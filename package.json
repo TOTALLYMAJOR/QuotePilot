@@ -21,8 +21,9 @@
     "check:perf:bundle": "node ./scripts/check-bundle-budget.mjs",
     "check:perf:cwv": "lhci autorun --config=./.lighthouserc.json",
     "deploy:firebase:functions": "npx firebase-tools deploy --only functions",
-    "deploy:firebase:hosting": "npm run build && npx firebase-tools deploy --only hosting",
-    "deploy:firebase": "npm run build && npx firebase-tools deploy --only hosting,firestore,functions",
+    "deploy:firebase:hosting": "npm run build && npx firebase-tools deploy --only hosting:app",
+    "deploy:firebase:hosting:customer": "node ./scripts/deploy-hosting-customer.mjs",
+    "deploy:firebase": "npm run build && npx firebase-tools deploy --only hosting:app,firestore,functions",
     "deploy:vercel": "npx vercel --prod",
     "deploy:vercel:build": "npm run build && npx vercel --prod --prebuilt"
   },
