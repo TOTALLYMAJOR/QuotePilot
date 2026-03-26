@@ -128,7 +128,26 @@ Notes:
 ## Deploy Entry Points
 - Firebase hosting/functions: `npm run deploy:firebase`
 - Firebase functions only: `npm run deploy:firebase:functions`
+- Firebase primary hosting site (`app` target): `npm run deploy:firebase:hosting`
+- Firebase customer hosting site (`customer` target): `npm run deploy:firebase:hosting:customer -- --site <siteId>`
 - Vercel (optional): `npm run deploy:vercel`
+
+### Multi-Site Hosting (Per Customer)
+Use one Firebase project with multiple Hosting sites, then map each customer domain to its site.
+
+One-time per customer site:
+```bash
+npx firebase-tools hosting:sites:create <siteId>
+```
+
+Deploy to a specific customer site:
+```bash
+npm run deploy:firebase:hosting:customer -- --site <siteId>
+```
+
+Optional flags:
+- `--project <projectId>` to override current Firebase project
+- `--skip-build` to reuse an existing `dist/` build
 
 ## Governance Docs
 - Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
