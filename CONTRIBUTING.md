@@ -1,6 +1,6 @@
 # Contributing to Firebase Quote Wizard
 
-Last updated: March 21, 2026
+Last updated: March 26, 2026
 
 ## Setup
 1. Use Node.js 20+.
@@ -62,3 +62,12 @@ Update only the owning docs for changed topics; link instead of duplicating narr
 ## Release Discipline
 Follow `docs/VERSION_CONTROL.md` for branch/tag/release policy.
 Production-triggering merges to `main` require a completed 10-minute UAT checklist in `docs/LAUNCH_RUNBOOK.md`.
+
+## GitHub Safety Baseline
+- Keep repository visibility set to **Private** for production/customer code.
+- Enable branch protection on `main`:
+  - require pull request before merge
+  - require status checks to pass (`CI Quality`)
+  - block force pushes/deletions
+- Keep Dependabot enabled for npm and GitHub Actions dependency updates.
+- Use `Security` tab private advisories for vulnerability intake.
