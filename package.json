@@ -17,6 +17,7 @@
     "check:env": "node ./scripts/check-env.mjs",
     "seed:menu:firestore": "node ./scripts/seed-firestore-menu.mjs",
     "migrate:multi-tenant": "node ./scripts/migrate-to-multi-tenant.mjs",
+    "check:secrets": "node ./scripts/check-secret-assets.mjs",
     "check:docs:governance": "node ./scripts/check-doc-governance.mjs",
     "check:perf:bundle": "node ./scripts/check-bundle-budget.mjs",
     "check:perf:cwv": "lhci autorun --config=./.lighthouserc.json",

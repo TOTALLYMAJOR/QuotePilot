@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: March 20, 2026
+Last updated: March 26, 2026
 
 ## P0 - Multi-Tenant Hardening (Post Rollout)
 - Run focused emulator tests for cross-org denial on org-scoped quotes/catalog writes.
@@ -12,7 +12,6 @@ Last updated: March 20, 2026
 - Re-establish staging sign-off workflow and release checklist enforcement before broadening `main` merge velocity.
 - Add explicit portal token expiry/rotation policy and enforcement path.
 - Add targeted E2E scenarios for booking conversion/confirmation edge cases.
-- Add automated secret scanning for non-markdown assets (scripts/config) in CI.
 
 ## P1 - Performance and UX
 - Reduce largest JavaScript chunk size (split proposal/export-heavy paths where practical).

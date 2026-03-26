@@ -84,6 +84,7 @@ npm run test:e2e
 npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
 npm run build
+npm run check:secrets
 npm run check:docs:governance
 npm run check:perf:bundle
 npm run check:perf:cwv

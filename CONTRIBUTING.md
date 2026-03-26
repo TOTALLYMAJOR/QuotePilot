@@ -37,6 +37,7 @@ npm run test:unit
 npm run test:rules:firestore
 npm run test:e2e
 npm run build
+npm run check:secrets
 npm run check:docs:governance
 npm run check:perf:bundle
 npm run check:perf:cwv

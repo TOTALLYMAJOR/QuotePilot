@@ -19,6 +19,7 @@ This changelog is backfilled from git history and will be maintained going forwa
   - `scripts/run-firebase-e2e-inner.sh`
   - `scripts/seed-e2e-emulator-user.mjs`
 - Customer-site Firebase Hosting deploy helper script (`scripts/deploy-hosting-customer.mjs`) for per-customer site deployments via a reusable `customer` target.
+- Non-markdown secret asset scanner (`scripts/check-secret-assets.mjs`) with high-confidence token/private-key detection and placeholder-aware hardcoded key checks.
 - VS Code devcontainer config (`.devcontainer/devcontainer.json`) for isolated development using the existing Docker Compose `web-dev` service.
 - End-user operations guide for staff/admin workflows (`docs/USER_MANUAL.md`).
 - Global event-type context provider for cross-surface event-type synchronization (wizard + admin).
@@ -38,6 +39,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 - CI quality workflow now runs both Playwright lanes: standard smoke and Firebase emulator smoke (`test:e2e:firebase`).
 - CI quality workflow now also runs Firebase authoritative smoke (`test:e2e:firebase:authoritative`).
+- CI `Governance + Perf Gates` job now runs `npm run check:secrets` to block committed secrets in scripts/config assets.
 - Firebase Hosting config moved to target-based multi-site layout (`app` + `customer`) and default hosting deploy now targets `hosting:app`.
 - `test:e2e` and `test:e2e:headed` now run through a Playwright wrapper that auto-resolves Linux shared-library dependencies.
 - Added Firebase client emulator wiring (`auth` + `firestore` + optional functions) for deterministic emulator-backed browser testing.

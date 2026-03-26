@@ -48,6 +48,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run non-markdown secret scan
+        run: npm run check:secrets
+
       - name: Run documentation governance checks
         run: npm run check:docs:governance
 
