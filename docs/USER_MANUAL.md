@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: March 18, 2026
+Last updated: March 26, 2026
 
 ## Purpose
 This guide explains day-to-day usage of the Firebase Quote Wizard for staff users and admins.
@@ -40,6 +40,7 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
   - Export PDF
   - Copy email template, portal link, and payment link
   - Create Stripe deposit link
+  - Rotate customer portal token when a link expires or should be reissued
 - Status filtering supports grouped views:
   - `Submitted` (sent/viewed/accepted)
   - `Archived` (booked/declined/expired)
@@ -68,6 +69,8 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
 - Customers can open portal links and view quote details.
 - Portal actions allow customer status responses (for example accept/decline).
 - Portal updates are reflected in staff quote history.
+- Portal tokens are time-bound and expire automatically.
+- Staff can use `Rotate Portal` in `Quote History` to issue a fresh link and invalidate the old one.
 
 ## Notifications and Confirmations
 - Toast notifications are shown for save/update/delete and key operational actions.

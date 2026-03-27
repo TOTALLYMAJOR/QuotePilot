@@ -23,6 +23,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 - GitHub security policy (`.github/SECURITY.md`) with private advisory reporting path and secret-handling response targets.
 - Dependabot configuration (`.github/dependabot.yml`) for weekly npm and GitHub Actions dependency update PRs.
 - Playwright quote-history booking scenarios for conversion/confirmation edge paths, including booked-conflict conversion blocking.
+- Portal token hardening with explicit token issue/expiry fields (`portalIssuedAtISO`, `portalExpiresAtISO`), staff-driven portal key rotation action, and portal expiry enforcement in customer portal status/read paths.
 - VS Code devcontainer config (`.devcontainer/devcontainer.json`) for isolated development using the existing Docker Compose `web-dev` service.
 - End-user operations guide for staff/admin workflows (`docs/USER_MANUAL.md`).
 - Global event-type context provider for cross-surface event-type synchronization (wizard + admin).

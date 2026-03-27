@@ -166,6 +166,13 @@ function summarizeList(items, limit = 5) {
 function resolvePortalLink(quote, basePortalUrl = "") {
   const portalKey = String(quote?.portalKey || "").trim();
   if (!portalKey) return "";
+  const portalExpiry = String(quote?.portalExpiresAtISO || quote?.expiresAtISO || "").trim();
+  if (portalExpiry) {
+    const expiresAt = new Date(portalExpiry);
+    if (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() < Date.now()) {
+      return "";
+    }
+  }
   const base = String(basePortalUrl || "").trim() || (
     typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : ""
   );

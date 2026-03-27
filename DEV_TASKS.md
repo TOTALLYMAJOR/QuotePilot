@@ -10,7 +10,6 @@ Last updated: March 26, 2026
 
 ## P0 - Security and Reliability
 - Re-establish staging sign-off workflow and release checklist enforcement before broadening `main` merge velocity.
-- Add explicit portal token expiry/rotation policy and enforcement path.
 
 ## P1 - Performance and UX
 - Reduce largest JavaScript chunk size (split proposal/export-heavy paths where practical).

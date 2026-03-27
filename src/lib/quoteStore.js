@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -36,6 +37,8 @@ const PORTAL_COLLECTION = "customerPortalQuotes";
 const QUOTE_HISTORY_COLLECTION = "quoteHistory";
 const QUOTE_VERSIONS_COLLECTION = "versions";
 const DEFAULT_VALIDITY_DAYS = 30;
+const PORTAL_TOKEN_VALIDITY_DAYS = 30;
+const PORTAL_TOKEN_EXPIRED_ERROR = "Quote link is invalid or expired.";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
@@ -285,6 +288,58 @@ function timestampToISO(value, fallback = isoNow()) {
   return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString();
 }
 
+function normalizeISO(value, fallback = isoNow()) {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString();
+}
+
+function minISO(left, right, fallback = isoNow()) {
+  const leftISO = normalizeISO(left, fallback);
+  const rightISO = normalizeISO(right, fallback);
+  const leftMs = parseSafe(leftISO, fallback).getTime();
+  const rightMs = parseSafe(rightISO, fallback).getTime();
+  return leftMs <= rightMs ? leftISO : rightISO;
+}
+
+function resolvePortalIssuedAtISO(quote, fallback = isoNow()) {
+  const createdAtISO = timestampToISO(quote?.createdAtISO || quote?.createdAt, fallback);
+  return normalizeISO(quote?.portalIssuedAtISO || createdAtISO, createdAtISO);
+}
+
+function resolvePortalExpiresAtISO(quote, issuedAtISO = "", fallback = isoNow()) {
+  const issuedISO = normalizeISO(
+    issuedAtISO || quote?.portalIssuedAtISO || quote?.createdAtISO || quote?.createdAt,
+    fallback
+  );
+  const hardLimitISO = addDaysISO(issuedISO, PORTAL_TOKEN_VALIDITY_DAYS);
+  const quoteExpiryISO = normalizeISO(quote?.expiresAtISO || hardLimitISO, hardLimitISO);
+  const explicitPortalExpiryISO = String(quote?.portalExpiresAtISO || "").trim();
+  if (explicitPortalExpiryISO) {
+    return minISO(explicitPortalExpiryISO, minISO(quoteExpiryISO, hardLimitISO, hardLimitISO), hardLimitISO);
+  }
+  return minISO(quoteExpiryISO, hardLimitISO, hardLimitISO);
+}
+
+function isPortalExpired(portalExpiresAtISO, nowISO = isoNow()) {
+  const expiresAt = parseSafe(portalExpiresAtISO, nowISO);
+  const now = parseSafe(nowISO, nowISO);
+  return expiresAt.getTime() < now.getTime();
+}
+
+function assertPortalTokenActive(portalSnapshot, nowISO = isoNow()) {
+  const issuedAtISO = resolvePortalIssuedAtISO(portalSnapshot, nowISO);
+  const expiresAtISO = resolvePortalExpiresAtISO(portalSnapshot, issuedAtISO, nowISO);
+  if (isPortalExpired(expiresAtISO, nowISO)) {
+    throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
+  }
+  return {
+    portalIssuedAtISO: issuedAtISO,
+    portalExpiresAtISO: expiresAtISO
+  };
+}
+
 function lifecycleObject(status, nowISO, previous = {}) {
   const key = STATUS_LIFECYCLE_FIELD[status];
   if (!key) return { ...(previous || {}) };
@@ -296,10 +351,22 @@ function lifecycleObject(status, nowISO, previous = {}) {
 
 function buildPortalSnapshot(quoteId, quote) {
   const createdAtISO = timestampToISO(quote.createdAtISO || quote.createdAt, isoNow());
+  const portalIssuedAtISO = resolvePortalIssuedAtISO(quote, createdAtISO);
+  const portalExpiresAtISO = resolvePortalExpiresAtISO(
+    {
+      ...quote,
+      createdAtISO,
+      portalIssuedAtISO
+    },
+    portalIssuedAtISO,
+    createdAtISO
+  );
   return {
     quoteId,
     organizationId: String(quote.organizationId || "").trim(),
     portalKey: quote.portalKey || "",
+    portalIssuedAtISO,
+    portalExpiresAtISO,
     quoteNumber: quote.quoteNumber || "",
     customerName: quote.customer?.name || "",
     customerEmail: quote.customer?.email || "",
@@ -463,6 +530,17 @@ function hydrateBooking(booking) {
 function hydrateQuote(item, nowISO = isoNow()) {
   const createdAtISO = item.createdAtISO || nowISO;
   const expiresAtISO = item.expiresAtISO || addDaysISO(createdAtISO, DEFAULT_VALIDITY_DAYS);
+  const portalIssuedAtISO = resolvePortalIssuedAtISO(item, createdAtISO);
+  const portalExpiresAtISO = resolvePortalExpiresAtISO(
+    {
+      ...item,
+      createdAtISO,
+      expiresAtISO,
+      portalIssuedAtISO
+    },
+    portalIssuedAtISO,
+    expiresAtISO
+  );
   const status = normalizeStatus(item.status);
   const integrationPayload = item.integrations || {};
   const integrationLogs = Array.isArray(integrationPayload.logs) ? integrationPayload.logs : [];
@@ -478,6 +556,8 @@ function hydrateQuote(item, nowISO = isoNow()) {
     deletedAtISO: item.deletedAtISO || "",
     createdAtISO,
     expiresAtISO,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
     payment: hydratePayment(item.payment),
     booking: hydrateBooking(item.booking),
     integrations: {
@@ -1552,12 +1632,21 @@ export async function submitQuote({
   const nowISO = isoNow();
   const quoteNumber = buildQuoteNumber();
   const portalKey = buildPortalKey();
+  const portalIssuedAtISO = nowISO;
   const resolvedOrganizationId = resolveQuoteOrganizationId(organizationId);
   const normalizedCustomerEmail = normalizeEmail(form.email);
   const customerNameKey = normalizeCustomerNameKey(form.name);
   const eventTypeId = String(form.eventTypeId || "").trim();
   const validityDays = Math.max(1, Number(settings?.quoteValidityDays || DEFAULT_VALIDITY_DAYS));
   const expiresAtISO = addDaysISO(nowISO, validityDays);
+  const portalExpiresAtISO = resolvePortalExpiresAtISO(
+    {
+      expiresAtISO,
+      portalIssuedAtISO
+    },
+    portalIssuedAtISO,
+    nowISO
+  );
   const menuItems = Array.isArray(form.menuItems) ? form.menuItems : [];
   const guests = Number(form.guests || 0);
   const menuItemQuantities = normalizeQuantityMap(form.menuItemQuantities);
@@ -1638,6 +1727,8 @@ export async function submitQuote({
     ownerEmail: normalizeEmail(ownerEmail),
     organizationId: resolvedOrganizationId,
     portalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
     event: {
       name: form.eventName || "",
       date: form.date || "",
@@ -1818,7 +1909,14 @@ export async function submitQuote({
       setActive: true,
       organizationId: resolvedOrganizationId
     });
-    return { id: ref.id, quoteNumber, portalKey, storage: "firebase" };
+    return {
+      id: ref.id,
+      quoteNumber,
+      portalKey,
+      portalIssuedAtISO,
+      portalExpiresAtISO,
+      storage: "firebase"
+    };
   }
 
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
@@ -1830,7 +1928,14 @@ export async function submitQuote({
     setActive: true,
     organizationId: resolvedOrganizationId
   });
-  return { id: fallbackId, quoteNumber, portalKey, storage: "local" };
+  return {
+    id: fallbackId,
+    quoteNumber,
+    portalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
+    storage: "local"
+  };
 }
 
 export async function updateQuote({
@@ -1877,8 +1982,19 @@ export async function updateQuote({
     ? { ...settings.featureFlags }
     : {};
   const lifecycle = lifecycleObject("draft", nowISO, existing.lifecycle);
+  const portalKey = String(existing.portalKey || "").trim() || buildPortalKey();
+  const portalIssuedAtISO = resolvePortalIssuedAtISO(existing, existing.createdAtISO || nowISO);
   const nextOrganizationId = resolveQuoteOrganizationId(
     organizationId !== undefined ? organizationId : existing.organizationId
+  );
+  const portalExpiresAtISO = resolvePortalExpiresAtISO(
+    {
+      ...existing,
+      expiresAtISO,
+      portalIssuedAtISO
+    },
+    portalIssuedAtISO,
+    nowISO
   );
   const hasVersionHistory =
     toVersionNumber(existing.latestVersionNumber, 0) > 0 || Boolean(String(existing.activeVersionId || "").trim());
@@ -1953,6 +2069,9 @@ export async function updateQuote({
     ownerUid: ownerUid || existing.ownerUid || "",
     ownerEmail: normalizeEmail(ownerEmail) || existing.ownerEmail || "",
     organizationId: nextOrganizationId,
+    portalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
     event: {
       name: form.eventName || "",
       date: form.date || "",
@@ -2100,7 +2219,9 @@ export async function updateQuote({
     return {
       id,
       quoteNumber: existing.quoteNumber || "",
-      portalKey: existing.portalKey || "",
+      portalKey,
+      portalIssuedAtISO,
+      portalExpiresAtISO,
       storage: "firebase",
       activeVersionId: versionResult.versionId,
       latestVersionNumber: versionResult.versionNumber
@@ -2129,10 +2250,94 @@ export async function updateQuote({
   return {
     id,
     quoteNumber: existing.quoteNumber || "",
-    portalKey: existing.portalKey || "",
+    portalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
     storage: "local",
     activeVersionId: versionResult.versionId,
     latestVersionNumber: versionResult.versionNumber
+  };
+}
+
+export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
+  }
+
+  const quote = await readQuoteById(id);
+  const nowISO = isoNow();
+  const previousPortalKey = String(quote.portalKey || "").trim();
+  const nextPortalKey = buildPortalKey();
+  const portalIssuedAtISO = nowISO;
+  const portalExpiresAtISO = resolvePortalExpiresAtISO(
+    {
+      expiresAtISO: quote.expiresAtISO || addDaysISO(nowISO, DEFAULT_VALIDITY_DAYS),
+      portalIssuedAtISO
+    },
+    portalIssuedAtISO,
+    nowISO
+  );
+  const normalizedActorEmail = normalizeEmail(actorEmail);
+
+  await saveQuoteVersion(id, {
+    reason: "portal_key_rotate",
+    organizationId: quote.organizationId
+  });
+
+  if (firebaseReady) {
+    await updateDoc(quoteDocRef(id, quote.organizationId), {
+      portalKey: nextPortalKey,
+      portalIssuedAtISO,
+      portalExpiresAtISO,
+      updatedAtISO: nowISO,
+      ...(normalizedActorEmail ? { "quoteMeta.portalRotatedByEmail": normalizedActorEmail } : {})
+    });
+    await syncPortalSnapshotFromQuoteDoc(id, quote.organizationId);
+    if (previousPortalKey && previousPortalKey !== nextPortalKey) {
+      try {
+        await deleteDoc(portalDocRef(previousPortalKey));
+      } catch {
+        // Ignore best-effort cleanup errors for stale portal snapshots.
+      }
+    }
+    return {
+      ok: true,
+      storage: "firebase",
+      portalKey: nextPortalKey,
+      portalIssuedAtISO,
+      portalExpiresAtISO
+    };
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  let found = false;
+  const next = existing.map((item) => {
+    if (item.id !== id) return item;
+    found = true;
+    return {
+      ...item,
+      portalKey: nextPortalKey,
+      portalIssuedAtISO,
+      portalExpiresAtISO,
+      updatedAtISO: nowISO,
+      quoteMeta: {
+        ...(item.quoteMeta || {}),
+        ...(normalizedActorEmail ? { portalRotatedByEmail: normalizedActorEmail } : {})
+      }
+    };
+  });
+  if (!found) {
+    throw new Error("Quote not found.");
+  }
+  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
+
+  return {
+    ok: true,
+    storage: "local",
+    portalKey: nextPortalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO
   };
 }
 
@@ -2141,9 +2346,18 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
   const nowISO = isoNow();
   const quoteNumber = buildQuoteNumber();
   const portalKey = buildPortalKey();
+  const portalIssuedAtISO = nowISO;
   const organizationId = resolveQuoteOrganizationId(source.organizationId);
   const validityDays = Math.max(1, Number(source?.quoteMeta?.quoteValidityDays || DEFAULT_VALIDITY_DAYS));
   const expiresAtISO = addDaysISO(nowISO, validityDays);
+  const portalExpiresAtISO = resolvePortalExpiresAtISO(
+    {
+      expiresAtISO,
+      portalIssuedAtISO
+    },
+    portalIssuedAtISO,
+    nowISO
+  );
   const payment = hydratePayment(source.payment);
   const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";
   const { id: _sourceId, createdAt: _createdAt, ...sourceWithoutIdentity } = source;
@@ -2178,6 +2392,8 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     ...sourceWithoutIdentity,
     quoteNumber,
     portalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
     ownerUid: ownerUid || source.ownerUid || "",
     ownerEmail: normalizedOwnerEmail,
     organizationId,
@@ -2234,7 +2450,14 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
       setActive: true,
       organizationId
     });
-    return { id: ref.id, quoteNumber, portalKey, storage: "firebase" };
+    return {
+      id: ref.id,
+      quoteNumber,
+      portalKey,
+      portalIssuedAtISO,
+      portalExpiresAtISO,
+      storage: "firebase"
+    };
   }
 
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
@@ -2246,7 +2469,14 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     setActive: true,
     organizationId
   });
-  return { id: fallbackId, quoteNumber, portalKey, storage: "local" };
+  return {
+    id: fallbackId,
+    quoteNumber,
+    portalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
+    storage: "local"
+  };
 }
 
 function applyQuoteHistoryFilters(quotes, { eventTypeId = "", customerName = "" } = {}) {
@@ -2534,6 +2764,8 @@ export async function reopenQuote(id) {
       : null;
   const nowISO = isoNow();
   const lifecycle = lifecycleObject("draft", nowISO, quote.lifecycle);
+  const nextPortalKey = buildPortalKey();
+  const previousPortalKey = String(quote.portalKey || "").trim();
   const restoredPatch = activeSnapshot
     ? {
       customer: activeSnapshot.customer || quote.customer,
@@ -2557,6 +2789,15 @@ export async function reopenQuote(id) {
       expiresAtISO: activeSnapshot.expiresAtISO || quote.expiresAtISO
     }
     : {};
+  const nextPortalIssuedAtISO = nowISO;
+  const nextPortalExpiresAtISO = resolvePortalExpiresAtISO(
+    {
+      expiresAtISO: restoredPatch.expiresAtISO || quote.expiresAtISO || addDaysISO(nowISO, DEFAULT_VALIDITY_DAYS),
+      portalIssuedAtISO: nextPortalIssuedAtISO
+    },
+    nextPortalIssuedAtISO,
+    nowISO
+  );
 
   await saveQuoteVersion(quoteId, {
     reason: "reopen_quote_before_restore",
@@ -2567,11 +2808,21 @@ export async function reopenQuote(id) {
     await updateDoc(quoteDocRef(quoteId, quote.organizationId), {
       ...restoredPatch,
       status: "draft",
+      portalKey: nextPortalKey,
+      portalIssuedAtISO: nextPortalIssuedAtISO,
+      portalExpiresAtISO: nextPortalExpiresAtISO,
       deletedAtISO: "",
       updatedAtISO: nowISO,
       lifecycle
     });
     await syncPortalSnapshotFromQuoteDoc(quoteId, quote.organizationId);
+    if (previousPortalKey && previousPortalKey !== nextPortalKey) {
+      try {
+        await deleteDoc(portalDocRef(previousPortalKey));
+      } catch {
+        // Ignore best-effort cleanup errors for stale portal snapshots.
+      }
+    }
     return { ok: true, storage: "firebase" };
   }
 
@@ -2582,6 +2833,9 @@ export async function reopenQuote(id) {
       ...item,
       ...restoredPatch,
       status: "draft",
+      portalKey: nextPortalKey,
+      portalIssuedAtISO: nextPortalIssuedAtISO,
+      portalExpiresAtISO: nextPortalExpiresAtISO,
       deletedAtISO: "",
       updatedAtISO: nowISO,
       lifecycle
@@ -2634,15 +2888,25 @@ export async function getPortalQuote(portalKey) {
   if (!key) {
     throw new Error("Portal key is required.");
   }
+  const nowISO = isoNow();
 
   if (firebaseReady) {
     const snap = await getDoc(portalDocRef(key));
     if (!snap.exists()) {
       throw new Error("Quote not found.");
     }
+    const portalData = snap.data();
+    if (String(portalData.portalKey || "").trim() !== key) {
+      throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
+    }
+    const portalValidity = assertPortalTokenActive(portalData, nowISO);
+    if (normalizeStatus(portalData.status) === "deleted") {
+      throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
+    }
     return {
       portalKey: key,
-      ...snap.data()
+      ...portalData,
+      ...portalValidity
     };
   }
 
@@ -2651,7 +2915,15 @@ export async function getPortalQuote(portalKey) {
   if (!quote) {
     throw new Error("Quote not found.");
   }
-  return buildPortalSnapshot(quote.id, quote);
+  const snapshot = buildPortalSnapshot(quote.id, quote);
+  const portalValidity = assertPortalTokenActive(snapshot, nowISO);
+  if (normalizeStatus(snapshot.status) === "deleted") {
+    throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
+  }
+  return {
+    ...snapshot,
+    ...portalValidity
+  };
 }
 
 export async function updatePortalQuoteStatus(portalKey, status) {
@@ -2674,6 +2946,10 @@ export async function updatePortalQuoteStatus(portalKey, status) {
       throw new Error("Quote not found.");
     }
     const portalData = portalSnap.data();
+    if (String(portalData.portalKey || "").trim() !== key) {
+      throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
+    }
+    assertPortalTokenActive(portalData, nowISO);
     if (normalizeStatus(portalData.status) === "booked") {
       throw new Error("This quote is already booked and can no longer be changed from the portal.");
     }
@@ -2698,11 +2974,15 @@ export async function updatePortalQuoteStatus(portalKey, status) {
   }
 
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  const localTarget = existing.find((quote) => quote.portalKey === key);
+  if (!localTarget) {
+    throw new Error("Quote not found.");
+  }
+  assertPortalTokenActive(localTarget, nowISO);
   const locked = existing.find((quote) => quote.portalKey === key && normalizeStatus(quote.status) === "booked");
   if (locked) {
     throw new Error("This quote is already booked and can no longer be changed from the portal.");
   }
-  const localTarget = existing.find((quote) => quote.portalKey === key);
   if (localTarget?.id) {
     await saveQuoteVersion(localTarget.id);
   }

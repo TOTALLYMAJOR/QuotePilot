@@ -15,6 +15,7 @@ import {
   getAllowedStatusTransitions,
   getQuoteHistory,
   PAYMENT_STATUSES,
+  rotateQuotePortalKey,
   reopenQuote,
   updateQuoteBookingConfirmation,
   updateQuotePaymentStatus,
@@ -48,6 +49,14 @@ function statusBucketLabel(status) {
   return bucket.charAt(0).toUpperCase() + bucket.slice(1);
 }
 
+function isPortalExpired(quote) {
+  const expiry = String(quote?.portalExpiresAtISO || quote?.expiresAtISO || "").trim();
+  if (!expiry) return false;
+  const dt = new Date(expiry);
+  if (Number.isNaN(dt.getTime())) return false;
+  return dt.getTime() < Date.now();
+}
+
 export default function QuoteHistoryModal({
   open,
   onClose,
@@ -78,6 +87,7 @@ export default function QuoteHistoryModal({
   const [exportingPdfId, setExportingPdfId] = useState("");
   const [sendingQuoteEmailId, setSendingQuoteEmailId] = useState("");
   const [sendingPaymentEmailId, setSendingPaymentEmailId] = useState("");
+  const [rotatingPortalId, setRotatingPortalId] = useState("");
   const [pendingDeleteQuote, setPendingDeleteQuote] = useState(null);
 
   const pushToast = (message, tone = "info") => {
@@ -440,6 +450,9 @@ export default function QuoteHistoryModal({
       if (!navigator.clipboard) {
         throw new Error("Clipboard unavailable in this browser.");
       }
+      if (isPortalExpired(quote)) {
+        throw new Error("Portal link expired. Rotate the portal link before sharing.");
+      }
       const portalLink = resolveQuotePortalLink(quote);
       if (!portalLink) {
         throw new Error("No customer portal key for this quote.");
@@ -452,9 +465,39 @@ export default function QuoteHistoryModal({
     }
   };
 
+  const handleRotatePortalLink = async (quote) => {
+    if (!quote?.id) return;
+    setRotatingPortalId(quote.id);
+    setState((prev) => ({ ...prev, error: "", feedback: "" }));
+    try {
+      const result = await rotateQuotePortalKey({
+        quoteId: quote.id,
+        actorEmail: currentUserEmail
+      });
+      applyQuoteLocally(quote.id, (existing) => ({
+        ...existing,
+        portalKey: result.portalKey,
+        portalIssuedAtISO: result.portalIssuedAtISO,
+        portalExpiresAtISO: result.portalExpiresAtISO
+      }));
+      setState((prev) => ({
+        ...prev,
+        feedback: `Portal link rotated for ${quote.quoteNumber}.`
+      }));
+      pushToast(`Portal link rotated for ${quote.quoteNumber}.`, "success");
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: err?.message || "Failed to rotate portal link." }));
+    } finally {
+      setRotatingPortalId("");
+    }
+  };
+
   const createCheckoutLink = async (quote) => {
     if (state.source !== "firebase") {
       throw new Error("Stripe checkout requires Firebase-backed quote storage.");
+    }
+    if (isPortalExpired(quote)) {
+      throw new Error("Portal link expired. Rotate the portal link before sending payment requests.");
     }
 
     const base = basePortalUrl || `${window.location.origin}${window.location.pathname}`;
@@ -497,6 +540,9 @@ export default function QuoteHistoryModal({
     setSendingQuoteEmailId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
+      if (isPortalExpired(quote)) {
+        throw new Error("Portal link expired. Rotate the portal link before sending quote email.");
+      }
       const { exportQuoteProposal } = await import("../lib/proposalExport");
       const attachment = await exportQuoteProposal(quote, {
         basePortalUrl,
@@ -531,6 +577,9 @@ export default function QuoteHistoryModal({
       const status = String(quote.status || "").trim().toLowerCase();
       if (!["accepted", "booked"].includes(status)) {
         throw new Error("Payment request email is only available after quote acceptance.");
+      }
+      if (isPortalExpired(quote)) {
+        throw new Error("Portal link expired. Rotate the portal link before sending payment requests.");
       }
 
       let paymentLink = String(quote.payment?.depositLink || "").trim();
@@ -776,6 +825,16 @@ export default function QuoteHistoryModal({
                             disabled={sendingPaymentEmailId === quote.id}
                           >
                             {sendingPaymentEmailId === quote.id ? "Sending..." : "Send Pay Request"}
+                          </button>
+                        )}
+                        {quote.status !== "deleted" && (
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleRotatePortalLink(quote)}
+                            disabled={rotatingPortalId === quote.id}
+                          >
+                            {rotatingPortalId === quote.id ? "Rotating..." : "Rotate Portal"}
                           </button>
                         )}
                         <button type="button" className="ghost compact" onClick={() => handleCopyEmail(quote)}>Copy Email</button>

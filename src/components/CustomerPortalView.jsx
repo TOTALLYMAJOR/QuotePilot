@@ -11,7 +11,9 @@ function fmtDate(iso) {
 
 function formatError(err) {
   const message = String(err?.message || "Unable to load quote.");
-  if (message.includes("not found")) return "Quote link is invalid or expired.";
+  if (message.includes("not found") || message.toLowerCase().includes("expired")) {
+    return "Quote link is invalid or expired.";
+  }
   return message;
 }
 
