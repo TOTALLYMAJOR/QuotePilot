@@ -1,6 +1,55 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { currency } from "../lib/quoteCalculator";
+import { detectBreakdownValueChanges } from "../lib/wizardUi";
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = (event) => setReduced(event.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  return reduced;
+}
+
+function money(value) {
+  return currency(Number(value || 0));
+}
+
+function BreakdownMoneyRow({ rowKey, label, value, delta = 0, changed = false, strong = false }) {
+  const directionClass = delta > 0 ? "delta-up" : delta < 0 ? "delta-down" : "";
+  const deltaPrefix = delta > 0 ? "+" : "-";
+  return (
+    <div
+      className={`breakdown-money-row ${changed ? "changed" : ""} ${strong ? "strong" : ""}`.trim()}
+      data-row-key={rowKey}
+      data-changed={changed ? "true" : "false"}
+    >
+      <dt>{label}</dt>
+      <dd>
+        <strong>{money(value)}</strong>
+        {changed && (
+          <small className={`row-delta ${directionClass}`.trim()}>
+            {deltaPrefix} {money(Math.abs(delta))}
+          </small>
+        )}
+      </dd>
+    </div>
+  );
+}
 
 export default function LiveBreakdown({ form, totals, settings, catalog }) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const effectTimersRef = useRef([]);
+  const animationFrameRef = useRef(0);
+
   const resolvePricingType = (item, fallback = "per_event") => {
     const raw = String(item?.pricingType || item?.type || "").trim().toLowerCase();
     if (raw === "per_person" || raw === "per_item" || raw === "per_event") return raw;
@@ -50,32 +99,272 @@ export default function LiveBreakdown({ form, totals, settings, catalog }) {
   });
 
   const staffingLaborEnabled = totals.staffingLaborEnabled !== false;
-  const subtotal = totals.base + totals.addons + totals.rentals + totals.menu + totals.labor + totals.travel;
+
+  const valueTargets = useMemo(() => {
+    const subtotal = totals.base + totals.addons + totals.rentals + totals.menu + totals.labor + totals.travel;
+    return {
+      package: totals.base,
+      addons: totals.addons,
+      rentals: totals.rentals,
+      menu: totals.menu,
+      labor: totals.labor,
+      bartenderLabor: totals.bartenderLabor,
+      travel: totals.travel,
+      subtotal,
+      serviceFee: totals.serviceFee,
+      tax: totals.tax,
+      total: totals.total,
+      deposit: totals.deposit
+    };
+  }, [
+    totals.addons,
+    totals.base,
+    totals.bartenderLabor,
+    totals.deposit,
+    totals.labor,
+    totals.menu,
+    totals.rentals,
+    totals.serviceFee,
+    totals.tax,
+    totals.total,
+    totals.travel
+  ]);
+
+  const [displayValues, setDisplayValues] = useState(valueTargets);
+  const [rowEffects, setRowEffects] = useState({});
+  const previousValuesRef = useRef(valueTargets);
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      effectTimersRef.current.forEach((timerId) => clearTimeout(timerId));
+      effectTimersRef.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
+    const previousValues = previousValuesRef.current;
+    const changes = detectBreakdownValueChanges(previousValues, valueTargets);
+    const changedKeys = Object.keys(changes);
+    previousValuesRef.current = valueTargets;
+
+    if (!changedKeys.length) {
+      setDisplayValues(valueTargets);
+      return;
+    }
+
+    setRowEffects((prev) => {
+      const next = { ...prev };
+      changedKeys.forEach((key) => {
+        next[key] = {
+          delta: changes[key],
+          tick: Date.now() + Math.random()
+        };
+      });
+      return next;
+    });
+
+    if (prefersReducedMotion) {
+      setDisplayValues(valueTargets);
+    } else {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      const fromValues = { ...previousValues };
+      const durationMs = 420;
+      const startTime = typeof performance !== "undefined" ? performance.now() : Date.now();
+
+      const frame = (now) => {
+        const currentTime = typeof now === "number" ? now : Date.now();
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(1, elapsed / durationMs);
+        const eased = 1 - ((1 - progress) ** 3);
+
+        const interpolated = Object.entries(valueTargets).reduce((acc, [key, target]) => {
+          const from = Number(fromValues?.[key] || 0);
+          const to = Number(target || 0);
+          acc[key] = from + ((to - from) * eased);
+          return acc;
+        }, {});
+
+        setDisplayValues(interpolated);
+        if (progress < 1) {
+          animationFrameRef.current = requestAnimationFrame(frame);
+        } else {
+          setDisplayValues(valueTargets);
+          animationFrameRef.current = 0;
+        }
+      };
+
+      animationFrameRef.current = requestAnimationFrame(frame);
+    }
+
+    const effectTimer = setTimeout(() => {
+      setRowEffects((prev) => {
+        const next = { ...prev };
+        changedKeys.forEach((key) => {
+          delete next[key];
+        });
+        return next;
+      });
+    }, 1450);
+
+    effectTimersRef.current.push(effectTimer);
+    return () => clearTimeout(effectTimer);
+  }, [prefersReducedMotion, valueTargets]);
 
   return (
-    <aside className="panel breakdown-panel">
-      <h3>Live Breakdown</h3>
-      <p className="muted">Auto-updates as options change.</p>
+    <aside className="panel breakdown-panel" aria-live="polite">
+      <div className="breakdown-head">
+        <h3>Live Breakdown</h3>
+        <p className="muted">Auto-updates as options change.</p>
+      </div>
 
-      <dl className="kv-list">
-        <div><dt>Guests</dt><dd>{totals.guests}</dd></div>
-        <div><dt>Package</dt><dd>{totals.selectedPkg?.name || "-"}</dd></div>
-        <div><dt>Add-ons</dt><dd>{selectedAddons.length}</dd></div>
-        <div><dt>Rentals</dt><dd>{selectedRentals.length}</dd></div>
-        <div><dt>Menu Picks</dt><dd>{selectedMenuItems.length}</dd></div>
-        <div><dt>Bartenders</dt><dd>{totals.bartenders}</dd></div>
-        <div><dt>Staffing Labor</dt><dd>{staffingLaborEnabled ? "Enabled" : "Disabled"}</dd></div>
-        <div><dt>Bartender Rate</dt><dd>{currency(totals.bartenderRateApplied || 0)}</dd></div>
-        <div><dt>Server Rate</dt><dd>{currency(totals.serverRateApplied || 0)}</dd></div>
-        <div><dt>Chef Rate</dt><dd>{currency(totals.chefRateApplied || 0)}</dd></div>
-        <div><dt>Travel</dt><dd>{form.milesRT} mi</dd></div>
-        <div><dt>Tax Region</dt><dd>{totals.taxRegionName || "-"}</dd></div>
-        <div><dt>Season</dt><dd>{totals.seasonProfileName || "Standard"}</dd></div>
-      </dl>
+      <section className="breakdown-stat-grid">
+        <article>
+          <small>Guests</small>
+          <strong>{totals.guests}</strong>
+        </article>
+        <article>
+          <small>Package</small>
+          <strong>{totals.selectedPkg?.name || "-"}</strong>
+        </article>
+        <article>
+          <small>Tax Region</small>
+          <strong>{totals.taxRegionName || "-"}</strong>
+        </article>
+        <article>
+          <small>Season</small>
+          <strong>{totals.seasonProfileName || "Standard"}</strong>
+        </article>
+      </section>
 
-      <hr />
+      <section className="breakdown-financial-block">
+        <header>
+          <h4>🍽 Menu</h4>
+          <span>{money(displayValues.package + displayValues.menu + displayValues.addons + displayValues.rentals)}</span>
+        </header>
+        <dl className="breakdown-money-list">
+          <BreakdownMoneyRow
+            rowKey="package"
+            label="Package"
+            value={displayValues.package}
+            changed={Boolean(rowEffects.package)}
+            delta={rowEffects.package?.delta || 0}
+          />
+          <BreakdownMoneyRow
+            rowKey="menu"
+            label="Menu Items"
+            value={displayValues.menu}
+            changed={Boolean(rowEffects.menu)}
+            delta={rowEffects.menu?.delta || 0}
+          />
+          <BreakdownMoneyRow
+            rowKey="addons"
+            label="Add-ons"
+            value={displayValues.addons}
+            changed={Boolean(rowEffects.addons)}
+            delta={rowEffects.addons?.delta || 0}
+          />
+          <BreakdownMoneyRow
+            rowKey="rentals"
+            label="Rentals"
+            value={displayValues.rentals}
+            changed={Boolean(rowEffects.rentals)}
+            delta={rowEffects.rentals?.delta || 0}
+          />
+        </dl>
+      </section>
 
-      <div className="breakdown-selection-groups">
+      <section className="breakdown-financial-block">
+        <header>
+          <h4>👨‍🍳 Staff</h4>
+          <span>{money(displayValues.labor)}</span>
+        </header>
+        <dl className="breakdown-money-list">
+          <BreakdownMoneyRow
+            rowKey="labor"
+            label="Labor"
+            value={displayValues.labor}
+            changed={Boolean(rowEffects.labor)}
+            delta={rowEffects.labor?.delta || 0}
+          />
+          <BreakdownMoneyRow
+            rowKey="bartenderLabor"
+            label="Bartender Portion"
+            value={displayValues.bartenderLabor}
+            changed={Boolean(rowEffects.bartenderLabor)}
+            delta={rowEffects.bartenderLabor?.delta || 0}
+          />
+        </dl>
+        <p className="source-note">Staffing labor: {staffingLaborEnabled ? "Enabled" : "Disabled"}</p>
+      </section>
+
+      <section className="breakdown-financial-block">
+        <header>
+          <h4>🚚 Travel / Logistics</h4>
+          <span>{money(displayValues.travel)}</span>
+        </header>
+        <dl className="breakdown-money-list">
+          <BreakdownMoneyRow
+            rowKey="travel"
+            label={`Travel (${form.milesRT} mi)`}
+            value={displayValues.travel}
+            changed={Boolean(rowEffects.travel)}
+            delta={rowEffects.travel?.delta || 0}
+          />
+        </dl>
+      </section>
+
+      <section className="breakdown-financial-block totals">
+        <header>
+          <h4>Totals</h4>
+          <span>{money(displayValues.total)}</span>
+        </header>
+        <dl className="breakdown-money-list">
+          <BreakdownMoneyRow
+            rowKey="subtotal"
+            label="Subtotal"
+            value={displayValues.subtotal}
+            changed={Boolean(rowEffects.subtotal)}
+            delta={rowEffects.subtotal?.delta || 0}
+          />
+          <BreakdownMoneyRow
+            rowKey="serviceFee"
+            label={`Service (${Math.round(totals.serviceFeePctApplied * 1000) / 10}%)`}
+            value={displayValues.serviceFee}
+            changed={Boolean(rowEffects.serviceFee)}
+            delta={rowEffects.serviceFee?.delta || 0}
+          />
+          <BreakdownMoneyRow
+            rowKey="tax"
+            label={`Tax (${Math.round(totals.taxRateApplied * 1000) / 10}%)`}
+            value={displayValues.tax}
+            changed={Boolean(rowEffects.tax)}
+            delta={rowEffects.tax?.delta || 0}
+          />
+          <BreakdownMoneyRow
+            rowKey="total"
+            label="Total"
+            value={displayValues.total}
+            changed={Boolean(rowEffects.total)}
+            delta={rowEffects.total?.delta || 0}
+            strong
+          />
+          <BreakdownMoneyRow
+            rowKey="deposit"
+            label={`Deposit (${Math.round(settings.depositPct * 100)}%)`}
+            value={displayValues.deposit}
+            changed={Boolean(rowEffects.deposit)}
+            delta={rowEffects.deposit?.delta || 0}
+            strong
+          />
+        </dl>
+      </section>
+
+      <section className="breakdown-selection-groups">
         <div>
           <strong>Selected Add-ons</strong>
           <p>{selectedAddons.map((item) => item.label).join(", ") || "-"}</p>
@@ -88,20 +377,7 @@ export default function LiveBreakdown({ form, totals, settings, catalog }) {
           <strong>Selected Menu Items</strong>
           <p>{selectedMenuItems.map((item) => item.label).join(", ") || "-"}</p>
         </div>
-      </div>
-
-      <hr />
-
-      <dl className="kv-list totals">
-        <div><dt>Subtotal</dt><dd>{currency(subtotal)}</dd></div>
-        <div><dt>Service Fee</dt><dd>{currency(totals.serviceFee)}</dd></div>
-        <div><dt>Tax</dt><dd>{currency(totals.tax)}</dd></div>
-        <div><dt>Menu Items</dt><dd>{currency(totals.menu)}</dd></div>
-        <div><dt>Service ({Math.round(totals.serviceFeePctApplied * 1000) / 10}%)</dt><dd>{currency(totals.serviceFee)}</dd></div>
-        <div><dt>Tax ({Math.round(totals.taxRateApplied * 1000) / 10}%)</dt><dd>{currency(totals.tax)}</dd></div>
-        <div><dt>Total</dt><dd>{currency(totals.total)}</dd></div>
-        <div><dt>Deposit ({Math.round(settings.depositPct * 100)}%)</dt><dd>{currency(totals.deposit)}</dd></div>
-      </dl>
+      </section>
     </aside>
   );
 }

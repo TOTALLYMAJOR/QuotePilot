@@ -38,6 +38,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Agent governance, performance guardrail docs, and technology exception log.
 - Governance enforcement script (`scripts/check-doc-governance.mjs`) and bundle budget gate (`scripts/check-bundle-budget.mjs`).
 - Lighthouse CI configuration and bundle baseline file for hard UX/performance gates.
+- Wizard UI helper module (`src/lib/wizardUi.js`) with reusable step validation, step-status modeling, event-type template defaulting, and breakdown delta detection functions plus dedicated unit coverage (`src/lib/__tests__/wizardUi.test.js`).
 
 ### Changed
 
@@ -79,6 +80,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Hardened Twilio delivery so SMS provider errors no longer block core quote save or Stripe checkout workflows.
 - Updated Playwright `webServer` configuration to use cross-platform env injection so Windows test runs start correctly.
 - Fixed CI Lighthouse Chromium path step quoting so `Governance + Perf Gates` runs cleanly in GitHub Actions.
+- Delivered a premium quote-wizard UX overhaul in one frontend pass:
+  - Elevated CTA hierarchy with a new hero `Get Instant Quote` primary action, compact header quick-action CTA, and reduced-emphasis secondary nav pills.
+  - Refactored Step 1 into accordion groups with progressive disclosure (`Core Event Basics`, `Client Contact`, `Advanced Pricing Overrides`, `Staffing Overrides`) and conditional bartender/staffing override visibility.
+  - Added template-driven smart defaults on event-type changes with non-destructive apply rules (empty/default + untouched fields only).
+  - Upgraded the stepper to explicit `current/completed/incomplete/locked` states with microcopy, warning treatment, and soft-lock forward gating on Step 1 required fields.
+  - Reworked the live breakdown panel into grouped financial dashboard blocks with sticky desktop behavior, animated monetary transitions, and transient row-level delta cues.
+  - Improved input ergonomics with guest/bartender steppers, event-hours slider + numeric sync, inline validation feedback, and motion/focus polish honoring `prefers-reduced-motion`.
+- Expanded Playwright smoke coverage for the new UX guidance behaviors: Step 1 soft-lock affordance, conditional bartender override visibility, hero CTA continuity, and live breakdown change cues.
 
 ## [2026-03-10]
 

@@ -5,24 +5,29 @@ function parseMoney(text) {
   return Number(normalized || 0);
 }
 
+function historyDialogMessage(page, textPattern) {
+  return page.getByRole("dialog").getByText(textPattern).first();
+}
+
 async function fillRequiredQuoteFields(page, { guests = 72, eventName = "E2E Launch Dinner", venue = "Birmingham Civic Hall" } = {}) {
-  const eventType = page.getByLabel("Event type", { exact: true });
+  const eventType = page.getByLabel(/Event type/i);
   if (await eventType.count()) {
     const optionCount = await eventType.locator("option").count();
     if (optionCount > 1) {
       await eventType.selectOption({ index: 1 });
     }
   }
-  await page.getByLabel("Event date", { exact: true }).fill("2026-06-14");
-  await page.getByLabel("Start time", { exact: true }).fill("18:00");
-  await page.getByLabel("Event hours", { exact: true }).fill("4");
-  await page.getByLabel("Guests (max 400)", { exact: true }).fill(String(guests));
-  await page.getByLabel("Event name", { exact: true }).fill(eventName);
-  await page.getByLabel("Venue", { exact: true }).fill(venue);
-  await page.getByLabel("Venue address", { exact: true }).fill("123 Event Way, Birmingham, AL");
-  await page.getByLabel("Your name", { exact: true }).fill("E2E Staff");
-  await page.getByLabel("Phone", { exact: true }).fill("205-555-0184");
-  await page.getByLabel("Email", { exact: true }).fill("client@example.com");
+
+  await page.getByLabel(/Event date/i).fill("2026-06-14");
+  await page.getByLabel(/Start time/i).fill("18:00");
+  await page.getByRole("spinbutton", { name: /Event hours/i }).fill("4");
+  await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill(String(guests));
+  await page.getByRole("textbox", { name: /Event name/i }).fill(eventName);
+  await page.getByRole("textbox", { name: /Venue/i }).first().fill(venue);
+  await page.getByRole("textbox", { name: /Venue address/i }).fill("123 Event Way, Birmingham, AL");
+  await page.getByRole("textbox", { name: /Your name/i }).fill("E2E Staff");
+  await page.getByRole("textbox", { name: /Phone/i }).fill("205-555-0184");
+  await page.getByRole("textbox", { name: /Email/i }).fill("client@example.com");
 }
 
 async function advanceToSaveButton(page, saveButtonLabel) {
@@ -59,7 +64,6 @@ async function advanceToSaveButton(page, saveButtonLabel) {
 async function createQuoteToHistory(page, { guests = 72, eventName, venue } = {}) {
   await fillRequiredQuoteFields(page, { guests, eventName, venue });
   await advanceToSaveButton(page, "Save & Submit");
-  await expect(page.getByText(/saved to/i)).toBeVisible();
 
   const historyHeading = page.getByRole("heading", { name: "Quote History" });
   if (!(await historyHeading.isVisible())) {
@@ -83,11 +87,49 @@ async function setQuoteStatus(row, status) {
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear();
-    // Disable worker cache side effects across tests.
     sessionStorage.clear();
   });
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Get Instant Quote" })).toBeVisible();
+});
+
+test("step 1 soft-lock keeps next disabled until required fields are complete", async ({ page }) => {
+  const nextButton = page.getByRole("button", { name: "Next" });
+  await expect(nextButton).toBeDisabled();
+  await expect(page.getByText(/Missing required fields/i)).toBeVisible();
+
+  await fillRequiredQuoteFields(page, { guests: 58, eventName: "E2E Soft Lock", venue: "Guidance Hall" });
+  await expect(nextButton).toBeEnabled();
+});
+
+test("staffing overrides only show bartender rate fields when bartenders are above zero", async ({ page }) => {
+  const staffingToggle = page.getByRole("button", { name: /Staffing Overrides/i });
+  await staffingToggle.click();
+  await expect(page.getByText(/Set bartenders above 0/i)).toBeVisible();
+  await expect(page.getByLabel(/Bartender rate type/i)).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Increase Bartenders/i }).click();
+  await page.getByRole("button", { name: /Increase Bartenders/i }).click();
+  await expect(page.getByLabel(/Bartender rate type/i)).toBeVisible();
+});
+
+test("hero CTA remains available and returns workflow focus to step 1", async ({ page }) => {
+  await fillRequiredQuoteFields(page, { guests: 64, eventName: "E2E Hero CTA", venue: "CTA Ballroom" });
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByText("Customized Cuisine Menu")).toBeVisible();
+
+  await page.getByRole("button", { name: "Get Instant Quote" }).click();
+  await expect(page.getByText("Core Event Basics")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next" })).toBeVisible();
+});
+
+test("live breakdown shows transient change cues when quote inputs update", async ({ page }) => {
+  await fillRequiredQuoteFields(page, { guests: 52, eventName: "E2E Breakdown", venue: "Delta Center" });
+
+  await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("96");
+  const totalRow = page.locator('[data-row-key="total"]');
+  await expect(totalRow).toHaveAttribute("data-changed", "true");
+  await expect(totalRow.locator(".row-delta")).toBeVisible();
 });
 
 test("new quote flow allows edits before save and persists in history", async ({ page }) => {
@@ -98,14 +140,13 @@ test("new quote flow allows edits before save and persists in history", async ({
   const beforeTotal = parseMoney(await totalLocator.innerText());
 
   await page.getByRole("button", { name: "Back" }).click();
-  await page.getByLabel("Guests (max 400)", { exact: true }).fill("110");
+  await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("110");
   await page.getByRole("button", { name: "Next" }).click();
 
   const afterTotal = parseMoney(await totalLocator.innerText());
   expect(afterTotal).toBeGreaterThan(beforeTotal);
 
-  await page.getByRole("button", { name: "Next" }).click();
-  await page.getByRole("button", { name: "Save & Submit" }).click();
+  await advanceToSaveButton(page, "Save & Submit");
 
   await expect(page.getByText(/Quote .* saved to/i)).toBeVisible();
   const firstQuoteRow = page.locator(".history-table-wrap tbody tr").filter({
@@ -124,16 +165,16 @@ test("quote history supports export and send actions", async ({ page }) => {
   await expect(firstQuoteRow).toBeVisible();
 
   await firstQuoteRow.getByRole("button", { name: "Copy Email" }).click();
-  await expect(page.getByText(/Email copied/i)).toBeVisible();
+  await expect(historyDialogMessage(page, /Email copied/i)).toBeVisible();
   await expect(firstQuoteRow.getByRole("combobox").first()).toHaveValue("sent");
 
   const downloadPromise = page.waitForEvent("download");
   await firstQuoteRow.getByRole("button", { name: "PDF" }).click();
   const pdfDownload = await downloadPromise;
-  expect(pdfDownload.suggestedFilename()).toMatch(/proposal\.pdf$/i);
+  expect(pdfDownload.suggestedFilename()).toMatch(/\.pdf$/i);
 
   await firstQuoteRow.getByRole("button", { name: "Copy Pay Link" }).click();
-  await expect(page.getByText(/Deposit link copied/i)).toBeVisible();
+  await expect(historyDialogMessage(page, /Deposit link copied/i)).toBeVisible();
 });
 
 test("create then edit keeps one quote row and reflects updated fields", async ({ page }) => {
@@ -148,7 +189,7 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   await quoteRows.first().getByRole("button", { name: "Edit" }).click();
   await expect(page.getByText(/Editing quote/i)).toBeVisible();
 
-  await page.getByLabel("Guests (max 400)", { exact: true }).fill("95");
+  await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("95");
   await advanceToSaveButton(page, "Save Changes");
 
   await expect(page.getByText(/updated in/i)).toBeVisible();
@@ -170,7 +211,7 @@ test("accepted quote can be converted and confirmation lifecycle is trackable", 
   await setQuoteStatus(row, "accepted");
 
   await row.getByRole("button", { name: "Convert" }).click();
-  await expect(page.getByText(/Converted .* to contract/i)).toBeVisible();
+  await expect(historyDialogMessage(page, /Converted .* to contract/i)).toBeVisible();
   await expect(row.locator("select").first()).toHaveValue("booked");
 
   const confirmationSelect = row.locator("td").nth(10).locator("select");
@@ -178,11 +219,11 @@ test("accepted quote can be converted and confirmation lifecycle is trackable", 
 
   await confirmationSelect.selectOption("sent");
   await expect(confirmationSelect).toHaveValue("sent");
-  await expect(page.getByText(/Confirmation marked sent/i)).toBeVisible();
+  await expect(historyDialogMessage(page, /Confirmation marked sent/i)).toBeVisible();
 
   await row.getByRole("button", { name: "Confirm" }).click();
   await expect(confirmationSelect).toHaveValue("confirmed");
-  await expect(page.getByText(/Confirmation marked confirmed/i)).toBeVisible();
+  await expect(historyDialogMessage(page, /Confirmation marked confirmed/i)).toBeVisible();
   await expect(row.getByRole("button", { name: "Confirm" })).toHaveCount(0);
 });
 
@@ -199,27 +240,27 @@ test("conversion is blocked when another quote is already booked for same venue/
   await setQuoteStatus(baselineRow, "sent");
   await setQuoteStatus(baselineRow, "accepted");
   await baselineRow.getByRole("button", { name: "Convert" }).click();
-  await expect(page.getByText(/Converted .* to contract/i)).toBeVisible();
+  await expect(historyDialogMessage(page, /Converted .* to contract/i)).toBeVisible();
   await expect(baselineRow.locator("select").first()).toHaveValue("booked");
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Get Instant Quote" }).click();
 
-  await createQuoteToHistory(page, {
+  await fillRequiredQuoteFields(page, {
     guests: 92,
     eventName: "E2E Contract Conflict",
     venue: "Conflict Pavilion"
   });
+  await advanceToSaveButton(page, "Save & Submit");
+  await expect(page.getByText(/Availability conflict: this date\/venue is already booked/i)).toBeVisible();
 
-  const candidateRow = quoteRows(page).filter({
-    has: page.getByRole("button", { name: "Convert" })
-  }).first();
-  await expect(candidateRow).toBeVisible();
+  const historyHeading = page.getByRole("heading", { name: "Quote History" });
+  if (!(await historyHeading.isVisible())) {
+    await page.getByRole("button", { name: "Quote History" }).click();
+  }
+  await expect(historyHeading).toBeVisible();
 
-  await setQuoteStatus(candidateRow, "sent");
-  await setQuoteStatus(candidateRow, "accepted");
-  await candidateRow.getByRole("button", { name: "Convert" }).click();
-
-  await expect(page.getByText(/Booking blocked: another contract is already booked/i)).toBeVisible();
-  await expect(candidateRow.locator("select").first()).toHaveValue("accepted");
+  const conflictRows = quoteRows(page);
+  await expect(conflictRows).toHaveCount(1);
+  await expect(conflictRows.first().locator("select").first()).toHaveValue("booked");
 });

@@ -1,11 +1,109 @@
+import { useState } from "react";
 import { currency } from "../lib/quoteCalculator";
 
-function Field({ label, children }) {
+function joinClassNames(...parts) {
+  return parts.filter(Boolean).join(" ");
+}
+
+function Field({ label, children, error = "", hint = "", required = false, className = "" }) {
   return (
-    <label className="field">
-      <span>{label}</span>
+    <label className={joinClassNames("field", className, error && "field-error")}> 
+      <span>
+        {label}
+        {required && <em className="field-required" aria-hidden="true">*</em>}
+      </span>
       {children}
+      {error && <small className="field-error-note">{error}</small>}
+      {!error && hint && <small className="field-hint">{hint}</small>}
     </label>
+  );
+}
+
+function AccordionGroup({
+  id,
+  title,
+  description,
+  open,
+  onToggle,
+  children,
+  optional = false,
+  collapsedHint = ""
+}) {
+  return (
+    <section className={joinClassNames("accordion-group", open && "open")}> 
+      <button
+        type="button"
+        className="accordion-trigger"
+        onClick={() => onToggle(id)}
+        aria-expanded={open}
+        aria-controls={`accordion-panel-${id}`}
+      >
+        <span>
+          <strong>{title}</strong>
+          {description && <small>{description}</small>}
+        </span>
+        <em>{open ? "Hide" : "Show"}</em>
+      </button>
+      {!open && optional && collapsedHint && (
+        <p className="accordion-collapsed-helper">{collapsedHint}</p>
+      )}
+      {open && (
+        <div id={`accordion-panel-${id}`} className="accordion-panel">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StepperNumberInput({
+  label,
+  min,
+  max,
+  value,
+  onChange,
+  onBlur,
+  error = "",
+  hint = "",
+  required = false
+}) {
+  const safeValue = Number.isFinite(Number(value)) ? Number(value) : 0;
+  const decrementDisabled = safeValue <= min;
+  const incrementDisabled = safeValue >= max;
+
+  return (
+    <Field label={label} error={error} hint={hint} required={required} className="field-stepper">
+      <div className="stepper-input">
+        <button
+          type="button"
+          className="ghost compact"
+          onClick={() => onChange(Math.max(min, safeValue - 1))}
+          disabled={decrementDisabled}
+          aria-label={`Decrease ${label}`}
+        >
+          -
+        </button>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          value={safeValue}
+          aria-label={label}
+          onChange={(e) => onChange(Number(e.target.value || 0))}
+          onBlur={onBlur}
+          aria-invalid={Boolean(error)}
+        />
+        <button
+          type="button"
+          className="ghost compact"
+          onClick={() => onChange(Math.min(max, safeValue + 1))}
+          disabled={incrementDisabled}
+          aria-label={`Increase ${label}`}
+        >
+          +
+        </button>
+      </div>
+    </Field>
   );
 }
 
@@ -16,137 +114,366 @@ export function StepEvent({
   settings,
   onTemplateChange,
   eventTypes = [],
-  onEventTypeChange
+  onEventTypeChange,
+  onFieldChange,
+  onFieldBlur,
+  touchedFields = {},
+  fieldErrors = {},
+  showValidation = false
 }) {
   const templates = Array.isArray(settings?.eventTemplates) ? settings.eventTemplates : [];
   const taxRegions = Array.isArray(settings?.taxRegions) ? settings.taxRegions : [];
   const seasonProfiles = Array.isArray(settings?.seasonalProfiles) ? settings.seasonalProfiles : [];
   const bartenderRateTypes = Array.isArray(settings?.bartenderRateTypes) ? settings.bartenderRateTypes : [];
   const staffingRateTypes = Array.isArray(settings?.staffingRateTypes) ? settings.staffingRateTypes : [];
+  const [openGroups, setOpenGroups] = useState({
+    core: true,
+    contact: true,
+    advancedPricing: false,
+    staffing: false
+  });
+
+  const hasBartenders = Number(form.bartenders || 0) > 0;
+  const staffingContextRelevant =
+    settings?.staffingLaborEnabled !== false &&
+    String(form.style || "").trim().toLowerCase() !== "drop-off";
+
+  const toggleGroup = (groupId) => {
+    setOpenGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  const markBlur = (field) => {
+    if (typeof onFieldBlur === "function") onFieldBlur(field);
+  };
+
+  const getError = (field) => {
+    if (!fieldErrors?.[field]) return "";
+    if (showValidation || touchedFields?.[field]) return fieldErrors[field];
+    return "";
+  };
+
+  const updateField = (field, value) => {
+    if (typeof onFieldChange === "function") {
+      onFieldChange(field, value);
+      return;
+    }
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   return (
-    <div className="grid two-col">
-      <Field label="Event template">
-        <select value={form.eventTemplateId || "custom"} onChange={(e) => onTemplateChange(e.target.value)}>
-          <option value="custom">Custom</option>
-          {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
-        </select>
-      </Field>
-      <Field label="Event type">
-        <select
-          value={form.eventTypeId || ""}
-          onChange={(e) => (typeof onEventTypeChange === "function"
-            ? onEventTypeChange(e.target.value)
-            : setForm((f) => ({ ...f, eventTypeId: e.target.value })))}
-        >
-          <option value="">
-            {eventTypes.length ? "Select event type" : "No event types available"}
-          </option>
-          {eventTypes.map((eventType) => (
-            <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Event date"><input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} /></Field>
-      <Field label="Start time"><input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} /></Field>
-      <Field label="Event hours"><input type="number" min="1" max="12" value={form.hours} onChange={(e) => setForm((f) => ({ ...f, hours: Number(e.target.value) }))} /></Field>
-      <Field label="Bartenders"><input type="number" min="0" max="10" value={form.bartenders} onChange={(e) => setForm((f) => ({ ...f, bartenders: Number(e.target.value) }))} /></Field>
-      <Field label="Bartender rate type">
-        <select
-          value={form.bartenderRateTypeId || ""}
-          onChange={(e) => setForm((f) => ({ ...f, bartenderRateTypeId: e.target.value }))}
-        >
-          <option value="">Default bartender rate</option>
-          {bartenderRateTypes.map((rateType) => (
-            <option key={rateType.id} value={rateType.id}>
-              {rateType.name} ({currency(rateType.rate)})
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Bartender rate override (optional)">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={form.bartenderRateOverride ?? ""}
-          onChange={(e) => setForm((f) => ({ ...f, bartenderRateOverride: e.target.value }))}
-          placeholder="Use selected/default bartender type"
-        />
-      </Field>
-      <Field label="Staffing rate type">
-        <select
-          value={form.staffingRateTypeId || ""}
-          onChange={(e) => setForm((f) => ({ ...f, staffingRateTypeId: e.target.value }))}
-        >
-          <option value="">Default staffing rate</option>
-          {staffingRateTypes.map((rateType) => (
-            <option key={rateType.id} value={rateType.id}>
-              {rateType.name} (Server {currency(rateType.serverRate)} / Chef {currency(rateType.chefRate)})
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Server rate override (optional)">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={form.serverRateOverride ?? ""}
-          onChange={(e) => setForm((f) => ({ ...f, serverRateOverride: e.target.value }))}
-          placeholder="Use selected/default staffing type"
-        />
-      </Field>
-      <Field label="Chef rate override (optional)">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={form.chefRateOverride ?? ""}
-          onChange={(e) => setForm((f) => ({ ...f, chefRateOverride: e.target.value }))}
-          placeholder="Use selected/default staffing type"
-        />
-      </Field>
-      <Field label="Guests (max 400)"><input type="number" min="1" max="400" value={form.guests} onChange={(e) => setForm((f) => ({ ...f, guests: Number(e.target.value) }))} /></Field>
-      <Field label="Event name"><input type="text" value={form.eventName} onChange={(e) => setForm((f) => ({ ...f, eventName: e.target.value }))} /></Field>
-      <Field label="Venue"><input type="text" value={form.venue} onChange={(e) => setForm((f) => ({ ...f, venue: e.target.value }))} /></Field>
-      <Field label="Venue address"><input type="text" value={form.venueAddress || ""} onChange={(e) => setForm((f) => ({ ...f, venueAddress: e.target.value }))} /></Field>
-      <Field label="Client / Organization"><input type="text" value={form.clientOrg} onChange={(e) => setForm((f) => ({ ...f, clientOrg: e.target.value }))} /></Field>
-      <Field label="Service style">
-        <select value={form.style} onChange={(e) => setForm((f) => ({ ...f, style: e.target.value }))}>
-          {styles.map((style) => <option key={style} value={style}>{style}</option>)}
-        </select>
-      </Field>
-      <Field label="Tax region">
-        <select value={form.taxRegion || ""} onChange={(e) => setForm((f) => ({ ...f, taxRegion: e.target.value }))}>
-          {taxRegions.map((region) => (
-            <option key={region.id} value={region.id}>
-              {region.name} ({Math.round(Number(region.rate || 0) * 1000) / 10}%)
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Season profile">
-        <select
-          value={form.seasonProfileId || "auto"}
-          onChange={(e) => setForm((f) => ({ ...f, seasonProfileId: e.target.value }))}
-        >
-          <option value="auto">Auto detect</option>
-          {seasonProfiles.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}
-        </select>
-      </Field>
-      <Field label="Show disposables on quote">
-        <select
-          value={form.includeDisposables === false ? "no" : "yes"}
-          onChange={(e) => setForm((f) => ({ ...f, includeDisposables: e.target.value === "yes" }))}
-        >
-          <option value="yes">Yes</option>
-          <option value="no">No</option>
-        </select>
-      </Field>
-      <Field label="Your name"><input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></Field>
-      <Field label="Phone"><input type="tel" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></Field>
-      <Field label="Email"><input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></Field>
+    <div className="event-step-layout">
+      <AccordionGroup
+        id="core"
+        title="Core Event Basics"
+        description="Required details used to unlock the guided flow"
+        open={openGroups.core}
+        onToggle={toggleGroup}
+      >
+        <div className="grid two-col">
+          <Field label="Event type" error={getError("eventTypeId")} required>
+            <select
+              value={form.eventTypeId || ""}
+              onChange={(e) => (typeof onEventTypeChange === "function"
+                ? onEventTypeChange(e.target.value)
+                : updateField("eventTypeId", e.target.value))}
+              onBlur={() => markBlur("eventTypeId")}
+              aria-invalid={Boolean(getError("eventTypeId"))}
+            >
+              <option value="">
+                {eventTypes.length ? "Select event type" : "No event types available"}
+              </option>
+              {eventTypes.map((eventType) => (
+                <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Event date" error={getError("date")} required>
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => updateField("date", e.target.value)}
+              onBlur={() => markBlur("date")}
+              aria-invalid={Boolean(getError("date"))}
+            />
+          </Field>
+          <Field label="Start time">
+            <input
+              type="time"
+              value={form.time}
+              onChange={(e) => updateField("time", e.target.value)}
+              onBlur={() => markBlur("time")}
+            />
+          </Field>
+          <Field label="Event hours" error={getError("hours")}>
+            <div className="hours-control">
+              <div className="hours-meta">
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={Math.max(1, Number(form.hours || 1))}
+                  aria-label="Event hours"
+                  onChange={(e) => updateField("hours", Number(e.target.value || 0))}
+                  onBlur={() => markBlur("hours")}
+                />
+                <output>{Math.max(1, Number(form.hours || 1))} hrs</output>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="12"
+                value={Math.max(1, Number(form.hours || 1))}
+                aria-label="Event hours slider"
+                onChange={(e) => updateField("hours", Number(e.target.value || 1))}
+              />
+            </div>
+          </Field>
+
+          <StepperNumberInput
+            label="Guests (max 400)"
+            min={0}
+            max={400}
+            value={Math.max(0, Number(form.guests || 0))}
+            onChange={(value) => updateField("guests", value)}
+            onBlur={() => markBlur("guests")}
+            error={getError("guests")}
+            required
+          />
+
+          <StepperNumberInput
+            label="Bartenders"
+            min={0}
+            max={10}
+            value={Math.max(0, Number(form.bartenders || 0))}
+            onChange={(value) => updateField("bartenders", value)}
+            onBlur={() => markBlur("bartenders")}
+          />
+
+          <Field label="Event name" error={getError("eventName")} required>
+            <input
+              type="text"
+              value={form.eventName}
+              onChange={(e) => updateField("eventName", e.target.value)}
+              onBlur={() => markBlur("eventName")}
+              aria-invalid={Boolean(getError("eventName"))}
+            />
+          </Field>
+          <Field label="Venue" error={getError("venue")} required>
+            <input
+              type="text"
+              value={form.venue}
+              onChange={(e) => updateField("venue", e.target.value)}
+              onBlur={() => markBlur("venue")}
+              aria-invalid={Boolean(getError("venue"))}
+            />
+          </Field>
+          <Field label="Venue address">
+            <input
+              type="text"
+              value={form.venueAddress || ""}
+              onChange={(e) => updateField("venueAddress", e.target.value)}
+              onBlur={() => markBlur("venueAddress")}
+            />
+          </Field>
+        </div>
+      </AccordionGroup>
+
+      <AccordionGroup
+        id="contact"
+        title="Client Contact"
+        description="Required contact details for proposal delivery"
+        open={openGroups.contact}
+        onToggle={toggleGroup}
+      >
+        <div className="grid two-col">
+          <Field label="Your name" error={getError("name")} required>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => updateField("name", e.target.value)}
+              onBlur={() => markBlur("name")}
+              aria-invalid={Boolean(getError("name"))}
+            />
+          </Field>
+          <Field label="Client / Organization">
+            <input
+              type="text"
+              value={form.clientOrg}
+              onChange={(e) => updateField("clientOrg", e.target.value)}
+              onBlur={() => markBlur("clientOrg")}
+            />
+          </Field>
+          <Field label="Phone">
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) => updateField("phone", e.target.value)}
+              onBlur={() => markBlur("phone")}
+            />
+          </Field>
+          <Field label="Email" error={getError("email")} required>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => updateField("email", e.target.value)}
+              onBlur={() => markBlur("email")}
+              aria-invalid={Boolean(getError("email"))}
+            />
+          </Field>
+        </div>
+      </AccordionGroup>
+
+      <AccordionGroup
+        id="advancedPricing"
+        title="Advanced Pricing Overrides"
+        description="Optional controls for templates, seasonality, and tax context"
+        optional
+        collapsedHint="Optional: use only when you need custom pricing context beyond core event details."
+        open={openGroups.advancedPricing}
+        onToggle={toggleGroup}
+      >
+        <div className="grid two-col">
+          <Field label="Event template">
+            <select
+              value={form.eventTemplateId || "custom"}
+              onChange={(e) => onTemplateChange(e.target.value)}
+              onBlur={() => markBlur("eventTemplateId")}
+            >
+              <option value="custom">Custom</option>
+              {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Service style">
+            <select
+              value={form.style}
+              onChange={(e) => updateField("style", e.target.value)}
+              onBlur={() => markBlur("style")}
+            >
+              {styles.map((style) => <option key={style} value={style}>{style}</option>)}
+            </select>
+          </Field>
+          <Field label="Tax region">
+            <select
+              value={form.taxRegion || ""}
+              onChange={(e) => updateField("taxRegion", e.target.value)}
+              onBlur={() => markBlur("taxRegion")}
+            >
+              {taxRegions.map((region) => (
+                <option key={region.id} value={region.id}>
+                  {region.name} ({Math.round(Number(region.rate || 0) * 1000) / 10}%)
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Season profile">
+            <select
+              value={form.seasonProfileId || "auto"}
+              onChange={(e) => updateField("seasonProfileId", e.target.value)}
+              onBlur={() => markBlur("seasonProfileId")}
+            >
+              <option value="auto">Auto detect</option>
+              {seasonProfiles.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Show disposables on quote">
+            <select
+              value={form.includeDisposables === false ? "no" : "yes"}
+              onChange={(e) => updateField("includeDisposables", e.target.value === "yes")}
+              onBlur={() => markBlur("includeDisposables")}
+            >
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </Field>
+        </div>
+      </AccordionGroup>
+
+      <AccordionGroup
+        id="staffing"
+        title="Staffing Overrides"
+        description="Optional labor rate controls"
+        optional
+        collapsedHint="Optional: rate overrides are only needed when you need to override default labor policy."
+        open={openGroups.staffing}
+        onToggle={toggleGroup}
+      >
+        {!staffingContextRelevant && (
+          <p className="source-note">Staffing overrides are hidden for the current service style or labor mode.</p>
+        )}
+        {staffingContextRelevant && (
+          <div className="grid two-col">
+            <Field label="Staffing rate type">
+              <select
+                value={form.staffingRateTypeId || ""}
+                onChange={(e) => updateField("staffingRateTypeId", e.target.value)}
+                onBlur={() => markBlur("staffingRateTypeId")}
+              >
+                <option value="">Default staffing rate</option>
+                {staffingRateTypes.map((rateType) => (
+                  <option key={rateType.id} value={rateType.id}>
+                    {rateType.name} (Server {currency(rateType.serverRate)} / Chef {currency(rateType.chefRate)})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Server rate override (optional)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.serverRateOverride ?? ""}
+                onChange={(e) => updateField("serverRateOverride", e.target.value)}
+                onBlur={() => markBlur("serverRateOverride")}
+                placeholder="Use selected/default staffing type"
+              />
+            </Field>
+            <Field label="Chef rate override (optional)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.chefRateOverride ?? ""}
+                onChange={(e) => updateField("chefRateOverride", e.target.value)}
+                onBlur={() => markBlur("chefRateOverride")}
+                placeholder="Use selected/default staffing type"
+              />
+            </Field>
+
+            {hasBartenders && (
+              <>
+                <Field label="Bartender rate type">
+                  <select
+                    value={form.bartenderRateTypeId || ""}
+                    onChange={(e) => updateField("bartenderRateTypeId", e.target.value)}
+                    onBlur={() => markBlur("bartenderRateTypeId")}
+                  >
+                    <option value="">Default bartender rate</option>
+                    {bartenderRateTypes.map((rateType) => (
+                      <option key={rateType.id} value={rateType.id}>
+                        {rateType.name} ({currency(rateType.rate)})
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Bartender rate override (optional)">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.bartenderRateOverride ?? ""}
+                    onChange={(e) => updateField("bartenderRateOverride", e.target.value)}
+                    onBlur={() => markBlur("bartenderRateOverride")}
+                    placeholder="Use selected/default bartender type"
+                  />
+                </Field>
+              </>
+            )}
+            {!hasBartenders && (
+              <p className="source-note">Set bartenders above 0 in Core Event Basics to enable bartender pricing controls.</p>
+            )}
+          </div>
+        )}
+      </AccordionGroup>
     </div>
   );
 }
@@ -155,7 +482,8 @@ export function StepMenu({
   form,
   setForm,
   menuSections,
-  menuLoading = false
+  menuLoading = false,
+  onSelectionTouched
 }) {
   const resolvedMenuSections = Array.isArray(menuSections) ? menuSections : [];
   const resolvePricingType = (item) => {
@@ -175,6 +503,7 @@ export function StepMenu({
     const itemId = String(item?.id || "").trim();
     if (!itemId) return;
     const pricingType = resolvePricingType(item);
+    if (typeof onSelectionTouched === "function") onSelectionTouched("menuItems");
     setForm((f) => {
       const nextSelected = new Set(Array.isArray(f.menuItems) ? f.menuItems : []);
       const nextQuantities = { ...(f.menuItemQuantities || {}) };
@@ -197,6 +526,7 @@ export function StepMenu({
 
   const patchMenuQuantity = (itemId, value) => {
     const quantity = Math.max(1, Math.round(Number(value || 1)));
+    if (typeof onSelectionTouched === "function") onSelectionTouched("menuItems");
     setForm((f) => ({
       ...f,
       menuItemQuantities: {
@@ -268,7 +598,8 @@ export function StepServices({
   catalog,
   recommendations,
   onApplyRecommendation,
-  guidedSellingEnabled: guidedSellingEnabledProp
+  guidedSellingEnabled: guidedSellingEnabledProp,
+  onSelectionTouched
 }) {
   const guidedSellingEnabled =
     guidedSellingEnabledProp !== undefined
@@ -290,6 +621,7 @@ export function StepServices({
     const id = String(item?.id || "").trim();
     if (!id) return;
     const pricingType = resolvePricingType(item, key === "rentals" ? "per_item" : "per_event");
+    if (typeof onSelectionTouched === "function") onSelectionTouched(key);
     setForm((f) => {
       const set = new Set(Array.isArray(f[key]) ? f[key] : []);
       const quantityMap = { ...(f[quantityKey] || {}) };
@@ -310,8 +642,9 @@ export function StepServices({
     });
   };
 
-  const patchQuantity = (quantityKey, id, value) => {
+  const patchQuantity = (quantityKey, id, value, touchedFieldName) => {
     const quantity = Math.max(1, Math.round(Number(value || 1)));
+    if (typeof onSelectionTouched === "function") onSelectionTouched(touchedFieldName);
     setForm((f) => ({
       ...f,
       [quantityKey]: {
@@ -324,7 +657,13 @@ export function StepServices({
   return (
     <div className="grid two-col">
       <Field label="Package tier">
-        <select value={form.pkg} onChange={(e) => setForm((f) => ({ ...f, pkg: e.target.value }))}>
+        <select
+          value={form.pkg}
+          onChange={(e) => {
+            if (typeof onSelectionTouched === "function") onSelectionTouched("pkg");
+            setForm((f) => ({ ...f, pkg: e.target.value }));
+          }}
+        >
           {catalog.packages.map((p) => <option key={p.id} value={p.id}>{p.name} - {currency(p.ppp)}/person</option>)}
         </select>
       </Field>
@@ -333,7 +672,10 @@ export function StepServices({
           type="number"
           min="0"
           value={form.milesRT}
-          onChange={(e) => setForm((f) => ({ ...f, milesRT: Number(e.target.value) }))}
+          onChange={(e) => {
+            if (typeof onSelectionTouched === "function") onSelectionTouched("milesRT");
+            setForm((f) => ({ ...f, milesRT: Number(e.target.value) }));
+          }}
         />
       </Field>
 
@@ -359,7 +701,7 @@ export function StepServices({
                     min="1"
                     step="1"
                     value={Math.max(1, Number(form.addonQuantities?.[item.id] || 1))}
-                    onChange={(e) => patchQuantity("addonQuantities", item.id, e.target.value)}
+                    onChange={(e) => patchQuantity("addonQuantities", item.id, e.target.value, "addons")}
                   />
                 )}
               </label>
@@ -393,7 +735,7 @@ export function StepServices({
                     min="1"
                     step="1"
                     value={Math.max(1, Number(form.rentalQuantities?.[item.id] || fallbackQty))}
-                    onChange={(e) => patchQuantity("rentalQuantities", item.id, e.target.value)}
+                    onChange={(e) => patchQuantity("rentalQuantities", item.id, e.target.value, "rentals")}
                   />
                 )}
               </label>

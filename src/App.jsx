@@ -13,6 +13,14 @@ import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
 import {
+  applyEventTypeTemplateDefaults,
+  buildStepperModel,
+  buildStepStatus,
+  buildStepValidation,
+  findTemplateForEventType,
+  STEP1_REQUIRED_FIELDS
+} from "./lib/wizardUi";
+import {
   checkEventAvailability,
   getQuoteById,
   setQuoteStoreOrganizationId,
@@ -30,10 +38,45 @@ const QuoteCompareModal = lazy(() => import("./components/QuoteCompareModal"));
 const QuoteHistoryModal = lazy(() => import("./components/QuoteHistoryModal"));
 const ReportingDashboardModal = lazy(() => import("./components/ReportingDashboardModal"));
 
-const STEP_LABELS = ["Event Basics", "Menu Selection", "Add-ons / Rentals", "Pricing Summary", "Save / Submit"];
 const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING || "").trim().toLowerCase()
 );
+
+const INITIAL_FORM = {
+  date: "",
+  time: "",
+  hours: 0,
+  bartenders: 0,
+  guests: 0,
+  venue: "",
+  venueAddress: "",
+  eventName: "",
+  clientOrg: "",
+  style: "Buffet",
+  name: "",
+  phone: "",
+  email: "",
+  pkg: "classic",
+  addons: [],
+  addonQuantities: {},
+  rentals: [],
+  rentalQuantities: {},
+  menuItems: [],
+  menuItemQuantities: {},
+  eventTypeId: "",
+  bartenderRateTypeId: "",
+  staffingRateTypeId: "",
+  bartenderRateOverride: "",
+  serverRateOverride: "",
+  chefRateOverride: "",
+  eventTemplateId: "custom",
+  taxRegion: "",
+  seasonProfileId: "auto",
+  milesRT: 0,
+  includeDisposables: true,
+  depositLink: "",
+  payMethod: "card"
+};
 
 function readPortalKeyFromUrl() {
   if (typeof window === "undefined") return "";
@@ -217,42 +260,14 @@ export default function App() {
   const [availabilityNotice, setAvailabilityNotice] = useState("");
   const [editingQuote, setEditingQuote] = useState({ id: "", quoteNumber: "" });
   const [toasts, setToasts] = useState([]);
-
-  const [form, setForm] = useState({
-    date: "",
-    time: "",
-    hours: 0,
-    bartenders: 0,
-    guests: 0,
-    venue: "",
-    venueAddress: "",
-    eventName: "",
-    clientOrg: "",
-    style: "Buffet",
-    name: "",
-    phone: "",
-    email: "",
-    pkg: "classic",
-    addons: [],
-    addonQuantities: {},
-    rentals: [],
-    rentalQuantities: {},
-    menuItems: [],
-    menuItemQuantities: {},
-    eventTypeId: "",
-    bartenderRateTypeId: "",
-    staffingRateTypeId: "",
-    bartenderRateOverride: "",
-    serverRateOverride: "",
-    chefRateOverride: "",
-    eventTemplateId: "custom",
-    taxRegion: "",
-    seasonProfileId: "auto",
-    milesRT: 0,
-    includeDisposables: true,
-    depositLink: "",
-    payMethod: "card"
-  });
+  const [form, setForm] = useState(INITIAL_FORM);
+  const [touchedFields, setTouchedFields] = useState({});
+  const [showStepValidation, setShowStepValidation] = useState(false);
+  const [stepValidation, setStepValidation] = useState(() => buildStepValidation(INITIAL_FORM));
+  const [stepStatus, setStepStatus] = useState(() => buildStepStatus({
+    currentStep: 1,
+    stepValidation: buildStepValidation(INITIAL_FORM)
+  }));
 
   const pushToast = (message, tone = "info") => {
     const id = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -261,6 +276,42 @@ export default function App() {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }, 3600);
   };
+
+  const markFieldsTouched = (fields = []) => {
+    const unique = Array.from(new Set(fields.filter(Boolean)));
+    if (!unique.length) return;
+    setTouchedFields((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      unique.forEach((field) => {
+        if (!next[field]) {
+          next[field] = true;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  };
+
+  const handleStep1FieldChange = (field, value) => {
+    markFieldsTouched([field]);
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleStep1FieldBlur = (field) => {
+    markFieldsTouched([field]);
+  };
+
+  const handleSelectionTouched = (field) => {
+    markFieldsTouched([field]);
+  };
+
+  const stepperModel = useMemo(
+    () => buildStepperModel({ currentStep: step, stepStatus }),
+    [step, stepStatus]
+  );
+  const step1Validation = stepValidation.step1 || { valid: false, missingFields: [], fieldErrors: {} };
+  const step1CanAdvance = step1Validation.valid;
 
   const effectiveMenuSections = useMemo(
     () => (Array.isArray(dynamicMenuSections) ? dynamicMenuSections : []),
@@ -286,6 +337,23 @@ export default function App() {
   const diagnosticsEnabled = featureFlags.diagnostics !== false;
   const dashboardEnabled = featureFlags.reportingDashboard !== false;
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
+
+  useEffect(() => {
+    setStepValidation(buildStepValidation(form));
+  }, [form]);
+
+  useEffect(() => {
+    setStepStatus(buildStepStatus({
+      currentStep: step,
+      stepValidation
+    }));
+  }, [step, stepValidation]);
+
+  useEffect(() => {
+    if (step === 1 && !step1CanAdvance) return;
+    if (!showStepValidation) return;
+    setShowStepValidation(false);
+  }, [showStepValidation, step, step1CanAdvance]);
 
   useEffect(() => {
     setOrganizationId(authSession.organizationId);
@@ -570,19 +638,38 @@ export default function App() {
   };
 
   const handleEventTypeChange = (eventTypeId) => {
-    const nextEventTypeId = String(eventTypeId || "");
+    const nextEventTypeId = String(eventTypeId || "").trim();
+    markFieldsTouched(["eventTypeId"]);
     setGlobalEventTypeId(nextEventTypeId);
-    setForm((prev) => ({
-      ...prev,
+    const templates = Array.isArray(catalog.settings?.eventTemplates) ? catalog.settings.eventTemplates : [];
+    const matchedTemplate = findTemplateForEventType({
       eventTypeId: nextEventTypeId,
-      eventTemplateId: "custom",
-      menuItems: [],
-      menuItemQuantities: {}
-    }));
+      templates,
+      eventTypes: catalog.eventTypes
+    });
+
+    setForm((prev) => {
+      const baseForm = {
+        ...prev,
+        eventTypeId: nextEventTypeId,
+        eventTemplateId: "custom"
+      };
+      const { nextForm } = applyEventTypeTemplateDefaults({
+        form: baseForm,
+        template: matchedTemplate,
+        catalog,
+        touchedFields,
+        initialForm: INITIAL_FORM
+      });
+      return nextForm;
+    });
   };
 
   const applyRecommendation = (item) => {
     if (!item) return;
+    if (item.kind === "package") markFieldsTouched(["pkg"]);
+    if (item.kind === "addon") markFieldsTouched(["addons"]);
+    if (item.kind === "rental") markFieldsTouched(["rentals"]);
 
     setForm((prev) => {
       if (item.kind === "package") {
@@ -616,6 +703,17 @@ export default function App() {
       }
       return prev;
     });
+  };
+
+  const handleNextStep = () => {
+    if (catalog.loading) return;
+    if (step === 1 && !step1CanAdvance) {
+      markFieldsTouched(STEP1_REQUIRED_FIELDS.map((field) => field.key));
+      setShowStepValidation(true);
+      return;
+    }
+    setShowStepValidation(false);
+    setStep((current) => Math.min(5, current + 1));
   };
 
   const handleSubmitQuote = async () => {
@@ -944,6 +1042,8 @@ export default function App() {
       id: quote.id,
       quoteNumber: quote.quoteNumber || quote.id
     });
+    setTouchedFields({});
+    setShowStepValidation(false);
     setHistoryOpen(false);
     setStep(1);
     setSubmitState({
@@ -1041,6 +1141,8 @@ export default function App() {
 
   const handleGetInstantQuote = () => {
     setEditingQuote({ id: "", quoteNumber: "" });
+    setTouchedFields({});
+    setShowStepValidation(false);
     setStep(1);
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1167,7 +1269,7 @@ export default function App() {
             <button className="ghost" onClick={() => setHistoryOpen(true)}>Quote History</button>
             {authSession.isAdmin && <button className="ghost" onClick={() => setAdminOpen(true)}>Admin Catalog</button>}
             {customerPortalEnabled && <button className="ghost" onClick={openPortalMode}>Customer Portal</button>}
-            <button className="cta" onClick={handleGetInstantQuote}>Get Instant Quote</button>
+            <button className="cta header-quick-cta" onClick={handleGetInstantQuote}>Quick Quote</button>
             <button className="ghost" onClick={handleSignOut}>Sign Out</button>
           </div>
         </div>
@@ -1179,6 +1281,12 @@ export default function App() {
             <p className="eyebrow">{heroEyebrow}</p>
             <h1>{heroHeadline}</h1>
             <p>{heroDescription}</p>
+            <div className="hero-cta-row">
+              <button className="cta hero-primary-cta" type="button" onClick={handleGetInstantQuote}>
+                Get Instant Quote
+              </button>
+              <p className="hero-cta-note">Start the guided flow with required fields first, then build the full proposal.</p>
+            </div>
             <div className="hero-pills">
               <span>Signed in: {authSession.user.email}</span>
               <span>Role: {authSession.role}</span>
@@ -1200,12 +1308,23 @@ export default function App() {
       <main className="container wizard-grid" ref={wizardRef}>
         <section className="panel wizard-panel">
           <ol className="stepper">
-            {STEP_LABELS.map((label, idx) => {
-              const num = idx + 1;
+            {stepperModel.map((stepMeta) => {
+              const stepOneMissing = stepMeta.stepNumber === 1 && !step1Validation.valid;
               return (
-                <li key={label} className={step >= num ? "active" : ""}>
-                  <span>{num}</span>
-                  <em>{label}</em>
+                <li
+                  key={stepMeta.label}
+                  className={`stepper-item status-${stepMeta.status} ${stepMeta.isLocked ? "is-locked" : ""}`.trim()}
+                >
+                  <span className="step-badge">
+                    {stepMeta.status === "completed" ? "✓" : stepOneMissing ? "!" : stepMeta.stepNumber}
+                  </span>
+                  <div className="step-copy">
+                    <em>{stepMeta.label}</em>
+                    <small>{stepMeta.microcopy}</small>
+                    {stepOneMissing && (
+                      <small className="step-warning">Missing required fields</small>
+                    )}
+                  </div>
                 </li>
               );
             })}
@@ -1222,7 +1341,17 @@ export default function App() {
                 onTemplateChange={applyEventTemplate}
                 eventTypes={catalog.eventTypes || []}
                 onEventTypeChange={handleEventTypeChange}
+                onFieldChange={handleStep1FieldChange}
+                onFieldBlur={handleStep1FieldBlur}
+                touchedFields={touchedFields}
+                fieldErrors={step1Validation.fieldErrors}
+                showValidation={showStepValidation}
               />
+            )}
+            {!catalog.loading && step === 1 && showStepValidation && !step1CanAdvance && (
+              <p className="warning-note step-guidance">
+                Complete required fields before continuing: {step1Validation.missingFields.map((field) => field.label).join(", ")}.
+              </p>
             )}
             {!catalog.loading && step === 2 && (
               <StepMenu
@@ -1230,6 +1359,7 @@ export default function App() {
                 setForm={setForm}
                 menuSections={effectiveMenuSections}
                 menuLoading={dynamicMenuLoading}
+                onSelectionTouched={handleSelectionTouched}
               />
             )}
             {!catalog.loading && step === 3 && (
@@ -1240,6 +1370,7 @@ export default function App() {
                 recommendations={recommendations}
                 guidedSellingEnabled={effectiveSettings.guidedSellingEnabled !== false}
                 onApplyRecommendation={applyRecommendation}
+                onSelectionTouched={handleSelectionTouched}
               />
             )}
             {!catalog.loading && step === 4 && <StepReview form={form} totals={totals} settings={effectiveSettings} />}
@@ -1247,7 +1378,13 @@ export default function App() {
               <div className="grid two-col">
                 <label className="field">
                   <span>Payment method</span>
-                  <select value={form.payMethod} onChange={(e) => setForm((f) => ({ ...f, payMethod: e.target.value }))}>
+                  <select
+                    value={form.payMethod}
+                    onChange={(e) => {
+                      handleSelectionTouched("payMethod");
+                      setForm((f) => ({ ...f, payMethod: e.target.value }));
+                    }}
+                  >
                     <option value="card">Pay by Card</option>
                     <option value="ach">Pay by ACH/Check</option>
                   </select>
@@ -1281,7 +1418,13 @@ export default function App() {
             </div>
             <div className="right-actions">
               {step < 5 ? (
-                <button className="cta" onClick={() => setStep((s) => Math.min(5, s + 1))} disabled={catalog.loading}>Next</button>
+                <button
+                  className="cta"
+                  onClick={handleNextStep}
+                  disabled={catalog.loading || (step === 1 && !step1CanAdvance)}
+                >
+                  Next
+                </button>
               ) : (
                 <>
                 <button
