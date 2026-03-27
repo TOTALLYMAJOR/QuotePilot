@@ -22,6 +22,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Non-markdown secret asset scanner (`scripts/check-secret-assets.mjs`) with high-confidence token/private-key detection and placeholder-aware hardcoded key checks.
 - GitHub security policy (`.github/SECURITY.md`) with private advisory reporting path and secret-handling response targets.
 - Dependabot configuration (`.github/dependabot.yml`) for weekly npm and GitHub Actions dependency update PRs.
+- Playwright quote-history booking scenarios for conversion/confirmation edge paths, including booked-conflict conversion blocking.
 - VS Code devcontainer config (`.devcontainer/devcontainer.json`) for isolated development using the existing Docker Compose `web-dev` service.
 - End-user operations guide for staff/admin workflows (`docs/USER_MANUAL.md`).
 - Global event-type context provider for cross-surface event-type synchronization (wizard + admin).

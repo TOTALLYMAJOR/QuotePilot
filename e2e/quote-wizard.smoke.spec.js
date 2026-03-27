@@ -56,8 +56,8 @@ async function advanceToSaveButton(page, saveButtonLabel) {
   throw new Error(`Unable to reach save button: ${saveButtonLabel}`);
 }
 
-async function createQuoteToHistory(page, { guests = 72 } = {}) {
-  await fillRequiredQuoteFields(page, { guests });
+async function createQuoteToHistory(page, { guests = 72, eventName, venue } = {}) {
+  await fillRequiredQuoteFields(page, { guests, eventName, venue });
   await advanceToSaveButton(page, "Save & Submit");
   await expect(page.getByText(/saved to/i)).toBeVisible();
 
@@ -66,6 +66,18 @@ async function createQuoteToHistory(page, { guests = 72 } = {}) {
     await page.getByRole("button", { name: "Quote History" }).click();
   }
   await expect(historyHeading).toBeVisible();
+}
+
+function quoteRows(page) {
+  return page.locator(".history-table-wrap tbody tr").filter({
+    has: page.getByRole("button", { name: "Copy Email" })
+  });
+}
+
+async function setQuoteStatus(row, status) {
+  const statusSelect = row.locator("select").first();
+  await statusSelect.selectOption(status);
+  await expect(statusSelect).toHaveValue(status);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -142,4 +154,72 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   await expect(page.getByText(/updated in/i)).toBeVisible();
   await expect(quoteRows).toHaveCount(1);
   await expect(quoteRows.first()).toContainText("95");
+});
+
+test("accepted quote can be converted and confirmation lifecycle is trackable", async ({ page }) => {
+  await createQuoteToHistory(page, {
+    guests: 68,
+    eventName: "E2E Booking Lifecycle",
+    venue: "Lifecycle Ballroom"
+  });
+
+  const row = quoteRows(page).first();
+  await expect(row).toBeVisible();
+
+  await setQuoteStatus(row, "sent");
+  await setQuoteStatus(row, "accepted");
+
+  await row.getByRole("button", { name: "Convert" }).click();
+  await expect(page.getByText(/Converted .* to contract/i)).toBeVisible();
+  await expect(row.locator("select").first()).toHaveValue("booked");
+
+  const confirmationSelect = row.locator("td").nth(10).locator("select");
+  await expect(confirmationSelect).toHaveValue("pending");
+
+  await confirmationSelect.selectOption("sent");
+  await expect(confirmationSelect).toHaveValue("sent");
+  await expect(page.getByText(/Confirmation marked sent/i)).toBeVisible();
+
+  await row.getByRole("button", { name: "Confirm" }).click();
+  await expect(confirmationSelect).toHaveValue("confirmed");
+  await expect(page.getByText(/Confirmation marked confirmed/i)).toBeVisible();
+  await expect(row.getByRole("button", { name: "Confirm" })).toHaveCount(0);
+});
+
+test("conversion is blocked when another quote is already booked for same venue/date", async ({ page }) => {
+  await createQuoteToHistory(page, {
+    guests: 75,
+    eventName: "E2E Contract Baseline",
+    venue: "Conflict Pavilion"
+  });
+
+  const baselineRow = quoteRows(page).first();
+  await expect(baselineRow).toBeVisible();
+
+  await setQuoteStatus(baselineRow, "sent");
+  await setQuoteStatus(baselineRow, "accepted");
+  await baselineRow.getByRole("button", { name: "Convert" }).click();
+  await expect(page.getByText(/Converted .* to contract/i)).toBeVisible();
+  await expect(baselineRow.locator("select").first()).toHaveValue("booked");
+
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Get Instant Quote" }).click();
+
+  await createQuoteToHistory(page, {
+    guests: 92,
+    eventName: "E2E Contract Conflict",
+    venue: "Conflict Pavilion"
+  });
+
+  const candidateRow = quoteRows(page).filter({
+    has: page.getByRole("button", { name: "Convert" })
+  }).first();
+  await expect(candidateRow).toBeVisible();
+
+  await setQuoteStatus(candidateRow, "sent");
+  await setQuoteStatus(candidateRow, "accepted");
+  await candidateRow.getByRole("button", { name: "Convert" }).click();
+
+  await expect(page.getByText(/Booking blocked: another contract is already booked/i)).toBeVisible();
+  await expect(candidateRow.locator("select").first()).toHaveValue("accepted");
 });
