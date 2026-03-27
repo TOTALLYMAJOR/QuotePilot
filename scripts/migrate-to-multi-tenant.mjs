@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { createRequire } from "node:module";
+import fs from "node:fs/promises";
+import path from "node:path";
 import process from "node:process";
 
 const require = createRequire(import.meta.url);
@@ -30,6 +32,7 @@ function parseArgs(argv) {
   let projectId = "";
   let organizationId = "";
   let dryRun = false;
+  let evidenceOut = "";
 
   for (let i = 0; i < args.length; i += 1) {
     const token = String(args[i] || "").trim();
@@ -43,6 +46,15 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (token === "--evidence-out") {
+      evidenceOut = String(args[i + 1] || "").trim();
+      i += 1;
+      continue;
+    }
+    if (token.startsWith("--evidence-out=")) {
+      evidenceOut = String(token.slice("--evidence-out=".length) || "").trim();
+      continue;
+    }
     if (token === "--organization" || token === "--org") {
       organizationId = slugify(args[i + 1], "default-org");
       i += 1;
@@ -54,8 +66,152 @@ function parseArgs(argv) {
       projectId ||
       String(process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "").trim(),
     organizationId: organizationId || slugify(process.env.FIREBASE_ORGANIZATION_ID || "default-org", "default-org"),
-    dryRun
+    dryRun,
+    evidenceOut
   };
+}
+
+function toInt(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildEvidencePayload({
+  projectId,
+  organizationId,
+  dryRun,
+  timestamp,
+  orgSummary,
+  eventTypes,
+  menuCategories,
+  menuItems,
+  catalogPackages,
+  catalogAddons,
+  catalogRentals,
+  quotes,
+  settings,
+  versions,
+  portal
+}) {
+  const collections = {
+    organizations: {
+      source: 0,
+      created: toInt(orgSummary.created),
+      patched: 0,
+      skipped: 0,
+      wouldCreate: toInt(orgSummary.wouldCreate),
+      wouldPatch: 0
+    },
+    eventTypes: {
+      source: toInt(eventTypes.source),
+      created: toInt(eventTypes.created),
+      patched: toInt(eventTypes.patched),
+      skipped: 0,
+      wouldCreate: toInt(eventTypes.wouldCreate),
+      wouldPatch: toInt(eventTypes.wouldPatch)
+    },
+    menuCategories: {
+      source: toInt(menuCategories.source),
+      created: toInt(menuCategories.created),
+      patched: toInt(menuCategories.patched),
+      skipped: 0,
+      wouldCreate: toInt(menuCategories.wouldCreate),
+      wouldPatch: toInt(menuCategories.wouldPatch)
+    },
+    menuItems: {
+      source: toInt(menuItems.source),
+      created: toInt(menuItems.created),
+      patched: toInt(menuItems.patched),
+      skipped: 0,
+      wouldCreate: toInt(menuItems.wouldCreate),
+      wouldPatch: toInt(menuItems.wouldPatch)
+    },
+    catalogPackages: {
+      source: toInt(catalogPackages.source),
+      created: toInt(catalogPackages.created),
+      patched: toInt(catalogPackages.patched),
+      skipped: 0,
+      wouldCreate: toInt(catalogPackages.wouldCreate),
+      wouldPatch: toInt(catalogPackages.wouldPatch)
+    },
+    catalogAddons: {
+      source: toInt(catalogAddons.source),
+      created: toInt(catalogAddons.created),
+      patched: toInt(catalogAddons.patched),
+      skipped: 0,
+      wouldCreate: toInt(catalogAddons.wouldCreate),
+      wouldPatch: toInt(catalogAddons.wouldPatch)
+    },
+    catalogRentals: {
+      source: toInt(catalogRentals.source),
+      created: toInt(catalogRentals.created),
+      patched: toInt(catalogRentals.patched),
+      skipped: 0,
+      wouldCreate: toInt(catalogRentals.wouldCreate),
+      wouldPatch: toInt(catalogRentals.wouldPatch)
+    },
+    quotes: {
+      source: toInt(quotes.source),
+      created: toInt(quotes.created),
+      patched: toInt(quotes.patched),
+      skipped: 0,
+      wouldCreate: toInt(quotes.wouldCreate),
+      wouldPatch: toInt(quotes.wouldPatch)
+    },
+    settingsConfig: {
+      source: toInt(settings.source),
+      created: toInt(settings.created),
+      patched: toInt(settings.patched),
+      skipped: 0,
+      wouldCreate: toInt(settings.wouldCreate),
+      wouldPatch: toInt(settings.wouldPatch)
+    },
+    quoteVersions: {
+      source: toInt(versions.source),
+      created: toInt(versions.created),
+      patched: 0,
+      skipped: toInt(versions.skipped),
+      wouldCreate: toInt(versions.wouldCreate),
+      wouldPatch: 0
+    },
+    customerPortalQuotes: {
+      source: toInt(portal.source),
+      created: 0,
+      patched: toInt(portal.patched),
+      skipped: 0,
+      wouldCreate: 0,
+      wouldPatch: toInt(portal.wouldPatch)
+    }
+  };
+
+  const totals = Object.values(collections).reduce(
+    (acc, entry) => ({
+      source: acc.source + toInt(entry.source),
+      created: acc.created + toInt(entry.created),
+      patched: acc.patched + toInt(entry.patched),
+      skipped: acc.skipped + toInt(entry.skipped),
+      wouldCreate: acc.wouldCreate + toInt(entry.wouldCreate),
+      wouldPatch: acc.wouldPatch + toInt(entry.wouldPatch)
+    }),
+    { source: 0, created: 0, patched: 0, skipped: 0, wouldCreate: 0, wouldPatch: 0 }
+  );
+
+  return {
+    projectId: projectId || "",
+    organizationId,
+    dryRun,
+    timestamp,
+    collections,
+    totals
+  };
+}
+
+async function writeEvidenceFile(outputPath, payload) {
+  if (!outputPath) return "";
+  const resolvedPath = path.resolve(outputPath);
+  await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
+  await fs.writeFile(resolvedPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  return resolvedPath;
 }
 
 function chunk(values, size = MAX_BATCH_WRITES) {
@@ -264,7 +420,7 @@ async function ensureOrgDoc({ db, organizationId, dryRun = false }) {
 }
 
 async function main() {
-  const { projectId, organizationId, dryRun } = parseArgs(process.argv.slice(2));
+  const { projectId, organizationId, dryRun, evidenceOut } = parseArgs(process.argv.slice(2));
 
   if (!admin.apps.length) {
     admin.initializeApp(projectId ? { projectId } : {});
@@ -379,6 +535,29 @@ async function main() {
     backfillPortalOrgIds({ db, organizationId, dryRun })
   ]);
 
+  const evidence = buildEvidencePayload({
+    projectId,
+    organizationId,
+    dryRun,
+    timestamp: new Date().toISOString(),
+    orgSummary,
+    eventTypes,
+    menuCategories,
+    menuItems,
+    catalogPackages,
+    catalogAddons,
+    catalogRentals,
+    quotes,
+    settings,
+    versions,
+    portal
+  });
+
+  let evidencePath = "";
+  if (evidenceOut) {
+    evidencePath = await writeEvidenceFile(evidenceOut, evidence);
+  }
+
   const label = dryRun ? "Dry run completed." : "Migration completed.";
   console.log(label);
   console.log(`Project: ${projectId || "(auto-detected)"}`);
@@ -424,6 +603,9 @@ async function main() {
     `customerPortalQuotes org backfill -> source:${portal.source} patched:${portal.patched}`
     + (dryRun ? ` wouldPatch:${portal.wouldPatch}` : "")
   );
+  if (evidencePath) {
+    console.log(`Evidence JSON written to: ${evidencePath}`);
+  }
 }
 
 main().catch((error) => {

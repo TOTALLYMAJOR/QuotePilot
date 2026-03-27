@@ -78,20 +78,32 @@ function resolveScopedOrganizationId(organizationId = "") {
   return normalizeOrganizationId(organizationId || getActiveOrganizationId());
 }
 
-function requireOrganizationId(organizationId = "", action = "menu operation") {
-  const resolvedOrgId = resolveScopedOrganizationId(organizationId);
-  if (!resolvedOrgId) {
-    throw new Error(`organizationId is required for ${action}.`);
-  }
-  return resolvedOrgId;
-}
-
 function orgCollectionRef(collectionName, organizationId) {
   return getOrganizationCollectionRef(collectionName, organizationId);
 }
 
 function orgDocRef(collectionName, docId, organizationId) {
   return getOrganizationSubDocRef(collectionName, docId, organizationId);
+}
+
+function resolveWritableCollectionRef(collectionName, organizationId = "", action = "menu operation") {
+  const resolvedOrgId = resolveScopedOrganizationId(organizationId);
+  if (resolvedOrgId) {
+    return orgCollectionRef(collectionName, resolvedOrgId);
+  }
+  throw new Error(`organizationId is required for ${action}.`);
+}
+
+function resolveWritableDocRef(collectionName, docId, organizationId = "", action = "menu operation") {
+  const entryId = asText(docId);
+  if (!entryId) {
+    throw new Error("docId is required.");
+  }
+  const resolvedOrgId = resolveScopedOrganizationId(organizationId);
+  if (resolvedOrgId) {
+    return orgDocRef(collectionName, entryId, resolvedOrgId);
+  }
+  throw new Error(`organizationId is required for ${action}.`);
 }
 
 export async function getEventTypes({ organizationId = "" } = {}) {
@@ -199,7 +211,7 @@ export async function getMenuItems(eventTypeId, { includeInactive = false, organ
 
 export async function createMenuItem(data = {}) {
   ensureReady();
-  const resolvedOrgId = requireOrganizationId(data.organizationId, "createMenuItem");
+  const targetCollectionRef = resolveWritableCollectionRef("menuItems", data.organizationId, "createMenuItem");
   const pricingType = normalizePriceType(data.pricingType || data.type);
   const payload = {
     eventTypeId: asText(data.eventTypeId),
@@ -217,7 +229,7 @@ export async function createMenuItem(data = {}) {
   if (!payload.categoryId) {
     throw new Error("categoryId is required.");
   }
-  const ref = await addDoc(orgCollectionRef("menuItems", resolvedOrgId), payload);
+  const ref = await addDoc(targetCollectionRef, payload);
   return {
     id: ref.id,
     ...payload
@@ -226,7 +238,6 @@ export async function createMenuItem(data = {}) {
 
 export async function updateMenuItem(id, data = {}) {
   ensureReady();
-  const resolvedOrgId = requireOrganizationId(data.organizationId, "updateMenuItem");
   const itemId = asText(id);
   if (!itemId) {
     throw new Error("Menu item id is required.");
@@ -260,7 +271,7 @@ export async function updateMenuItem(id, data = {}) {
   }
   payload.updatedAtISO = new Date().toISOString();
 
-  await updateDoc(orgDocRef("menuItems", itemId, resolvedOrgId), payload);
+  await updateDoc(resolveWritableDocRef("menuItems", itemId, data.organizationId, "updateMenuItem"), payload);
   return {
     id: itemId,
     ...payload
@@ -269,18 +280,17 @@ export async function updateMenuItem(id, data = {}) {
 
 export async function deleteMenuItem(id, { organizationId = "" } = {}) {
   ensureReady();
-  const resolvedOrgId = requireOrganizationId(organizationId, "deleteMenuItem");
   const itemId = asText(id);
   if (!itemId) {
     throw new Error("Menu item id is required.");
   }
-  await deleteDoc(orgDocRef("menuItems", itemId, resolvedOrgId));
+  await deleteDoc(resolveWritableDocRef("menuItems", itemId, organizationId, "deleteMenuItem"));
   return { ok: true, id: itemId };
 }
 
 export async function createCategory(data = {}) {
   ensureReady();
-  const resolvedOrgId = requireOrganizationId(data.organizationId, "createCategory");
+  const targetCollectionRef = resolveWritableCollectionRef("menuCategories", data.organizationId, "createCategory");
   const payload = {
     eventTypeId: asText(data.eventTypeId),
     name: asText(data.name, "New Category"),
@@ -289,7 +299,7 @@ export async function createCategory(data = {}) {
   if (!payload.eventTypeId) {
     throw new Error("eventTypeId is required.");
   }
-  const ref = await addDoc(orgCollectionRef("menuCategories", resolvedOrgId), payload);
+  const ref = await addDoc(targetCollectionRef, payload);
   return {
     id: ref.id,
     ...payload
@@ -298,7 +308,6 @@ export async function createCategory(data = {}) {
 
 export async function updateCategory(id, data = {}) {
   ensureReady();
-  const resolvedOrgId = requireOrganizationId(data.organizationId, "updateCategory");
   const categoryId = asText(id);
   if (!categoryId) {
     throw new Error("Category id is required.");
@@ -313,7 +322,7 @@ export async function updateCategory(id, data = {}) {
   }
   payload.updatedAtISO = new Date().toISOString();
 
-  await updateDoc(orgDocRef("menuCategories", categoryId, resolvedOrgId), payload);
+  await updateDoc(resolveWritableDocRef("menuCategories", categoryId, data.organizationId, "updateCategory"), payload);
   return {
     id: categoryId,
     ...payload
@@ -322,12 +331,12 @@ export async function updateCategory(id, data = {}) {
 
 export async function createEventType(data = {}) {
   ensureReady();
-  const resolvedOrgId = requireOrganizationId(data.organizationId, "createEventType");
+  const targetCollectionRef = resolveWritableCollectionRef("eventTypes", data.organizationId, "createEventType");
   const payload = {
     name: asText(data.name, "New Event Type"),
     createdAtISO: new Date().toISOString()
   };
-  const ref = await addDoc(orgCollectionRef("eventTypes", resolvedOrgId), payload);
+  const ref = await addDoc(targetCollectionRef, payload);
   return {
     id: ref.id,
     ...payload
@@ -336,7 +345,6 @@ export async function createEventType(data = {}) {
 
 export async function updateEventType(id, data = {}) {
   ensureReady();
-  const resolvedOrgId = requireOrganizationId(data.organizationId, "updateEventType");
   const eventTypeId = asText(id);
   if (!eventTypeId) {
     throw new Error("Event type id is required.");
@@ -348,7 +356,7 @@ export async function updateEventType(id, data = {}) {
   }
   payload.updatedAtISO = new Date().toISOString();
 
-  await updateDoc(orgDocRef("eventTypes", eventTypeId, resolvedOrgId), payload);
+  await updateDoc(resolveWritableDocRef("eventTypes", eventTypeId, data.organizationId, "updateEventType"), payload);
   return {
     id: eventTypeId,
     ...payload

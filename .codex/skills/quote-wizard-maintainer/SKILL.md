@@ -25,6 +25,8 @@ description: Maintain and evolve the React + Firebase catering quote wizard. Use
 - Default validation: `scripts/run-maintainer-checks.sh`
 - Fast validation (docs/light edits): `scripts/run-maintainer-checks.sh --quick`
 - Build-only validation: `scripts/run-maintainer-checks.sh --build-only`
+- High-risk validation: `scripts/run-maintainer-checks.sh --high-risk`
+- Explicit lane validation: `scripts/run-maintainer-checks.sh --lane lane:quick|lane:core|lane:firebase-auth-rules|lane:authoritative-pricing|lane:release`
 - Optional CWV gate: `scripts/run-maintainer-checks.sh --with-cwv`
 
 ## Resources

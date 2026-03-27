@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: March 17, 2026
+Last updated: March 27, 2026
 
 ## Goal
 Deploy Firebase Quote Wizard safely with environment validation, reproducible build checks, and clear post-launch verification.
@@ -93,10 +93,13 @@ Stripe webhook endpoint:
 ## 6) Pre-Merge 10-Minute UAT (Required for Production-Triggering Merge)
 Pass all checks before merging a release-intent PR to `main`:
 1. CI is fully green:
-   - `Unit + Build`
-   - `Governance + Perf Gates`
+   - `lane:quick (Preflight + Secrets)`
+   - `lane:core (Unit + Build + Governance + Bundle)`
    - `Docker Build Smoke`
-   - `Playwright Smoke`
+   - `lane:playwright-smoke`
+   - `lane:firebase-auth-rules`
+   - `lane:authoritative-pricing`
+   - `lane:cwv-smoke`
 2. Manually verify production-critical paths in a release candidate build:
    - quote save succeeds,
    - quote history row appears and opens,

@@ -8,6 +8,8 @@ Production-ready catering quote application built with React, Vite, Firebase, an
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
+- Orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
 
 ## Product Scope
@@ -90,6 +92,16 @@ npm run check:perf:bundle
 npm run check:perf:cwv
 ```
 
+## Orchestration Lanes
+```bash
+npm run lane:quick
+npm run lane:core
+npm run lane:firebase-auth-rules
+npm run lane:authoritative-pricing
+npm run lane:release
+npm run lane:release:cwv
+```
+
 ## E2E Test Lanes
 - `npm run test:e2e`
   - Default browser smoke lane.
@@ -157,6 +169,8 @@ Optional flags:
 - Skill index: [docs/SKILLS.md](docs/SKILLS.md)
 - Staff/admin operations guide: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature checklist mapping: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Cloud/local orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
+- Cloud/local orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
 - Performance guardrails: [docs/PERFORMANCE_GUARDRAILS.md](docs/PERFORMANCE_GUARDRAILS.md)
 - Current operational state: [PROJECT_STATUS.md](PROJECT_STATUS.md)
 - Prioritized backlog: [DEV_TASKS.md](DEV_TASKS.md)

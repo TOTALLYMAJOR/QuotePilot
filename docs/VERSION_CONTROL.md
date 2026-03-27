@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: March 17, 2026
+Last updated: March 27, 2026
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -28,6 +28,7 @@ git checkout -b feature/<scope>-<topic>
 - `main` is for production-intent merges only.
 - Feature work lands in topic branches and merges only after required CI and pre-merge UAT evidence are complete.
 - Deploy workflow is gated by successful `CI Quality` runs on `main` pushes (manual dispatch remains available for controlled operations).
+- If branch protection is not enabled, `Mainline Safety Net (Auto-Revert Failed Pushes)` provides fallback protection by reverting failed `main` push heads after CI failure.
 
 ## Branch Naming
 - `feature/<scope>-<topic>`
@@ -45,10 +46,11 @@ git checkout -b feature/<scope>-<topic>
 1. Create `release/<version>` from `main`.
 2. Finalize `CHANGELOG.md` and `PROJECT_STATUS.md`.
 3. Run release checks (CI must be green):
-   - `Unit + Build`
-   - `Governance + Perf Gates`
+   - `lane:quick (Preflight + Secrets)`
+   - `lane:core (Unit + Build + Governance + Bundle)`
+   - heavy lanes (`lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`) when required by risk classifier or `main` push policy
    - `Docker Build Smoke`
-   - `Playwright Smoke`
+   - `lane:playwright-smoke`
 4. Complete pre-merge 10-minute UAT checklist from `docs/LAUNCH_RUNBOOK.md`.
 5. Set/confirm rollback target:
    - Preserve the previous production commit SHA.
@@ -74,3 +76,7 @@ If a topic changes, only update the owning doc and cross-link from others.
   - Set to `true` only for intentional, validated functions deploy windows, then return to `false`.
 - Firebase Functions config: `notifications.sms_provider`
   - Default production value: `"none"` unless buyer-approved SMS enablement is validated.
+
+## Orchestration References
+- Blueprint: `docs/ORCHESTRATION_BLUEPRINT.md`
+- Runbook: `docs/ORCHESTRATION_RUNBOOK.md`

@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: March 16, 2026
+Last updated: March 27, 2026
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
@@ -20,6 +20,12 @@ This document defines governance for repository-managed agent and skill assets u
   - `bash .codex/skills/quote-wizard-maintainer/scripts/run-maintainer-checks.sh`
 - Release manager checks:
   - `bash .codex/skills/quote-wizard-release-manager/scripts/release-readiness.sh`
+- Orchestration lane entrypoints:
+  - `npm run lane:quick`
+  - `npm run lane:core`
+  - `npm run lane:firebase-auth-rules`
+  - `npm run lane:authoritative-pricing`
+  - `npm run lane:release`
 - Governance controls:
   - `npm run check:docs:governance`
   - `npm run check:perf:bundle`

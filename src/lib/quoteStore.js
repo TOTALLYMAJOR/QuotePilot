@@ -109,6 +109,39 @@ function quoteVersionsCollectionRef(quoteId, organizationId = undefined) {
   return collection(db, QUOTES_COLLECTION, id, QUOTE_VERSIONS_COLLECTION);
 }
 
+function resolveContextualOrganizationId() {
+  return normalizeOrganizationId(scopedOrganizationId || getActiveOrganizationId());
+}
+
+function requireWriteOrganizationId(organizationId = undefined, action = "quote write") {
+  const resolvedOrganizationId = normalizeOrganizationId(organizationId) || resolveContextualOrganizationId();
+  if (!resolvedOrganizationId) {
+    throw new Error(`organizationId is required for ${action}.`);
+  }
+  return resolvedOrganizationId;
+}
+
+function quoteWriteCollectionRef(organizationId = undefined, action = "quote write") {
+  return getOrganizationCollectionRef(QUOTES_COLLECTION, requireWriteOrganizationId(organizationId, action));
+}
+
+function quoteWriteDocRef(quoteId, organizationId = undefined, action = "quote write") {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
+  }
+  return getOrganizationSubDocRef(QUOTES_COLLECTION, id, requireWriteOrganizationId(organizationId, action));
+}
+
+function quoteVersionsWriteCollectionRef(quoteId, organizationId = undefined, action = "quote version write") {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
+  }
+  const resolvedOrganizationId = requireWriteOrganizationId(organizationId, action);
+  return collection(db, "organizations", resolvedOrganizationId, QUOTES_COLLECTION, id, QUOTE_VERSIONS_COLLECTION);
+}
+
 function portalDocRef(portalKey) {
   return doc(db, PORTAL_COLLECTION, portalKey);
 }
@@ -387,6 +420,95 @@ function buildPortalSnapshot(quoteId, quote) {
   };
 }
 
+async function ensureQuoteWriteTarget(
+  quoteId,
+  { organizationId = undefined, sourceQuote = null, action = "quote write" } = {}
+) {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
+  }
+
+  const resolvedOrganizationId = requireWriteOrganizationId(organizationId, action);
+  if (!firebaseReady || !db) {
+    return {
+      organizationId: resolvedOrganizationId,
+      migratedFromLegacy: false
+    };
+  }
+
+  const targetRef = quoteWriteDocRef(id, resolvedOrganizationId, action);
+  const targetSnap = await getDoc(targetRef);
+  if (targetSnap.exists()) {
+    return {
+      organizationId: resolvedOrganizationId,
+      migratedFromLegacy: false
+    };
+  }
+
+  if (!allowLegacyGlobalFallback()) {
+    throw new Error("Quote not found.");
+  }
+
+  const legacyRef = doc(db, QUOTES_COLLECTION, id);
+  const legacySnap = await getDoc(legacyRef);
+  if (!legacySnap.exists()) {
+    throw new Error("Quote not found.");
+  }
+
+  const nowISO = isoNow();
+  const legacyData = legacySnap.data() || {};
+  const sourceData = sourceQuote && typeof sourceQuote === "object" ? sourceQuote : {};
+  const createdAtISO = timestampToISO(legacyData.createdAtISO || legacyData.createdAt || sourceData.createdAtISO, nowISO);
+  const payload = {
+    ...legacyData,
+    ...sourceData,
+    organizationId: resolvedOrganizationId,
+    createdAtISO,
+    updatedAtISO: legacyData.updatedAtISO || sourceData.updatedAtISO || nowISO
+  };
+
+  await setDoc(targetRef, payload, { merge: true });
+
+  try {
+    const legacyVersionsSnap = await getDocs(query(
+      quoteVersionsCollectionRef(id, ""),
+      orderBy("versionNumber", "asc")
+    ));
+    await Promise.all(
+      legacyVersionsSnap.docs.map((versionDoc) => {
+        const versionId = String(versionDoc.id || "").trim();
+        if (!versionId) return Promise.resolve();
+        return setDoc(
+          doc(quoteVersionsWriteCollectionRef(id, resolvedOrganizationId, action), versionId),
+          {
+            ...versionDoc.data(),
+            quoteId: id,
+            organizationId: resolvedOrganizationId
+          },
+          { merge: true }
+        );
+      })
+    );
+  } catch {
+    // Legacy version docs are best-effort during additive migration.
+  }
+
+  const portalKey = String(payload.portalKey || "").trim();
+  if (portalKey) {
+    await setDoc(
+      portalDocRef(portalKey),
+      buildPortalSnapshot(id, payload),
+      { merge: true }
+    );
+  }
+
+  return {
+    organizationId: resolvedOrganizationId,
+    migratedFromLegacy: true
+  };
+}
+
 function resolvePersistedPricingSnapshot({
   pricingSnapshot = null,
   form = {},
@@ -423,7 +545,8 @@ function resolvePersistedPricingSnapshot({
 
 async function syncPortalSnapshotFromQuoteDoc(quoteId, organizationId = "") {
   if (!firebaseReady || !db || !quoteId) return;
-  const quoteSnap = await getDoc(quoteDocRef(quoteId, organizationId));
+  const writeOrganizationId = requireWriteOrganizationId(organizationId, "syncPortalSnapshotFromQuoteDoc");
+  const quoteSnap = await getDoc(quoteWriteDocRef(quoteId, writeOrganizationId, "syncPortalSnapshotFromQuoteDoc"));
   if (!quoteSnap.exists()) return;
   const data = quoteSnap.data();
   const portalKey = data.portalKey;
@@ -432,7 +555,7 @@ async function syncPortalSnapshotFromQuoteDoc(quoteId, organizationId = "") {
     portalDocRef(portalKey),
     buildPortalSnapshot(quoteId, {
       ...data,
-      organizationId: resolveQuoteOrganizationId(organizationId),
+      organizationId: writeOrganizationId,
       createdAtISO: timestampToISO(data.createdAtISO || data.createdAt)
     }),
     { merge: true }
@@ -882,9 +1005,10 @@ export async function ensureLegacyQuoteCompatibility(
   { organizationId = undefined, persistVersion = true } = {}
 ) {
   const quote = await readQuoteById(quoteId);
-  const resolvedOrganizationId = resolveQuoteOrganizationId(
-    organizationId !== undefined ? organizationId : quote.organizationId
-  );
+  const organizationCandidate = organizationId !== undefined ? organizationId : quote.organizationId;
+  const resolvedOrganizationId = firebaseReady
+    ? requireWriteOrganizationId(organizationCandidate, "ensureLegacyQuoteCompatibility")
+    : resolveQuoteOrganizationId(organizationCandidate);
   const hasPointers = quoteHasVersionPointers(quote);
   const history = await getQuoteVersionHistory(quote.id, {
     organizationId: resolvedOrganizationId
@@ -914,7 +1038,12 @@ export async function ensureLegacyQuoteCompatibility(
     });
 
     if (firebaseReady) {
-      await updateDoc(quoteDocRef(quote.id, resolvedOrganizationId), {
+      await ensureQuoteWriteTarget(quote.id, {
+        organizationId: resolvedOrganizationId,
+        sourceQuote: quote,
+        action: "ensureLegacyQuoteCompatibility"
+      });
+      await updateDoc(quoteWriteDocRef(quote.id, resolvedOrganizationId, "ensureLegacyQuoteCompatibility"), {
         activeVersionId: latestVersionId,
         latestVersionNumber: latestVersionMeta.versionNumber,
         versionMeta: latestVersionMeta
@@ -964,13 +1093,20 @@ export async function saveQuoteVersion(
   const quote = await readQuoteById(quoteId);
   const timestamp = isoNow();
   const snapshot = JSON.parse(JSON.stringify(quote));
-  const resolvedOrganizationId = resolveQuoteOrganizationId(
-    organizationId !== undefined ? organizationId : quote.organizationId
-  );
+  const organizationCandidate = organizationId !== undefined ? organizationId : quote.organizationId;
+  const resolvedOrganizationId = firebaseReady
+    ? requireWriteOrganizationId(organizationCandidate, "saveQuoteVersion")
+    : resolveQuoteOrganizationId(organizationCandidate);
   const normalizedReason = normalizeVersionMetadata({ reason }).reason;
 
   if (firebaseReady) {
-    const quoteRef = quoteDocRef(quote.id, resolvedOrganizationId);
+    const writeTarget = await ensureQuoteWriteTarget(quote.id, {
+      organizationId: resolvedOrganizationId,
+      sourceQuote: quote,
+      action: "saveQuoteVersion"
+    });
+    const writeOrganizationId = writeTarget.organizationId;
+    const quoteRef = quoteWriteDocRef(quote.id, writeOrganizationId, "saveQuoteVersion");
     const result = await runTransaction(db, async (tx) => {
       const quoteSnap = await tx.get(quoteRef);
       if (!quoteSnap.exists()) {
@@ -986,11 +1122,14 @@ export async function saveQuoteVersion(
         ownerEmail: quote.ownerEmail,
         reason: normalizedReason
       });
-      const versionRef = doc(quoteVersionsCollectionRef(quote.id, resolvedOrganizationId), versionId);
+      const versionRef = doc(
+        quoteVersionsWriteCollectionRef(quote.id, writeOrganizationId, "saveQuoteVersion"),
+        versionId
+      );
       tx.set(versionRef, {
         versionId,
         quoteId: quote.id,
-        organizationId: resolvedOrganizationId,
+        organizationId: writeOrganizationId,
         versionNumber: versionMeta.versionNumber,
         createdAtISO: timestamp,
         reason: versionMeta.reason,
@@ -1200,7 +1339,7 @@ export async function convertQuoteToContract({
   await saveQuoteVersion(id);
 
   if (firebaseReady) {
-    await updateDoc(quoteDocRef(id, quote.organizationId), {
+    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "convertQuoteToContract"), {
       status: "booked",
       booking: nextBooking,
       lifecycle: nextLifecycle,
@@ -1293,7 +1432,7 @@ export async function updateQuoteBookingConfirmation({
   await saveQuoteVersion(id);
 
   if (firebaseReady) {
-    await updateDoc(quoteDocRef(id, quote.organizationId), {
+    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "updateQuoteBookingConfirmation"), {
       booking: nextBooking,
       updatedAtISO: nowISO
     });
@@ -1348,7 +1487,7 @@ export async function recordQuoteIntegrationSync({
   await saveQuoteVersion(id);
 
   if (firebaseReady) {
-    const quoteRef = quoteDocRef(id, quote.organizationId);
+    const quoteRef = quoteWriteDocRef(id, quote.organizationId, "recordQuoteIntegrationSync");
     const quoteSnap = await getDoc(quoteRef);
     if (!quoteSnap.exists()) {
       throw new Error("Quote not found.");
@@ -1586,7 +1725,7 @@ export async function updateQuoteBookingAssignment({ quoteId, staffLead = "" } =
   await saveQuoteVersion(id);
 
   if (firebaseReady) {
-    await updateDoc(quoteDocRef(id, quote.organizationId), {
+    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "updateQuoteBookingAssignment"), {
       "booking.staffLead": nextLead,
       "booking.staffAssignedAtISO": nowISO,
       updatedAtISO: nowISO
@@ -1895,7 +2034,7 @@ export async function submitQuote({
   };
 
   if (firebaseReady) {
-    const ref = await addDoc(quotesCollectionRef(resolvedOrganizationId), {
+    const ref = await addDoc(quoteWriteCollectionRef(resolvedOrganizationId, "submitQuote"), {
       ...payload,
       createdAt: serverTimestamp()
     });
@@ -1984,9 +2123,10 @@ export async function updateQuote({
   const lifecycle = lifecycleObject("draft", nowISO, existing.lifecycle);
   const portalKey = String(existing.portalKey || "").trim() || buildPortalKey();
   const portalIssuedAtISO = resolvePortalIssuedAtISO(existing, existing.createdAtISO || nowISO);
-  const nextOrganizationId = resolveQuoteOrganizationId(
-    organizationId !== undefined ? organizationId : existing.organizationId
-  );
+  const organizationCandidate = organizationId !== undefined ? organizationId : existing.organizationId;
+  const nextOrganizationId = firebaseReady
+    ? requireWriteOrganizationId(organizationCandidate, "updateQuote")
+    : resolveQuoteOrganizationId(organizationCandidate);
   const portalExpiresAtISO = resolvePortalExpiresAtISO(
     {
       ...existing,
@@ -2209,12 +2349,19 @@ export async function updateQuote({
   };
 
   if (firebaseReady) {
-    await updateDoc(quoteDocRef(id, existing.organizationId), patch);
-    await syncPortalSnapshotFromQuoteDoc(id, existing.organizationId);
+    const writeTarget = await ensureQuoteWriteTarget(id, {
+      organizationId: nextOrganizationId,
+      sourceQuote: existing,
+      action: "updateQuote"
+    });
+    const writeOrganizationId = writeTarget.organizationId;
+    patch.organizationId = writeOrganizationId;
+    await updateDoc(quoteWriteDocRef(id, writeOrganizationId, "updateQuote"), patch);
+    await syncPortalSnapshotFromQuoteDoc(id, writeOrganizationId);
     const versionResult = await saveQuoteVersion(id, {
       reason: "quote_edit",
       setActive: true,
-      organizationId: nextOrganizationId
+      organizationId: writeOrganizationId
     });
     return {
       id,
@@ -2286,7 +2433,7 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
   });
 
   if (firebaseReady) {
-    await updateDoc(quoteDocRef(id, quote.organizationId), {
+    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "rotateQuotePortalKey"), {
       portalKey: nextPortalKey,
       portalIssuedAtISO,
       portalExpiresAtISO,
@@ -2347,7 +2494,9 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
   const quoteNumber = buildQuoteNumber();
   const portalKey = buildPortalKey();
   const portalIssuedAtISO = nowISO;
-  const organizationId = resolveQuoteOrganizationId(source.organizationId);
+  const organizationId = firebaseReady
+    ? requireWriteOrganizationId(source.organizationId, "duplicateQuote")
+    : resolveQuoteOrganizationId(source.organizationId);
   const validityDays = Math.max(1, Number(source?.quoteMeta?.quoteValidityDays || DEFAULT_VALIDITY_DAYS));
   const expiresAtISO = addDaysISO(nowISO, validityDays);
   const portalExpiresAtISO = resolvePortalExpiresAtISO(
@@ -2436,7 +2585,7 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
   };
 
   if (firebaseReady) {
-    const ref = await addDoc(quotesCollectionRef(organizationId), {
+    const ref = await addDoc(quoteWriteCollectionRef(organizationId, "duplicateQuote"), {
       ...payload,
       createdAt: serverTimestamp()
     });
@@ -2568,10 +2717,11 @@ export async function getQuoteHistory(filters = {}) {
     );
 
     if (autoExpired.length) {
+      const writableAutoExpired = autoExpired.filter((quote) => normalizeOrganizationId(quote.organizationId));
       await Promise.all(
-        autoExpired.map(async (quote) => {
+        writableAutoExpired.map(async (quote) => {
           await saveQuoteVersion(quote.id);
-          await updateDoc(quoteDocRef(quote.id, quote.organizationId), {
+          await updateDoc(quoteWriteDocRef(quote.id, quote.organizationId, "getQuoteHistory auto-expire"), {
             status: "expired",
             updatedAtISO: nowISO,
             "lifecycle.expiredAtISO": quote.lifecycle?.expiredAtISO || nowISO
@@ -2641,7 +2791,7 @@ export async function updateQuoteStatus(quoteId, status) {
   await saveQuoteVersion(id);
 
   if (firebaseReady) {
-    await updateDoc(quoteDocRef(id, existingQuote.organizationId), statusPayload);
+    await updateDoc(quoteWriteDocRef(id, existingQuote.organizationId, "updateQuoteStatus"), statusPayload);
     await syncPortalSnapshotFromQuoteDoc(id, existingQuote.organizationId);
   } else {
     const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
@@ -2719,7 +2869,7 @@ export async function updateQuotePaymentStatus(quoteId, paymentStatus) {
 
   if (firebaseReady) {
     const quote = await readQuoteById(quoteId);
-    await updateDoc(quoteDocRef(quoteId, quote.organizationId), paymentPatch);
+    await updateDoc(quoteWriteDocRef(quoteId, quote.organizationId, "updateQuotePaymentStatus"), paymentPatch);
     await syncPortalSnapshotFromQuoteDoc(quoteId, quote.organizationId);
     return { ok: true, storage: "firebase" };
   }
@@ -2805,7 +2955,7 @@ export async function reopenQuote(id) {
   });
 
   if (firebaseReady) {
-    await updateDoc(quoteDocRef(quoteId, quote.organizationId), {
+    await updateDoc(quoteWriteDocRef(quoteId, quote.organizationId, "reopenQuote"), {
       ...restoredPatch,
       status: "draft",
       portalKey: nextPortalKey,
@@ -2858,7 +3008,7 @@ export async function deleteQuote(id) {
   await saveQuoteVersion(quoteId);
 
   if (firebaseReady) {
-    await updateDoc(quoteDocRef(quoteId, quote.organizationId), {
+    await updateDoc(quoteWriteDocRef(quoteId, quote.organizationId, "deleteQuote"), {
       status: "deleted",
       deletedAtISO: nowISO,
       updatedAtISO: nowISO,
@@ -2964,7 +3114,7 @@ export async function updatePortalQuoteStatus(portalKey, status) {
     });
 
     if (portalData.quoteId) {
-      await updateDoc(quoteDocRef(portalData.quoteId, portalData.organizationId), {
+      await updateDoc(quoteWriteDocRef(portalData.quoteId, portalData.organizationId, "updatePortalQuoteStatus"), {
         status: nextStatus,
         updatedAtISO: nowISO,
         lifecycle

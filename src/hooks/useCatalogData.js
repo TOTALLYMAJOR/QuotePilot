@@ -166,11 +166,7 @@ async function loadFromFirebaseByOrganization(organizationId = "") {
 async function saveToFirebase(catalog, organizationId = "") {
   const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
   if (!resolvedOrganizationId) {
-    if (!allowLegacyGlobalFallback()) {
-      throw new Error("organizationId is required for catalog writes.");
-    }
-    await saveToFirebaseGlobal(catalog);
-    return;
+    throw new Error("organizationId is required for catalog writes.");
   }
 
   const packageCollection = getOrganizationCollectionRef("catalogPackages", resolvedOrganizationId);
@@ -228,60 +224,6 @@ async function saveToFirebase(catalog, organizationId = "") {
   });
 
   batch.set(settingsRef, catalog.settings, { merge: true });
-  await batch.commit();
-}
-
-async function saveToFirebaseGlobal(catalog) {
-  const [pkgSnap, addSnap, rentSnap] = await Promise.all([
-    getDocs(collection(db, "catalogPackages")),
-    getDocs(collection(db, "catalogAddons")),
-    getDocs(collection(db, "catalogRentals"))
-  ]);
-
-  const batch = writeBatch(db);
-  const packageIds = new Set(catalog.packages.map((item) => item.id));
-  const addonIds = new Set(catalog.addons.map((item) => item.id));
-  const rentalIds = new Set(catalog.rentals.map((item) => item.id));
-
-  pkgSnap.docs.forEach((docSnap) => {
-    if (!packageIds.has(docSnap.id)) batch.delete(docSnap.ref);
-  });
-  addSnap.docs.forEach((docSnap) => {
-    if (!addonIds.has(docSnap.id)) batch.delete(docSnap.ref);
-  });
-  rentSnap.docs.forEach((docSnap) => {
-    if (!rentalIds.has(docSnap.id)) batch.delete(docSnap.ref);
-  });
-
-  catalog.packages.forEach((item) => {
-    batch.set(doc(db, "catalogPackages", item.id), {
-      name: item.name,
-      ppp: Number(item.ppp || 0)
-    });
-  });
-  catalog.addons.forEach((item) => {
-    const pricingType = normalizePricingType(item.pricingType || item.type || "per_person");
-    batch.set(doc(db, "catalogAddons", item.id), {
-      name: item.name,
-      pricingType,
-      type: pricingType,
-      price: Number(item.price || 0),
-      active: item.active !== false
-    });
-  });
-  catalog.rentals.forEach((item) => {
-    const pricingType = normalizePricingType(item.pricingType || item.type || "per_item");
-    batch.set(doc(db, "catalogRentals", item.id), {
-      name: item.name,
-      price: Number(item.price || 0),
-      qtyPerGuests: Number(item.qtyPerGuests || 1),
-      pricingType,
-      type: pricingType,
-      active: item.active !== false
-    });
-  });
-
-  batch.set(doc(db, "pricing", "settings"), catalog.settings);
   await batch.commit();
 }
 
@@ -414,6 +356,10 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     if (!firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK) {
       return { ok: false, error: "Firebase catalog is required in this environment." };
     }
+    const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
+    if (firebaseReady && !resolvedOrganizationId) {
+      return { ok: false, error: "organizationId is required for catalog writes." };
+    }
     const normalized = normalizeCatalog(nextCatalog);
     const baseVersion = Math.max(
       0,
@@ -434,7 +380,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
 
     try {
       if (firebaseReady) {
-        await saveToFirebase(normalizedWithPricingVersion, organizationId);
+        await saveToFirebase(normalizedWithPricingVersion, resolvedOrganizationId);
       }
 
       if (ALLOW_LOCAL_CATALOG_FALLBACK) {

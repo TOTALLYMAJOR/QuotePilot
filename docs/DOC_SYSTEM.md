@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: March 18, 2026
+Last updated: March 27, 2026
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -37,6 +37,7 @@ Each major topic has one source of truth. Other docs should link to that source 
 | Historical shipped changes | `CHANGELOG.md` | Immutable history by date/version/merge period. |
 | Release workflow/process policy | `docs/VERSION_CONTROL.md` | References this doc for ownership rules. |
 | Agent policy and skill governance | `docs/AGENT_GOVERNANCE.md` | `docs/SKILLS.md` remains index-only. |
+| Cloud/local orchestration policy and lane contracts | `docs/ORCHESTRATION_BLUEPRINT.md` | Operational commands and scenarios live in `docs/ORCHESTRATION_RUNBOOK.md`. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
 | Performance budgets and CWV policy | `docs/PERFORMANCE_GUARDRAILS.md` | Baselines live under `docs/performance/`. |

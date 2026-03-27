@@ -2,6 +2,22 @@
 - What changed:
 - Why it changed:
 
+## Change Intent Contract
+- change_type: docs / process / ui / core / auth_rules / deploy
+- risk_level: low / medium / high
+- tenant_impact: none / read / write / rules
+- required_lanes: auto / manual override (list lanes if override)
+- doc_impact: canonical docs touched (`README.md`, `PROJECT_STATUS.md`, `DEV_TASKS.md`, `CHANGELOG.md`, `docs/DOC_SYSTEM.md`)
+
+## Lane Evidence
+- [ ] `lane:quick` (`npm run lane:quick`)
+- [ ] `lane:core` (`npm run lane:core`)
+- [ ] `lane:firebase-auth-rules` (required for high-risk/auth-rules/tenant-sensitive changes)
+- [ ] `lane:authoritative-pricing` (required for high-risk/auth-rules/tenant-sensitive changes)
+- [ ] `lane:release` (required for release-intent/main-bound operations)
+- CI classifier summary:
+- CI advisory failures accepted? yes / no (justify):
+
 ## Validation
 - [ ] `npm run check:env`
 - [ ] `npm run build`
@@ -11,10 +27,11 @@
 - Risk level: low / medium / high
 - Affected areas:
 - Rollback approach:
+- Residual risk note:
 
 ## Production Release Gate
 - Production impact: none / production-triggering
-- [ ] If production-triggering: all CI jobs are green (`Unit + Build`, `Governance + Perf Gates`, `Docker Build Smoke`, `Playwright Smoke`)
+- [ ] If production-triggering: all hard-gate CI jobs are green (including Firebase/CWV lanes when required)
 - [ ] If production-triggering: 10-minute UAT checklist from `docs/LAUNCH_RUNBOOK.md` passed
 - [ ] If production-triggering: rollback SHA/path is confirmed against `PROJECT_STATUS.md`
 

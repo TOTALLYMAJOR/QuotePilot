@@ -11,6 +11,40 @@ import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 const PROJECT_ID = "quote-wizard-rules";
 const RULES_PATH = path.resolve(process.cwd(), "firestore.rules");
 const HAS_FIRESTORE_EMULATOR = Boolean(String(process.env.FIRESTORE_EMULATOR_HOST || "").trim());
+const VALID_PORTAL_KEY = "abcdefghijklmnopqrstuvwxyz";
+
+const ORG_SCOPED_ADMIN_WRITE_CASES = [
+  {
+    collection: "settings",
+    docId: "pricing",
+    data: { serviceFeePct: 0.1 }
+  },
+  {
+    collection: "catalogPackages",
+    docId: "pkg-basic",
+    data: { name: "Basic Package" }
+  },
+  {
+    collection: "catalogAddons",
+    docId: "addon-transport",
+    data: { name: "Transport Addon" }
+  },
+  {
+    collection: "catalogRentals",
+    docId: "rental-table",
+    data: { name: "Table Rental" }
+  },
+  {
+    collection: "menuCategories",
+    docId: "menu-entrees",
+    data: { name: "Entrees" }
+  },
+  {
+    collection: "menuItems",
+    docId: "menu-item-1",
+    data: { name: "Grilled Salmon" }
+  }
+];
 
 let testEnv;
 
@@ -26,6 +60,11 @@ async function seedBaseData() {
       role: "sales",
       email: "sales-b@example.com",
       organizationId: "org-b"
+    });
+    await setDoc(doc(db, "userRoles", "admin-org-a"), {
+      role: "admin",
+      email: "admin-a@example.com",
+      organizationId: "org-a"
     });
     await setDoc(doc(db, "userRoles", "customer-org-a"), {
       role: "customer",
@@ -44,6 +83,26 @@ async function seedBaseData() {
 function versionRefFor(uid, email, orgId, quoteId = "q1", versionId = "v0001") {
   const db = testEnv.authenticatedContext(uid, { email }).firestore();
   return doc(db, "organizations", orgId, "quotes", quoteId, "versions", versionId);
+}
+
+function quoteRefFor(uid, email, orgId, quoteId) {
+  const db = testEnv.authenticatedContext(uid, { email }).firestore();
+  return doc(db, "organizations", orgId, "quotes", quoteId);
+}
+
+function orgScopedRefFor(uid, email, orgId, collection, docId) {
+  const db = testEnv.authenticatedContext(uid, { email }).firestore();
+  return doc(db, "organizations", orgId, collection, docId);
+}
+
+function buildQuotePayload(ownerUid, organizationId, overrides = {}) {
+  return {
+    ownerUid,
+    organizationId,
+    portalKey: VALID_PORTAL_KEY,
+    status: "draft",
+    ...overrides
+  };
 }
 
 function buildVersionPayload(overrides = {}) {
@@ -90,9 +149,16 @@ function buildVersionPayload(overrides = {}) {
   };
 }
 
+async function assertOrgScopedWritesFail(uid, email, orgId, cases = ORG_SCOPED_ADMIN_WRITE_CASES) {
+  for (const { collection, docId, data } of cases) {
+    const ref = orgScopedRefFor(uid, email, orgId, collection, docId);
+    await assertFails(setDoc(ref, data));
+  }
+}
+
 const rulesDescribe = HAS_FIRESTORE_EMULATOR ? describe : describe.skip;
 
-rulesDescribe("firestore rules - quote versions", () => {
+rulesDescribe("firestore rules - org scoped access controls", () => {
   beforeAll(async () => {
     testEnv = await initializeTestEnvironment({
       projectId: PROJECT_ID,
@@ -134,5 +200,38 @@ rulesDescribe("firestore rules - quote versions", () => {
     const customerRef = versionRefFor("customer-org-a", "customer-a@example.com", "org-a", "q1", "v0001");
     await assertFails(setDoc(customerRef, buildVersionPayload()));
     await assertFails(getDoc(customerRef));
+  });
+
+  test("org-a admin can write own org paths but cannot write org-b quotes/catalog/menu/settings", async () => {
+    const ownOrgQuoteRef = quoteRefFor("admin-org-a", "admin-a@example.com", "org-a", "q-admin-own");
+    await assertSucceeds(setDoc(ownOrgQuoteRef, buildQuotePayload("admin-org-a", "org-a")));
+
+    const crossOrgQuoteRef = quoteRefFor("admin-org-a", "admin-a@example.com", "org-b", "q-admin-cross");
+    await assertFails(setDoc(crossOrgQuoteRef, buildQuotePayload("admin-org-a", "org-b")));
+
+    for (const { collection, docId, data } of ORG_SCOPED_ADMIN_WRITE_CASES) {
+      const ownOrgRef = orgScopedRefFor("admin-org-a", "admin-a@example.com", "org-a", collection, docId);
+      await assertSucceeds(setDoc(ownOrgRef, data));
+
+      const crossOrgRef = orgScopedRefFor("admin-org-a", "admin-a@example.com", "org-b", collection, docId);
+      await assertFails(setDoc(crossOrgRef, data));
+    }
+  });
+
+  test("org-a sales cannot write org-b quotes/catalog/menu/settings", async () => {
+    const ownOrgQuoteRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q-sales-own");
+    await assertSucceeds(setDoc(ownOrgQuoteRef, buildQuotePayload("sales-org-a", "org-a")));
+
+    const crossOrgQuoteRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-b", "q-sales-cross");
+    await assertFails(setDoc(crossOrgQuoteRef, buildQuotePayload("sales-org-a", "org-b")));
+
+    await assertOrgScopedWritesFail("sales-org-a", "sales-a@example.com", "org-b");
+  });
+
+  test("customer cannot write staff-only org quote/catalog/menu/settings paths", async () => {
+    const customerQuoteRef = quoteRefFor("customer-org-a", "customer-a@example.com", "org-a", "q-customer-own");
+    await assertFails(setDoc(customerQuoteRef, buildQuotePayload("customer-org-a", "org-a")));
+
+    await assertOrgScopedWritesFail("customer-org-a", "customer-a@example.com", "org-a");
   });
 });

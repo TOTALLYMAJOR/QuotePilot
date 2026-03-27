@@ -6,14 +6,17 @@
 
 ## 2) Run Release Checks
 ```bash
-npm run check:env
-npm run build
-npm run check:docs:governance
-npm run check:perf:bundle
+npm run lane:quick
+npm run lane:core
 ```
 Optional CWV gate:
 ```bash
 npm run check:perf:cwv
+```
+High-risk release lanes:
+```bash
+npm run lane:firebase-auth-rules
+npm run lane:authoritative-pricing
 ```
 
 ## 3) Curate Release Notes

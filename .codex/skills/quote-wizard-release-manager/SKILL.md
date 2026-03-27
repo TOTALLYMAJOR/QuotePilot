@@ -25,3 +25,8 @@ description: Prepare and validate releases for the React + Firebase quote wizard
 - `references/release-playbook.md`: canonical release sequence.
 - `references/document-sync-checklist.md`: doc consistency checks.
 - `scripts/release-readiness.sh`: repeatable pre-release checks.
+
+## Readiness Script Options
+- Base: `scripts/release-readiness.sh`
+- Include CWV: `scripts/release-readiness.sh --with-cwv`
+- Include high-risk Firebase lanes: `scripts/release-readiness.sh --high-risk`

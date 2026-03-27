@@ -5,9 +5,25 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$ROOT_DIR"
 
 WITH_CWV="false"
-if [[ "${1:-}" == "--with-cwv" ]]; then
-  WITH_CWV="true"
-fi
+HIGH_RISK="false"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --with-cwv)
+      WITH_CWV="true"
+      shift
+      ;;
+    --high-risk)
+      HIGH_RISK="true"
+      shift
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      echo "Usage: release-readiness.sh [--with-cwv] [--high-risk]" >&2
+      exit 1
+      ;;
+  esac
+done
 
 echo "== Release readiness check =="
 
@@ -15,17 +31,19 @@ echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "Working tree status:"
 git status --short
 
-echo "==> Running environment validation"
-npm run check:env
+echo "==> Running lane:quick"
+npm run lane:quick
 
-echo "==> Running production build"
-npm run build
+echo "==> Running lane:core"
+npm run lane:core
 
-echo "==> Running documentation governance checks"
-npm run check:docs:governance
+if [[ "$HIGH_RISK" == "true" ]]; then
+  echo "==> Running lane:firebase-auth-rules"
+  npm run lane:firebase-auth-rules
 
-echo "==> Enforcing bundle budget"
-npm run check:perf:bundle
+  echo "==> Running lane:authoritative-pricing"
+  npm run lane:authoritative-pricing
+fi
 
 if [[ "$WITH_CWV" == "true" ]]; then
   echo "==> Running CWV smoke gate"

@@ -1,0 +1,71 @@
+name: Mainline Safety Net (Auto-Revert Failed Pushes)
+
+on:
+  workflow_run:
+    workflows:
+      - CI Quality
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mainline-safety-net-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  auto_revert_failed_main_push:
+    name: Auto-Revert Failed Main Push
+    if: >
+      github.event.workflow_run.name == 'CI Quality' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion != 'success' &&
+      !contains(github.event.workflow_run.head_commit.message, 'chore(main-guard): auto-revert')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Revert failed main head commit (when still head)
+        env:
+          FAILED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+
+          current_head="$(git rev-parse origin/main)"
+          echo "Failed SHA: ${FAILED_SHA}"
+          echo "Current main HEAD: ${current_head}"
+
+          if [ "${current_head}" != "${FAILED_SHA}" ]; then
+            echo "main advanced after the failed run; skipping auto-revert."
+            exit 0
+          fi
+
+          parent_count="$(git rev-list --parents -n 1 "${FAILED_SHA}" | wc -w | tr -d ' ')"
+          if [ "${parent_count}" -gt 2 ]; then
+            git revert -m 1 --no-commit "${FAILED_SHA}"
+          else
+            git revert --no-commit "${FAILED_SHA}"
+          fi
+
+          if git diff --quiet; then
+            echo "No changes detected after revert; nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(main-guard): auto-revert ${FAILED_SHA} after CI Quality failure"
+          git push origin HEAD:main
+
+      - name: Emit summary
+        run: echo "Mainline safety net completed."

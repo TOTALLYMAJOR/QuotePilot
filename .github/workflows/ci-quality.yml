@@ -6,33 +6,35 @@ on:
     branches:
       - main
 
+env:
+  VITE_FIREBASE_API_KEY: ci-placeholder-api-key
+  VITE_FIREBASE_AUTH_DOMAIN: ci-placeholder-auth-domain
+  VITE_FIREBASE_PROJECT_ID: ci-placeholder-project-id
+  VITE_FIREBASE_STORAGE_BUCKET: ci-placeholder-storage-bucket
+  VITE_FIREBASE_MESSAGING_SENDER_ID: ci-placeholder-messaging-sender
+  VITE_FIREBASE_APP_ID: ci-placeholder-app-id
+
+concurrency:
+  group: ci-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  unit_and_build:
-    name: Unit + Build
+  classify_changes:
+    name: Classify Changes + Lane Plan
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run unit tests
-        run: npm run test:unit
-
-      - name: Build app
-        run: npm run build
-
-  governance_and_perf:
-    name: Governance + Perf Gates
-    runs-on: ubuntu-latest
-    needs: unit_and_build
+    outputs:
+      changed_count: ${{ steps.classify.outputs.changed_count }}
+      changed_files_csv: ${{ steps.classify.outputs.changed_files_csv }}
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      high_risk: ${{ steps.classify.outputs.high_risk }}
+      is_main_push: ${{ steps.classify.outputs.is_main_push }}
+      run_heavy_lanes: ${{ steps.classify.outputs.run_heavy_lanes }}
+      heavy_required: ${{ steps.classify.outputs.heavy_required }}
+      firebase_required: ${{ steps.classify.outputs.firebase_required }}
+      cwv_required: ${{ steps.classify.outputs.cwv_required }}
+      change_type: ${{ steps.classify.outputs.change_type }}
+      tenant_impact: ${{ steps.classify.outputs.tenant_impact }}
+      recommended_lanes_csv: ${{ steps.classify.outputs.recommended_lanes_csv }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,22 +45,78 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Classify CI lanes
+        id: classify
+        run: npm run classify:ci:lanes
+
+  lane_quick:
+    name: lane:quick (Preflight + Secrets)
+    runs-on: ubuntu-latest
+    needs: classify_changes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run lane:quick
+        run: npm run lane:quick
+
+  lane_core:
+    name: lane:core (Unit + Build + Governance + Bundle)
+    runs-on: ubuntu-latest
+    needs: lane_quick
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run non-markdown secret scan
-        run: npm run check:secrets
+      - name: Run lane:core
+        run: npm run lane:core
 
-      - name: Run documentation governance checks
-        run: npm run check:docs:governance
+  docker_build_smoke:
+    name: Docker Build Smoke
+    runs-on: ubuntu-latest
+    needs: lane_core
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Build app for performance checks
-        run: npm run build
+      - name: Build production Docker image
+        run: docker compose build web
 
-      - name: Enforce bundle budget
-        run: npm run check:perf:bundle
+  cwv_smoke:
+    name: lane:cwv-smoke
+    runs-on: ubuntu-latest
+    needs:
+      - classify_changes
+      - lane_core
+    if: needs.classify_changes.outputs.run_heavy_lanes == 'true'
+    continue-on-error: ${{ needs.classify_changes.outputs.cwv_required != 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Install Playwright browser + Linux deps for Lighthouse
         run: npx playwright install --with-deps chromium
@@ -71,21 +129,14 @@ jobs:
         env:
           LHCI_COLLECT__CHROME_PATH: ${{ env.CHROME_PATH }}
 
-  docker_build_smoke:
-    name: Docker Build Smoke
-    runs-on: ubuntu-latest
-    needs: unit_and_build
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build production Docker image
-        run: docker compose build web
-
   playwright_smoke:
-    name: Playwright Smoke
+    name: lane:playwright-smoke
     runs-on: ubuntu-latest
-    needs: unit_and_build
+    needs:
+      - classify_changes
+      - lane_core
+    if: needs.classify_changes.outputs.run_heavy_lanes == 'true'
+    continue-on-error: ${{ needs.classify_changes.outputs.heavy_required != 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -111,6 +162,7 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report/
+          retention-days: 14
 
       - name: Upload Playwright traces (failure)
         if: failure()
@@ -118,11 +170,16 @@ jobs:
         with:
           name: playwright-traces
           path: test-results/
+          retention-days: 14
 
   playwright_firebase_smoke:
-    name: Playwright Firebase Smoke
+    name: lane:firebase-auth-rules
     runs-on: ubuntu-latest
-    needs: unit_and_build
+    needs:
+      - classify_changes
+      - lane_core
+    if: needs.classify_changes.outputs.run_heavy_lanes == 'true'
+    continue-on-error: ${{ needs.classify_changes.outputs.firebase_required != 'true' }}
     timeout-minutes: 25
     steps:
       - name: Checkout
@@ -149,6 +206,7 @@ jobs:
         with:
           name: playwright-firebase-report
           path: playwright-report/
+          retention-days: 14
 
       - name: Upload Playwright traces (failure)
         if: failure()
@@ -156,11 +214,16 @@ jobs:
         with:
           name: playwright-firebase-traces
           path: test-results/
+          retention-days: 14
 
   playwright_firebase_authoritative_smoke:
-    name: Playwright Firebase Authoritative Smoke
+    name: lane:authoritative-pricing
     runs-on: ubuntu-latest
-    needs: unit_and_build
+    needs:
+      - classify_changes
+      - lane_core
+    if: needs.classify_changes.outputs.run_heavy_lanes == 'true'
+    continue-on-error: ${{ needs.classify_changes.outputs.firebase_required != 'true' }}
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -187,6 +250,7 @@ jobs:
         with:
           name: playwright-firebase-authoritative-report
           path: playwright-report/
+          retention-days: 14
 
       - name: Upload Playwright traces (failure)
         if: failure()
@@ -194,3 +258,4 @@ jobs:
         with:
           name: playwright-firebase-authoritative-traces
           path: test-results/
+          retention-days: 14

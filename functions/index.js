@@ -24,11 +24,54 @@ const EMAIL_PROVIDERS = new Set(["resend", "none"]);
 const QUOTES_COLLECTION = "quotes";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 
+let cachedFunctionsConfig = undefined;
+let functionsConfigErrorLogged = false;
+
+function getFunctionsConfigSnapshot() {
+  if (cachedFunctionsConfig !== undefined) {
+    return cachedFunctionsConfig;
+  }
+
+  if (typeof functions.config !== "function") {
+    cachedFunctionsConfig = {};
+    return cachedFunctionsConfig;
+  }
+
+  try {
+    const config = functions.config();
+    cachedFunctionsConfig = config && typeof config === "object" ? config : {};
+  } catch (err) {
+    if (!functionsConfigErrorLogged) {
+      functions.logger.warn("functions.config() unavailable; falling back to environment variables.", {
+        message: normalizeText(err?.message).slice(0, 180)
+      });
+      functionsConfigErrorLogged = true;
+    }
+    cachedFunctionsConfig = {};
+  }
+
+  return cachedFunctionsConfig;
+}
+
+function readEnvConfig(path) {
+  const envKey = String(path || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+  if (!envKey) return "";
+  return normalizeText(process.env[envKey]);
+}
+
 function readConfig(path, fallback = "") {
-  const config = functions.config() || {};
+  const config = getFunctionsConfigSnapshot();
   const value = path.split(".").reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), config);
-  if (value === undefined || value === null) return fallback;
-  return String(value).trim();
+  if (value !== undefined && value !== null && String(value).trim()) {
+    return String(value).trim();
+  }
+  const envValue = readEnvConfig(path);
+  if (envValue) return envValue;
+  return fallback;
 }
 
 function normalizeText(value) {

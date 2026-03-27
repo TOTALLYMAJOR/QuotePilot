@@ -1,6 +1,6 @@
 # Multi-Tenant Organization Scoping Plan
 
-Last updated: March 20, 2026  
+Last updated: March 27, 2026  
 Status: Implemented (Phases 1-8 complete; additive migration mode active)
 
 ## Implementation Status
@@ -82,6 +82,7 @@ organizations/{orgId}
 - Seed script populates only the targeted org.
 - Legacy data migrates into a default org successfully.
 - Quote version history remains attached to the correct parent quote.
+- Migration dry-run evidence follows `docs/ORCHESTRATION_RUNBOOK.md` ("Migration Dry-Run Evidence Standard (P0 Execution)") before production migration writes are approved.
 
 ## Risk Areas
 - Bootstrap race conditions.
