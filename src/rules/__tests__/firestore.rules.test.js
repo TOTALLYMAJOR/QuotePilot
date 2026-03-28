@@ -12,6 +12,10 @@ const PROJECT_ID = "quote-wizard-rules";
 const RULES_PATH = path.resolve(process.cwd(), "firestore.rules");
 const HAS_FIRESTORE_EMULATOR = Boolean(String(process.env.FIRESTORE_EMULATOR_HOST || "").trim());
 const VALID_PORTAL_KEY = "abcdefghijklmnopqrstuvwxyz";
+const EXPIRED_PORTAL_KEY = "expired-abcdefghijklmnopqrstuvwxyz";
+const DELETED_PORTAL_KEY = "deleted-abcdefghijklmnopqrstuvwxyz";
+const ACTIVE_PORTAL_EXPIRES_MS = 4102444800000; // 2100-01-01T00:00:00.000Z
+const EXPIRED_PORTAL_EXPIRES_MS = 1577836800000; // 2020-01-01T00:00:00.000Z
 
 const ORG_SCOPED_ADMIN_WRITE_CASES = [
   {
@@ -74,8 +78,47 @@ async function seedBaseData() {
     await setDoc(doc(db, "organizations", "org-a", "quotes", "q1"), {
       ownerUid: "sales-org-a",
       organizationId: "org-a",
-      portalKey: "abcdefghijklmnopqrstuvwxyz",
+      portalKey: VALID_PORTAL_KEY,
       status: "draft"
+    });
+    await setDoc(doc(db, "organizations", "org-a", "quotes", "q-expired"), {
+      ownerUid: "sales-org-a",
+      organizationId: "org-a",
+      portalKey: EXPIRED_PORTAL_KEY,
+      status: "draft"
+    });
+    await setDoc(doc(db, "organizations", "org-a", "quotes", "q-deleted"), {
+      ownerUid: "sales-org-a",
+      organizationId: "org-a",
+      portalKey: DELETED_PORTAL_KEY,
+      status: "draft"
+    });
+    await setDoc(doc(db, "customerPortalQuotes", VALID_PORTAL_KEY), {
+      portalKey: VALID_PORTAL_KEY,
+      quoteId: "q1",
+      organizationId: "org-a",
+      status: "sent",
+      portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
+      updatedAtISO: "2026-03-20T00:00:00.000Z",
+      lifecycle: {}
+    });
+    await setDoc(doc(db, "customerPortalQuotes", EXPIRED_PORTAL_KEY), {
+      portalKey: EXPIRED_PORTAL_KEY,
+      quoteId: "q-expired",
+      organizationId: "org-a",
+      status: "sent",
+      portalExpiresAtMs: EXPIRED_PORTAL_EXPIRES_MS,
+      updatedAtISO: "2026-03-20T00:00:00.000Z",
+      lifecycle: {}
+    });
+    await setDoc(doc(db, "customerPortalQuotes", DELETED_PORTAL_KEY), {
+      portalKey: DELETED_PORTAL_KEY,
+      quoteId: "q-deleted",
+      organizationId: "org-a",
+      status: "deleted",
+      portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
+      updatedAtISO: "2026-03-20T00:00:00.000Z",
+      lifecycle: {}
     });
   });
 }
@@ -93,6 +136,16 @@ function quoteRefFor(uid, email, orgId, quoteId) {
 function orgScopedRefFor(uid, email, orgId, collection, docId) {
   const db = testEnv.authenticatedContext(uid, { email }).firestore();
   return doc(db, "organizations", orgId, collection, docId);
+}
+
+function portalSnapshotRefFor(portalKey) {
+  const db = testEnv.unauthenticatedContext().firestore();
+  return doc(db, "customerPortalQuotes", portalKey);
+}
+
+function portalQuoteRefFor(orgId, quoteId) {
+  const db = testEnv.unauthenticatedContext().firestore();
+  return doc(db, "organizations", orgId, "quotes", quoteId);
 }
 
 function buildQuotePayload(ownerUid, organizationId, overrides = {}) {
@@ -233,5 +286,66 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(setDoc(customerQuoteRef, buildQuotePayload("customer-org-a", "org-a")));
 
     await assertOrgScopedWritesFail("customer-org-a", "customer-a@example.com", "org-a");
+  });
+
+  test("portal snapshots allow active key reads/status updates and deny expired/deleted keys", async () => {
+    const activeRef = portalSnapshotRefFor(VALID_PORTAL_KEY);
+    await assertSucceeds(getDoc(activeRef));
+    await assertSucceeds(updateDoc(activeRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T00:00:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T00:00:00.000Z"
+      }
+    }));
+
+    const expiredRef = portalSnapshotRefFor(EXPIRED_PORTAL_KEY);
+    await assertFails(getDoc(expiredRef));
+    await assertFails(updateDoc(expiredRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T00:00:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T00:00:00.000Z"
+      }
+    }));
+
+    const deletedRef = portalSnapshotRefFor(DELETED_PORTAL_KEY);
+    await assertFails(getDoc(deletedRef));
+    await assertFails(updateDoc(deletedRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T00:00:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T00:00:00.000Z"
+      }
+    }));
+  });
+
+  test("org quote portal status patch requires active portal snapshot", async () => {
+    const activeQuoteRef = portalQuoteRefFor("org-a", "q1");
+    await assertSucceeds(updateDoc(activeQuoteRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T00:00:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T00:00:00.000Z"
+      }
+    }));
+
+    const expiredQuoteRef = portalQuoteRefFor("org-a", "q-expired");
+    await assertFails(updateDoc(expiredQuoteRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T00:00:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T00:00:00.000Z"
+      }
+    }));
+
+    const deletedQuoteRef = portalQuoteRefFor("org-a", "q-deleted");
+    await assertFails(updateDoc(deletedQuoteRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T00:00:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T00:00:00.000Z"
+      }
+    }));
   });
 });

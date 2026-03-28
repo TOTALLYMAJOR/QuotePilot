@@ -1,15 +1,17 @@
 # Dev Tasks
 
-Last updated: March 27, 2026
+Last updated: March 28, 2026
 
 ## P0 - Multi-Tenant Hardening (Post Rollout)
-- In-progress execution track: harden cross-org denial coverage for org-scoped quote and catalog write paths.
-- Evidence expectation: attach emulator denial matrix evidence (wrong-org deny + same-org allow controls) with command/test artifacts, plus migration dry-run evidence captured per `docs/ORCHESTRATION_RUNBOOK.md` ("Migration Dry-Run Evidence Standard (P0 Execution)").
-- Completion criteria: quote/catalog org-scoped write paths deny cross-org access, same-org writes still pass, and no unresolved legacy global fallback bypass remains for protected writes.
-- Run focused emulator tests for cross-org denial on org-scoped quotes/catalog writes.
-- Execute migration script in production only after a dry-run is captured with the required command pattern, artifact naming/location, and PR evidence format from `docs/ORCHESTRATION_RUNBOOK.md`.
-- Remove legacy global fallback (`VITE_ENABLE_LEGACY_GLOBAL_FALLBACK`) after migration verification.
-- Remove remaining legacy global write paths once fallback retirement is complete.
+- Completed execution track: org-scoped quote/catalog write paths now enforce cross-org denial with migration evidence attached.
+- Evidence captured (March 28, 2026):
+  - Cross-org denial emulator matrix log: `.cache/p0-denial-matrix/20260328T001230Z--firestore-rules-cross-org-denial.log`
+  - Portal expiry/deleted-state rule hardening emulator log: `.cache/p0-denial-matrix/20260328T022716Z--firestore-rules-portal-expiry-hardening.log`
+  - Migration dry-run log/json: `.cache/migration-dry-runs/20260328T001210Z--tonicatering--250--dry-run.log` and `.cache/migration-dry-runs/20260328T001210Z--tonicatering--250--dry-run.json`
+  - Portal expiry-ms dry-run log/json: `.cache/migration-dry-runs/20260328T022619Z--tonicatering--250--portal-ms-dry-run.log` and `.cache/migration-dry-runs/20260328T022619Z--tonicatering--250--portal-ms-dry-run.json`
+  - Migration apply log/json: `.cache/migration-runs/20260328T001919Z--tonicatering--250--apply.log` and `.cache/migration-runs/20260328T001919Z--tonicatering--250--apply.json`
+  - Portal expiry-ms apply log/json: `.cache/migration-runs/20260328T022640Z--tonicatering--250--portal-ms-apply.log` and `.cache/migration-runs/20260328T022640Z--tonicatering--250--portal-ms-apply.json`
+- Remaining P0 action: deploy hardened portal rules to production and run post-deploy smoke verification (active portal token succeeds; expired/deleted tokens are denied).
 
 ## P0 - Security and Reliability
 - Re-establish staging sign-off workflow and release checklist enforcement before broadening `main` merge velocity.

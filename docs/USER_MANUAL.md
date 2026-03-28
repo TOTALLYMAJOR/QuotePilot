@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: March 26, 2026
+Last updated: March 27, 2026
 
 ## Purpose
 This guide explains day-to-day usage of the Firebase Quote Wizard for staff users and admins.
@@ -64,6 +64,40 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
   - `pricingType`
   - `active` toggle
 - Save overall catalog changes with `Save Catalog`.
+- If `Optional Modules` are managed by order policy, only unpaid modules are locked off.
+- Paid modules remain editable by admins.
+
+## Customer Onboarding (No Stripe Flow)
+Use the provisioning script to create a customer org, enforce ordered feature entitlements, and generate a send-ready onboarding email.
+
+Backend source of truth:
+- Firebase Callable Function `provisionCustomerOrder` handles provisioning logic server-side.
+- Firestore `provisioningOrders/{orderId}` stores onboarding status, feature entitlements, and email send outcome.
+
+Example:
+```bash
+npm run customer:provision -- \
+  --project <your-project-id> \
+  --name "Customer Org Name" \
+  --owner-email owner@example.com \
+  --owner-name "Owner Name" \
+  --plan growth \
+  --sequence-start 250 \
+  --email-out ./artifacts/onboarding/customer-email.txt
+```
+
+Behavior:
+- Auto-assigns org id when `--organization` is omitted using numeric sequence (default starts at `250`).
+- Defaults `orderId` to `orgId + 1` when org id is numeric and `--order-id` is omitted.
+- Skips menu/event seed by default (`--seed-menu` to opt in).
+- Applies ordered feature entitlements in org settings.
+  - unpaid modules are locked off
+  - paid modules remain editable
+- Applies neutral white-label branding defaults so new orgs do not inherit another customer's branding.
+- Ensures a minimal neutral catalog skeleton exists so runtime does not fall back to legacy defaults.
+- Grants owner admin access immediately when `--owner-uid` is provided.
+- Otherwise creates an email-based invite consumed at first sign-in for the owner email.
+- Uses Firebase Admin credentials when available; otherwise falls back to Firestore REST writes using your Firebase CLI login token (requires `--project`).
 
 ## Customer Portal
 - Customers can open portal links and view quote details.
@@ -78,6 +112,7 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
 
 ## Troubleshooting
 - If catalog fails to load in non-dev environments, Firebase catalog access is required and the app blocks edits until resolved.
+- If you see `organizationId is required` errors, the signed-in account is missing tenant context (`userRoles/{uid}.organizationId`) and must be re-provisioned/invited into an organization.
 - If quote save fails, verify required fields:
   - customer name
   - customer email

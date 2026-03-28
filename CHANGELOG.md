@@ -13,6 +13,8 @@ This changelog is backfilled from git history and will be maintained going forwa
 - CI lane classifier script (`scripts/ci-lane-classifier.mjs`) that computes docs-only/high-risk state, change intent hints, tenant impact, and recommended lanes from changed paths.
 - Shared orchestration lane runner (`scripts/orchestration-lanes.sh`) and npm lane entrypoints (`lane:quick`, `lane:core`, `lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:release`).
 - PR change-intent contract fields and lane evidence checklist in `.github/PULL_REQUEST_TEMPLATE.md`.
+- No-Stripe customer onboarding provisioning script (`scripts/provision-customer-order.mjs`) with plan/feature selection, org bootstrap, order-based feature entitlements, and copy-ready onboarding email generation.
+- Server-side onboarding callable (`provisionCustomerOrder`) in Cloud Functions to centralize customer provisioning logic, apply feature entitlements, store `provisioningOrders` audit records, and optionally send onboarding email.
 
 - Firebase emulator browser smoke lane (`npm run test:e2e:firebase`) with seeded auth/org fixtures for real Auth + Firestore rules validation.
 - Firebase authoritative browser smoke lane (`npm run test:e2e:firebase:authoritative`) that starts Functions emulator and validates authoritative pricing callable behavior in save flow.
@@ -77,6 +79,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Standardized production safety controls: `ENABLE_FUNCTIONS_DEPLOY=false` default and fail-safe SMS runtime config (`notifications.sms_provider="none"`).
 - Added explicit release gate policy requiring green CI + 10-minute UAT + rollback SHA confirmation for production-triggering merges.
 - Updated `@vitejs/plugin-react` to a Vite 7 compatible major version so `npm ci` succeeds for CI and container builds.
+- Added invite-aware organization bootstrap in Cloud Functions (`organizationInvites`) so pre-authorized customer emails are granted org role/access automatically on first sign-in.
+- Local provisioning script now also writes `provisioningOrders/<orderId>` records so manual onboarding runs are auditable in Firebase.
+- Customer provisioning now bootstraps neutral white-label defaults (branding/contact + minimal catalog skeleton) in both the local script and `provisionCustomerOrder` callable to prevent cross-client branding/menu fallback bleed-through.
 - Added a CI Docker smoke check job that runs `docker compose build web` on pushes/PRs.
 - Hardened Playwright smoke selectors with exact label matching to avoid `Venue`/`Venue address` strict-mode collisions.
 - Updated Playwright history assertion to validate persisted quote row data that is actually rendered (`E2E Staff` and edited guest count).
@@ -104,7 +109,27 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Restored legacy-global write fallback for menu management mutations when org context is missing, preventing Admin Catalog add/edit/delete menu operations from failing in fallback mode.
 - Hardened org-scoped write safety for protected catalog and quote persistence paths by removing legacy global write fallback in `menuService` and `useCatalogData` save flows, and by requiring organization context for Firebase quote mutations in `quoteStore` while preserving legacy read fallback behavior.
 - Added legacy quote write auto-migration safeguards in `quoteStore` so legacy global quote docs are copied into org-scoped paths during Firebase write/version operations when org context is available.
+- Admin Catalog `Optional Modules` controls now enforce order entitlements: paid modules remain editable, while unpaid modules are locked off.
+- Local customer provisioning now supports numeric org sequencing (`--sequence-start`, default `250`) and defaults order ids to `orgId + 1` for numeric orgs; menu/event seed is opt-in via `--seed-menu` (safe default skips seed).
+- Local provisioning now auto-falls back from Firebase Admin SDK to Firestore REST writes using Firebase CLI auth when ADC is unavailable (with `--project`), reducing first-run environment friction.
+- Retired legacy global catalog/quote fallback behavior across frontend services (`useCatalogData`, `menuService`, `quoteStore`) and authoritative pricing/functions codepaths (`pricingEngine`, `readQuoteOrThrow`), with strict org-required fail-closed behavior for Firebase tenant reads/writes.
+- Firestore Rules now explicitly deny retired legacy global business collections (`catalog*`, `pricing/settings`, `eventTypes`, `menu*`, `quotes`, `quoteHistory`) so tenant business access is org-scoped by policy.
 - Updated Cloud Functions config loading to safely handle `firebase-functions` v7 `functions.config()` removal by falling back to environment variables instead of throwing in runtime call paths (including `notifyOwnerNewQuote`).
+- `scripts/migrate-to-multi-tenant.mjs` now supports Firestore REST fallback for both dry-run and apply modes using Firebase CLI auth when ADC credentials are unavailable, so production migration execution is not blocked by local credential shape.
+- `customerPortalQuotes` Firestore rules are now hardened to require active snapshots (`status != "deleted"` and `portalExpiresAtMs > request.time.toMillis()`) for portal reads/status updates and quote portal status patches.
+- Portal snapshots now include `portalExpiresAtMs` from `quoteStore` to support rule-level expiry enforcement for newly written portal records.
+- Migration backfill now patches missing `portalExpiresAtMs` for existing `customerPortalQuotes` records (in addition to `organizationId`) and uses safer REST pagination/token-refresh behavior under Firebase CLI auth fallback.
+- Added Firestore rules emulator coverage for portal token hardening (active token allow, expired/deleted deny, and quote status patch gating through active portal snapshots).
+- Captured P0 hardening evidence artifacts for production migration readiness:
+  - Cross-org denial emulator matrix log (`.cache/p0-denial-matrix/20260328T001230Z--firestore-rules-cross-org-denial.log`)
+  - Migration dry-run log/json (`.cache/migration-dry-runs/20260328T001210Z--tonicatering--250--dry-run.log`, `.cache/migration-dry-runs/20260328T001210Z--tonicatering--250--dry-run.json`)
+- Captured portal-rule hardening rollout evidence:
+  - Portal hardening emulator matrix log (`.cache/p0-denial-matrix/20260328T022716Z--firestore-rules-portal-expiry-hardening.log`)
+  - Portal expiry-ms backfill dry-run log/json (`.cache/migration-dry-runs/20260328T022619Z--tonicatering--250--portal-ms-dry-run.log`, `.cache/migration-dry-runs/20260328T022619Z--tonicatering--250--portal-ms-dry-run.json`)
+  - Portal expiry-ms backfill apply log/json (`.cache/migration-runs/20260328T022640Z--tonicatering--250--portal-ms-apply.log`, `.cache/migration-runs/20260328T022640Z--tonicatering--250--portal-ms-apply.json`)
+- Executed production migration for org `250` with evidence capture:
+  - Apply log/json (`.cache/migration-runs/20260328T001919Z--tonicatering--250--apply.log`, `.cache/migration-runs/20260328T001919Z--tonicatering--250--apply.json`)
+  - Totals: `source=496`, `created=1`, `patched=0`
 
 ## [2026-03-10]
 

@@ -15,6 +15,10 @@ Production-ready catering quote application built with React, Vite, Firebase, an
 ## Product Scope
 The app supports a 5-step quote wizard, dynamic event-type menus, pricing configuration, proposal export, customer portal updates, and operations workflows (history, scheduling, reporting, diagnostics).
 
+Tenant safety mode:
+- Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
+- Legacy global business collections are retired for runtime access.
+
 ## Architecture Snapshot
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
@@ -137,6 +141,56 @@ Notes:
 - The script is idempotent and only creates missing docs.
 - It never deletes or rewrites existing menu docs.
 - Auth uses Firebase Admin ADC/service credentials (`GOOGLE_APPLICATION_CREDENTIALS`) or emulator config.
+
+## Customer Provisioning (No Stripe)
+Provision a customer organization, enforce order-based feature entitlements (unpaid modules locked off), and generate a copy-ready onboarding email template.
+
+Server-side option (recommended):
+- Callable Firebase Function: `provisionCustomerOrder`
+- Behavior:
+  - writes org + settings + invite + `provisioningOrders/{orderId}` audit record
+  - applies ordered feature entitlements
+  - optionally sends onboarding email via configured email provider
+
+Basic usage:
+```bash
+npm run customer:provision -- \
+  --project <your-project-id> \
+  --name "Acme Events" \
+  --owner-email owner@acme.com \
+  --owner-name "Avery Owner" \
+  --plan growth \
+  --sequence-start 250 \
+  --email-out ./artifacts/onboarding/acme-events-email.txt
+```
+
+Custom feature set:
+```bash
+npm run customer:provision -- \
+  --project <your-project-id> \
+  --organization <orgId> \
+  --name "Acme Events" \
+  --owner-email owner@acme.com \
+  --features customerPortal,eventSchedule,guidedSelling \
+  --disable-features crmSync,diagnostics
+```
+
+What the provisioning script does:
+- Auto-assigns numeric org IDs when `--organization` is omitted (starts at `--sequence-start`, default `250`).
+- Sets `orderId` to `orgId + 1` when `--order-id` is omitted and org id is numeric.
+- Skips menu/event seeding by default to avoid inheriting prior client menu content.
+- Seeds menu/event defaults only when `--seed-menu` is explicitly passed.
+- Creates/updates `organizations/<orgId>`.
+- Writes ordered feature entitlements to `organizations/<orgId>/settings/config`:
+  - paid features remain editable
+  - unpaid features are locked off in Admin Catalog
+- Applies neutral white-label branding/contact defaults so new orgs do not inherit another client's brand identity.
+- Ensures a minimal neutral catalog skeleton exists to prevent fallback to legacy client defaults.
+- Writes a provisioning audit record to `provisioningOrders/<orderId>`.
+- Grants admin via `userRoles/<uid>` when `--owner-uid` is provided.
+- Otherwise creates an email-based invite in `organizationInvites/<owner-email-key>` that is consumed on first sign-in.
+- Uses Firebase Admin credentials when available; if ADC is missing and `--project` is provided, it falls back to Firestore REST writes with the current Firebase CLI login token.
+- Prints an onboarding email template and optionally writes it to `--email-out`.
 
 ## Deploy Entry Points
 - Firebase hosting/functions: `npm run deploy:firebase`

@@ -16,6 +16,7 @@ const ROLES_COLLECTION = "userRoles";
 const ORGANIZATIONS_COLLECTION = "organizations";
 const STAFF_ROLES = new Set(["admin", "sales"]);
 const ROLE_VALUES = new Set(["admin", "sales", "customer"]);
+const INVITES_COLLECTION = "organizationInvites";
 const BOOTSTRAP_ADMIN_EMAILS = new Set([
   "tonitastefultouch@yahoo.com"
 ]);
@@ -23,6 +24,45 @@ const SMS_PROVIDERS = new Set(["twilio", "none"]);
 const EMAIL_PROVIDERS = new Set(["resend", "none"]);
 const QUOTES_COLLECTION = "quotes";
 const PORTAL_COLLECTION = "customerPortalQuotes";
+const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
+const FEATURE_FLAG_KEYS = [
+  "customerPortal",
+  "eventSchedule",
+  "integrationsOps",
+  "diagnostics",
+  "reportingDashboard",
+  "quoteCompare",
+  "crmSync",
+  "guidedSelling"
+];
+const FEATURE_FLAG_LABELS = {
+  customerPortal: "Customer Portal",
+  eventSchedule: "Event Schedule",
+  integrationsOps: "Integrations Ops",
+  diagnostics: "Diagnostics",
+  reportingDashboard: "Reporting Dashboard",
+  quoteCompare: "Quote Compare",
+  crmSync: "CRM Sync",
+  guidedSelling: "Guided Selling"
+};
+const FEATURE_PLAN_PRESETS = {
+  starter: ["customerPortal", "eventSchedule", "guidedSelling"],
+  growth: ["customerPortal", "eventSchedule", "guidedSelling", "quoteCompare", "reportingDashboard"],
+  enterprise: [...FEATURE_FLAG_KEYS]
+};
+const NEUTRAL_CATALOG_SKELETON = {
+  packages: [
+    { id: "starter-package", name: "Starter Package", ppp: 0 },
+    { id: "standard-package", name: "Standard Package", ppp: 0 },
+    { id: "signature-package", name: "Signature Package", ppp: 0 }
+  ],
+  addons: [
+    { id: "custom-addon", name: "Custom Add-on", pricingType: "per_event", type: "per_event", price: 0, active: true }
+  ],
+  rentals: [
+    { id: "custom-rental", name: "Custom Rental", pricingType: "per_item", type: "per_item", price: 0, qtyPerGuests: 10, active: true }
+  ]
+};
 
 let cachedFunctionsConfig = undefined;
 let functionsConfigErrorLogged = false;
@@ -78,6 +118,12 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+function withFallback(value, fallback = "") {
+  const text = normalizeText(value);
+  if (text) return text;
+  return normalizeText(fallback);
+}
+
 function normalizeEmail(value) {
   return normalizeText(value).toLowerCase();
 }
@@ -103,6 +149,298 @@ function slugify(value, fallback = "organization") {
     .replace(/-{2,}/g, "-")
     .replace(/^-|-$/g, "");
   return slug || fallback;
+}
+
+function inviteDocIdFromEmail(value) {
+  const email = normalizeEmail(value);
+  if (!email) return "";
+  return email
+    .replace(/[^\w-]+/g, "_")
+    .replace(/_{2,}/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
+async function readPendingOrganizationInvite(tx, email) {
+  const normalizedEmail = normalizeEmail(email);
+  const inviteId = inviteDocIdFromEmail(normalizedEmail);
+  if (!normalizedEmail || !inviteId) return null;
+
+  const inviteRef = db.collection(INVITES_COLLECTION).doc(inviteId);
+  const inviteSnap = await tx.get(inviteRef);
+  if (!inviteSnap.exists) return null;
+
+  const invite = inviteSnap.data() || {};
+  if (normalizeEmail(invite.email) !== normalizedEmail) return null;
+
+  const status = normalizeText(invite.status).toLowerCase();
+  if (status && status !== "pending" && status !== "active") return null;
+  if (invite.consumedAt || normalizeText(invite.consumedAtISO)) return null;
+
+  const expiresAtISO = normalizeText(invite.expiresAtISO);
+  if (expiresAtISO) {
+    const expiresAtMs = Date.parse(expiresAtISO);
+    if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+      return null;
+    }
+  }
+
+  const role = normalizeRole(invite.role);
+  if (role !== "admin" && role !== "sales") return null;
+
+  const organizationId = normalizeOrganizationId(invite.organizationId);
+  if (!organizationId) return null;
+
+  return {
+    inviteRef,
+    role,
+    organizationId,
+    organizationName: normalizeText(invite.organizationName)
+  };
+}
+
+function normalizeOrderId(value, fallback = "") {
+  const raw = normalizeText(value).toLowerCase();
+  const normalized = raw
+    .replace(/[^\w-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
+  if (normalized) return normalized;
+  const fallbackRaw = normalizeText(fallback).toLowerCase();
+  const fallbackNormalized = fallbackRaw
+    .replace(/[^\w-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
+  return fallbackNormalized;
+}
+
+function normalizeFeatureList(input) {
+  if (Array.isArray(input)) {
+    return input
+      .map((item) => normalizeText(item))
+      .filter(Boolean);
+  }
+  return String(input || "")
+    .split(",")
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+}
+
+function validateFeatureIds(featureIds, fieldName = "features") {
+  const invalid = featureIds.filter((id) => !FEATURE_FLAG_KEYS.includes(id));
+  if (!invalid.length) return;
+  throw new functions.https.HttpsError(
+    "invalid-argument",
+    `${fieldName} contains unknown feature ids: ${invalid.join(", ")}.`
+  );
+}
+
+function resolveFeatureEntitlements(data = {}) {
+  const requestedPlan = normalizeText(data?.plan).toLowerCase();
+  const plan = FEATURE_PLAN_PRESETS[requestedPlan] ? requestedPlan : "growth";
+  const featureFlags = FEATURE_FLAG_KEYS.reduce((acc, key) => {
+    acc[key] = false;
+    return acc;
+  }, {});
+
+  FEATURE_PLAN_PRESETS[plan].forEach((key) => {
+    featureFlags[key] = true;
+  });
+
+  const explicitFeatures = normalizeFeatureList(data?.features);
+  if (explicitFeatures.length) {
+    if (explicitFeatures.length === 1 && explicitFeatures[0].toLowerCase() === "all") {
+      FEATURE_FLAG_KEYS.forEach((key) => {
+        featureFlags[key] = true;
+      });
+    } else {
+      validateFeatureIds(explicitFeatures, "features");
+      FEATURE_FLAG_KEYS.forEach((key) => {
+        featureFlags[key] = explicitFeatures.includes(key);
+      });
+    }
+  }
+
+  const disableFeatures = normalizeFeatureList(data?.disableFeatures);
+  if (disableFeatures.length) {
+    validateFeatureIds(disableFeatures, "disableFeatures");
+    disableFeatures.forEach((key) => {
+      featureFlags[key] = false;
+    });
+  }
+
+  const paidFeatureIds = FEATURE_FLAG_KEYS.filter((key) => featureFlags[key]);
+  const unpaidFeatureIds = FEATURE_FLAG_KEYS.filter((key) => !featureFlags[key]);
+
+  return {
+    plan,
+    featureFlags,
+    paidFeatureIds,
+    unpaidFeatureIds
+  };
+}
+
+function formatFeatureListForEmail(featureIds = []) {
+  return featureIds.map((id) => `- ${FEATURE_FLAG_LABELS[id] || id}`);
+}
+
+function buildNeutralSettingsPatch({
+  organizationName = "",
+  ownerName = "",
+  ownerEmail = "",
+  supportEmail = ""
+} = {}) {
+  const resolvedOrganizationName = withFallback(organizationName, "Organization Workspace");
+  const resolvedSupportEmail = normalizeEmail(supportEmail) || normalizeEmail(ownerEmail);
+  const resolvedPreparedBy = withFallback(ownerName, "Sales Team");
+  return {
+    quotePreparedBy: resolvedPreparedBy,
+    brandName: resolvedOrganizationName,
+    brandTagline: "Managed by Little Legend Studios",
+    brandLogoUrl: "",
+    brandPrimaryColor: "#1f2937",
+    brandAccentColor: "#4b5563",
+    brandDarkAccentColor: "#111827",
+    brandBackgroundStart: "#f3f4f6",
+    brandBackgroundMid: "#e5e7eb",
+    brandBackgroundEnd: "#d1d5db",
+    heroEyebrow: "Event Catering Workspace",
+    heroHeadline: `${resolvedOrganizationName} Quote Operations`,
+    heroDescription: "Build quotes, configure pricing, and manage proposals from one workspace.",
+    brandCrew: [],
+    businessPhone: "",
+    businessEmail: resolvedSupportEmail,
+    businessAddress: "",
+    acceptanceEmail: resolvedSupportEmail,
+    menuSections: []
+  };
+}
+
+async function buildNeutralCatalogSeedEntries({ organizationId = "", nowISO = "" } = {}) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  if (!normalizedOrganizationId) return [];
+
+  const orgRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
+  const packagesCollection = orgRef.collection("catalogPackages");
+  const addonsCollection = orgRef.collection("catalogAddons");
+  const rentalsCollection = orgRef.collection("catalogRentals");
+
+  const [packageSnap, addonSnap, rentalSnap] = await Promise.all([
+    packagesCollection.limit(1).get(),
+    addonsCollection.limit(1).get(),
+    rentalsCollection.limit(1).get()
+  ]);
+
+  const entries = [];
+  if (packageSnap.empty) {
+    NEUTRAL_CATALOG_SKELETON.packages.forEach((item) => {
+      entries.push({
+        ref: packagesCollection.doc(item.id),
+        data: {
+          ...item,
+          source: "provisioning-default",
+          createdAtISO: nowISO
+        }
+      });
+    });
+  }
+
+  if (addonSnap.empty) {
+    NEUTRAL_CATALOG_SKELETON.addons.forEach((item) => {
+      entries.push({
+        ref: addonsCollection.doc(item.id),
+        data: {
+          ...item,
+          source: "provisioning-default",
+          createdAtISO: nowISO
+        }
+      });
+    });
+  }
+
+  if (rentalSnap.empty) {
+    NEUTRAL_CATALOG_SKELETON.rentals.forEach((item) => {
+      entries.push({
+        ref: rentalsCollection.doc(item.id),
+        data: {
+          ...item,
+          source: "provisioning-default",
+          createdAtISO: nowISO
+        }
+      });
+    });
+  }
+
+  return entries;
+}
+
+function buildProvisioningEmailPayload({
+  ownerName = "",
+  ownerEmail = "",
+  organizationName = "",
+  organizationId = "",
+  appUrl = "",
+  paidFeatureIds = [],
+  unpaidFeatureIds = [],
+  supportEmail = "",
+  orderId = "",
+  ownerUid = ""
+} = {}) {
+  const greetingName = normalizeText(ownerName, "there");
+  const roleLine = ownerUid
+    ? "Your admin access is already linked to your account."
+    : "Your admin access is pre-authorized for this email and will activate on first sign-in.";
+  const supportLine = supportEmail
+    ? `If you need help, reply to this message or contact ${supportEmail}.`
+    : "If you need help, reply to this message and we will assist right away.";
+
+  const lines = [
+    `Hi ${greetingName},`,
+    "",
+    `Your ${organizationName} workspace is ready.`,
+    "",
+    "Getting started:",
+    `1. Open ${appUrl}`,
+    `2. Sign in (or create an account) using ${ownerEmail}`,
+    `3. Confirm you are in organization "${organizationName}" (${organizationId})`,
+    "",
+    roleLine,
+    orderId ? `Order reference: ${orderId}` : "",
+    "",
+    "Enabled modules:",
+    ...formatFeatureListForEmail(paidFeatureIds),
+    "",
+    "Not included in this order:",
+    ...formatFeatureListForEmail(unpaidFeatureIds),
+    "",
+    "Modules not included in this order are locked off. Paid modules can still be adjusted by your admin team.",
+    "",
+    supportLine,
+    "",
+    "Thank you."
+  ].filter(Boolean);
+
+  const text = lines.join("\n");
+  const html = `
+    <p>Hi ${greetingName},</p>
+    <p>Your <strong>${organizationName}</strong> workspace is ready.</p>
+    <p><strong>Getting started</strong><br/>
+    1. Open <a href="${appUrl}">${appUrl}</a><br/>
+    2. Sign in (or create an account) using <strong>${ownerEmail}</strong><br/>
+    3. Confirm your organization is <strong>${organizationName}</strong> (${organizationId})</p>
+    <p>${roleLine}</p>
+    ${orderId ? `<p>Order reference: <strong>${orderId}</strong></p>` : ""}
+    <p><strong>Enabled modules</strong><br/>${formatFeatureListForEmail(paidFeatureIds).join("<br/>")}</p>
+    <p><strong>Not included in this order</strong><br/>${formatFeatureListForEmail(unpaidFeatureIds).join("<br/>")}</p>
+    <p>Modules not included in this order are locked off. Paid modules can still be adjusted by your admin team.</p>
+    <p>${supportLine}</p>
+    <p>Thank you.</p>
+  `;
+
+  return {
+    subject: `Workspace Ready: ${organizationName}`,
+    text,
+    html
+  };
 }
 
 function currencyLabel(amount) {
@@ -255,12 +593,13 @@ async function ensureOrganizationBootstrapInternal({
   return db.runTransaction(async (tx) => {
     const roleRef = db.collection(ROLES_COLLECTION).doc(normalizedUid);
     const roleSnap = await tx.get(roleRef);
+    const pendingInvite = await readPendingOrganizationInvite(tx, normalizedEmail);
 
     const bootstrapAdmin = BOOTSTRAP_ADMIN_EMAILS.has(normalizedEmail);
     const existingRole = normalizeRole(roleSnap.data()?.role);
-    const role = bootstrapAdmin ? "admin" : existingRole;
+    const role = pendingInvite?.role || (bootstrapAdmin ? "admin" : existingRole);
     const shouldHaveOrganization = role === "admin" || role === "sales";
-    let organizationId = normalizeText(roleSnap.data()?.organizationId);
+    let organizationId = normalizeOrganizationId(pendingInvite?.organizationId || roleSnap.data()?.organizationId);
 
     if (shouldHaveOrganization && !organizationId) {
       organizationId = db.collection(ORGANIZATIONS_COLLECTION).doc().id;
@@ -271,8 +610,8 @@ async function ensureOrganizationBootstrapInternal({
       const orgRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
       const orgSnap = await tx.get(orgRef);
       if (!orgSnap.exists) {
-        const resolvedName = normalizeText(
-          organizationName,
+        const resolvedName = withFallback(
+          organizationName || pendingInvite?.organizationName,
           bootstrapAdmin ? "Default Organization" : "Organization"
         );
         tx.set(orgRef, {
@@ -289,6 +628,19 @@ async function ensureOrganizationBootstrapInternal({
           updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
       }
+    }
+
+    if (pendingInvite) {
+      const nowISO = new Date().toISOString();
+      tx.set(pendingInvite.inviteRef, {
+        status: "consumed",
+        consumedByUid: normalizedUid,
+        consumedByEmail: normalizedEmail,
+        consumedAt: FieldValue.serverTimestamp(),
+        consumedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedAtISO: nowISO
+      }, { merge: true });
     }
 
     const rolePayload = {
@@ -339,46 +691,35 @@ async function assertStaff(context) {
 
 function getQuoteDocRef(quoteId, organizationId = "") {
   const id = normalizeText(quoteId);
-  const orgId = normalizeOrganizationId(organizationId);
-  if (orgId) {
-    return db.collection(ORGANIZATIONS_COLLECTION).doc(orgId).collection(QUOTES_COLLECTION).doc(id);
+  if (!id) {
+    throw new functions.https.HttpsError("invalid-argument", "quoteId is required.");
   }
-  return db.collection(QUOTES_COLLECTION).doc(id);
+  const orgId = normalizeOrganizationId(organizationId);
+  if (!orgId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+  return db.collection(ORGANIZATIONS_COLLECTION).doc(orgId).collection(QUOTES_COLLECTION).doc(id);
 }
 
-async function readQuoteOrThrow(quoteId, { organizationId = "", allowLegacyGlobalFallback = true } = {}) {
+async function readQuoteOrThrow(quoteId, { organizationId = "" } = {}) {
   const id = normalizeText(quoteId);
   if (!id) {
     throw new functions.https.HttpsError("invalid-argument", "quoteId is required.");
   }
 
   const scopedOrganizationId = normalizeOrganizationId(organizationId);
-  if (scopedOrganizationId) {
-    const scopedRef = getQuoteDocRef(id, scopedOrganizationId);
-    const scopedSnap = await scopedRef.get();
-    if (scopedSnap.exists) {
-      const quote = scopedSnap.data() || {};
-      return {
-        quoteId: id,
-        quote,
-        quoteRef: scopedRef,
-        organizationId: scopedOrganizationId,
-        quoteNumber: normalizeText(quote.quoteNumber) || id
-      };
-    }
-    if (!allowLegacyGlobalFallback) {
-      throw new functions.https.HttpsError("not-found", "Quote not found.");
-    }
+  if (!scopedOrganizationId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
   }
 
-  const quoteRef = getQuoteDocRef(id, "");
+  const quoteRef = getQuoteDocRef(id, scopedOrganizationId);
   const quoteSnap = await quoteRef.get();
   if (!quoteSnap.exists) {
     throw new functions.https.HttpsError("not-found", "Quote not found.");
   }
   const quote = quoteSnap.data() || {};
-  const quoteOrganizationId = normalizeOrganizationId(quote.organizationId);
-  if (scopedOrganizationId && quoteOrganizationId && quoteOrganizationId !== scopedOrganizationId) {
+  const quoteOrganizationId = normalizeOrganizationId(quote.organizationId || scopedOrganizationId);
+  if (quoteOrganizationId !== scopedOrganizationId) {
     throw new functions.https.HttpsError("permission-denied", "Quote is outside your organization.");
   }
 
@@ -637,6 +978,262 @@ exports.ensureOrganizationBootstrap = functions.region(REGION).https.onCall(asyn
     role: bootstrap.role,
     organizationId: bootstrap.organizationId,
     createdOrganization: Boolean(bootstrap.createdOrganization)
+  };
+});
+
+exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (data, context) => {
+  const staff = await assertStaff(context);
+  const actorEmail = normalizeEmail(context?.auth?.token?.email || "");
+  const ownerEmail = normalizeEmail(data?.ownerEmail);
+  if (!ownerEmail) {
+    throw new functions.https.HttpsError("invalid-argument", "ownerEmail is required.");
+  }
+
+  const ownerName = normalizeText(data?.ownerName);
+  const ownerUid = normalizeText(data?.ownerUid);
+  const organizationName = withFallback(data?.organizationName || data?.name, "Organization");
+  const organizationId = normalizeOrganizationId(
+    data?.organizationId || data?.organizationSlug || slugify(organizationName, "organization")
+  );
+  if (!organizationId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+
+  const entitlements = resolveFeatureEntitlements(data);
+  const appUrl = parseUrlOrThrow(
+    normalizeText(data?.appUrl || readConfig("app.base_url", "https://tonicatering.web.app")),
+    "appUrl"
+  );
+  const supportEmail = normalizeEmail(data?.supportEmail || readConfig("notifications.owner_email"));
+  const sendEmail = data?.sendEmail !== false;
+  const defaultOrderId = `${organizationId}-${Date.now()}`;
+  const orderId = normalizeOrderId(data?.orderId, defaultOrderId) || defaultOrderId;
+  const inviteId = inviteDocIdFromEmail(ownerEmail);
+  if (!inviteId && !ownerUid) {
+    throw new functions.https.HttpsError("invalid-argument", "ownerEmail or ownerUid must resolve to a valid invite id.");
+  }
+
+  const nowISO = new Date().toISOString();
+  const now = FieldValue.serverTimestamp();
+  const orderRef = db.collection(PROVISIONING_ORDERS_COLLECTION).doc(orderId);
+  const orgRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const settingsRef = orgRef.collection("settings").doc("config");
+  const neutralSettingsPatch = buildNeutralSettingsPatch({
+    organizationName,
+    ownerName,
+    ownerEmail,
+    supportEmail
+  });
+  const neutralCatalogEntries = await buildNeutralCatalogSeedEntries({
+    organizationId,
+    nowISO
+  });
+  const batch = db.batch();
+
+  batch.set(orgRef, {
+    name: organizationName,
+    slug: slugify(organizationName, organizationId),
+    ownerEmail,
+    ownerUid: ownerUid || "",
+    featureFlagsLocked: true,
+    featureFlagsPaid: entitlements.paidFeatureIds,
+    orderId,
+    updatedAtISO: nowISO,
+    updatedAt: now
+  }, { merge: true });
+
+  batch.set(settingsRef, {
+    featureFlags: entitlements.featureFlags,
+    featureFlagsLocked: true,
+    featureFlagsPaid: entitlements.paidFeatureIds,
+    featureFlagsLockReason: "Unpaid modules are locked by ordered package.",
+    featureFlagsLockUpdatedAtISO: nowISO,
+    ...neutralSettingsPatch,
+    orderId,
+    onboarding: {
+      status: "provisioned",
+      plan: entitlements.plan,
+      ownerEmail,
+      ownerName,
+      appUrl,
+      supportEmail,
+      provisionedAtISO: nowISO
+    },
+    updatedAtISO: nowISO,
+    updatedAt: now
+  }, { merge: true });
+
+  neutralCatalogEntries.forEach((entry) => {
+    batch.set(entry.ref, entry.data, { merge: true });
+  });
+
+  batch.set(orderRef, {
+    orderId,
+    status: "provisioned",
+    organizationId,
+    organizationName,
+    ownerEmail,
+    ownerName,
+    ownerUid: ownerUid || "",
+    plan: entitlements.plan,
+    featureFlags: entitlements.featureFlags,
+    featureFlagsPaid: entitlements.paidFeatureIds,
+    featureFlagsUnpaid: entitlements.unpaidFeatureIds,
+    appUrl,
+    supportEmail,
+    catalogBootstrap: {
+      template: "neutral",
+      recordsCreated: neutralCatalogEntries.length
+    },
+    sendEmail,
+    requestedBy: {
+      uid: staff.uid,
+      email: actorEmail
+    },
+    updatedAtISO: nowISO,
+    updatedAt: now,
+    createdAt: now
+  }, { merge: true });
+
+  if (ownerUid) {
+    const roleRef = db.collection(ROLES_COLLECTION).doc(ownerUid);
+    batch.set(roleRef, {
+      role: "admin",
+      email: ownerEmail,
+      organizationId,
+      updatedAt: now,
+      createdAt: now
+    }, { merge: true });
+  }
+
+  if (inviteId) {
+    const inviteRef = db.collection(INVITES_COLLECTION).doc(inviteId);
+    if (ownerUid) {
+      batch.set(inviteRef, {
+        email: ownerEmail,
+        ownerName,
+        role: "admin",
+        organizationId,
+        organizationName,
+        status: "consumed",
+        consumedByUid: ownerUid,
+        consumedByEmail: ownerEmail,
+        consumedAtISO: nowISO,
+        updatedAtISO: nowISO,
+        consumedAt: now,
+        updatedAt: now
+      }, { merge: true });
+    } else {
+      batch.set(inviteRef, {
+        email: ownerEmail,
+        ownerName,
+        role: "admin",
+        organizationId,
+        organizationName,
+        featureFlags: entitlements.featureFlags,
+        featureFlagsLocked: true,
+        featureFlagsPaid: entitlements.paidFeatureIds,
+        plan: entitlements.plan,
+        orderId,
+        appUrl,
+        supportEmail,
+        status: "pending",
+        createdAtISO: nowISO,
+        updatedAtISO: nowISO,
+        createdAt: now,
+        updatedAt: now
+      }, { merge: true });
+    }
+  }
+
+  await batch.commit();
+
+  const emailPayload = buildProvisioningEmailPayload({
+    ownerName,
+    ownerEmail,
+    organizationName,
+    organizationId,
+    appUrl,
+    paidFeatureIds: entitlements.paidFeatureIds,
+    unpaidFeatureIds: entitlements.unpaidFeatureIds,
+    supportEmail,
+    orderId,
+    ownerUid
+  });
+
+  let emailResult = {
+    sent: false,
+    reason: "send_email_disabled"
+  };
+
+  if (sendEmail) {
+    try {
+      emailResult = await sendCustomerEmail({
+        toEmail: ownerEmail,
+        subject: emailPayload.subject,
+        text: emailPayload.text,
+        html: emailPayload.html
+      });
+
+      await orderRef.set({
+        status: "completed",
+        email: {
+          ...emailResult,
+          toEmail: ownerEmail,
+          subject: emailPayload.subject,
+          sentAtISO: new Date().toISOString()
+        },
+        updatedAtISO: new Date().toISOString(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      const errorMessage = normalizeText(err?.message || "Failed to send onboarding email.");
+      await orderRef.set({
+        status: "provisioned_email_failed",
+        email: {
+          sent: false,
+          toEmail: ownerEmail,
+          subject: emailPayload.subject,
+          error: errorMessage,
+          failedAtISO: new Date().toISOString()
+        },
+        updatedAtISO: new Date().toISOString(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      emailResult = {
+        sent: false,
+        error: errorMessage
+      };
+    }
+  } else {
+    await orderRef.set({
+      status: "completed",
+      email: {
+        sent: false,
+        reason: "send_email_disabled",
+        toEmail: ownerEmail,
+        subject: emailPayload.subject
+      },
+      updatedAtISO: new Date().toISOString(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  }
+
+  return {
+    ok: true,
+    orderId,
+    organizationId,
+    organizationName,
+    ownerEmail,
+    plan: entitlements.plan,
+    featureFlags: entitlements.featureFlags,
+    featureFlagsPaid: entitlements.paidFeatureIds,
+    featureFlagsUnpaid: entitlements.unpaidFeatureIds,
+    catalogBootstrap: {
+      template: "neutral",
+      recordsCreated: neutralCatalogEntries.length
+    },
+    email: emailResult
   };
 });
 
@@ -955,9 +1552,17 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
         organizationId = normalizeOrganizationId(portalSnap.data()?.organizationId);
       }
       if (quoteId) {
+        if (!organizationId) {
+          functions.logger.warn("checkout.session.completed ignored: missing organizationId", {
+            quoteId,
+            sessionId: normalizeText(session.id),
+            portalKey: sessionPortalKey
+          });
+          res.json({ received: true, ignored: "missing_organization_id" });
+          return;
+        }
         const quoteDetails = await readQuoteOrThrow(quoteId, {
-          organizationId,
-          allowLegacyGlobalFallback: true
+          organizationId
         });
         const quote = quoteDetails.quote || {};
         const quoteNumber = quoteDetails.quoteNumber || quoteId;

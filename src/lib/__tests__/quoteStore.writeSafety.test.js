@@ -15,7 +15,6 @@ const mockState = vi.hoisted(() => ({
   setDoc: vi.fn(),
   updateDoc: vi.fn(),
   where: vi.fn(),
-  allowLegacyGlobalFallback: vi.fn(),
   getActiveOrganizationId: vi.fn(),
   getOrganizationCollectionRef: vi.fn(),
   getOrganizationSubDocRef: vi.fn(),
@@ -53,7 +52,6 @@ vi.mock("firebase/firestore", () => ({
 }));
 
 vi.mock("../organizationService", () => ({
-  allowLegacyGlobalFallback: mockState.allowLegacyGlobalFallback,
   getActiveOrganizationId: mockState.getActiveOrganizationId,
   getOrganizationCollectionRef: mockState.getOrganizationCollectionRef,
   getOrganizationSubDocRef: mockState.getOrganizationSubDocRef,
@@ -66,7 +64,6 @@ describe("quoteStore Firebase write safety", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setQuoteStoreOrganizationId("");
-    mockState.allowLegacyGlobalFallback.mockReturnValue(true);
     mockState.getActiveOrganizationId.mockReturnValue("");
     mockState.normalizeOrganizationId.mockImplementation((value) => normalizeLikeService(value));
     mockState.getOrganizationCollectionRef.mockImplementation((name, orgId) => ({ refType: "org-collection", name, orgId }));
@@ -127,7 +124,7 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.addDoc).not.toHaveBeenCalled();
   });
 
-  test("saveQuoteVersion preserves legacy global read compatibility but blocks Firebase write without org", async () => {
+  test("saveQuoteVersion blocks Firebase read/write without org context", async () => {
     const createdAtISO = "2026-03-27T12:00:00.000Z";
     mockState.getDoc.mockResolvedValue({
       exists: () => true,
@@ -148,51 +145,17 @@ describe("quoteStore Firebase write safety", () => {
       })
     });
 
-    await expect(saveQuoteVersion("legacy-global-quote")).rejects.toThrow(/organizationId is required for saveQuoteVersion/i);
+    await expect(saveQuoteVersion("legacy-global-quote")).rejects.toThrow(/organizationId is required for quote read/i);
 
-    expect(mockState.doc).toHaveBeenCalledWith(mockState.db, "quotes", "legacy-global-quote");
+    expect(mockState.doc).not.toHaveBeenCalledWith(mockState.db, "quotes", "legacy-global-quote");
     expect(mockState.runTransaction).not.toHaveBeenCalled();
   });
 
-  test("saveQuoteVersion auto-migrates legacy global quote into scoped org path when active org is available", async () => {
+  test("saveQuoteVersion does not auto-migrate legacy global quote into scoped org path", async () => {
     mockState.getActiveOrganizationId.mockReturnValue("Org One");
-    const createdAtISO = "2026-03-27T12:00:00.000Z";
-    const legacyPayload = {
-      quoteNumber: "Q-1",
-      status: "draft",
-      createdAtISO,
-      updatedAtISO: createdAtISO,
-      ownerUid: "staff-1",
-      ownerEmail: "staff@example.com",
-      customer: { name: "Client", email: "client@example.com" },
-      event: { name: "Event", date: "2026-05-01", venue: "Venue", guests: 50, hours: 4 },
-      selection: { menuItems: [] },
-      totals: { total: 1000, deposit: 300 },
-      payment: { depositStatus: "unpaid" },
-      booking: { confirmationStatus: "pending" },
-      lifecycle: { draftAtISO: createdAtISO }
-    };
+    mockState.getDoc.mockResolvedValueOnce({ exists: () => false, data: () => ({}) });
 
-    mockState.getDoc
-      .mockResolvedValueOnce({ exists: () => false, data: () => ({}) })
-      .mockResolvedValueOnce({ exists: () => true, data: () => legacyPayload })
-      .mockResolvedValueOnce({ exists: () => false, data: () => ({}) })
-      .mockResolvedValueOnce({ exists: () => true, data: () => legacyPayload });
-
-    await expect(saveQuoteVersion("legacy-global-quote")).resolves.toMatchObject({
-      ok: true,
-      storage: "firebase",
-      versionNumber: 1
-    });
-
-    expect(mockState.getOrganizationSubDocRef).toHaveBeenCalledWith("quotes", "legacy-global-quote", "org-one");
-    expect(mockState.setDoc).toHaveBeenCalledWith(
-      { refType: "org-doc", name: "quotes", docId: "legacy-global-quote", orgId: "org-one" },
-      expect.objectContaining({
-        organizationId: "org-one",
-        quoteNumber: "Q-1"
-      }),
-      { merge: true }
-    );
+    await expect(saveQuoteVersion("legacy-global-quote")).rejects.toThrow(/quote not found/i);
+    expect(mockState.setDoc).not.toHaveBeenCalled();
   });
 });

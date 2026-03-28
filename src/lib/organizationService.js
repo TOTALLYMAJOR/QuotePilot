@@ -1,12 +1,12 @@
 import { collection, doc, getDoc } from "firebase/firestore";
-import { db, firebaseReady } from "./firebase";
+import { httpsCallable } from "firebase/functions";
+import { cloudFunctions, db, firebaseReady } from "./firebase";
 
 export const ORGANIZATIONS_COLLECTION = "organizations";
 export const DEFAULT_ORGANIZATION_ID = String(import.meta.env.VITE_DEFAULT_ORGANIZATION_ID || "default-org").trim();
-export const LEGACY_GLOBAL_FALLBACK_ENABLED =
-  String(import.meta.env.VITE_ENABLE_LEGACY_GLOBAL_FALLBACK || "true").trim().toLowerCase() !== "false";
 
 let activeOrganizationId = "";
+const PROVISION_CUSTOMER_ORDER_CALLABLE = "provisionCustomerOrder";
 
 export function normalizeOrganizationId(value, fallback = "") {
   const raw = String(value || "").trim();
@@ -74,10 +74,6 @@ export function getActiveOrganizationId() {
   return activeOrganizationId;
 }
 
-export function allowLegacyGlobalFallback() {
-  return LEGACY_GLOBAL_FALLBACK_ENABLED;
-}
-
 export function getOrganizationDocRef(orgId = "") {
   if (!firebaseReady || !db) {
     throw new Error("Firebase is not configured.");
@@ -121,4 +117,13 @@ export function getOrganizationSubDocRef(collectionName, docId, orgId = "") {
     throw new Error("docId is required.");
   }
   return doc(db, ORGANIZATIONS_COLLECTION, resolvedOrgId, collectionId, entryId);
+}
+
+export async function provisionCustomerOrder(payload = {}) {
+  if (!cloudFunctions) {
+    throw new Error("Cloud Functions are not configured.");
+  }
+  const call = httpsCallable(cloudFunctions, PROVISION_CUSTOMER_ORDER_CALLABLE);
+  const result = await call(payload);
+  return result?.data || { ok: false };
 }

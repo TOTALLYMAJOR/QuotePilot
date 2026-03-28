@@ -136,6 +136,7 @@ describe("quoteStore portal token policy", () => {
     const quote = await getPortalQuote("portal-key-12345678901234567890");
     expect(quote.portalKey).toBe("portal-key-12345678901234567890");
     expect(quote.portalExpiresAtISO).toBeTruthy();
+    expect(Number(quote.portalExpiresAtMs)).toBeGreaterThan(0);
   });
 
   test("blocks expired portal tokens", async () => {

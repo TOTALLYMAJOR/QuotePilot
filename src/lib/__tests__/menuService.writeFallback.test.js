@@ -10,7 +10,6 @@ const mockState = vi.hoisted(() => ({
   query: vi.fn(),
   updateDoc: vi.fn(),
   where: vi.fn(),
-  allowLegacyGlobalFallback: vi.fn(),
   getActiveOrganizationId: vi.fn(),
   getOrganizationCollectionRef: vi.fn(),
   getOrganizationSubDocRef: vi.fn(),
@@ -34,14 +33,13 @@ vi.mock("firebase/firestore", () => ({
 }));
 
 vi.mock("../organizationService", () => ({
-  allowLegacyGlobalFallback: mockState.allowLegacyGlobalFallback,
   getActiveOrganizationId: mockState.getActiveOrganizationId,
   getOrganizationCollectionRef: mockState.getOrganizationCollectionRef,
   getOrganizationSubDocRef: mockState.getOrganizationSubDocRef,
   normalizeOrganizationId: mockState.normalizeOrganizationId
 }));
 
-import { createMenuItem } from "../menuService";
+import { createMenuItem, getEventTypes } from "../menuService";
 
 function normalizeLikeService(value) {
   return String(value || "")
@@ -55,7 +53,6 @@ function normalizeLikeService(value) {
 describe("menuService write fallback behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockState.allowLegacyGlobalFallback.mockReturnValue(true);
     mockState.getActiveOrganizationId.mockReturnValue("");
     mockState.normalizeOrganizationId.mockImplementation((value) => normalizeLikeService(value));
     mockState.collection.mockImplementation((...args) => ({ refType: "legacy", args }));
@@ -105,9 +102,11 @@ describe("menuService write fallback behavior", () => {
     expect(mockState.collection).not.toHaveBeenCalledWith(mockState.db, "menuItems");
   });
 
-  test("createMenuItem throws when org context is missing and legacy fallback is disabled", async () => {
-    mockState.allowLegacyGlobalFallback.mockReturnValue(false);
+  test("getEventTypes throws when org context is missing in firebase mode", async () => {
+    await expect(getEventTypes()).rejects.toThrow(/organizationId is required for getEventTypes/i);
+  });
 
+  test("createMenuItem throws when org context is missing", async () => {
     await expect(
       createMenuItem({
         eventTypeId: "wedding",

@@ -15,7 +15,6 @@ import {
 } from "firebase/firestore";
 import { db, firebaseReady } from "./firebase";
 import {
-  allowLegacyGlobalFallback,
   getActiveOrganizationId,
   getOrganizationCollectionRef,
   getOrganizationSubDocRef,
@@ -85,28 +84,28 @@ function resolveQuoteOrganizationId(organizationId) {
 
 function quotesCollectionRef(organizationId = undefined) {
   const resolvedOrganizationId = resolveQuoteOrganizationId(organizationId);
-  if (resolvedOrganizationId) {
-    return getOrganizationCollectionRef(QUOTES_COLLECTION, resolvedOrganizationId);
+  if (!resolvedOrganizationId) {
+    throw new Error("organizationId is required for quote read.");
   }
-  return collection(db, QUOTES_COLLECTION);
+  return getOrganizationCollectionRef(QUOTES_COLLECTION, resolvedOrganizationId);
 }
 
 function quoteDocRef(quoteId, organizationId = undefined) {
   const id = String(quoteId || "").trim();
   const resolvedOrganizationId = resolveQuoteOrganizationId(organizationId);
-  if (resolvedOrganizationId) {
-    return getOrganizationSubDocRef(QUOTES_COLLECTION, id, resolvedOrganizationId);
+  if (!resolvedOrganizationId) {
+    throw new Error("organizationId is required for quote read.");
   }
-  return doc(db, QUOTES_COLLECTION, id);
+  return getOrganizationSubDocRef(QUOTES_COLLECTION, id, resolvedOrganizationId);
 }
 
 function quoteVersionsCollectionRef(quoteId, organizationId = undefined) {
   const id = String(quoteId || "").trim();
   const resolvedOrganizationId = resolveQuoteOrganizationId(organizationId);
-  if (resolvedOrganizationId) {
-    return collection(db, "organizations", resolvedOrganizationId, QUOTES_COLLECTION, id, QUOTE_VERSIONS_COLLECTION);
+  if (!resolvedOrganizationId) {
+    throw new Error("organizationId is required for quote version read.");
   }
-  return collection(db, QUOTES_COLLECTION, id, QUOTE_VERSIONS_COLLECTION);
+  return collection(db, "organizations", resolvedOrganizationId, QUOTES_COLLECTION, id, QUOTE_VERSIONS_COLLECTION);
 }
 
 function resolveContextualOrganizationId() {
@@ -114,6 +113,14 @@ function resolveContextualOrganizationId() {
 }
 
 function requireWriteOrganizationId(organizationId = undefined, action = "quote write") {
+  const resolvedOrganizationId = normalizeOrganizationId(organizationId) || resolveContextualOrganizationId();
+  if (!resolvedOrganizationId) {
+    throw new Error(`organizationId is required for ${action}.`);
+  }
+  return resolvedOrganizationId;
+}
+
+function requireReadOrganizationId(organizationId = undefined, action = "quote read") {
   const resolvedOrganizationId = normalizeOrganizationId(organizationId) || resolveContextualOrganizationId();
   if (!resolvedOrganizationId) {
     throw new Error(`organizationId is required for ${action}.`);
@@ -361,6 +368,10 @@ function isPortalExpired(portalExpiresAtISO, nowISO = isoNow()) {
   return expiresAt.getTime() < now.getTime();
 }
 
+function toEpochMs(input, fallback = isoNow()) {
+  return parseSafe(input, fallback).getTime();
+}
+
 function assertPortalTokenActive(portalSnapshot, nowISO = isoNow()) {
   const issuedAtISO = resolvePortalIssuedAtISO(portalSnapshot, nowISO);
   const expiresAtISO = resolvePortalExpiresAtISO(portalSnapshot, issuedAtISO, nowISO);
@@ -400,6 +411,7 @@ function buildPortalSnapshot(quoteId, quote) {
     portalKey: quote.portalKey || "",
     portalIssuedAtISO,
     portalExpiresAtISO,
+    portalExpiresAtMs: toEpochMs(portalExpiresAtISO, createdAtISO),
     quoteNumber: quote.quoteNumber || "",
     customerName: quote.customer?.name || "",
     customerEmail: quote.customer?.email || "",
@@ -422,7 +434,7 @@ function buildPortalSnapshot(quoteId, quote) {
 
 async function ensureQuoteWriteTarget(
   quoteId,
-  { organizationId = undefined, sourceQuote = null, action = "quote write" } = {}
+  { organizationId = undefined, action = "quote write" } = {}
 ) {
   const id = String(quoteId || "").trim();
   if (!id) {
@@ -445,68 +457,7 @@ async function ensureQuoteWriteTarget(
       migratedFromLegacy: false
     };
   }
-
-  if (!allowLegacyGlobalFallback()) {
-    throw new Error("Quote not found.");
-  }
-
-  const legacyRef = doc(db, QUOTES_COLLECTION, id);
-  const legacySnap = await getDoc(legacyRef);
-  if (!legacySnap.exists()) {
-    throw new Error("Quote not found.");
-  }
-
-  const nowISO = isoNow();
-  const legacyData = legacySnap.data() || {};
-  const sourceData = sourceQuote && typeof sourceQuote === "object" ? sourceQuote : {};
-  const createdAtISO = timestampToISO(legacyData.createdAtISO || legacyData.createdAt || sourceData.createdAtISO, nowISO);
-  const payload = {
-    ...legacyData,
-    ...sourceData,
-    organizationId: resolvedOrganizationId,
-    createdAtISO,
-    updatedAtISO: legacyData.updatedAtISO || sourceData.updatedAtISO || nowISO
-  };
-
-  await setDoc(targetRef, payload, { merge: true });
-
-  try {
-    const legacyVersionsSnap = await getDocs(query(
-      quoteVersionsCollectionRef(id, ""),
-      orderBy("versionNumber", "asc")
-    ));
-    await Promise.all(
-      legacyVersionsSnap.docs.map((versionDoc) => {
-        const versionId = String(versionDoc.id || "").trim();
-        if (!versionId) return Promise.resolve();
-        return setDoc(
-          doc(quoteVersionsWriteCollectionRef(id, resolvedOrganizationId, action), versionId),
-          {
-            ...versionDoc.data(),
-            quoteId: id,
-            organizationId: resolvedOrganizationId
-          },
-          { merge: true }
-        );
-      })
-    );
-  } catch {
-    // Legacy version docs are best-effort during additive migration.
-  }
-
-  const portalKey = String(payload.portalKey || "").trim();
-  if (portalKey) {
-    await setDoc(
-      portalDocRef(portalKey),
-      buildPortalSnapshot(id, payload),
-      { merge: true }
-    );
-  }
-
-  return {
-    organizationId: resolvedOrganizationId,
-    migratedFromLegacy: true
-  };
+  throw new Error("Quote not found.");
 }
 
 function resolvePersistedPricingSnapshot({
@@ -919,14 +870,8 @@ async function readQuoteById(quoteId) {
 
   const nowISO = isoNow();
   if (firebaseReady) {
-    const scopedOrgId = resolveQuoteOrganizationId();
-    let quoteSnap = await getDoc(quoteDocRef(id, scopedOrgId));
-    let quoteOrgId = scopedOrgId;
-
-    if (!quoteSnap.exists() && scopedOrgId && allowLegacyGlobalFallback()) {
-      quoteSnap = await getDoc(doc(db, QUOTES_COLLECTION, id));
-      quoteOrgId = "";
-    }
+    const scopedOrgId = requireReadOrganizationId(undefined, "quote read");
+    const quoteSnap = await getDoc(quoteDocRef(id, scopedOrgId));
 
     if (!quoteSnap.exists()) {
       throw new Error("Quote not found.");
@@ -937,7 +882,7 @@ async function readQuoteById(quoteId) {
       {
         id,
         ...data,
-        organizationId: normalizeOrganizationId(data.organizationId || quoteOrgId),
+        organizationId: normalizeOrganizationId(data.organizationId || scopedOrgId),
         createdAtISO
       },
       nowISO
@@ -1040,7 +985,6 @@ export async function ensureLegacyQuoteCompatibility(
     if (firebaseReady) {
       await ensureQuoteWriteTarget(quote.id, {
         organizationId: resolvedOrganizationId,
-        sourceQuote: quote,
         action: "ensureLegacyQuoteCompatibility"
       });
       await updateDoc(quoteWriteDocRef(quote.id, resolvedOrganizationId, "ensureLegacyQuoteCompatibility"), {
@@ -1102,7 +1046,6 @@ export async function saveQuoteVersion(
   if (firebaseReady) {
     const writeTarget = await ensureQuoteWriteTarget(quote.id, {
       organizationId: resolvedOrganizationId,
-      sourceQuote: quote,
       action: "saveQuoteVersion"
     });
     const writeOrganizationId = writeTarget.organizationId;
@@ -1217,18 +1160,11 @@ export async function getQuoteVersionHistory(quoteId, { organizationId = undefin
   }
 
   if (firebaseReady) {
-    const resolvedOrganizationId = resolveQuoteOrganizationId(organizationId);
-    let versionSnap = await getDocs(query(
+    const resolvedOrganizationId = requireReadOrganizationId(organizationId, "quote version read");
+    const versionSnap = await getDocs(query(
       quoteVersionsCollectionRef(id, resolvedOrganizationId),
       orderBy("versionNumber", "desc")
     ));
-
-    if (!versionSnap.docs.length && resolvedOrganizationId && allowLegacyGlobalFallback()) {
-      versionSnap = await getDocs(query(
-        quoteVersionsCollectionRef(id, ""),
-        orderBy("versionNumber", "desc")
-      ));
-    }
 
     return {
       source: "firebase",
@@ -2351,7 +2287,6 @@ export async function updateQuote({
   if (firebaseReady) {
     const writeTarget = await ensureQuoteWriteTarget(id, {
       organizationId: nextOrganizationId,
-      sourceQuote: existing,
       action: "updateQuote"
     });
     const writeOrganizationId = writeTarget.organizationId;
@@ -2653,9 +2588,8 @@ export async function getQuoteHistory(filters = {}) {
   const nowISO = isoNow();
 
   if (firebaseReady) {
-    const scopedOrganizationId = resolveQuoteOrganizationId(filters?.organizationId);
+    const scopedOrganizationId = requireReadOrganizationId(filters?.organizationId, "quote history read");
     const quoteCollection = quotesCollectionRef(scopedOrganizationId);
-    let quoteOrgFallback = scopedOrganizationId;
     const runHistoryQuery = async (targetCollection) => {
       if (normalizedCustomerName) {
         const prefixConstraints = [
@@ -2687,13 +2621,7 @@ export async function getQuoteHistory(filters = {}) {
       return { snap, usedServerCustomerPrefix: false };
     };
 
-    let { snap, usedServerCustomerPrefix } = await runHistoryQuery(quoteCollection);
-    if (!snap.docs.length && scopedOrganizationId && allowLegacyGlobalFallback()) {
-      const legacyResult = await runHistoryQuery(collection(db, QUOTES_COLLECTION));
-      snap = legacyResult.snap;
-      usedServerCustomerPrefix = legacyResult.usedServerCustomerPrefix;
-      quoteOrgFallback = "";
-    }
+    const { snap, usedServerCustomerPrefix } = await runHistoryQuery(quoteCollection);
 
     const quotes = sortQuotesDesc(
       snap.docs.map((docSnap) => {
@@ -2703,7 +2631,7 @@ export async function getQuoteHistory(filters = {}) {
           {
             id: docSnap.id,
             ...data,
-            organizationId: normalizeOrganizationId(data.organizationId || quoteOrgFallback),
+            organizationId: normalizeOrganizationId(data.organizationId || scopedOrganizationId),
             createdAtISO: createdAtISO || nowISO
           },
           nowISO

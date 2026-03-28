@@ -71,18 +71,6 @@ service cloud.firestore {
         );
     }
 
-    function quoteBelongsToUserLegacy(data) {
-      return isSignedIn()
-        && (
-          data.ownerUid == request.auth.uid
-          || (
-            data.customerEmailKey != null
-            && request.auth.token.email != null
-            && data.customerEmailKey == request.auth.token.email
-          )
-        );
-    }
-
     function statusPatchOnly() {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
         "status",
@@ -99,8 +87,19 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/customerPortalQuotes/$(portalKey));
     }
 
-    function portalMatchesOrgQuote(portalKey, quoteId, orgId) {
+    function portalSnapshotActive(portalKey) {
       return portalSnapshotExists(portalKey)
+        && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.portalKey == portalKey
+        && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.status != "deleted"
+        && (
+          get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.portalExpiresAtMs is int
+          || get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.portalExpiresAtMs is float
+        )
+        && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.portalExpiresAtMs > request.time.toMillis();
+    }
+
+    function portalMatchesOrgQuote(portalKey, quoteId, orgId) {
+      return portalSnapshotActive(portalKey)
         && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.quoteId == quoteId
         && (
           (
@@ -111,15 +110,6 @@ service cloud.firestore {
             !(get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.organizationId is string)
             || get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.organizationId == ""
           )
-        );
-    }
-
-    function portalMatchesLegacyQuote(portalKey, quoteId) {
-      return portalSnapshotExists(portalKey)
-        && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.quoteId == quoteId
-        && (
-          !(get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.organizationId is string)
-          || get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.organizationId == ""
         );
     }
 
@@ -235,58 +225,50 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Temporary legacy global collections while additive migration is in progress.
+    // Legacy global collections are retired. All business data must be org-scoped.
     match /catalogPackages/{docId} {
-      allow read: if isStaff();
-      allow write: if isAdmin();
+      allow read, write: if false;
     }
 
     match /catalogAddons/{docId} {
-      allow read: if isStaff();
-      allow write: if isAdmin();
+      allow read, write: if false;
     }
 
     match /catalogRentals/{docId} {
-      allow read: if isStaff();
-      allow write: if isAdmin();
+      allow read, write: if false;
     }
 
     match /pricing/settings {
-      allow read: if isStaff();
-      allow write: if isAdmin();
+      allow read, write: if false;
     }
 
     match /eventTypes/{docId} {
-      allow read: if isStaff();
-      allow write: if isAdmin();
+      allow read, write: if false;
     }
 
     match /menuCategories/{docId} {
-      allow read: if isStaff();
-      allow write: if isAdmin();
+      allow read, write: if false;
     }
 
     match /menuItems/{docId} {
-      allow read: if isStaff();
-      allow write: if isAdmin();
+      allow read, write: if false;
     }
 
     match /quotes/{quoteId} {
-      allow create: if isStaff()
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.portalKey is string
-        && request.resource.data.portalKey.size() >= 20;
-      allow read: if isStaff() || quoteBelongsToUserLegacy(resource.data);
-      allow update: if isStaff()
-        || (statusPatchOnly() && portalMatchesLegacyQuote(resource.data.portalKey, quoteId));
-      allow delete: if isAdmin();
+      allow read, write: if false;
     }
 
     match /customerPortalQuotes/{portalKey} {
       allow get: if portalKey.size() >= 20
         && resource.data.portalKey == portalKey
         && resource.data.quoteId is string
-        && resource.data.quoteId.size() > 0;
+        && resource.data.quoteId.size() > 0
+        && resource.data.status != "deleted"
+        && (
+          resource.data.portalExpiresAtMs is int
+          || resource.data.portalExpiresAtMs is float
+        )
+        && resource.data.portalExpiresAtMs > request.time.toMillis();
       allow list: if false;
       allow create, delete: if isStaff();
       allow update: if isStaff()
@@ -294,12 +276,17 @@ service cloud.firestore {
           portalStatusPatchOnly(portalKey)
           && resource.data.quoteId is string
           && resource.data.quoteId.size() > 0
+          && resource.data.status != "deleted"
+          && (
+            resource.data.portalExpiresAtMs is int
+            || resource.data.portalExpiresAtMs is float
+          )
+          && resource.data.portalExpiresAtMs > request.time.toMillis()
         );
     }
 
     match /quoteHistory/{historyId} {
-      allow read, create: if isStaff();
-      allow update, delete: if false;
+      allow read, write: if false;
     }
 
     match /{document=**} {

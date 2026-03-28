@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { collection, doc, getDoc, getDocs, writeBatch } from "firebase/firestore";
+import { doc, getDoc, getDocs, writeBatch } from "firebase/firestore";
 import {
   DEFAULT_ADDONS,
   DEFAULT_PACKAGES,
@@ -10,7 +10,6 @@ import {
 } from "../data/mockCatalog";
 import { db, firebaseReady } from "../lib/firebase";
 import {
-  allowLegacyGlobalFallback,
   getOrganizationCollectionRef,
   getOrganizationSubDocRef,
   resolveOrganizationId
@@ -97,24 +96,6 @@ function deriveEventTypesFromSettings(settings = {}) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function loadFromFirebase() {
-  const [pkgSnap, addSnap, rentSnap, settingsSnap] = await Promise.all([
-    getDocs(collection(db, "catalogPackages")),
-    getDocs(collection(db, "catalogAddons")),
-    getDocs(collection(db, "catalogRentals")),
-    getDoc(doc(db, "pricing", "settings"))
-  ]);
-
-  const raw = {
-    packages: pkgSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-    addons: addSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-    rentals: rentSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-    settings: settingsSnap.exists() ? settingsSnap.data() : DEFAULT_SETTINGS
-  };
-
-  return normalizeCatalog(raw);
-}
-
 function hasCatalogRecords(catalog) {
   return Boolean(
     catalog?.packages?.length
@@ -126,13 +107,7 @@ function hasCatalogRecords(catalog) {
 async function loadFromFirebaseByOrganization(organizationId = "") {
   const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
   if (!resolvedOrganizationId) {
-    if (!allowLegacyGlobalFallback()) {
-      throw new Error("organizationId is required for catalog reads.");
-    }
-    return {
-      catalog: await loadFromFirebase(),
-      source: "firebase-legacy-global"
-    };
+    throw new Error("organizationId is required for catalog reads.");
   }
 
   const [pkgSnap, addSnap, rentSnap, settingsSnap] = await Promise.all([
@@ -149,17 +124,9 @@ async function loadFromFirebaseByOrganization(organizationId = "") {
     settings: settingsSnap.exists() ? settingsSnap.data() : DEFAULT_SETTINGS
   });
 
-  if (hasCatalogRecords(orgCatalog) || !allowLegacyGlobalFallback()) {
-    return {
-      catalog: orgCatalog,
-      source: "firebase-org"
-    };
-  }
-
-  const legacy = await loadFromFirebase();
   return {
-    catalog: legacy,
-    source: "firebase-legacy-fallback"
+    catalog: orgCatalog,
+    source: "firebase-org"
   };
 }
 
@@ -328,13 +295,14 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           surface: "catalog",
           action: "load"
         });
-        const fallback = ALLOW_LOCAL_CATALOG_FALLBACK ? defaultCatalog() : blockedCatalog();
+        const shouldUseLocalFallback = !firebaseReady && ALLOW_LOCAL_CATALOG_FALLBACK;
+        const fallback = shouldUseLocalFallback ? defaultCatalog() : blockedCatalog();
         setState((prev) => ({
           ...prev,
           loading: false,
-          source: ALLOW_LOCAL_CATALOG_FALLBACK ? "fallback-defaults" : "firebase-required",
-          requiresFirebase: !ALLOW_LOCAL_CATALOG_FALLBACK,
-          error: ALLOW_LOCAL_CATALOG_FALLBACK
+          source: shouldUseLocalFallback ? "fallback-defaults" : "firebase-required",
+          requiresFirebase: !shouldUseLocalFallback,
+          error: shouldUseLocalFallback
             ? err?.message || "Failed to load catalog."
             : "Firebase catalog is required in this environment. Configure Firebase to continue.",
           eventTypes: deriveEventTypesFromSettings(fallback.settings),

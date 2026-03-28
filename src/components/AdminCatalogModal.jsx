@@ -879,11 +879,27 @@ export default function AdminCatalogModal({
       const eventTemplates = parseJsonArray("eventTemplates", "Event Templates JSON");
       const seasonalProfiles = parseJsonArray("seasonalProfiles", "Seasonal Profiles JSON");
       const brandCrew = parseJsonArray("brandCrew", "Brand Crew JSON");
+      const paidFeatureIds = Array.isArray(draft.settings?.featureFlagsPaid)
+        ? draft.settings.featureFlagsPaid.map((value) => String(value || "").trim()).filter(Boolean)
+        : [];
+      const paidFeatureIdSet = new Set(paidFeatureIds);
+      const enforceOrderFeatureAccess = draft.settings?.featureFlagsLocked === true && paidFeatureIdSet.size > 0;
+      const normalizedFeatureFlags = {
+        ...(draft.settings?.featureFlags || {})
+      };
+      if (enforceOrderFeatureAccess) {
+        FEATURE_FLAG_META.forEach((flag) => {
+          if (!paidFeatureIdSet.has(flag.id)) {
+            normalizedFeatureFlags[flag.id] = false;
+          }
+        });
+      }
 
       const nextDraft = {
         ...draft,
         settings: {
           ...draft.settings,
+          featureFlags: normalizedFeatureFlags,
           serviceFeeTiers,
           taxRegions,
           eventTemplates,
@@ -907,6 +923,20 @@ export default function AdminCatalogModal({
   };
 
   const selectedCategoryItems = menuItems.filter((item) => item.categoryId === selectedCategory);
+  const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
+  const featureFlagsPaid = Array.isArray(draft.settings?.featureFlagsPaid)
+    ? draft.settings.featureFlagsPaid.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const paidFeatureIdSet = new Set(featureFlagsPaid);
+  const enforceOrderFeatureAccess = featureFlagsLocked && paidFeatureIdSet.size > 0;
+  const isFeatureEditable = (featureId) => {
+    if (!enforceOrderFeatureAccess) return true;
+    return paidFeatureIdSet.has(featureId);
+  };
+  const isFeatureEnabled = (featureId) => {
+    if (enforceOrderFeatureAccess && !paidFeatureIdSet.has(featureId)) return false;
+    return draft.settings?.featureFlags?.[featureId] !== false;
+  };
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -1438,14 +1468,20 @@ export default function AdminCatalogModal({
 
             <section className="admin-section">
           <div className="admin-section-head"><h3>Optional Modules</h3></div>
+          {enforceOrderFeatureAccess && (
+            <p className="source-note">
+              Modules not included in this order are locked off. Paid modules can still be adjusted.
+            </p>
+          )}
           <div className="admin-grid-settings">
             {FEATURE_FLAG_META.map((flag) => (
               <label key={flag.id}>
                 <span>{flag.label}</span>
                 <input
                   type="checkbox"
-                  checked={draft.settings?.featureFlags?.[flag.id] !== false}
+                  checked={isFeatureEnabled(flag.id)}
                   onChange={(e) => patchFeatureFlag(flag.id, e.target.checked)}
+                  disabled={!isFeatureEditable(flag.id)}
                 />
               </label>
             ))}

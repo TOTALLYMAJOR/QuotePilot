@@ -379,7 +379,6 @@ function normalizePricingInputPayload(data = {}, staff = {}) {
 
   return {
     organizationId,
-    allowLegacyGlobalFallback: root.allowLegacyGlobalFallback !== false,
     quoteId: toText(source.quoteId || root.quoteId),
     quoteNumber: toText(source.quoteNumber || root.quoteNumber),
     actor,
@@ -427,14 +426,6 @@ function normalizePricingInputPayload(data = {}, staff = {}) {
       generatedAt: normalizeISO(source.metadata?.generatedAt || source.generatedAt || root.generatedAt || "", "")
     }
   };
-}
-
-function hasCatalogRecords(bundle = {}) {
-  return Boolean(
-    Array.isArray(bundle.packages) && bundle.packages.length
-    || Array.isArray(bundle.addons) && bundle.addons.length
-    || Array.isArray(bundle.rentals) && bundle.rentals.length
-  );
 }
 
 function normalizeCatalogPackage(item = {}) {
@@ -702,27 +693,15 @@ function normalizeCatalogBundle(bundle = {}) {
 
 async function readCatalogBundle(db, organizationsCollection, organizationId = "") {
   const orgId = normalizeOrganizationId(organizationId);
-  if (orgId) {
-    const [pkgSnap, addSnap, rentSnap, settingsSnap] = await Promise.all([
-      db.collection(organizationsCollection).doc(orgId).collection("catalogPackages").get(),
-      db.collection(organizationsCollection).doc(orgId).collection("catalogAddons").get(),
-      db.collection(organizationsCollection).doc(orgId).collection("catalogRentals").get(),
-      db.collection(organizationsCollection).doc(orgId).collection("settings").doc("config").get()
-    ]);
-
-    return normalizeCatalogBundle({
-      packages: pkgSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
-      addons: addSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
-      rentals: rentSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
-      settings: settingsSnap.exists ? settingsSnap.data() : {}
-    });
+  if (!orgId) {
+    throw new PricingEngineError("invalid-argument", "organizationId is required for authoritative pricing.");
   }
 
   const [pkgSnap, addSnap, rentSnap, settingsSnap] = await Promise.all([
-    db.collection("catalogPackages").get(),
-    db.collection("catalogAddons").get(),
-    db.collection("catalogRentals").get(),
-    db.collection("pricing").doc("settings").get()
+    db.collection(organizationsCollection).doc(orgId).collection("catalogPackages").get(),
+    db.collection(organizationsCollection).doc(orgId).collection("catalogAddons").get(),
+    db.collection(organizationsCollection).doc(orgId).collection("catalogRentals").get(),
+    db.collection(organizationsCollection).doc(orgId).collection("settings").doc("config").get()
   ]);
 
   return normalizeCatalogBundle({
@@ -734,34 +713,18 @@ async function readCatalogBundle(db, organizationsCollection, organizationId = "
 }
 
 async function loadCatalogAndSettings(db, organizationsCollection, {
-  organizationId = "",
-  allowLegacyGlobalFallback = true
+  organizationId = ""
 } = {}) {
   const scopedOrganizationId = normalizeOrganizationId(organizationId);
-
-  if (scopedOrganizationId) {
-    const orgBundle = await readCatalogBundle(db, organizationsCollection, scopedOrganizationId);
-    if (hasCatalogRecords(orgBundle) || allowLegacyGlobalFallback === false) {
-      return {
-        ...orgBundle,
-        source: "firebase-org",
-        organizationId: scopedOrganizationId
-      };
-    }
-
-    const legacyGlobalBundle = await readCatalogBundle(db, organizationsCollection, "");
-    return {
-      ...legacyGlobalBundle,
-      source: "firebase-legacy-fallback",
-      organizationId: scopedOrganizationId
-    };
+  if (!scopedOrganizationId) {
+    throw new PricingEngineError("invalid-argument", "organizationId is required for authoritative pricing.");
   }
 
-  const globalBundle = await readCatalogBundle(db, organizationsCollection, "");
+  const globalBundle = await readCatalogBundle(db, organizationsCollection, scopedOrganizationId);
   return {
     ...globalBundle,
-    source: "firebase-legacy-global",
-    organizationId: ""
+    source: "firebase-org",
+    organizationId: scopedOrganizationId
   };
 }
 
@@ -1323,8 +1286,7 @@ async function calculateQuotePricingAuthoritative({
 
   const normalizedInput = normalizePricingInputPayload(data, staff);
   const catalogBundle = await loadCatalogAndSettings(db, organizationsCollection, {
-    organizationId: normalizedInput.organizationId,
-    allowLegacyGlobalFallback: normalizedInput.allowLegacyGlobalFallback
+    organizationId: normalizedInput.organizationId
   });
 
   const pricing = calculateAuthoritativePricing(

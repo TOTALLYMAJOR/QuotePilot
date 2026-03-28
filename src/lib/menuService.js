@@ -1,6 +1,5 @@
 import {
   addDoc,
-  collection,
   deleteDoc,
   getDocs,
   query,
@@ -9,7 +8,6 @@ import {
 } from "firebase/firestore";
 import { db, firebaseReady } from "./firebase";
 import {
-  allowLegacyGlobalFallback,
   getActiveOrganizationId,
   getOrganizationCollectionRef,
   getOrganizationSubDocRef,
@@ -115,20 +113,11 @@ export async function getEventTypes({ organizationId = "" } = {}) {
   });
 
   if (!resolvedOrgId) {
-    if (!allowLegacyGlobalFallback()) {
-      return [];
-    }
-    const legacySnap = await getDocs(query(collection(db, "eventTypes")));
-    return sortByName(mapDocs(legacySnap).map(mapEventType));
+    throw new Error("organizationId is required for getEventTypes.");
   }
 
   const scopedSnap = await getDocs(query(orgCollectionRef("eventTypes", resolvedOrgId)));
-  const scopedItems = mapDocs(scopedSnap).map(mapEventType);
-  if (scopedItems.length || !allowLegacyGlobalFallback()) {
-    return sortByName(scopedItems);
-  }
-  const legacySnap = await getDocs(query(collection(db, "eventTypes")));
-  return sortByName(mapDocs(legacySnap).map(mapEventType));
+  return sortByName(mapDocs(scopedSnap).map(mapEventType));
 }
 
 export async function getMenuCategories(eventTypeId, { organizationId = "" } = {}) {
@@ -142,26 +131,13 @@ export async function getMenuCategories(eventTypeId, { organizationId = "" } = {
   });
 
   if (!resolvedOrgId) {
-    if (!allowLegacyGlobalFallback()) {
-      return [];
-    }
-    const legacySnap = await getDocs(
-      query(collection(db, "menuCategories"), where("eventTypeId", "==", nextEventTypeId))
-    );
-    return sortByName(mapDocs(legacySnap).map(mapCategory));
+    throw new Error("organizationId is required for getMenuCategories.");
   }
 
   const scopedSnap = await getDocs(
     query(orgCollectionRef("menuCategories", resolvedOrgId), where("eventTypeId", "==", nextEventTypeId))
   );
-  const scopedItems = mapDocs(scopedSnap).map(mapCategory);
-  if (scopedItems.length || !allowLegacyGlobalFallback()) {
-    return sortByName(scopedItems);
-  }
-  const legacySnap = await getDocs(
-    query(collection(db, "menuCategories"), where("eventTypeId", "==", nextEventTypeId))
-  );
-  return sortByName(mapDocs(legacySnap).map(mapCategory));
+  return sortByName(mapDocs(scopedSnap).map(mapCategory));
 }
 
 export async function getMenuItems(eventTypeId, { includeInactive = false, organizationId = "" } = {}) {
@@ -184,29 +160,14 @@ export async function getMenuItems(eventTypeId, { includeInactive = false, organ
   };
 
   if (!resolvedOrgId) {
-    if (!allowLegacyGlobalFallback()) {
-      return [];
-    }
-    const legacySnap = await getDocs(
-      query(collection(db, "menuItems"), where("eventTypeId", "==", nextEventTypeId))
-    );
-    const mapped = mapDocs(legacySnap).map(mapItem);
-    return sortByName(includeInactive ? mapped : mapped.filter((item) => item.active !== false));
+    throw new Error("organizationId is required for getMenuItems.");
   }
 
   const scopedSnap = await getDocs(
     query(orgCollectionRef("menuItems", resolvedOrgId), where("eventTypeId", "==", nextEventTypeId))
   );
   const scopedMapped = mapDocs(scopedSnap).map(mapItem);
-  if (scopedMapped.length || !allowLegacyGlobalFallback()) {
-    return sortByName(includeInactive ? scopedMapped : scopedMapped.filter((item) => item.active !== false));
-  }
-
-  const legacySnap = await getDocs(
-    query(collection(db, "menuItems"), where("eventTypeId", "==", nextEventTypeId))
-  );
-  const mapped = mapDocs(legacySnap).map(mapItem);
-  return sortByName(includeInactive ? mapped : mapped.filter((item) => item.active !== false));
+  return sortByName(includeInactive ? scopedMapped : scopedMapped.filter((item) => item.active !== false));
 }
 
 export async function createMenuItem(data = {}) {

@@ -23,6 +23,7 @@
     "test:e2e:firebase:authoritative": "node ./scripts/run-firebase-e2e-authoritative.mjs",
     "check:env": "node ./scripts/check-env.mjs",
     "seed:menu:firestore": "node ./scripts/seed-firestore-menu.mjs",
+    "customer:provision": "node ./scripts/provision-customer-order.mjs",
     "migrate:multi-tenant": "node ./scripts/migrate-to-multi-tenant.mjs",
     "migrate:multi-tenant:dry-run:evidence": "node ./scripts/migrate-to-multi-tenant.mjs --dry-run --evidence-out ./artifacts/migration/multi-tenant-dry-run-evidence.json",
     "check:secrets": "node ./scripts/check-secret-assets.mjs",
