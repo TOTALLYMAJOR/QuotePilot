@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: March 27, 2026
+Last updated: March 28, 2026
 
 ## Purpose
 This guide explains day-to-day usage of the Firebase Quote Wizard for staff users and admins.
@@ -64,17 +64,25 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
   - `pricingType`
   - `active` toggle
 - Save overall catalog changes with `Save Catalog`.
-- If `Optional Modules` are managed by order policy, only unpaid modules are locked off.
-- Paid modules remain editable by admins.
+- `Optional Modules` behavior depends on entitlement mode:
+  - Standard mode: all module toggles are editable by admins.
+  - Order-enforced mode: modules paid for in the order remain editable; modules not paid for are locked off.
+- In order-enforced mode each module row is labeled as either `Included in order` or `Locked (not in order)`.
+- To change what is included/locked, update entitlements through customer provisioning, then reopen `Admin Catalog`.
 
 ## Customer Onboarding (No Stripe Flow)
-Use the provisioning script to create a customer org, enforce ordered feature entitlements, and generate a send-ready onboarding email.
+Use provisioning to create/update a customer org, apply paid module entitlements, and generate a send-ready onboarding email.
 
 Backend source of truth:
 - Firebase Callable Function `provisionCustomerOrder` handles provisioning logic server-side.
 - Firestore `provisioningOrders/{orderId}` stores onboarding status, feature entitlements, and email send outcome.
 
-Example:
+### Operator Runbook
+1. Confirm project access and local setup:
+   - `firebase login`
+   - `npm install`
+   - `npm run check:env`
+2. Run provisioning for a new customer:
 ```bash
 npm run customer:provision -- \
   --project <your-project-id> \
@@ -85,12 +93,30 @@ npm run customer:provision -- \
   --sequence-start 250 \
   --email-out ./artifacts/onboarding/customer-email.txt
 ```
+3. (Optional) Update paid/unpaid modules for an existing customer org:
+```bash
+npm run customer:provision -- \
+  --project <your-project-id> \
+  --organization <orgId> \
+  --order-id <orderId> \
+  --name "Customer Org Name" \
+  --owner-email owner@example.com \
+  --owner-name "Owner Name" \
+  --features customerPortal,eventSchedule,guidedSelling \
+  --disable-features crmSync,diagnostics \
+  --email-out ./artifacts/onboarding/customer-email-updated.txt
+```
+4. Send the generated email template from `--email-out`.
+5. Verify in-app:
+   - Sign in as org admin.
+   - Open `Admin Catalog` → `Pricing` → `Optional Modules`.
+   - Confirm paid modules are editable and unpaid modules show `Locked (not in order)`.
 
-Behavior:
+Provisioning behavior:
 - Auto-assigns org id when `--organization` is omitted using numeric sequence (default starts at `250`).
 - Defaults `orderId` to `orgId + 1` when org id is numeric and `--order-id` is omitted.
 - Skips menu/event seed by default (`--seed-menu` to opt in).
-- Applies ordered feature entitlements in org settings.
+- Applies ordered feature entitlements in org settings:
   - unpaid modules are locked off
   - paid modules remain editable
 - Applies neutral white-label branding defaults so new orgs do not inherit another customer's branding.

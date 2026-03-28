@@ -937,6 +937,10 @@ export default function AdminCatalogModal({
     if (enforceOrderFeatureAccess && !paidFeatureIdSet.has(featureId)) return false;
     return draft.settings?.featureFlags?.[featureId] !== false;
   };
+  const getFeatureAccessLabel = (featureId) => {
+    if (!enforceOrderFeatureAccess) return "Editable in this catalog.";
+    return paidFeatureIdSet.has(featureId) ? "Included in order." : "Locked (not in order).";
+  };
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -1470,18 +1474,20 @@ export default function AdminCatalogModal({
           <div className="admin-section-head"><h3>Optional Modules</h3></div>
           {enforceOrderFeatureAccess && (
             <p className="source-note">
-              Modules not included in this order are locked off. Paid modules can still be adjusted.
+              Modules not included in this order are locked. To change access, update provisioning entitlements for this org and reopen this modal.
             </p>
           )}
           <div className="admin-grid-settings">
             {FEATURE_FLAG_META.map((flag) => (
               <label key={flag.id}>
                 <span>{flag.label}</span>
+                {enforceOrderFeatureAccess && <small className="source-note">{getFeatureAccessLabel(flag.id)}</small>}
                 <input
                   type="checkbox"
                   checked={isFeatureEnabled(flag.id)}
                   onChange={(e) => patchFeatureFlag(flag.id, e.target.checked)}
                   disabled={!isFeatureEditable(flag.id)}
+                  title={getFeatureAccessLabel(flag.id)}
                 />
               </label>
             ))}

@@ -110,6 +110,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Hardened org-scoped write safety for protected catalog and quote persistence paths by removing legacy global write fallback in `menuService` and `useCatalogData` save flows, and by requiring organization context for Firebase quote mutations in `quoteStore` while preserving legacy read fallback behavior.
 - Added legacy quote write auto-migration safeguards in `quoteStore` so legacy global quote docs are copied into org-scoped paths during Firebase write/version operations when org context is available.
 - Admin Catalog `Optional Modules` controls now enforce order entitlements: paid modules remain editable, while unpaid modules are locked off.
+- Improved operator clarity for entitlement workflows:
+  - Admin Catalog `Optional Modules` now shows per-feature `Included in order` vs `Locked (not in order)` status text and guidance for entitlement changes.
+  - User manual now includes a step-by-step no-Stripe provisioning runbook for new-customer setup and existing-customer feature entitlement updates.
 - Local customer provisioning now supports numeric org sequencing (`--sequence-start`, default `250`) and defaults order ids to `orgId + 1` for numeric orgs; menu/event seed is opt-in via `--seed-menu` (safe default skips seed).
 - Local provisioning now auto-falls back from Firebase Admin SDK to Firestore REST writes using Firebase CLI auth when ADC is unavailable (with `--project`), reducing first-run environment friction.
 - Retired legacy global catalog/quote fallback behavior across frontend services (`useCatalogData`, `menuService`, `quoteStore`) and authoritative pricing/functions codepaths (`pricingEngine`, `readQuoteOrThrow`), with strict org-required fail-closed behavior for Firebase tenant reads/writes.
