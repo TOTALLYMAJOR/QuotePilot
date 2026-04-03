@@ -133,9 +133,19 @@ function quoteRefFor(uid, email, orgId, quoteId) {
   return doc(db, "organizations", orgId, "quotes", quoteId);
 }
 
+function quoteRefForWithClaims(uid, email, claims = {}, orgId, quoteId) {
+  const db = testEnv.authenticatedContext(uid, { email, ...claims }).firestore();
+  return doc(db, "organizations", orgId, "quotes", quoteId);
+}
+
 function orgScopedRefFor(uid, email, orgId, collection, docId) {
   const db = testEnv.authenticatedContext(uid, { email }).firestore();
   return doc(db, "organizations", orgId, collection, docId);
+}
+
+function tenantDomainRefFor(uid, email, claims = {}, hostname = "tenant-a.mbmapps.com") {
+  const db = testEnv.authenticatedContext(uid, { email, ...claims }).firestore();
+  return doc(db, "tenantDomains", hostname);
 }
 
 function portalSnapshotRefFor(portalKey) {
@@ -279,6 +289,43 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(setDoc(crossOrgQuoteRef, buildQuotePayload("sales-org-a", "org-b")));
 
     await assertOrgScopedWritesFail("sales-org-a", "sales-a@example.com", "org-b");
+  });
+
+  test("mismatched claim organization is denied even when role doc exists", async () => {
+    const ref = quoteRefForWithClaims(
+      "sales-org-a",
+      "sales-a@example.com",
+      { role: "sales", organizationId: "org-b" },
+      "org-a",
+      "q-claim-mismatch"
+    );
+    await assertFails(setDoc(ref, buildQuotePayload("sales-org-a", "org-a")));
+  });
+
+  test("tenant domain mapping writes are scoped to same-org admins", async () => {
+    const ownOrgRef = tenantDomainRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      { role: "admin", organizationId: "org-a" },
+      "alpha.mbmapps.com"
+    );
+    await assertSucceeds(setDoc(ownOrgRef, {
+      organizationId: "org-a",
+      active: true,
+      environment: "prod"
+    }));
+
+    const crossOrgRef = tenantDomainRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      { role: "admin", organizationId: "org-a" },
+      "beta.mbmapps.com"
+    );
+    await assertFails(setDoc(crossOrgRef, {
+      organizationId: "org-b",
+      active: true,
+      environment: "prod"
+    }));
   });
 
   test("customer cannot write staff-only org quote/catalog/menu/settings paths", async () => {

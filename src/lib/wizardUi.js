@@ -194,7 +194,11 @@ export function applyEventTypeTemplateDefaults({
   maybeApply("seasonProfileId", String(template.seasonProfileId || ""));
   maybeApply("milesRT", Number(template.milesRT || 0));
   maybeApply("payMethod", String(template.payMethod || ""));
+  maybeApply("servers", Number(template.servers || 0));
+  maybeApply("chefs", Number(template.chefs || 0));
   maybeApply("bartenders", Number(template.bartenders || 0));
+  maybeApply("serverRateMixCsv", String(template.serverRateMixCsv || ""));
+  maybeApply("chefRateMixCsv", String(template.chefRateMixCsv || ""));
 
   if (templateAddons.length && isEligibleForDefault({ field: "addons", value: nextForm.addons, initialForm, touchedFields })) {
     nextForm.addons = [...templateAddons];

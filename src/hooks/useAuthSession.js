@@ -6,6 +6,7 @@ import { signOutCurrentUser } from "../lib/authClient";
 import { auth, cloudFunctions, db, firebaseReady } from "../lib/firebase";
 import { buildOrganizationProfile, DEFAULT_ORGANIZATION_ID, resolveOrganizationId } from "../lib/organizationService";
 import { recordDiagnosticError, recordDiagnosticEvent } from "../lib/sessionDiagnostics";
+import { clearTenantContextCache } from "../lib/tenantDomainService";
 
 const ROLE_VALUES = new Set(["admin", "sales", "customer"]);
 const E2E_AUTH_BYPASS = ["1", "true", "yes", "on"].includes(
@@ -21,6 +22,7 @@ const ORG_BOOTSTRAP_TIMEOUT_MS = Math.max(
   1000,
   Number(import.meta.env.VITE_ORG_BOOTSTRAP_TIMEOUT_MS || 12000) || 12000
 );
+const AUTH_CLAIMS_MODE = String(import.meta.env.VITE_AUTH_CLAIMS_MODE || "dual").trim().toLowerCase() || "dual";
 const BOOTSTRAP_ADMINS = new Set(
   [
     "tonitastefultouch@yahoo.com",
@@ -38,6 +40,40 @@ function normalizeEmail(value) {
 function normalizeRole(value) {
   const role = String(value || "").trim().toLowerCase();
   return ROLE_VALUES.has(role) ? role : "customer";
+}
+
+function normalizeOrganizationIdStrict(value) {
+  return resolveOrganizationId(value, "");
+}
+
+function resolveRuntimePrincipal({ claimRole = "customer", claimOrg = "", roleRecord = { role: "customer", organizationId: "" } } = {}) {
+  const normalizedClaimRole = normalizeRole(claimRole);
+  const normalizedClaimOrg = normalizeOrganizationIdStrict(claimOrg);
+  const normalizedRoleDocRole = normalizeRole(roleRecord?.role);
+  const normalizedRoleDocOrg = normalizeOrganizationIdStrict(roleRecord?.organizationId);
+
+  if (normalizedClaimOrg && normalizedRoleDocOrg && normalizedClaimOrg !== normalizedRoleDocOrg) {
+    throw new Error("Claim organization does not match role scope.");
+  }
+
+  if (AUTH_CLAIMS_MODE === "claims") {
+    return {
+      role: normalizedClaimRole,
+      organizationId: normalizedClaimOrg
+    };
+  }
+
+  if (AUTH_CLAIMS_MODE === "roles") {
+    return {
+      role: normalizedRoleDocRole,
+      organizationId: normalizedRoleDocOrg
+    };
+  }
+
+  return {
+    role: normalizedClaimRole !== "customer" ? normalizedClaimRole : normalizedRoleDocRole,
+    organizationId: normalizedClaimOrg || normalizedRoleDocOrg
+  };
 }
 
 function generateOrganizationId() {
@@ -187,17 +223,40 @@ async function loadOrCreateRole(user) {
   return loadOrCreateRoleLegacy(user);
 }
 
-export function useAuthSession() {
+export function useAuthSession({ tenantContext = null } = {}) {
   const [state, setState] = useState({
     loading: true,
     user: null,
     role: "customer",
-    organizationId: resolveOrganizationId("", ""),
+    organizationId: normalizeOrganizationIdStrict(""),
     error: ""
   });
 
   useEffect(() => {
     let active = true;
+
+    if (tenantContext?.loading) {
+      setState((prev) => ({
+        ...prev,
+        loading: true
+      }));
+      return () => {
+        active = false;
+      };
+    }
+
+    if (tenantContext?.blocked) {
+      setState({
+        loading: false,
+        user: null,
+        role: "customer",
+        organizationId: normalizeOrganizationIdStrict(""),
+        error: tenantContext.error || "Tenant host is not active."
+      });
+      return () => {
+        active = false;
+      };
+    }
 
     if (E2E_AUTH_BYPASS) {
       setState({
@@ -207,7 +266,9 @@ export function useAuthSession() {
           email: E2E_EMAIL
         },
         role: E2E_ROLE,
-        organizationId: resolveOrganizationId("", ""),
+        organizationId: tenantContext?.hostType === "tenant"
+          ? normalizeOrganizationIdStrict(tenantContext.organizationId)
+          : normalizeOrganizationIdStrict(""),
         error: ""
       });
       return () => {
@@ -225,7 +286,7 @@ export function useAuthSession() {
         loading: false,
         user: null,
         role: "customer",
-        organizationId: resolveOrganizationId("", ""),
+        organizationId: normalizeOrganizationIdStrict(""),
         error: "Firebase Auth is unavailable. Check env config."
       });
       return () => {
@@ -240,7 +301,7 @@ export function useAuthSession() {
           loading: false,
           user: null,
           role: "customer",
-          organizationId: resolveOrganizationId("", ""),
+          organizationId: normalizeOrganizationIdStrict(""),
           error: ""
         });
         return;
@@ -250,14 +311,32 @@ export function useAuthSession() {
       try {
         const tokenResult = await nextUser.getIdTokenResult();
         const claimRole = normalizeRole(tokenResult?.claims?.role);
+        const claimOrg = normalizeOrganizationIdStrict(tokenResult?.claims?.organizationId);
         const roleRecord = await loadOrCreateRole(nextUser);
-        const role = claimRole !== "customer" ? claimRole : roleRecord.role;
+        const runtimePrincipal = resolveRuntimePrincipal({
+          claimRole,
+          claimOrg,
+          roleRecord
+        });
+        let organizationId = normalizeOrganizationIdStrict(runtimePrincipal.organizationId);
+        const tenantHostOrg = tenantContext?.hostType === "tenant"
+          ? normalizeOrganizationIdStrict(tenantContext.organizationId)
+          : "";
+        if (tenantHostOrg) {
+          if (organizationId && organizationId !== tenantHostOrg) {
+            throw new Error("Signed-in account is outside this tenant.");
+          }
+          organizationId = tenantHostOrg;
+        }
+        if ((runtimePrincipal.role === "admin" || runtimePrincipal.role === "sales") && !organizationId) {
+          throw new Error("Staff account is missing organization scope.");
+        }
         if (!active) return;
         setState({
           loading: false,
           user: nextUser,
-          role,
-          organizationId: resolveOrganizationId(roleRecord.organizationId, ""),
+          role: runtimePrincipal.role,
+          organizationId,
           error: ""
         });
       } catch (err) {
@@ -271,7 +350,7 @@ export function useAuthSession() {
           loading: false,
           user: nextUser,
           role: "customer",
-          organizationId: resolveOrganizationId("", ""),
+          organizationId: normalizeOrganizationIdStrict(""),
           error: err?.message || "Failed to load role data."
         });
       }
@@ -281,7 +360,7 @@ export function useAuthSession() {
       active = false;
       stop();
     };
-  }, []);
+  }, [tenantContext?.loading, tenantContext?.blocked, tenantContext?.error, tenantContext?.hostType, tenantContext?.organizationId]);
 
   const roleFlags = useMemo(() => {
     const isAdmin = state.role === "admin";
@@ -294,14 +373,18 @@ export function useAuthSession() {
     ...roleFlags,
     signOut: E2E_AUTH_BYPASS
       ? async () => {
+        clearTenantContextCache();
         setState({
           loading: false,
           user: null,
           role: "customer",
-          organizationId: resolveOrganizationId("", ""),
+          organizationId: normalizeOrganizationIdStrict(""),
           error: ""
         });
       }
-      : signOutCurrentUser
+      : async () => {
+        clearTenantContextCache();
+        await signOutCurrentUser();
+      }
   };
 }

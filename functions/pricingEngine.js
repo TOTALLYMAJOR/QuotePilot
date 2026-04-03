@@ -1,6 +1,8 @@
 const PRICING_VERSION = "pricing-v1";
 const PRICING_AUTHORITY = "server_authoritative";
 const PRICING_MODES = new Set(["per_person", "per_item", "per_event"]);
+const STAFFING_CHARGE_MODES = new Set(["per_hour", "per_event_per_staff"]);
+const MAX_RATE_MIX_CSV_LENGTH = 300;
 
 const DEFAULT_SERVICE_FEE_TIERS = [
   { id: "tier-small", minGuests: 0, maxGuests: 99, pct: 0.2 },
@@ -67,6 +69,7 @@ const DEFAULT_PRICING_SETTINGS = {
   bartenderRate: 30,
   serverRate: 22,
   chefRate: 28,
+  staffingChargeMode: "per_hour",
   staffingLaborEnabled: true,
   serviceFeePct: 0.2,
   serviceFeeTiers: DEFAULT_SERVICE_FEE_TIERS,
@@ -83,13 +86,6 @@ const DEFAULT_PRICING_SETTINGS = {
   menuSections: [],
   pricingSettingsVersion: 0,
   pricingSettingsUpdatedAtISO: ""
-};
-
-const STAFF_RULES = {
-  Buffet: { serverRatio: 25, minServers: 2, chefRatio: Number.POSITIVE_INFINITY },
-  Plated: { serverRatio: 12, minServers: 3, chefRatio: 50 },
-  Stations: { serverRatio: 20, minServers: 2, chefRatio: 75 },
-  "Drop-off": { serverRatio: Number.POSITIVE_INFINITY, minServers: 0, chefRatio: Number.POSITIVE_INFINITY }
 };
 
 class PricingEngineError extends Error {
@@ -146,6 +142,37 @@ function normalizeOrganizationId(value) {
 function normalizePricingType(value, fallback = "per_event") {
   const raw = toLowerText(value, fallback);
   return PRICING_MODES.has(raw) ? raw : fallback;
+}
+
+function normalizeAddonStaffRole(value) {
+  const raw = toLowerText(value);
+  if (raw === "server" || raw === "chef" || raw === "bartender") return raw;
+  return "";
+}
+
+function resolveAddonStaffRole(item = {}) {
+  const hasExplicitField = item && Object.prototype.hasOwnProperty.call(item, "staffRole");
+  const explicit = normalizeAddonStaffRole(item?.staffRole);
+  if (explicit) return explicit;
+  if (hasExplicitField) return "";
+
+  const source = `${toText(item?.id)} ${toText(item?.name)}`.trim().toLowerCase();
+  if (!source) return "";
+  if (source.includes("bartender") || source.includes("bar tender")) return "bartender";
+  if (source.includes("chef")) return "chef";
+  if (source.includes("server") || source.includes("event staff")) return "server";
+  return "";
+}
+
+function addonSupportsQuantity(item = {}, pricingMode = "per_event") {
+  if (pricingMode === "per_item") return true;
+  if (pricingMode === "per_event" && resolveAddonStaffRole(item)) return true;
+  return false;
+}
+
+function normalizeStaffingChargeMode(value, fallback = "per_hour") {
+  const raw = toLowerText(value, fallback);
+  return STAFFING_CHARGE_MODES.has(raw) ? raw : fallback;
 }
 
 function normalizeQuantityMap(input) {
@@ -249,36 +276,78 @@ function resolveSeasonProfile(input, settings) {
 }
 
 function resolveLaborRates(input, settings) {
-  const bartenderRateTypes = Array.isArray(settings?.bartenderRateTypes) ? settings.bartenderRateTypes : [];
-  const staffingRateTypes = Array.isArray(settings?.staffingRateTypes) ? settings.staffingRateTypes : [];
-
-  const selectedBartenderRateTypeId = toText(input?.labor?.bartenderRateTypeId || settings?.defaultBartenderRateType);
-  const selectedStaffingRateTypeId = toText(input?.labor?.staffingRateTypeId || settings?.defaultStaffingRateType);
-
-  const bartenderRateType = bartenderRateTypes.find((item) => toText(item?.id) === selectedBartenderRateTypeId) || null;
-  const staffingRateType = staffingRateTypes.find((item) => toText(item?.id) === selectedStaffingRateTypeId) || null;
-
   const baseBartenderRate = toNumber(settings?.bartenderRate, 0);
   const baseServerRate = toNumber(settings?.serverRate, 0);
   const baseChefRate = toNumber(settings?.chefRate, 0);
-
-  const bartenderRateFromType = toNumber(bartenderRateType?.rate, baseBartenderRate);
-  const serverRateFromType = toNumber(staffingRateType?.serverRate, baseServerRate);
-  const chefRateFromType = toNumber(staffingRateType?.chefRate, baseChefRate);
 
   const bartenderRateOverride = toOptionalRate(input?.labor?.bartenderRateOverride);
   const serverRateOverride = toOptionalRate(input?.labor?.serverRateOverride);
   const chefRateOverride = toOptionalRate(input?.labor?.chefRateOverride);
 
   return {
-    bartenderRateApplied: bartenderRateOverride ?? bartenderRateFromType,
-    serverRateApplied: serverRateOverride ?? serverRateFromType,
-    chefRateApplied: chefRateOverride ?? chefRateFromType,
-    bartenderRateTypeId: toText(bartenderRateType?.id),
-    bartenderRateTypeName: toText(bartenderRateType?.name),
-    staffingRateTypeId: toText(staffingRateType?.id),
-    staffingRateTypeName: toText(staffingRateType?.name)
+    bartenderRateApplied: bartenderRateOverride ?? baseBartenderRate,
+    serverRateApplied: serverRateOverride ?? baseServerRate,
+    chefRateApplied: chefRateOverride ?? baseChefRate,
+    bartenderRateTypeId: "",
+    bartenderRateTypeName: "",
+    staffingRateTypeId: "",
+    staffingRateTypeName: ""
   };
+}
+
+function roundCurrency(value) {
+  return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function normalizeRateMixCsv(value) {
+  return String(value ?? "").trim().slice(0, MAX_RATE_MIX_CSV_LENGTH);
+}
+
+function parseRateMixCsv(value, maxEntries = 0) {
+  const limit = Math.max(0, toInt(maxEntries, 0));
+  if (limit <= 0) return [];
+  const raw = normalizeRateMixCsv(value);
+  if (!raw) return [];
+  return raw.split(",").reduce((acc, token) => {
+    if (acc.length >= limit) return acc;
+    const text = toText(token);
+    if (!text) return acc;
+    const n = Number(text);
+    if (!Number.isFinite(n) || n < 0) return acc;
+    acc.push(roundCurrency(n));
+    return acc;
+  }, []);
+}
+
+function resolveRatesApplied(countValue, fallbackRateValue, rateMixCsv) {
+  const count = Math.max(0, toInt(countValue, 0));
+  if (count <= 0) return [];
+  const fallbackRate = roundCurrency(Math.max(0, toNumber(fallbackRateValue, 0)));
+  const parsed = parseRateMixCsv(rateMixCsv, count);
+  if (!parsed.length) {
+    return Array.from({ length: count }, () => fallbackRate);
+  }
+  return Array.from({ length: count }, (_, index) => {
+    const resolved = parsed[index];
+    if (resolved === undefined) return fallbackRate;
+    return roundCurrency(Math.max(0, toNumber(resolved, fallbackRate)));
+  });
+}
+
+function normalizeServerRateMixCsv(value) {
+  return normalizeRateMixCsv(value);
+}
+
+function normalizeChefRateMixCsv(value) {
+  return normalizeRateMixCsv(value);
+}
+
+function resolveServerRatesApplied(servers, fallbackServerRate, serverRateMixCsv) {
+  return resolveRatesApplied(servers, fallbackServerRate, serverRateMixCsv);
+}
+
+function resolveChefRatesApplied(chefs, fallbackChefRate, chefRateMixCsv) {
+  return resolveRatesApplied(chefs, fallbackChefRate, chefRateMixCsv);
 }
 
 function toCatalogId(value, fallback = "") {
@@ -392,6 +461,8 @@ function normalizePricingInputPayload(data = {}, staff = {}) {
       guests: Math.max(0, toInt(event.guests ?? rawForm.guests, 0)),
       hours: Math.max(0, toNumber(event.hours ?? rawForm.hours, 0)),
       style: toText(event.style || rawForm.style, "Buffet"),
+      servers: Math.max(0, toInt(event.servers ?? rawForm.servers, 0)),
+      chefs: Math.max(0, toInt(event.chefs ?? rawForm.chefs, 0)),
       bartenders: Math.max(0, toInt(event.bartenders ?? rawForm.bartenders, 0)),
       milesRT: Math.max(0, toNumber(event.milesRT ?? selection.milesRT ?? rawForm.milesRT, 0)),
       taxRegionId: toText(event.taxRegionId || selection.taxRegion || rawForm.taxRegion),
@@ -415,11 +486,15 @@ function normalizePricingInputPayload(data = {}, staff = {}) {
       }
     },
     labor: {
-      bartenderRateTypeId: toText(source.labor?.bartenderRateTypeId || rawForm.bartenderRateTypeId || selection.bartenderRateTypeId),
-      staffingRateTypeId: toText(source.labor?.staffingRateTypeId || rawForm.staffingRateTypeId || selection.staffingRateTypeId),
       bartenderRateOverride: source.labor?.bartenderRateOverride ?? rawForm.bartenderRateOverride ?? selection.bartenderRateOverride,
       serverRateOverride: source.labor?.serverRateOverride ?? rawForm.serverRateOverride ?? selection.serverRateOverride,
-      chefRateOverride: source.labor?.chefRateOverride ?? rawForm.chefRateOverride ?? selection.chefRateOverride
+      chefRateOverride: source.labor?.chefRateOverride ?? rawForm.chefRateOverride ?? selection.chefRateOverride,
+      serverRateMixCsv: normalizeServerRateMixCsv(
+        source.labor?.serverRateMixCsv ?? rawForm.serverRateMixCsv ?? selection.serverRateMixCsv
+      ),
+      chefRateMixCsv: normalizeChefRateMixCsv(
+        source.labor?.chefRateMixCsv ?? rawForm.chefRateMixCsv ?? selection.chefRateMixCsv
+      )
     },
     metadata: {
       source: toText(source.metadata?.source || root.source || source.source),
@@ -445,6 +520,7 @@ function normalizeCatalogAddon(item = {}) {
     price: toNumber(item.price, 0),
     pricingType,
     type: pricingType,
+    staffRole: resolveAddonStaffRole(item),
     active: item.active !== false
   };
 }
@@ -580,6 +656,10 @@ function normalizePricingSettings(settings = {}) {
     bartenderRate,
     serverRate,
     chefRate,
+    staffingChargeMode: normalizeStaffingChargeMode(
+      source.staffingChargeMode,
+      DEFAULT_PRICING_SETTINGS.staffingChargeMode
+    ),
     staffingLaborEnabled: source.staffingLaborEnabled !== false,
     serviceFeePct: Math.max(0, toNumber(source.serviceFeePct, DEFAULT_PRICING_SETTINGS.serviceFeePct)),
     serviceFeeTiers: normalizeServiceFeeTiers(source.serviceFeeTiers),
@@ -641,6 +721,7 @@ function buildRulesSettingsSnapshot(settings = {}) {
       rentalMultiplier: toNumber(profile.rentalMultiplier, 1)
     })),
     defaultSeasonProfile: toText(settings.defaultSeasonProfile),
+    staffingChargeMode: normalizeStaffingChargeMode(settings.staffingChargeMode, "per_hour"),
     staffingLaborEnabled: settings.staffingLaborEnabled !== false,
     perMileRate: toNumber(settings.perMileRate, 0),
     longDistancePerMileRate: toNumber(settings.longDistancePerMileRate, 0),
@@ -815,6 +896,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
 
   const guests = Math.min(400, Math.max(0, toNumber(input.event.guests, 0)));
   const hours = Math.max(0, toNumber(input.event.hours, 0));
+  const serversInput = Math.max(0, toInt(input.event.servers, 0));
+  const chefsInput = Math.max(0, toInt(input.event.chefs, 0));
   const bartenders = Math.max(0, toNumber(input.event.bartenders, 0));
   const style = toText(input.event.style, "Buffet");
   const milesRT = Math.max(0, toNumber(input.event.milesRT, 0));
@@ -841,6 +924,9 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
   const addonMultiplier = toNumber(seasonProfile?.addonMultiplier, 1);
   const rentalMultiplier = toNumber(seasonProfile?.rentalMultiplier, 1);
   const staffingLaborEnabled = settings?.staffingLaborEnabled !== false;
+  const staffingChargeMode = normalizeStaffingChargeMode(settings?.staffingChargeMode, "per_hour");
+  const serverRateMixCsv = normalizeServerRateMixCsv(input?.labor?.serverRateMixCsv);
+  const chefRateMixCsv = normalizeChefRateMixCsv(input?.labor?.chefRateMixCsv);
 
   const thresholdMiles = toNumber(settings?.deliveryThresholdMiles, 0);
   const standardTravelRate = toNumber(settings?.perMileRate, 0);
@@ -858,7 +944,6 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
   let addons = 0;
   let rentals = 0;
   let menu = 0;
-
   const lineItems = [];
 
   if (guests > 0) {
@@ -883,27 +968,31 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         missingReferences.add(`addon:${itemRef.id}`);
       }
       const pricingMode = normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_person");
+      const quantityEnabled = addonSupportsQuantity(found || itemRef, pricingMode);
+      const effectivePricingMode = pricingMode === "per_event" && quantityEnabled ? "per_item" : pricingMode;
+      const resolvedQuantity = quantityEnabled
+        ? resolveLineQuantity(itemRef.id, addonQuantityMap, itemRef.quantity || 1)
+        : 1;
       const unitPrice = toNumber(found?.price, 0);
       const active = found ? found.active !== false : false;
       const result = active
         ? calculatePriceWithMode({
-          pricingMode,
+          pricingMode: effectivePricingMode,
           unitPrice,
           guests,
-          quantity: resolveLineQuantity(itemRef.id, addonQuantityMap, itemRef.quantity || 1),
+          quantity: resolvedQuantity,
           multiplier: addonMultiplier
         })
         : {
-          quantity: pricingMode === "per_person" ? Math.max(0, toInt(guests, 0)) : Math.max(1, toInt(itemRef.quantity, 1)),
+          quantity: pricingMode === "per_person" ? Math.max(0, toInt(guests, 0)) : Math.max(1, resolvedQuantity),
           total: 0
         };
-
       addons += result.total;
       lineItems.push(buildLineItem({
         id: itemRef.id,
         category: "addon",
         name: toText(found?.name, itemRef.name || itemRef.id),
-        pricingMode,
+        pricingMode: effectivePricingMode,
         unitPrice,
         quantity: result.quantity,
         total: result.total,
@@ -1006,21 +1095,31 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
     }));
   }
 
-  const styleRules = STAFF_RULES[style] || STAFF_RULES.Buffet;
-  const computedServers =
-    styleRules.serverRatio === Number.POSITIVE_INFINITY
-      ? 0
-      : Math.max(styleRules.minServers, Math.ceil(guests / styleRules.serverRatio));
-  const computedChefs =
-    styleRules.chefRatio === Number.POSITIVE_INFINITY ? 0 : Math.ceil(guests / styleRules.chefRatio);
+  const baseServers = staffingLaborEnabled ? serversInput : 0;
+  const baseChefs = staffingLaborEnabled ? chefsInput : 0;
+  const baseBartenders = staffingLaborEnabled ? bartenders : 0;
+  const appliedAddonServers = 0;
+  const appliedAddonChefs = 0;
+  const appliedAddonBartenders = 0;
+  const servers = baseServers + appliedAddonServers;
+  const chefs = baseChefs + appliedAddonChefs;
+  const displayBartenders = baseBartenders + appliedAddonBartenders;
+  const serverRatesApplied = staffingLaborEnabled
+    ? resolveServerRatesApplied(baseServers, laborRates.serverRateApplied, serverRateMixCsv)
+    : [];
+  const chefRatesApplied = staffingLaborEnabled
+    ? resolveChefRatesApplied(baseChefs, laborRates.chefRateApplied, chefRateMixCsv)
+    : [];
 
-  const servers = staffingLaborEnabled ? computedServers : 0;
-  const chefs = staffingLaborEnabled ? computedChefs : 0;
-
-  const bartenderLabor = staffingLaborEnabled ? laborRates.bartenderRateApplied * bartenders * hours : 0;
-  const labor = staffingLaborEnabled
-    ? laborRates.serverRateApplied * servers * hours + laborRates.chefRateApplied * chefs * hours + bartenderLabor
+  const laborHourFactor = staffingChargeMode === "per_event_per_staff" ? 1 : hours;
+  const serverLabor = staffingLaborEnabled
+    ? serverRatesApplied.reduce((sum, rate) => sum + toNumber(rate, 0), 0) * laborHourFactor
     : 0;
+  const chefLabor = staffingLaborEnabled
+    ? chefRatesApplied.reduce((sum, rate) => sum + toNumber(rate, 0), 0) * laborHourFactor
+    : 0;
+  const bartenderLabor = staffingLaborEnabled ? laborRates.bartenderRateApplied * baseBartenders * laborHourFactor : 0;
+  const labor = staffingLaborEnabled ? serverLabor + chefLabor + bartenderLabor : 0;
 
   const travel = baseMiles * standardTravelRate + longDistanceMiles * longDistanceRate;
 
@@ -1041,9 +1140,20 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
       total: labor,
       meta: {
         staffingLaborEnabled,
+        staffingChargeMode,
         servers,
         chefs,
-        bartenders,
+        bartenders: displayBartenders,
+        baseServers,
+        baseChefs,
+        baseBartenders,
+        addonServers: appliedAddonServers,
+        addonChefs: appliedAddonChefs,
+        addonBartenders: appliedAddonBartenders,
+        serverRatesApplied,
+        chefRatesApplied,
+        serverLabor,
+        chefLabor,
         hours,
         ...laborRates
       }
@@ -1124,6 +1234,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
       guests: Math.max(0, toInt(input.event.guests, 0)),
       hours: Math.max(0, toNumber(input.event.hours, 0)),
       style,
+      servers: Math.max(0, toInt(input.event.servers, 0)),
+      chefs: Math.max(0, toInt(input.event.chefs, 0)),
       bartenders: Math.max(0, toInt(input.event.bartenders, 0)),
       milesRT,
       taxRegionId: toText(input.event.taxRegionId, taxRegion.id),
@@ -1139,12 +1251,17 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
       },
       addons: input.selection.addons.map((itemRef) => {
         const found = maps.addonById.get(itemRef.id);
+        const pricingMode = normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_person");
+        const quantityEnabled = addonSupportsQuantity(found || itemRef, pricingMode);
+        const effectivePricingMode = pricingMode === "per_event" && quantityEnabled ? "per_item" : pricingMode;
         return {
           id: itemRef.id,
           name: toText(found?.name, itemRef.name || itemRef.id),
-          pricingMode: normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_person"),
+          pricingMode: effectivePricingMode,
           unitPrice: toNumber(found?.price, 0),
-          quantity: resolveLineQuantity(itemRef.id, addonQuantityMap, itemRef.quantity || 1)
+          quantity: quantityEnabled
+            ? resolveLineQuantity(itemRef.id, addonQuantityMap, itemRef.quantity || 1)
+            : 1
         };
       }),
       rentals: input.selection.rentals.map((itemRef) => {
@@ -1177,6 +1294,13 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         menuItemQuantities: menuItemQuantityMap
       }
     },
+    labor: {
+      bartenderRateOverride: input.labor?.bartenderRateOverride ?? "",
+      serverRateOverride: input.labor?.serverRateOverride ?? "",
+      chefRateOverride: input.labor?.chefRateOverride ?? "",
+      serverRateMixCsv,
+      chefRateMixCsv
+    },
     pricingModes: {
       package: "per_person",
       addonsDefault: "per_person",
@@ -1189,6 +1313,7 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
       depositPct: toNumber(settings.depositPct, 0),
       defaultTaxRegion: toText(settings.defaultTaxRegion),
       defaultSeasonProfile: toText(settings.defaultSeasonProfile),
+      staffingChargeMode: normalizeStaffingChargeMode(settings.staffingChargeMode, "per_hour"),
       pricingSettingsVersion: Math.max(0, toInt(settings.pricingSettingsVersion, 0)),
       pricingSettingsUpdatedAtISO: normalizeISO(settings.pricingSettingsUpdatedAtISO, "")
     },
@@ -1206,6 +1331,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
     lineItems,
     fees: {
       labor,
+      serverLabor,
+      chefLabor,
       travel,
       bartenderLabor,
       serviceFee
@@ -1238,11 +1365,16 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
       pricingSettingsVersion: Math.max(0, toInt(settings.pricingSettingsVersion, 0)),
       pricingSettingsUpdatedAtISO: normalizeISO(settings.pricingSettingsUpdatedAtISO, ""),
       settingsSnapshot: buildRulesSettingsSnapshot(settings),
+      staffingChargeMode,
       staffingLaborEnabled,
       laborRateSnapshot: {
         bartenderRateApplied: laborRates.bartenderRateApplied,
         serverRateApplied: laborRates.serverRateApplied,
+        serverRatesApplied,
+        serverLabor,
         chefRateApplied: laborRates.chefRateApplied,
+        chefRatesApplied,
+        chefLabor,
         bartenderRateTypeId: laborRates.bartenderRateTypeId,
         bartenderRateTypeName: laborRates.bartenderRateTypeName,
         staffingRateTypeId: laborRates.staffingRateTypeId,
@@ -1252,7 +1384,16 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         style,
         servers,
         chefs,
-        bartenders,
+        bartenders: displayBartenders,
+        baseServers,
+        baseChefs,
+        baseBartenders,
+        addonServers: appliedAddonServers,
+        addonChefs: appliedAddonChefs,
+        addonBartenders: appliedAddonBartenders,
+        serverRateMixCsv,
+        chefRateMixCsv,
+        staffingChargeMode,
         hours
       },
       travel: {

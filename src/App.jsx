@@ -8,6 +8,7 @@ import { useOrganization } from "./context/OrganizationContext";
 import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useAuthSession } from "./hooks/useAuthSession";
 import { useCatalogData } from "./hooks/useCatalogData";
+import { useTenantContext } from "./hooks/useTenantContext";
 import { calculateQuotePricing, notifyOwnerNewQuote, sendQuoteToCustomerEmail } from "./lib/commerceOps";
 import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
@@ -46,11 +47,14 @@ const INITIAL_FORM = {
   date: "",
   time: "",
   hours: 0,
+  servers: 0,
+  chefs: 0,
   bartenders: 0,
   guests: 0,
   venue: "",
   venueAddress: "",
   eventName: "",
+  dietaryRestrictions: "",
   clientOrg: "",
   style: "Buffet",
   name: "",
@@ -68,6 +72,8 @@ const INITIAL_FORM = {
   staffingRateTypeId: "",
   bartenderRateOverride: "",
   serverRateOverride: "",
+  serverRateMixCsv: "",
+  chefRateMixCsv: "",
   chefRateOverride: "",
   eventTemplateId: "custom",
   taxRegion: "",
@@ -94,6 +100,13 @@ function copyText(text) {
 function toNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function toRateArray(input, fallback = []) {
+  if (!Array.isArray(input)) return Array.isArray(fallback) ? [...fallback] : [];
+  return input
+    .map((value) => Math.round(toNumber(value, 0) * 100) / 100)
+    .filter((value) => Number.isFinite(value) && value >= 0);
 }
 
 function toPositiveTimeout(value, fallback) {
@@ -137,6 +150,7 @@ function toOptionalNumber(value) {
 
 function normalizeFeatureFlags(input) {
   const source = input && typeof input === "object" ? input : {};
+  const aiAssist = source.aiAssist !== false;
   return {
     customerPortal: source.customerPortal !== false,
     eventSchedule: source.eventSchedule !== false,
@@ -145,7 +159,9 @@ function normalizeFeatureFlags(input) {
     reportingDashboard: source.reportingDashboard !== false,
     quoteCompare: source.quoteCompare !== false,
     crmSync: source.crmSync !== false,
-    guidedSelling: source.guidedSelling !== false
+    guidedSelling: source.guidedSelling !== false,
+    aiAssist,
+    aiAutopilot: aiAssist && source.aiAutopilot === true
   };
 }
 
@@ -167,6 +183,9 @@ function buildTotalsFromPricingSnapshot(pricingSnapshot = {}, fallbackTotals = {
   const lineItems = Array.isArray(pricingSnapshot?.lineItems) ? pricingSnapshot.lineItems : [];
   const rules = pricingSnapshot?.rulesSnapshot && typeof pricingSnapshot.rulesSnapshot === "object"
     ? pricingSnapshot.rulesSnapshot
+    : {};
+  const staffingSnapshot = rules.staffing && typeof rules.staffing === "object"
+    ? rules.staffing
     : {};
   const laborSnapshot = rules.laborRateSnapshot && typeof rules.laborRateSnapshot === "object"
     ? rules.laborRateSnapshot
@@ -202,14 +221,47 @@ function buildTotalsFromPricingSnapshot(pricingSnapshot = {}, fallbackTotals = {
     rentals,
     menu,
     labor: toNumber(pricingSnapshot?.fees?.labor, toNumber(fallbackTotals.labor, 0)),
+    serverLabor: toNumber(
+      pricingSnapshot?.fees?.serverLabor,
+      toNumber(laborSnapshot.serverLabor, toNumber(fallbackTotals.serverLabor, 0))
+    ),
+    chefLabor: toNumber(
+      pricingSnapshot?.fees?.chefLabor,
+      toNumber(laborSnapshot.chefLabor, toNumber(fallbackTotals.chefLabor, 0))
+    ),
     bartenderLabor: toNumber(pricingSnapshot?.fees?.bartenderLabor, toNumber(fallbackTotals.bartenderLabor, 0)),
     bartenderRateApplied: toNumber(laborSnapshot.bartenderRateApplied, toNumber(fallbackTotals.bartenderRateApplied, 0)),
     serverRateApplied: toNumber(laborSnapshot.serverRateApplied, toNumber(fallbackTotals.serverRateApplied, 0)),
+    serverRatesApplied: toRateArray(laborSnapshot.serverRatesApplied, fallbackTotals.serverRatesApplied),
     chefRateApplied: toNumber(laborSnapshot.chefRateApplied, toNumber(fallbackTotals.chefRateApplied, 0)),
+    chefRatesApplied: toRateArray(laborSnapshot.chefRatesApplied, fallbackTotals.chefRatesApplied),
     bartenderRateTypeId: String(laborSnapshot.bartenderRateTypeId || fallbackTotals.bartenderRateTypeId || ""),
     bartenderRateTypeName: String(laborSnapshot.bartenderRateTypeName || fallbackTotals.bartenderRateTypeName || ""),
     staffingRateTypeId: String(laborSnapshot.staffingRateTypeId || fallbackTotals.staffingRateTypeId || ""),
     staffingRateTypeName: String(laborSnapshot.staffingRateTypeName || fallbackTotals.staffingRateTypeName || ""),
+    staffingLaborEnabled:
+      rules.staffingLaborEnabled !== undefined
+        ? rules.staffingLaborEnabled !== false
+        : fallbackTotals.staffingLaborEnabled !== false,
+    staffingChargeMode: String(rules.staffingChargeMode || fallbackTotals.staffingChargeMode || "per_hour"),
+    servers: toNumber(staffingSnapshot.servers, toNumber(fallbackTotals.servers, 0)),
+    chefs: toNumber(staffingSnapshot.chefs, toNumber(fallbackTotals.chefs, 0)),
+    bartenders: toNumber(staffingSnapshot.bartenders, toNumber(fallbackTotals.bartenders, 0)),
+    baseServers: toNumber(
+      staffingSnapshot.baseServers,
+      toNumber(fallbackTotals.baseServers, toNumber(staffingSnapshot.servers, toNumber(fallbackTotals.servers, 0)))
+    ),
+    baseChefs: toNumber(
+      staffingSnapshot.baseChefs,
+      toNumber(fallbackTotals.baseChefs, toNumber(staffingSnapshot.chefs, toNumber(fallbackTotals.chefs, 0)))
+    ),
+    baseBartenders: toNumber(
+      staffingSnapshot.baseBartenders,
+      toNumber(fallbackTotals.baseBartenders, toNumber(staffingSnapshot.bartenders, toNumber(fallbackTotals.bartenders, 0)))
+    ),
+    addonServers: toNumber(staffingSnapshot.addonServers, toNumber(fallbackTotals.addonServers, 0)),
+    addonChefs: toNumber(staffingSnapshot.addonChefs, toNumber(fallbackTotals.addonChefs, 0)),
+    addonBartenders: toNumber(staffingSnapshot.addonBartenders, toNumber(fallbackTotals.addonBartenders, 0)),
     travel: toNumber(pricingSnapshot?.fees?.travel, toNumber(fallbackTotals.travel, 0)),
     serviceFee: toNumber(pricingSnapshot?.fees?.serviceFee, toNumber(fallbackTotals.serviceFee, 0)),
     tax: toNumber(pricingSnapshot?.tax?.amount, toNumber(fallbackTotals.tax, 0)),
@@ -229,13 +281,18 @@ function buildTotalsFromPricingSnapshot(pricingSnapshot = {}, fallbackTotals = {
 
 export default function App() {
   const wizardRef = useRef(null);
+  const autopilotAppliedRef = useRef(new Set());
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { setOrganizationId } = useOrganization();
-  const authSession = useAuthSession();
+  const tenantContext = useTenantContext();
+  const authSession = useAuthSession({ tenantContext });
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
+  const catalogEnabled = authSession.isStaff
+    && tenantContext.ready
+    && (!tenantContext.requiresTenant || authSession.organizationId === tenantContext.organizationId);
   const catalog = useCatalogData({
-    enabled: authSession.isStaff,
+    enabled: catalogEnabled,
     organizationId: authSession.organizationId
   });
   const [dynamicMenuSections, setDynamicMenuSections] = useState([]);
@@ -337,6 +394,8 @@ export default function App() {
   const diagnosticsEnabled = featureFlags.diagnostics !== false;
   const dashboardEnabled = featureFlags.reportingDashboard !== false;
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
+  const aiAssistEnabled = featureFlags.aiAssist !== false;
+  const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
 
   useEffect(() => {
     setStepValidation(buildStepValidation(form));
@@ -504,10 +563,6 @@ export default function App() {
       const next = { ...prev };
       const defaultTaxRegion = catalog.settings?.defaultTaxRegion || catalog.settings?.taxRegions?.[0]?.id || "";
       const defaultSeasonProfile = catalog.settings?.defaultSeasonProfile || "auto";
-      const defaultBartenderRateType =
-        catalog.settings?.defaultBartenderRateType || catalog.settings?.bartenderRateTypes?.[0]?.id || "";
-      const defaultStaffingRateType =
-        catalog.settings?.defaultStaffingRateType || catalog.settings?.staffingRateTypes?.[0]?.id || "";
 
       if (!next.taxRegion && defaultTaxRegion) {
         next.taxRegion = defaultTaxRegion;
@@ -519,14 +574,6 @@ export default function App() {
       }
       if (!next.eventTemplateId) {
         next.eventTemplateId = "custom";
-        changed = true;
-      }
-      if (!next.bartenderRateTypeId && defaultBartenderRateType) {
-        next.bartenderRateTypeId = defaultBartenderRateType;
-        changed = true;
-      }
-      if (!next.staffingRateTypeId && defaultStaffingRateType) {
-        next.staffingRateTypeId = defaultStaffingRateType;
         changed = true;
       }
       return changed ? next : prev;
@@ -608,6 +655,8 @@ export default function App() {
       eventTypeId: template.eventTypeId || prev.eventTypeId || "",
       style: template.style || prev.style,
       hours: Number(template.hours || prev.hours || 0),
+      servers: Number(template.servers ?? prev.servers ?? 0),
+      chefs: Number(template.chefs ?? prev.chefs ?? 0),
       bartenders: Number(template.bartenders ?? prev.bartenders ?? 0),
       pkg: template.pkg || prev.pkg,
       addons: templateAddons,
@@ -630,6 +679,14 @@ export default function App() {
         template.serverRateOverride === "" || template.serverRateOverride === null || template.serverRateOverride === undefined
           ? prev.serverRateOverride
           : Number(template.serverRateOverride),
+      serverRateMixCsv:
+        template.serverRateMixCsv === null || template.serverRateMixCsv === undefined
+          ? prev.serverRateMixCsv
+          : String(template.serverRateMixCsv || ""),
+      chefRateMixCsv:
+        template.chefRateMixCsv === null || template.chefRateMixCsv === undefined
+          ? prev.chefRateMixCsv
+          : String(template.chefRateMixCsv || ""),
       chefRateOverride:
         template.chefRateOverride === "" || template.chefRateOverride === null || template.chefRateOverride === undefined
           ? prev.chefRateOverride
@@ -704,6 +761,19 @@ export default function App() {
       return prev;
     });
   };
+
+  useEffect(() => {
+    if (!aiAutopilotEnabled) {
+      autopilotAppliedRef.current.clear();
+      return;
+    }
+    if (step !== 3) return;
+    if (!Array.isArray(recommendations) || recommendations.length === 0) return;
+    const nextRecommendation = recommendations.find((item) => !autopilotAppliedRef.current.has(item.key));
+    if (!nextRecommendation) return;
+    autopilotAppliedRef.current.add(nextRecommendation.key);
+    applyRecommendation(nextRecommendation);
+  }, [aiAutopilotEnabled, recommendations, step]);
 
   const handleNextStep = () => {
     if (catalog.loading) return;
@@ -1002,9 +1072,12 @@ export default function App() {
       eventName: event.name || "",
       clientOrg: customer.organization || "",
       style: event.style || prev.style,
+      servers: toNumber(event.servers, 0),
+      chefs: toNumber(event.chefs, 0),
       name: customer.name || "",
       phone: customer.phone || "",
       email: customer.email || "",
+      dietaryRestrictions: String(event.dietaryRestrictions || ""),
       pkg: selection.packageId || prev.pkg,
       addons: Array.isArray(selection.addons) ? selection.addons : [],
       addonQuantities,
@@ -1025,6 +1098,8 @@ export default function App() {
         selection.serverRateOverride !== "" && selection.serverRateOverride !== null && selection.serverRateOverride !== undefined
           ? toOptionalNumber(selection.serverRateOverride)
           : serverApplied,
+      serverRateMixCsv: String(selection.serverRateMixCsv || ""),
+      chefRateMixCsv: String(selection.chefRateMixCsv || ""),
       chefRateOverride:
         selection.chefRateOverride !== "" && selection.chefRateOverride !== null && selection.chefRateOverride !== undefined
           ? toOptionalNumber(selection.chefRateOverride)
@@ -1172,6 +1247,31 @@ export default function App() {
     window.history.replaceState({}, "", nextUrl);
   };
 
+  if (tenantContext.loading) {
+    return (
+      <main className="auth-shell container">
+        <section className="panel auth-card">
+          <h1>Loading Workspace</h1>
+          <p className="muted">Resolving tenant context for this host...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (tenantContext.blocked) {
+    return (
+      <main className="auth-shell container">
+        <section className="panel auth-card">
+          <h1>Tenant Not Found</h1>
+          <p className="muted">
+            Host <strong>{tenantContext.hostname || "unknown"}</strong> is not active or is not mapped to a tenant.
+          </p>
+          <p className="source-note">{tenantContext.error || "Contact support to provision this domain."}</p>
+        </section>
+      </main>
+    );
+  }
+
   if (portalMode && customerPortalEnabled) {
     return (
       <div className="app-shell" style={appThemeVars}>
@@ -1203,7 +1303,7 @@ export default function App() {
           <p className="muted">
             Signed in as {authSession.user.email}. Your account role is <strong>{authSession.role}</strong>.
           </p>
-          <p className="source-note">Ask an admin to set your role to `sales` or `admin` in `userRoles/{authSession.user.uid}`.</p>
+          <p className="source-note">Ask an admin to set your role to `sales` or `admin` and refresh claims for your account.</p>
           <div className="auth-actions">
             {customerPortalEnabled && <button type="button" className="ghost" onClick={openPortalMode}>Open Customer Portal</button>}
             <button type="button" className="cta" onClick={handleSignOut}>Sign Out</button>
@@ -1290,6 +1390,7 @@ export default function App() {
             <div className="hero-pills">
               <span>Signed in: {authSession.user.email}</span>
               <span>Role: {authSession.role}</span>
+              <span>Host: {tenantContext.hostname || "-"}</span>
               <span>Source: {catalog.source}</span>
             </div>
           </div>
@@ -1369,6 +1470,8 @@ export default function App() {
                 catalog={catalog}
                 recommendations={recommendations}
                 guidedSellingEnabled={effectiveSettings.guidedSellingEnabled !== false}
+                aiAssistEnabled={aiAssistEnabled}
+                aiAutopilotEnabled={aiAutopilotEnabled}
                 onApplyRecommendation={applyRecommendation}
                 onSelectionTouched={handleSelectionTouched}
               />
@@ -1506,6 +1609,7 @@ export default function App() {
           currentUserUid={authSession.user?.uid || ""}
           currentUserEmail={authSession.user?.email || ""}
           onEditQuote={handleEditQuote}
+          canDeleteQuotes={authSession.isAdmin}
           onToast={pushToast}
         />
 
@@ -1526,6 +1630,8 @@ export default function App() {
             organizationId={authSession.organizationId}
             settings={effectiveSettings}
             currentUserEmail={authSession.user?.email || ""}
+            currentUserUid={authSession.user?.uid || ""}
+            canProvisionCustomer={authSession.isAdmin}
           />
         )}
 

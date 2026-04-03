@@ -9,6 +9,7 @@ const mockState = vi.hoisted(() => ({
   getDocs: vi.fn(),
   query: vi.fn(),
   updateDoc: vi.fn(),
+  writeBatch: vi.fn(),
   where: vi.fn(),
   getActiveOrganizationId: vi.fn(),
   getOrganizationCollectionRef: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("firebase/firestore", () => ({
   getDocs: mockState.getDocs,
   query: mockState.query,
   updateDoc: mockState.updateDoc,
+  writeBatch: mockState.writeBatch,
   where: mockState.where
 }));
 
@@ -39,7 +41,7 @@ vi.mock("../organizationService", () => ({
   normalizeOrganizationId: mockState.normalizeOrganizationId
 }));
 
-import { createMenuItem, getEventTypes } from "../menuService";
+import { createEventType, createMenuItem, getEventTypes } from "../menuService";
 
 function normalizeLikeService(value) {
   return String(value || "")
@@ -57,7 +59,17 @@ describe("menuService write fallback behavior", () => {
     mockState.normalizeOrganizationId.mockImplementation((value) => normalizeLikeService(value));
     mockState.collection.mockImplementation((...args) => ({ refType: "legacy", args }));
     mockState.getOrganizationCollectionRef.mockImplementation((name, orgId) => ({ refType: "scoped", name, orgId }));
+    mockState.doc.mockImplementation((collectionRef, id) => ({
+      refType: "doc",
+      collectionRef,
+      id: id || "event-type-seeded"
+    }));
     mockState.addDoc.mockResolvedValue({ id: "menu-item-1" });
+    mockState.writeBatch.mockReturnValue({
+      set: vi.fn(),
+      delete: vi.fn(),
+      commit: vi.fn().mockResolvedValue(undefined)
+    });
   });
 
   test("createMenuItem throws when org context is missing, even if legacy fallback is enabled", async () => {
@@ -114,5 +126,27 @@ describe("menuService write fallback behavior", () => {
         name: "Smoked Ribs"
       })
     ).rejects.toThrow(/organizationId is required for createMenuItem/i);
+  });
+
+  test("createEventType seeds canonical categories and items atomically", async () => {
+    const batch = {
+      set: vi.fn(),
+      delete: vi.fn(),
+      commit: vi.fn().mockResolvedValue(undefined)
+    };
+    mockState.writeBatch.mockReturnValue(batch);
+
+    const created = await createEventType({
+      name: "New Event Type",
+      organizationId: "Org 123"
+    });
+
+    expect(created.id).toBe("event-type-seeded");
+    expect(created.seeded).toEqual({
+      categories: 10,
+      items: 93
+    });
+    expect(batch.set).toHaveBeenCalledTimes(104);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
   });
 });

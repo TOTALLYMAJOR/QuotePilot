@@ -163,6 +163,18 @@ function summarizeList(items, limit = 5) {
   return safeItems.length > limit ? `${preview}...` : preview;
 }
 
+function formatRateList(rates = [], limit = 8) {
+  const safeRates = Array.isArray(rates)
+    ? rates
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value >= 0)
+    : [];
+  if (!safeRates.length) return "-";
+  const labels = safeRates.map((rate) => currency(rate));
+  if (labels.length <= limit) return labels.join(", ");
+  return `${labels.slice(0, limit).join(", ")} (+${labels.length - limit} more)`;
+}
+
 function resolvePortalLink(quote, basePortalUrl = "") {
   const portalKey = String(quote?.portalKey || "").trim();
   if (!portalKey) return "";
@@ -294,6 +306,7 @@ export async function exportQuoteProposal(quote, {
   const right = pageWidth - 44;
   const maxWidth = right - left;
   const lineGap = 17;
+  const contentBottomPadding = 74;
   const palette = resolvePalette(meta);
   const portalLink = resolvePortalLink(quote, basePortalUrl);
   const showDisposablesNote = meta.includeDisposables !== false;
@@ -310,7 +323,7 @@ export async function exportQuoteProposal(quote, {
   });
 
   const ensureSpace = (needed = 24) => {
-    if (y + needed <= pageHeight - 48) return;
+    if (y + needed <= pageHeight - contentBottomPadding) return;
     doc.addPage();
     y = 64;
   };
@@ -393,6 +406,8 @@ export async function exportQuoteProposal(quote, {
   row("Venue Address", proposal.event.venueAddress || "-");
   row("Guests", proposal.event.guests);
   row("Service Style", proposal.event.style);
+  row("Staff Counts", `S ${proposal.event.servers || 0} / C ${proposal.event.chefs || 0} / B ${proposal.event.bartenders || 0}`);
+  row("Dietary Restrictions", proposal.event.dietaryRestrictions || "-");
 
   section("Selections");
   row("Package", proposal.selection.packageName || proposal.selection.packageId);
@@ -427,11 +442,40 @@ export async function exportQuoteProposal(quote, {
   countedAmountRow("Add-ons", proposal.selection.addons, proposal.totals.addons);
   countedAmountRow("Rentals", proposal.selection.rentals, proposal.totals.rentals);
 
-  const serverLabor = (proposal.totals.labor || 0) - (proposal.totals.bartenderLabor || 0);
-  row("  Server/Chef Labor", currency(serverLabor));
+  const hasCustomServerMix = String(proposal.selection.serverRateMixCsv || "").trim() !== ""
+    || (Array.isArray(proposal.totals.serverRatesApplied)
+      && proposal.totals.serverRatesApplied.some(
+        (rate) => Math.abs(Number(rate || 0) - Number(proposal.totals.serverRateApplied || 0)) >= 0.01
+      ));
+  const hasCustomChefMix = String(proposal.selection.chefRateMixCsv || "").trim() !== ""
+    || (Array.isArray(proposal.totals.chefRatesApplied)
+      && proposal.totals.chefRatesApplied.some(
+        (rate) => Math.abs(Number(rate || 0) - Number(proposal.totals.chefRateApplied || 0)) >= 0.01
+      ));
+  if (hasCustomServerMix) {
+    row("  Server Rates (Applied)", formatRateList(proposal.totals.serverRatesApplied));
+  }
+  if (hasCustomChefMix) {
+    row("  Chef Rates (Applied)", formatRateList(proposal.totals.chefRatesApplied));
+  }
+  const laborTotal = Number(proposal.totals.labor || 0);
+  const bartenderLaborTotal = Number(proposal.totals.bartenderLabor || 0);
+  const hasServerLabor = proposal.totals.serverLabor !== undefined && proposal.totals.serverLabor !== null;
+  const hasChefLabor = proposal.totals.chefLabor !== undefined && proposal.totals.chefLabor !== null;
+  const staffingLaborTotal = laborTotal - bartenderLaborTotal;
+  const parsedServerLabor = Number(proposal.totals.serverLabor);
+  const serverLabor = hasServerLabor && Number.isFinite(parsedServerLabor)
+    ? parsedServerLabor
+    : staffingLaborTotal;
+  const parsedChefLabor = Number(proposal.totals.chefLabor);
+  const chefLabor = hasChefLabor && Number.isFinite(parsedChefLabor)
+    ? parsedChefLabor
+    : (hasServerLabor ? staffingLaborTotal - serverLabor : 0);
+  row("  Server Labor", currency(serverLabor));
+  row("  Chef Labor", currency(chefLabor));
   row("  Bartender Labor", currency(proposal.totals.bartenderLabor || 0));
 
-  const laborSubtotal = serverLabor + (proposal.totals.bartenderLabor || 0);
+  const laborSubtotal = serverLabor + chefLabor + (proposal.totals.bartenderLabor || 0);
   subtotalRow("Labor Subtotal", laborSubtotal);
 
   row("Travel/Mileage", currency(proposal.totals.travel || 0));

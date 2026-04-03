@@ -133,6 +133,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Executed production migration for org `250` with evidence capture:
   - Apply log/json (`.cache/migration-runs/20260328T001919Z--tonicatering--250--apply.log`, `.cache/migration-runs/20260328T001919Z--tonicatering--250--apply.json`)
   - Totals: `source=496`, `created=1`, `patched=0`
+- Simplified quote staffing to direct manual role controls in Event Basics (servers, chefs, bartenders) with clear default-vs-override labeling in admin pricing settings and live count visibility in the quote breakdown.
+- Added per-role mixed-rate CSV support for servers and chefs (`serverRateMixCsv`, `chefRateMixCsv`) so labor can apply different rates per staff member in live totals and proposal payload/PDF output.
+- Added quote-level dietary restrictions and editable kitchen checkpoint overrides with schedule persistence (`booking.kitchenCheckpoints`) and schedule card rendering support.
+- Added canonical menu template enforcement utilities (`src/data/canonicalMenuTemplate.js`, `src/lib/menuCanonicalSync.js`) and admin menu flows that keep event-type menus synchronized to the same canonical dataset.
+- Replaced quote-history soft-delete operator behavior with admin callable hard-delete flow (`hardDeleteQuote`) plus org-scoped purge support for previously soft-deleted quotes (`purgeDeletedQuotesForOrganization`).
 
 ## [2026-03-10]
 

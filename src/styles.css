@@ -1048,6 +1048,16 @@ thead th {
   gap: 0.34rem;
 }
 
+.breakdown-staff-meta {
+  margin: 0.55rem 0 0;
+  color: #5b472b;
+  font-size: 0.8rem;
+}
+
+.breakdown-staff-meta strong {
+  color: #423119;
+}
+
 .breakdown-money-row {
   border-radius: 10px;
   display: flex;
@@ -1295,6 +1305,18 @@ hr {
   align-items: center;
 }
 
+.admin-row-headings {
+  margin-top: 0.12rem;
+}
+
+.admin-row-headings span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6a5436;
+  font-weight: 700;
+}
+
 .admin-menu-section {
   border: 1px solid #e2c995;
   border-radius: 12px;
@@ -1365,6 +1387,12 @@ hr {
   gap: 0.3rem;
   font-size: 0.82rem;
   color: var(--tone-ink-3);
+}
+
+.admin-field-hint {
+  font-size: 0.72rem;
+  color: #6b5538;
+  font-weight: 400;
 }
 
 .rule-config-list {
@@ -1605,6 +1633,19 @@ hr {
 
 .integration-message-field {
   grid-column: 1 / -1;
+}
+
+.provisioning-send-email {
+  grid-column: 1 / -1;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4f3c23;
+  font-size: 0.82rem;
+}
+
+.provisioning-send-email input[type="checkbox"] {
+  width: auto;
 }
 
 .integration-filters {
@@ -1978,22 +2019,39 @@ hr {
 }
 
 .schedule-checkpoint-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.34rem;
+  gap: 0.3rem;
   font-size: 0.7rem;
   color: #5e4728;
 }
 
-.schedule-checkpoint-item span {
-  color: #594426;
+.schedule-checkpoint-item input[type="text"],
+.schedule-checkpoint-item input[type="time"] {
+  width: 100%;
+  margin: 0;
+  padding: 0.25rem 0.32rem;
+  border: 1px solid #d9bc8a;
+  border-radius: 8px;
+  background: #fffaf0;
+  font-size: 0.69rem;
+  color: #45331a;
 }
 
 .schedule-checkpoint-item em {
   font-style: normal;
   color: #3e2f18;
   font-weight: 600;
+  text-align: right;
+  font-size: 0.67rem;
+}
+
+.schedule-checkpoint-actions {
+  margin-top: 0.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
 }
 
 .schedule-checkpoint-hint {
@@ -2334,6 +2392,14 @@ hr {
 
   .schedule-month-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .schedule-checkpoint-item {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-checkpoint-item em {
+    text-align: left;
   }
 
   .quote-sheet-meta,

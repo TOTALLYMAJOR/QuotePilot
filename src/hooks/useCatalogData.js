@@ -50,6 +50,12 @@ function normalizePricingType(value) {
   return "per_event";
 }
 
+function normalizeAddonStaffRole(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "server" || raw === "chef" || raw === "bartender") return raw;
+  return "";
+}
+
 function normalizeMenuSectionsFromEvent(categories = [], items = []) {
   const itemLookup = new Map();
   items.forEach((item) => {
@@ -170,11 +176,13 @@ async function saveToFirebase(catalog, organizationId = "") {
   });
   catalog.addons.forEach((item) => {
     const pricingType = normalizePricingType(item.pricingType || item.type || "per_person");
+    const staffRole = normalizeAddonStaffRole(item.staffRole);
     batch.set(doc(addonCollection, item.id), {
       name: item.name,
       pricingType,
       type: pricingType,
       price: Number(item.price || 0),
+      staffRole,
       active: item.active !== false
     });
   });

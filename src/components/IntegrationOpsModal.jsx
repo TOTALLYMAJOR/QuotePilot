@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { getIntegrationSetupStatus, sendIntegrationTestSms } from "../lib/commerceOps";
+import {
+  archiveOrganizationWorkspace,
+  deleteOrganizationWorkspace,
+  provisionCustomerOrder
+} from "../lib/organizationService";
 import { currency } from "../lib/quoteCalculator";
-import { getQuoteHistory, recordQuoteIntegrationSync, syncQuoteToCrm } from "../lib/quoteStore";
+import {
+  getQuoteHistory,
+  purgeDeletedQuotesForOrganization,
+  recordQuoteIntegrationSync,
+  syncQuoteToCrm
+} from "../lib/quoteStore";
 
 const PROVIDERS = ["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"];
 const STATES = ["queued", "success", "error", "retrying", "skipped"];
 const DIRECTIONS = ["push", "pull"];
+const PROVISION_PLANS = ["starter", "growth", "enterprise"];
 
 function toIso(value) {
   const date = new Date(value || "");
@@ -42,6 +53,36 @@ function getWindowBaseUrl() {
 function formatMissingFields(fields) {
   if (!Array.isArray(fields) || fields.length === 0) return "none";
   return fields.join(", ");
+}
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeOrganizationSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function buildArchiveToken(organizationId = "") {
+  const id = normalizeOrganizationSlug(organizationId);
+  return id ? `ARCHIVE ${id}` : "";
+}
+
+function buildDeleteToken(organizationId = "") {
+  const id = normalizeOrganizationSlug(organizationId);
+  return id ? `DELETE ${id}` : "";
+}
+
+function describeProvisionEmailStatus(email = {}) {
+  if (email?.sent) return "sent";
+  if (email?.reason === "send_email_disabled") return "disabled";
+  if (email?.error) return "failed";
+  return "not sent";
 }
 
 function describeSmsOutcome(sms) {
@@ -93,7 +134,9 @@ export default function IntegrationOpsModal({
   onClose,
   organizationId = "",
   settings = {},
-  currentUserEmail = ""
+  currentUserEmail = "",
+  currentUserUid = "",
+  canProvisionCustomer = false
 }) {
   const defaultProvider = toProvider(settings.crmProvider || "crm");
   const [state, setState] = useState({
@@ -120,6 +163,34 @@ export default function IntegrationOpsModal({
     appBaseUrl: getWindowBaseUrl(),
     twilioFromNumber: "",
     ownerPhone: ""
+  });
+  const [provisionState, setProvisionState] = useState({
+    loading: false,
+    error: "",
+    result: null
+  });
+  const [provisionForm, setProvisionForm] = useState({
+    organizationName: "",
+    organizationId: "",
+    ownerEmail: normalizeEmail(currentUserEmail),
+    ownerName: "",
+    ownerUid: String(currentUserUid || "").trim(),
+    plan: "growth",
+    orderId: "",
+    supportEmail: "",
+    appUrl: getWindowBaseUrl(),
+    sendEmail: false
+  });
+  const [cleanupState, setCleanupState] = useState({
+    loading: false,
+    error: "",
+    result: null
+  });
+  const [purgingDeletedQuotes, setPurgingDeletedQuotes] = useState(false);
+  const [cleanupForm, setCleanupForm] = useState({
+    organizationId: normalizeOrganizationSlug(organizationId),
+    archiveToken: "",
+    deleteToken: ""
   });
   const [form, setForm] = useState({
     quoteId: "",
@@ -210,6 +281,249 @@ export default function IntegrationOpsModal({
     }
   };
 
+  const handleProvisionCustomer = async () => {
+    if (!canProvisionCustomer) {
+      setProvisionState((prev) => ({ ...prev, error: "Admin role is required for customer provisioning." }));
+      return;
+    }
+
+    const organizationName = String(provisionForm.organizationName || "").trim();
+    const ownerEmail = normalizeEmail(provisionForm.ownerEmail || currentUserEmail);
+    const ownerUid = String(provisionForm.ownerUid || currentUserUid || "").trim();
+    if (!organizationName || !ownerEmail) {
+      setProvisionState((prev) => ({ ...prev, error: "Organization name and owner email are required." }));
+      return;
+    }
+
+    const payload = {
+      organizationName,
+      ownerEmail,
+      ownerName: String(provisionForm.ownerName || "").trim(),
+      ownerUid,
+      plan: String(provisionForm.plan || "growth").trim().toLowerCase(),
+      orderId: String(provisionForm.orderId || "").trim(),
+      supportEmail: normalizeEmail(provisionForm.supportEmail),
+      appUrl: String(provisionForm.appUrl || "").trim() || getWindowBaseUrl(),
+      sendEmail: Boolean(provisionForm.sendEmail)
+    };
+    const organizationSlug = normalizeOrganizationSlug(provisionForm.organizationId);
+    if (organizationSlug) {
+      payload.organizationId = organizationSlug;
+    }
+
+    const confirmed = window.confirm(
+      `Provision ${organizationName} for ${ownerEmail}? This writes org settings, invite/role access, and a provisioning order record.`
+    );
+    if (!confirmed) return;
+
+    setProvisionState({ loading: true, error: "", result: null });
+    setFeedback("");
+    setState((prev) => ({ ...prev, error: "" }));
+    try {
+      const result = await provisionCustomerOrder(payload);
+      if (!result?.ok) {
+        throw new Error("Provisioning failed.");
+      }
+      setProvisionState({
+        loading: false,
+        error: "",
+        result
+      });
+      setProvisionForm((prev) => ({
+        ...prev,
+        organizationId: String(result.organizationId || prev.organizationId || ""),
+        ownerEmail,
+        ownerUid: ownerUid || prev.ownerUid,
+        organizationName
+      }));
+      setFeedback(`Provisioned ${result.organizationName || organizationName} (${result.organizationId || "n/a"}).`);
+    } catch (err) {
+      setProvisionState({
+        loading: false,
+        error: err?.message || "Failed to provision customer order.",
+        result: null
+      });
+    }
+  };
+
+  const handleArchiveOrganization = async () => {
+    if (!canProvisionCustomer) {
+      setCleanupState((prev) => ({ ...prev, error: "Admin role is required for organization cleanup." }));
+      return;
+    }
+
+    const targetOrganizationId = normalizeOrganizationSlug(cleanupForm.organizationId);
+    const confirmation = String(cleanupForm.archiveToken || "").trim();
+    if (!targetOrganizationId) {
+      setCleanupState((prev) => ({ ...prev, error: "Target organization id is required." }));
+      return;
+    }
+    if (!confirmation) {
+      setCleanupState((prev) => ({ ...prev, error: `Enter confirmation token: ${buildArchiveToken(targetOrganizationId)}` }));
+      return;
+    }
+
+    const expectedToken = buildArchiveToken(targetOrganizationId);
+    if (confirmation !== expectedToken) {
+      setCleanupState((prev) => ({ ...prev, error: `Archive token mismatch. Use exactly: ${expectedToken}` }));
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Archive organization "${targetOrganizationId}"? This disables tenant host mappings and marks the org archived.`
+    );
+    if (!confirmed) return;
+
+    setCleanupState({ loading: true, error: "", result: null });
+    setFeedback("");
+    try {
+      const result = await archiveOrganizationWorkspace({
+        organizationId: targetOrganizationId,
+        confirmationToken: confirmation
+      });
+      if (!result?.ok) {
+        throw new Error("Archive operation failed.");
+      }
+      setCleanupState({
+        loading: false,
+        error: "",
+        result: {
+          ...result,
+          action: "archive"
+        }
+      });
+      setCleanupForm((prev) => ({
+        ...prev,
+        organizationId: targetOrganizationId,
+        archiveToken: "",
+        deleteToken: prev.deleteToken || buildDeleteToken(targetOrganizationId)
+      }));
+      setFeedback(`Archived organization ${targetOrganizationId}.`);
+    } catch (err) {
+      setCleanupState({
+        loading: false,
+        error: err?.message || "Failed to archive organization.",
+        result: null
+      });
+    }
+  };
+
+  const handleDeleteOrganization = async () => {
+    if (!canProvisionCustomer) {
+      setCleanupState((prev) => ({ ...prev, error: "Admin role is required for organization cleanup." }));
+      return;
+    }
+
+    const targetOrganizationId = normalizeOrganizationSlug(cleanupForm.organizationId);
+    const confirmation = String(cleanupForm.deleteToken || "").trim();
+    if (!targetOrganizationId) {
+      setCleanupState((prev) => ({ ...prev, error: "Target organization id is required." }));
+      return;
+    }
+    if (!confirmation) {
+      setCleanupState((prev) => ({ ...prev, error: `Enter confirmation token: ${buildDeleteToken(targetOrganizationId)}` }));
+      return;
+    }
+
+    const expectedToken = buildDeleteToken(targetOrganizationId);
+    if (confirmation !== expectedToken) {
+      setCleanupState((prev) => ({ ...prev, error: `Delete token mismatch. Use exactly: ${expectedToken}` }));
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Hard delete organization "${targetOrganizationId}"? This permanently deletes org data and cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setCleanupState({ loading: true, error: "", result: null });
+    setFeedback("");
+    try {
+      const result = await deleteOrganizationWorkspace({
+        organizationId: targetOrganizationId,
+        confirmationToken: confirmation
+      });
+      if (!result?.ok) {
+        throw new Error("Delete operation failed.");
+      }
+      setCleanupState({
+        loading: false,
+        error: "",
+        result: {
+          ...result,
+          action: "delete"
+        }
+      });
+      setCleanupForm((prev) => ({
+        ...prev,
+        organizationId: targetOrganizationId,
+        archiveToken: "",
+        deleteToken: ""
+      }));
+      setFeedback(`Deleted organization ${targetOrganizationId}.`);
+    } catch (err) {
+      setCleanupState({
+        loading: false,
+        error: err?.message || "Failed to delete organization.",
+        result: null
+      });
+    }
+  };
+
+  const handlePurgeDeletedQuotes = async () => {
+    if (!canProvisionCustomer) {
+      setCleanupState((prev) => ({ ...prev, error: "Admin role is required for quote cleanup." }));
+      return;
+    }
+
+    const targetOrganizationId = normalizeOrganizationSlug(cleanupForm.organizationId);
+    if (!targetOrganizationId) {
+      setCleanupState((prev) => ({ ...prev, error: "Target organization id is required." }));
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Permanently purge legacy deleted quotes for "${targetOrganizationId}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setPurgingDeletedQuotes(true);
+    setCleanupState((prev) => ({ ...prev, error: "" }));
+    setFeedback("");
+    try {
+      const result = await purgeDeletedQuotesForOrganization({
+        organizationId: targetOrganizationId,
+        limit: 300
+      });
+      if (!result?.ok) {
+        throw new Error("Purge operation failed.");
+      }
+      const deletedQuotes = Math.max(0, Number(result.deletedQuotes || 0));
+      const hasMore = result.hasMore === true;
+      setCleanupState((prev) => ({
+        ...prev,
+        result: {
+          ...(result || {}),
+          action: "purge-deleted-quotes"
+        }
+      }));
+      setFeedback(
+        hasMore
+          ? `Purged ${deletedQuotes} deleted quote(s). More may remain; run purge again.`
+          : `Purged ${deletedQuotes} deleted quote(s).`
+      );
+      await load();
+    } catch (err) {
+      setCleanupState((prev) => ({
+        ...prev,
+        error: err?.message || "Failed to purge deleted quotes.",
+        result: null
+      }));
+    } finally {
+      setPurgingDeletedQuotes(false);
+    }
+  };
+
   useEffect(() => {
     if (!open) return;
     setFeedback("");
@@ -220,7 +534,32 @@ export default function IntegrationOpsModal({
       ...prev,
       appBaseUrl: prev.appBaseUrl || getWindowBaseUrl()
     }));
-  }, [open, organizationId, settings.crmProvider]);
+    setProvisionState({
+      loading: false,
+      error: "",
+      result: null
+    });
+    setProvisionForm((prev) => ({
+      ...prev,
+      ownerEmail: prev.ownerEmail || normalizeEmail(currentUserEmail),
+      ownerUid: prev.ownerUid || String(currentUserUid || "").trim(),
+      appUrl: prev.appUrl || getWindowBaseUrl()
+    }));
+    setCleanupState({
+      loading: false,
+      error: "",
+      result: null
+    });
+    setPurgingDeletedQuotes(false);
+    setCleanupForm((prev) => {
+      const targetOrganizationId = normalizeOrganizationSlug(prev.organizationId || organizationId);
+      return {
+        organizationId: targetOrganizationId,
+        archiveToken: prev.archiveToken,
+        deleteToken: prev.deleteToken
+      };
+    });
+  }, [open, organizationId, settings.crmProvider, currentUserEmail, currentUserUid]);
 
   const activityRows = useMemo(() => flattenLogs(state.quotes), [state.quotes]);
 
@@ -264,6 +603,8 @@ export default function IntegrationOpsModal({
   const stripeStatus = integrationStatus.stripe || {};
   const twilioMissingFields = Array.isArray(twilioStatus.missingFields) ? twilioStatus.missingFields : [];
   const stripeMissingFields = Array.isArray(stripeStatus.missingFields) ? stripeStatus.missingFields : [];
+  const provisioningResult = provisionState.result || {};
+  const provisioningEmailStatus = describeProvisionEmailStatus(provisioningResult.email);
 
   const setupCommand = useMemo(() => {
     const appBaseUrl = setupForm.appBaseUrl.trim() || "https://your-live-domain.example";
@@ -487,6 +828,270 @@ export default function IntegrationOpsModal({
               {setupState.testing ? "Sending Test..." : "Send Test SMS"}
             </button>
           </div>
+        </section>
+
+        <section className="admin-section">
+          <div className="admin-section-head">
+            <h3>Customer Provisioning (Admin)</h3>
+          </div>
+          <p className="source-note">
+            Create or update customer organizations directly in-app with order-based module entitlements.
+          </p>
+          {!canProvisionCustomer && (
+            <p className="warning-note">Provisioning controls are restricted to admin users.</p>
+          )}
+          {canProvisionCustomer && (
+            <>
+              <div className="right-actions">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() =>
+                    setProvisionForm((prev) => ({
+                      ...prev,
+                      ownerEmail: normalizeEmail(currentUserEmail),
+                      ownerUid: String(currentUserUid || "").trim()
+                    }))}
+                >
+                  Use My Account
+                </button>
+              </div>
+              <p className="source-note">
+                Signed-in account: <strong>{normalizeEmail(currentUserEmail) || "-"}</strong> • UID:{" "}
+                <strong>{String(currentUserUid || "").trim() || "-"}</strong>
+              </p>
+              {provisionState.error && <p className="error-note">{provisionState.error}</p>}
+              <div className="admin-grid-settings integration-form-grid">
+                <label>
+                  Organization name
+                  <input
+                    type="text"
+                    placeholder="Acme Events"
+                    value={provisionForm.organizationName}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, organizationName: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Organization id (optional)
+                  <input
+                    type="text"
+                    placeholder="acme-events"
+                    value={provisionForm.organizationId}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, organizationId: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Plan
+                  <select
+                    value={provisionForm.plan}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, plan: event.target.value }))}
+                  >
+                    {PROVISION_PLANS.map((plan) => (
+                      <option key={plan} value={plan}>{plan}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Owner email (defaults to signed-in account)
+                  <input
+                    type="email"
+                    placeholder="owner@example.com"
+                    value={provisionForm.ownerEmail}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, ownerEmail: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Owner name (optional)
+                  <input
+                    type="text"
+                    placeholder="Avery Owner"
+                    value={provisionForm.ownerName}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, ownerName: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Owner UID (recommended)
+                  <input
+                    type="text"
+                    placeholder="firebase-auth-uid"
+                    value={provisionForm.ownerUid}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, ownerUid: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Order id (optional)
+                  <input
+                    type="text"
+                    placeholder="acme-order-2026-001"
+                    value={provisionForm.orderId}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, orderId: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Support email (optional)
+                  <input
+                    type="email"
+                    placeholder="support@example.com"
+                    value={provisionForm.supportEmail}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, supportEmail: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  App URL
+                  <input
+                    type="url"
+                    placeholder="https://your-live-domain.example"
+                    value={provisionForm.appUrl}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, appUrl: event.target.value }))}
+                  />
+                </label>
+                <label className="provisioning-send-email">
+                  <input
+                    type="checkbox"
+                    checked={provisionForm.sendEmail}
+                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, sendEmail: event.target.checked }))}
+                  />
+                  Send onboarding email now
+                </label>
+              </div>
+              <div className="right-actions">
+                <button
+                  type="button"
+                  className="cta"
+                  onClick={handleProvisionCustomer}
+                  disabled={provisionState.loading}
+                >
+                  {provisionState.loading ? "Provisioning..." : "Provision Customer"}
+                </button>
+              </div>
+              {provisioningResult.ok && (
+                <>
+                  <div className="status-strip">
+                    <span>Organization: <strong>{provisioningResult.organizationId || "-"}</strong></span>
+                    <span>Order: <strong>{provisioningResult.orderId || "-"}</strong></span>
+                    <span>Plan: <strong>{provisioningResult.plan || "-"}</strong></span>
+                    <span>Email: <strong>{provisioningEmailStatus}</strong></span>
+                  </div>
+                  {provisioningResult?.email?.error && (
+                    <p className="warning-note">Onboarding email error: {provisioningResult.email.error}</p>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </section>
+
+        <section className="admin-section">
+          <div className="admin-section-head">
+            <h3>Organization Cleanup (Admin)</h3>
+          </div>
+          <p className="warning-note">
+            Use archive first. Hard delete is permanent and removes the organization workspace data.
+          </p>
+          {!canProvisionCustomer && (
+            <p className="warning-note">Cleanup controls are restricted to admin users.</p>
+          )}
+          {canProvisionCustomer && (
+            <>
+              {cleanupState.error && <p className="error-note">{cleanupState.error}</p>}
+              <div className="admin-grid-settings integration-form-grid">
+                <label>
+                  Target organization id
+                  <input
+                    type="text"
+                    placeholder="queentrinis"
+                    value={cleanupForm.organizationId}
+                    onChange={(event) =>
+                      setCleanupForm((prev) => ({
+                        ...prev,
+                        organizationId: event.target.value
+                      }))}
+                  />
+                </label>
+                <label>
+                  Archive token
+                  <input
+                    type="text"
+                    placeholder={`ARCHIVE ${normalizeOrganizationSlug(cleanupForm.organizationId) || "<org-id>"}`}
+                    value={cleanupForm.archiveToken}
+                    onChange={(event) =>
+                      setCleanupForm((prev) => ({
+                        ...prev,
+                        archiveToken: event.target.value
+                      }))}
+                  />
+                </label>
+                <label>
+                  Delete token
+                  <input
+                    type="text"
+                    placeholder={`DELETE ${normalizeOrganizationSlug(cleanupForm.organizationId) || "<org-id>"}`}
+                    value={cleanupForm.deleteToken}
+                    onChange={(event) =>
+                      setCleanupForm((prev) => ({
+                        ...prev,
+                        deleteToken: event.target.value
+                      }))}
+                  />
+                </label>
+              </div>
+              <div className="right-actions">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() =>
+                    setCleanupForm((prev) => ({
+                      ...prev,
+                      archiveToken: buildArchiveToken(prev.organizationId)
+                    }))}
+                >
+                  Fill Archive Token
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() =>
+                    setCleanupForm((prev) => ({
+                      ...prev,
+                      deleteToken: buildDeleteToken(prev.organizationId)
+                    }))}
+                >
+                  Fill Delete Token
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={handlePurgeDeletedQuotes}
+                  disabled={cleanupState.loading || purgingDeletedQuotes}
+                >
+                  {purgingDeletedQuotes ? "Purging..." : "Purge Deleted Quotes"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={handleArchiveOrganization}
+                  disabled={cleanupState.loading}
+                >
+                  {cleanupState.loading ? "Working..." : "Archive Organization"}
+                </button>
+                <button
+                  type="button"
+                  className="cta"
+                  onClick={handleDeleteOrganization}
+                  disabled={cleanupState.loading}
+                >
+                  {cleanupState.loading ? "Working..." : "Hard Delete Organization"}
+                </button>
+              </div>
+              {cleanupState.result?.ok && (
+                <div className="status-strip">
+                  <span>Action: <strong>{cleanupState.result.action || "-"}</strong></span>
+                  <span>Organization: <strong>{cleanupState.result.organizationId || "-"}</strong></span>
+                  <span>Timestamp: <strong>{cleanupState.result.completedAtISO || "-"}</strong></span>
+                </div>
+              )}
+            </>
+          )}
         </section>
 
         <section className="admin-section">

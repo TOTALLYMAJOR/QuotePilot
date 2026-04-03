@@ -14,6 +14,7 @@ const db = admin.firestore();
 const REGION = "us-central1";
 const ROLES_COLLECTION = "userRoles";
 const ORGANIZATIONS_COLLECTION = "organizations";
+const TENANT_DOMAINS_COLLECTION = "tenantDomains";
 const STAFF_ROLES = new Set(["admin", "sales"]);
 const ROLE_VALUES = new Set(["admin", "sales", "customer"]);
 const INVITES_COLLECTION = "organizationInvites";
@@ -25,6 +26,15 @@ const EMAIL_PROVIDERS = new Set(["resend", "none"]);
 const QUOTES_COLLECTION = "quotes";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
+const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
+let cachedFunctionsConfig = undefined;
+let functionsConfigErrorLogged = false;
+const CLAIMS_VERSION = 1;
+const AUTH_CLAIMS_MODE = normalizeText(readConfig("auth.claims_mode", "dual")).toLowerCase() || "dual";
+const RESERVED_SUBDOMAINS = new Set(["www", "app", "api", "admin"]);
+const UNKNOWN_HOST_WINDOW_MS = Math.max(1_000, Number(readConfig("security.unknown_host_window_ms", "300000")) || 300000);
+const UNKNOWN_HOST_LIMIT = Math.max(1, Number(readConfig("security.unknown_host_limit", "20")) || 20);
+const unknownHostCounter = new Map();
 const FEATURE_FLAG_KEYS = [
   "customerPortal",
   "eventSchedule",
@@ -33,7 +43,9 @@ const FEATURE_FLAG_KEYS = [
   "reportingDashboard",
   "quoteCompare",
   "crmSync",
-  "guidedSelling"
+  "guidedSelling",
+  "aiAssist",
+  "aiAutopilot"
 ];
 const FEATURE_FLAG_LABELS = {
   customerPortal: "Customer Portal",
@@ -43,11 +55,13 @@ const FEATURE_FLAG_LABELS = {
   reportingDashboard: "Reporting Dashboard",
   quoteCompare: "Quote Compare",
   crmSync: "CRM Sync",
-  guidedSelling: "Guided Selling"
+  guidedSelling: "Guided Selling",
+  aiAssist: "AI Assist (Suggestions)",
+  aiAutopilot: "AI Autopilot (Auto Apply)"
 };
 const FEATURE_PLAN_PRESETS = {
-  starter: ["customerPortal", "eventSchedule", "guidedSelling"],
-  growth: ["customerPortal", "eventSchedule", "guidedSelling", "quoteCompare", "reportingDashboard"],
+  starter: ["customerPortal", "eventSchedule", "guidedSelling", "aiAssist"],
+  growth: ["customerPortal", "eventSchedule", "guidedSelling", "quoteCompare", "reportingDashboard", "aiAssist"],
   enterprise: [...FEATURE_FLAG_KEYS]
 };
 const NEUTRAL_CATALOG_SKELETON = {
@@ -63,9 +77,6 @@ const NEUTRAL_CATALOG_SKELETON = {
     { id: "custom-rental", name: "Custom Rental", pricingType: "per_item", type: "per_item", price: 0, qtyPerGuests: 10, active: true }
   ]
 };
-
-let cachedFunctionsConfig = undefined;
-let functionsConfigErrorLogged = false;
 
 function getFunctionsConfigSnapshot() {
   if (cachedFunctionsConfig !== undefined) {
@@ -140,6 +151,97 @@ function normalizeOrganizationId(value) {
     .replace(/[^\w-]+/g, "-")
     .replace(/-{2,}/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function normalizeHostname(value) {
+  const raw = normalizeText(value).toLowerCase();
+  if (!raw) return "";
+  return raw
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "")
+    .replace(/:\d+$/, "")
+    .replace(/\.+$/, "");
+}
+
+function getBaseDomain() {
+  const fromConfig = normalizeHostname(readConfig("app.base_domain", "mbmapps.com"));
+  return fromConfig || "mbmapps.com";
+}
+
+function getHostType(hostname = "") {
+  const normalizedHost = normalizeHostname(hostname);
+  if (!normalizedHost) return "unknown";
+  if (normalizedHost === "localhost" || normalizedHost.endsWith(".localhost")) return "local";
+  if (normalizedHost === "127.0.0.1" || normalizedHost === "::1") return "local";
+  if (normalizedHost.endsWith(".web.app") || normalizedHost.endsWith(".firebaseapp.com")) return "app";
+
+  const baseDomain = getBaseDomain();
+  if (normalizedHost === baseDomain || normalizedHost === `www.${baseDomain}`) {
+    return "marketing";
+  }
+  if (normalizedHost === `app.${baseDomain}`) {
+    return "app";
+  }
+  if (normalizedHost.endsWith(`.${baseDomain}`)) {
+    const label = normalizedHost.slice(0, -1 * (`.${baseDomain}`.length)).split(".")[0];
+    if (RESERVED_SUBDOMAINS.has(label)) {
+      return "reserved";
+    }
+    return "tenant";
+  }
+  return "unknown";
+}
+
+function getRequestHostnameFromContext(context) {
+  const rawRequest = context?.rawRequest;
+  const originHost = normalizeHostname(rawRequest?.headers?.origin || rawRequest?.headers?.referer || "");
+  if (originHost) return originHost;
+  const forwardedHost = normalizeHostname(rawRequest?.headers?.["x-forwarded-host"] || "");
+  if (forwardedHost) return forwardedHost;
+  return normalizeHostname(rawRequest?.hostname || rawRequest?.headers?.host || "");
+}
+
+function getRequestHostnameFromHttp(req) {
+  return normalizeHostname(req?.hostname || req?.headers?.host || "");
+}
+
+function getRequestIp(context) {
+  const rawRequest = context?.rawRequest;
+  return normalizeText(
+    rawRequest?.headers?.["x-forwarded-for"]
+      || rawRequest?.ip
+      || rawRequest?.socket?.remoteAddress
+      || ""
+  ).split(",")[0].trim();
+}
+
+function getRequestIpFromHttp(req) {
+  return normalizeText(
+    req?.headers?.["x-forwarded-for"]
+      || req?.ip
+      || req?.socket?.remoteAddress
+      || ""
+  ).split(",")[0].trim();
+}
+
+function recordUnknownHostAttempt({ host = "", ip = "" } = {}) {
+  const normalizedHost = normalizeHostname(host);
+  const normalizedIp = normalizeText(ip);
+  if (!normalizedHost) return { blocked: false, count: 0 };
+
+  const key = `${normalizedIp}::${normalizedHost}`;
+  const now = Date.now();
+  const current = unknownHostCounter.get(key);
+  const inWindow = current && current.expiresAt > now;
+  const nextCount = inWindow ? current.count + 1 : 1;
+  const expiresAt = inWindow ? current.expiresAt : now + UNKNOWN_HOST_WINDOW_MS;
+  unknownHostCounter.set(key, { count: nextCount, expiresAt });
+
+  return {
+    blocked: nextCount > UNKNOWN_HOST_LIMIT,
+    count: nextCount,
+    expiresAt
+  };
 }
 
 function slugify(value, fallback = "organization") {
@@ -266,6 +368,9 @@ function resolveFeatureEntitlements(data = {}) {
     disableFeatures.forEach((key) => {
       featureFlags[key] = false;
     });
+  }
+  if (!featureFlags.aiAssist) {
+    featureFlags.aiAutopilot = false;
   }
 
   const paidFeatureIds = FEATURE_FLAG_KEYS.filter((key) => featureFlags[key]);
@@ -567,6 +672,87 @@ function parseUrlOrThrow(raw, fieldName) {
   }
 }
 
+function buildCleanupConfirmationToken(action = "", organizationId = "") {
+  const normalizedAction = normalizeText(action).toUpperCase();
+  const normalizedOrgId = normalizeOrganizationId(organizationId);
+  if (!normalizedAction || !normalizedOrgId) return "";
+  return `${normalizedAction} ${normalizedOrgId}`;
+}
+
+function assertCleanupConfirmation({
+  action = "",
+  organizationId = "",
+  confirmationToken = ""
+} = {}) {
+  const normalizedAction = normalizeText(action).toLowerCase();
+  const normalizedOrgId = normalizeOrganizationId(organizationId);
+  const expectedToken = buildCleanupConfirmationToken(normalizedAction, normalizedOrgId);
+  const providedToken = normalizeText(confirmationToken);
+
+  if (!normalizedAction || !normalizedOrgId) {
+    throw new functions.https.HttpsError("invalid-argument", "action and organizationId are required.");
+  }
+  if (!providedToken) {
+    throw new functions.https.HttpsError("invalid-argument", `confirmationToken is required. Expected: ${expectedToken}`);
+  }
+  if (providedToken !== expectedToken) {
+    throw new functions.https.HttpsError("invalid-argument", `confirmationToken mismatch. Expected: ${expectedToken}`);
+  }
+}
+
+async function updateTenantDomainMappingsForOrganization({
+  organizationId = "",
+  mode = "archive",
+  actorUid = "",
+  actorEmail = "",
+  nowISO = ""
+} = {}) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  if (!normalizedOrganizationId) return 0;
+
+  const snapshot = await db.collection(TENANT_DOMAINS_COLLECTION)
+    .where("organizationId", "==", normalizedOrganizationId)
+    .get();
+
+  if (snapshot.empty) return 0;
+
+  let batch = db.batch();
+  let batchWrites = 0;
+  let total = 0;
+
+  for (const docSnap of snapshot.docs) {
+    total += 1;
+    batchWrites += 1;
+    if (mode === "delete") {
+      batch.delete(docSnap.ref);
+    } else {
+      batch.set(docSnap.ref, {
+        active: false,
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp(),
+        cleanup: {
+          lastAction: "archived",
+          lastActionAtISO: nowISO,
+          actorUid: normalizeText(actorUid),
+          actorEmail: normalizeEmail(actorEmail)
+        }
+      }, { merge: true });
+    }
+
+    if (batchWrites >= 400) {
+      await batch.commit();
+      batch = db.batch();
+      batchWrites = 0;
+    }
+  }
+
+  if (batchWrites > 0) {
+    await batch.commit();
+  }
+
+  return total;
+}
+
 function getStripeClient() {
   const secretKey = readConfig("stripe.secret_key");
   if (!secretKey) {
@@ -673,19 +859,194 @@ async function getUserRole(uid) {
   };
 }
 
-async function assertStaff(context) {
+function getRuntimeRoleOrgFromClaims(context) {
+  const token = context?.auth?.token || {};
+  return {
+    role: normalizeRole(token.role),
+    organizationId: normalizeOrganizationId(token.organizationId),
+    claimsVersion: Number(token.claimsVersion || 0) || 0,
+    email: normalizeEmail(token.email || "")
+  };
+}
+
+function mergeRuntimePrincipal({ claimsRole = "customer", claimsOrg = "", roleDoc = { role: "customer", organizationId: "" } } = {}) {
+  const roleDocRole = normalizeRole(roleDoc?.role);
+  const roleDocOrg = normalizeOrganizationId(roleDoc?.organizationId);
+  const claimRole = normalizeRole(claimsRole);
+  const claimOrg = normalizeOrganizationId(claimsOrg);
+
+  if (claimOrg && roleDocOrg && claimOrg !== roleDocOrg) {
+    throw new functions.https.HttpsError("permission-denied", "Claim organization does not match role scope.");
+  }
+
+  if (AUTH_CLAIMS_MODE === "claims") {
+    return {
+      role: claimRole,
+      organizationId: claimOrg
+    };
+  }
+
+  if (AUTH_CLAIMS_MODE === "roles") {
+    return {
+      role: roleDocRole,
+      organizationId: roleDocOrg
+    };
+  }
+
+  return {
+    role: claimRole !== "customer" ? claimRole : roleDocRole,
+    organizationId: claimOrg || roleDocOrg
+  };
+}
+
+function hasCrossOrgPolicyBypass({ role = "", email = "", hostType = "" } = {}) {
+  const normalizedRole = normalizeRole(role);
+  const normalizedEmail = normalizeEmail(email);
+  if (BOOTSTRAP_ADMIN_EMAILS.has(normalizedEmail)) return true;
+  if (hostType === "app" && normalizedRole === "admin") {
+    return String(readConfig("auth.allow_app_cross_org_admin", "false")).toLowerCase() === "true";
+  }
+  return false;
+}
+
+async function syncPrincipalClaims({ uid = "", role = "customer", organizationId = "" } = {}) {
+  const normalizedUid = normalizeText(uid);
+  if (!normalizedUid) return;
+
+  const normalizedRole = normalizeRole(role);
+  const normalizedOrgId = normalizeOrganizationId(organizationId);
+  const currentRecord = await admin.auth().getUser(normalizedUid);
+  const existingClaims = currentRecord.customClaims && typeof currentRecord.customClaims === "object"
+    ? currentRecord.customClaims
+    : {};
+  const nextClaims = {
+    ...existingClaims,
+    role: normalizedRole,
+    organizationId: normalizedOrgId,
+    claimsVersion: CLAIMS_VERSION
+  };
+  await admin.auth().setCustomUserClaims(normalizedUid, nextClaims);
+}
+
+async function resolveTenantByHostInternal(hostname = "", { enforceActive = true, requestIp = "" } = {}) {
+  const normalizedHost = normalizeHostname(hostname);
+  const hostType = getHostType(normalizedHost);
+
+  if (hostType === "app" || hostType === "marketing" || hostType === "local") {
+    return {
+      hostname: normalizedHost,
+      hostType,
+      organizationId: "",
+      active: true,
+      environment: hostType === "local" ? "local" : "prod",
+      brandingRef: ""
+    };
+  }
+
+  if (hostType !== "tenant") {
+    const throttle = recordUnknownHostAttempt({ host: normalizedHost, ip: requestIp });
+    functions.logger.warn("Tenant host resolution rejected: invalid host type", {
+      hostname: normalizedHost,
+      hostType,
+      requestIp,
+      count: throttle.count
+    });
+    if (throttle.blocked) {
+      throw new functions.https.HttpsError("resource-exhausted", "Host resolution throttled.");
+    }
+    throw new functions.https.HttpsError("not-found", "Tenant host not found.");
+  }
+
+  const domainSnap = await db.collection(TENANT_DOMAINS_COLLECTION).doc(normalizedHost).get();
+  if (!domainSnap.exists) {
+    const throttle = recordUnknownHostAttempt({ host: normalizedHost, ip: requestIp });
+    functions.logger.warn("Tenant host resolution rejected: host missing", {
+      hostname: normalizedHost,
+      requestIp,
+      count: throttle.count
+    });
+    if (throttle.blocked) {
+      throw new functions.https.HttpsError("resource-exhausted", "Host resolution throttled.");
+    }
+    throw new functions.https.HttpsError("not-found", "Tenant host not found.");
+  }
+
+  const domain = domainSnap.data() || {};
+  const organizationId = normalizeOrganizationId(domain.organizationId);
+  const active = domain.active !== false;
+  const environment = normalizeText(domain.environment || "prod").toLowerCase() || "prod";
+  const brandingRef = normalizeText(domain.brandingRef || "");
+
+  if (!organizationId) {
+    throw new functions.https.HttpsError("failed-precondition", "Tenant host has no organization mapping.");
+  }
+  if (enforceActive && !active) {
+    throw new functions.https.HttpsError("not-found", "Tenant host is inactive.");
+  }
+
+  return {
+    hostname: normalizedHost,
+    hostType,
+    organizationId,
+    active,
+    environment,
+    brandingRef
+  };
+}
+
+async function assertStaff(context, { expectedOrganizationId = "", hostname = "" } = {}) {
   if (!context.auth?.uid) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
   }
+
+  const requestHost = normalizeHostname(hostname || getRequestHostnameFromContext(context));
+  const requestIp = getRequestIp(context);
+  const hostResolution = await resolveTenantByHostInternal(requestHost, {
+    enforceActive: true,
+    requestIp
+  });
+
   const roleRecord = await getUserRole(context.auth.uid);
-  const role = roleRecord.role;
+  const claimPrincipal = getRuntimeRoleOrgFromClaims(context);
+  const mergedPrincipal = mergeRuntimePrincipal({
+    claimsRole: claimPrincipal.role,
+    claimsOrg: claimPrincipal.organizationId,
+    roleDoc: roleRecord
+  });
+  const role = mergedPrincipal.role;
   if (!STAFF_ROLES.has(role)) {
     throw new functions.https.HttpsError("permission-denied", "Staff role required.");
   }
+
+  const principalOrg = normalizeOrganizationId(mergedPrincipal.organizationId);
+  const tenantOrg = normalizeOrganizationId(hostResolution.organizationId);
+  const requestedOrg = normalizeOrganizationId(expectedOrganizationId);
+  const bypass = hasCrossOrgPolicyBypass({
+    role,
+    email: claimPrincipal.email,
+    hostType: hostResolution.hostType
+  });
+
+  if (tenantOrg && principalOrg && tenantOrg !== principalOrg && !bypass) {
+    throw new functions.https.HttpsError("permission-denied", "Tenant host is outside your organization scope.");
+  }
+  if (requestedOrg && principalOrg && requestedOrg !== principalOrg && !bypass) {
+    throw new functions.https.HttpsError("permission-denied", "Requested organization is outside your role scope.");
+  }
+  if (requestedOrg && tenantOrg && requestedOrg !== tenantOrg && !bypass) {
+    throw new functions.https.HttpsError("permission-denied", "Requested organization does not match tenant host.");
+  }
+
+  const scopedOrganizationId = requestedOrg || tenantOrg || principalOrg;
   return {
     uid: context.auth.uid,
     role,
-    organizationId: roleRecord.organizationId
+    organizationId: scopedOrganizationId,
+    claimsVersion: claimPrincipal.claimsVersion,
+    email: claimPrincipal.email,
+    host: requestHost,
+    hostType: hostResolution.hostType,
+    resolvedHostOrg: tenantOrg
   };
 }
 
@@ -729,6 +1090,51 @@ async function readQuoteOrThrow(quoteId, { organizationId = "" } = {}) {
     quoteRef,
     organizationId: quoteOrganizationId,
     quoteNumber: normalizeText(quote.quoteNumber) || id
+  };
+}
+
+async function deletePortalSnapshotsForQuote({
+  quoteId = "",
+  organizationId = "",
+  fallbackPortalKey = ""
+} = {}) {
+  const normalizedQuoteId = normalizeText(quoteId);
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  const deletedKeys = new Set();
+
+  if (normalizedQuoteId) {
+    const portalSnap = await db
+      .collection(PORTAL_COLLECTION)
+      .where("quoteId", "==", normalizedQuoteId)
+      .get();
+
+    if (!portalSnap.empty) {
+      const batch = db.batch();
+      portalSnap.docs.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        const portalOrganizationId = normalizeOrganizationId(data.organizationId);
+        if (normalizedOrganizationId && portalOrganizationId && portalOrganizationId !== normalizedOrganizationId) {
+          return;
+        }
+        deletedKeys.add(docSnap.id);
+        batch.delete(docSnap.ref);
+      });
+
+      if (deletedKeys.size) {
+        await batch.commit();
+      }
+    }
+  }
+
+  const fallbackKey = normalizeText(fallbackPortalKey);
+  if (fallbackKey && !deletedKeys.has(fallbackKey)) {
+    await db.collection(PORTAL_COLLECTION).doc(fallbackKey).delete();
+    deletedKeys.add(fallbackKey);
+  }
+
+  return {
+    deleted: deletedKeys.size,
+    keys: Array.from(deletedKeys)
   };
 }
 
@@ -928,11 +1334,26 @@ async function sendOwnerSms(message) {
   }
 }
 
-async function patchPaymentState({ quoteId, organizationId = "", portalKey = "", paymentPatch = {} }) {
+async function patchPaymentState({
+  quoteId,
+  organizationId = "",
+  portalKey = "",
+  paymentPatch = {},
+  auditContext = {}
+}) {
   const nowISO = new Date().toISOString();
   const quoteUpdate = { updatedAtISO: nowISO };
   for (const [key, value] of Object.entries(paymentPatch)) {
     quoteUpdate[`payment.${key}`] = value;
+  }
+  if (normalizeHostname(auditContext.host)) {
+    quoteUpdate["payment.lastHost"] = normalizeHostname(auditContext.host);
+  }
+  if (normalizeText(auditContext.eventType)) {
+    quoteUpdate["payment.lastEventType"] = normalizeText(auditContext.eventType).toLowerCase();
+  }
+  if (normalizeOrganizationId(auditContext.organizationId)) {
+    quoteUpdate["payment.lastOrganizationId"] = normalizeOrganizationId(auditContext.organizationId);
   }
   await getQuoteDocRef(quoteId, organizationId).set(quoteUpdate, { merge: true });
 
@@ -943,6 +1364,12 @@ async function patchPaymentState({ quoteId, organizationId = "", portalKey = "",
         ...paymentPatch
       }
     };
+    if (normalizeHostname(auditContext.host)) {
+      portalUpdate.payment.lastHost = normalizeHostname(auditContext.host);
+    }
+    if (normalizeText(auditContext.eventType)) {
+      portalUpdate.payment.lastEventType = normalizeText(auditContext.eventType).toLowerCase();
+    }
     if (organizationId) {
       portalUpdate.organizationId = organizationId;
     }
@@ -952,6 +1379,55 @@ async function patchPaymentState({ quoteId, organizationId = "", portalKey = "",
     );
   }
 }
+
+exports.resolveTenantByHost = functions.region(REGION).https.onCall(async (data, context) => {
+  const hostname = normalizeHostname(data?.hostname || getRequestHostnameFromContext(context));
+  const requestIp = getRequestIp(context);
+  const tenant = await resolveTenantByHostInternal(hostname, {
+    enforceActive: true,
+    requestIp
+  });
+  return {
+    ...tenant,
+    resolvedAtISO: new Date().toISOString()
+  };
+});
+
+exports.syncUserClaimsFromRole = functions.region(REGION).https.onCall(async (data, context) => {
+  const staff = await assertStaff(context);
+  if (staff.role !== "admin" && !hasCrossOrgPolicyBypass({ role: staff.role, email: staff.email, hostType: staff.hostType })) {
+    throw new functions.https.HttpsError("permission-denied", "Admin role required.");
+  }
+
+  const targetUid = normalizeText(data?.uid || context?.auth?.uid);
+  if (!targetUid) {
+    throw new functions.https.HttpsError("invalid-argument", "uid is required.");
+  }
+
+  const targetRole = await getUserRole(targetUid);
+  if (
+    targetRole.organizationId
+    && staff.organizationId
+    && targetRole.organizationId !== staff.organizationId
+    && !hasCrossOrgPolicyBypass({ role: staff.role, email: staff.email, hostType: staff.hostType })
+  ) {
+    throw new functions.https.HttpsError("permission-denied", "Target user is outside your organization scope.");
+  }
+
+  await syncPrincipalClaims({
+    uid: targetUid,
+    role: targetRole.role,
+    organizationId: targetRole.organizationId
+  });
+
+  return {
+    ok: true,
+    uid: targetUid,
+    role: targetRole.role,
+    organizationId: targetRole.organizationId,
+    claimsVersion: CLAIMS_VERSION
+  };
+});
 
 exports.ensureOrganizationBootstrap = functions.region(REGION).https.onCall(async (data, context) => {
   const uid = normalizeText(context?.auth?.uid);
@@ -971,6 +1447,12 @@ exports.ensureOrganizationBootstrap = functions.region(REGION).https.onCall(asyn
     email,
     organizationName,
     organizationSlug
+  });
+
+  await syncPrincipalClaims({
+    uid,
+    role: bootstrap.role,
+    organizationId: bootstrap.organizationId
   });
 
   return {
@@ -997,6 +1479,13 @@ exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (da
   );
   if (!organizationId) {
     throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+  if (
+    staff.resolvedHostOrg
+    && organizationId !== staff.resolvedHostOrg
+    && !hasCrossOrgPolicyBypass({ role: staff.role, email: staff.email, hostType: staff.hostType })
+  ) {
+    throw new functions.https.HttpsError("permission-denied", "Tenant host can only provision its own organization.");
   }
 
   const entitlements = resolveFeatureEntitlements(data);
@@ -1148,6 +1637,14 @@ exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (da
 
   await batch.commit();
 
+  if (ownerUid) {
+    await syncPrincipalClaims({
+      uid: ownerUid,
+      role: "admin",
+      organizationId
+    });
+  }
+
   const emailPayload = buildProvisioningEmailPayload({
     ownerName,
     ownerEmail,
@@ -1234,6 +1731,192 @@ exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (da
       recordsCreated: neutralCatalogEntries.length
     },
     email: emailResult
+  };
+});
+
+exports.archiveOrganizationWorkspace = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  if (!organizationId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (staff.role !== "admin" && !hasCrossOrgPolicyBypass({ role: staff.role, email: staff.email, hostType: staff.hostType })) {
+    throw new functions.https.HttpsError("permission-denied", "Admin role required.");
+  }
+
+  assertCleanupConfirmation({
+    action: "archive",
+    organizationId,
+    confirmationToken: data?.confirmationToken
+  });
+
+  const orgRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const orgSnap = await orgRef.get();
+  if (!orgSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Organization not found.");
+  }
+
+  const nowISO = new Date().toISOString();
+  await orgRef.set({
+    active: false,
+    archived: true,
+    status: "archived",
+    archivedAtISO: nowISO,
+    archivedBy: {
+      uid: staff.uid,
+      email: staff.email
+    },
+    updatedAtISO: nowISO,
+    updatedAt: FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  const tenantDomainsUpdated = await updateTenantDomainMappingsForOrganization({
+    organizationId,
+    mode: "archive",
+    actorUid: staff.uid,
+    actorEmail: staff.email,
+    nowISO
+  });
+
+  return {
+    ok: true,
+    organizationId,
+    tenantDomainsUpdated,
+    completedAtISO: nowISO
+  };
+});
+
+exports.deleteOrganizationWorkspace = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  if (!organizationId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (staff.role !== "admin" && !hasCrossOrgPolicyBypass({ role: staff.role, email: staff.email, hostType: staff.hostType })) {
+    throw new functions.https.HttpsError("permission-denied", "Admin role required.");
+  }
+
+  assertCleanupConfirmation({
+    action: "delete",
+    organizationId,
+    confirmationToken: data?.confirmationToken
+  });
+
+  const orgRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const orgSnap = await orgRef.get();
+  if (!orgSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Organization not found.");
+  }
+
+  const organizationData = orgSnap.data() || {};
+  if (organizationData.archived !== true) {
+    throw new functions.https.HttpsError("failed-precondition", "Organization must be archived before hard delete.");
+  }
+
+  const nowISO = new Date().toISOString();
+  const tenantDomainsDeleted = await updateTenantDomainMappingsForOrganization({
+    organizationId,
+    mode: "delete",
+    actorUid: staff.uid,
+    actorEmail: staff.email,
+    nowISO
+  });
+
+  await db.recursiveDelete(orgRef);
+
+  return {
+    ok: true,
+    organizationId,
+    tenantDomainsDeleted,
+    completedAtISO: nowISO
+  };
+});
+
+exports.hardDeleteQuote = functions.region(REGION).https.onCall(async (data, context) => {
+  const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  if (!quoteId) {
+    throw new functions.https.HttpsError("invalid-argument", "quoteId is required.");
+  }
+
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: requestedOrganizationId
+  });
+  if (staff.role !== "admin" && !hasCrossOrgPolicyBypass({ role: staff.role, email: staff.email, hostType: staff.hostType })) {
+    throw new functions.https.HttpsError("permission-denied", "Admin role required.");
+  }
+
+  const scopedOrganizationId = normalizeOrganizationId(requestedOrganizationId || staff.organizationId);
+  if (!scopedOrganizationId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+
+  const { quote, quoteRef, organizationId } = await readQuoteOrThrow(quoteId, {
+    organizationId: scopedOrganizationId
+  });
+  const portalCleanup = await deletePortalSnapshotsForQuote({
+    quoteId,
+    organizationId,
+    fallbackPortalKey: quote?.portalKey
+  });
+
+  await db.recursiveDelete(quoteRef);
+
+  return {
+    ok: true,
+    quoteId,
+    organizationId,
+    portalSnapshotsDeleted: portalCleanup.deleted,
+    completedAtISO: new Date().toISOString()
+  };
+});
+
+exports.purgeDeletedQuotesForOrganization = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  if (!organizationId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (staff.role !== "admin" && !hasCrossOrgPolicyBypass({ role: staff.role, email: staff.email, hostType: staff.hostType })) {
+    throw new functions.https.HttpsError("permission-denied", "Admin role required.");
+  }
+
+  const requestedLimit = Number(data?.limit || 100);
+  const limit = Math.max(1, Math.min(300, Number.isFinite(requestedLimit) ? Math.round(requestedLimit) : 100));
+  const quotesRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).collection(QUOTES_COLLECTION);
+  const deletedSnap = await quotesRef.where("status", "==", "deleted").limit(limit).get();
+
+  let deletedQuotes = 0;
+  let portalSnapshotsDeleted = 0;
+  for (const docSnap of deletedSnap.docs) {
+    const quoteData = docSnap.data() || {};
+    const quoteOrganizationId = normalizeOrganizationId(quoteData.organizationId || organizationId);
+    if (quoteOrganizationId !== organizationId) {
+      continue;
+    }
+    const quoteId = docSnap.id;
+    const portalCleanup = await deletePortalSnapshotsForQuote({
+      quoteId,
+      organizationId,
+      fallbackPortalKey: quoteData?.portalKey
+    });
+    portalSnapshotsDeleted += portalCleanup.deleted;
+    await db.recursiveDelete(docSnap.ref);
+    deletedQuotes += 1;
+  }
+
+  return {
+    ok: true,
+    organizationId,
+    scanned: deletedSnap.size,
+    deletedQuotes,
+    portalSnapshotsDeleted,
+    limitApplied: limit,
+    hasMore: deletedSnap.size === limit,
+    completedAtISO: new Date().toISOString()
   };
 });
 
@@ -1497,6 +2180,11 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
       depositConfirmedAtISO: "",
       stripeSessionId: session.id,
       lastCheckoutCreatedAtISO: nowISO
+    },
+    auditContext: {
+      host: staff.host,
+      eventType: "checkout.session.created",
+      organizationId
     }
   });
 
@@ -1519,6 +2207,8 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
     res.status(405).send("Method Not Allowed");
     return;
   }
+  const requestHost = getRequestHostnameFromHttp(req);
+  const requestIp = getRequestIpFromHttp(req);
 
   const webhookSecret = readConfig("stripe.webhook_secret");
   if (!webhookSecret) {
@@ -1541,6 +2231,25 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
     return;
   }
 
+  const eventId = normalizeText(event?.id);
+  if (eventId) {
+    const dedupeRef = db.collection(WEBHOOK_EVENTS_COLLECTION).doc(`stripe-${eventId}`);
+    const dedupeSnap = await dedupeRef.get();
+    if (dedupeSnap.exists) {
+      res.json({ received: true, duplicate: true });
+      return;
+    }
+    await dedupeRef.set({
+      provider: "stripe",
+      eventId,
+      eventType: normalizeText(event?.type),
+      requestHost,
+      requestIp,
+      receivedAtISO: new Date().toISOString(),
+      createdAt: FieldValue.serverTimestamp()
+    }, { merge: false });
+  }
+
   if (event.type === "checkout.session.completed") {
     try {
       const session = event.data.object || {};
@@ -1556,7 +2265,8 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
           functions.logger.warn("checkout.session.completed ignored: missing organizationId", {
             quoteId,
             sessionId: normalizeText(session.id),
-            portalKey: sessionPortalKey
+            portalKey: sessionPortalKey,
+            requestHost
           });
           res.json({ received: true, ignored: "missing_organization_id" });
           return;
@@ -1576,12 +2286,21 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
             depositConfirmedAtISO: new Date().toISOString(),
             stripeSessionId: normalizeText(session.id),
             depositLink: normalizeText(session.url) || normalizeText(quote?.payment?.depositLink)
+          },
+          auditContext: {
+            host: requestHost,
+            eventType: event.type,
+            organizationId: quoteDetails.organizationId
           }
         });
         await sendOwnerSms(`Deposit paid for ${quoteNumber}. Amount ${currencyLabel(amountTotal)}.`);
       }
     } catch (err) {
-      functions.logger.error("Failed processing checkout.session.completed", err);
+      functions.logger.error("Failed processing checkout.session.completed", {
+        requestHost,
+        requestIp,
+        message: normalizeText(err?.message).slice(0, 240)
+      });
       res.status(500).send("Failed to process checkout session.");
       return;
     }

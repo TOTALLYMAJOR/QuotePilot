@@ -8,7 +8,8 @@ vi.mock("../firebase", () => ({
 import {
   convertQuoteToContract,
   getQuoteHistory,
-  updateQuoteBookingConfirmation
+  updateQuoteBookingConfirmation,
+  updateQuoteKitchenCheckpoints
 } from "../quoteStore";
 
 const LOCAL_QUOTES_KEY = "quoteWizard.quotes";
@@ -214,5 +215,42 @@ describe("quoteStore booking workflow", () => {
     const updated = history.quotes.find((quote) => quote.id === "q1");
     expect(updated.booking.confirmationStatus).toBe("confirmed");
     expect(updated.booking.confirmedAtISO).not.toBe("");
+  });
+
+  test("persists editable kitchen checkpoints for an event", async () => {
+    seedQuotes([
+      makeQuote({
+        id: "q-checkpoints",
+        quoteNumber: "Q-CHECKPOINTS",
+        booking: {
+          kitchenCheckpoints: []
+        }
+      })
+    ]);
+
+    const result = await updateQuoteKitchenCheckpoints({
+      quoteId: "q-checkpoints",
+      checkpoints: [
+        { id: "prep-start", label: "Prep kickoff", minuteOffset: -165 },
+        { id: "service-start", label: "Buffet opens", minuteOffset: 0 }
+      ]
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.checkpoints).toHaveLength(2);
+    expect(result.checkpoints[0]).toEqual({
+      id: "prep-start",
+      label: "Prep kickoff",
+      minuteOffset: -165
+    });
+
+    const history = await getQuoteHistory();
+    const updated = history.quotes.find((quote) => quote.id === "q-checkpoints");
+    expect(updated.booking.kitchenCheckpoints).toHaveLength(2);
+    expect(updated.booking.kitchenCheckpoints[1]).toEqual({
+      id: "service-start",
+      label: "Buffet opens",
+      minuteOffset: 0
+    });
   });
 });

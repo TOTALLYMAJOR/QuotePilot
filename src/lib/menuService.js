@@ -1,9 +1,11 @@
 import {
   addDoc,
   deleteDoc,
+  doc,
   getDocs,
   query,
   updateDoc,
+  writeBatch,
   where
 } from "firebase/firestore";
 import { db, firebaseReady } from "./firebase";
@@ -14,6 +16,7 @@ import {
   normalizeOrganizationId
 } from "./organizationService";
 import { DEFAULT_SETTINGS } from "../data/mockCatalog";
+import { buildCanonicalMenuForEventType } from "../data/canonicalMenuTemplate";
 
 const LOCAL_EVENT_TYPES = (() => {
   const templates = Array.isArray(DEFAULT_SETTINGS?.eventTemplates)
@@ -293,14 +296,44 @@ export async function updateCategory(id, data = {}) {
 export async function createEventType(data = {}) {
   ensureReady();
   const targetCollectionRef = resolveWritableCollectionRef("eventTypes", data.organizationId, "createEventType");
+  const categoryCollectionRef = resolveWritableCollectionRef("menuCategories", data.organizationId, "createEventType");
+  const itemCollectionRef = resolveWritableCollectionRef("menuItems", data.organizationId, "createEventType");
+
+  const createdAtISO = new Date().toISOString();
+  const eventTypeRef = doc(targetCollectionRef);
+  const eventTypeId = eventTypeRef.id;
+  const canonicalSeed = buildCanonicalMenuForEventType(eventTypeId);
   const payload = {
     name: asText(data.name, "New Event Type"),
-    createdAtISO: new Date().toISOString()
+    createdAtISO
   };
-  const ref = await addDoc(targetCollectionRef, payload);
+
+  const batch = writeBatch(db);
+  batch.set(eventTypeRef, payload);
+  canonicalSeed.categories.forEach((entry) => {
+    batch.set(doc(categoryCollectionRef, entry.id), {
+      ...entry,
+      source: "canonical-menu-seed",
+      createdAtISO
+    });
+  });
+  canonicalSeed.items.forEach((entry) => {
+    batch.set(doc(itemCollectionRef, entry.id), {
+      ...entry,
+      source: "canonical-menu-seed",
+      createdAtISO
+    });
+  });
+
+  await batch.commit();
+
   return {
-    id: ref.id,
-    ...payload
+    id: eventTypeId,
+    ...payload,
+    seeded: {
+      categories: canonicalSeed.categories.length,
+      items: canonicalSeed.items.length
+    }
   };
 }
 
