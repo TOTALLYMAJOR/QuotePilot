@@ -45,6 +45,36 @@ function BreakdownMoneyRow({ rowKey, label, value, delta = 0, changed = false, s
   );
 }
 
+function BreakdownCountRow({ rowKey, label, value }) {
+  return (
+    <div
+      className="breakdown-money-row breakdown-count-row"
+      data-row-key={rowKey}
+      data-changed="false"
+    >
+      <dt>{label}</dt>
+      <dd>
+        <strong>{Math.max(0, Number(value || 0))}</strong>
+      </dd>
+    </div>
+  );
+}
+
+function BreakdownTextRow({ rowKey, label, value }) {
+  return (
+    <div
+      className="breakdown-money-row breakdown-count-row"
+      data-row-key={rowKey}
+      data-changed="false"
+    >
+      <dt>{label}</dt>
+      <dd>
+        <strong>{value}</strong>
+      </dd>
+    </div>
+  );
+}
+
 export default function LiveBreakdown({ form, totals, settings, catalog }) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const effectTimersRef = useRef([]);
@@ -56,11 +86,29 @@ export default function LiveBreakdown({ form, totals, settings, catalog }) {
     return fallback;
   };
 
+  const resolveAddonStaffRole = (item) => {
+    const hasExplicitField = item && Object.prototype.hasOwnProperty.call(item, "staffRole");
+    const explicit = String(item?.staffRole || "").trim().toLowerCase();
+    if (explicit === "server" || explicit === "chef" || explicit === "bartender") return explicit;
+    if (hasExplicitField) return "";
+    const source = `${String(item?.id || "")} ${String(item?.name || "")}`.trim().toLowerCase();
+    if (!source) return "";
+    if (source.includes("bartender") || source.includes("bar tender")) return "bartender";
+    if (source.includes("chef")) return "chef";
+    if (source.includes("server") || source.includes("event staff")) return "server";
+    return "";
+  };
+
+  const addonSupportsQuantity = (item, pricingType) =>
+    pricingType === "per_item" || (pricingType === "per_event" && Boolean(resolveAddonStaffRole(item)));
+
   const selectedAddons = catalog.addons
     .filter((item) => form.addons.includes(item.id))
     .map((item) => {
       const pricingType = resolvePricingType(item, "per_person");
-      const quantity = pricingType === "per_item" ? Math.max(1, Number(form.addonQuantities?.[item.id] || 1)) : null;
+      const quantity = addonSupportsQuantity(item, pricingType)
+        ? Math.max(1, Number(form.addonQuantities?.[item.id] || 1))
+        : null;
       return {
         id: item.id,
         name: item.name,
@@ -99,6 +147,41 @@ export default function LiveBreakdown({ form, totals, settings, catalog }) {
   });
 
   const staffingLaborEnabled = totals.staffingLaborEnabled !== false;
+  const staffingChargeMode = String(totals.staffingChargeMode || "per_hour").trim().toLowerCase();
+  const staffingChargeModeLabel = staffingChargeMode === "per_event_per_staff"
+    ? "Per event x staff count"
+    : "Per hour x staff count";
+  const formatRateList = (rates, limit = 6) => {
+    const safeRates = Array.isArray(rates)
+      ? rates
+        .map((rate) => Number(rate))
+        .filter((rate) => Number.isFinite(rate) && rate >= 0)
+      : [];
+    if (!safeRates.length) return "";
+    const labels = safeRates.map((rate) => money(rate));
+    if (labels.length <= limit) return labels.join(", ");
+    return `${labels.slice(0, limit).join(", ")} (+${labels.length - limit} more)`;
+  };
+  const serverRatesApplied = Array.isArray(totals.serverRatesApplied)
+    ? totals.serverRatesApplied
+      .map((rate) => Number(rate))
+      .filter((rate) => Number.isFinite(rate) && rate >= 0)
+    : [];
+  const chefRatesApplied = Array.isArray(totals.chefRatesApplied)
+    ? totals.chefRatesApplied
+      .map((rate) => Number(rate))
+      .filter((rate) => Number.isFinite(rate) && rate >= 0)
+    : [];
+  const hasCustomServerMix = String(form.serverRateMixCsv || "").trim() !== ""
+    || serverRatesApplied.some((rate) => Math.abs(rate - Number(totals.serverRateApplied || 0)) >= 0.01);
+  const hasCustomChefMix = String(form.chefRateMixCsv || "").trim() !== ""
+    || chefRatesApplied.some((rate) => Math.abs(rate - Number(totals.chefRateApplied || 0)) >= 0.01);
+  const serverRatesLabel = serverRatesApplied.length
+    ? formatRateList(serverRatesApplied)
+    : `${money(totals.serverRateApplied)} x ${Math.max(0, Number(totals.servers || 0))}`;
+  const chefRatesLabel = chefRatesApplied.length
+    ? formatRateList(chefRatesApplied)
+    : `${money(totals.chefRateApplied)} x ${Math.max(0, Number(totals.chefs || 0))}`;
 
   const valueTargets = useMemo(() => {
     const subtotal = totals.base + totals.addons + totals.rentals + totals.menu + totals.labor + totals.travel;
@@ -298,8 +381,19 @@ export default function LiveBreakdown({ form, totals, settings, catalog }) {
             changed={Boolean(rowEffects.bartenderLabor)}
             delta={rowEffects.bartenderLabor?.delta || 0}
           />
+          <BreakdownCountRow rowKey="serversCount" label="Servers (count)" value={totals.servers} />
+          <BreakdownCountRow rowKey="chefsCount" label="Chefs (count)" value={totals.chefs} />
+          <BreakdownCountRow rowKey="bartendersCount" label="Bartenders (count)" value={totals.bartenders} />
+          {staffingLaborEnabled && hasCustomServerMix && Math.max(0, Number(totals.servers || 0)) > 0 && (
+            <BreakdownTextRow rowKey="serverRatesApplied" label="Server Rates" value={serverRatesLabel} />
+          )}
+          {staffingLaborEnabled && hasCustomChefMix && Math.max(0, Number(totals.chefs || 0)) > 0 && (
+            <BreakdownTextRow rowKey="chefRatesApplied" label="Chef Rates" value={chefRatesLabel} />
+          )}
         </dl>
-        <p className="source-note">Staffing labor: {staffingLaborEnabled ? "Enabled" : "Disabled"}</p>
+        <p className="source-note">
+          Staffing labor: {staffingLaborEnabled ? "Enabled" : "Disabled"} • Charge mode: {staffingChargeModeLabel}
+        </p>
       </section>
 
       <section className="breakdown-financial-block">

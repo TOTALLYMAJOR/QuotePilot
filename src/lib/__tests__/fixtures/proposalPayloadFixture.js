@@ -18,6 +18,10 @@ export const proposalPayloadFixtureQuote = {
     venueAddress: "123 Garden Ave, Birmingham, AL",
     guests: 120,
     hours: 5,
+    servers: 8,
+    chefs: 3,
+    bartenders: 2,
+    dietaryRestrictions: "Nut allergy, vegetarian option for 12 guests",
     style: "Plated"
   },
   selection: {
@@ -31,7 +35,9 @@ export const proposalPayloadFixtureQuote = {
     payMethod: "card",
     taxRegion: "local",
     seasonProfileId: "summer_peak",
-    eventTemplateId: "wedding"
+    eventTemplateId: "wedding",
+    serverRateMixCsv: "25,30,30,35",
+    chefRateMixCsv: "60,65,70"
   },
   payment: {
     depositLink: "https://pay.example.com/deposits/q-2026-0042",
@@ -43,7 +49,12 @@ export const proposalPayloadFixtureQuote = {
     rentals: 102,
     menu: 210,
     labor: 1900,
+    serverLabor: 625,
+    chefLabor: 975,
+    serverRatesApplied: [25, 30, 30, 35, 35],
+    chefRatesApplied: [60, 65, 70],
     bartenderLabor: 300,
+    chefRateApplied: 65,
     travel: 49.2,
     serviceFee: 1191.24,
     tax: 575.27,

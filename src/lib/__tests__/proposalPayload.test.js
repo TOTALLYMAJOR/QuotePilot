@@ -13,9 +13,17 @@ describe("proposal payload snapshots", () => {
       branding: payload.branding,
       customer: payload.customer,
       event: payload.event,
+      selection: {
+        serverRateMixCsv: payload.selection.serverRateMixCsv,
+        chefRateMixCsv: payload.selection.chefRateMixCsv
+      },
       totals: {
         total: payload.totals.total,
         deposit: payload.totals.deposit,
+        serverLabor: payload.totals.serverLabor,
+        chefLabor: payload.totals.chefLabor,
+        serverRatesApplied: payload.totals.serverRatesApplied,
+        chefRatesApplied: payload.totals.chefRatesApplied,
         taxRateApplied: payload.totals.taxRateApplied,
         taxRegionName: payload.totals.taxRegionName,
         seasonProfileName: payload.totals.seasonProfileName
@@ -48,10 +56,14 @@ describe("proposal payload snapshots", () => {
           "phone": "205-555-0162",
         },
         "event": {
+          "bartenders": 2,
+          "chefs": 3,
           "date": "2026-04-20",
+          "dietaryRestrictions": "Nut allergy, vegetarian option for 12 guests",
           "guests": 120,
           "hours": 5,
           "name": "Spring Gala",
+          "servers": 8,
           "style": "Plated",
           "time": "18:00",
           "venue": "Pine Hall",
@@ -65,9 +77,27 @@ describe("proposal payload snapshots", () => {
           "quoteValidityDays": 30,
         },
         "quoteNumber": "Q-2026-0042",
+        "selection": {
+          "chefRateMixCsv": "60,65,70",
+          "serverRateMixCsv": "25,30,30,35",
+        },
         "totals": {
+          "chefLabor": 975,
+          "chefRatesApplied": [
+            60,
+            65,
+            70,
+          ],
           "deposit": 2513.76,
           "seasonProfileName": "Summer Peak",
+          "serverLabor": 625,
+          "serverRatesApplied": [
+            25,
+            30,
+            30,
+            35,
+            35,
+          ],
           "taxRateApplied": 0.1,
           "taxRegionName": "Local",
           "total": 8379.21,

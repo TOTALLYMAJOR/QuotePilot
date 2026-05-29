@@ -10,6 +10,7 @@ import {
   ensureLegacyQuoteCompatibility,
   getActiveQuoteVersion,
   getQuoteHistory,
+  purgeDeletedQuotesForOrganization,
   resolveQuotePricingSnapshot,
   resolveQuoteVersionMetadata,
   reopenQuote,
@@ -134,7 +135,7 @@ function seedQuotes(quotes) {
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(quotes));
 }
 
-describe("quoteStore versioning and soft delete", () => {
+describe("quoteStore versioning and delete behavior", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", createStorageMock());
   });
@@ -143,29 +144,57 @@ describe("quoteStore versioning and soft delete", () => {
     vi.unstubAllGlobals();
   });
 
-  test("soft deletes and reopens a quote while recording versions", async () => {
+  test("hard deletes a quote and removes local history entries", async () => {
     seedQuotes([makeQuote({ id: "q1" })]);
+    localStorage.setItem(
+      LOCAL_QUOTE_HISTORY_KEY,
+      JSON.stringify([
+        {
+          id: "history-q1-v1",
+          quoteId: "q1",
+          versionId: "v0001",
+          versionNumber: 1,
+          snapshot: {
+            id: "q1",
+            status: "accepted"
+          }
+        },
+        {
+          id: "history-q2-v1",
+          quoteId: "q2",
+          versionId: "v0001",
+          versionNumber: 1,
+          snapshot: {
+            id: "q2",
+            status: "draft"
+          }
+        }
+      ])
+    );
 
     await deleteQuote("q1");
-    let history = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY) || "[]");
-    expect(history.length).toBe(1);
-    expect(history[0].quoteId).toBe("q1");
-    expect(history[0].snapshot.status).toBe("accepted");
+    const history = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY) || "[]");
+    expect(history).toHaveLength(1);
+    expect(history[0].quoteId).toBe("q2");
 
-    let quotes = await getQuoteHistory();
-    let updated = quotes.quotes.find((quote) => quote.id === "q1");
-    expect(updated.status).toBe("deleted");
-    expect(updated.deletedAtISO).not.toBe("");
+    const quotes = await getQuoteHistory();
+    const updated = quotes.quotes.find((quote) => quote.id === "q1");
+    expect(updated).toBeUndefined();
+  });
 
-    await reopenQuote("q1");
-    history = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY) || "[]");
-    expect(history.length).toBe(2);
-    expect(history[0].snapshot.status).toBe("deleted");
+  test("purges legacy deleted quotes from local fallback storage", async () => {
+    seedQuotes([
+      makeQuote({ id: "q-purge-1", status: "deleted", deletedAtISO: "2026-03-11T12:00:00.000Z" }),
+      makeQuote({ id: "q-purge-2", status: "draft" })
+    ]);
 
-    quotes = await getQuoteHistory();
-    updated = quotes.quotes.find((quote) => quote.id === "q1");
-    expect(updated.status).toBe("draft");
-    expect(updated.deletedAtISO).toBe("");
+    const result = await purgeDeletedQuotesForOrganization();
+    expect(result.ok).toBe(true);
+    expect(result.storage).toBe("local");
+    expect(result.deletedQuotes).toBe(1);
+
+    const quotes = await getQuoteHistory();
+    expect(quotes.quotes.map((quote) => quote.id)).toEqual(["q-purge-2"]);
   });
 
   test("captures a version before status updates", async () => {
@@ -211,6 +240,8 @@ describe("quoteStore versioning and soft delete", () => {
         eventTypeId: "wedding",
         taxRegion: "local",
         seasonProfileId: "standard",
+        serverRateMixCsv: "24,26",
+        chefRateMixCsv: "50,55",
         includeDisposables: true,
         depositLink: ""
       },
@@ -286,6 +317,8 @@ describe("quoteStore versioning and soft delete", () => {
     expect(created.latestVersionNumber).toBe(1);
     expect(created.pricing.authority).toBe("server_authoritative");
     expect(created.pricing.grandTotal).toBe(4321);
+    expect(created.selection.serverRateMixCsv).toBe("24,26");
+    expect(created.selection.chefRateMixCsv).toBe("50,55");
   });
 
   test("updates an existing quote with versioning and locked labor-rate snapshot", async () => {
@@ -335,6 +368,8 @@ describe("quoteStore versioning and soft delete", () => {
         staffingRateTypeId: "senior",
         bartenderRateOverride: 42,
         serverRateOverride: 31,
+        serverRateMixCsv: "30,31,32",
+        chefRateMixCsv: "52,53,54",
         chefRateOverride: 53
       },
       totals: {
@@ -389,6 +424,8 @@ describe("quoteStore versioning and soft delete", () => {
     expect(updated.selection.laborRateSnapshot.bartenderRateApplied).toBe(42);
     expect(updated.selection.laborRateSnapshot.serverRateApplied).toBe(31);
     expect(updated.selection.laborRateSnapshot.chefRateApplied).toBe(53);
+    expect(updated.selection.serverRateMixCsv).toBe("30,31,32");
+    expect(updated.selection.chefRateMixCsv).toBe("52,53,54");
     expect(updated.totals.bartenderRateApplied).toBe(42);
     expect(updated.totals.serverRateApplied).toBe(31);
     expect(updated.totals.chefRateApplied).toBe(53);

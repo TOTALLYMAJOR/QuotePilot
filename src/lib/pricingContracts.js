@@ -1,4 +1,6 @@
 const PRICING_MODES = new Set(["per_person", "per_item", "per_event"]);
+const STAFFING_CHARGE_MODES = new Set(["per_hour", "per_event_per_staff"]);
+const MAX_RATE_MIX_CSV_LENGTH = 300;
 
 export const PRICING_VERSION = "pricing-v1";
 export const CLIENT_PREVIEW_AUTHORITY = "client_preview";
@@ -21,6 +23,31 @@ function toText(value, fallback = "") {
   return text || fallback;
 }
 
+function normalizeRateMixCsv(value) {
+  return toText(value).slice(0, MAX_RATE_MIX_CSV_LENGTH);
+}
+
+function normalizeServerRateMixCsv(value) {
+  return normalizeRateMixCsv(value);
+}
+
+function normalizeChefRateMixCsv(value) {
+  return normalizeRateMixCsv(value);
+}
+
+function toRateArray(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((value) => Math.round(toNumber(value, 0) * 100) / 100)
+    .filter((value) => Number.isFinite(value) && value >= 0);
+}
+
+function toOptionalNumberOrBlank(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const n = Number(value);
+  return Number.isFinite(n) ? n : "";
+}
+
 function normalizeISO(value, fallback = "") {
   const text = toText(value);
   if (!text) return fallback;
@@ -31,6 +58,11 @@ function normalizeISO(value, fallback = "") {
 function normalizePricingMode(value, fallback = "per_event") {
   const mode = toText(value, fallback).toLowerCase();
   return PRICING_MODES.has(mode) ? mode : fallback;
+}
+
+function normalizeStaffingChargeMode(value, fallback = "per_hour") {
+  const mode = toText(value, fallback).toLowerCase();
+  return STAFFING_CHARGE_MODES.has(mode) ? mode : fallback;
 }
 
 function normalizeQuantityMap(input) {
@@ -126,6 +158,7 @@ export function normalizePricingInput(payload = {}) {
   const source = payload && typeof payload === "object" ? payload : {};
   const event = source.event && typeof source.event === "object" ? source.event : {};
   const selection = source.selection && typeof source.selection === "object" ? source.selection : {};
+  const labor = source.labor && typeof source.labor === "object" ? source.labor : {};
   const packageInput = selection.package && typeof selection.package === "object"
     ? selection.package
     : {
@@ -153,6 +186,8 @@ export function normalizePricingInput(payload = {}) {
       guests: Math.max(0, toInt(event.guests || source.guests, 0)),
       hours: toNumber(event.hours || source.hours, 0),
       style: toText(event.style || source.style),
+      servers: Math.max(0, toInt(event.servers || source.servers, 0)),
+      chefs: Math.max(0, toInt(event.chefs || source.chefs, 0)),
       bartenders: Math.max(0, toInt(event.bartenders || source.bartenders, 0)),
       milesRT: Math.max(0, toNumber(selection.milesRT ?? source.milesRT ?? event.milesRT, 0)),
       taxRegionId: toText(selection.taxRegion || source.taxRegion || event.taxRegion),
@@ -175,6 +210,23 @@ export function normalizePricingInput(payload = {}) {
         menuItemQuantities: normalizeQuantityMap(selection.menuItemQuantities || source.menuItemQuantities)
       }
     },
+    labor: {
+      bartenderRateOverride: toOptionalNumberOrBlank(
+        labor.bartenderRateOverride ?? selection.bartenderRateOverride ?? source.bartenderRateOverride
+      ),
+      serverRateOverride: toOptionalNumberOrBlank(
+        labor.serverRateOverride ?? selection.serverRateOverride ?? source.serverRateOverride
+      ),
+      chefRateOverride: toOptionalNumberOrBlank(
+        labor.chefRateOverride ?? selection.chefRateOverride ?? source.chefRateOverride
+      ),
+      serverRateMixCsv: normalizeServerRateMixCsv(
+        labor.serverRateMixCsv ?? selection.serverRateMixCsv ?? source.serverRateMixCsv
+      ),
+      chefRateMixCsv: normalizeChefRateMixCsv(
+        labor.chefRateMixCsv ?? selection.chefRateMixCsv ?? source.chefRateMixCsv
+      )
+    },
     pricingModes: {
       package: normalizePricingMode(packageInput.pricingMode || packageInput.pricingType || packageInput.type, "per_person"),
       addonsDefault: "per_person",
@@ -187,6 +239,7 @@ export function normalizePricingInput(payload = {}) {
       depositPct: toNumber(source.settings?.depositPct, 0),
       defaultTaxRegion: toText(source.settings?.defaultTaxRegion),
       defaultSeasonProfile: toText(source.settings?.defaultSeasonProfile),
+      staffingChargeMode: normalizeStaffingChargeMode(source.settings?.staffingChargeMode, "per_hour"),
       pricingSettingsVersion: Math.max(0, toInt(source.settings?.pricingSettingsVersion, 0)),
       pricingSettingsUpdatedAtISO: normalizeISO(source.settings?.pricingSettingsUpdatedAtISO, "")
     },
@@ -212,6 +265,8 @@ export function normalizePricingOutput(payload = {}) {
     lineItems: normalizeLineItems(source.lineItems),
     fees: {
       labor: toNumber(rawFees.labor, 0),
+      serverLabor: toNumber(rawFees.serverLabor, 0),
+      chefLabor: toNumber(rawFees.chefLabor, 0),
       travel: toNumber(rawFees.travel, 0),
       bartenderLabor: toNumber(rawFees.bartenderLabor, 0),
       serviceFee: toNumber(rawFees.serviceFee, 0)
@@ -253,6 +308,8 @@ export function buildPricingSnapshotFromClientTotals({
     rentals: toNumber(totals.rentals, 0),
     menu: toNumber(totals.menu, 0),
     labor: toNumber(totals.labor, 0),
+    serverLabor: toNumber(totals.serverLabor, 0),
+    chefLabor: toNumber(totals.chefLabor, 0),
     bartenderLabor: toNumber(totals.bartenderLabor, 0),
     travel: toNumber(totals.travel, 0),
     serviceFee: toNumber(totals.serviceFee, 0),
@@ -282,6 +339,8 @@ export function buildPricingSnapshotFromClientTotals({
       guests: form.guests,
       hours: form.hours,
       style: form.style,
+      servers: form.servers,
+      chefs: form.chefs,
       bartenders: form.bartenders
     },
     selection: {
@@ -296,7 +355,16 @@ export function buildPricingSnapshotFromClientTotals({
       menuItemQuantities: selection.menuItemQuantities || form.menuItemQuantities,
       milesRT: selection.milesRT ?? form.milesRT,
       taxRegion: selection.taxRegion || form.taxRegion,
-      seasonProfileId: selection.seasonProfileId || form.seasonProfileId
+      seasonProfileId: selection.seasonProfileId || form.seasonProfileId,
+      serverRateMixCsv: normalizeServerRateMixCsv(selection.serverRateMixCsv ?? form.serverRateMixCsv),
+      chefRateMixCsv: normalizeChefRateMixCsv(selection.chefRateMixCsv ?? form.chefRateMixCsv)
+    },
+    labor: {
+      bartenderRateOverride: selection.bartenderRateOverride ?? form.bartenderRateOverride,
+      serverRateOverride: selection.serverRateOverride ?? form.serverRateOverride,
+      chefRateOverride: selection.chefRateOverride ?? form.chefRateOverride,
+      serverRateMixCsv: normalizeServerRateMixCsv(selection.serverRateMixCsv ?? form.serverRateMixCsv),
+      chefRateMixCsv: normalizeChefRateMixCsv(selection.chefRateMixCsv ?? form.chefRateMixCsv)
     },
     settings
   });
@@ -313,6 +381,8 @@ export function buildPricingSnapshotFromClientTotals({
     lineItems: resolvedLineItems,
     fees: {
       labor: normalizedTotals.labor,
+      serverLabor: normalizedTotals.serverLabor,
+      chefLabor: normalizedTotals.chefLabor,
       travel: normalizedTotals.travel,
       bartenderLabor: normalizedTotals.bartenderLabor,
       serviceFee: normalizedTotals.serviceFee
@@ -344,6 +414,10 @@ export function buildPricingSnapshotFromClientTotals({
       depositPct: toNumber(settings.depositPct, 0),
       pricingSettingsVersion: Math.max(0, toInt(settings.pricingSettingsVersion, 0)),
       pricingSettingsUpdatedAtISO: normalizeISO(settings.pricingSettingsUpdatedAtISO, ""),
+      staffingChargeMode: normalizeStaffingChargeMode(
+        totals.staffingChargeMode || settings.staffingChargeMode,
+        "per_hour"
+      ),
       settingsSnapshot: {
         serviceFeePct: toNumber(settings.serviceFeePct, 0),
         serviceFeeTiers: Array.isArray(settings.serviceFeeTiers) ? [...settings.serviceFeeTiers] : [],
@@ -353,6 +427,7 @@ export function buildPricingSnapshotFromClientTotals({
         depositPct: toNumber(settings.depositPct, 0),
         seasonalProfiles: Array.isArray(settings.seasonalProfiles) ? [...settings.seasonalProfiles] : [],
         defaultSeasonProfile: toText(settings.defaultSeasonProfile),
+        staffingChargeMode: normalizeStaffingChargeMode(settings.staffingChargeMode, "per_hour"),
         staffingLaborEnabled: settings.staffingLaborEnabled !== false,
         perMileRate: toNumber(settings.perMileRate, 0),
         longDistancePerMileRate: toNumber(settings.longDistancePerMileRate, 0),
@@ -362,11 +437,37 @@ export function buildPricingSnapshotFromClientTotals({
         staffingRateTypes: Array.isArray(settings.staffingRateTypes) ? [...settings.staffingRateTypes] : [],
         defaultStaffingRateType: toText(settings.defaultStaffingRateType)
       },
+      laborRateSnapshot: {
+        bartenderRateApplied: toNumber(totals.bartenderRateApplied, 0),
+        serverRateApplied: toNumber(totals.serverRateApplied, 0),
+        serverRatesApplied: toRateArray(totals.serverRatesApplied),
+        serverLabor: toNumber(totals.serverLabor, 0),
+        chefRateApplied: toNumber(totals.chefRateApplied, 0),
+        chefRatesApplied: toRateArray(totals.chefRatesApplied),
+        chefLabor: toNumber(totals.chefLabor, 0),
+        bartenderRateTypeId: toText(totals.bartenderRateTypeId),
+        bartenderRateTypeName: toText(totals.bartenderRateTypeName),
+        staffingRateTypeId: toText(totals.staffingRateTypeId),
+        staffingRateTypeName: toText(totals.staffingRateTypeName)
+      },
       pricingModeDefaults: {
         package: "per_person",
         addons: "per_person",
         rentals: "per_item",
         menuItems: "per_event"
+      },
+      staffing: {
+        style: toText(form.style),
+        servers: Math.max(0, toInt(totals.servers, 0)),
+        chefs: Math.max(0, toInt(totals.chefs, 0)),
+        bartenders: Math.max(0, toInt(totals.bartenders, 0)),
+        serverRateMixCsv: normalizeServerRateMixCsv(form.serverRateMixCsv),
+        chefRateMixCsv: normalizeChefRateMixCsv(form.chefRateMixCsv),
+        staffingChargeMode: normalizeStaffingChargeMode(
+          totals.staffingChargeMode || settings.staffingChargeMode,
+          "per_hour"
+        ),
+        hours: toNumber(form.hours, 0)
       }
     }
   });
@@ -427,6 +528,8 @@ export function deriveLegacyPricingSnapshot(quote = {}) {
     }),
     fees: {
       labor: toNumber(totals.labor, 0),
+      serverLabor: toNumber(totals.serverLabor, 0),
+      chefLabor: toNumber(totals.chefLabor, 0),
       travel: toNumber(totals.travel, 0),
       bartenderLabor: toNumber(totals.bartenderLabor, 0),
       serviceFee: toNumber(totals.serviceFee, 0)
@@ -454,6 +557,7 @@ export function deriveLegacyPricingSnapshot(quote = {}) {
       packageMultiplier: toNumber(totals.packageMultiplier, 1),
       addonMultiplier: toNumber(totals.addonMultiplier, 1),
       rentalMultiplier: toNumber(totals.rentalMultiplier, 1),
+      staffingChargeMode: normalizeStaffingChargeMode(totals.staffingChargeMode, "per_hour"),
       pricingSettingsVersion: Math.max(0, toInt(meta.pricingSettingsVersion, 0)),
       pricingSettingsUpdatedAtISO: normalizeISO(meta.pricingSettingsUpdatedAtISO || meta.updatedAtISO, ""),
       laborRateSnapshot:
@@ -462,7 +566,11 @@ export function deriveLegacyPricingSnapshot(quote = {}) {
           : {
               bartenderRateApplied: toNumber(totals.bartenderRateApplied, 0),
               serverRateApplied: toNumber(totals.serverRateApplied, 0),
+              serverRatesApplied: toRateArray(totals.serverRatesApplied),
+              serverLabor: toNumber(totals.serverLabor, 0),
               chefRateApplied: toNumber(totals.chefRateApplied, 0),
+              chefRatesApplied: toRateArray(totals.chefRatesApplied),
+              chefLabor: toNumber(totals.chefLabor, 0),
               bartenderRateTypeId: toText(totals.bartenderRateTypeId),
               bartenderRateTypeName: toText(totals.bartenderRateTypeName),
               staffingRateTypeId: toText(totals.staffingRateTypeId),

@@ -13,7 +13,8 @@ import {
   updateDoc,
   where
 } from "firebase/firestore";
-import { db, firebaseReady } from "./firebase";
+import { httpsCallable } from "firebase/functions";
+import { cloudFunctions, db, firebaseReady } from "./firebase";
 import {
   getActiveOrganizationId,
   getOrganizationCollectionRef,
@@ -38,6 +39,8 @@ const QUOTE_VERSIONS_COLLECTION = "versions";
 const DEFAULT_VALIDITY_DAYS = 30;
 const PORTAL_TOKEN_VALIDITY_DAYS = 30;
 const PORTAL_TOKEN_EXPIRED_ERROR = "Quote link is invalid or expired.";
+const HARD_DELETE_QUOTE_CALLABLE = "hardDeleteQuote";
+const PURGE_DELETED_QUOTES_CALLABLE = "purgeDeletedQuotesForOrganization";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
@@ -45,6 +48,19 @@ const BOOKING_CONFIRMATION_STATUSES = ["pending", "sent", "confirmed", "cancelle
 const INTEGRATION_PROVIDER_SET = new Set(["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"]);
 const INTEGRATION_STATE_SET = new Set(["queued", "success", "error", "retrying", "skipped"]);
 const DEFAULT_CRM_SYNC_TIMEOUT_MS = 12000;
+const MAX_DIETARY_RESTRICTIONS_LENGTH = 1200;
+const MAX_RATE_MIX_CSV_LENGTH = 300;
+const KITCHEN_CHECKPOINT_DEFS = [
+  { id: "prep-start", label: "Prep kickoff", minuteOffset: -180 },
+  { id: "line-check", label: "Line check", minuteOffset: -120 },
+  { id: "pack-out", label: "Pack and load-out", minuteOffset: -60 },
+  { id: "onsite-setup", label: "On-site setup", minuteOffset: -30 },
+  { id: "service-start", label: "Service start", minuteOffset: 0 },
+  { id: "service-end", label: "Service wrap", minuteOffset: 300 },
+  { id: "reset", label: "Kitchen reset", minuteOffset: 345 }
+];
+const KITCHEN_CHECKPOINT_IDS = new Set(KITCHEN_CHECKPOINT_DEFS.map((item) => item.id));
+const KITCHEN_CHECKPOINT_BY_ID = new Map(KITCHEN_CHECKPOINT_DEFS.map((item) => [item.id, item]));
 const STATUS_LIFECYCLE_FIELD = {
   draft: "draftAtISO",
   sent: "sentAtISO",
@@ -138,6 +154,12 @@ function quoteWriteDocRef(quoteId, organizationId = undefined, action = "quote w
     throw new Error("Quote id is required.");
   }
   return getOrganizationSubDocRef(QUOTES_COLLECTION, id, requireWriteOrganizationId(organizationId, action));
+}
+
+function ensureCallableReady(action = "quote callable") {
+  if (!cloudFunctions) {
+    throw new Error(`Cloud Functions unavailable for ${action}.`);
+  }
 }
 
 function quoteVersionsWriteCollectionRef(quoteId, organizationId = undefined, action = "quote version write") {
@@ -246,6 +268,61 @@ function normalizeIntegrationProvider(value) {
 function toText(value, fallback = "") {
   const text = String(value ?? "").trim();
   return text || fallback;
+}
+
+function sanitizeDietaryRestrictions(value) {
+  return String(value ?? "")
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .slice(0, MAX_DIETARY_RESTRICTIONS_LENGTH);
+}
+
+function sanitizeRateMixCsv(value) {
+  return String(value ?? "")
+    .replace(/\r\n/g, " ")
+    .trim()
+    .slice(0, MAX_RATE_MIX_CSV_LENGTH);
+}
+
+function sanitizeServerRateMixCsv(value) {
+  return sanitizeRateMixCsv(value);
+}
+
+function sanitizeChefRateMixCsv(value) {
+  return sanitizeRateMixCsv(value);
+}
+
+function normalizeRateArray(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((value) => Math.round(toNumber(value, 0) * 100) / 100)
+    .filter((value) => Number.isFinite(value) && value >= 0);
+}
+
+function sanitizeCheckpointLabel(value, fallback = "") {
+  const text = String(value ?? "").trim();
+  const safe = text || fallback;
+  return safe.slice(0, 80);
+}
+
+function normalizeKitchenCheckpoints(input) {
+  if (!Array.isArray(input)) return [];
+  const byId = new Map();
+
+  input.forEach((item) => {
+    const id = String(item?.id || "").trim();
+    if (!id || !KITCHEN_CHECKPOINT_IDS.has(id) || byId.has(id)) return;
+    const fallback = KITCHEN_CHECKPOINT_BY_ID.get(id) || { label: id, minuteOffset: 0 };
+    byId.set(id, {
+      id,
+      label: sanitizeCheckpointLabel(item?.label, fallback.label),
+      minuteOffset: Math.max(-1440, Math.min(2880, Math.round(toNumber(item?.minuteOffset, fallback.minuteOffset))))
+    });
+  });
+
+  if (!byId.size) return [];
+
+  return KITCHEN_CHECKPOINT_DEFS.map((item) => byId.get(item.id)).filter(Boolean);
 }
 
 function normalizeFeatureFlags(input) {
@@ -597,7 +674,8 @@ function hydrateBooking(booking) {
     availabilitySummary:
       payload.availabilitySummary && typeof payload.availabilitySummary === "object"
         ? { ...payload.availabilitySummary }
-        : {}
+        : {},
+    kitchenCheckpoints: normalizeKitchenCheckpoints(payload.kitchenCheckpoints)
   };
 }
 
@@ -1693,6 +1771,48 @@ export async function updateQuoteBookingAssignment({ quoteId, staffLead = "" } =
   return { ok: true, storage: "local" };
 }
 
+export async function updateQuoteKitchenCheckpoints({ quoteId, checkpoints = [] } = {}) {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
+  }
+  const quote = await readQuoteById(id);
+  const nowISO = isoNow();
+  const nextCheckpoints = normalizeKitchenCheckpoints(checkpoints);
+
+  await saveQuoteVersion(id);
+
+  if (firebaseReady) {
+    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "updateQuoteKitchenCheckpoints"), {
+      "booking.kitchenCheckpoints": nextCheckpoints,
+      updatedAtISO: nowISO
+    });
+    await syncPortalSnapshotFromQuoteDoc(id, quote.organizationId);
+    return { ok: true, storage: "firebase", checkpoints: nextCheckpoints };
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  let found = false;
+  const next = existing.map((item) => {
+    if (item.id !== id) return item;
+    found = true;
+    const booking = hydrateBooking(item.booking);
+    return {
+      ...item,
+      updatedAtISO: nowISO,
+      booking: {
+        ...booking,
+        kitchenCheckpoints: nextCheckpoints
+      }
+    };
+  });
+  if (!found) {
+    throw new Error("Quote not found.");
+  }
+  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
+  return { ok: true, storage: "local", checkpoints: nextCheckpoints };
+}
+
 export async function submitQuote({
   form,
   totals,
@@ -1774,6 +1894,8 @@ export async function submitQuote({
         form.serverRateOverride === "" || form.serverRateOverride === null || form.serverRateOverride === undefined
           ? ""
           : toNumber(form.serverRateOverride, 0),
+      serverRateMixCsv: sanitizeServerRateMixCsv(form.serverRateMixCsv),
+      chefRateMixCsv: sanitizeChefRateMixCsv(form.chefRateMixCsv),
       chefRateOverride:
         form.chefRateOverride === "" || form.chefRateOverride === null || form.chefRateOverride === undefined
           ? ""
@@ -1812,7 +1934,10 @@ export async function submitQuote({
       venueAddress: form.venueAddress || "",
       guests: Number(form.guests || 0),
       hours: Number(form.hours || 0),
+      servers: Number(form.servers || 0),
+      chefs: Number(form.chefs || 0),
       bartenders: Number(form.bartenders || 0),
+      dietaryRestrictions: sanitizeDietaryRestrictions(form.dietaryRestrictions),
       style: form.style || "",
       eventTypeId
     },
@@ -1845,7 +1970,11 @@ export async function submitQuote({
       laborRateSnapshot: {
         bartenderRateApplied: totals.bartenderRateApplied,
         serverRateApplied: totals.serverRateApplied,
+        serverRatesApplied: normalizeRateArray(totals.serverRatesApplied),
+        serverLabor: toNumber(totals.serverLabor, 0),
         chefRateApplied: totals.chefRateApplied,
+        chefRatesApplied: normalizeRateArray(totals.chefRatesApplied),
+        chefLabor: toNumber(totals.chefLabor, 0),
         bartenderRateTypeId: totals.bartenderRateTypeId || "",
         bartenderRateTypeName: totals.bartenderRateTypeName || "",
         staffingRateTypeId: totals.staffingRateTypeId || "",
@@ -1861,6 +1990,8 @@ export async function submitQuote({
         form.serverRateOverride === "" || form.serverRateOverride === null || form.serverRateOverride === undefined
           ? ""
           : toNumber(form.serverRateOverride, 0),
+      serverRateMixCsv: sanitizeServerRateMixCsv(form.serverRateMixCsv),
+      chefRateMixCsv: sanitizeChefRateMixCsv(form.chefRateMixCsv),
       chefRateOverride:
         form.chefRateOverride === "" || form.chefRateOverride === null || form.chefRateOverride === undefined
           ? ""
@@ -1876,6 +2007,7 @@ export async function submitQuote({
       bookedByEmail: "",
       staffLead: "",
       staffAssignedAtISO: "",
+      kitchenCheckpoints: [],
       contractNumber: "",
       contractConvertedAtISO: "",
       contractConvertedByEmail: "",
@@ -1902,10 +2034,14 @@ export async function submitQuote({
       rentals: totals.rentals,
       menu: totals.menu,
       labor: totals.labor,
+      serverLabor: totals.serverLabor,
+      chefLabor: totals.chefLabor,
       bartenderLabor: totals.bartenderLabor,
       bartenderRateApplied: totals.bartenderRateApplied,
       serverRateApplied: totals.serverRateApplied,
+      serverRatesApplied: normalizeRateArray(totals.serverRatesApplied),
       chefRateApplied: totals.chefRateApplied,
+      chefRatesApplied: normalizeRateArray(totals.chefRatesApplied),
       bartenderRateTypeId: totals.bartenderRateTypeId || "",
       bartenderRateTypeName: totals.bartenderRateTypeName || "",
       staffingRateTypeId: totals.staffingRateTypeId || "",
@@ -2117,6 +2253,8 @@ export async function updateQuote({
         form.serverRateOverride === "" || form.serverRateOverride === null || form.serverRateOverride === undefined
           ? ""
           : toNumber(form.serverRateOverride, 0),
+      serverRateMixCsv: sanitizeServerRateMixCsv(form.serverRateMixCsv),
+      chefRateMixCsv: sanitizeChefRateMixCsv(form.chefRateMixCsv),
       chefRateOverride:
         form.chefRateOverride === "" || form.chefRateOverride === null || form.chefRateOverride === undefined
           ? ""
@@ -2156,7 +2294,10 @@ export async function updateQuote({
       venueAddress: form.venueAddress || "",
       guests: Number(form.guests || 0),
       hours: Number(form.hours || 0),
+      servers: Number(form.servers || 0),
+      chefs: Number(form.chefs || 0),
       bartenders: Number(form.bartenders || 0),
+      dietaryRestrictions: sanitizeDietaryRestrictions(form.dietaryRestrictions),
       style: form.style || "",
       eventTypeId
     },
@@ -2189,7 +2330,11 @@ export async function updateQuote({
       laborRateSnapshot: {
         bartenderRateApplied: totals.bartenderRateApplied,
         serverRateApplied: totals.serverRateApplied,
+        serverRatesApplied: normalizeRateArray(totals.serverRatesApplied),
+        serverLabor: toNumber(totals.serverLabor, 0),
         chefRateApplied: totals.chefRateApplied,
+        chefRatesApplied: normalizeRateArray(totals.chefRatesApplied),
+        chefLabor: toNumber(totals.chefLabor, 0),
         bartenderRateTypeId: totals.bartenderRateTypeId || "",
         bartenderRateTypeName: totals.bartenderRateTypeName || "",
         staffingRateTypeId: totals.staffingRateTypeId || "",
@@ -2205,6 +2350,8 @@ export async function updateQuote({
         form.serverRateOverride === "" || form.serverRateOverride === null || form.serverRateOverride === undefined
           ? ""
           : toNumber(form.serverRateOverride, 0),
+      serverRateMixCsv: sanitizeServerRateMixCsv(form.serverRateMixCsv),
+      chefRateMixCsv: sanitizeChefRateMixCsv(form.chefRateMixCsv),
       chefRateOverride:
         form.chefRateOverride === "" || form.chefRateOverride === null || form.chefRateOverride === undefined
           ? ""
@@ -2221,10 +2368,14 @@ export async function updateQuote({
       rentals: totals.rentals,
       menu: totals.menu,
       labor: totals.labor,
+      serverLabor: totals.serverLabor,
+      chefLabor: totals.chefLabor,
       bartenderLabor: totals.bartenderLabor,
       bartenderRateApplied: totals.bartenderRateApplied,
       serverRateApplied: totals.serverRateApplied,
+      serverRatesApplied: normalizeRateArray(totals.serverRatesApplied),
       chefRateApplied: totals.chefRateApplied,
+      chefRatesApplied: normalizeRateArray(totals.chefRatesApplied),
       bartenderRateTypeId: totals.bartenderRateTypeId || "",
       bartenderRateTypeName: totals.bartenderRateTypeName || "",
       staffingRateTypeId: totals.staffingRateTypeId || "",
@@ -2494,6 +2645,7 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
       bookedByEmail: "",
       staffLead: "",
       staffAssignedAtISO: "",
+      kitchenCheckpoints: [],
       contractNumber: "",
       contractConvertedAtISO: "",
       contractConvertedByEmail: "",
@@ -2563,11 +2715,15 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
   };
 }
 
-function applyQuoteHistoryFilters(quotes, { eventTypeId = "", customerName = "" } = {}) {
+function applyQuoteHistoryFilters(quotes, { eventTypeId = "", customerName = "", includeDeleted = false } = {}) {
   const normalizedEventTypeId = String(eventTypeId || "").trim();
   const normalizedCustomerName = normalizeCustomerNameKey(customerName);
 
   return quotes.filter((quote) => {
+    if (!includeDeleted && normalizeStatus(quote?.status) === "deleted") {
+      return false;
+    }
+
     const quoteEventTypeId = String(quote?.eventTypeId || quote?.selection?.eventTypeId || "").trim();
     if (normalizedEventTypeId && quoteEventTypeId !== normalizedEventTypeId) {
       return false;
@@ -2585,6 +2741,7 @@ function applyQuoteHistoryFilters(quotes, { eventTypeId = "", customerName = "" 
 export async function getQuoteHistory(filters = {}) {
   const normalizedEventTypeId = String(filters?.eventTypeId || "").trim();
   const normalizedCustomerName = normalizeCustomerNameKey(filters?.customerName || "");
+  const includeDeleted = filters?.includeDeleted === true;
   const nowISO = isoNow();
 
   if (firebaseReady) {
@@ -2661,7 +2818,8 @@ export async function getQuoteHistory(filters = {}) {
 
     const filteredQuotes = applyQuoteHistoryFilters(nextQuotes, {
       eventTypeId: normalizedEventTypeId,
-      customerName: usedServerCustomerPrefix ? "" : normalizedCustomerName
+      customerName: usedServerCustomerPrefix ? "" : normalizedCustomerName,
+      includeDeleted
     });
 
     return {
@@ -2689,7 +2847,8 @@ export async function getQuoteHistory(filters = {}) {
     source: "local",
     quotes: applyQuoteHistoryFilters(nextQuotes, {
       eventTypeId: normalizedEventTypeId,
-      customerName: normalizedCustomerName
+      customerName: normalizedCustomerName,
+      includeDeleted
     })
   };
 }
@@ -2923,42 +3082,94 @@ export async function reopenQuote(id) {
   return { ok: true, storage: "local" };
 }
 
-export async function deleteQuote(id) {
+export async function deleteQuote(id, { organizationId = undefined } = {}) {
   const quoteId = String(id || "").trim();
   if (!quoteId) {
     throw new Error("Quote id is required.");
   }
 
-  const quote = await readQuoteById(quoteId);
-  const nowISO = isoNow();
-  const lifecycle = lifecycleObject("deleted", nowISO, quote.lifecycle);
-
-  await saveQuoteVersion(quoteId);
-
   if (firebaseReady) {
-    await updateDoc(quoteWriteDocRef(quoteId, quote.organizationId, "deleteQuote"), {
-      status: "deleted",
-      deletedAtISO: nowISO,
-      updatedAtISO: nowISO,
-      lifecycle
-    });
-    await syncPortalSnapshotFromQuoteDoc(quoteId, quote.organizationId);
-    return { ok: true, storage: "firebase" };
+    ensureCallableReady("hard delete quote");
+    const call = httpsCallable(cloudFunctions, HARD_DELETE_QUOTE_CALLABLE);
+    const resolvedOrganizationId = normalizeOrganizationId(organizationId) || resolveContextualOrganizationId();
+    const payload = { quoteId };
+    if (resolvedOrganizationId) {
+      payload.organizationId = resolvedOrganizationId;
+    }
+    const result = await call(payload);
+    return {
+      ok: true,
+      storage: "firebase",
+      ...(result?.data || {})
+    };
   }
 
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
-  const next = existing.map((item) => {
-    if (item.id !== quoteId) return item;
-    return {
-      ...item,
-      status: "deleted",
-      deletedAtISO: nowISO,
-      updatedAtISO: nowISO,
-      lifecycle
-    };
-  });
+  const exists = existing.some((item) => item.id === quoteId);
+  if (!exists) {
+    throw new Error("Quote not found.");
+  }
+  const next = existing.filter((item) => item.id !== quoteId);
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
-  return { ok: true, storage: "local" };
+  const history = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY) || "[]");
+  const nextHistory = history.filter((item) => String(item?.quoteId || "").trim() !== quoteId);
+  localStorage.setItem(LOCAL_QUOTE_HISTORY_KEY, JSON.stringify(nextHistory));
+  return {
+    ok: true,
+    storage: "local",
+    quoteId
+  };
+}
+
+export async function purgeDeletedQuotesForOrganization({
+  organizationId = "",
+  limit = 100
+} = {}) {
+  const normalizedLimit = Math.max(1, Math.min(300, Math.round(toNumber(limit, 100))));
+
+  if (firebaseReady) {
+    const scopedOrganizationId = requireWriteOrganizationId(
+      organizationId,
+      "purge deleted quotes"
+    );
+    ensureCallableReady("purge deleted quotes");
+    const call = httpsCallable(cloudFunctions, PURGE_DELETED_QUOTES_CALLABLE);
+    const result = await call({
+      organizationId: scopedOrganizationId,
+      limit: normalizedLimit
+    });
+    return result?.data || { ok: false };
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  const deletedIds = new Set(
+    existing
+      .filter((quote) => normalizeStatus(quote?.status) === "deleted")
+      .map((quote) => String(quote?.id || "").trim())
+      .filter(Boolean)
+  );
+  if (!deletedIds.size) {
+    return {
+      ok: true,
+      storage: "local",
+      deletedQuotes: 0,
+      hasMore: false
+    };
+  }
+
+  const nextQuotes = existing.filter((quote) => !deletedIds.has(String(quote?.id || "").trim()));
+  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(nextQuotes));
+
+  const history = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY) || "[]");
+  const nextHistory = history.filter((item) => !deletedIds.has(String(item?.quoteId || "").trim()));
+  localStorage.setItem(LOCAL_QUOTE_HISTORY_KEY, JSON.stringify(nextHistory));
+
+  return {
+    ok: true,
+    storage: "local",
+    deletedQuotes: deletedIds.size,
+    hasMore: false
+  };
 }
 
 export async function getPortalQuote(portalKey) {

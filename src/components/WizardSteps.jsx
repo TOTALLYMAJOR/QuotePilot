@@ -124,19 +124,16 @@ export function StepEvent({
   const templates = Array.isArray(settings?.eventTemplates) ? settings.eventTemplates : [];
   const taxRegions = Array.isArray(settings?.taxRegions) ? settings.taxRegions : [];
   const seasonProfiles = Array.isArray(settings?.seasonalProfiles) ? settings.seasonalProfiles : [];
-  const bartenderRateTypes = Array.isArray(settings?.bartenderRateTypes) ? settings.bartenderRateTypes : [];
-  const staffingRateTypes = Array.isArray(settings?.staffingRateTypes) ? settings.staffingRateTypes : [];
   const [openGroups, setOpenGroups] = useState({
     core: true,
     contact: true,
-    advancedPricing: false,
-    staffing: false
+    advancedPricing: false
   });
 
-  const hasBartenders = Number(form.bartenders || 0) > 0;
-  const staffingContextRelevant =
-    settings?.staffingLaborEnabled !== false &&
-    String(form.style || "").trim().toLowerCase() !== "drop-off";
+  const staffingChargeMode = String(settings?.staffingChargeMode || "per_hour").trim().toLowerCase();
+  const staffingChargeModeLabel = staffingChargeMode === "per_event_per_staff"
+    ? "Per event x staff count"
+    : "Per hour x staff count";
 
   const toggleGroup = (groupId) => {
     setOpenGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -241,13 +238,93 @@ export function StepEvent({
           />
 
           <StepperNumberInput
+            label="Servers"
+            min={0}
+            max={30}
+            value={Math.max(0, Number(form.servers || 0))}
+            onChange={(value) => updateField("servers", value)}
+            onBlur={() => markBlur("servers")}
+          />
+
+          <StepperNumberInput
+            label="Chefs"
+            min={0}
+            max={20}
+            value={Math.max(0, Number(form.chefs || 0))}
+            onChange={(value) => updateField("chefs", value)}
+            onBlur={() => markBlur("chefs")}
+          />
+
+          <StepperNumberInput
             label="Bartenders"
             min={0}
-            max={10}
+            max={20}
             value={Math.max(0, Number(form.bartenders || 0))}
             onChange={(value) => updateField("bartenders", value)}
             onBlur={() => markBlur("bartenders")}
           />
+
+          <Field label="Server rate override (optional)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.serverRateOverride ?? ""}
+              onChange={(e) => updateField("serverRateOverride", e.target.value)}
+              onBlur={() => markBlur("serverRateOverride")}
+              placeholder={`Default from admin (${staffingChargeModeLabel})`}
+            />
+          </Field>
+
+          <Field
+            label="Server rates (optional, one per server)"
+            hint="Applied in order to each server count; remaining servers use Server rate override/default."
+          >
+            <input
+              type="text"
+              value={String(form.serverRateMixCsv || "")}
+              onChange={(e) => updateField("serverRateMixCsv", String(e.target.value || "").slice(0, 300))}
+              onBlur={() => markBlur("serverRateMixCsv")}
+              placeholder="25, 30, 30, 35"
+            />
+          </Field>
+
+          <Field label="Chef rate override (optional)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.chefRateOverride ?? ""}
+              onChange={(e) => updateField("chefRateOverride", e.target.value)}
+              onBlur={() => markBlur("chefRateOverride")}
+              placeholder={`Default from admin (${staffingChargeModeLabel})`}
+            />
+          </Field>
+
+          <Field
+            label="Chef rates (optional, one per chef)"
+            hint="Applied in order to each chef count; remaining chefs use Chef rate override/default."
+          >
+            <input
+              type="text"
+              value={String(form.chefRateMixCsv || "")}
+              onChange={(e) => updateField("chefRateMixCsv", String(e.target.value || "").slice(0, 300))}
+              onBlur={() => markBlur("chefRateMixCsv")}
+              placeholder="45, 50, 55"
+            />
+          </Field>
+
+          <Field label="Bartender rate override (optional)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.bartenderRateOverride ?? ""}
+              onChange={(e) => updateField("bartenderRateOverride", e.target.value)}
+              onBlur={() => markBlur("bartenderRateOverride")}
+              placeholder={`Default from admin (${staffingChargeModeLabel})`}
+            />
+          </Field>
 
           <Field label="Event name" error={getError("eventName")} required>
             <input
@@ -273,6 +350,14 @@ export function StepEvent({
               value={form.venueAddress || ""}
               onChange={(e) => updateField("venueAddress", e.target.value)}
               onBlur={() => markBlur("venueAddress")}
+            />
+          </Field>
+          <Field label="Dietary Restrictions" className="quote-sheet-meta-wide">
+            <textarea
+              value={form.dietaryRestrictions || ""}
+              onChange={(e) => updateField("dietaryRestrictions", e.target.value)}
+              onBlur={() => markBlur("dietaryRestrictions")}
+              placeholder="Allergies, no-pork/no-shellfish, vegetarian requests, kosher/halal notes, etc."
             />
           </Field>
         </div>
@@ -388,92 +473,6 @@ export function StepEvent({
         </div>
       </AccordionGroup>
 
-      <AccordionGroup
-        id="staffing"
-        title="Staffing Overrides"
-        description="Optional labor rate controls"
-        optional
-        collapsedHint="Optional: rate overrides are only needed when you need to override default labor policy."
-        open={openGroups.staffing}
-        onToggle={toggleGroup}
-      >
-        {!staffingContextRelevant && (
-          <p className="source-note">Staffing overrides are hidden for the current service style or labor mode.</p>
-        )}
-        {staffingContextRelevant && (
-          <div className="grid two-col">
-            <Field label="Staffing rate type">
-              <select
-                value={form.staffingRateTypeId || ""}
-                onChange={(e) => updateField("staffingRateTypeId", e.target.value)}
-                onBlur={() => markBlur("staffingRateTypeId")}
-              >
-                <option value="">Default staffing rate</option>
-                {staffingRateTypes.map((rateType) => (
-                  <option key={rateType.id} value={rateType.id}>
-                    {rateType.name} (Server {currency(rateType.serverRate)} / Chef {currency(rateType.chefRate)})
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Server rate override (optional)">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.serverRateOverride ?? ""}
-                onChange={(e) => updateField("serverRateOverride", e.target.value)}
-                onBlur={() => markBlur("serverRateOverride")}
-                placeholder="Use selected/default staffing type"
-              />
-            </Field>
-            <Field label="Chef rate override (optional)">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.chefRateOverride ?? ""}
-                onChange={(e) => updateField("chefRateOverride", e.target.value)}
-                onBlur={() => markBlur("chefRateOverride")}
-                placeholder="Use selected/default staffing type"
-              />
-            </Field>
-
-            {hasBartenders && (
-              <>
-                <Field label="Bartender rate type">
-                  <select
-                    value={form.bartenderRateTypeId || ""}
-                    onChange={(e) => updateField("bartenderRateTypeId", e.target.value)}
-                    onBlur={() => markBlur("bartenderRateTypeId")}
-                  >
-                    <option value="">Default bartender rate</option>
-                    {bartenderRateTypes.map((rateType) => (
-                      <option key={rateType.id} value={rateType.id}>
-                        {rateType.name} ({currency(rateType.rate)})
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Bartender rate override (optional)">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.bartenderRateOverride ?? ""}
-                    onChange={(e) => updateField("bartenderRateOverride", e.target.value)}
-                    onBlur={() => markBlur("bartenderRateOverride")}
-                    placeholder="Use selected/default bartender type"
-                  />
-                </Field>
-              </>
-            )}
-            {!hasBartenders && (
-              <p className="source-note">Set bartenders above 0 in Core Event Basics to enable bartender pricing controls.</p>
-            )}
-          </div>
-        )}
-      </AccordionGroup>
     </div>
   );
 }
@@ -599,21 +598,43 @@ export function StepServices({
   recommendations,
   onApplyRecommendation,
   guidedSellingEnabled: guidedSellingEnabledProp,
+  aiAssistEnabled: aiAssistEnabledProp,
+  aiAutopilotEnabled: aiAutopilotEnabledProp,
   onSelectionTouched
 }) {
   const guidedSellingEnabled =
     guidedSellingEnabledProp !== undefined
       ? guidedSellingEnabledProp !== false
       : catalog.settings?.guidedSellingEnabled !== false;
+  const aiAssistEnabled = aiAssistEnabledProp !== false;
+  const aiAutopilotEnabled = aiAssistEnabled && aiAutopilotEnabledProp === true;
   const resolvePricingType = (item, fallback = "per_event") => {
     const raw = String(item?.pricingType || item?.type || "").trim().toLowerCase();
     if (raw === "per_person" || raw === "per_item" || raw === "per_event") return raw;
     return fallback;
   };
+
+  const resolveAddonStaffRole = (item) => {
+    const hasExplicitField = item && Object.prototype.hasOwnProperty.call(item, "staffRole");
+    const explicit = String(item?.staffRole || "").trim().toLowerCase();
+    if (explicit === "server" || explicit === "chef" || explicit === "bartender") return explicit;
+    if (hasExplicitField) return "";
+    const source = `${String(item?.id || "")} ${String(item?.name || "")}`.trim().toLowerCase();
+    if (!source) return "";
+    if (source.includes("bartender") || source.includes("bar tender")) return "bartender";
+    if (source.includes("chef")) return "chef";
+    if (source.includes("server") || source.includes("event staff")) return "server";
+    return "";
+  };
+
+  const addonSupportsQuantity = (item, pricingType) =>
+    pricingType === "per_item" || (pricingType === "per_event" && Boolean(resolveAddonStaffRole(item)));
+
   const pricingLabel = (item, fallback = "per_event") => {
     const pricingType = resolvePricingType(item, fallback);
     if (pricingType === "per_person") return `${currency(item.price)}/person`;
     if (pricingType === "per_item") return `${currency(item.price)}/item`;
+    if (addonSupportsQuantity(item, pricingType)) return `${currency(item.price)}/unit`;
     return currency(item.price);
   };
 
@@ -621,13 +642,16 @@ export function StepServices({
     const id = String(item?.id || "").trim();
     if (!id) return;
     const pricingType = resolvePricingType(item, key === "rentals" ? "per_item" : "per_event");
+    const quantityEnabled = key === "addons"
+      ? addonSupportsQuantity(item, pricingType)
+      : pricingType === "per_item";
     if (typeof onSelectionTouched === "function") onSelectionTouched(key);
     setForm((f) => {
       const set = new Set(Array.isArray(f[key]) ? f[key] : []);
       const quantityMap = { ...(f[quantityKey] || {}) };
       if (checked) {
         set.add(id);
-        if (pricingType === "per_item") {
+        if (quantityEnabled) {
           quantityMap[id] = Math.max(1, Number(quantityMap[id] || fallbackQty || 1));
         }
       } else {
@@ -681,9 +705,11 @@ export function StepServices({
 
       <div>
         <h4>Add-ons</h4>
+        <p className="source-note">Per-item (and configured unit-based) add-ons support quantity edits.</p>
         <div className="checklist">
           {catalog.addons.map((item) => {
             const pricingType = resolvePricingType(item, "per_person");
+            const quantityEnabled = addonSupportsQuantity(item, pricingType);
             const selected = form.addons.includes(item.id);
             return (
               <label className="checkrow checkrow-quantity" key={item.id}>
@@ -694,7 +720,7 @@ export function StepServices({
                 />
                 <span>{item.name}</span>
                 <small>{pricingLabel(item, "per_person")}</small>
-                {pricingType === "per_item" && selected && (
+                {quantityEnabled && selected && (
                   <input
                     className="qty-input"
                     type="number"
@@ -746,13 +772,16 @@ export function StepServices({
 
       <div className="recommendation-panel">
         <h4>Recommended Upgrades</h4>
-        {!guidedSellingEnabled && (
+        {!aiAssistEnabled && (
+          <p className="source-note">AI assist is currently disabled in Optional Modules.</p>
+        )}
+        {aiAssistEnabled && !guidedSellingEnabled && (
           <p className="source-note">Guided selling is currently disabled in Catalog Admin.</p>
         )}
-        {guidedSellingEnabled && recommendations.length === 0 && (
+        {aiAssistEnabled && guidedSellingEnabled && recommendations.length === 0 && (
           <p className="source-note">No rule matches this quote yet. Increase guests/hours or adjust rule triggers.</p>
         )}
-        {guidedSellingEnabled && recommendations.length > 0 && (
+        {aiAssistEnabled && guidedSellingEnabled && recommendations.length > 0 && (
           <div className="recommendation-list">
             {recommendations.map((item) => (
               <article className="recommendation-card" key={item.key}>
@@ -761,8 +790,13 @@ export function StepServices({
                   <p>{item.reason}</p>
                   <small>{item.impact}</small>
                 </div>
-                <button type="button" className="ghost compact" onClick={() => onApplyRecommendation(item)}>
-                  Apply
+                <button
+                  type="button"
+                  className="ghost compact"
+                  onClick={() => onApplyRecommendation(item)}
+                  disabled={aiAutopilotEnabled}
+                >
+                  {aiAutopilotEnabled ? "Auto" : "Apply"}
                 </button>
               </article>
             ))}
@@ -786,6 +820,41 @@ export function StepReview({ form, totals, settings }) {
   const effectivePerPerson = totals.guests > 0 ? totals.base / totals.guests : 0;
   const staffingOnly = Math.max(0, totals.labor - totals.bartenderLabor);
   const staffingLaborEnabled = totals.staffingLaborEnabled !== false;
+  const staffingChargeMode = String(totals.staffingChargeMode || "per_hour").trim().toLowerCase();
+  const staffingChargeModeLabel = staffingChargeMode === "per_event_per_staff"
+    ? "per event x staff count"
+    : "per hour x staff count";
+  const formatRateList = (rates, limit = 6) => {
+    const safeRates = Array.isArray(rates)
+      ? rates
+        .map((rate) => Number(rate))
+        .filter((rate) => Number.isFinite(rate) && rate >= 0)
+      : [];
+    if (!safeRates.length) return "";
+    const labels = safeRates.map((rate) => currency(rate));
+    if (labels.length <= limit) return labels.join(", ");
+    return `${labels.slice(0, limit).join(", ")} (+${labels.length - limit} more)`;
+  };
+  const serverRatesApplied = Array.isArray(totals.serverRatesApplied)
+    ? totals.serverRatesApplied
+      .map((rate) => Number(rate))
+      .filter((rate) => Number.isFinite(rate) && rate >= 0)
+    : [];
+  const chefRatesApplied = Array.isArray(totals.chefRatesApplied)
+    ? totals.chefRatesApplied
+      .map((rate) => Number(rate))
+      .filter((rate) => Number.isFinite(rate) && rate >= 0)
+    : [];
+  const hasCustomServerMix = String(form.serverRateMixCsv || "").trim() !== ""
+    || serverRatesApplied.some((rate) => Math.abs(rate - Number(totals.serverRateApplied || 0)) >= 0.01);
+  const hasCustomChefMix = String(form.chefRateMixCsv || "").trim() !== ""
+    || chefRatesApplied.some((rate) => Math.abs(rate - Number(totals.chefRateApplied || 0)) >= 0.01);
+  const serverRatesLabel = serverRatesApplied.length
+    ? formatRateList(serverRatesApplied)
+    : `${currency(totals.serverRateApplied || 0)} x ${Math.max(0, Number(totals.servers || 0))}`;
+  const chefRatesLabel = chefRatesApplied.length
+    ? formatRateList(chefRatesApplied)
+    : `${currency(totals.chefRateApplied || 0)} x ${Math.max(0, Number(totals.chefs || 0))}`;
   const validityDays = Math.max(1, Number(settings.quoteValidityDays || 30));
   const businessContact = [
     settings.businessAddress,
@@ -812,6 +881,7 @@ export function StepReview({ form, totals, settings }) {
           <p><strong>Date of Event:</strong> {eventDateLabel}</p>
           <p className="quote-sheet-meta-wide"><strong>Event Location:</strong> {form.venue || "-"}</p>
           <p className="quote-sheet-meta-wide"><strong>Venue Address:</strong> {form.venueAddress || "-"}</p>
+          <p className="quote-sheet-meta-wide"><strong>Dietary Restrictions:</strong> {form.dietaryRestrictions || "-"}</p>
         </div>
 
         <section className="quote-sheet-menu">
@@ -825,6 +895,26 @@ export function StepReview({ form, totals, settings }) {
           {staffingLaborEnabled && <div className="quote-charge"><span>Staffing</span><strong>{currency(staffingOnly)}</strong></div>}
           <div className="quote-charge"><span>Travel Fee</span><strong>{currency(totals.travel)}</strong></div>
           {staffingLaborEnabled && <div className="quote-charge"><span>Bartender</span><strong>{currency(totals.bartenderLabor)}</strong></div>}
+          {staffingLaborEnabled && (
+            <div className="quote-charge quote-charge-wide">
+              <span>Staff Count ({staffingChargeModeLabel})</span>
+              <strong>
+                S {Math.max(0, Number(totals.servers || 0))} / C {Math.max(0, Number(totals.chefs || 0))} / B {Math.max(0, Number(totals.bartenders || 0))}
+              </strong>
+            </div>
+          )}
+          {staffingLaborEnabled && hasCustomServerMix && Math.max(0, Number(totals.servers || 0)) > 0 && (
+            <div className="quote-charge quote-charge-wide">
+              <span>Server Rates (Applied)</span>
+              <strong>{serverRatesLabel}</strong>
+            </div>
+          )}
+          {staffingLaborEnabled && hasCustomChefMix && Math.max(0, Number(totals.chefs || 0)) > 0 && (
+            <div className="quote-charge quote-charge-wide">
+              <span>Chef Rates (Applied)</span>
+              <strong>{chefRatesLabel}</strong>
+            </div>
+          )}
           {!staffingLaborEnabled && (
             <div className="quote-charge quote-charge-wide">
               <span>Staffing labor automation</span>

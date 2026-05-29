@@ -20,6 +20,13 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function toRateArray(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((value) => Math.round(toNumber(value, 0) * 100) / 100)
+    .filter((value) => Number.isFinite(value) && value >= 0);
+}
+
 function toDateLabel(iso) {
   const dt = new Date(iso);
   if (Number.isNaN(dt.getTime())) return "";
@@ -84,6 +91,10 @@ export function buildProposalPayload(quote) {
       venueAddress: cleanText(quote.event?.venueAddress),
       guests: toNumber(quote.event?.guests, 0),
       hours: toNumber(quote.event?.hours, 0),
+      servers: toNumber(quote.event?.servers, 0),
+      chefs: toNumber(quote.event?.chefs, 0),
+      bartenders: toNumber(quote.event?.bartenders, 0),
+      dietaryRestrictions: cleanText(quote.event?.dietaryRestrictions),
       style: cleanText(quote.event?.style)
     },
     selection: {
@@ -111,7 +122,9 @@ export function buildProposalPayload(quote) {
       staffingRateTypeId: cleanText(quote.selection?.staffingRateTypeId),
       bartenderRateOverride: toNumber(quote.selection?.bartenderRateOverride, 0),
       serverRateOverride: toNumber(quote.selection?.serverRateOverride, 0),
-      chefRateOverride: toNumber(quote.selection?.chefRateOverride, 0)
+      chefRateOverride: toNumber(quote.selection?.chefRateOverride, 0),
+      serverRateMixCsv: cleanText(quote.selection?.serverRateMixCsv),
+      chefRateMixCsv: cleanText(quote.selection?.chefRateMixCsv)
     },
     payment: {
       depositLink: cleanText(quote.payment?.depositLink),
@@ -123,10 +136,14 @@ export function buildProposalPayload(quote) {
       rentals: toNumber(quote.totals?.rentals, 0),
       menu: toNumber(quote.totals?.menu, 0),
       labor: toNumber(quote.totals?.labor, 0),
+      serverLabor: toNumber(quote.totals?.serverLabor, 0),
+      chefLabor: toNumber(quote.totals?.chefLabor, 0),
       bartenderLabor: toNumber(quote.totals?.bartenderLabor, 0),
       bartenderRateApplied: toNumber(quote.totals?.bartenderRateApplied, 0),
       serverRateApplied: toNumber(quote.totals?.serverRateApplied, 0),
+      serverRatesApplied: toRateArray(quote.totals?.serverRatesApplied),
       chefRateApplied: toNumber(quote.totals?.chefRateApplied, 0),
+      chefRatesApplied: toRateArray(quote.totals?.chefRatesApplied),
       bartenderRateTypeId: cleanText(quote.totals?.bartenderRateTypeId),
       bartenderRateTypeName: cleanText(quote.totals?.bartenderRateTypeName),
       staffingRateTypeId: cleanText(quote.totals?.staffingRateTypeId),

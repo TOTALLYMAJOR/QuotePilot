@@ -340,7 +340,9 @@ export const DEFAULT_FEATURE_FLAGS = {
   reportingDashboard: true,
   quoteCompare: true,
   crmSync: true,
-  guidedSelling: true
+  guidedSelling: true,
+  aiAssist: true,
+  aiAutopilot: false
 };
 
 export const DEFAULT_SETTINGS = {
@@ -361,6 +363,7 @@ export const DEFAULT_SETTINGS = {
   quoteValidityDays: 30,
   serverRate: 22,
   chefRate: 28,
+  staffingChargeMode: "per_hour",
   staffingRateTypes: DEFAULT_STAFFING_RATE_TYPES,
   defaultStaffingRateType: "standard",
   quotePreparedBy: "Chef Toni North",
@@ -440,6 +443,32 @@ function normalizePricingType(value, fallback = "per_event") {
   return fallback;
 }
 
+function normalizeAddonStaffRole(value, fallback = "") {
+  const raw = String(value || fallback || "").trim().toLowerCase();
+  if (raw === "server" || raw === "chef" || raw === "bartender") return raw;
+  return "";
+}
+
+function inferAddonStaffRole(addon = {}) {
+  const hasExplicitField = Object.prototype.hasOwnProperty.call(addon, "staffRole");
+  const explicitRole = normalizeAddonStaffRole(addon?.staffRole);
+  if (explicitRole) return explicitRole;
+  if (hasExplicitField) return "";
+
+  const source = `${String(addon?.id || "")} ${String(addon?.name || "")}`.trim().toLowerCase();
+  if (!source) return "";
+  if (source.includes("bartender") || source.includes("bar tender")) return "bartender";
+  if (source.includes("chef")) return "chef";
+  if (source.includes("server") || source.includes("event staff")) return "server";
+  return "";
+}
+
+function normalizeStaffingChargeMode(value, fallback = "per_hour") {
+  const raw = String(value || fallback).trim().toLowerCase();
+  if (raw === "per_event_per_staff") return "per_event_per_staff";
+  return "per_hour";
+}
+
 const CRM_PROVIDER_SET = new Set(["webhook", "webhook_bridge", "hubspot", "salesforce"]);
 
 function normalizeCrmProvider(value, fallback = "webhook") {
@@ -500,6 +529,8 @@ function normalizeTemplate(item, idx) {
       item.serverRateOverride === "" || item.serverRateOverride === null || item.serverRateOverride === undefined
         ? ""
         : toNumber(item.serverRateOverride, 0, 0),
+    serverRateMixCsv: toText(item.serverRateMixCsv),
+    chefRateMixCsv: toText(item.chefRateMixCsv),
     chefRateOverride:
       item.chefRateOverride === "" || item.chefRateOverride === null || item.chefRateOverride === undefined
         ? ""
@@ -694,6 +725,7 @@ function toBoolean(value, fallback = false) {
 
 function normalizeFeatureFlags(input, legacySettings = {}) {
   const source = input && typeof input === "object" ? input : {};
+  const aiAssist = toBoolean(source.aiAssist, DEFAULT_FEATURE_FLAGS.aiAssist);
   return {
     customerPortal: toBoolean(source.customerPortal, DEFAULT_FEATURE_FLAGS.customerPortal),
     eventSchedule: toBoolean(source.eventSchedule, DEFAULT_FEATURE_FLAGS.eventSchedule),
@@ -705,7 +737,9 @@ function normalizeFeatureFlags(input, legacySettings = {}) {
     guidedSelling: toBoolean(
       source.guidedSelling,
       toBoolean(legacySettings.guidedSellingEnabled, DEFAULT_FEATURE_FLAGS.guidedSelling)
-    )
+    ),
+    aiAssist,
+    aiAutopilot: aiAssist && toBoolean(source.aiAutopilot, DEFAULT_FEATURE_FLAGS.aiAutopilot)
   };
 }
 
@@ -751,6 +785,7 @@ export function normalizeCatalog(raw) {
     pricingType: normalizePricingType(a.pricingType || a.type, "per_person"),
     type: normalizePricingType(a.pricingType || a.type, "per_person"),
     price: Number(a.price || 0),
+    staffRole: inferAddonStaffRole(a),
     active: a.active !== false
   }));
   const rentals = (raw.rentals || DEFAULT_RENTALS).map((r) =>
@@ -832,6 +867,10 @@ export function normalizeCatalog(raw) {
       quoteValidityDays: toNumber(rawSettings.quoteValidityDays, DEFAULT_SETTINGS.quoteValidityDays, 1),
       serverRate: toNumber(rawSettings.serverRate, DEFAULT_SETTINGS.serverRate, 0),
       chefRate: toNumber(rawSettings.chefRate, DEFAULT_SETTINGS.chefRate, 0),
+      staffingChargeMode: normalizeStaffingChargeMode(
+        rawSettings.staffingChargeMode,
+        DEFAULT_SETTINGS.staffingChargeMode
+      ),
       staffingRateTypes,
       defaultStaffingRateType,
       quotePreparedBy: toText(rawSettings.quotePreparedBy, DEFAULT_SETTINGS.quotePreparedBy),
@@ -888,12 +927,13 @@ export function normalizeCatalog(raw) {
 export function toStorageCatalog(catalog) {
   return {
     packages: catalog.packages.map(({ id, name, ppp }) => ({ id, name, ppp })),
-    addons: catalog.addons.map(({ id, name, type, pricingType, price, active }) => ({
+    addons: catalog.addons.map(({ id, name, type, pricingType, price, staffRole, active }) => ({
       id,
       name,
       type: normalizePricingType(pricingType || type, "per_person"),
       pricingType: normalizePricingType(pricingType || type, "per_person"),
       price,
+      staffRole: normalizeAddonStaffRole(staffRole),
       active: active !== false
     })),
     rentals: catalog.rentals.map(({ id, name, price, qtyPerGuests, type, pricingType, active }) => ({

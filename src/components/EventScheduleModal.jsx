@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { currency } from "../lib/quoteCalculator";
-import { getQuoteHistory, updateQuoteBookingAssignment } from "../lib/quoteStore";
+import {
+  getQuoteHistory,
+  updateQuoteBookingAssignment,
+  updateQuoteKitchenCheckpoints
+} from "../lib/quoteStore";
 
 const STATUS_SET = new Set(["accepted", "booked"]);
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -275,25 +279,57 @@ function formatCheckpointTime(totalMinutes) {
   return label;
 }
 
+function formatMinutesToTimeInput(totalMinutes) {
+  const normalized = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
+  const hours = Math.floor(normalized / 60);
+  const mins = normalized % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+}
+
+function defaultKitchenCheckpointOffsets(durationMinutes) {
+  return [
+    { id: "prep-start", label: "Prep kickoff", minuteOffset: -180 },
+    { id: "line-check", label: "Line check", minuteOffset: -120 },
+    { id: "pack-out", label: "Pack and load-out", minuteOffset: -60 },
+    { id: "onsite-setup", label: "On-site setup", minuteOffset: -30 },
+    { id: "service-start", label: "Service start", minuteOffset: 0 },
+    { id: "service-end", label: "Service wrap", minuteOffset: durationMinutes },
+    { id: "reset", label: "Kitchen reset", minuteOffset: durationMinutes + 45 }
+  ];
+}
+
 function buildKitchenCheckpoints(event) {
   const startMinutes = parseTimeToMinutes(event.time);
   if (startMinutes === null) return [];
 
   const durationMinutes = Math.max(60, Math.round(toNumber(event.hours, 0) * 60));
-  const checkpoints = [
-    { id: "prep-start", label: "Prep kickoff", minute: startMinutes - 180 },
-    { id: "line-check", label: "Line check", minute: startMinutes - 120 },
-    { id: "pack-out", label: "Pack and load-out", minute: startMinutes - 60 },
-    { id: "onsite-setup", label: "On-site setup", minute: startMinutes - 30 },
-    { id: "service-start", label: "Service start", minute: startMinutes },
-    { id: "service-end", label: "Service wrap", minute: startMinutes + durationMinutes },
-    { id: "reset", label: "Kitchen reset", minute: startMinutes + durationMinutes + 45 }
-  ];
+  const defaults = defaultKitchenCheckpointOffsets(durationMinutes);
+  const overrides = Array.isArray(event.kitchenCheckpointOverrides) ? event.kitchenCheckpointOverrides : [];
+  const overrideById = new Map(
+    overrides
+      .map((item) => ({
+        id: String(item?.id || "").trim(),
+        label: String(item?.label || "").trim(),
+        minuteOffset: Number(item?.minuteOffset)
+      }))
+      .filter((item) => item.id && Number.isFinite(item.minuteOffset))
+      .map((item) => [item.id, item])
+  );
 
-  return checkpoints.map((item) => ({
-    ...item,
-    timeLabel: formatCheckpointTime(item.minute)
-  }));
+  return defaults.map((item) => {
+    const override = overrideById.get(item.id);
+    const minuteOffset = override ? Math.round(override.minuteOffset) : item.minuteOffset;
+    const minute = startMinutes + minuteOffset;
+    const label = override?.label ? override.label.slice(0, 80) : item.label;
+    return {
+      id: item.id,
+      label,
+      minute,
+      minuteOffset,
+      timeLabel: formatCheckpointTime(minute),
+      timeValue: formatMinutesToTimeInput(minute)
+    };
+  });
 }
 
 export default function EventScheduleModal({
@@ -310,6 +346,7 @@ export default function EventScheduleModal({
   const [selectedIso, setSelectedIso] = useState(todayIso);
   const [feedback, setFeedback] = useState("");
   const [assigningId, setAssigningId] = useState("");
+  const [savingCheckpointId, setSavingCheckpointId] = useState("");
   const [dropLaneKey, setDropLaneKey] = useState("");
 
   const load = async () => {
@@ -353,10 +390,14 @@ export default function EventScheduleModal({
           hours: Number(quote.event?.hours || 0),
           eventName: quote.event?.name || "-",
           venue: quote.event?.venue || "-",
+          dietaryRestrictions: String(quote.event?.dietaryRestrictions || "").trim(),
           customer: quote.customer?.name || quote.customer?.email || "-",
           guests: Number(quote.event?.guests || 0),
           total: Number(quote.totals?.total || 0),
           staffLead: String(quote.booking?.staffLead || "").trim(),
+          kitchenCheckpointOverrides: Array.isArray(quote.booking?.kitchenCheckpoints)
+            ? quote.booking.kitchenCheckpoints
+            : [],
           contractNumber: String(quote.booking?.contractNumber || "").trim(),
           confirmationStatus: String(quote.booking?.confirmationStatus || "pending").trim(),
           confirmationSentAtISO: String(quote.booking?.confirmationSentAtISO || ""),
@@ -521,6 +562,122 @@ export default function EventScheduleModal({
     } finally {
       setAssigningId("");
     }
+  };
+
+  const toCheckpointOverrides = (checkpoints = []) =>
+    checkpoints.map((item) => ({
+      id: item.id,
+      label: String(item.label || "").trim().slice(0, 80),
+      minuteOffset: Math.round(toNumber(item.minuteOffset, 0))
+    }));
+
+  const handleCheckpointFieldChange = (quoteId, checkpointId, field, value) => {
+    const id = String(quoteId || "").trim();
+    if (!id) return;
+    const targetCheckpointId = String(checkpointId || "").trim();
+    if (!targetCheckpointId) return;
+
+    setState((prev) => ({
+      ...prev,
+      quotes: prev.quotes.map((quote) => {
+        if (quote.id !== id) return quote;
+        const startMinutes = parseTimeToMinutes(quote.event?.time);
+        if (startMinutes === null) return quote;
+
+        const current = buildKitchenCheckpoints({
+          time: quote.event?.time,
+          hours: quote.event?.hours,
+          kitchenCheckpointOverrides: quote.booking?.kitchenCheckpoints
+        });
+        if (!current.length) return quote;
+
+        const next = current.map((checkpoint) => {
+          if (checkpoint.id !== targetCheckpointId) return checkpoint;
+          if (field === "label") {
+            return {
+              ...checkpoint,
+              label: String(value || "").slice(0, 80)
+            };
+          }
+          const parsedMinutes = parseTimeToMinutes(value);
+          if (parsedMinutes === null) return checkpoint;
+          const minuteOffset = parsedMinutes - startMinutes;
+          return {
+            ...checkpoint,
+            minute: parsedMinutes,
+            minuteOffset,
+            timeLabel: formatCheckpointTime(parsedMinutes),
+            timeValue: formatMinutesToTimeInput(parsedMinutes)
+          };
+        });
+
+        return {
+          ...quote,
+          booking: {
+            ...(quote.booking || {}),
+            kitchenCheckpoints: toCheckpointOverrides(next)
+          }
+        };
+      })
+    }));
+  };
+
+  const persistKitchenCheckpoints = async (quoteId, checkpoints, successMessage = "Kitchen checkpoints saved.") => {
+    const id = String(quoteId || "").trim();
+    if (!id) return;
+    setSavingCheckpointId(id);
+    setFeedback("");
+    try {
+      await updateQuoteKitchenCheckpoints({
+        quoteId: id,
+        checkpoints
+      });
+      setFeedback(successMessage);
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        error: err?.message || "Failed to save kitchen checkpoints."
+      }));
+    } finally {
+      setSavingCheckpointId("");
+    }
+  };
+
+  const handleSaveCheckpoints = async (quoteId) => {
+    const quote = state.quotes.find((item) => item.id === quoteId);
+    if (!quote) return;
+    const current = buildKitchenCheckpoints({
+      time: quote.event?.time,
+      hours: quote.event?.hours,
+      kitchenCheckpointOverrides: quote.booking?.kitchenCheckpoints
+    });
+    await persistKitchenCheckpoints(quoteId, toCheckpointOverrides(current));
+  };
+
+  const handleResetCheckpoints = async (quoteId) => {
+    const quote = state.quotes.find((item) => item.id === quoteId);
+    if (!quote) return;
+    const defaults = buildKitchenCheckpoints({
+      time: quote.event?.time,
+      hours: quote.event?.hours,
+      kitchenCheckpointOverrides: []
+    });
+    const nextOverrides = toCheckpointOverrides(defaults);
+
+    setState((prev) => ({
+      ...prev,
+      quotes: prev.quotes.map((item) => {
+        if (item.id !== quoteId) return item;
+        return {
+          ...item,
+          booking: {
+            ...(item.booking || {}),
+            kitchenCheckpoints: nextOverrides
+          }
+        };
+      })
+    }));
+    await persistKitchenCheckpoints(quoteId, nextOverrides, "Kitchen checkpoints reset to defaults.");
   };
 
   const handleDragStart = (event, quoteId) => {
@@ -714,6 +871,7 @@ export default function EventScheduleModal({
                       <p>{item.eventName}</p>
                       <p>{item.time || "Time TBD"} • {item.venue}</p>
                       <p>{item.customer} • {item.guests || 0} guests</p>
+                      <p>Dietary restrictions: {item.dietaryRestrictions || "None provided"}</p>
                       <p>Total: {currency(item.total)}</p>
                       <p>Contract: {item.contractNumber || "Pending conversion"}</p>
                       <p
@@ -751,10 +909,44 @@ export default function EventScheduleModal({
                           <div className="schedule-checkpoint-list">
                             {item.kitchenCheckpoints.map((checkpoint) => (
                               <div key={`${item.id}-${checkpoint.id}`} className="schedule-checkpoint-item">
-                                <span>{checkpoint.label}</span>
+                                <input
+                                  type="text"
+                                  value={checkpoint.label}
+                                  maxLength={80}
+                                  onChange={(event) =>
+                                    handleCheckpointFieldChange(item.id, checkpoint.id, "label", event.target.value)}
+                                  disabled={savingCheckpointId === item.id}
+                                  aria-label={`${checkpoint.id} label`}
+                                />
+                                <input
+                                  type="time"
+                                  value={checkpoint.timeValue}
+                                  onChange={(event) =>
+                                    handleCheckpointFieldChange(item.id, checkpoint.id, "time", event.target.value)}
+                                  disabled={savingCheckpointId === item.id}
+                                  aria-label={`${checkpoint.id} time`}
+                                />
                                 <em>{checkpoint.timeLabel}</em>
                               </div>
                             ))}
+                          </div>
+                          <div className="schedule-checkpoint-actions">
+                            <button
+                              type="button"
+                              className="ghost compact"
+                              onClick={() => handleSaveCheckpoints(item.id)}
+                              disabled={savingCheckpointId === item.id}
+                            >
+                              {savingCheckpointId === item.id ? "Saving..." : "Save checkpoints"}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost compact"
+                              onClick={() => handleResetCheckpoints(item.id)}
+                              disabled={savingCheckpointId === item.id}
+                            >
+                              Reset defaults
+                            </button>
                           </div>
                         </div>
                       ) : (

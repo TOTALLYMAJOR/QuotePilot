@@ -7,6 +7,8 @@ export const DEFAULT_ORGANIZATION_ID = String(import.meta.env.VITE_DEFAULT_ORGAN
 
 let activeOrganizationId = "";
 const PROVISION_CUSTOMER_ORDER_CALLABLE = "provisionCustomerOrder";
+const ARCHIVE_ORGANIZATION_CALLABLE = "archiveOrganizationWorkspace";
+const DELETE_ORGANIZATION_CALLABLE = "deleteOrganizationWorkspace";
 
 export function normalizeOrganizationId(value, fallback = "") {
   const raw = String(value || "").trim();
@@ -124,6 +126,24 @@ export async function provisionCustomerOrder(payload = {}) {
     throw new Error("Cloud Functions are not configured.");
   }
   const call = httpsCallable(cloudFunctions, PROVISION_CUSTOMER_ORDER_CALLABLE);
+  const result = await call(payload);
+  return result?.data || { ok: false };
+}
+
+export async function archiveOrganizationWorkspace(payload = {}) {
+  if (!cloudFunctions) {
+    throw new Error("Cloud Functions are not configured.");
+  }
+  const call = httpsCallable(cloudFunctions, ARCHIVE_ORGANIZATION_CALLABLE);
+  const result = await call(payload);
+  return result?.data || { ok: false };
+}
+
+export async function deleteOrganizationWorkspace(payload = {}) {
+  if (!cloudFunctions) {
+    throw new Error("Cloud Functions are not configured.");
+  }
+  const call = httpsCallable(cloudFunctions, DELETE_ORGANIZATION_CALLABLE);
   const result = await call(payload);
   return result?.data || { ok: false };
 }

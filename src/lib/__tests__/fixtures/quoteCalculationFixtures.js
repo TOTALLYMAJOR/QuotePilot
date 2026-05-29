@@ -7,7 +7,8 @@ const rawFixtureCatalog = {
   ],
   addons: [
     { id: "cookie", name: "Cookie Tray", type: "per_person", price: 2 },
-    { id: "coffee", name: "Coffee Service", type: "per_event", price: 50 }
+    { id: "coffee", name: "Coffee Service", type: "per_event", price: 50 },
+    { id: "event_staff", name: "Event Staff", type: "per_event", price: 100, staffRole: "server" }
   ],
   rentals: [{ id: "chairs", name: "Banquet Chairs", price: 4, qtyPerGuests: 10 }],
   settings: {
@@ -22,6 +23,7 @@ const rawFixtureCatalog = {
     defaultBartenderRateType: "standard",
     serverRate: 20,
     chefRate: 40,
+    staffingChargeMode: "per_hour",
     staffingRateTypes: [
       { id: "standard", name: "Standard Staffing", serverRate: 20, chefRate: 40 },
       { id: "premium", name: "Premium Staffing", serverRate: 30, chefRate: 55 }
@@ -84,12 +86,16 @@ export const baseFixtureForm = {
   date: "2026-03-10",
   guests: 0,
   hours: 0,
+  servers: 0,
+  chefs: 0,
   style: "Buffet",
   bartenders: 0,
   bartenderRateTypeId: "",
   staffingRateTypeId: "",
   bartenderRateOverride: "",
   serverRateOverride: "",
+  serverRateMixCsv: "",
+  chefRateMixCsv: "",
   chefRateOverride: "",
   pkg: "basic",
   addons: [],
@@ -147,7 +153,8 @@ export const quoteCalculationFixtures = [
       ...baseFixtureForm,
       guests: 120,
       hours: 5,
-      style: "Plated",
+      servers: 10,
+      chefs: 3,
       bartenders: 2
     },
     expected: {
@@ -158,12 +165,33 @@ export const quoteCalculationFixtures = [
     }
   },
   {
+    id: "staff-addon-quantity-increments-count",
+    form: {
+      ...baseFixtureForm,
+      guests: 60,
+      hours: 4,
+      servers: 3,
+      addons: ["event_staff"],
+      addonQuantities: {
+        event_staff: 2
+      }
+    },
+    expected: {
+      addons: 200,
+      baseServers: 3,
+      addonServers: 0,
+      servers: 3,
+      labor: 240
+    }
+  },
+  {
     id: "labor-pricing-with-rate-types-and-overrides",
     form: {
       ...baseFixtureForm,
       guests: 120,
       hours: 5,
-      style: "Plated",
+      servers: 10,
+      chefs: 3,
       bartenders: 2,
       bartenderRateTypeId: "premium",
       staffingRateTypeId: "premium",
@@ -177,6 +205,27 @@ export const quoteCalculationFixtures = [
       chefRateApplied: 60,
       bartenderLabor: 500,
       labor: 3050
+    }
+  },
+  {
+    id: "labor-pricing-per-event-per-staff",
+    form: {
+      ...baseFixtureForm,
+      guests: 120,
+      hours: 5,
+      servers: 10,
+      chefs: 3,
+      bartenders: 2
+    },
+    settingsPatch: {
+      staffingChargeMode: "per_event_per_staff"
+    },
+    expected: {
+      staffingChargeMode: "per_event_per_staff",
+      servers: 10,
+      chefs: 3,
+      bartenderLabor: 60,
+      labor: 380
     }
   },
   {
@@ -207,7 +256,7 @@ export const quoteCalculationFixtures = [
     },
     expected: {
       taxRateApplied: 0.02,
-      tax: 2.82
+      tax: 2.66
     }
   },
   {

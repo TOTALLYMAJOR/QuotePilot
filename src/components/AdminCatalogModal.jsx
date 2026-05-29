@@ -71,13 +71,21 @@ const FEATURE_FLAG_META = [
   { id: "reportingDashboard", label: "Reporting Dashboard" },
   { id: "quoteCompare", label: "Quote Compare" },
   { id: "crmSync", label: "CRM Sync" },
-  { id: "guidedSelling", label: "Guided Selling" }
+  { id: "guidedSelling", label: "Guided Selling" },
+  { id: "aiAssist", label: "AI Assist (Suggestions)" },
+  { id: "aiAutopilot", label: "AI Autopilot (Auto Apply)" }
 ];
 
 function normalizePricingType(value, fallback = "per_event") {
   const raw = String(value || fallback).trim().toLowerCase();
   if (raw === "per_person" || raw === "per_item" || raw === "per_event") return raw;
   return fallback;
+}
+
+function normalizeStaffingChargeMode(value, fallback = "per_hour") {
+  const raw = String(value || fallback).trim().toLowerCase();
+  if (raw === "per_event_per_staff") return "per_event_per_staff";
+  return "per_hour";
 }
 
 function normalizeCrmProvider(value, fallback = "webhook") {
@@ -330,7 +338,15 @@ export default function AdminCatalogModal({
       key === "packages"
         ? { id, name: "New Package", ppp: 0 }
       : key === "addons"
-          ? { id, name: "New Add-on", pricingType: "per_person", type: "per_person", price: 0, active: true }
+          ? {
+              id,
+              name: "New Add-on",
+              pricingType: "per_person",
+              type: "per_person",
+              price: 0,
+              staffRole: "",
+              active: true
+            }
           : { id, name: "New Rental", pricingType: "per_item", type: "per_item", price: 0, qtyPerGuests: 10, active: true };
 
     setDraft((prev) => ({ ...prev, [key]: [...prev[key], template] }));
@@ -379,93 +395,6 @@ export default function AdminCatalogModal({
           ...(prev.settings?.featureFlags || {}),
           [flagId]: Boolean(checked)
         }
-      }
-    }));
-  };
-
-  const patchBartenderRateType = (index, field, value) => {
-    setDraft((prev) => {
-      const rateTypes = [...(prev.settings?.bartenderRateTypes || [])];
-      const current = { ...(rateTypes[index] || {}) };
-      current[field] = field === "rate" ? Number(value || 0) : value;
-      rateTypes[index] = current;
-      return {
-        ...prev,
-        settings: {
-          ...prev.settings,
-          bartenderRateTypes: rateTypes
-        }
-      };
-    });
-  };
-
-  const patchStaffingRateType = (index, field, value) => {
-    setDraft((prev) => {
-      const rateTypes = [...(prev.settings?.staffingRateTypes || [])];
-      const current = { ...(rateTypes[index] || {}) };
-      if (field === "serverRate" || field === "chefRate") {
-        current[field] = Number(value || 0);
-      } else {
-        current[field] = value;
-      }
-      rateTypes[index] = current;
-      return {
-        ...prev,
-        settings: {
-          ...prev.settings,
-          staffingRateTypes: rateTypes
-        }
-      };
-    });
-  };
-
-  const addBartenderRateType = () => {
-    const nextType = {
-      id: `bartender-rate-${Date.now()}`,
-      name: "New Bartender Type",
-      rate: Number(draft.settings?.bartenderRate || 0)
-    };
-    setDraft((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        bartenderRateTypes: [...(prev.settings?.bartenderRateTypes || []), nextType]
-      }
-    }));
-  };
-
-  const addStaffingRateType = () => {
-    const nextType = {
-      id: `staffing-rate-${Date.now()}`,
-      name: "New Staffing Type",
-      serverRate: Number(draft.settings?.serverRate || 0),
-      chefRate: Number(draft.settings?.chefRate || 0)
-    };
-    setDraft((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        staffingRateTypes: [...(prev.settings?.staffingRateTypes || []), nextType]
-      }
-    }));
-  };
-
-  const removeBartenderRateType = (index) => {
-    setDraft((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        bartenderRateTypes: (prev.settings?.bartenderRateTypes || []).filter((_, idx) => idx !== index)
-      }
-    }));
-  };
-
-  const removeStaffingRateType = (index) => {
-    setDraft((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        staffingRateTypes: (prev.settings?.staffingRateTypes || []).filter((_, idx) => idx !== index)
       }
     }));
   };
@@ -594,8 +523,11 @@ export default function AdminCatalogModal({
       setNewEventTypeName("");
       await refreshEventTypes(created.id);
       await refreshEventMenuData(created.id);
-      setStatus(`Event type "${created.name}" added.`);
-      pushToast(`Event type "${created.name}" added.`, "success");
+      const seededLabel = created?.seeded
+        ? ` Seeded ${Number(created.seeded.categories || 0)} categories and ${Number(created.seeded.items || 0)} items.`
+        : "";
+      setStatus(`Event type "${created.name}" added.${seededLabel}`);
+      pushToast(`Event type "${created.name}" added.${seededLabel}`, "success");
     } catch (err) {
       setStatus(err?.message || "Failed to create event type.");
       pushToast(err?.message || "Failed to create event type.", "error");
@@ -894,6 +826,9 @@ export default function AdminCatalogModal({
           }
         });
       }
+      if (normalizedFeatureFlags.aiAssist === false) {
+        normalizedFeatureFlags.aiAutopilot = false;
+      }
 
       const nextDraft = {
         ...draft,
@@ -978,6 +913,18 @@ export default function AdminCatalogModal({
 
         {activeTab === "addons" && (
           <Section title="Add-ons" onAdd={() => addRow("addons")}>
+          <p className="source-note">
+            Add-ons are <strong>price-only</strong> and do not change server/chef/bartender counts.
+            Use quantity with <code>per_item</code> pricing when you need multiple units.
+          </p>
+          <div className="admin-row admin-row-headings" aria-hidden="true">
+            <span>Item ID</span>
+            <span>Display Name</span>
+            <span>Pricing Type</span>
+            <span>Price</span>
+            <span>Active</span>
+            <span>Actions</span>
+          </div>
           {draft.addons.map((item, i) => (
             <div className="admin-row" key={item.id}>
               <input value={item.id} disabled />
@@ -1243,115 +1190,63 @@ export default function AdminCatalogModal({
             <section className="admin-section">
           <div className="admin-section-head"><h3>Numeric Settings</h3></div>
           <div className="admin-grid-settings">
-            <label>Per-mile rate<input type="number" step="0.01" value={draft.settings.perMileRate} onChange={(e) => patchNumericSetting("perMileRate", e.target.value)} /></label>
-            <label>Long-distance per-mile<input type="number" step="0.01" value={draft.settings.longDistancePerMileRate} onChange={(e) => patchNumericSetting("longDistancePerMileRate", e.target.value)} /></label>
-            <label>Delivery threshold miles<input type="number" step="1" min="0" value={draft.settings.deliveryThresholdMiles} onChange={(e) => patchNumericSetting("deliveryThresholdMiles", e.target.value)} /></label>
-            <label>Capacity limit<input type="number" step="1" min="1" value={draft.settings.capacityLimit || 400} onChange={(e) => patchNumericSetting("capacityLimit", e.target.value)} /></label>
-            <label>Bartender rate<input type="number" step="0.01" min="0" value={draft.settings.bartenderRate} onChange={(e) => patchNumericSetting("bartenderRate", e.target.value)} /></label>
-            <label>Service fee pct fallback<input type="number" step="0.01" value={draft.settings.serviceFeePct} onChange={(e) => patchNumericSetting("serviceFeePct", e.target.value)} /></label>
-            <label>Tax rate fallback<input type="number" step="0.01" value={draft.settings.taxRate} onChange={(e) => patchNumericSetting("taxRate", e.target.value)} /></label>
-            <label>Deposit pct<input type="number" step="0.01" value={draft.settings.depositPct} onChange={(e) => patchNumericSetting("depositPct", e.target.value)} /></label>
-            <label>Quote validity days<input type="number" step="1" min="1" value={draft.settings.quoteValidityDays} onChange={(e) => patchNumericSetting("quoteValidityDays", e.target.value)} /></label>
-            <label>Server rate<input type="number" step="0.01" value={draft.settings.serverRate} onChange={(e) => patchNumericSetting("serverRate", e.target.value)} /></label>
-            <label>Chef rate<input type="number" step="0.01" value={draft.settings.chefRate} onChange={(e) => patchNumericSetting("chefRate", e.target.value)} /></label>
+            <label>
+              Per-mile rate
+              <small className="admin-field-hint">Travel charge per mile up to the delivery threshold. Shown in Travel / Logistics.</small>
+              <input type="number" step="0.01" value={draft.settings.perMileRate} onChange={(e) => patchNumericSetting("perMileRate", e.target.value)} />
+            </label>
+            <label>
+              Long-distance per-mile
+              <small className="admin-field-hint">Travel charge per mile after the threshold is exceeded.</small>
+              <input type="number" step="0.01" value={draft.settings.longDistancePerMileRate} onChange={(e) => patchNumericSetting("longDistancePerMileRate", e.target.value)} />
+            </label>
+            <label>
+              Delivery threshold miles
+              <small className="admin-field-hint">Miles billed at Per-mile rate before Long-distance rate starts.</small>
+              <input type="number" step="1" min="0" value={draft.settings.deliveryThresholdMiles} onChange={(e) => patchNumericSetting("deliveryThresholdMiles", e.target.value)} />
+            </label>
+            <label>
+              Capacity limit
+              <small className="admin-field-hint">Operations/scheduling warning limit for same-venue load.</small>
+              <input type="number" step="1" min="1" value={draft.settings.capacityLimit || 400} onChange={(e) => patchNumericSetting("capacityLimit", e.target.value)} />
+            </label>
+            <label>
+              Default bartender rate
+              <small className="admin-field-hint">Event Basics uses this unless a quote-level bartender rate override is entered.</small>
+              <input type="number" step="0.01" min="0" value={draft.settings.bartenderRate} onChange={(e) => patchNumericSetting("bartenderRate", e.target.value)} />
+            </label>
+            <label>
+              Service fee pct fallback
+              <small className="admin-field-hint">Used only when no service-fee tier matches guest count.</small>
+              <input type="number" step="0.01" value={draft.settings.serviceFeePct} onChange={(e) => patchNumericSetting("serviceFeePct", e.target.value)} />
+            </label>
+            <label>
+              Tax rate fallback
+              <small className="admin-field-hint">Used only when no tax region is selected/found.</small>
+              <input type="number" step="0.01" value={draft.settings.taxRate} onChange={(e) => patchNumericSetting("taxRate", e.target.value)} />
+            </label>
+            <label>
+              Deposit pct
+              <small className="admin-field-hint">Controls required deposit shown in totals and proposal summary.</small>
+              <input type="number" step="0.01" value={draft.settings.depositPct} onChange={(e) => patchNumericSetting("depositPct", e.target.value)} />
+            </label>
+            <label>
+              Quote validity days
+              <small className="admin-field-hint">Printed on quote/proposal as the expiration window.</small>
+              <input type="number" step="1" min="1" value={draft.settings.quoteValidityDays} onChange={(e) => patchNumericSetting("quoteValidityDays", e.target.value)} />
+            </label>
+            <label>
+              Default server rate
+              <small className="admin-field-hint">Event Basics uses this unless a quote-level server rate override is entered.</small>
+              <input type="number" step="0.01" value={draft.settings.serverRate} onChange={(e) => patchNumericSetting("serverRate", e.target.value)} />
+            </label>
+            <label>
+              Default chef rate
+              <small className="admin-field-hint">Event Basics uses this unless a quote-level chef rate override is entered.</small>
+              <input type="number" step="0.01" value={draft.settings.chefRate} onChange={(e) => patchNumericSetting("chefRate", e.target.value)} />
+            </label>
             <label>Integration retry limit<input type="number" step="1" min="1" max="10" value={draft.settings.integrationRetryLimit || 3} onChange={(e) => patchNumericSetting("integrationRetryLimit", e.target.value)} /></label>
             <label>Integration audit retention<input type="number" step="1" min="10" max="200" value={draft.settings.integrationAuditRetention || 50} onChange={(e) => patchNumericSetting("integrationAuditRetention", e.target.value)} /></label>
-          </div>
-            </section>
-
-            <section className="admin-section">
-          <div className="admin-section-head">
-            <h3>Labor Rate Types</h3>
-            <div className="admin-inline-actions">
-              <button type="button" className="ghost compact" onClick={addBartenderRateType}>Add Bartender Type</button>
-              <button type="button" className="ghost compact" onClick={addStaffingRateType}>Add Staffing Type</button>
-            </div>
-          </div>
-          <div className="admin-section-body">
-            <h4>Bartender Rate Types</h4>
-            {(draft.settings?.bartenderRateTypes || []).map((rateType, index) => (
-              <div className="admin-row" key={rateType.id || `bartender-rate-${index}`}>
-                <input
-                  value={rateType.id || ""}
-                  onChange={(e) => patchBartenderRateType(index, "id", e.target.value)}
-                />
-                <input
-                  value={rateType.name || ""}
-                  onChange={(e) => patchBartenderRateType(index, "name", e.target.value)}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={Number(rateType.rate || 0)}
-                  onChange={(e) => patchBartenderRateType(index, "rate", e.target.value)}
-                />
-                <button type="button" className="ghost compact" onClick={() => removeBartenderRateType(index)}>Delete</button>
-              </div>
-            ))}
-            {(draft.settings?.bartenderRateTypes || []).length === 0 && (
-              <p className="source-note">No bartender rate types configured. Use the button above to add one.</p>
-            )}
-            <label>
-              Default bartender type
-              <select
-                value={draft.settings?.defaultBartenderRateType || ""}
-                onChange={(e) => patchTextSetting("defaultBartenderRateType", e.target.value)}
-              >
-                <option value="">Use numeric fallback</option>
-                {(draft.settings?.bartenderRateTypes || []).map((rateType) => (
-                  <option key={rateType.id} value={rateType.id}>
-                    {rateType.name || rateType.id}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <h4>Staffing Rate Types</h4>
-            {(draft.settings?.staffingRateTypes || []).map((rateType, index) => (
-              <div className="admin-row" key={rateType.id || `staffing-rate-${index}`}>
-                <input
-                  value={rateType.id || ""}
-                  onChange={(e) => patchStaffingRateType(index, "id", e.target.value)}
-                />
-                <input
-                  value={rateType.name || ""}
-                  onChange={(e) => patchStaffingRateType(index, "name", e.target.value)}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={Number(rateType.serverRate || 0)}
-                  onChange={(e) => patchStaffingRateType(index, "serverRate", e.target.value)}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={Number(rateType.chefRate || 0)}
-                  onChange={(e) => patchStaffingRateType(index, "chefRate", e.target.value)}
-                />
-                <button type="button" className="ghost compact" onClick={() => removeStaffingRateType(index)}>Delete</button>
-              </div>
-            ))}
-            {(draft.settings?.staffingRateTypes || []).length === 0 && (
-              <p className="source-note">No staffing rate types configured. Use the button above to add one.</p>
-            )}
-            <label>
-              Default staffing type
-              <select
-                value={draft.settings?.defaultStaffingRateType || ""}
-                onChange={(e) => patchTextSetting("defaultStaffingRateType", e.target.value)}
-              >
-                <option value="">Use numeric fallback</option>
-                {(draft.settings?.staffingRateTypes || []).map((rateType) => (
-                  <option key={rateType.id} value={rateType.id}>
-                    {rateType.name || rateType.id}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
             </section>
 
@@ -1371,11 +1266,23 @@ export default function AdminCatalogModal({
             </label>
             <label>
               <span>Include staffing labor automation in totals</span>
+              <small className="admin-field-hint">When off, server/chef/bartender labor is excluded from quote totals.</small>
               <input
                 type="checkbox"
                 checked={draft.settings.staffingLaborEnabled !== false}
                 onChange={(e) => patchToggleSetting("staffingLaborEnabled", e.target.checked)}
               />
+            </label>
+            <label>
+              Staffing charge mode
+              <small className="admin-field-hint">Per hour = rate x staff count x hours. Per event = rate x staff count (hours ignored).</small>
+              <select
+                value={normalizeStaffingChargeMode(draft.settings?.staffingChargeMode, "per_hour")}
+                onChange={(e) => patchTextSetting("staffingChargeMode", normalizeStaffingChargeMode(e.target.value, "per_hour"))}
+              >
+                <option value="per_hour">Per hour x staff count</option>
+                <option value="per_event_per_staff">Per event x staff count</option>
+              </select>
             </label>
           </div>
           <div className="rule-config-list">
