@@ -1608,6 +1608,7 @@ export default function App() {
           organizationId={authSession.organizationId}
           currentUserUid={authSession.user?.uid || ""}
           currentUserEmail={authSession.user?.email || ""}
+          currentUserRole={authSession.role}
           onEditQuote={handleEditQuote}
           canDeleteQuotes={authSession.isAdmin}
           onToast={pushToast}

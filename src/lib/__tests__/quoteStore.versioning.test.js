@@ -137,10 +137,13 @@ function seedQuotes(quotes) {
 
 describe("quoteStore versioning and delete behavior", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-20T12:00:00.000Z"));
     vi.stubGlobal("localStorage", createStorageMock());
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 

@@ -82,6 +82,8 @@ body {
 
 .container {
   width: min(1180px, calc(100% - 2rem));
+  min-width: 0;
+  max-width: calc(100% - 2rem);
   margin: 0 auto;
 }
 
@@ -310,10 +312,12 @@ body {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: var(--space-4);
+  min-width: 0;
   padding-bottom: 2rem;
 }
 
 .panel {
+  min-width: 0;
   background: linear-gradient(180deg, rgba(255, 251, 243, 0.97), rgba(255, 246, 228, 0.96));
   border-radius: var(--radius-md);
   border: 1px solid rgba(201, 153, 74, 0.58);
@@ -323,6 +327,7 @@ body {
 }
 
 .step-stage {
+  min-width: 0;
   animation: stage-in 220ms ease-out;
 }
 
@@ -332,6 +337,8 @@ body {
   display: flex;
   list-style: none;
   gap: 0.7rem;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .stepper-item {
@@ -1232,6 +1239,8 @@ hr {
 
 .modal-card {
   width: min(1080px, 100%);
+  min-width: 0;
+  max-width: 100%;
   max-height: 90vh;
   overflow: auto;
   background: linear-gradient(180deg, #fff9ef, #fff3e0);
@@ -1482,6 +1491,9 @@ hr {
 
 .history-table-wrap {
   margin-top: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: auto;
 }
 

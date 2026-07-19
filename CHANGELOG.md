@@ -50,6 +50,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Quote History now uses the authenticated staff role to hide payment, booking, portal rotation, contract conversion, and delete controls from sales users while preserving proposal-prep actions.
 - `CI Quality` workflow now uses classifier-driven lane orchestration, branch concurrency cancellation, hard-vs-advisory heavy lane behavior, and artifact retention windows for failure triage.
 - CI lane classifier now treats fallback-retirement-sensitive org/fallback modules (`src/lib/menuService.js`, `src/hooks/useCatalogData.js`, `src/lib/organizationService.js`, `src/context/OrganizationContext.jsx`) as high-risk, making Firebase heavy lanes required (non-advisory) on feature branches.
 - Deploy workflow guard now explicitly restricts workflow-run deploys to successful `CI Quality` runs from `main` in the same repository context.
@@ -138,6 +139,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Added quote-level dietary restrictions and editable kitchen checkpoint overrides with schedule persistence (`booking.kitchenCheckpoints`) and schedule card rendering support.
 - Added canonical menu template enforcement utilities (`src/data/canonicalMenuTemplate.js`, `src/lib/menuCanonicalSync.js`) and admin menu flows that keep event-type menus synchronized to the same canonical dataset.
 - Replaced quote-history soft-delete operator behavior with admin callable hard-delete flow (`hardDeleteQuote`) plus org-scoped purge support for previously soft-deleted quotes (`purgeDeletedQuotesForOrganization`).
+
+### Fixed
+
+- Quote store unit fixtures now pin their intended validation date so portal-expiry and quote-expiry assertions remain deterministic over time.
 
 ## [2026-03-10]
 

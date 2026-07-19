@@ -55,6 +55,38 @@ function isPortalExpired(quote) {
   return dt.getTime() < Date.now();
 }
 
+function normalizeHistoryRole(role) {
+  const normalized = String(role || "").trim().toLowerCase();
+  if (normalized === "admin" || normalized === "sales") return normalized;
+  return "customer";
+}
+
+export function getQuoteHistoryActionPermissions(role) {
+  const normalizedRole = normalizeHistoryRole(role);
+  const isAdmin = normalizedRole === "admin";
+  const isSales = normalizedRole === "sales";
+  const isStaff = isAdmin || isSales;
+
+  return {
+    role: normalizedRole,
+    isStaff,
+    canEditQuote: isStaff,
+    canDuplicateQuote: isStaff,
+    canExportProposal: isStaff,
+    canSendQuoteEmail: isStaff,
+    canCopyArtifacts: isStaff,
+    canCopyPaymentLink: isAdmin,
+    canSendPaymentRequest: isAdmin,
+    canCreateCheckoutLink: isAdmin,
+    canManageQuoteStatus: isAdmin,
+    canManagePaymentStatus: isAdmin,
+    canConvertToContract: isAdmin,
+    canManageConfirmation: isAdmin,
+    canRotatePortalLink: isAdmin,
+    canDeleteQuote: isAdmin
+  };
+}
+
 export default function QuoteHistoryModal({
   open,
   onClose,
@@ -62,6 +94,7 @@ export default function QuoteHistoryModal({
   organizationId = "",
   currentUserUid = "",
   currentUserEmail = "",
+  currentUserRole = "customer",
   onEditQuote,
   canDeleteQuotes = false,
   onToast
@@ -147,6 +180,12 @@ export default function QuoteHistoryModal({
 
   if (!open) return null;
 
+  const permissions = getQuoteHistoryActionPermissions(currentUserRole);
+  const authorityCopy = permissions.role === "admin"
+    ? "Admin can change quote, payment, booking, portal, and contract state."
+    : permissions.role === "sales"
+      ? "Sales can prepare and send proposals; admin approval is required for payment, booking, portal, and delete actions."
+      : "Customers can review portal content only; staff authority is required for quote history actions.";
   const normalizedCustomerQuery = query.trim().toLowerCase();
   const eventTypeNameById = new Map(
     (eventTypes || []).map((item) => [String(item.id), item.name])
@@ -213,6 +252,10 @@ export default function QuoteHistoryModal({
   };
 
   const handleStatusUpdate = async (quoteId, nextStatus, silent = false) => {
+    if (!permissions.canManageQuoteStatus) {
+      setState((prev) => ({ ...prev, error: "Admin role required to change quote status." }));
+      return;
+    }
     setUpdatingId(quoteId);
     try {
       await updateQuoteStatus(quoteId, nextStatus);
@@ -232,6 +275,10 @@ export default function QuoteHistoryModal({
   };
 
   const handlePaymentUpdate = async (quoteId, nextPaymentStatus) => {
+    if (!permissions.canManagePaymentStatus) {
+      setState((prev) => ({ ...prev, error: "Admin role required to change payment status." }));
+      return;
+    }
     setUpdatingPaymentId(quoteId);
     try {
       await updateQuotePaymentStatus(quoteId, nextPaymentStatus);
@@ -249,6 +296,10 @@ export default function QuoteHistoryModal({
   };
 
   const handleDeleteQuote = async (quoteId) => {
+    if (!permissions.canDeleteQuote || !canDeleteQuotes) {
+      setState((prev) => ({ ...prev, error: "Admin role required to delete quotes." }));
+      return;
+    }
     setUpdatingId(quoteId);
     setState((prev) => ({ ...prev, error: "" }));
     try {
@@ -307,6 +358,10 @@ export default function QuoteHistoryModal({
   };
 
   const handleConvertToContract = async (quote) => {
+    if (!permissions.canConvertToContract) {
+      setState((prev) => ({ ...prev, error: "Admin role required to convert quotes to contracts." }));
+      return;
+    }
     setConvertingId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
@@ -343,6 +398,10 @@ export default function QuoteHistoryModal({
   };
 
   const handleConfirmationUpdate = async (quoteId, nextConfirmationStatus) => {
+    if (!permissions.canManageConfirmation) {
+      setState((prev) => ({ ...prev, error: "Admin role required to update booking confirmation." }));
+      return;
+    }
     setUpdatingConfirmationId(quoteId);
     setState((prev) => ({ ...prev, error: "" }));
     try {
@@ -444,6 +503,10 @@ export default function QuoteHistoryModal({
 
   const handleRotatePortalLink = async (quote) => {
     if (!quote?.id) return;
+    if (!permissions.canRotatePortalLink) {
+      setState((prev) => ({ ...prev, error: "Admin role required to rotate portal links." }));
+      return;
+    }
     setRotatingPortalId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
@@ -470,6 +533,9 @@ export default function QuoteHistoryModal({
   };
 
   const createCheckoutLink = async (quote) => {
+    if (!permissions.canCreateCheckoutLink) {
+      throw new Error("Admin role required to create Stripe checkout links.");
+    }
     if (state.source !== "firebase") {
       throw new Error("Stripe checkout requires Firebase-backed quote storage.");
     }
@@ -612,6 +678,9 @@ export default function QuoteHistoryModal({
         </div>
 
         <p className="source-note">Source: {state.source || "-"}</p>
+        <p className="source-note">
+          Authority: {authorityCopy}
+        </p>
         {state.error && <p className="error-note">{state.error}</p>}
         {state.feedback && <p className="source-note">{state.feedback}</p>}
         <div className="history-controls">
@@ -688,28 +757,36 @@ export default function QuoteHistoryModal({
                     <td>{currency(quote.totals?.deposit || 0)}</td>
                     <td>
                       <div className="history-meta-stack">
-                        <select
-                          value={quote.status || "draft"}
-                          onChange={(e) => handleStatusUpdate(quote.id, e.target.value)}
-                          disabled={updatingId === quote.id || statusTransitions.length === 0}
-                        >
-                          {statusOptions.map((status) => (
-                            <option key={status} value={status}>{status}</option>
-                          ))}
-                        </select>
+                        {permissions.canManageQuoteStatus ? (
+                          <select
+                            value={quote.status || "draft"}
+                            onChange={(e) => handleStatusUpdate(quote.id, e.target.value)}
+                            disabled={updatingId === quote.id || statusTransitions.length === 0}
+                          >
+                            {statusOptions.map((status) => (
+                              <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <strong>{quote.status || "draft"}</strong>
+                        )}
                         <small>{statusBucketLabel(quote.status || "draft")}</small>
                       </div>
                     </td>
                     <td>
-                      <select
-                        value={quote.payment?.depositStatus || "unpaid"}
-                        onChange={(e) => handlePaymentUpdate(quote.id, e.target.value)}
-                        disabled={updatingPaymentId === quote.id}
-                      >
-                        {PAYMENT_STATUSES.map((paymentStatus) => (
-                          <option key={paymentStatus} value={paymentStatus}>{paymentStatus}</option>
-                        ))}
-                      </select>
+                      {permissions.canManagePaymentStatus ? (
+                        <select
+                          value={quote.payment?.depositStatus || "unpaid"}
+                          onChange={(e) => handlePaymentUpdate(quote.id, e.target.value)}
+                          disabled={updatingPaymentId === quote.id}
+                        >
+                          {PAYMENT_STATUSES.map((paymentStatus) => (
+                            <option key={paymentStatus} value={paymentStatus}>{paymentStatus}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span>{quote.payment?.depositStatus || "unpaid"}</span>
+                      )}
                     </td>
                     <td>
                       <div className="history-meta-stack">
@@ -720,15 +797,19 @@ export default function QuoteHistoryModal({
                     <td>
                       {canTrackConfirmation ? (
                         <div className="history-meta-stack">
-                          <select
-                            value={confirmationStatus}
-                            onChange={(e) => handleConfirmationUpdate(quote.id, e.target.value)}
-                            disabled={updatingConfirmationId === quote.id}
-                          >
-                            {BOOKING_CONFIRMATION_STATUSES.map((bookingStatus) => (
-                              <option key={bookingStatus} value={bookingStatus}>{bookingStatus}</option>
-                            ))}
-                          </select>
+                          {permissions.canManageConfirmation ? (
+                            <select
+                              value={confirmationStatus}
+                              onChange={(e) => handleConfirmationUpdate(quote.id, e.target.value)}
+                              disabled={updatingConfirmationId === quote.id}
+                            >
+                              {BOOKING_CONFIRMATION_STATUSES.map((bookingStatus) => (
+                                <option key={bookingStatus} value={bookingStatus}>{bookingStatus}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <strong>{confirmationStatus}</strong>
+                          )}
                           <small>{fmtDate(booking.confirmedAtISO || booking.confirmationSentAtISO)}</small>
                         </div>
                       ) : (
@@ -739,7 +820,7 @@ export default function QuoteHistoryModal({
                     <td>{fmtDate(quote.updatedAtISO || quote.createdAtISO)}</td>
                     <td>
                       <div className="row-actions">
-                        {canConvert && (
+                        {permissions.canConvertToContract && canConvert && (
                           <button
                             type="button"
                             className="cta compact"
@@ -749,7 +830,7 @@ export default function QuoteHistoryModal({
                             {convertingId === quote.id ? "Converting..." : "Convert"}
                           </button>
                         )}
-                        {canTrackConfirmation && confirmationStatus !== "confirmed" && (
+                        {permissions.canManageConfirmation && canTrackConfirmation && confirmationStatus !== "confirmed" && (
                           <button
                             type="button"
                             className="ghost compact"
@@ -759,34 +840,42 @@ export default function QuoteHistoryModal({
                             Confirm
                           </button>
                         )}
-                        <button type="button" className="ghost compact" onClick={() => handleEditQuote(quote)}>
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost compact"
-                          onClick={() => handleDuplicateQuote(quote)}
-                          disabled={duplicatingId === quote.id}
-                        >
-                          {duplicatingId === quote.id ? "Duplicating..." : "Duplicate"}
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost compact"
-                          onClick={() => handleExportPdf(quote)}
-                          disabled={exportingPdfId === quote.id}
-                        >
-                          {exportingPdfId === quote.id ? "Generating PDF..." : "PDF"}
-                        </button>
-                        <button
-                          type="button"
-                          className="cta compact"
-                          onClick={() => handleSendQuoteEmail(quote)}
-                          disabled={sendingQuoteEmailId === quote.id}
-                        >
-                          {sendingQuoteEmailId === quote.id ? "Sending..." : "Send Quote Email"}
-                        </button>
-                        {canSendPaymentRequest && (
+                        {permissions.canEditQuote && (
+                          <button type="button" className="ghost compact" onClick={() => handleEditQuote(quote)}>
+                            Edit
+                          </button>
+                        )}
+                        {permissions.canDuplicateQuote && (
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleDuplicateQuote(quote)}
+                            disabled={duplicatingId === quote.id}
+                          >
+                            {duplicatingId === quote.id ? "Duplicating..." : "Duplicate"}
+                          </button>
+                        )}
+                        {permissions.canExportProposal && (
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleExportPdf(quote)}
+                            disabled={exportingPdfId === quote.id}
+                          >
+                            {exportingPdfId === quote.id ? "Generating PDF..." : "PDF"}
+                          </button>
+                        )}
+                        {permissions.canSendQuoteEmail && (
+                          <button
+                            type="button"
+                            className="cta compact"
+                            onClick={() => handleSendQuoteEmail(quote)}
+                            disabled={sendingQuoteEmailId === quote.id}
+                          >
+                            {sendingQuoteEmailId === quote.id ? "Sending..." : "Send Quote Email"}
+                          </button>
+                        )}
+                        {permissions.canSendPaymentRequest && canSendPaymentRequest && (
                           <button
                             type="button"
                             className="cta compact"
@@ -796,26 +885,36 @@ export default function QuoteHistoryModal({
                             {sendingPaymentEmailId === quote.id ? "Sending..." : "Send Pay Request"}
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="ghost compact"
-                          onClick={() => handleRotatePortalLink(quote)}
-                          disabled={rotatingPortalId === quote.id}
-                        >
-                          {rotatingPortalId === quote.id ? "Rotating..." : "Rotate Portal"}
-                        </button>
-                        <button type="button" className="ghost compact" onClick={() => handleCopyEmail(quote)}>Copy Email</button>
-                        <button type="button" className="ghost compact" onClick={() => handleCopyPortalLink(quote)}>Copy Portal</button>
-                        <button type="button" className="ghost compact" onClick={() => handleCopyPaymentLink(quote)}>Copy Pay Link</button>
-                        <button
-                          type="button"
-                          className="cta compact"
-                          onClick={() => handleCreateCheckout(quote)}
-                          disabled={creatingCheckoutId === quote.id}
-                        >
-                          {creatingCheckoutId === quote.id ? "Creating..." : "Create Stripe Link"}
-                        </button>
-                        {canDeleteQuotes && (
+                        {permissions.canRotatePortalLink && (
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleRotatePortalLink(quote)}
+                            disabled={rotatingPortalId === quote.id}
+                          >
+                            {rotatingPortalId === quote.id ? "Rotating..." : "Rotate Portal"}
+                          </button>
+                        )}
+                        {permissions.canCopyArtifacts && (
+                          <>
+                            <button type="button" className="ghost compact" onClick={() => handleCopyEmail(quote)}>Copy Email</button>
+                            <button type="button" className="ghost compact" onClick={() => handleCopyPortalLink(quote)}>Copy Portal</button>
+                            {permissions.canCopyPaymentLink && (
+                              <button type="button" className="ghost compact" onClick={() => handleCopyPaymentLink(quote)}>Copy Pay Link</button>
+                            )}
+                          </>
+                        )}
+                        {permissions.canCreateCheckoutLink && (
+                          <button
+                            type="button"
+                            className="cta compact"
+                            onClick={() => handleCreateCheckout(quote)}
+                            disabled={creatingCheckoutId === quote.id}
+                          >
+                            {creatingCheckoutId === quote.id ? "Creating..." : "Create Stripe Link"}
+                          </button>
+                        )}
+                        {permissions.canDeleteQuote && canDeleteQuotes ? (
                           <button
                             type="button"
                             className="ghost compact"
@@ -824,7 +923,7 @@ export default function QuoteHistoryModal({
                           >
                             {updatingId === quote.id ? "Deleting..." : "Delete"}
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     </td>
                   </tr>
