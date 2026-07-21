@@ -8,6 +8,7 @@ vi.mock("../firebase", () => ({
 import {
   getPortalQuote,
   rotateQuotePortalKey,
+  updatePortalDecision,
   updatePortalQuoteStatus
 } from "../quoteStore";
 
@@ -140,6 +141,25 @@ describe("quoteStore portal token policy", () => {
     expect(quote.portalKey).toBe("portal-key-12345678901234567890");
     expect(quote.portalExpiresAtISO).toBeTruthy();
     expect(Number(quote.portalExpiresAtMs)).toBeGreaterThan(0);
+  });
+
+  test("stores a customer change request without accepting or booking the quote", async () => {
+    seedQuotes([makeQuote()]);
+
+    const result = await updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "changes_requested",
+      message: "Please replace the salmon entree."
+    });
+
+    expect(result.status).toBe("viewed");
+    expect(result.portalDecision).toMatchObject({
+      decision: "changes_requested",
+      message: "Please replace the salmon entree."
+    });
+    const refreshed = await getPortalQuote("portal-key-12345678901234567890");
+    expect(refreshed.status).toBe("viewed");
+    expect(refreshed.portalDecision.decision).toBe("changes_requested");
   });
 
   test("blocks expired portal tokens", async () => {

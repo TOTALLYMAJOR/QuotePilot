@@ -13,6 +13,7 @@ import { calculateQuotePricing, notifyOwnerNewQuote, sendQuoteToCustomerEmail } 
 import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
+import { buildProposalReadiness } from "./lib/quoteWorkflow";
 import {
   applyEventTypeTemplateDefaults,
   buildStepperModel,
@@ -38,6 +39,7 @@ const DiagnosticsModal = lazy(() => import("./components/DiagnosticsModal"));
 const QuoteCompareModal = lazy(() => import("./components/QuoteCompareModal"));
 const QuoteHistoryModal = lazy(() => import("./components/QuoteHistoryModal"));
 const ReportingDashboardModal = lazy(() => import("./components/ReportingDashboardModal"));
+const SalesWorkflowModal = lazy(() => import("./components/SalesWorkflowModal"));
 
 const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING || "").trim().toLowerCase()
@@ -306,6 +308,7 @@ export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [salesWorkflowOpen, setSalesWorkflowOpen] = useState(false);
   const [submitState, setSubmitState] = useState({
     saving: false,
     sendingQuoteEmail: false,
@@ -451,6 +454,10 @@ export default function App() {
   const totals = useMemo(
     () => calculateQuote(form, catalog, effectiveSettings),
     [form, catalog, effectiveSettings]
+  );
+  const proposalReadiness = useMemo(
+    () => buildProposalReadiness(form, totals),
+    [form, totals]
   );
 
   const recommendations = useMemo(
@@ -1362,6 +1369,7 @@ export default function App() {
             </div>
           )}
           <div className="right-actions header-actions">
+            <button className="ghost" onClick={() => setSalesWorkflowOpen(true)}>Sales Workflow</button>
             {eventScheduleEnabled && <button className="ghost" onClick={() => setScheduleOpen(true)}>Schedule</button>}
             {integrationsEnabled && <button className="ghost" onClick={() => setIntegrationsOpen(true)}>Integrations</button>}
             {diagnosticsEnabled && <button className="ghost" onClick={() => setDiagnosticsOpen(true)}>Diagnostics</button>}
@@ -1476,7 +1484,14 @@ export default function App() {
                 onSelectionTouched={handleSelectionTouched}
               />
             )}
-            {!catalog.loading && step === 4 && <StepReview form={form} totals={totals} settings={effectiveSettings} />}
+            {!catalog.loading && step === 4 && (
+              <StepReview
+                form={form}
+                totals={totals}
+                settings={effectiveSettings}
+                readiness={proposalReadiness}
+              />
+            )}
             {!catalog.loading && step === 5 && (
               <div className="grid two-col">
                 <label className="field">
@@ -1614,6 +1629,19 @@ export default function App() {
           onToast={pushToast}
         />
 
+        <SalesWorkflowModal
+          open={salesWorkflowOpen}
+          onClose={() => setSalesWorkflowOpen(false)}
+          onOpenQuoteHistory={() => {
+            setSalesWorkflowOpen(false);
+            setHistoryOpen(true);
+          }}
+          organizationId={authSession.organizationId}
+          currentUserEmail={authSession.user?.email || ""}
+          currentUserRole={authSession.role}
+          onToast={pushToast}
+        />
+
         {eventScheduleEnabled && (
           <EventScheduleModal
             open={scheduleOpen}
@@ -1621,6 +1649,7 @@ export default function App() {
             organizationId={authSession.organizationId}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
+            currentUserEmail={authSession.user?.email || ""}
           />
         )}
 

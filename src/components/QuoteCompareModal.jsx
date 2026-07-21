@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { calculateQuote, currency } from "../lib/quoteCalculator";
+import { buildQuoteScenarios } from "../lib/quoteWorkflow";
 
 function cloneForm(form) {
   return {
@@ -36,12 +37,26 @@ export default function QuoteCompareModal({
   primaryTotals
 }) {
   const [compareForm, setCompareForm] = useState(() => cloneForm(form));
+  const [scenarioId, setScenarioId] = useState("better");
+  const scenarios = useMemo(
+    () => buildQuoteScenarios(form, catalog),
+    [form, catalog]
+  );
+  const scenarioResults = useMemo(
+    () => scenarios.map((scenario) => ({
+      ...scenario,
+      totals: calculateQuote(scenario.form, catalog, settings)
+    })),
+    [scenarios, catalog, settings]
+  );
 
   useEffect(() => {
     if (open) {
-      setCompareForm(cloneForm(form));
+      const initial = scenarios.find((item) => item.id === "better") || scenarios[0];
+      setScenarioId(initial?.id || "custom");
+      setCompareForm(cloneForm(initial?.form || form));
     }
-  }, [open, form]);
+  }, [open, form, scenarios]);
 
   const compareTotals = useMemo(
     () => calculateQuote(compareForm, catalog, settings),
@@ -51,10 +66,12 @@ export default function QuoteCompareModal({
   if (!open) return null;
 
   const updateField = (field, value) => {
+    setScenarioId("custom");
     setCompareForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const toggleMulti = (field, id, checked) => {
+    setScenarioId("custom");
     setCompareForm((prev) => {
       const next = new Set(prev[field] || []);
       if (checked) next.add(id);
@@ -64,6 +81,11 @@ export default function QuoteCompareModal({
         [field]: [...next]
       };
     });
+  };
+
+  const selectScenario = (scenario) => {
+    setScenarioId(scenario.id);
+    setCompareForm(cloneForm(scenario.form));
   };
 
   const applyScenario = () => {
@@ -86,9 +108,34 @@ export default function QuoteCompareModal({
           <button type="button" className="ghost" onClick={onClose}>Close</button>
         </div>
 
+        <div className="scenario-presets" aria-label="Good better best quote scenarios">
+          {scenarioResults.map((scenario) => {
+            const delta = Number(scenario.totals.total || 0) - Number(primaryTotals.total || 0);
+            return (
+              <article
+                key={scenario.id}
+                className={`scenario-preset ${scenarioId === scenario.id ? "selected" : ""}`.trim()}
+              >
+                <div className="scenario-preset-head">
+                  <span>{scenario.label}</span>
+                  <strong>{currency(scenario.totals.total || 0)}</strong>
+                </div>
+                <p>{scenario.packageName}</p>
+                <small>{scenario.description}</small>
+                <button type="button" className="ghost compact" onClick={() => selectScenario(scenario)}>
+                  {scenarioId === scenario.id ? "Selected" : `Compare ${scenario.label}`}
+                </button>
+                <em className={delta > 0 ? "delta-up" : delta < 0 ? "delta-down" : ""}>
+                  {delta >= 0 ? "+" : ""}{currency(delta)} vs current
+                </em>
+              </article>
+            );
+          })}
+        </div>
+
         <div className="compare-grid">
           <section className="compare-config">
-            <h3>Alternative Scenario</h3>
+            <h3>{scenarioId === "custom" ? "Custom Scenario" : `${scenarios.find((item) => item.id === scenarioId)?.label || "Alternative"} Scenario`}</h3>
             <div className="grid two-col">
               <label className="field">
                 <span>Guests</span>
@@ -251,7 +298,9 @@ export default function QuoteCompareModal({
 
         <div className="modal-foot">
           <span className="source-note">Apply scenario to overwrite current selections.</span>
-          <button type="button" className="cta" onClick={applyScenario}>Use Scenario</button>
+          <button type="button" className="cta" onClick={applyScenario}>
+            Use {scenarioId === "custom" ? "Custom Scenario" : `${scenarios.find((item) => item.id === scenarioId)?.label || "Scenario"}`}
+          </button>
         </div>
       </div>
     </div>

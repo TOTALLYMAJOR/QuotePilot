@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: March 28, 2026
+Last updated: July 21, 2026
 
 ## P0 - Multi-Tenant Hardening (Post Rollout)
 - Completed execution track: org-scoped quote/catalog write paths now enforce cross-org denial with migration evidence attached.
@@ -22,7 +22,9 @@ Last updated: March 28, 2026
 - Add intentional transition/motion polish for step changes and live breakdown updates.
 
 ## P1 - Product Capability
-- Add lead/client follow-up workflow stages with reminder prompts.
+- Add automated notifications and escalation rules for due follow-ups and new customer change requests.
+- Add server-authoritative enforcement and audit linkage from approved sensitive-action requests to separate admin execution.
+- Refresh/backfill existing portal snapshots so older active links receive the new decision-center event, selection, and pricing fields.
 - Add basic analytics events for funnel drop-off and add-on selection trends.
 - Extend operations audit controls (retry dashboards, sync health trends, role-based action logs).
 

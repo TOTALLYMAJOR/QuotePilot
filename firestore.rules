@@ -75,10 +75,49 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
         "status",
         "updatedAtISO",
-        "lifecycle"
+        "lifecycle",
+        "portalDecision"
       ])
       && request.resource.data.status in ["viewed", "accepted", "declined"]
+      && validPortalDecisionPatch()
       && request.resource.data.portalKey == resource.data.portalKey;
+    }
+
+    function validPortalDecisionPatch() {
+      return !request.resource.data.diff(resource.data).changedKeys().hasAny(["portalDecision"])
+        || (
+          request.resource.data.portalDecision is map
+          && request.resource.data.portalDecision.keys().hasAll([
+            "decision",
+            "message",
+            "submittedAtISO"
+          ])
+          && request.resource.data.portalDecision.keys().hasOnly([
+            "decision",
+            "message",
+            "submittedAtISO"
+          ])
+          && request.resource.data.portalDecision.decision in [
+            "accepted",
+            "declined",
+            "changes_requested"
+          ]
+          && (
+            (
+              request.resource.data.portalDecision.decision == "changes_requested"
+              && request.resource.data.status == "viewed"
+            )
+            || request.resource.data.portalDecision.decision == request.resource.data.status
+          )
+          && request.resource.data.portalDecision.message is string
+          && request.resource.data.portalDecision.message.size() <= 1200
+          && (
+            request.resource.data.portalDecision.decision != "changes_requested"
+            || request.resource.data.portalDecision.message.size() > 0
+          )
+          && request.resource.data.portalDecision.submittedAtISO is string
+          && request.resource.data.portalDecision.submittedAtISO.size() > 0
+        );
     }
 
     function portalSnapshotExists(portalKey) {

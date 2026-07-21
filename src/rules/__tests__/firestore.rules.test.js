@@ -345,6 +345,42 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         viewedAtISO: "2026-03-21T00:00:00.000Z"
       }
     }));
+    await assertSucceeds(updateDoc(activeRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T01:00:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T01:00:00.000Z"
+      },
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Please revise the entree.",
+        submittedAtISO: "2026-03-21T01:00:00.000Z"
+      }
+    }));
+    await assertFails(updateDoc(activeRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T02:00:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T02:00:00.000Z"
+      },
+      portalDecision: {
+        decision: "changes_requested",
+        message: "",
+        submittedAtISO: "2026-03-21T02:00:00.000Z"
+      }
+    }));
+    await assertFails(updateDoc(activeRef, {
+      status: "accepted",
+      updatedAtISO: "2026-03-21T02:30:00.000Z",
+      lifecycle: {
+        acceptedAtISO: "2026-03-21T02:30:00.000Z"
+      },
+      portalDecision: {
+        decision: "declined",
+        message: "",
+        submittedAtISO: "2026-03-21T02:30:00.000Z"
+      }
+    }));
 
     const expiredRef = portalSnapshotRefFor(EXPIRED_PORTAL_KEY);
     await assertFails(getDoc(expiredRef));
@@ -374,6 +410,11 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       updatedAtISO: "2026-03-21T00:00:00.000Z",
       lifecycle: {
         viewedAtISO: "2026-03-21T00:00:00.000Z"
+      },
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Please revise the entree.",
+        submittedAtISO: "2026-03-21T00:00:00.000Z"
       }
     }));
 

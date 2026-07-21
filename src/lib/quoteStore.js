@@ -29,6 +29,12 @@ import {
 } from "./pricingContracts";
 import { buildCrmAdapterRequest, resolveCrmProvider } from "./crmAdapters";
 import { buildQuoteEmailPayload } from "./proposalPayload";
+import {
+  APPROVAL_ACTION_IDS,
+  APPROVAL_STATES,
+  FOLLOW_UP_STAGE_IDS,
+  PRODUCTION_CHECKLIST_IDS
+} from "./quoteWorkflow";
 
 const LOCAL_QUOTES_KEY = "quoteWizard.quotes";
 const LOCAL_QUOTE_HISTORY_KEY = "quoteWizard.quoteHistory";
@@ -50,6 +56,9 @@ const INTEGRATION_STATE_SET = new Set(["queued", "success", "error", "retrying",
 const DEFAULT_CRM_SYNC_TIMEOUT_MS = 12000;
 const MAX_DIETARY_RESTRICTIONS_LENGTH = 1200;
 const MAX_RATE_MIX_CSV_LENGTH = 300;
+const MAX_FOLLOW_UP_NOTE_LENGTH = 1200;
+const MAX_APPROVAL_NOTE_LENGTH = 800;
+const MAX_PORTAL_DECISION_MESSAGE_LENGTH = 1200;
 const KITCHEN_CHECKPOINT_DEFS = [
   { id: "prep-start", label: "Prep kickoff", minuteOffset: -180 },
   { id: "line-check", label: "Line check", minuteOffset: -120 },
@@ -325,6 +334,83 @@ function normalizeKitchenCheckpoints(input) {
   return KITCHEN_CHECKPOINT_DEFS.map((item) => byId.get(item.id)).filter(Boolean);
 }
 
+function normalizeProductionChecklist(input) {
+  if (!Array.isArray(input)) return [];
+  const byId = new Map();
+  input.forEach((item) => {
+    const id = String(item?.id || "").trim();
+    if (!id || !PRODUCTION_CHECKLIST_IDS.includes(id) || byId.has(id)) return;
+    byId.set(id, {
+      id,
+      completed: item?.completed === true,
+      completedAtISO: item?.completed === true ? String(item?.completedAtISO || "").trim() : "",
+      completedByEmail: item?.completed === true ? normalizeEmail(item?.completedByEmail) : ""
+    });
+  });
+  return PRODUCTION_CHECKLIST_IDS.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function normalizeFollowUp(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const stage = FOLLOW_UP_STAGE_IDS.includes(source.stage) ? source.stage : "new";
+  const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(String(source.dueDate || "").trim())
+    ? String(source.dueDate).trim()
+    : "";
+  const completed = source.completed === true;
+  return {
+    stage,
+    dueDate,
+    note: String(source.note || "").trim().slice(0, MAX_FOLLOW_UP_NOTE_LENGTH),
+    completed,
+    completedAtISO: completed ? String(source.completedAtISO || "").trim() : "",
+    updatedAtISO: String(source.updatedAtISO || "").trim(),
+    updatedByEmail: normalizeEmail(source.updatedByEmail)
+  };
+}
+
+function normalizeApprovalRequests(input) {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set();
+  return input
+    .map((item) => {
+      const id = String(item?.id || "").trim();
+      const action = String(item?.action || "").trim();
+      const state = String(item?.state || "pending").trim().toLowerCase();
+      if (!id || seen.has(id) || !APPROVAL_ACTION_IDS.includes(action) || !APPROVAL_STATES.includes(state)) {
+        return null;
+      }
+      seen.add(id);
+      return {
+        id,
+        action,
+        state,
+        note: String(item?.note || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH),
+        requestedAtISO: String(item?.requestedAtISO || "").trim(),
+        requestedByEmail: normalizeEmail(item?.requestedByEmail),
+        resolvedAtISO: state === "pending" ? "" : String(item?.resolvedAtISO || "").trim(),
+        resolvedByEmail: state === "pending" ? "" : normalizeEmail(item?.resolvedByEmail),
+        resolutionNote: state === "pending"
+          ? ""
+          : String(item?.resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+      };
+    })
+    .filter(Boolean)
+    .slice(-50);
+}
+
+function normalizePortalDecision(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const decision = ["accepted", "declined", "changes_requested"].includes(source.decision)
+    ? source.decision
+    : "";
+  if (!decision) return {};
+  return {
+    decision,
+    message: String(source.message || "").trim().slice(0, MAX_PORTAL_DECISION_MESSAGE_LENGTH),
+    submittedAtISO: String(source.submittedAtISO || "").trim()
+  };
+}
+
 function normalizeFeatureFlags(input) {
   const source = input && typeof input === "object" ? input : {};
   return {
@@ -482,6 +568,7 @@ function buildPortalSnapshot(quoteId, quote) {
     portalIssuedAtISO,
     createdAtISO
   );
+  const portalBooking = hydrateBooking(quote.booking);
   return {
     quoteId,
     organizationId: String(quote.organizationId || "").trim(),
@@ -494,13 +581,53 @@ function buildPortalSnapshot(quoteId, quote) {
     customerEmail: quote.customer?.email || "",
     eventName: quote.event?.name || "",
     eventDate: quote.event?.date || "",
+    eventTime: quote.event?.time || "",
+    eventHours: Number(quote.event?.hours || 0),
+    eventGuests: Number(quote.event?.guests || 0),
+    eventStyle: quote.event?.style || "",
     venue: quote.event?.venue || "",
+    venueAddress: quote.event?.venueAddress || "",
+    dietaryRestrictions: quote.event?.dietaryRestrictions || "",
     total: Number(quote.totals?.total || 0),
     deposit: Number(quote.totals?.deposit || 0),
+    totals: {
+      base: Number(quote.totals?.base || 0),
+      addons: Number(quote.totals?.addons || 0),
+      rentals: Number(quote.totals?.rentals || 0),
+      menu: Number(quote.totals?.menu || 0),
+      labor: Number(quote.totals?.labor || 0),
+      travel: Number(quote.totals?.travel || 0),
+      serviceFee: Number(quote.totals?.serviceFee || 0),
+      tax: Number(quote.totals?.tax || 0),
+      total: Number(quote.totals?.total || 0),
+      deposit: Number(quote.totals?.deposit || 0)
+    },
+    selection: {
+      packageName: quote.selection?.packageName || "",
+      addons: (Array.isArray(quote.selection?.addonSnapshots) ? quote.selection.addonSnapshots : [])
+        .map((item) => String(item?.name || "").trim())
+        .filter(Boolean),
+      rentals: (Array.isArray(quote.selection?.rentalSnapshots) ? quote.selection.rentalSnapshots : [])
+        .map((item) => String(item?.name || "").trim())
+        .filter(Boolean),
+      menuItems: (Array.isArray(quote.selection?.menuItemNames) ? quote.selection.menuItemNames : [])
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    },
+    quoteMeta: {
+      brandName: quote.quoteMeta?.brandName || ""
+    },
     status: normalizeStatus(quote.status),
     expiresAtISO: quote.expiresAtISO || addDaysISO(createdAtISO, DEFAULT_VALIDITY_DAYS),
     payment: hydratePayment(quote.payment),
-    booking: hydrateBooking(quote.booking),
+    booking: {
+      bookedAtISO: portalBooking.bookedAtISO,
+      contractNumber: portalBooking.contractNumber,
+      confirmationStatus: portalBooking.confirmationStatus,
+      confirmationSentAtISO: portalBooking.confirmationSentAtISO,
+      confirmedAtISO: portalBooking.confirmedAtISO
+    },
+    portalDecision: normalizePortalDecision(quote.portalDecision),
     lifecycle: {
       ...(quote.lifecycle || {})
     },
@@ -675,7 +802,8 @@ function hydrateBooking(booking) {
       payload.availabilitySummary && typeof payload.availabilitySummary === "object"
         ? { ...payload.availabilitySummary }
         : {},
-    kitchenCheckpoints: normalizeKitchenCheckpoints(payload.kitchenCheckpoints)
+    kitchenCheckpoints: normalizeKitchenCheckpoints(payload.kitchenCheckpoints),
+    productionChecklist: normalizeProductionChecklist(payload.productionChecklist)
   };
 }
 
@@ -712,6 +840,12 @@ function hydrateQuote(item, nowISO = isoNow()) {
     portalExpiresAtISO,
     payment: hydratePayment(item.payment),
     booking: hydrateBooking(item.booking),
+    workflow: {
+      ...(item.workflow || {}),
+      followUp: normalizeFollowUp(item.workflow?.followUp),
+      approvalRequests: normalizeApprovalRequests(item.workflow?.approvalRequests)
+    },
+    portalDecision: normalizePortalDecision(item.portalDecision),
     integrations: {
       ...integrationPayload,
       logs: integrationLogs
@@ -1727,6 +1861,37 @@ export async function syncQuoteToCrm({
   }
 }
 
+async function persistQuotePatch({
+  quote,
+  quoteId,
+  operation,
+  nowISO,
+  firebasePatch,
+  localPatch,
+  syncPortal = false
+}) {
+  await saveQuoteVersion(quoteId);
+  if (firebaseReady) {
+    await updateDoc(quoteWriteDocRef(quoteId, quote.organizationId, operation), {
+      ...firebasePatch,
+      updatedAtISO: nowISO
+    });
+    if (syncPortal) await syncPortalSnapshotFromQuoteDoc(quoteId, quote.organizationId);
+    return "firebase";
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  let found = false;
+  const next = existing.map((item) => {
+    if (item.id !== quoteId) return item;
+    found = true;
+    return { ...item, updatedAtISO: nowISO, ...localPatch(item) };
+  });
+  if (!found) throw new Error("Quote not found.");
+  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
+  return "local";
+}
+
 export async function updateQuoteBookingAssignment({ quoteId, staffLead = "" } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
@@ -1736,39 +1901,25 @@ export async function updateQuoteBookingAssignment({ quoteId, staffLead = "" } =
   const nowISO = isoNow();
   const nextLead = String(staffLead || "").trim();
 
-  await saveQuoteVersion(id);
-
-  if (firebaseReady) {
-    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "updateQuoteBookingAssignment"), {
+  const storage = await persistQuotePatch({
+    quote,
+    quoteId: id,
+    operation: "updateQuoteBookingAssignment",
+    nowISO,
+    firebasePatch: {
       "booking.staffLead": nextLead,
-      "booking.staffAssignedAtISO": nowISO,
-      updatedAtISO: nowISO
-    });
-    await syncPortalSnapshotFromQuoteDoc(id, quote.organizationId);
-    return { ok: true, storage: "firebase" };
-  }
-
-  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
-  let found = false;
-  const next = existing.map((quote) => {
-    if (quote.id !== id) return quote;
-    found = true;
-    const booking = hydrateBooking(quote.booking);
-    return {
-      ...quote,
-      updatedAtISO: nowISO,
+      "booking.staffAssignedAtISO": nowISO
+    },
+    localPatch: (item) => ({
       booking: {
-        ...booking,
+        ...hydrateBooking(item.booking),
         staffLead: nextLead,
         staffAssignedAtISO: nowISO
       }
-    };
+    }),
+    syncPortal: true
   });
-  if (!found) {
-    throw new Error("Quote not found.");
-  }
-  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
-  return { ok: true, storage: "local" };
+  return { ok: true, storage };
 }
 
 export async function updateQuoteKitchenCheckpoints({ quoteId, checkpoints = [] } = {}) {
@@ -1780,37 +1931,222 @@ export async function updateQuoteKitchenCheckpoints({ quoteId, checkpoints = [] 
   const nowISO = isoNow();
   const nextCheckpoints = normalizeKitchenCheckpoints(checkpoints);
 
-  await saveQuoteVersion(id);
-
-  if (firebaseReady) {
-    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "updateQuoteKitchenCheckpoints"), {
-      "booking.kitchenCheckpoints": nextCheckpoints,
-      updatedAtISO: nowISO
-    });
-    await syncPortalSnapshotFromQuoteDoc(id, quote.organizationId);
-    return { ok: true, storage: "firebase", checkpoints: nextCheckpoints };
-  }
-
-  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
-  let found = false;
-  const next = existing.map((item) => {
-    if (item.id !== id) return item;
-    found = true;
-    const booking = hydrateBooking(item.booking);
-    return {
-      ...item,
-      updatedAtISO: nowISO,
+  const storage = await persistQuotePatch({
+    quote,
+    quoteId: id,
+    operation: "updateQuoteKitchenCheckpoints",
+    nowISO,
+    firebasePatch: { "booking.kitchenCheckpoints": nextCheckpoints },
+    localPatch: (item) => ({
       booking: {
-        ...booking,
+        ...hydrateBooking(item.booking),
         kitchenCheckpoints: nextCheckpoints
       }
-    };
+    }),
+    syncPortal: true
   });
-  if (!found) {
-    throw new Error("Quote not found.");
+  return { ok: true, storage, checkpoints: nextCheckpoints };
+}
+
+export async function updateQuoteProductionChecklist({
+  quoteId,
+  checklist = [],
+  actorEmail = ""
+} = {}) {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
   }
-  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
-  return { ok: true, storage: "local", checkpoints: nextCheckpoints };
+  const quote = await readQuoteById(id);
+  const nowISO = isoNow();
+  const actor = normalizeEmail(actorEmail);
+  const nextChecklist = normalizeProductionChecklist(checklist).map((item) => ({
+    ...item,
+    completedAtISO: item.completed ? item.completedAtISO || nowISO : "",
+    completedByEmail: item.completed ? item.completedByEmail || actor : ""
+  }));
+
+  const storage = await persistQuotePatch({
+    quote,
+    quoteId: id,
+    operation: "updateQuoteProductionChecklist",
+    nowISO,
+    firebasePatch: { "booking.productionChecklist": nextChecklist },
+    localPatch: (item) => ({
+      booking: {
+        ...hydrateBooking(item.booking),
+        productionChecklist: nextChecklist
+      }
+    })
+  });
+  return { ok: true, storage, checklist: nextChecklist };
+}
+
+export async function updateQuoteFollowUp({
+  quoteId,
+  stage = "new",
+  dueDate = "",
+  note = "",
+  completed = false,
+  actorEmail = ""
+} = {}) {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
+  }
+  if (!FOLLOW_UP_STAGE_IDS.includes(stage)) {
+    throw new Error("Invalid follow-up stage.");
+  }
+  const normalizedDueDate = String(dueDate || "").trim();
+  if (normalizedDueDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalizedDueDate)) {
+    throw new Error("Follow-up due date must use YYYY-MM-DD.");
+  }
+
+  const quote = await readQuoteById(id);
+  const current = normalizeFollowUp(quote.workflow?.followUp);
+  const nowISO = isoNow();
+  const nextFollowUp = normalizeFollowUp({
+    stage,
+    dueDate: normalizedDueDate,
+    note,
+    completed,
+    completedAtISO: completed ? current.completedAtISO || nowISO : "",
+    updatedAtISO: nowISO,
+    updatedByEmail: actorEmail
+  });
+
+  const storage = await persistQuotePatch({
+    quote,
+    quoteId: id,
+    operation: "updateQuoteFollowUp",
+    nowISO,
+    firebasePatch: { "workflow.followUp": nextFollowUp },
+    localPatch: (item) => ({
+      workflow: {
+        ...(item.workflow || {}),
+        followUp: nextFollowUp,
+        approvalRequests: normalizeApprovalRequests(item.workflow?.approvalRequests)
+      }
+    })
+  });
+  return { ok: true, storage, followUp: nextFollowUp };
+}
+
+export async function requestQuoteApproval({
+  quoteId,
+  action,
+  note = "",
+  actorEmail = "",
+  actorRole = ""
+} = {}) {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
+  }
+  const normalizedRole = String(actorRole || "").trim().toLowerCase();
+  if (!new Set(["sales", "admin"]).has(normalizedRole)) {
+    throw new Error("Staff role required to request approval.");
+  }
+  const normalizedAction = String(action || "").trim();
+  if (!APPROVAL_ACTION_IDS.includes(normalizedAction)) {
+    throw new Error("Invalid approval action.");
+  }
+
+  const quote = await readQuoteById(id);
+  const current = normalizeApprovalRequests(quote.workflow?.approvalRequests);
+  if (current.some((item) => item.action === normalizedAction && item.state === "pending")) {
+    throw new Error("A pending approval request already exists for this action.");
+  }
+  const nowISO = isoNow();
+  const request = {
+    id: buildPortalKey(),
+    action: normalizedAction,
+    state: "pending",
+    note: String(note || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH),
+    requestedAtISO: nowISO,
+    requestedByEmail: normalizeEmail(actorEmail),
+    resolvedAtISO: "",
+    resolvedByEmail: "",
+    resolutionNote: ""
+  };
+  const nextRequests = normalizeApprovalRequests([...current, request]);
+
+  const storage = await persistQuotePatch({
+    quote,
+    quoteId: id,
+    operation: "requestQuoteApproval",
+    nowISO,
+    firebasePatch: { "workflow.approvalRequests": nextRequests },
+    localPatch: (item) => ({
+      workflow: {
+        ...(item.workflow || {}),
+        followUp: normalizeFollowUp(item.workflow?.followUp),
+        approvalRequests: nextRequests
+      }
+    })
+  });
+  return { ok: true, storage, request };
+}
+
+export async function resolveQuoteApprovalRequest({
+  quoteId,
+  requestId,
+  state,
+  resolutionNote = "",
+  actorEmail = "",
+  actorRole = ""
+} = {}) {
+  const id = String(quoteId || "").trim();
+  const approvalRequestId = String(requestId || "").trim();
+  if (!id || !approvalRequestId) {
+    throw new Error("Quote id and approval request id are required.");
+  }
+  if (String(actorRole || "").trim().toLowerCase() !== "admin") {
+    throw new Error("Admin role required to resolve approval requests.");
+  }
+  const nextState = String(state || "").trim().toLowerCase();
+  if (!new Set(["approved", "rejected"]).has(nextState)) {
+    throw new Error("Approval resolution must be approved or rejected.");
+  }
+
+  const quote = await readQuoteById(id);
+  const current = normalizeApprovalRequests(quote.workflow?.approvalRequests);
+  const target = current.find((item) => item.id === approvalRequestId);
+  if (!target) {
+    throw new Error("Approval request not found.");
+  }
+  if (target.state !== "pending") {
+    throw new Error("Approval request is already resolved.");
+  }
+  const nowISO = isoNow();
+  const nextRequests = current.map((item) => (
+    item.id === approvalRequestId
+      ? {
+        ...item,
+        state: nextState,
+        resolvedAtISO: nowISO,
+        resolvedByEmail: normalizeEmail(actorEmail),
+        resolutionNote: String(resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+      }
+      : item
+  ));
+  const resolvedRequest = nextRequests.find((item) => item.id === approvalRequestId);
+
+  const storage = await persistQuotePatch({
+    quote,
+    quoteId: id,
+    operation: "resolveQuoteApprovalRequest",
+    nowISO,
+    firebasePatch: { "workflow.approvalRequests": nextRequests },
+    localPatch: (item) => ({
+      workflow: {
+        ...(item.workflow || {}),
+        followUp: normalizeFollowUp(item.workflow?.followUp),
+        approvalRequests: nextRequests
+      }
+    })
+  });
+  return { ok: true, storage, request: resolvedRequest };
 }
 
 export async function submitQuote({
@@ -2008,6 +2344,7 @@ export async function submitQuote({
       staffLead: "",
       staffAssignedAtISO: "",
       kitchenCheckpoints: [],
+      productionChecklist: [],
       contractNumber: "",
       contractConvertedAtISO: "",
       contractConvertedByEmail: "",
@@ -2018,6 +2355,11 @@ export async function submitQuote({
       availabilityCheckedAtISO: "",
       availabilitySummary: {}
     },
+    workflow: {
+      followUp: normalizeFollowUp({ stage: "new" }),
+      approvalRequests: []
+    },
+    portalDecision: {},
     integrations: {
       retryLimit: Math.max(1, Number(settings?.integrationRetryLimit || 3)),
       retention: Math.max(10, Number(settings?.integrationAuditRetention || 50)),
@@ -2646,6 +2988,7 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
       staffLead: "",
       staffAssignedAtISO: "",
       kitchenCheckpoints: [],
+      productionChecklist: [],
       contractNumber: "",
       contractConvertedAtISO: "",
       contractConvertedByEmail: "",
@@ -2656,6 +2999,11 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
       availabilityCheckedAtISO: "",
       availabilitySummary: {}
     },
+    workflow: {
+      followUp: normalizeFollowUp({ stage: "new" }),
+      approvalRequests: []
+    },
+    portalDecision: {},
     integrations: {
       ...(sourceWithoutIdentity.integrations || {}),
       lastSyncAtISO: "",
@@ -3215,18 +3563,35 @@ export async function getPortalQuote(portalKey) {
   };
 }
 
-export async function updatePortalQuoteStatus(portalKey, status) {
+export async function updatePortalDecision({
+  portalKey,
+  decision,
+  message = ""
+} = {}) {
   const key = String(portalKey || "").trim();
   if (!key) {
     throw new Error("Portal key is required.");
   }
 
-  const nextStatus = normalizeStatus(status);
-  if (!["viewed", "accepted", "declined"].includes(nextStatus)) {
-    throw new Error("Invalid portal status.");
+  const normalizedDecision = String(decision || "").trim().toLowerCase();
+  if (!["viewed", "accepted", "declined", "changes_requested"].includes(normalizedDecision)) {
+    throw new Error("Invalid portal decision.");
+  }
+  const normalizedMessage = String(message || "").trim().slice(0, MAX_PORTAL_DECISION_MESSAGE_LENGTH);
+  if (normalizedDecision === "changes_requested" && !normalizedMessage) {
+    throw new Error("Add a note describing the requested changes.");
   }
 
   const nowISO = isoNow();
+  const nextStatus = normalizedDecision === "changes_requested" ? "viewed" : normalizedDecision;
+  const portalDecision = normalizedDecision === "viewed"
+    ? {}
+    : {
+      decision: normalizedDecision,
+      message: normalizedMessage,
+      submittedAtISO: nowISO
+    };
+  const portalDecisionPatch = normalizedDecision === "viewed" ? {} : { portalDecision };
 
   if (firebaseReady) {
     const portalRef = portalDocRef(key);
@@ -3242,24 +3607,23 @@ export async function updatePortalQuoteStatus(portalKey, status) {
     if (normalizeStatus(portalData.status) === "booked") {
       throw new Error("This quote is already booked and can no longer be changed from the portal.");
     }
-    if (portalData.quoteId) {
-      await saveQuoteVersion(portalData.quoteId);
-    }
     const lifecycle = lifecycleObject(nextStatus, nowISO, portalData.lifecycle);
     await updateDoc(portalRef, {
       status: nextStatus,
       updatedAtISO: nowISO,
-      lifecycle
+      lifecycle,
+      ...portalDecisionPatch
     });
 
     if (portalData.quoteId) {
-      await updateDoc(quoteWriteDocRef(portalData.quoteId, portalData.organizationId, "updatePortalQuoteStatus"), {
+      await updateDoc(quoteWriteDocRef(portalData.quoteId, portalData.organizationId, "updatePortalDecision"), {
         status: nextStatus,
         updatedAtISO: nowISO,
-        lifecycle
+        lifecycle,
+        ...portalDecisionPatch
       });
     }
-    return { ok: true, storage: "firebase" };
+    return { ok: true, storage: "firebase", status: nextStatus, portalDecision };
   }
 
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
@@ -3272,20 +3636,30 @@ export async function updatePortalQuoteStatus(portalKey, status) {
   if (locked) {
     throw new Error("This quote is already booked and can no longer be changed from the portal.");
   }
-  if (localTarget?.id) {
-    await saveQuoteVersion(localTarget.id);
-  }
   const next = existing.map((quote) => {
     if (quote.portalKey !== key) return quote;
     return {
       ...quote,
       status: nextStatus,
       updatedAtISO: nowISO,
-      lifecycle: lifecycleObject(nextStatus, nowISO, quote.lifecycle)
+      lifecycle: lifecycleObject(nextStatus, nowISO, quote.lifecycle),
+      ...(normalizedDecision === "viewed" ? {} : { portalDecision })
     };
   });
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
-  return { ok: true, storage: "local" };
+  return { ok: true, storage: "local", status: nextStatus, portalDecision };
+}
+
+export async function updatePortalQuoteStatus(portalKey, status) {
+  const nextStatus = normalizeStatus(status);
+  if (!["viewed", "accepted", "declined"].includes(nextStatus)) {
+    throw new Error("Invalid portal status.");
+  }
+  return updatePortalDecision({
+    portalKey,
+    decision: nextStatus,
+    message: ""
+  });
 }
 
 export function buildQuoteEmailTemplate(quote) {

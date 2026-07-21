@@ -9,7 +9,12 @@ function historyDialogMessage(page, textPattern) {
   return page.getByRole("dialog").getByText(textPattern).first();
 }
 
-async function fillRequiredQuoteFields(page, { guests = 72, eventName = "E2E Launch Dinner", venue = "Birmingham Civic Hall" } = {}) {
+async function fillRequiredQuoteFields(page, {
+  guests = 72,
+  eventName = "E2E Launch Dinner",
+  venue = "Birmingham Civic Hall",
+  date = "2026-06-14"
+} = {}) {
   const eventType = page.getByLabel(/Event type/i);
   if (await eventType.count()) {
     const optionCount = await eventType.locator("option").count();
@@ -18,7 +23,7 @@ async function fillRequiredQuoteFields(page, { guests = 72, eventName = "E2E Lau
     }
   }
 
-  await page.getByLabel(/Event date/i).fill("2026-06-14");
+  await page.getByLabel(/Event date/i).fill(date);
   await page.getByLabel(/Start time/i).fill("18:00");
   await page.getByRole("spinbutton", { name: /Event hours/i }).fill("4");
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill(String(guests));
@@ -61,8 +66,8 @@ async function advanceToSaveButton(page, saveButtonLabel) {
   throw new Error(`Unable to reach save button: ${saveButtonLabel}`);
 }
 
-async function createQuoteToHistory(page, { guests = 72, eventName, venue } = {}) {
-  await fillRequiredQuoteFields(page, { guests, eventName, venue });
+async function createQuoteToHistory(page, { guests = 72, eventName, venue, date } = {}) {
+  await fillRequiredQuoteFields(page, { guests, eventName, venue, date });
   await advanceToSaveButton(page, "Save & Submit");
 
   const historyHeading = page.getByRole("heading", { name: "Quote History" });
@@ -132,6 +137,27 @@ test("live breakdown shows transient change cues when quote inputs update", asyn
   await expect(totalRow.locator(".row-delta")).toBeVisible();
 });
 
+test("good better best scenarios can be compared and applied", async ({ page }) => {
+  await fillRequiredQuoteFields(page, {
+    guests: 96,
+    eventName: "E2E Scenario Gala",
+    venue: "Scenario Hall"
+  });
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Compare Scenario" }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Good", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Better", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Best", { exact: true })).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Compare Best" }).click();
+  await dialog.getByRole("button", { name: "Use Best" }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByLabel("Package tier")).toHaveValue("deluxe");
+});
+
 test("new quote flow allows edits before save and persists in history", async ({ page }) => {
   await fillRequiredQuoteFields(page, { guests: 60, eventName: "E2E Quote A", venue: "Hall A" });
   await page.getByRole("button", { name: "Next" }).click();
@@ -175,6 +201,86 @@ test("quote history supports export and send actions", async ({ page }) => {
 
   await firstQuoteRow.getByRole("button", { name: "Copy Pay Link" }).click();
   await expect(historyDialogMessage(page, /Deposit link copied/i)).toBeVisible();
+});
+
+test("sales workflow persists a follow-up plan", async ({ page }) => {
+  await createQuoteToHistory(page, {
+    guests: 78,
+    eventName: "E2E Follow-up Dinner",
+    venue: "Follow-up Hall"
+  });
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Sales Workflow" }).click();
+
+  const workflow = page.getByRole("dialog");
+  await expect(workflow.getByRole("heading", { name: "Sales Workflow" })).toBeVisible();
+  await workflow.getByLabel("Due date").fill("2026-06-10");
+  await workflow.getByLabel("Note").fill("Confirm final menu after tasting.");
+  await workflow.getByRole("button", { name: "Save Follow-up" }).click();
+  await expect(workflow.getByText(/Follow-up saved for/i)).toBeVisible();
+
+  await workflow.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Sales Workflow" }).click();
+  await expect(page.getByRole("dialog").getByLabel("Due date")).toHaveValue("2026-06-10");
+  await expect(page.getByRole("dialog").getByLabel("Note")).toHaveValue("Confirm final menu after tasting.");
+});
+
+test("portal decision center records a customer change request", async ({ page }) => {
+  await createQuoteToHistory(page, {
+    guests: 88,
+    eventName: "E2E Portal Decision",
+    venue: "Decision Hall"
+  });
+  const portalKey = await page.evaluate(() => {
+    const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
+    return quotes[0]?.portalKey || "";
+  });
+  expect(portalKey).toBeTruthy();
+
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Customer Portal" }).click();
+  await expect(page.getByRole("heading", { name: "Proposal Decision Center" })).toBeVisible();
+  await page.getByPlaceholder("Paste your quote key").fill(portalKey);
+  await page.getByRole("button", { name: "Open Proposal" }).click();
+  await expect(page.getByRole("heading", {
+    name: "E2E Portal Decision on June 14, 2026"
+  })).toBeVisible();
+  await page.getByRole("button", { name: "Request Changes" }).click();
+  await page.getByLabel("Requested changes").fill("Please replace the entree with a vegetarian option.");
+  await page.getByRole("button", { name: "Submit Decision" }).click();
+  await expect(page.getByText("Changes requested", { exact: true })).toBeVisible();
+  await expect(page.getByText(/current proposal remains unaccepted/i)).toBeVisible();
+});
+
+test("accepted event production checklist persists completion", async ({ page }) => {
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0")
+  ].join("-");
+  await createQuoteToHistory(page, {
+    guests: 74,
+    eventName: "E2E Production Event",
+    venue: "Production Hall",
+    date: today
+  });
+
+  const row = quoteRows(page).first();
+  await setQuoteStatus(row, "sent");
+  await setQuoteStatus(row, "accepted");
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Schedule" }).click();
+
+  const schedule = page.getByRole("dialog");
+  await expect(schedule.getByText("E2E Production Event")).toBeVisible();
+  const eventBrief = schedule.getByLabel("Event brief reviewed");
+  await eventBrief.check();
+  await expect(schedule.getByText(/Production checklist updated for/i)).toBeVisible();
+
+  await schedule.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Schedule" }).click();
+  await expect(page.getByRole("dialog").getByLabel("Event brief reviewed")).toBeChecked();
 });
 
 test("create then edit keeps one quote row and reflects updated fields", async ({ page }) => {

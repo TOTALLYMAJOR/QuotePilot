@@ -2224,6 +2224,900 @@ hr {
   font-size: 0.88rem;
 }
 
+.readiness-panel {
+  margin-bottom: 0.75rem;
+  border: 1px solid #b9c8c2;
+  border-left: 4px solid #3f7561;
+  border-radius: 8px;
+  background: #f5faf8;
+  padding: 0.7rem;
+}
+
+.readiness-panel.readiness-review {
+  border-left-color: #ad7829;
+  background: #fff9ee;
+}
+
+.readiness-panel.readiness-needs_details {
+  border-left-color: #aa493d;
+  background: #fff5f3;
+}
+
+.readiness-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.readiness-head > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.readiness-head span {
+  color: #3c4b45;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.readiness-head strong {
+  color: #173d31;
+  font-size: 1.05rem;
+}
+
+.readiness-head em {
+  color: #475850;
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.readiness-panel progress,
+.schedule-production-checklist progress {
+  width: 100%;
+  height: 7px;
+  margin-top: 0.45rem;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #dce6e1;
+}
+
+.readiness-panel progress::-webkit-progress-bar,
+.schedule-production-checklist progress::-webkit-progress-bar {
+  background: #dce6e1;
+}
+
+.readiness-panel progress::-webkit-progress-value,
+.schedule-production-checklist progress::-webkit-progress-value {
+  background: #35745b;
+}
+
+.readiness-panel progress::-moz-progress-bar,
+.schedule-production-checklist progress::-moz-progress-bar {
+  background: #35745b;
+}
+
+.readiness-gaps {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.readiness-gaps span {
+  border: 1px solid #d6bca0;
+  border-radius: 6px;
+  background: #fff;
+  color: #68472b;
+  padding: 0.16rem 0.38rem;
+  font-size: 0.68rem;
+}
+
+.scenario-presets {
+  margin-top: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.scenario-preset {
+  min-width: 0;
+  border: 1px solid #c9c6bb;
+  border-radius: 8px;
+  background: #fffef9;
+  padding: 0.65rem;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.scenario-preset.selected {
+  border-color: #39715d;
+  box-shadow: inset 0 0 0 1px #39715d;
+  background: #f4faf7;
+}
+
+.scenario-preset-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.scenario-preset-head span {
+  color: #2f3d38;
+  font-weight: 800;
+}
+
+.scenario-preset-head strong {
+  color: #1d352c;
+  font-size: 1rem;
+}
+
+.scenario-preset p,
+.scenario-preset small,
+.scenario-preset em {
+  margin: 0;
+}
+
+.scenario-preset p {
+  color: #463922;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.scenario-preset small {
+  min-height: 2.2em;
+  color: #665c4b;
+  font-size: 0.7rem;
+}
+
+.scenario-preset em {
+  font-size: 0.68rem;
+  font-style: normal;
+}
+
+.sales-workflow-card {
+  width: min(1240px, 100%);
+}
+
+.sales-workflow-card .modal-head h2 {
+  margin: 0;
+}
+
+.sales-workflow-card .modal-head .source-note {
+  margin-top: 0.15rem;
+}
+
+.workflow-metrics {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid #d7d2c5;
+}
+
+.workflow-metrics > div {
+  padding: 0.62rem 0.72rem;
+  display: grid;
+  gap: 0.12rem;
+  border-right: 1px solid #d7d2c5;
+}
+
+.workflow-metrics > div:last-child {
+  border-right: 0;
+}
+
+.workflow-metrics span {
+  color: #59635e;
+  font-size: 0.72rem;
+}
+
+.workflow-metrics strong {
+  color: #23372f;
+  font-size: 1.18rem;
+}
+
+.workflow-tabs {
+  margin-top: 0.7rem;
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #cfc9bb;
+}
+
+.workflow-tabs button {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #5c594f;
+  padding: 0.55rem 0.85rem;
+  font-weight: 700;
+}
+
+.workflow-tabs button.active {
+  border-bottom-color: #2f6e57;
+  color: #1e4d3d;
+}
+
+.sales-workflow-layout {
+  min-height: 520px;
+  display: grid;
+  grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+}
+
+.workflow-quote-list {
+  min-width: 0;
+  max-height: 62vh;
+  overflow: auto;
+  border-right: 1px solid #d8d2c4;
+  padding: 0.55rem 0.55rem 0.55rem 0;
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+}
+
+.workflow-quote-row {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d5d0c4;
+  border-radius: 7px;
+  background: #fffefb;
+  color: #302d27;
+  padding: 0.55rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  text-align: left;
+}
+
+.workflow-quote-row.selected {
+  border-color: #3b7560;
+  background: #f2f8f5;
+}
+
+.workflow-quote-row > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.workflow-quote-row strong,
+.workflow-quote-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-quote-row strong {
+  font-size: 0.76rem;
+}
+
+.workflow-quote-row small {
+  color: #68645c;
+  font-size: 0.67rem;
+}
+
+.workflow-quote-meta {
+  flex: 0 0 auto;
+  justify-items: end;
+}
+
+.workflow-quote-meta em {
+  color: #2c6853;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.workflow-quote-meta .overdue {
+  color: #9b342b;
+  font-weight: 700;
+}
+
+.workflow-detail {
+  min-width: 0;
+  max-height: 62vh;
+  overflow: auto;
+  padding: 0.65rem 0 0.65rem 0.75rem;
+}
+
+.workflow-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.workflow-detail-head .eyebrow,
+.workflow-detail-head h3 {
+  margin: 0;
+}
+
+.workflow-detail-head h3 {
+  margin-top: 0.12rem;
+  color: #2b302d;
+  font-size: 1rem;
+}
+
+.status-badge {
+  border: 1px solid #b7b7b1;
+  border-radius: 6px;
+  background: #f6f5f1;
+  color: #454843;
+  padding: 0.2rem 0.42rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.status-badge.status-accepted,
+.status-badge.status-booked {
+  border-color: #75a18e;
+  background: #eaf5ef;
+  color: #20523f;
+}
+
+.workflow-detail > .readiness-panel {
+  margin-top: 0.65rem;
+}
+
+.workflow-form-section,
+.workflow-timeline-section {
+  margin-top: 0.75rem;
+  border-top: 1px solid #d9d3c6;
+  padding-top: 0.65rem;
+}
+
+.workflow-form-section h4,
+.workflow-timeline-section h4 {
+  margin: 0 0 0.5rem;
+  color: #32433c;
+  font-size: 0.84rem;
+}
+
+.workflow-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.workflow-complete-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #48554f;
+  font-size: 0.76rem;
+}
+
+.workflow-complete-toggle input {
+  width: auto;
+}
+
+.workflow-note-field {
+  grid-column: 1 / -1;
+}
+
+.workflow-form-section .right-actions {
+  margin-top: 0.5rem;
+}
+
+.workflow-approval-request,
+.approval-resolution {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(220px, 1.5fr) auto;
+  gap: 0.45rem;
+}
+
+.workflow-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+
+.workflow-timeline li {
+  position: relative;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 0.45rem;
+}
+
+.workflow-timeline li::before {
+  content: "";
+  position: absolute;
+  top: 11px;
+  bottom: -3px;
+  left: 6px;
+  width: 1px;
+  background: #c8d1cd;
+}
+
+.workflow-timeline li:last-child::before {
+  display: none;
+}
+
+.workflow-timeline li > span {
+  position: relative;
+  z-index: 1;
+  width: 13px;
+  height: 13px;
+  margin-top: 4px;
+  border: 3px solid #edf4f1;
+  border-radius: 50%;
+  background: #39745c;
+}
+
+.workflow-timeline strong {
+  color: #303a36;
+  font-size: 0.76rem;
+}
+
+.workflow-timeline p,
+.workflow-timeline time {
+  margin: 0.1rem 0 0;
+  color: #666b67;
+  font-size: 0.68rem;
+}
+
+.workflow-timeline time {
+  display: block;
+}
+
+.approval-queue {
+  padding-top: 0.65rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.approval-row {
+  border: 1px solid #cec9be;
+  border-left: 4px solid #b47a2d;
+  border-radius: 8px;
+  background: #fffefb;
+  padding: 0.65rem;
+}
+
+.approval-row.state-approved {
+  border-left-color: #3a795f;
+}
+
+.approval-row.state-rejected {
+  border-left-color: #a4463b;
+}
+
+.approval-row-main {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.approval-row h3,
+.approval-row p {
+  margin: 0;
+}
+
+.approval-row h3 {
+  margin-top: 0.15rem;
+  color: #303832;
+  font-size: 0.9rem;
+}
+
+.approval-row p {
+  margin-top: 0.15rem;
+  color: #66625a;
+  font-size: 0.74rem;
+}
+
+.approval-state {
+  color: #76521f;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.approval-audit {
+  display: grid;
+  justify-items: end;
+  gap: 0.12rem;
+  color: #6a6862;
+  font-size: 0.66rem;
+}
+
+.approval-note {
+  margin-top: 0.5rem !important;
+  border-left: 2px solid #d8d2c5;
+  padding-left: 0.5rem;
+}
+
+.approval-resolution {
+  margin-top: 0.55rem;
+  grid-template-columns: 1fr auto auto;
+}
+
+.approval-resolution-summary {
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.12rem;
+  color: #4e5a54;
+  font-size: 0.72rem;
+}
+
+.approval-resolution-summary small {
+  color: #74756f;
+}
+
+.approval-queue-actions {
+  margin-top: 0.25rem;
+}
+
+.portal-card {
+  width: min(1120px, 100%);
+  border-radius: 8px;
+  background: #fbfbf8;
+}
+
+.portal-head .eyebrow {
+  margin: 0 0 0.15rem;
+  color: #527064;
+}
+
+.portal-decision-layout {
+  margin-top: 0.9rem;
+  border-top: 1px solid #d7d8d2;
+}
+
+.portal-proposal-header {
+  padding: 0.9rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.portal-proposal-header > div:first-child > span {
+  color: #63726c;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.portal-proposal-header h2,
+.portal-proposal-header p {
+  margin: 0;
+}
+
+.portal-proposal-header h2 {
+  margin-top: 0.18rem;
+  color: #26342f;
+  font-size: 1.2rem;
+}
+
+.portal-proposal-header p {
+  margin-top: 0.18rem;
+  color: #66706c;
+  font-size: 0.8rem;
+}
+
+.portal-decision-receipt {
+  max-width: 390px;
+  border: 1px solid #bbc5c0;
+  border-left: 4px solid #70827a;
+  border-radius: 7px;
+  background: #f5f7f6;
+  padding: 0.55rem 0.65rem;
+  display: grid;
+  gap: 0.16rem;
+}
+
+.portal-decision-receipt.receipt-accepted,
+.portal-decision-receipt.receipt-booked {
+  border-left-color: #2f7658;
+  background: #eef7f2;
+}
+
+.portal-decision-receipt.receipt-declined {
+  border-left-color: #a3493f;
+  background: #fff3f1;
+}
+
+.portal-decision-receipt.receipt-changes {
+  border-left-color: #a36f25;
+  background: #fff8ec;
+}
+
+.portal-decision-receipt strong {
+  color: #2b3e36;
+  font-size: 0.8rem;
+}
+
+.portal-decision-receipt span {
+  color: #596761;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.portal-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr);
+  border-block: 1px solid #d7d8d2;
+}
+
+.portal-detail-section {
+  min-width: 0;
+  padding: 0.85rem 0.9rem 0.85rem 0;
+}
+
+.portal-detail-section + .portal-detail-section {
+  border-left: 1px solid #d7d8d2;
+  padding-inline: 0.9rem 0;
+}
+
+.portal-detail-section h3 {
+  margin: 0 0 0.55rem;
+  color: #30443b;
+  font-size: 0.84rem;
+}
+
+.portal-detail-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.7rem;
+}
+
+.portal-detail-grid div,
+.portal-price-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.portal-detail-grid dt,
+.portal-detail-grid dd,
+.portal-price-list dt,
+.portal-price-list dd {
+  margin: 0;
+}
+
+.portal-detail-grid dt {
+  color: #6a736f;
+  font-size: 0.68rem;
+}
+
+.portal-detail-grid dd {
+  color: #303a36;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.portal-address,
+.portal-expiry {
+  margin: 0.55rem 0 0;
+  color: #6a716d;
+  font-size: 0.72rem;
+}
+
+.portal-scope-block {
+  margin-top: 0.75rem;
+  border-top: 1px solid #e0e0da;
+  padding-top: 0.65rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.portal-scope-block h4,
+.portal-scope-block p {
+  margin: 0;
+}
+
+.portal-scope-block h4 {
+  color: #293a33;
+  font-size: 0.82rem;
+}
+
+.portal-scope-block span {
+  color: #65706b;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.portal-scope-block p {
+  margin-top: 0.1rem;
+  color: #454e4a;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.portal-price-list {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.portal-price-list div {
+  color: #525d58;
+  font-size: 0.72rem;
+}
+
+.portal-price-total {
+  margin-top: 0.35rem;
+  border-top: 1px solid #ccd2cf;
+  padding-top: 0.45rem;
+  color: #243b31 !important;
+  font-size: 0.88rem !important;
+  font-weight: 800;
+}
+
+.portal-price-deposit {
+  color: #6c4c1f !important;
+  font-weight: 800;
+}
+
+.portal-payment-state {
+  margin-top: 0.7rem;
+  border-top: 1px solid #e0e0da;
+  padding-top: 0.55rem;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.portal-payment-state span,
+.portal-payment-state small {
+  color: #68716d;
+  font-size: 0.66rem;
+}
+
+.portal-payment-state strong {
+  color: #30433b;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.portal-pay-link {
+  width: 100%;
+  margin-top: 0.55rem;
+  display: inline-flex;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.portal-decision-panel {
+  padding: 0.9rem 0;
+}
+
+.portal-decision-panel h3 {
+  margin: 0 0 0.55rem;
+  color: #2d4037;
+  font-size: 0.9rem;
+}
+
+.portal-decision-options {
+  width: fit-content;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid #bfc6c2;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.portal-decision-options button {
+  border: 0;
+  border-right: 1px solid #bfc6c2;
+  border-radius: 0;
+  background: #fff;
+  color: #4c5a54;
+  padding: 0.48rem 0.72rem;
+  white-space: nowrap;
+}
+
+.portal-decision-options button:last-child {
+  border-right: 0;
+}
+
+.portal-decision-options button.active {
+  background: #2f6d55;
+  color: #fff;
+}
+
+.portal-decision-note {
+  max-width: 760px;
+  margin-top: 0.65rem;
+}
+
+.portal-accept-confirmation {
+  margin-top: 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: #46534d;
+  font-size: 0.76rem;
+}
+
+.portal-accept-confirmation input {
+  width: auto;
+}
+
+.portal-decision-submit {
+  margin-top: 0.65rem;
+}
+
+.portal-decision-note-receipt {
+  padding: 0.8rem 0;
+}
+
+.portal-decision-note-receipt span {
+  color: #6b746f;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.portal-decision-note-receipt p {
+  margin: 0.2rem 0 0;
+  color: #3f4a45;
+  font-size: 0.78rem;
+}
+
+.schedule-production-checklist {
+  margin-top: 0.5rem;
+  border-top: 1px solid #d5d8d2;
+  padding-top: 0.45rem;
+}
+
+.schedule-production-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.schedule-production-head strong,
+.schedule-production-head span {
+  color: #385147;
+  font-size: 0.68rem;
+}
+
+.schedule-production-head strong {
+  text-transform: uppercase;
+}
+
+.schedule-production-items {
+  margin-top: 0.4rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.schedule-production-items label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem;
+  border-bottom: 1px solid #ece8df;
+  padding: 0.2rem 0;
+}
+
+.schedule-production-items input {
+  width: auto;
+}
+
+.schedule-production-items span {
+  color: #3f4c46;
+  font-size: 0.69rem;
+}
+
+.schedule-production-items small {
+  color: #78817d;
+  font-size: 0.61rem;
+}
+
 .compare-grid {
   margin-top: 0.75rem;
   display: grid;
@@ -2340,10 +3234,61 @@ hr {
   .admin-grid-settings,
   .rule-config-grid,
   .compare-grid,
+  .scenario-presets,
   .menu-grid,
   .schedule-layout,
   .schedule-toolbar,
-  .schedule-week-grid {
+  .schedule-week-grid,
+  .sales-workflow-layout,
+  .portal-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workflow-metrics > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .workflow-metrics > div:nth-child(-n + 2) {
+    border-bottom: 1px solid #d7d2c5;
+  }
+
+  .workflow-quote-list {
+    max-height: 240px;
+    border-right: 0;
+    border-bottom: 1px solid #d8d2c4;
+    padding-right: 0;
+  }
+
+  .workflow-detail {
+    max-height: none;
+    padding-left: 0;
+  }
+
+  .portal-detail-section,
+  .portal-detail-section + .portal-detail-section {
+    border-left: 0;
+    padding-inline: 0;
+  }
+
+  .portal-detail-section + .portal-detail-section {
+    border-top: 1px solid #d7d8d2;
+  }
+
+  .portal-proposal-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .portal-decision-receipt {
+    max-width: none;
+  }
+
+  .workflow-approval-request,
+  .approval-resolution {
     grid-template-columns: 1fr;
   }
 
@@ -2457,6 +3402,43 @@ hr {
 
   .right-actions {
     flex-wrap: wrap;
+  }
+
+  .workflow-metrics,
+  .workflow-form-grid,
+  .portal-detail-grid,
+  .portal-decision-options {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-metrics > div {
+    border-right: 0;
+    border-bottom: 1px solid #d7d2c5;
+  }
+
+  .workflow-metrics > div:last-child {
+    border-bottom: 0;
+  }
+
+  .portal-decision-options {
+    width: 100%;
+  }
+
+  .portal-decision-options button {
+    border-right: 0;
+    border-bottom: 1px solid #bfc6c2;
+  }
+
+  .portal-decision-options button:last-child {
+    border-bottom: 0;
+  }
+
+  .approval-row-main {
+    flex-direction: column;
+  }
+
+  .approval-audit {
+    justify-items: start;
   }
 }
 

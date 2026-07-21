@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: March 28, 2026
+Last updated: July 21, 2026
 
 ## Purpose
 This guide explains day-to-day usage of the Firebase Quote Wizard for staff users and admins.
@@ -24,6 +24,8 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
 
 ## Quote Builder Details
 - Event Type drives dynamic menu categories and items.
+- The review step shows a proposal readiness score and any missing customer, event, menu, or total details.
+- `Compare Scenario` presents Good/Better/Best package options with recalculated totals; applying a scenario updates the active quote draft.
 - Pricing supports:
   - `per_person`
   - `per_item` (with quantity input)
@@ -44,6 +46,18 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
 - Status filtering supports grouped views:
   - `Submitted` (sent/viewed/accepted)
   - `Archived` (booked/declined/expired)
+
+## Sales Workflow
+- Open `Sales Workflow` from the top navigation.
+- Summary metrics show active opportunities, readiness gaps, follow-ups due, and pending approval requests.
+- The `Follow-ups` view supports lead stage, due date, note, completion state, proposal readiness, and a lifecycle timeline for each quote.
+- Sales staff can request approval for sensitive actions such as payment requests, contract conversion, portal-link rotation, or quote deletion.
+- Admins can approve or reject those requests with a resolution note. Approval records intent only; it does not execute the sensitive action. The admin must complete the separate action in Quote History.
+
+## Event Schedule and Production Checklist
+- Open `Schedule` to review accepted and booked events by month or week, inspect conflicts, and assign a staff lead.
+- Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.
+- Checklist completion is an operational task record only. The app does not track inventory, so checklist state does not confirm stock counts or item availability.
 
 ## Admin Catalog Operations
 - Open `Admin Catalog` (admin users only).
@@ -126,8 +140,9 @@ Provisioning behavior:
 - Uses Firebase Admin credentials when available; otherwise falls back to Firestore REST writes using your Firebase CLI login token (requires `--project`).
 
 ## Customer Portal
-- Customers can open portal links and view quote details.
-- Portal actions allow customer status responses (for example accept/decline).
+- Customers can open portal links and review event details, selected package/menu/add-ons/rentals, itemized pricing, total, deposit, and payment state.
+- Portal decisions support `Accept`, `Request Changes`, and `Decline`; change requests require a customer note.
+- Proposal acceptance is recorded separately from payment and booking confirmation.
 - Portal updates are reflected in staff quote history.
 - Portal tokens are time-bound and expire automatically.
 - Staff can use `Rotate Portal` in `Quote History` to issue a fresh link and invalidate the old one.

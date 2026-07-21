@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { currency } from "../lib/quoteCalculator";
+import { buildProductionChecklist } from "../lib/quoteWorkflow";
 import {
   getQuoteHistory,
   updateQuoteBookingAssignment,
-  updateQuoteKitchenCheckpoints
+  updateQuoteKitchenCheckpoints,
+  updateQuoteProductionChecklist
 } from "../lib/quoteStore";
 
 const STATUS_SET = new Set(["accepted", "booked"]);
@@ -337,7 +339,8 @@ export default function EventScheduleModal({
   onClose,
   organizationId = "",
   staffLeads = [],
-  capacityLimit = 400
+  capacityLimit = 400,
+  currentUserEmail = ""
 }) {
   const todayIso = toIsoDate(new Date());
   const [state, setState] = useState({ loading: false, error: "", source: "", quotes: [] });
@@ -347,6 +350,7 @@ export default function EventScheduleModal({
   const [feedback, setFeedback] = useState("");
   const [assigningId, setAssigningId] = useState("");
   const [savingCheckpointId, setSavingCheckpointId] = useState("");
+  const [savingChecklistId, setSavingChecklistId] = useState("");
   const [dropLaneKey, setDropLaneKey] = useState("");
 
   const load = async () => {
@@ -398,6 +402,7 @@ export default function EventScheduleModal({
           kitchenCheckpointOverrides: Array.isArray(quote.booking?.kitchenCheckpoints)
             ? quote.booking.kitchenCheckpoints
             : [],
+          productionChecklist: buildProductionChecklist(quote),
           contractNumber: String(quote.booking?.contractNumber || "").trim(),
           confirmationStatus: String(quote.booking?.confirmationStatus || "pending").trim(),
           confirmationSentAtISO: String(quote.booking?.confirmationSentAtISO || ""),
@@ -680,6 +685,61 @@ export default function EventScheduleModal({
     await persistKitchenCheckpoints(quoteId, nextOverrides, "Kitchen checkpoints reset to defaults.");
   };
 
+  const handleProductionChecklistToggle = async (quoteId, checklistItemId, completed) => {
+    const id = String(quoteId || "").trim();
+    const itemId = String(checklistItemId || "").trim();
+    if (!id || !itemId) return;
+    const quote = state.quotes.find((item) => item.id === id);
+    if (!quote) return;
+
+    const snapshot = state.quotes;
+    const nowISO = new Date().toISOString();
+    const nextChecklist = buildProductionChecklist(quote).items.map((item) => {
+      if (item.id !== itemId) return item;
+      return {
+        ...item,
+        completed,
+        completedAtISO: completed ? item.completedAtISO || nowISO : "",
+        completedByEmail: completed ? item.completedByEmail || currentUserEmail : ""
+      };
+    });
+
+    setSavingChecklistId(id);
+    setFeedback("");
+    setState((prev) => ({
+      ...prev,
+      error: "",
+      quotes: prev.quotes.map((item) => (
+        item.id === id
+          ? {
+            ...item,
+            booking: {
+              ...(item.booking || {}),
+              productionChecklist: nextChecklist
+            }
+          }
+          : item
+      ))
+    }));
+
+    try {
+      await updateQuoteProductionChecklist({
+        quoteId: id,
+        checklist: nextChecklist,
+        actorEmail: currentUserEmail
+      });
+      setFeedback(`Production checklist updated for ${quote.quoteNumber || id}.`);
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        quotes: snapshot,
+        error: err?.message || "Failed to save production checklist."
+      }));
+    } finally {
+      setSavingChecklistId("");
+    }
+  };
+
   const handleDragStart = (event, quoteId) => {
     if (assigningId) return;
     event.dataTransfer.setData("text/plain", quoteId);
@@ -903,6 +963,38 @@ export default function EventScheduleModal({
                           {item.conflictReasons.map((reason) => reasonLabel(reason)).join(" • ")}
                         </p>
                       )}
+                      <div className="schedule-production-checklist">
+                        <div className="schedule-production-head">
+                          <strong>Production checklist</strong>
+                          <span>
+                            {item.productionChecklist.completed}/{item.productionChecklist.total}
+                          </span>
+                        </div>
+                        <progress
+                          max={item.productionChecklist.total}
+                          value={item.productionChecklist.completed}
+                        >
+                          {item.productionChecklist.percent}%
+                        </progress>
+                        <div className="schedule-production-items">
+                          {item.productionChecklist.items.map((checklistItem) => (
+                            <label key={`${item.id}-${checklistItem.id}`}>
+                              <input
+                                type="checkbox"
+                                checked={checklistItem.completed}
+                                onChange={(event) => handleProductionChecklistToggle(
+                                  item.id,
+                                  checklistItem.id,
+                                  event.target.checked
+                                )}
+                                disabled={savingChecklistId === item.id}
+                              />
+                              <span>{checklistItem.label}</span>
+                              <small>{checklistItem.group}</small>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                       {item.kitchenCheckpoints.length > 0 ? (
                         <div className="schedule-checkpoints">
                           <strong>Kitchen checkpoints</strong>

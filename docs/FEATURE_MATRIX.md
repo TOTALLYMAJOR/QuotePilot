@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: March 27, 2026
+Last updated: July 21, 2026
 
 This matrix maps the master feature checklist to current implementation and source locations.
 
@@ -24,17 +24,18 @@ This matrix maps the master feature checklist to current implementation and sour
 | 9 | Admin panel tabbed UX + hierarchical menu management | Implemented | `src/components/AdminCatalogModal.jsx`, `src/styles.css` (`.admin-tabs`) |
 | 10 | Inline editing with blur/enter persistence | Implemented | `src/components/AdminCatalogModal.jsx` (`handleManagedMenuItemBlur`, `handleManagedMenuItemKeyDown`) |
 | 11 | Booking lifecycle (availability checks, contract conversion, confirmations, staff assignments) | Implemented | `src/lib/quoteStore.js` (`checkEventAvailability`, `convertQuoteToContract`, `updateQuoteBookingConfirmation`, `updateQuoteBookingAssignment`), `src/components/EventScheduleModal.jsx`, `src/components/QuoteHistoryModal.jsx` |
-| 12 | Customer portal (accept/decline + token lifecycle) | Implemented | `src/components/CustomerPortalView.jsx`, `src/lib/quoteStore.js` (`getPortalQuote`, `updatePortalQuoteStatus`, `rotateQuotePortalKey`), `firestore.rules` (`customerPortalQuotes`) |
+| 12 | Customer decision center (scope/pricing + accept/change request/decline + token lifecycle) | Implemented | `src/components/CustomerPortalView.jsx`, `src/lib/quoteStore.js` (`getPortalQuote`, `updatePortalDecision`, `rotateQuotePortalKey`), `firestore.rules` (`customerPortalQuotes`) |
 | 13 | Integrations ops + CRM sync logging + setup assistant | Implemented | `src/components/IntegrationOpsModal.jsx`, `src/lib/quoteStore.js` (`recordQuoteIntegrationSync`, `syncQuoteToCrm`), `src/lib/commerceOps.js`, `functions/index.js` |
 | 14 | Reporting dashboard (pipeline, conversion, revenue metrics) | Implemented | `src/components/ReportingDashboardModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`) |
-| 15 | Event schedule board (month/week, conflict insights, assignment lanes) | Implemented | `src/components/EventScheduleModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`, `updateQuoteBookingAssignment`) |
+| 15 | Event schedule board (month/week, conflicts, assignments, production checklist) | Implemented | `src/components/EventScheduleModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`, `updateQuoteBookingAssignment`, `updateQuoteProductionChecklist`) |
 | 16 | Session diagnostics (runtime capture + staff export/clear tools) | Implemented | `src/lib/sessionDiagnostics.js`, `src/components/DiagnosticsModal.jsx`, `src/main.jsx`, `src/App.jsx` |
 | 17 | Global event + organization context across surfaces | Implemented | `src/context/EventTypeContext.jsx`, `src/context/OrganizationContext.jsx`, `src/main.jsx`, `src/App.jsx`, `src/components/AdminCatalogModal.jsx` |
 | 18 | Auth, org bootstrap, and role-gated controls | Implemented | `src/hooks/useAuthSession.js`, `src/components/AuthGate.jsx`, `functions/index.js` (`ensureOrganizationBootstrap`), `firestore.rules` |
 | 19 | Optional guided selling recommendations + rules | Implemented / Optional | `src/lib/recommendations.js`, `src/components/AdminCatalogModal.jsx`, `src/data/mockCatalog.js` |
-| 20 | Optional scenario compare workflow | Implemented / Optional | `src/components/QuoteCompareModal.jsx`, `src/App.jsx` |
+| 20 | Good/Better/Best scenario compare workflow | Implemented / Optional | `src/lib/quoteWorkflow.js` (`buildQuoteScenarios`), `src/components/QuoteCompareModal.jsx`, `src/App.jsx` |
 | 21 | Optional admin security/audit depth (beyond role gating) | Partial / Optional | Role-gated access and rules are shipped in `src/hooks/useAuthSession.js`, `src/components/AuthGate.jsx`, `firestore.rules`; sync log audit trail exists in `src/lib/quoteStore.js`, but full cross-surface audit pipeline remains limited |
 | 22 | QA acceptance tests and checks | Implemented (core) | Unit tests under `src/lib/__tests__/`, UI snapshots under `src/components/__tests__/`, Firestore rules tests under `src/rules/__tests__/`, Playwright smoke lanes under `e2e/`, and CI scripts in `package.json` |
+| 23 | Sales workflow (readiness, follow-ups, lifecycle, approval queue) | Implemented | `src/lib/quoteWorkflow.js`, `src/components/SalesWorkflowModal.jsx`, `src/lib/quoteStore.js` (`updateQuoteFollowUp`, `requestQuoteApproval`, `resolveQuoteApprovalRequest`) |
 
 ## Guided Flow (Where It Lives)
 - Wizard flow entry and steps: `src/App.jsx`

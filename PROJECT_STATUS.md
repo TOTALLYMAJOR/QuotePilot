@@ -1,11 +1,13 @@
 # Project Status
 
-Last updated: March 28, 2026
+Last updated: July 21, 2026
 
 ## Operational Health
 - Runtime: app is live on Firebase Hosting (`https://tonicatering.web.app`).
 - Build: `npm run build` passes locally for this branch.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
+- Current branch workflow delivery: proposal readiness, Good/Better/Best scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action approval requests, the customer decision center, and event production checklists are implemented and locally covered.
+- Workflow authority boundaries: approval resolution does not execute a sensitive action; customer acceptance does not prove payment or booking; production checklist completion does not prove inventory availability.
 - CI gates: classifier-driven lane gates are configured (`lane:quick`, `lane:core`, `Docker Build Smoke`, `lane:playwright-smoke`, `lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`).
 - P0 fallback-retirement safeguard: classifier now elevates `menuService`/`useCatalogData`/`organizationService`/`OrganizationContext` edits to `high_risk`, so Firebase heavy lanes are required (not advisory) on feature branches.
 - Legacy global runtime fallback retired: frontend tenant data services and authoritative pricing/functions paths now fail closed when org context is missing instead of reading legacy global collections.
@@ -31,17 +33,20 @@ Last updated: March 28, 2026
   - workflow run: `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
 
 ## Active Risks
+- The new `portalDecision` Firestore rule changes and enriched portal snapshots are implemented locally but are not deployed or hosted-smoke-verified in this branch.
+- Approval requests are role-gated in the application workflow, but stronger server-authoritative action-specific enforcement and end-to-end audit linkage remain follow-up work.
+- Existing portal snapshots need refresh/backfill before older links can display every newly added event, selection, and pricing field.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
 - Bundle size remains a watch item; budget/CWV gates now prevent uncontrolled regressions.
 - Functions integrations (Stripe/Twilio) remain optional and require secure runtime configuration.
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
 
 ## Current Focus (Near-Term)
-1. Deploy updated `firestore.rules` portal hardening and run post-deploy portal smoke checks (active link works; expired/deleted denied).
-2. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
-3. Expand end-to-end coverage for scheduling/booking edge paths.
-4. Improve large-chunk performance while staying inside bundle/CWV guardrails.
-5. Maintain per-merge documentation sync discipline under `docs/DOC_SYSTEM.md`.
+1. Deploy the updated `firestore.rules` and run hosted portal decision smoke checks, including active, expired, deleted, and change-request paths.
+2. Refresh/backfill existing customer portal snapshots with the new customer-safe event and pricing fields.
+3. Add server-authoritative enforcement and audit linkage for approval-request-to-admin-action execution.
+4. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
+5. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)
 - Focus completed: migration execution after fallback retirement and denial-matrix verification.
