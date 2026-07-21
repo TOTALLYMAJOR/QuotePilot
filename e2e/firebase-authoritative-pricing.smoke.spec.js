@@ -4,7 +4,7 @@ const STAFF_EMAIL = process.env.E2E_FIREBASE_EMAIL || "e2e-admin@local.test";
 const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 
 async function signInAsStaff(page) {
-  await page.goto("/");
+  await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
   if (await signInHeading.count()) {
     await expect(signInHeading).toBeVisible();

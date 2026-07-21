@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import MarketingPage from "./components/MarketingPage";
 import { EventTypeProvider } from "./context/EventTypeContext";
 import { OrganizationProvider } from "./context/OrganizationContext";
 import { initSessionDiagnostics, recordDiagnosticError } from "./lib/sessionDiagnostics";
@@ -21,12 +22,20 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
   });
 }
 
+const searchParams = new URLSearchParams(window.location.search);
+const isPortalRoute = Boolean(String(searchParams.get("portal") || "").trim());
+const isMarketingRoute = window.location.pathname === "/" && !isPortalRoute;
+
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <OrganizationProvider>
-      <EventTypeProvider>
-        <App />
-      </EventTypeProvider>
-    </OrganizationProvider>
+    {isMarketingRoute ? (
+      <MarketingPage />
+    ) : (
+      <OrganizationProvider>
+        <EventTypeProvider>
+          <App />
+        </EventTypeProvider>
+      </OrganizationProvider>
+    )}
   </React.StrictMode>
 );

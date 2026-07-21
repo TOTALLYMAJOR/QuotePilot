@@ -94,7 +94,7 @@ test.beforeEach(async ({ page }) => {
     localStorage.clear();
     sessionStorage.clear();
   });
-  await page.goto("/");
+  await page.goto("/app");
   await expect(page.getByRole("button", { name: "Get Instant Quote" })).toBeVisible();
 });
 

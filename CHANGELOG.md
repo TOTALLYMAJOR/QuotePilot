@@ -8,6 +8,8 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Public QuotePilot by MBMapps marketing page at `/`, adapted from the approved Figma direction with animated workflow mapping, scroll-reveal process storytelling, responsive layouts, and reduced-motion support; the existing staff workspace now lives at `/app` while customer `?portal=` links remain compatible.
+
 - Proposal readiness scoring in the review step and Sales Workflow, with weighted completion criteria and actionable readiness gaps.
 - Good/Better/Best quote scenarios with comparable package totals and one-click application back into the wizard.
 - Sales Workflow workspace with lead follow-up stages, due dates, notes, completion state, quote lifecycle timelines, and an admin resolution queue for sensitive-action approval requests.

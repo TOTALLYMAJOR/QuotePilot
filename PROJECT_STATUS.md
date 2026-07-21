@@ -64,6 +64,7 @@ Last updated: July 21, 2026
 - Remaining P0 rollout item: deploy hardened portal rules to production and attach post-deploy smoke evidence.
 
 ## Notes
+
 - Canonical status ownership is defined in [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md).
 - Launch operations guidance now lives in [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md).
 - Release-only branch and rollback policy live in [docs/VERSION_CONTROL.md](docs/VERSION_CONTROL.md).

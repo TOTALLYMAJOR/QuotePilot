@@ -12,6 +12,11 @@ Production-ready catering quote application built with React, Vite, Firebase, an
 - Orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
 
+## Application Routes
+- `/`: public QuotePilot marketing page.
+- `/app`: authenticated staff quote workspace.
+- `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal; existing token links remain compatible.
+
 ## Product Scope
 The app supports a 5-step quote wizard, dynamic event-type menus, pricing configuration, proposal export, customer portal updates, and operations workflows (history, scheduling, reporting, diagnostics).
 

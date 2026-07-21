@@ -48,7 +48,7 @@ test.beforeEach(async ({ page }) => {
 
 test("sales quote history preserves proposal actions and hides payment and booking authority controls", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/app");
   await expect(page.getByText("Role: sales")).toBeVisible();
 
   await fillRequiredQuoteFields(page);
