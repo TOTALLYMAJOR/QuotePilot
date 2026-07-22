@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import customerDecisionImage from "../assets/marketing/quotepilot/customer-decision.png";
+import eventProductionImage from "../assets/marketing/quotepilot/event-production.png";
+import quoteBuilderImage from "../assets/marketing/quotepilot/quote-builder.png";
+import quoteHistoryImage from "../assets/marketing/quotepilot/quote-history.png";
+import salesWorkflowImage from "../assets/marketing/quotepilot/sales-workflow.png";
+import scenarioCompareImage from "../assets/marketing/quotepilot/scenario-compare.png";
 import "../marketing.css";
 
 const operatingModel = [
@@ -13,7 +19,7 @@ const operatingModel = [
 const principles = [
   {
     title: "Authority stays visible",
-    copy: "A customer decision, a payment confirmation, and an operations-ready event are connected—but never treated as the same thing.",
+    copy: "A customer decision, a payment confirmation, and an operations-ready event are connected, but never treated as the same thing.",
     mark: "A"
   },
   {
@@ -29,6 +35,69 @@ const principles = [
 ];
 
 const capabilities = ["Lead follow-up", "Guided quoting", "Scenario compare", "Customer decisions", "Payment state", "Event production"];
+
+const featureDrawerItems = [
+  {
+    id: "guided-quote",
+    title: "Guided quote builder",
+    summary: "Move from event basics to a customer-ready proposal through one structured five-part flow.",
+    value: "Sales teams can capture the event, configure selections, review pricing, and prepare the proposal without rebuilding context.",
+    boundary: "A complete draft can be ready for review without being accepted, paid, or booked.",
+    image: quoteBuilderImage,
+    imageAlt: "QuotePilot guided quote builder with event fields and a live pricing breakdown",
+    trace: ["Capture event scope", "Configure the offer", "Review and propose"]
+  },
+  {
+    id: "scenario-compare",
+    title: "Good, Better, Best",
+    summary: "Shape clear package options while keeping the original quote available as the baseline.",
+    value: "Teams can compare realistic alternatives, understand total changes, and apply the selected direction back to the active draft.",
+    boundary: "A scenario is a sales option. It does not change the customer decision until the proposal is reviewed and accepted.",
+    image: scenarioCompareImage,
+    imageAlt: "QuotePilot scenario comparison showing Good, Better, and Best pricing options",
+    trace: ["Build the baseline", "Compare options", "Apply one direction"]
+  },
+  {
+    id: "decision-center",
+    title: "Customer decision center",
+    summary: "Give customers a focused place to review scope, pricing, and the next decision.",
+    value: "Customers can accept, decline, or request changes from a time-bound portal while staff retain the operating record.",
+    boundary: "Acceptance records the customer decision. Payment and booking confirmation remain separate facts.",
+    image: customerDecisionImage,
+    imageAlt: "QuotePilot customer decision center with event details, pricing, and decision controls",
+    trace: ["Share the proposal", "Record the decision", "Return context to staff"]
+  },
+  {
+    id: "payment-state",
+    title: "Payment state",
+    summary: "Keep payment context visible beside the proposal without collapsing commercial milestones.",
+    value: "Staff can see where a proposal, deposit request, and payment confirmation sit in the broader event workflow.",
+    boundary: "A payment link is a handoff. Only confirmed provider state should be treated as payment evidence.",
+    image: quoteHistoryImage,
+    imageAlt: "QuotePilot quote history with proposal, payment, contract, and lifecycle controls",
+    trace: ["Prepare the handoff", "Track provider state", "Preserve the record"]
+  },
+  {
+    id: "sales-workflow",
+    title: "Sales follow-up",
+    summary: "Keep readiness gaps, due follow-ups, lifecycle context, and approval requests in one staff workflow.",
+    value: "Sales can prepare the next customer action while admins retain control of sensitive payment, booking, and deletion operations.",
+    boundary: "An approved request records intent. The authorized admin still completes the separate operational action.",
+    image: salesWorkflowImage,
+    imageAlt: "QuotePilot sales workflow with proposal readiness, follow-up planning, and lifecycle history",
+    trace: ["Find the gap", "Plan the follow-up", "Route sensitive work"]
+  },
+  {
+    id: "event-production",
+    title: "Event production",
+    summary: "Carry approved quote context into a practical checklist for the team preparing the event.",
+    value: "Kitchen, logistics, staffing, service, and closeout tasks stay connected to the event record after the sales decision.",
+    boundary: "Checklist completion records work performed. It does not prove inventory availability or final event readiness.",
+    image: eventProductionImage,
+    imageAlt: "QuotePilot event schedule with an accepted event and its production checklist",
+    trace: ["Carry the scope forward", "Coordinate the team", "Close out the work"]
+  }
+];
 
 function ArrowIcon() {
   return (
@@ -163,7 +232,140 @@ function ProcessVisual({ index }) {
   return <div className="process-checklist"><span>scope</span><span>kitchen</span><span>logistics</span><i /></div>;
 }
 
+function FeatureDrawer({ open, selectedId, onSelect, onClose, returnFocusRef }) {
+  const drawerRef = useRef(null);
+  const closeRef = useRef(null);
+  const activeFeature = featureDrawerItems.find((item) => item.id === selectedId) || featureDrawerItems[0];
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = requestAnimationFrame(() => closeRef.current?.focus());
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== "Tab" || !drawerRef.current) return;
+      const focusable = [...drawerRef.current.querySelectorAll(
+        'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+      )];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      returnFocusRef.current?.focus();
+    };
+  }, [open, onClose, returnFocusRef]);
+
+  if (!open) return null;
+
+  return (
+    <div className="marketing-feature-layer">
+      <button
+        className="marketing-feature-backdrop"
+        type="button"
+        tabIndex="-1"
+        aria-label="Close feature drawer"
+        onClick={onClose}
+      />
+      <aside
+        className="marketing-feature-drawer"
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="marketing-feature-title"
+      >
+        <div className="marketing-feature-drawer-head">
+          <div>
+            <span>Inside QuotePilot</span>
+            <p>Follow the work from quote to event.</p>
+          </div>
+          <button ref={closeRef} type="button" onClick={onClose}>Close</button>
+        </div>
+
+        <div className="marketing-feature-drawer-body">
+          <div className="marketing-feature-index" aria-label="QuotePilot features">
+            {featureDrawerItems.map((feature) => (
+              <button
+                key={feature.id}
+                type="button"
+                className={feature.id === activeFeature.id ? "is-active" : ""}
+                aria-pressed={feature.id === activeFeature.id}
+                onClick={() => onSelect(feature.id)}
+              >
+                <span>{feature.title}</span>
+                <small>{feature.summary}</small>
+              </button>
+            ))}
+          </div>
+
+          <article className="marketing-feature-detail" key={activeFeature.id}>
+            <p className="marketing-feature-label">Feature overview</p>
+            <h2 id="marketing-feature-title">{activeFeature.title}</h2>
+            <p className="marketing-feature-summary">{activeFeature.summary}</p>
+
+            <figure className="marketing-feature-media">
+              <img
+                src={activeFeature.image}
+                alt={activeFeature.imageAlt}
+                width="1440"
+                height="960"
+                decoding="async"
+              />
+              <figcaption>Actual QuotePilot interface shown with local demo data.</figcaption>
+            </figure>
+
+            <div className="marketing-feature-copy">
+              <section>
+                <span>Operational value</span>
+                <p>{activeFeature.value}</p>
+              </section>
+              <section>
+                <span>Kept distinct</span>
+                <p>{activeFeature.boundary}</p>
+              </section>
+            </div>
+
+            <ol className="marketing-feature-trace" aria-label={`${activeFeature.title} workflow`}>
+              {activeFeature.trace.map((item) => <li key={item}>{item}</li>)}
+            </ol>
+          </article>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 export default function MarketingPage() {
+  const [featureDrawerOpen, setFeatureDrawerOpen] = useState(false);
+  const [selectedFeatureId, setSelectedFeatureId] = useState(featureDrawerItems[0].id);
+  const featureTriggerRef = useRef(null);
+
+  const openFeatureDrawer = useCallback((trigger) => {
+    featureTriggerRef.current = trigger;
+    setFeatureDrawerOpen(true);
+  }, []);
+  const closeFeatureDrawer = useCallback(() => setFeatureDrawerOpen(false), []);
+
   useEffect(() => {
     document.documentElement.classList.add("marketing-active");
     const nodes = [...document.querySelectorAll("[data-reveal]")];
@@ -199,8 +401,27 @@ export default function MarketingPage() {
           <a href="#system">System</a>
           <a href="#workflow">Workflow</a>
           <a href="#principles">Principles</a>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={featureDrawerOpen}
+            onClick={(event) => openFeatureDrawer(event.currentTarget)}
+          >
+            Features
+          </button>
         </nav>
-        <a className="marketing-header-cta" href="/app">Launch app <ArrowIcon /></a>
+        <div className="marketing-header-actions">
+          <button
+            className="marketing-header-feature"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={featureDrawerOpen}
+            onClick={(event) => openFeatureDrawer(event.currentTarget)}
+          >
+            Features
+          </button>
+          <a className="marketing-header-cta" href="/app">Launch app <ArrowIcon /></a>
+        </div>
       </header>
 
       <main id="marketing-main">
@@ -213,7 +434,7 @@ export default function MarketingPage() {
               <em className="marketing-hero-stagger">Without losing the truth.</em>
             </h1>
             <p className="marketing-hero-description marketing-hero-stagger">
-              QuotePilot connects guided quoting, proposals, customer decisions, payment state, and event production—while keeping each team’s authority explicit.
+              QuotePilot connects guided quoting, customer decisions, payment state, and event production while keeping authority explicit.
             </p>
             <div className="marketing-hero-actions marketing-hero-stagger">
               <a className="marketing-button marketing-button-primary" href="/app">Open workspace <ArrowIcon /></a>
@@ -223,7 +444,6 @@ export default function MarketingPage() {
           <div className="marketing-hero-visual marketing-hero-stagger">
             <OrbitConsole />
           </div>
-          <div className="marketing-scroll-cue" aria-hidden="true"><span /> Scroll to trace the workflow</div>
         </section>
 
         <section className="marketing-philosophy" id="system" data-reveal>
@@ -319,10 +539,18 @@ export default function MarketingPage() {
 
       <footer className="marketing-footer">
         <div className="marketing-brand"><BrandMark /><span><b>QUOTEPILOT</b><small>BY MBMAPPS</small></span></div>
-        <p>Quote, proposal, payment state, and event readiness—connected with their boundaries intact.</p>
+        <p>Quote, proposal, payment state, and event readiness, connected with their boundaries intact.</p>
         <div><a href="#system">System</a><a href="#workflow">Workflow</a><a href="/app">Staff app</a></div>
         <small>© {new Date().getFullYear()} MBMapps. QuotePilot.</small>
       </footer>
+
+      <FeatureDrawer
+        open={featureDrawerOpen}
+        selectedId={selectedFeatureId}
+        onSelect={setSelectedFeatureId}
+        onClose={closeFeatureDrawer}
+        returnFocusRef={featureTriggerRef}
+      />
     </div>
   );
 }

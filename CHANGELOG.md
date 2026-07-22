@@ -8,6 +8,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Accessible glass feature drawer on the QuotePilot landing page, with six selectable workflow capabilities, real app screenshots captured with local demo data, proof-safe state boundaries, keyboard focus containment, and a full-screen mobile layout.
 - Public QuotePilot by MBMapps marketing page at `/`, adapted from the approved Figma direction with animated workflow mapping, scroll-reveal process storytelling, responsive layouts, and reduced-motion support; the existing staff workspace now lives at `/app` while customer `?portal=` links remain compatible.
 
 - Proposal readiness scoring in the review step and Sales Workflow, with weighted completion criteria and actionable readiness gaps.

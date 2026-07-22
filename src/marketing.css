@@ -101,10 +101,15 @@
 .marketing-brand small { color: var(--marketing-muted); font-family: "DM Mono", monospace; font-size: 0.53rem; letter-spacing: 0.2em; }
 
 .marketing-header nav { display: flex; align-items: center; gap: 0.35rem; padding: 0.3rem; border: 1px solid var(--marketing-line); border-radius: 999px; background: rgba(18, 18, 20, 0.72); }
-.marketing-header nav a { padding: 0.55rem 1rem; border-radius: 999px; color: #a1a4ab; font-family: "DM Mono", monospace; font-size: 0.62rem; letter-spacing: 0.09em; text-transform: uppercase; transition: color 180ms ease, background 180ms ease; }
+.marketing-header nav a,
+.marketing-header nav button { padding: 0.55rem 1rem; border: 0; border-radius: 999px; color: #a1a4ab; background: transparent; font-family: "DM Mono", monospace; font-size: 0.62rem; letter-spacing: 0.09em; text-transform: uppercase; cursor: pointer; transition: color 180ms ease, background 180ms ease; }
 .marketing-header nav a:hover,
-.marketing-header nav a:focus-visible { color: white; background: rgba(255, 255, 255, 0.06); }
+.marketing-header nav a:focus-visible,
+.marketing-header nav button:hover,
+.marketing-header nav button:focus-visible { color: white; background: rgba(255, 255, 255, 0.06); }
 
+.marketing-header-actions { justify-self: end; display: flex; align-items: center; gap: .65rem; }
+.marketing-header-feature { display: none; min-height: 2.7rem; padding: 0 .8rem; border: 1px solid var(--marketing-line); border-radius: .35rem; color: #c3c4c8; background: rgba(255,255,255,.025); font-family: "DM Mono", monospace; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
 .marketing-header-cta { justify-self: end; display: inline-flex; align-items: center; gap: 0.65rem; padding: 0.72rem 1rem; border: 1px solid rgba(255, 157, 22, 0.42); border-radius: 0.35rem; color: #f4d39f !important; font-family: "DM Mono", monospace; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; transition: background 180ms ease, transform 180ms ease; }
 .marketing-header-cta:hover { transform: translateY(-2px); background: rgba(255, 157, 22, 0.1); }
 
@@ -164,8 +169,6 @@
 .marketing-node-payment { left: 9%; bottom: 14%; animation-delay: -2.4s; }
 .marketing-node-ops { right: 14%; top: 48%; animation-delay: -3.1s; }
 
-.marketing-scroll-cue { position: absolute; left: 50%; bottom: 1.3rem; transform: translateX(-50%); display: flex; align-items: center; gap: .65rem; color: #5d6067; font-family: "DM Mono", monospace; font-size: .52rem; letter-spacing: .12em; text-transform: uppercase; }
-.marketing-scroll-cue span { width: 1px; height: 2.4rem; background: linear-gradient(var(--marketing-amber), transparent); animation: marketing-scroll 1.8s ease-in-out infinite; }
 .marketing-hero-stagger { animation: marketing-rise 900ms cubic-bezier(.2,.75,.2,1) both; }
 .marketing-hero-copy .marketing-hero-stagger:nth-child(1) { animation-delay: 240ms; }
 .marketing-hero-copy .marketing-hero-stagger:nth-child(2) { animation-delay: 330ms; }
@@ -287,6 +290,48 @@
 .marketing-footer > div:nth-of-type(2) a:hover { color: var(--marketing-amber); }
 .marketing-footer > small { grid-column: 1/-1; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,.06); font-family: "DM Mono", monospace; font-size: .52rem; letter-spacing: .06em; }
 
+.marketing-feature-layer { position: fixed; inset: 0; z-index: 160; }
+.marketing-feature-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(1, 1, 2, .66); cursor: pointer; animation: marketing-feature-fade 260ms ease both; }
+.marketing-feature-drawer { position: absolute; top: 1rem; right: 1rem; bottom: 1rem; width: min(58rem, calc(100vw - 2rem)); overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: 1rem; background: linear-gradient(135deg, rgba(255,255,255,.1), rgba(255,255,255,.025)), rgba(11,11,14,.82); -webkit-backdrop-filter: blur(28px) saturate(145%); backdrop-filter: blur(28px) saturate(145%); box-shadow: inset 0 1px 0 rgba(255,255,255,.15), inset 0 -1px 0 rgba(255,255,255,.05), -2rem 0 7rem rgba(0,0,0,.52); animation: marketing-feature-enter 420ms cubic-bezier(.16,1,.3,1) both; }
+.marketing-feature-drawer::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 76% 2%, rgba(255,157,22,.15), transparent 30rem), linear-gradient(90deg, rgba(255,255,255,.055), transparent 32%); }
+.marketing-feature-drawer-head { position: relative; z-index: 1; min-height: 6.8rem; display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: 1.35rem 1.5rem 1.35rem 2rem; border-bottom: 1px solid rgba(255,255,255,.12); }
+.marketing-feature-drawer-head > div { display: grid; gap: .35rem; }
+.marketing-feature-drawer-head span { color: var(--marketing-amber); font-family: "DM Mono", monospace; font-size: .62rem; letter-spacing: .15em; text-transform: uppercase; }
+.marketing-feature-drawer-head p { margin: 0; color: #b3b5bb; font-size: .92rem; }
+.marketing-feature-drawer-head button { min-height: 2.75rem; padding: 0 1rem; border: 1px solid rgba(255,255,255,.17); border-radius: .35rem; color: #e6e6e3; background: rgba(255,255,255,.045); font-family: "DM Mono", monospace; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; transition: border-color 180ms ease, background 180ms ease, transform 180ms ease; }
+.marketing-feature-drawer-head button:hover,
+.marketing-feature-drawer-head button:focus-visible { border-color: rgba(255,157,22,.58); background: rgba(255,157,22,.08); }
+.marketing-feature-drawer-head button:active { transform: scale(.98); }
+.marketing-feature-drawer-body { position: relative; z-index: 1; height: calc(100% - 6.8rem); display: grid; grid-template-columns: minmax(16rem, .76fr) minmax(0, 1.35fr); }
+.marketing-feature-index { overflow-y: auto; padding: .8rem; border-right: 1px solid rgba(255,255,255,.11); }
+.marketing-feature-index button { position: relative; width: 100%; display: grid; gap: .45rem; padding: 1.2rem 1rem 1.25rem 1.25rem; border: 0; border-bottom: 1px solid rgba(255,255,255,.08); color: #a4a6ad; background: transparent; text-align: left; cursor: pointer; transition: color 220ms ease, background 220ms ease, transform 220ms ease; }
+.marketing-feature-index button::before { content: ""; position: absolute; left: 0; top: 1rem; bottom: 1rem; width: 2px; background: var(--marketing-amber); opacity: 0; transform: scaleY(.4); transition: opacity 220ms ease, transform 220ms ease; }
+.marketing-feature-index button:hover { color: #e7e7e4; background: rgba(255,255,255,.025); }
+.marketing-feature-index button:active { transform: scale(.99); }
+.marketing-feature-index button.is-active { color: #f4f4f1; background: linear-gradient(90deg, rgba(255,157,22,.09), transparent); }
+.marketing-feature-index button.is-active::before { opacity: 1; transform: scaleY(1); }
+.marketing-feature-index span { font-size: .96rem; font-weight: 500; }
+.marketing-feature-index small { color: #747780; font-size: .72rem; line-height: 1.5; }
+.marketing-feature-index button.is-active small { color: #a9abb1; }
+.marketing-feature-detail { overflow-y: auto; padding: clamp(2rem, 4vw, 4.5rem); animation: marketing-feature-detail 360ms cubic-bezier(.16,1,.3,1) both; }
+.marketing-feature-label { margin: 0 0 1.4rem; color: var(--marketing-amber); font-family: "DM Mono", monospace; font-size: .58rem; letter-spacing: .16em; text-transform: uppercase; }
+.marketing-feature-detail h2 { max-width: 11ch; margin: 0; font-size: clamp(2.7rem, 5vw, 5.4rem); line-height: .93; letter-spacing: -.055em; font-weight: 300; text-transform: uppercase; }
+.marketing-feature-summary { max-width: 34rem; margin: 1.5rem 0 0; color: #b5b7bd; font-size: 1rem; line-height: 1.7; }
+.marketing-feature-media { margin: 2.5rem 0 0; }
+.marketing-feature-media img { width: 100%; aspect-ratio: 3 / 2; display: block; object-fit: cover; object-position: top center; border: 1px solid rgba(255,255,255,.15); border-radius: .7rem; background: #111114; box-shadow: 0 1.5rem 4rem rgba(0,0,0,.28); }
+.marketing-feature-media figcaption { margin-top: .7rem; color: #747780; font-family: "DM Mono", monospace; font-size: .54rem; letter-spacing: .05em; }
+.marketing-feature-copy { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; margin-top: clamp(2.5rem, 5vh, 4.5rem); }
+.marketing-feature-copy section { padding-top: 1.1rem; border-top: 1px solid rgba(255,255,255,.15); }
+.marketing-feature-copy span { color: #e0b471; font-family: "DM Mono", monospace; font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; }
+.marketing-feature-copy p { margin: .9rem 0 0; color: #8e919a; font-size: .88rem; line-height: 1.65; }
+.marketing-feature-trace { counter-reset: feature-trace; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 3.5rem 0 0; padding: 0; list-style: none; }
+.marketing-feature-trace li { counter-increment: feature-trace; min-height: 6.8rem; display: grid; align-content: space-between; gap: 1rem; padding: 1rem; border: 1px solid rgba(255,255,255,.12); border-radius: .7rem; color: #c8c9cd; background: rgba(255,255,255,.035); font-size: .76rem; line-height: 1.4; }
+.marketing-feature-trace li::before { content: "0" counter(feature-trace); color: var(--marketing-amber); font-family: "DM Mono", monospace; font-size: .56rem; letter-spacing: .1em; }
+
+@keyframes marketing-feature-fade { from { opacity: 0; } }
+@keyframes marketing-feature-enter { from { opacity: 0; transform: translateX(2.5rem) scale(.985); } }
+@keyframes marketing-feature-detail { from { opacity: 0; transform: translateY(1rem); } }
+
 @keyframes marketing-header-in { from { opacity: 0; transform: translateY(-100%); } }
 @keyframes marketing-rise { from { opacity: 0; transform: translateY(2.2rem); filter: blur(8px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
 @keyframes marketing-orbit { to { transform: translate(-50%,-50%) rotate(360deg); } }
@@ -303,6 +348,7 @@
 @media (max-width: 1050px) {
   .marketing-header { grid-template-columns: 1fr auto; }
   .marketing-header nav { display: none; }
+  .marketing-header-feature { display: inline-flex; align-items: center; justify-content: center; }
   .marketing-hero { grid-template-columns: 1fr; padding-top: 10rem; }
   .marketing-hero-copy { max-width: 50rem; }
   .marketing-console { max-width: 48rem; margin: 0 auto; }
@@ -315,7 +361,9 @@
 
 @media (max-width: 720px) {
   .marketing-header { height: 4.8rem; padding: 0 1rem; }
-  .marketing-header-cta { padding: .62rem .7rem; }
+  .marketing-header-actions { gap: .4rem; }
+  .marketing-header-feature,
+  .marketing-header-cta { min-height: 2.55rem; padding: .62rem .65rem; }
   .marketing-header-cta svg { display: none; }
   .marketing-brand-mark { width: 2.15rem; height: 2.15rem; }
   .marketing-hero { min-height: auto; grid-template-columns: minmax(0,1fr); gap: 3.5rem; padding: 8.5rem 1.15rem 5.5rem; }
@@ -330,7 +378,6 @@
   .marketing-orbit-a { width: 13rem; height: 13rem; }
   .marketing-orbit-b { width: 20rem; height: 13rem; }
   .marketing-orbit-c { width: 26rem; height: 19rem; }
-  .marketing-scroll-cue { display: none; }
   .marketing-philosophy { min-height: auto; padding: 6rem 1.25rem; }
   .marketing-philosophy h2 { font-size: clamp(3rem, 14vw, 4.5rem); }
   .marketing-blueprint { min-height: auto; padding: 6rem 1.25rem 8rem; }
@@ -363,6 +410,24 @@
   .marketing-footer > p,
   .marketing-footer > div:nth-of-type(2),
   .marketing-footer > small { grid-column: 1; grid-row: auto; justify-content: flex-start; }
+  .marketing-feature-drawer { inset: 0; width: 100%; border: 0; border-radius: 0; }
+  .marketing-feature-drawer-head { min-height: 5.8rem; padding: 1rem; }
+  .marketing-feature-drawer-head p { display: none; }
+  .marketing-feature-drawer-body { height: calc(100% - 5.8rem); grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .marketing-feature-index { display: flex; overflow: auto hidden; padding: .65rem; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.11); scroll-snap-type: x mandatory; }
+  .marketing-feature-index button { min-width: 10.5rem; padding: .8rem .9rem; border: 1px solid transparent; border-bottom-color: transparent; scroll-snap-align: start; }
+  .marketing-feature-index button::before,
+  .marketing-feature-index small { display: none; }
+  .marketing-feature-index button.is-active { border-color: rgba(255,157,22,.28); border-radius: .7rem; }
+  .marketing-feature-detail { padding: 2rem 1.15rem 3rem; }
+  .marketing-feature-detail h2 { max-width: 12ch; font-size: clamp(2.6rem, 13vw, 4rem); }
+  .marketing-feature-copy { grid-template-columns: 1fr; gap: 1.5rem; margin-top: 3rem; }
+  .marketing-feature-trace { grid-template-columns: 1fr; margin-top: 2.5rem; }
+  .marketing-feature-trace li { min-height: 5.4rem; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .marketing-feature-drawer { background: #111114; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
