@@ -3,7 +3,8 @@
 Production-ready catering quote application built with React, Vite, Firebase, and jsPDF.
 
 ## Quick Links
-- Current Firebase origin: https://tonicatering.web.app
+- Canonical QuotePilot URL: https://quotepilot.mbmapps.com
+- Firebase project origin remains a deployment-provider detail during the custom-domain cutover.
 - MBMApps product page: https://mbmapps.com/apps/quoteflow
 - Repository: https://github.com/TOTALLYMAJOR/Firebase-quote-wizard
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)

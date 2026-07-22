@@ -64,6 +64,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Replaced the legacy Toni Catering Firebase origin in application/onboarding defaults with the canonical shared QuotePilot host, `https://quotepilot.mbmapps.com`; historical Firebase project identifiers and migration evidence remain unchanged.
 - Customer portal snapshots now retain package inclusions and tenant theme/logo values so each sent proposal remains visually and commercially consistent with the saved quote.
 - Playwright local runs now explicitly enable the development catalog fallback, avoiding inherited shell environment ambiguity.
 - QuotePilot platform fallbacks are now MBMApps-owned or tenant-neutral instead of inheriting Tasteful Touch Catering identity; Toni remains an organization-scoped customer admin, customer-host routing stays tenant-scoped, and the proposed `quotepilot.mbmapps.com` host is classified as a shared application surface.

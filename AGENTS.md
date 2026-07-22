@@ -9,7 +9,8 @@ Ship safe changes with validation evidence and canonical documentation sync.
 ## Core Facts
 - Frontend: React 18 + Vite 7
 - Services: Firebase Auth, Firestore, Firebase Hosting
-- Main deploy target: Firebase Hosting (`https://tonicatering.web.app`)
+- Canonical public host: `https://quotepilot.mbmapps.com`
+- Current Firebase project/site: `tonicatering` (legacy provider origin; do not use as customer-facing brand copy)
 - Secondary deploy target: Vercel (optional)
 
 ## Required Workflow

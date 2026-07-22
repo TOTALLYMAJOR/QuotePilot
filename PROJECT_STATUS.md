@@ -3,7 +3,7 @@
 Last updated: July 22, 2026
 
 ## Operational Health
-- Runtime: app is live on Firebase Hosting (`https://tonicatering.web.app`).
+- Canonical public URL: `https://quotepilot.mbmapps.com`; application defaults now use this host. The custom-domain hosting/DNS cutover is not yet verified live.
 - Platform identity: QuotePilot by MBMApps is the product identity; Tasteful Touch Catering remains a customer organization with its own persisted branding and organization-scoped admin role.
 - Build: `npm run build` passes locally for this branch.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
@@ -36,7 +36,7 @@ Last updated: July 22, 2026
 
 ## Active Risks
 - The checked local Firebase configuration files still contain placeholders. Real Firebase Web App values must be supplied through ignored `.env.local` files and the hosting provider before hosted verification or deployment.
-- The proposed `quotepilot.mbmapps.com` shared application hostname is code-ready but not yet connected in Firebase Hosting, authorized in Firebase Authentication, or published in the externally managed MBMApps DNS zone.
+- `quotepilot.mbmapps.com` currently resolves outside Firebase Hosting and did not complete a TLS request during the July 22 verification. It must be attached to the selected hosting project, given valid TLS, and authorized in Firebase Authentication before it is declared live.
 - The new `portalDecision` Firestore rule changes and enriched portal snapshots are implemented locally but are not deployed or hosted-smoke-verified in this branch.
 - Package bundles, customer record upserts, portal themes/logo snapshots, and portal chat are local branch capabilities only until their app and Firestore rule changes are deployed together.
 - Approval requests are role-gated in the application workflow, but stronger server-authoritative action-specific enforcement and end-to-end audit linkage remain follow-up work.

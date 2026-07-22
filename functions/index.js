@@ -1156,7 +1156,7 @@ function resolvePortalLink(quote, fallbackPortalLink = "") {
   }
   const portalKey = normalizeText(quote?.portalKey);
   if (!portalKey) return "";
-  const appBaseUrl = normalizeText(readConfig("app.base_url", "https://tonicatering.web.app"));
+  const appBaseUrl = normalizeText(readConfig("app.base_url", "https://quotepilot.mbmapps.com"));
   if (!appBaseUrl) return "";
   return `${appBaseUrl}?portal=${encodeURIComponent(portalKey)}`;
 }
@@ -1497,7 +1497,7 @@ exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (da
 
   const entitlements = resolveFeatureEntitlements(data);
   const appUrl = parseUrlOrThrow(
-    normalizeText(data?.appUrl || readConfig("app.base_url", "https://tonicatering.web.app")),
+    normalizeText(data?.appUrl || readConfig("app.base_url", "https://quotepilot.mbmapps.com")),
     "appUrl"
   );
   const supportEmail = normalizeEmail(data?.supportEmail || readConfig("notifications.owner_email"));
@@ -2138,7 +2138,7 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
 
   const quotePortalKey = normalizeText(quote.portalKey);
   const appBaseUrl = readConfig("app.base_url");
-  const defaultBase = appBaseUrl || "https://tonicatering.web.app";
+  const defaultBase = appBaseUrl || "https://quotepilot.mbmapps.com";
   const defaultSuccess = quotePortalKey
     ? `${defaultBase}?portal=${encodeURIComponent(quotePortalKey)}&payment=success`
     : `${defaultBase}?payment=success`;
