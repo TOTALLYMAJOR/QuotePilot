@@ -541,7 +541,7 @@ export default function MarketingPage() {
         <div className="marketing-brand"><BrandMark /><span><b>QUOTEPILOT</b><small>BY MBMAPPS</small></span></div>
         <p>Quote, proposal, payment state, and event readiness, connected with their boundaries intact.</p>
         <div><a href="#system">System</a><a href="#workflow">Workflow</a><a href="/app">Staff app</a></div>
-        <small>© {new Date().getFullYear()} MBMapps. QuotePilot.</small>
+        <small>© {new Date().getFullYear()} MBMApps. QuotePilot.</small>
       </footer>
 
       <FeatureDrawer

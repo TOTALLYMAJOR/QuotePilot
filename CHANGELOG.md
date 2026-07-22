@@ -59,6 +59,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- QuotePilot platform fallbacks are now MBMApps-owned or tenant-neutral instead of inheriting Tasteful Touch Catering identity; Toni remains an organization-scoped customer admin, customer-host routing stays tenant-scoped, and the proposed `quotepilot.mbmapps.com` host is classified as a shared application surface.
 - Customer portal snapshots now include customer-safe event scope, pricing breakdowns, selection labels, payment state, and decision receipts; Firestore portal patches remain constrained to allowed status and portal-decision fields.
 - Sensitive-action approval resolution records admin intent without executing payment, contract, portal-link, or deletion actions; those actions remain separate admin operations.
 - Quote History now uses the authenticated staff role to hide payment, booking, portal rotation, contract conversion, and delete controls from sales users while preserving proposal-prep actions.

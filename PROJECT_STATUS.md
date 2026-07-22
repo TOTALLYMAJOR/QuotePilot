@@ -1,9 +1,10 @@
 # Project Status
 
-Last updated: July 21, 2026
+Last updated: July 22, 2026
 
 ## Operational Health
 - Runtime: app is live on Firebase Hosting (`https://tonicatering.web.app`).
+- Platform identity: QuotePilot by MBMApps is the product identity; Tasteful Touch Catering remains a customer organization with its own persisted branding and organization-scoped admin role.
 - Build: `npm run build` passes locally for this branch.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action approval requests, the customer decision center, and event production checklists are implemented and locally covered.
@@ -33,6 +34,7 @@ Last updated: July 21, 2026
   - workflow run: `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
 
 ## Active Risks
+- The proposed `quotepilot.mbmapps.com` shared application hostname is code-ready but not yet connected in Firebase Hosting, authorized in Firebase Authentication, or published in the externally managed MBMApps DNS zone.
 - The new `portalDecision` Firestore rule changes and enriched portal snapshots are implemented locally but are not deployed or hosted-smoke-verified in this branch.
 - Approval requests are role-gated in the application workflow, but stronger server-authoritative action-specific enforcement and end-to-end audit linkage remain follow-up work.
 - Existing portal snapshots need refresh/backfill before older links can display every newly added event, selection, and pricing field.

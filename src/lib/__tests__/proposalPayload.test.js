@@ -138,7 +138,7 @@ describe("proposal payload snapshots", () => {
       quoteMeta: {}
     });
 
-    expect(email.subject).toBe("Tasteful Touch Catering Quote Q-1 - 2026-05-01");
-    expect(email.body).toContain("Tasteful Touch Catering");
+    expect(email.subject).toBe("Catering Team Quote Q-1 - 2026-05-01");
+    expect(email.body).toContain("Catering Team");
   });
 });

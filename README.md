@@ -3,7 +3,8 @@
 Production-ready catering quote application built with React, Vite, Firebase, and jsPDF.
 
 ## Quick Links
-- Live app: https://tonicatering.web.app
+- Current Firebase origin: https://tonicatering.web.app
+- MBMApps product page: https://mbmapps.com/apps/quoteflow
 - Repository: https://github.com/TOTALLYMAJOR/Firebase-quote-wizard
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
@@ -85,6 +86,8 @@ Create `.env` from `.env.example` and set required Firebase keys:
 Optional:
 - `VITE_FIREBASE_FUNCTIONS_REGION`
 - `VITE_BOOTSTRAP_ADMIN_EMAILS`
+- `VITE_BASE_DOMAIN` (defaults to `mbmapps.com`)
+- `VITE_SHARED_APP_HOSTS` (defaults to `app.mbmapps.com,quotepilot.mbmapps.com`)
 
 ## Quality Gates
 ```bash
@@ -220,6 +223,9 @@ npm run deploy:firebase:hosting:customer -- --site <siteId>
 Optional flags:
 - `--project <projectId>` to override current Firebase project
 - `--skip-build` to reuse an existing `dist/` build
+
+### QuotePilot MBMApps Host
+`quotepilot.mbmapps.com` is reserved as the shared QuotePilot application host, not a customer tenant. Before switching `app.base_url`, connect the hostname to Firebase Hosting, add the DNS records Firebase provides, authorize the domain in Firebase Authentication, and verify `/`, `/app`, and portal-token routes.
 
 ## Governance Docs
 - Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)

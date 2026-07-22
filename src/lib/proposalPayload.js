@@ -1,13 +1,10 @@
 import { currency } from "./quoteCalculator";
 
 const DEFAULT_BRANDING = {
-  name: "Tasteful Touch Catering",
-  tagline: "Chef Toni and Grill Master Ervin",
-  logoPath: "/brand/logo.png",
-  crewMembers: [
-    { label: "Chef Toni", imagePath: "/brand/chef-toni.png" },
-    { label: "Grill Master Ervin", imagePath: "/brand/grillmaster-irvin.png" }
-  ]
+  name: "Catering Team",
+  tagline: "",
+  logoPath: "",
+  crewMembers: []
 };
 
 function cleanText(value, fallback = "") {
@@ -38,7 +35,7 @@ function toList(input) {
 }
 
 export function normalizeCrewMembers(input) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_BRANDING.crewMembers;
+  const source = Array.isArray(input) ? input : DEFAULT_BRANDING.crewMembers;
   return source
     .map((member, idx) => ({
       label: cleanText(member?.label, `Team Member ${idx + 1}`),

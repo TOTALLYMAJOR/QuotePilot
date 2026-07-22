@@ -328,6 +328,18 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }));
   });
 
+  test("a customer email cannot bootstrap itself into a platform admin role", async () => {
+    const db = testEnv.authenticatedContext("legacy-customer", {
+      email: "tonitastefultouch@yahoo.com"
+    }).firestore();
+
+    await assertFails(setDoc(doc(db, "userRoles", "legacy-customer"), {
+      role: "admin",
+      email: "tonitastefultouch@yahoo.com",
+      organizationId: "org-a"
+    }));
+  });
+
   test("customer cannot write staff-only org quote/catalog/menu/settings paths", async () => {
     const customerQuoteRef = quoteRefFor("customer-org-a", "customer-a@example.com", "org-a", "q-customer-own");
     await assertFails(setDoc(customerQuoteRef, buildQuotePayload("customer-org-a", "org-a")));

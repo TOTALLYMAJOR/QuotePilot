@@ -66,7 +66,8 @@ npx firebase-tools functions:config:set \
   twilio.auth_token="<your_twilio_auth_token>" \
   twilio.from_number="<your_twilio_from_number>" \
   notifications.owner_phone="<your_owner_phone>" \
-  app.base_url="https://tonicatering.web.app"
+  app.base_url="https://quotepilot.mbmapps.com" \
+  app.shared_hosts="app.mbmapps.com,quotepilot.mbmapps.com"
 ```
 
 If buyer wants Stripe checkout but no SMS yet:
@@ -75,7 +76,8 @@ npx firebase-tools functions:config:set \
   notifications.sms_provider="none" \
   stripe.secret_key="<your_stripe_secret>" \
   stripe.webhook_secret="<your_stripe_webhook_secret>" \
-  app.base_url="https://tonicatering.web.app"
+  app.base_url="https://quotepilot.mbmapps.com" \
+  app.shared_hosts="app.mbmapps.com,quotepilot.mbmapps.com"
 ```
 
 Deploy functions:

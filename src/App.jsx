@@ -465,9 +465,9 @@ export default function App() {
     [form, catalog, totals, effectiveSettings]
   );
   const isEditingQuote = Boolean(editingQuote.id);
-  const brandName = catalog.settings?.brandName || "Tasteful Touch Catering";
-  const brandTagline = catalog.settings?.brandTagline || "Chef Toni and Grill Master Ervin";
-  const brandLogoUrl = catalog.settings?.brandLogoUrl || "/brand/logo.png";
+  const brandName = catalog.settings?.brandName || "QuotePilot";
+  const brandTagline = catalog.settings?.brandTagline || "Quote-to-event operations by MBMApps";
+  const brandLogoUrl = catalog.settings?.brandLogoUrl || "/brand/quotepilot-mark.svg";
   const brandPrimaryColor = catalog.settings?.brandPrimaryColor || "#c99334";
   const brandAccentColor = catalog.settings?.brandAccentColor || "#f0d29a";
   const brandDarkAccentColor = catalog.settings?.brandDarkAccentColor || "#8d611a";
@@ -479,11 +479,11 @@ export default function App() {
     .map((member) => String(member?.label || "").trim())
     .filter(Boolean);
   const scheduleCapacityLimit = Math.max(1, Number(catalog.settings?.capacityLimit || 400));
-  const heroEyebrow = catalog.settings?.heroEyebrow || "Premium Event Catering Workbench";
-  const heroHeadline = catalog.settings?.heroHeadline || "Signature flavor. Configurable quotes.";
+  const heroEyebrow = catalog.settings?.heroEyebrow || "Quote-to-event operating system";
+  const heroHeadline = catalog.settings?.heroHeadline || "Build a clearer quote. Keep the truth intact.";
   const heroDescription =
     catalog.settings?.heroDescription ||
-    "A polished sales cockpit for weddings, corporate events, and celebrations up to 400 guests. Build scenarios, apply smart upsells, and send better proposals faster.";
+    "Configure catering quotes, compare scenarios, record customer decisions, and carry approved scope into event production.";
   const appThemeVars = {
     "--tone-gold-1": brandAccentColor,
     "--tone-gold-2": brandPrimaryColor,

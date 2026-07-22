@@ -24,13 +24,10 @@ const ORG_BOOTSTRAP_TIMEOUT_MS = Math.max(
 );
 const AUTH_CLAIMS_MODE = String(import.meta.env.VITE_AUTH_CLAIMS_MODE || "dual").trim().toLowerCase() || "dual";
 const BOOTSTRAP_ADMINS = new Set(
-  [
-    "tonitastefultouch@yahoo.com",
-    ...(String(import.meta.env.VITE_BOOTSTRAP_ADMIN_EMAILS || "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean))
-  ].map((value) => value.toLowerCase())
+  String(import.meta.env.VITE_BOOTSTRAP_ADMIN_EMAILS || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
 );
 
 function normalizeEmail(value) {

@@ -22,6 +22,14 @@ service cloud.firestore {
         : "";
     }
 
+    function claimOrganizationId() {
+      return isSignedIn()
+        && request.auth.token.keys().hasAny(["organizationId"])
+        && request.auth.token.organizationId is string
+        ? request.auth.token.organizationId
+        : "";
+    }
+
     function roleOrganizationId(uid) {
       return isSignedIn()
         && exists(/databases/$(database)/documents/userRoles/$(uid))
@@ -30,15 +38,8 @@ service cloud.firestore {
         : "";
     }
 
-    function isBootstrapAdmin() {
-      return isSignedIn()
-        && request.auth.token.email in [
-          "tonitastefultouch@yahoo.com"
-        ];
-    }
-
     function isAdmin() {
-      return isBootstrapAdmin() || hasRole("admin");
+      return hasRole("admin");
     }
 
     function isStaff() {
@@ -48,11 +49,12 @@ service cloud.firestore {
     function sameOrg(orgId) {
       return isSignedIn()
         && orgId is string
-        && orgId == userOrganizationId();
+        && orgId == userOrganizationId()
+        && (claimOrganizationId() == "" || claimOrganizationId() == orgId);
     }
 
     function isOrgAdmin(orgId) {
-      return isBootstrapAdmin() || (sameOrg(orgId) && hasRole("admin"));
+      return sameOrg(orgId) && hasRole("admin");
     }
 
     function isOrgStaff(orgId) {
@@ -161,7 +163,6 @@ service cloud.firestore {
     match /userRoles/{uid} {
       allow read: if isSignedIn() && (
         request.auth.uid == uid
-        || isBootstrapAdmin()
         || (
           hasRole("admin")
           && userOrganizationId() != ""
@@ -169,13 +170,6 @@ service cloud.firestore {
         )
       );
       allow create: if (
-          isBootstrapAdmin()
-          && isSignedIn()
-          && request.auth.uid == uid
-          && request.resource.data.role == "admin"
-          && request.resource.data.email == request.auth.token.email
-        )
-        || (
           isSignedIn()
           && request.auth.uid == uid
           && request.resource.data.role == "customer"
@@ -186,20 +180,29 @@ service cloud.firestore {
           && request.resource.data.organizationId is string
           && request.resource.data.organizationId == userOrganizationId()
         );
-      allow update: if isBootstrapAdmin()
-        || (
+      allow update: if (
           hasRole("admin")
           && resource.data.organizationId is string
           && request.resource.data.organizationId is string
           && resource.data.organizationId == userOrganizationId()
           && request.resource.data.organizationId == userOrganizationId()
         );
-      allow delete: if isBootstrapAdmin()
-        || (
+      allow delete: if (
           hasRole("admin")
           && resource.data.organizationId is string
           && resource.data.organizationId == userOrganizationId()
         );
+    }
+
+    match /tenantDomains/{hostname} {
+      allow read: if false;
+      allow create: if hasRole("admin")
+        && sameOrg(request.resource.data.organizationId);
+      allow update: if hasRole("admin")
+        && sameOrg(resource.data.organizationId)
+        && sameOrg(request.resource.data.organizationId);
+      allow delete: if hasRole("admin")
+        && sameOrg(resource.data.organizationId);
     }
 
     match /organizations/{orgId} {

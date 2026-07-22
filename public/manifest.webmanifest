@@ -1,7 +1,7 @@
 {
-  "name": "Tasteful Touch Quote Wizard",
-  "short_name": "Quote Wizard",
-  "description": "Staff quote builder and customer quote portal for Tasteful Touch Catering.",
+  "name": "QuotePilot by MBMApps",
+  "short_name": "QuotePilot",
+  "description": "Catering quote, proposal, customer decision, and event operations software by MBMApps.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -9,14 +9,9 @@
   "theme_color": "#1b150f",
   "icons": [
     {
-      "src": "/brand/logo.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/brand/logo.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/brand/quotepilot-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ]
 }

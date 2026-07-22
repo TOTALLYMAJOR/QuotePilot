@@ -273,7 +273,7 @@ function buildNeutralSettingsPatch({
   return {
     quotePreparedBy: resolvedPreparedBy,
     brandName: resolvedOrgName,
-    brandTagline: "Managed by Little Legend Studios",
+    brandTagline: "Powered by QuotePilot by MBMApps",
     brandLogoUrl: "",
     brandPrimaryColor: "#1f2937",
     brandAccentColor: "#4b5563",

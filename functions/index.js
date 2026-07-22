@@ -18,9 +18,6 @@ const TENANT_DOMAINS_COLLECTION = "tenantDomains";
 const STAFF_ROLES = new Set(["admin", "sales"]);
 const ROLE_VALUES = new Set(["admin", "sales", "customer"]);
 const INVITES_COLLECTION = "organizationInvites";
-const BOOTSTRAP_ADMIN_EMAILS = new Set([
-  "tonitastefultouch@yahoo.com"
-]);
 const SMS_PROVIDERS = new Set(["twilio", "none"]);
 const EMAIL_PROVIDERS = new Set(["resend", "none"]);
 const QUOTES_COLLECTION = "quotes";
@@ -31,6 +28,18 @@ let cachedFunctionsConfig = undefined;
 let functionsConfigErrorLogged = false;
 const CLAIMS_VERSION = 1;
 const AUTH_CLAIMS_MODE = normalizeText(readConfig("auth.claims_mode", "dual")).toLowerCase() || "dual";
+const BOOTSTRAP_ADMIN_EMAILS = new Set(
+  normalizeText(readConfig("auth.bootstrap_admin_emails", ""))
+    .split(",")
+    .map((value) => normalizeEmail(value))
+    .filter(Boolean)
+);
+const SHARED_APP_HOSTS = new Set(
+  normalizeText(readConfig("app.shared_hosts", "app.mbmapps.com,quotepilot.mbmapps.com"))
+    .split(",")
+    .map((value) => normalizeHostname(value))
+    .filter(Boolean)
+);
 const RESERVED_SUBDOMAINS = new Set(["www", "app", "api", "admin"]);
 const UNKNOWN_HOST_WINDOW_MS = Math.max(1_000, Number(readConfig("security.unknown_host_window_ms", "300000")) || 300000);
 const UNKNOWN_HOST_LIMIT = Math.max(1, Number(readConfig("security.unknown_host_limit", "20")) || 20);
@@ -174,13 +183,11 @@ function getHostType(hostname = "") {
   if (normalizedHost === "localhost" || normalizedHost.endsWith(".localhost")) return "local";
   if (normalizedHost === "127.0.0.1" || normalizedHost === "::1") return "local";
   if (normalizedHost.endsWith(".web.app") || normalizedHost.endsWith(".firebaseapp.com")) return "app";
+  if (SHARED_APP_HOSTS.has(normalizedHost)) return "app";
 
   const baseDomain = getBaseDomain();
   if (normalizedHost === baseDomain || normalizedHost === `www.${baseDomain}`) {
     return "marketing";
-  }
-  if (normalizedHost === `app.${baseDomain}`) {
-    return "app";
   }
   if (normalizedHost.endsWith(`.${baseDomain}`)) {
     const label = normalizedHost.slice(0, -1 * (`.${baseDomain}`.length)).split(".")[0];
@@ -400,7 +407,7 @@ function buildNeutralSettingsPatch({
   return {
     quotePreparedBy: resolvedPreparedBy,
     brandName: resolvedOrganizationName,
-    brandTagline: "Managed by Little Legend Studios",
+    brandTagline: "Powered by QuotePilot by MBMApps",
     brandLogoUrl: "",
     brandPrimaryColor: "#1f2937",
     brandAccentColor: "#4b5563",
@@ -595,7 +602,7 @@ function getEmailConfig() {
   return {
     provider: getEmailProvider(),
     fromEmail: normalizeEmail(readConfig("email.from_email", readConfig("notifications.owner_email"))),
-    fromName: normalizeText(readConfig("email.from_name", "Tasteful Touch Catering")),
+    fromName: normalizeText(readConfig("email.from_name", "QuotePilot by MBMApps")),
     resendApiKey: normalizeText(readConfig("resend.api_key"))
   };
 }
@@ -1996,7 +2003,7 @@ exports.sendQuoteToCustomer = functions.region(REGION).https.onCall(async (data,
   const portalLink = resolvePortalLink(quote, data?.portalLink);
   const paymentLink = normalizeText(quote?.payment?.depositLink);
   const attachment = normalizeAttachment(data?.attachment);
-  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "Tasteful Touch Catering";
+  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "Catering Team";
 
   const lines = [
     `Hi ${customerName},`,
@@ -2058,7 +2065,7 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
   const customerName = normalizeText(quote.customer?.name) || "there";
   const eventName = normalizeText(quote.event?.name) || "your event";
   const deposit = currencyLabel(quote.totals?.deposit);
-  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "Tasteful Touch Catering";
+  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "Catering Team";
 
   const lines = [
     `Hi ${customerName},`,

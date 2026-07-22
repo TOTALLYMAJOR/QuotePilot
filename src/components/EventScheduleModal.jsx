@@ -10,7 +10,7 @@ import {
 
 const STATUS_SET = new Set(["accepted", "booked"]);
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DEFAULT_STAFF_LEADS = ["Chef Toni", "Ervin", "Shift Lead"];
+const DEFAULT_STAFF_LEADS = ["Event Lead", "Kitchen Lead", "Shift Lead"];
 const EMPTY_DAY_CONFLICT = { total: 0, overlap: 0, unknown: 0, capacity: 0 };
 
 function toIsoDate(value) {
