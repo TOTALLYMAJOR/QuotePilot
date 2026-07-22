@@ -10,6 +10,17 @@ const REQUIRED = [
   "VITE_FIREBASE_APP_ID"
 ];
 
+const PLACEHOLDER_PATTERNS = [
+  /^your[_-]/i,
+  /your[_-]?project/i,
+  /your[_-]?sender/i,
+  /your[_-]?app/i,
+  /replace[_-]?me/i,
+  /change[_-]?me/i,
+  /placeholder/i,
+  /^x+$/i
+];
+
 function readDotEnv(filePath) {
   if (!fs.existsSync(filePath)) return {};
   const raw = fs.readFileSync(filePath, "utf8");
@@ -30,15 +41,33 @@ function readDotEnv(filePath) {
 
 const cwd = process.cwd();
 const envPath = path.join(cwd, ".env");
-const dotEnv = readDotEnv(envPath);
+const envLocalPath = path.join(cwd, ".env.local");
+const dotEnv = {
+  ...readDotEnv(envPath),
+  ...readDotEnv(envLocalPath)
+};
 
-const missing = REQUIRED.filter((key) => !(process.env[key] || dotEnv[key]));
+function valueFor(key) {
+  return String(process.env[key] || dotEnv[key] || "").trim();
+}
 
-if (missing.length) {
-  console.error("Missing required Firebase env vars:");
+function isPlaceholder(value) {
+  return PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+const missing = REQUIRED.filter((key) => !valueFor(key));
+const placeholders = REQUIRED.filter((key) => {
+  const value = valueFor(key);
+  return value && isPlaceholder(value);
+});
+
+if (missing.length || placeholders.length) {
+  if (missing.length) console.error("Missing required Firebase env vars:");
   missing.forEach((key) => console.error(`- ${key}`));
-  console.error("\nAdd them to .env (local) or host environment settings (Vercel/GitHub Actions).");
+  if (placeholders.length) console.error(`${missing.length ? "\n" : ""}Placeholder Firebase env vars must be replaced:`);
+  placeholders.forEach((key) => console.error(`- ${key}`));
+  console.error("\nCopy the Firebase Web App configuration into .env.local or the hosting provider environment. Never commit real values.");
   process.exit(1);
 }
 
-console.log("Firebase env check passed.");
+console.log("Firebase env check passed (process environment/.env.local/.env).");

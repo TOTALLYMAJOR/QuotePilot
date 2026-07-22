@@ -59,6 +59,9 @@ const MAX_RATE_MIX_CSV_LENGTH = 300;
 const MAX_FOLLOW_UP_NOTE_LENGTH = 1200;
 const MAX_APPROVAL_NOTE_LENGTH = 800;
 const MAX_PORTAL_DECISION_MESSAGE_LENGTH = 1200;
+const MAX_PORTAL_CHAT_MESSAGE_LENGTH = 1200;
+const MAX_PORTAL_CHAT_MESSAGES = 100;
+const LOCAL_CUSTOMERS_KEY = "quoteWizard.customers";
 const KITCHEN_CHECKPOINT_DEFS = [
   { id: "prep-start", label: "Prep kickoff", minuteOffset: -180 },
   { id: "line-check", label: "Line check", minuteOffset: -120 },
@@ -182,6 +185,10 @@ function quoteVersionsWriteCollectionRef(quoteId, organizationId = undefined, ac
 
 function portalDocRef(portalKey) {
   return doc(db, PORTAL_COLLECTION, portalKey);
+}
+
+function portalMessagesCollectionRef(portalKey) {
+  return collection(db, PORTAL_COLLECTION, portalKey, "messages");
 }
 
 function isoNow() {
@@ -411,6 +418,84 @@ function normalizePortalDecision(input) {
   };
 }
 
+function normalizePortalConversation(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const messages = Array.isArray(source.messages) ? source.messages : [];
+  return {
+    messages: messages
+      .map((item) => ({
+        id: String(item?.id || "").trim(),
+        authorType: item?.authorType === "staff" ? "staff" : "customer",
+        authorName: String(item?.authorName || "").trim().slice(0, 80),
+        body: String(item?.body || "").trim().slice(0, MAX_PORTAL_CHAT_MESSAGE_LENGTH),
+        createdAtISO: String(item?.createdAtISO || "").trim()
+      }))
+      .filter((item) => item.id && item.body && item.createdAtISO)
+      .slice(-MAX_PORTAL_CHAT_MESSAGES)
+  };
+}
+
+function buildPackageBundleSnapshot(selectedPackage = {}, catalog = {}, settings = {}) {
+  const menuItems = Array.isArray(settings?.menuSections)
+    ? settings.menuSections.flatMap((section) => section.items || [])
+    : [];
+  const nameMap = (items) => new Map((Array.isArray(items) ? items : []).map((item) => [String(item?.id || ""), String(item?.name || item?.id || "")]));
+  const addonNames = nameMap(catalog?.addons);
+  const rentalNames = nameMap(catalog?.rentals);
+  const menuNames = nameMap(menuItems);
+  const resolve = (ids, map) => (Array.isArray(ids) ? ids : [])
+    .map((id) => ({ id: String(id), name: map.get(String(id)) || String(id) }))
+    .filter((item) => item.id);
+  return {
+    addons: resolve(selectedPackage?.includedAddonIds, addonNames),
+    rentals: resolve(selectedPackage?.includedRentalIds, rentalNames),
+    menuItems: resolve(selectedPackage?.includedMenuItemIds, menuNames)
+  };
+}
+
+function customerDocumentId(email) {
+  return encodeURIComponent(normalizeEmail(email)).replace(/\./g, "%2E").slice(0, 500);
+}
+
+async function upsertCustomerRecord({ organizationId, quoteId, quoteNumber, customer = {}, event = {}, nowISO = isoNow() }) {
+  const email = normalizeEmail(customer.email);
+  const customerId = customerDocumentId(email);
+  if (!customerId) return;
+  const scopedOrganizationId = String(organizationId || (!firebaseReady ? "local" : "")).trim();
+  if (!scopedOrganizationId) return;
+  const record = {
+    customerId,
+    organizationId: scopedOrganizationId,
+    name: String(customer.name || "").trim(),
+    email,
+    phone: String(customer.phone || "").trim(),
+    company: String(customer.organization || "").trim(),
+    lastQuoteId: String(quoteId || "").trim(),
+    lastQuoteNumber: String(quoteNumber || "").trim(),
+    lastEventName: String(event.name || "").trim(),
+    lastEventDate: String(event.date || "").trim(),
+    updatedAtISO: nowISO
+  };
+
+  if (firebaseReady && db) {
+    const ref = getOrganizationSubDocRef("customers", customerId, scopedOrganizationId);
+    const existing = await getDoc(ref);
+    await setDoc(ref, {
+      ...record,
+      ...(existing.exists() ? {} : { createdAtISO: nowISO })
+    }, { merge: true });
+    return;
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_CUSTOMERS_KEY) || "[]");
+  const scopedId = `${scopedOrganizationId}:${customerId}`;
+  const index = existing.findIndex((item) => item.scopedId === scopedId);
+  const nextRecord = { ...(index >= 0 ? existing[index] : { scopedId, createdAtISO: nowISO }), ...record };
+  if (index >= 0) existing[index] = nextRecord;
+  else existing.push(nextRecord);
+  localStorage.setItem(LOCAL_CUSTOMERS_KEY, JSON.stringify(existing));
+}
+
 function normalizeFeatureFlags(input) {
   const source = input && typeof input === "object" ? input : {};
   return {
@@ -604,6 +689,9 @@ function buildPortalSnapshot(quoteId, quote) {
     },
     selection: {
       packageName: quote.selection?.packageName || "",
+      packageBundle: quote.selection?.packageBundle && typeof quote.selection.packageBundle === "object"
+        ? quote.selection.packageBundle
+        : { addons: [], rentals: [], menuItems: [] },
       addons: (Array.isArray(quote.selection?.addonSnapshots) ? quote.selection.addonSnapshots : [])
         .map((item) => String(item?.name || "").trim())
         .filter(Boolean),
@@ -615,7 +703,18 @@ function buildPortalSnapshot(quoteId, quote) {
         .filter(Boolean)
     },
     quoteMeta: {
-      brandName: quote.quoteMeta?.brandName || ""
+      brandName: quote.quoteMeta?.brandName || "",
+      brandTagline: quote.quoteMeta?.brandTagline || "",
+      brandLogoUrl: quote.quoteMeta?.brandLogoUrl || "",
+      portalThemeId: quote.quoteMeta?.portalThemeId || "midnight",
+      brandPrimaryColor: quote.quoteMeta?.brandPrimaryColor || "#c99334",
+      brandAccentColor: quote.quoteMeta?.brandAccentColor || "#f0d29a",
+      brandDarkAccentColor: quote.quoteMeta?.brandDarkAccentColor || "#8d611a",
+      brandBackgroundStart: quote.quoteMeta?.brandBackgroundStart || "#100d09",
+      brandBackgroundMid: quote.quoteMeta?.brandBackgroundMid || "#221a12",
+      brandBackgroundEnd: quote.quoteMeta?.brandBackgroundEnd || "#050505",
+      businessPhone: quote.quoteMeta?.businessPhone || "",
+      businessEmail: quote.quoteMeta?.businessEmail || ""
     },
     status: normalizeStatus(quote.status),
     expiresAtISO: quote.expiresAtISO || addDaysISO(createdAtISO, DEFAULT_VALIDITY_DAYS),
@@ -628,6 +727,7 @@ function buildPortalSnapshot(quoteId, quote) {
       confirmedAtISO: portalBooking.confirmedAtISO
     },
     portalDecision: normalizePortalDecision(quote.portalDecision),
+    portalConversation: normalizePortalConversation(quote.portalConversation),
     lifecycle: {
       ...(quote.lifecycle || {})
     },
@@ -2193,6 +2293,8 @@ export async function submitQuote({
     guests,
     defaultPricingType: "per_item"
   });
+  const selectedPackage = catalog?.packages?.find((item) => item.id === form.pkg) || totals.selectedPkg || {};
+  const packageBundle = buildPackageBundleSnapshot(selectedPackage, catalog, settings);
   const crmProvider = resolveCrmProvider(settings?.crmProvider || "webhook", "webhook");
   const featureFlags = settings?.featureFlags && typeof settings.featureFlags === "object"
     ? { ...settings.featureFlags }
@@ -2211,6 +2313,7 @@ export async function submitQuote({
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
+      packageBundle,
       addons: form.addons,
       rentals: form.rentals,
       menuItems,
@@ -2280,6 +2383,7 @@ export async function submitQuote({
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
+      packageBundle,
       addons: form.addons,
       rentals: form.rentals,
       addonQuantities,
@@ -2412,6 +2516,10 @@ export async function submitQuote({
       brandPrimaryColor: settings?.brandPrimaryColor || "",
       brandAccentColor: settings?.brandAccentColor || "",
       brandDarkAccentColor: settings?.brandDarkAccentColor || "",
+      brandBackgroundStart: settings?.brandBackgroundStart || "",
+      brandBackgroundMid: settings?.brandBackgroundMid || "",
+      brandBackgroundEnd: settings?.brandBackgroundEnd || "",
+      portalThemeId: settings?.portalThemeId || "midnight",
       brandCrew: Array.isArray(settings?.brandCrew) ? settings.brandCrew : [],
       businessPhone: settings?.businessPhone || "",
       businessEmail: settings?.businessEmail || "",
@@ -2457,6 +2565,14 @@ export async function submitQuote({
       buildPortalSnapshot(ref.id, payload),
       { merge: true }
     );
+    await upsertCustomerRecord({
+      organizationId: resolvedOrganizationId,
+      quoteId: ref.id,
+      quoteNumber,
+      customer: payload.customer,
+      event: payload.event,
+      nowISO
+    });
     await saveQuoteVersion(ref.id, {
       reason: "initial_quote_create",
       setActive: true,
@@ -2476,6 +2592,14 @@ export async function submitQuote({
   const fallbackId = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now());
   existing.unshift({ id: fallbackId, ...payload });
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+  await upsertCustomerRecord({
+    organizationId: resolvedOrganizationId,
+    quoteId: fallbackId,
+    quoteNumber,
+    customer: payload.customer,
+    event: payload.event,
+    nowISO
+  });
   await saveQuoteVersion(fallbackId, {
     reason: "initial_quote_create",
     setActive: true,
@@ -2530,6 +2654,8 @@ export async function updateQuote({
     guests,
     defaultPricingType: "per_item"
   });
+  const selectedPackage = catalog?.packages?.find((item) => item.id === form.pkg) || totals.selectedPkg || {};
+  const packageBundle = buildPackageBundleSnapshot(selectedPackage, catalog, settings);
   const crmProvider = resolveCrmProvider(settings?.crmProvider || "webhook", "webhook");
   const featureFlags = settings?.featureFlags && typeof settings.featureFlags === "object"
     ? { ...settings.featureFlags }
@@ -2576,6 +2702,7 @@ export async function updateQuote({
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
+      packageBundle,
       addons: form.addons,
       rentals: form.rentals,
       menuItems,
@@ -2646,6 +2773,7 @@ export async function updateQuote({
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
+      packageBundle,
       addons: form.addons,
       rentals: form.rentals,
       addonQuantities,
@@ -2746,6 +2874,10 @@ export async function updateQuote({
       brandPrimaryColor: settings?.brandPrimaryColor || "",
       brandAccentColor: settings?.brandAccentColor || "",
       brandDarkAccentColor: settings?.brandDarkAccentColor || "",
+      brandBackgroundStart: settings?.brandBackgroundStart || "",
+      brandBackgroundMid: settings?.brandBackgroundMid || "",
+      brandBackgroundEnd: settings?.brandBackgroundEnd || "",
+      portalThemeId: settings?.portalThemeId || "midnight",
       brandCrew: Array.isArray(settings?.brandCrew) ? settings.brandCrew : [],
       businessPhone: settings?.businessPhone || "",
       businessEmail: settings?.businessEmail || "",
@@ -2786,6 +2918,14 @@ export async function updateQuote({
     patch.organizationId = writeOrganizationId;
     await updateDoc(quoteWriteDocRef(id, writeOrganizationId, "updateQuote"), patch);
     await syncPortalSnapshotFromQuoteDoc(id, writeOrganizationId);
+    await upsertCustomerRecord({
+      organizationId: writeOrganizationId,
+      quoteId: id,
+      quoteNumber: existing.quoteNumber || "",
+      customer: patch.customer,
+      event: patch.event,
+      nowISO
+    });
     const versionResult = await saveQuoteVersion(id, {
       reason: "quote_edit",
       setActive: true,
@@ -2817,6 +2957,14 @@ export async function updateQuote({
     throw new Error("Quote not found.");
   }
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
+  await upsertCustomerRecord({
+    organizationId: nextOrganizationId,
+    quoteId: id,
+    quoteNumber: existing.quoteNumber || "",
+    customer: patch.customer,
+    event: patch.event,
+    nowISO
+  });
   const versionResult = await saveQuoteVersion(id, {
     reason: "quote_edit",
     setActive: true,
@@ -3561,6 +3709,90 @@ export async function getPortalQuote(portalKey) {
     ...snapshot,
     ...portalValidity
   };
+}
+
+export async function appendPortalMessage({
+  portalKey,
+  body,
+  authorType = "customer",
+  authorName = ""
+} = {}) {
+  const key = String(portalKey || "").trim();
+  const normalizedBody = String(body || "").trim().slice(0, MAX_PORTAL_CHAT_MESSAGE_LENGTH);
+  const normalizedAuthorType = authorType === "staff" ? "staff" : "customer";
+  if (!key) throw new Error("Portal key is required.");
+  if (!normalizedBody) throw new Error("Enter a message before sending.");
+
+  const nowISO = isoNow();
+  const message = {
+    id: buildPortalKey(),
+    authorType: normalizedAuthorType,
+    authorName: String(authorName || (normalizedAuthorType === "staff" ? "Quote team" : "Customer")).trim().slice(0, 80),
+    body: normalizedBody,
+    createdAtISO: nowISO
+  };
+
+  if (firebaseReady) {
+    const portalSnap = await getDoc(portalDocRef(key));
+    if (!portalSnap.exists()) throw new Error("Quote not found.");
+    const portalData = portalSnap.data();
+    if (String(portalData.portalKey || "").trim() !== key) throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
+    assertPortalTokenActive(portalData, nowISO);
+    if (normalizeStatus(portalData.status) === "deleted") throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
+    await setDoc(doc(portalMessagesCollectionRef(key), message.id), {
+      ...message,
+      portalKey: key,
+      quoteId: String(portalData.quoteId || "").trim(),
+      organizationId: String(portalData.organizationId || "").trim(),
+      createdAt: serverTimestamp()
+    });
+    return { ok: true, storage: "firebase", message };
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  let found = false;
+  const next = existing.map((quote) => {
+    if (quote.portalKey !== key) return quote;
+    found = true;
+    assertPortalTokenActive(quote, nowISO);
+    const conversation = normalizePortalConversation(quote.portalConversation);
+    return {
+      ...quote,
+      portalConversation: {
+        messages: [...conversation.messages, message].slice(-MAX_PORTAL_CHAT_MESSAGES)
+      },
+      updatedAtISO: nowISO
+    };
+  });
+  if (!found) throw new Error("Quote not found.");
+  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
+  return { ok: true, storage: "local", message };
+}
+
+export async function getPortalMessages(portalKey) {
+  const key = String(portalKey || "").trim();
+  if (!key) throw new Error("Portal key is required.");
+
+  if (firebaseReady) {
+    const portalSnap = await getDoc(portalDocRef(key));
+    if (!portalSnap.exists()) throw new Error("Quote not found.");
+    assertPortalTokenActive(portalSnap.data(), isoNow());
+    const messageSnap = await getDocs(query(portalMessagesCollectionRef(key), orderBy("createdAt", "asc")));
+    return messageSnap.docs.map((item) => {
+      const data = item.data();
+      return {
+        id: item.id,
+        ...data,
+        createdAtISO: timestampToISO(data.createdAt, data.createdAtISO)
+      };
+    }).slice(-MAX_PORTAL_CHAT_MESSAGES);
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  const quote = existing.find((item) => item.portalKey === key);
+  if (!quote) throw new Error("Quote not found.");
+  assertPortalTokenActive(quote, isoNow());
+  return normalizePortalConversation(quote.portalConversation).messages;
 }
 
 export async function updatePortalDecision({

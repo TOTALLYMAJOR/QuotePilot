@@ -8,6 +8,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Admin-configurable package bundles that can include add-ons, rentals, and menu items without charging those selections twice; the saved quote and customer portal retain an explicit bundle snapshot.
+- Four customer-portal theme presets (Midnight Amber, Warm Linen, Garden Sage, and Coastal Blue) with tenant logo/brand controls.
+- Quote-scoped customer/staff portal chat with immutable Firestore messages, active-link enforcement, and same-organization staff access.
+- Organization-scoped customer records that are created or refreshed when a quote is saved, including contact information and latest quote/event metadata.
+- Firebase environment validation now reads `.env.local` and rejects example placeholders instead of treating them as deployment-ready credentials.
 - Accessible glass feature drawer on the QuotePilot landing page, with six selectable workflow capabilities, real app screenshots captured with local demo data, proof-safe state boundaries, keyboard focus containment, and a full-screen mobile layout.
 - Public QuotePilot by MBMapps marketing page at `/`, adapted from the approved Figma direction with animated workflow mapping, scroll-reveal process storytelling, responsive layouts, and reduced-motion support; the existing staff workspace now lives at `/app` while customer `?portal=` links remain compatible.
 
@@ -59,6 +64,8 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Customer portal snapshots now retain package inclusions and tenant theme/logo values so each sent proposal remains visually and commercially consistent with the saved quote.
+- Playwright local runs now explicitly enable the development catalog fallback, avoiding inherited shell environment ambiguity.
 - QuotePilot platform fallbacks are now MBMApps-owned or tenant-neutral instead of inheriting Tasteful Touch Catering identity; Toni remains an organization-scoped customer admin, customer-host routing stays tenant-scoped, and the proposed `quotepilot.mbmapps.com` host is classified as a shared application surface.
 - Customer portal snapshots now include customer-safe event scope, pricing breakdowns, selection labels, payment state, and decision receipts; Firestore portal patches remain constrained to allowed status and portal-decision fields.
 - Sensitive-action approval resolution records admin intent without executing payment, contract, portal-link, or deletion actions; those actions remain separate admin operations.

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { calculateQuote } from "../quoteCalculator";
 import {
+  baseFixtureForm,
   quoteCalculationCatalog,
   quoteCalculationFixtures,
   quoteCalculationSettings
@@ -59,6 +60,37 @@ describe("calculateQuote fixtures", () => {
     expect(disabledTotals.bartenderLabor).toBe(0);
     expect(disabledTotals.labor).toBe(0);
     expect(disabledTotals.total).toBeLessThan(enabledTotals.total);
+  });
+
+  test("does not double-charge items included in the selected package bundle", () => {
+    const catalog = {
+      ...quoteCalculationCatalog,
+      packages: quoteCalculationCatalog.packages.map((pkg) => pkg.id === "premium"
+        ? {
+            ...pkg,
+            includedAddonIds: ["cookie"],
+            includedRentalIds: ["chairs"],
+            includedMenuItemIds: ["salad"]
+          }
+        : pkg)
+    };
+    const form = {
+      ...baseFixtureForm,
+      guests: 50,
+      pkg: "premium",
+      addons: ["cookie"],
+      rentals: ["chairs"],
+      menuItems: ["salad"]
+    };
+
+    const totals = calculateQuote(form, catalog, quoteCalculationSettings);
+
+    expect(totals.includedAddonIds).toEqual(["cookie"]);
+    expect(totals.includedRentalIds).toEqual(["chairs"]);
+    expect(totals.includedMenuItemIds).toEqual(["salad"]);
+    expect(totals.addons).toBe(0);
+    expect(totals.rentals).toBe(0);
+    expect(totals.menu).toBe(0);
   });
 
   test("applies an exact server-rate mix per server", () => {

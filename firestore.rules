@@ -325,6 +325,54 @@ service cloud.firestore {
           )
           && resource.data.portalExpiresAtMs > request.time.toMillis()
         );
+
+      match /messages/{messageId} {
+        allow read: if portalSnapshotActive(portalKey);
+        allow create: if portalSnapshotActive(portalKey)
+          && request.resource.data.keys().hasAll([
+            "portalKey",
+            "quoteId",
+            "organizationId",
+            "authorType",
+            "authorName",
+            "body",
+            "createdAtISO",
+            "createdAt"
+          ])
+          && request.resource.data.keys().hasOnly([
+            "portalKey",
+            "quoteId",
+            "organizationId",
+            "authorType",
+            "authorName",
+            "body",
+            "createdAtISO",
+            "createdAt"
+          ])
+          && request.resource.data.portalKey == portalKey
+          && request.resource.data.quoteId == get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.quoteId
+          && request.resource.data.organizationId == get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.organizationId
+          && request.resource.data.authorName is string
+          && request.resource.data.authorName.size() <= 80
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 1200
+          && request.resource.data.createdAtISO is string
+          && request.resource.data.createdAtISO.size() > 0
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.createdAt == request.time
+          && (
+            (
+              !isSignedIn()
+              && request.resource.data.authorType == "customer"
+            )
+            || (
+              isOrgStaff(request.resource.data.organizationId)
+              && request.resource.data.authorType == "staff"
+            )
+          );
+        allow update, delete: if false;
+      }
     }
 
     match /quoteHistory/{historyId} {

@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: July 21, 2026
+Last updated: July 22, 2026
 
 This matrix maps the master feature checklist to current implementation and source locations.
 
@@ -15,7 +15,7 @@ This matrix maps the master feature checklist to current implementation and sour
 |---|---|---|---|
 | 1 | Data + architecture collections/model | Implemented | `src/lib/organizationService.js`, `src/context/OrganizationContext.jsx`, `firestore.rules`, `functions/index.js`, `scripts/seed-firestore-menu.mjs`, `scripts/migrate-to-multi-tenant.mjs` |
 | 2 | Dynamic menu system (Firestore + event filtering + grouping + active items) | Implemented | `src/hooks/useCatalogData.js`, `src/lib/menuService.js`, `src/components/WizardSteps.jsx` |
-| 3 | Pricing engine (`per_item`, `per_person`, `per_event`) | Implemented | `src/lib/quoteCalculator.js`, `functions/pricingEngine.js`, `src/lib/commerceOps.js`, `src/components/LiveBreakdown.jsx` |
+| 3 | Pricing engine (`per_item`, `per_person`, `per_event`) + configurable package bundles | Implemented | `src/lib/quoteCalculator.js`, `src/components/AdminCatalogModal.jsx`, `functions/pricingEngine.js`, `src/lib/commerceOps.js`, `src/components/LiveBreakdown.jsx` |
 | 4 | 5-step quote builder wizard | Implemented | `src/lib/wizardUi.js` (`WIZARD_STEP_DEFINITIONS`), `src/components/WizardSteps.jsx`, `src/App.jsx` |
 | 5 | Live sticky summary panel with real-time totals | Implemented | `src/components/LiveBreakdown.jsx`, `src/styles.css` (`.breakdown-panel`) |
 | 6 | Quote system (create/update, snapshots, statuses) | Implemented | `src/lib/quoteStore.js` (`submitQuote`, `updateQuote`), `src/components/QuoteHistoryModal.jsx` |
@@ -24,7 +24,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 9 | Admin panel tabbed UX + hierarchical menu management | Implemented | `src/components/AdminCatalogModal.jsx`, `src/styles.css` (`.admin-tabs`) |
 | 10 | Inline editing with blur/enter persistence | Implemented | `src/components/AdminCatalogModal.jsx` (`handleManagedMenuItemBlur`, `handleManagedMenuItemKeyDown`) |
 | 11 | Booking lifecycle (availability checks, contract conversion, confirmations, staff assignments) | Implemented | `src/lib/quoteStore.js` (`checkEventAvailability`, `convertQuoteToContract`, `updateQuoteBookingConfirmation`, `updateQuoteBookingAssignment`), `src/components/EventScheduleModal.jsx`, `src/components/QuoteHistoryModal.jsx` |
-| 12 | Customer decision center (scope/pricing + accept/change request/decline + token lifecycle) | Implemented | `src/components/CustomerPortalView.jsx`, `src/lib/quoteStore.js` (`getPortalQuote`, `updatePortalDecision`, `rotateQuotePortalKey`), `firestore.rules` (`customerPortalQuotes`) |
+| 12 | Customer decision center (scope/pricing/bundles + decisions + branded themes/logo + quote chat + token lifecycle) | Implemented | `src/components/CustomerPortalView.jsx`, `src/components/QuoteConversationModal.jsx`, `src/lib/quoteStore.js` (`getPortalQuote`, `appendPortalMessage`, `rotateQuotePortalKey`), `firestore.rules` (`customerPortalQuotes`) |
 | 13 | Integrations ops + CRM sync logging + setup assistant | Implemented | `src/components/IntegrationOpsModal.jsx`, `src/lib/quoteStore.js` (`recordQuoteIntegrationSync`, `syncQuoteToCrm`), `src/lib/commerceOps.js`, `functions/index.js` |
 | 14 | Reporting dashboard (pipeline, conversion, revenue metrics) | Implemented | `src/components/ReportingDashboardModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`) |
 | 15 | Event schedule board (month/week, conflicts, assignments, production checklist) | Implemented | `src/components/EventScheduleModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`, `updateQuoteBookingAssignment`, `updateQuoteProductionChecklist`) |
@@ -36,6 +36,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 21 | Optional admin security/audit depth (beyond role gating) | Partial / Optional | Role-gated access and rules are shipped in `src/hooks/useAuthSession.js`, `src/components/AuthGate.jsx`, `firestore.rules`; sync log audit trail exists in `src/lib/quoteStore.js`, but full cross-surface audit pipeline remains limited |
 | 22 | QA acceptance tests and checks | Implemented (core) | Unit tests under `src/lib/__tests__/`, UI snapshots under `src/components/__tests__/`, Firestore rules tests under `src/rules/__tests__/`, Playwright smoke lanes under `e2e/`, and CI scripts in `package.json` |
 | 23 | Sales workflow (readiness, follow-ups, lifecycle, approval queue) | Implemented | `src/lib/quoteWorkflow.js`, `src/components/SalesWorkflowModal.jsx`, `src/lib/quoteStore.js` (`updateQuoteFollowUp`, `requestQuoteApproval`, `resolveQuoteApprovalRequest`) |
+| 24 | Organization-scoped customer contact records refreshed from quote saves | Implemented (data layer) | `src/lib/quoteStore.js` (`upsertCustomerRecord`), `firestore.rules` (`organizations/{orgId}/customers`) |
 
 ## Guided Flow (Where It Lives)
 - Wizard flow entry and steps: `src/App.jsx`

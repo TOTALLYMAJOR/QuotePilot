@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: July 21, 2026
+Last updated: July 22, 2026
 
 ## Purpose
 This guide explains day-to-day usage of the Firebase Quote Wizard for staff users and admins.
@@ -31,6 +31,7 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
   - `per_item` (with quantity input)
   - `per_event`
 - Totals update in real time when guest count, item selection, or quantity changes.
+- A package may include configured add-ons, rentals, or menu items. Included selections are labeled in the wizard and are not charged a second time.
 
 ## Quote History Operations
 - Open `Quote History` from the top navigation.
@@ -67,6 +68,9 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
   - Rentals
   - Menu
   - Pricing
+- In `Packages`, use the bundle controls to choose included add-ons, rentals, and menu items for each tier.
+- Existing guided-selling rules remain configurable under Pricing; bundle contents and recommendation rules are separate controls.
+- In `Branding`, choose one of four portal themes, set brand text/colors, and provide a logo URL or upload a logo image.
 - Menu management flow:
   1. Select Event Type
   2. Select Category
@@ -140,12 +144,21 @@ Provisioning behavior:
 - Uses Firebase Admin credentials when available; otherwise falls back to Firestore REST writes using your Firebase CLI login token (requires `--project`).
 
 ## Customer Portal
-- Customers can open portal links and review event details, selected package/menu/add-ons/rentals, itemized pricing, total, deposit, and payment state.
+- Customers can open portal links and review event details, selected package/menu/add-ons/rentals, package inclusions, itemized pricing, total, deposit, and payment state.
+- The portal uses the theme and logo captured when the quote was saved, preserving the proposal presentation even if branding changes later.
 - Portal decisions support `Accept`, `Request Changes`, and `Decline`; change requests require a customer note.
+- Customers can send quote-specific chat messages from the portal. Staff open `Quote History` → `Chat` to review and reply.
+- Chat is not live-presence messaging; use `Refresh` to retrieve replies. Messages are retained as an immutable conversation history.
 - Proposal acceptance is recorded separately from payment and booking confirmation.
 - Portal updates are reflected in staff quote history.
 - Portal tokens are time-bound and expire automatically.
 - Staff can use `Rotate Portal` in `Quote History` to issue a fresh link and invalidate the old one.
+- A portal link is a bearer credential, not a customer login. Share it only with the intended recipient and rotate it if exposed.
+
+## Customer Records
+- Saving or updating a quote creates or refreshes an organization-scoped customer record keyed by normalized email.
+- The record maintains customer name, email, phone, company, latest quote number, latest event name/date, and update timestamps.
+- Quote history remains the staff-facing workflow for locating a customer's quotes; customer records provide the durable tenant data layer for future CRM/contact views.
 
 ## Notifications and Confirmations
 - Toast notifications are shown for save/update/delete and key operational actions.

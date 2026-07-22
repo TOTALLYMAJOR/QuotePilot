@@ -481,6 +481,7 @@ export function StepMenu({
   form,
   setForm,
   menuSections,
+  selectedPackage = null,
   menuLoading = false,
   onSelectionTouched
 }) {
@@ -497,6 +498,7 @@ export function StepMenu({
     return currency(item.price);
   };
   const menuQuantities = form.menuItemQuantities || {};
+  const includedMenuItemIds = new Set(Array.isArray(selectedPackage?.includedMenuItemIds) ? selectedPackage.includedMenuItemIds : []);
 
   const toggleMenuItem = (item, checked) => {
     const itemId = String(item?.id || "").trim();
@@ -562,7 +564,7 @@ export function StepMenu({
                         onChange={(e) => toggleMenuItem(item, e.target.checked)}
                       />
                       <span>{item.name}</span>
-                      <small>{pricingLabel(item)}</small>
+                      <small>{includedMenuItemIds.has(item.id) ? "Included in package" : pricingLabel(item)}</small>
                       {resolvePricingType(item) === "per_item" && form.menuItems.includes(item.id) && (
                         <input
                           className="qty-input"
@@ -608,6 +610,9 @@ export function StepServices({
       : catalog.settings?.guidedSellingEnabled !== false;
   const aiAssistEnabled = aiAssistEnabledProp !== false;
   const aiAutopilotEnabled = aiAssistEnabled && aiAutopilotEnabledProp === true;
+  const selectedPackage = catalog.packages.find((item) => item.id === form.pkg) || catalog.packages[0] || {};
+  const includedAddonIds = new Set(Array.isArray(selectedPackage.includedAddonIds) ? selectedPackage.includedAddonIds : []);
+  const includedRentalIds = new Set(Array.isArray(selectedPackage.includedRentalIds) ? selectedPackage.includedRentalIds : []);
   const resolvePricingType = (item, fallback = "per_event") => {
     const raw = String(item?.pricingType || item?.type || "").trim().toLowerCase();
     if (raw === "per_person" || raw === "per_item" || raw === "per_event") return raw;
@@ -688,7 +693,10 @@ export function StepServices({
             setForm((f) => ({ ...f, pkg: e.target.value }));
           }}
         >
-          {catalog.packages.map((p) => <option key={p.id} value={p.id}>{p.name} - {currency(p.ppp)}/person</option>)}
+          {catalog.packages.map((p) => {
+            const includedCount = (p.includedAddonIds?.length || 0) + (p.includedRentalIds?.length || 0) + (p.includedMenuItemIds?.length || 0);
+            return <option key={p.id} value={p.id}>{p.name} - {currency(p.ppp)}/person{includedCount ? ` · ${includedCount} included` : ""}</option>;
+          })}
         </select>
       </Field>
       <Field label="Travel (round trip miles)">
@@ -719,7 +727,7 @@ export function StepServices({
                   onChange={(e) => toggle("addons", "addonQuantities", item, e.target.checked, 1)}
                 />
                 <span>{item.name}</span>
-                <small>{pricingLabel(item, "per_person")}</small>
+                <small>{includedAddonIds.has(item.id) ? "Included in package" : pricingLabel(item, "per_person")}</small>
                 {quantityEnabled && selected && (
                   <input
                     className="qty-input"
@@ -753,7 +761,7 @@ export function StepServices({
                   onChange={(e) => toggle("rentals", "rentalQuantities", item, e.target.checked, fallbackQty)}
                 />
                 <span>{item.name}</span>
-                <small>{pricingLabel(item, "per_item")}</small>
+                <small>{includedRentalIds.has(item.id) ? "Included in package" : pricingLabel(item, "per_item")}</small>
                 {pricingType === "per_item" && selected && (
                   <input
                     className="qty-input"

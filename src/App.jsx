@@ -1467,6 +1467,7 @@ export default function App() {
                 form={form}
                 setForm={setForm}
                 menuSections={effectiveMenuSections}
+                selectedPackage={catalog.packages.find((item) => item.id === form.pkg) || catalog.packages[0]}
                 menuLoading={dynamicMenuLoading}
                 onSelectionTouched={handleSelectionTouched}
               />

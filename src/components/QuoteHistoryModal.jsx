@@ -6,6 +6,7 @@ import {
 } from "../lib/commerceOps";
 import { currency } from "../lib/quoteCalculator";
 import { getEventTypes } from "../lib/menuService";
+import QuoteConversationModal from "./QuoteConversationModal";
 import {
   BOOKING_CONFIRMATION_STATUSES,
   buildQuoteEmailTemplate,
@@ -121,6 +122,7 @@ export default function QuoteHistoryModal({
   const [sendingPaymentEmailId, setSendingPaymentEmailId] = useState("");
   const [rotatingPortalId, setRotatingPortalId] = useState("");
   const [pendingDeleteQuote, setPendingDeleteQuote] = useState(null);
+  const [conversationQuote, setConversationQuote] = useState(null);
 
   const pushToast = (message, tone = "info") => {
     if (typeof onToast === "function") {
@@ -904,6 +906,9 @@ export default function QuoteHistoryModal({
                             )}
                           </>
                         )}
+                        {permissions.isStaff && quote.portalKey && (
+                          <button type="button" className="ghost compact" onClick={() => setConversationQuote(quote)}>Chat</button>
+                        )}
                         {permissions.canCreateCheckoutLink && (
                           <button
                             type="button"
@@ -953,6 +958,14 @@ export default function QuoteHistoryModal({
               </button>
             </div>
           </div>
+        )}
+        {conversationQuote && (
+          <QuoteConversationModal
+            quote={conversationQuote}
+            currentUserEmail={currentUserEmail}
+            onClose={() => setConversationQuote(null)}
+            onToast={onToast}
+          />
         )}
       </div>
     </div>

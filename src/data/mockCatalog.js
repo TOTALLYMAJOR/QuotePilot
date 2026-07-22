@@ -1,7 +1,14 @@
 export const DEFAULT_PACKAGES = [
-  { id: "classic", name: "Classic", ppp: 18 },
-  { id: "premium", name: "Premium", ppp: 24 },
-  { id: "deluxe", name: "Deluxe", ppp: 32 }
+  { id: "classic", name: "Classic", ppp: 18, includedAddonIds: [], includedRentalIds: [], includedMenuItemIds: [] },
+  { id: "premium", name: "Premium", ppp: 24, includedAddonIds: ["tea"], includedRentalIds: [], includedMenuItemIds: [] },
+  { id: "deluxe", name: "Deluxe", ppp: 32, includedAddonIds: ["dessert", "tea"], includedRentalIds: ["linens"], includedMenuItemIds: [] }
+];
+
+export const PORTAL_THEME_PRESETS = [
+  { id: "midnight", name: "Midnight Amber", primary: "#c99334", accent: "#f0d29a", dark: "#8d611a", surface: "#100d09", surfaceAlt: "#221a12", canvas: "#050505" },
+  { id: "linen", name: "Warm Linen", primary: "#8b5e34", accent: "#d8b98f", dark: "#5e3d22", surface: "#fffaf1", surfaceAlt: "#f4eadb", canvas: "#ede3d3" },
+  { id: "garden", name: "Garden Sage", primary: "#436b55", accent: "#a7c4a0", dark: "#294536", surface: "#f4f7f1", surfaceAlt: "#e1eadc", canvas: "#d5e1cf" },
+  { id: "coastal", name: "Coastal Blue", primary: "#295f78", accent: "#9bc7d8", dark: "#173e52", surface: "#f2f8fa", surfaceAlt: "#dfeef3", canvas: "#d3e6ed" }
 ];
 
 export const DEFAULT_ADDONS = [
@@ -373,6 +380,7 @@ export const DEFAULT_SETTINGS = {
   brandBackgroundStart: "#100d09",
   brandBackgroundMid: "#221a12",
   brandBackgroundEnd: "#ae7d2b",
+  portalThemeId: "midnight",
   heroEyebrow: "Quote-to-event operating system",
   heroHeadline: "Build a clearer quote. Keep the truth intact.",
   heroDescription:
@@ -774,7 +782,10 @@ export function normalizeCatalog(raw) {
   const packages = (raw.packages || DEFAULT_PACKAGES).map((p) => ({
     id: p.id,
     name: p.name,
-    ppp: Number(p.ppp || 0)
+    ppp: Number(p.ppp || 0),
+    includedAddonIds: Array.isArray(p.includedAddonIds) ? p.includedAddonIds.map(String).filter(Boolean) : [],
+    includedRentalIds: Array.isArray(p.includedRentalIds) ? p.includedRentalIds.map(String).filter(Boolean) : [],
+    includedMenuItemIds: Array.isArray(p.includedMenuItemIds) ? p.includedMenuItemIds.map(String).filter(Boolean) : []
   }));
   const addons = (raw.addons || DEFAULT_ADDONS).map((a) => ({
     id: a.id,
@@ -880,6 +891,9 @@ export function normalizeCatalog(raw) {
       brandBackgroundStart: normalizeHexColor(rawSettings.brandBackgroundStart, DEFAULT_SETTINGS.brandBackgroundStart),
       brandBackgroundMid: normalizeHexColor(rawSettings.brandBackgroundMid, DEFAULT_SETTINGS.brandBackgroundMid),
       brandBackgroundEnd: normalizeHexColor(rawSettings.brandBackgroundEnd, DEFAULT_SETTINGS.brandBackgroundEnd),
+      portalThemeId: PORTAL_THEME_PRESETS.some((theme) => theme.id === rawSettings.portalThemeId)
+        ? rawSettings.portalThemeId
+        : DEFAULT_SETTINGS.portalThemeId,
       heroEyebrow: toText(rawSettings.heroEyebrow, DEFAULT_SETTINGS.heroEyebrow),
       heroHeadline: toText(rawSettings.heroHeadline, DEFAULT_SETTINGS.heroHeadline),
       heroDescription: toText(rawSettings.heroDescription, DEFAULT_SETTINGS.heroDescription),

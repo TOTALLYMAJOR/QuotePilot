@@ -30,8 +30,10 @@ export default defineConfig({
     command: `npm run dev -- --host ${HOST} --port ${PORT}`,
     url: BASE_URL,
     env: {
+      NODE_ENV: "development",
       VITE_E2E_BYPASS_AUTH: "true",
       VITE_E2E_ROLE: process.env.VITE_E2E_ROLE || "admin",
+      VITE_ALLOW_LOCAL_CATALOG_FALLBACK: "true",
       VITE_FIREBASE_API_KEY: "",
       VITE_FIREBASE_PROJECT_ID: "",
       VITE_FIREBASE_AUTH_DOMAIN: "",

@@ -171,7 +171,10 @@ async function saveToFirebase(catalog, organizationId = "") {
   catalog.packages.forEach((item) => {
     batch.set(doc(packageCollection, item.id), {
       name: item.name,
-      ppp: Number(item.ppp || 0)
+      ppp: Number(item.ppp || 0),
+      includedAddonIds: Array.isArray(item.includedAddonIds) ? item.includedAddonIds : [],
+      includedRentalIds: Array.isArray(item.includedRentalIds) ? item.includedRentalIds : [],
+      includedMenuItemIds: Array.isArray(item.includedMenuItemIds) ? item.includedMenuItemIds : []
     });
   });
   catalog.addons.forEach((item) => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { firebaseReady, storage } from "../lib/firebase";
+import { PORTAL_THEME_PRESETS } from "../data/mockCatalog";
 import {
   createCategory,
   createEventType,
@@ -336,7 +337,7 @@ export default function AdminCatalogModal({
     const id = `${key}-${Date.now()}`;
     const template =
       key === "packages"
-        ? { id, name: "New Package", ppp: 0 }
+        ? { id, name: "New Package", ppp: 0, includedAddonIds: [], includedRentalIds: [], includedMenuItemIds: [] }
       : key === "addons"
           ? {
               id,
@@ -354,6 +355,35 @@ export default function AdminCatalogModal({
 
   const removeRow = (key, index) => {
     setDraft((prev) => ({ ...prev, [key]: prev[key].filter((_, i) => i !== index) }));
+  };
+
+  const togglePackageInclusion = (packageIndex, field, itemId, checked) => {
+    setDraft((prev) => {
+      const packages = [...prev.packages];
+      const current = { ...packages[packageIndex] };
+      const ids = new Set(Array.isArray(current[field]) ? current[field] : []);
+      if (checked) ids.add(itemId);
+      else ids.delete(itemId);
+      current[field] = [...ids];
+      packages[packageIndex] = current;
+      return { ...prev, packages };
+    });
+  };
+
+  const applyPortalTheme = (theme) => {
+    setDraft((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        portalThemeId: theme.id,
+        brandPrimaryColor: theme.primary,
+        brandAccentColor: theme.accent,
+        brandDarkAccentColor: theme.dark,
+        brandBackgroundStart: theme.surface,
+        brandBackgroundMid: theme.surfaceAlt,
+        brandBackgroundEnd: theme.canvas
+      }
+    }));
   };
 
   const patchNumericSetting = (field, value) => {
@@ -900,13 +930,38 @@ export default function AdminCatalogModal({
 
         {activeTab === "packages" && (
           <Section title="Packages" onAdd={() => addRow("packages")}>
+          <p className="source-note">Bundle inclusions are covered by the package price and remain visible in the saved quote snapshot.</p>
           {draft.packages.map((item, i) => (
-            <div className="admin-row" key={item.id}>
-              <input value={item.id} disabled />
-              <input value={item.name} onChange={(e) => patchArrayItem("packages", i, "name", e.target.value)} />
-              <input type="number" value={item.ppp} onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))} />
-              <button type="button" className="ghost" onClick={() => removeRow("packages", i)}>Delete</button>
-            </div>
+            <article className="bundle-config-card" key={item.id}>
+              <div className="admin-row">
+                <input value={item.id} disabled />
+                <input value={item.name} onChange={(e) => patchArrayItem("packages", i, "name", e.target.value)} />
+                <input type="number" value={item.ppp} onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))} />
+                <button type="button" className="ghost" onClick={() => removeRow("packages", i)}>Delete</button>
+              </div>
+              <div className="bundle-config-groups">
+                {[
+                  ["includedAddonIds", "Included add-ons", draft.addons || []],
+                  ["includedRentalIds", "Included rentals", draft.rentals || []],
+                  ["includedMenuItemIds", "Included menu items", (draft.settings?.menuSections || []).flatMap((section) => section.items || [])]
+                ].map(([field, label, options]) => (
+                  <fieldset key={field}>
+                    <legend>{label}</legend>
+                    {options.length === 0 && <small>None configured</small>}
+                    {options.map((option) => (
+                      <label key={option.id}>
+                        <input
+                          type="checkbox"
+                          checked={(item[field] || []).includes(option.id)}
+                          onChange={(event) => togglePackageInclusion(i, field, option.id, event.target.checked)}
+                        />
+                        <span>{option.name}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                ))}
+              </div>
+            </article>
           ))}
           </Section>
         )}
@@ -1546,6 +1601,24 @@ export default function AdminCatalogModal({
 
             <section className="admin-section">
           <div className="admin-section-head"><h3>Branding</h3></div>
+          <div className="theme-preset-grid" role="group" aria-label="Portal theme presets">
+            {PORTAL_THEME_PRESETS.map((theme) => (
+              <button
+                type="button"
+                key={theme.id}
+                className={`theme-preset ${draft.settings?.portalThemeId === theme.id ? "active" : ""}`}
+                onClick={() => applyPortalTheme(theme)}
+                aria-pressed={draft.settings?.portalThemeId === theme.id}
+              >
+                <span className="theme-preset-swatches" aria-hidden="true">
+                  <i style={{ background: theme.primary }} />
+                  <i style={{ background: theme.accent }} />
+                  <i style={{ background: theme.surface }} />
+                </span>
+                <strong>{theme.name}</strong>
+              </button>
+            ))}
+          </div>
           <div className="admin-grid-settings">
             <label>
               Brand name

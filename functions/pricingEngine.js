@@ -504,10 +504,16 @@ function normalizePricingInputPayload(data = {}, staff = {}) {
 }
 
 function normalizeCatalogPackage(item = {}) {
+  const normalizeIds = (value) => Array.isArray(value)
+    ? [...new Set(value.map((id) => toText(id)).filter(Boolean))]
+    : [];
   return {
     id: toText(item.id),
     name: toText(item.name, toText(item.id)),
     ppp: toNumber(item.ppp, 0),
+    includedAddonIds: normalizeIds(item.includedAddonIds),
+    includedRentalIds: normalizeIds(item.includedRentalIds),
+    includedMenuItemIds: normalizeIds(item.includedMenuItemIds),
     active: item.active !== false
   };
 }
@@ -910,6 +916,9 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
   if (!maps.packageById.has(input.selection.package.id)) {
     missingReferences.add(`package:${input.selection.package.id}`);
   }
+  const includedAddonIds = new Set(selectedPkg.includedAddonIds || []);
+  const includedRentalIds = new Set(selectedPkg.includedRentalIds || []);
+  const includedMenuItemIds = new Set(selectedPkg.includedMenuItemIds || []);
 
   const serviceFeePctApplied = resolveServiceFeePct(guests, settings);
   const taxRegion = resolveTaxRegion({
@@ -975,7 +984,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         : 1;
       const unitPrice = toNumber(found?.price, 0);
       const active = found ? found.active !== false : false;
-      const result = active
+      const includedInPackage = includedAddonIds.has(itemRef.id);
+      const result = active && !includedInPackage
         ? calculatePriceWithMode({
           pricingMode: effectivePricingMode,
           unitPrice,
@@ -998,6 +1008,7 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         total: result.total,
         meta: {
           active,
+          includedInPackage,
           addonMultiplier
         }
       }));
@@ -1011,10 +1022,11 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
       const pricingMode = normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_item");
       const unitPrice = toNumber(found?.price, 0);
       const active = found ? found.active !== false : false;
+      const includedInPackage = includedRentalIds.has(itemRef.id);
       const defaultQty = pricingMode === "per_item"
         ? Math.max(1, Math.ceil(guests / Math.max(1, toNumber(found?.qtyPerGuests, 1))))
         : 1;
-      const result = active
+      const result = active && !includedInPackage
         ? calculatePriceWithMode({
           pricingMode,
           unitPrice,
@@ -1038,6 +1050,7 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         total: result.total,
         meta: {
           active,
+          includedInPackage,
           qtyPerGuests: toNumber(found?.qtyPerGuests, 1),
           rentalMultiplier
         }
@@ -1052,7 +1065,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
       const pricingMode = normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_event");
       const unitPrice = toNumber(found?.price, 0);
       const active = found ? found.active !== false : false;
-      const result = active
+      const includedInPackage = includedMenuItemIds.has(itemRef.id);
+      const result = active && !includedInPackage
         ? calculatePriceWithMode({
           pricingMode,
           unitPrice,
@@ -1076,6 +1090,7 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         total: result.total,
         meta: {
           active,
+          includedInPackage,
           addonMultiplier
         }
       }));

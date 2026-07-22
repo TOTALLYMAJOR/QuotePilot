@@ -75,13 +75,20 @@ docker compose up --build web
 ```
 
 ## Environment
-Create `.env` from `.env.example` and set required Firebase keys:
+Create an ignored `.env.local` from `.env.example`, then replace every placeholder with the Firebase Web App configuration from Firebase Console → Project settings → Your apps:
+
+```bash
+cp .env.example .env.local
+```
+
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
 - `VITE_FIREBASE_PROJECT_ID`
 - `VITE_FIREBASE_STORAGE_BUCKET`
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
+
+Run `npm run check:env` after configuration. It reads the process environment, `.env.local`, and `.env`, and fails when required values are missing or still placeholders. Keep real values out of Git; `.env` and `.env.local` are ignored.
 
 Optional:
 - `VITE_FIREBASE_FUNCTIONS_REGION`

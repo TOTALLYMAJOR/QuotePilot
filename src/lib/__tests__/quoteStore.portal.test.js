@@ -6,6 +6,8 @@ vi.mock("../firebase", () => ({
 }));
 
 import {
+  appendPortalMessage,
+  getPortalMessages,
   getPortalQuote,
   rotateQuotePortalKey,
   updatePortalDecision,
@@ -193,5 +195,32 @@ describe("quoteStore portal token policy", () => {
     const refreshed = await getPortalQuote(result.portalKey);
     expect(refreshed.portalKey).toBe(result.portalKey);
     expect(refreshed.portalExpiresAtISO).toBe(result.portalExpiresAtISO);
+  });
+
+  test("keeps an ordered, auditable customer and staff conversation", async () => {
+    seedQuotes([makeQuote()]);
+
+    await appendPortalMessage({
+      portalKey: "portal-key-12345678901234567890",
+      authorType: "customer",
+      authorName: "Portal Client",
+      body: "Can we make the entree vegetarian?"
+    });
+    vi.setSystemTime(new Date("2026-03-20T12:01:00.000Z"));
+    await appendPortalMessage({
+      portalKey: "portal-key-12345678901234567890",
+      authorType: "staff",
+      authorName: "QuotePilot Team",
+      body: "Yes. We will send a revised selection."
+    });
+
+    const messages = await getPortalMessages("portal-key-12345678901234567890");
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.authorType)).toEqual(["customer", "staff"]);
+    expect(messages.map((message) => message.body)).toEqual([
+      "Can we make the entree vegetarian?",
+      "Yes. We will send a revised selection."
+    ]);
+    expect(messages[0].createdAtISO).not.toBe(messages[1].createdAtISO);
   });
 });

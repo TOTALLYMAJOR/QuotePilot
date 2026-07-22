@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { currency } from "../lib/quoteCalculator";
-import { getPortalQuote, updatePortalDecision } from "../lib/quoteStore";
+import { appendPortalMessage, getPortalMessages, getPortalQuote, updatePortalDecision } from "../lib/quoteStore";
 
 const DECISION_OPTIONS = [
   ["accepted", "Accept"],
@@ -77,6 +77,9 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
   const [decisionDraft, setDecisionDraft] = useState("accepted");
   const [decisionMessage, setDecisionMessage] = useState("");
   const [acceptanceConfirmed, setAcceptanceConfirmed] = useState(false);
+  const [chatDraft, setChatDraft] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [chatBusy, setChatBusy] = useState(false);
   const [state, setState] = useState({
     loading: false,
     busy: false,
@@ -102,10 +105,12 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
     setState((prev) => ({ ...prev, loading: true, error: "", status: "" }));
     try {
       const quote = await getPortalQuote(key);
+      const portalMessages = await getPortalMessages(key).catch(() => []);
       setPortalKey(key);
       setDecisionDraft(quote.portalDecision?.decision || "accepted");
       setDecisionMessage(quote.portalDecision?.message || "");
       setAcceptanceConfirmed(false);
+      setMessages(portalMessages);
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -119,6 +124,27 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
         quote: null,
         error: formatError(err)
       }));
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!quote?.portalKey || !chatDraft.trim()) return;
+    setChatBusy(true);
+    setState((prev) => ({ ...prev, error: "", status: "" }));
+    try {
+      await appendPortalMessage({
+        portalKey: quote.portalKey,
+        body: chatDraft,
+        authorType: "customer",
+        authorName: quote.customerName || "Customer"
+      });
+      setChatDraft("");
+      setMessages(await getPortalMessages(quote.portalKey));
+      setState((prev) => ({ ...prev, status: "Message sent to the quote team." }));
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: formatError(err) }));
+    } finally {
+      setChatBusy(false);
     }
   };
 
@@ -185,14 +211,32 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
     ["Add-ons", scope.addons],
     ["Rentals", scope.rentals]
   ].filter(([, items]) => items?.length > 0);
+  const packageBundle = scope.packageBundle || {};
+  const bundleRows = [
+    ["Included add-ons", packageBundle.addons],
+    ["Included rentals", packageBundle.rentals],
+    ["Included menu", packageBundle.menuItems]
+  ].map(([label, items]) => [label, (items || []).map((item) => item?.name || item).filter(Boolean)])
+    .filter(([, items]) => items.length > 0);
+  const brand = quote?.quoteMeta || {};
+  const portalThemeStyle = quote ? {
+    "--portal-primary": brand.brandPrimaryColor || "#c99334",
+    "--portal-accent": brand.brandAccentColor || "#f0d29a",
+    "--portal-dark": brand.brandDarkAccentColor || "#8d611a",
+    "--portal-surface": brand.brandBackgroundStart || "#100d09",
+    "--portal-surface-alt": brand.brandBackgroundMid || "#221a12",
+    "--portal-canvas": brand.brandBackgroundEnd || "#050505"
+  } : undefined;
 
   return (
-    <main className="portal-shell container">
+    <main className={`portal-shell portal-theme-${brand.portalThemeId || "midnight"} container`} style={portalThemeStyle}>
       <section className="panel portal-card">
         <div className="portal-head">
           <div>
+            {brand.brandLogoUrl && <img className="portal-brand-logo" src={brand.brandLogoUrl} alt={`${brand.brandName || "Business"} logo`} />}
             <p className="eyebrow">{quote?.quoteMeta?.brandName || "Customer Portal"}</p>
             <h1>Proposal Decision Center</h1>
+            {brand.brandTagline && <p className="portal-brand-tagline">{brand.brandTagline}</p>}
           </div>
           <button type="button" className="ghost" onClick={onBackToStaff}>Staff Sign In</button>
         </div>
@@ -239,6 +283,9 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
                   <h4>{scope.packageName || "Catering package"}</h4>
                   {scopeRows.map(([label, items]) => (
                     <div key={label}><span>{label}</span><p>{items.join(", ")}</p></div>
+                  ))}
+                  {bundleRows.map(([label, items]) => (
+                    <div key={label} className="portal-bundle-row"><span>{label}</span><p>{items.join(", ")}</p></div>
                   ))}
                   <div>
                     <span>Dietary notes</span>
@@ -320,6 +367,32 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
                 <p>{quote.portalDecision.message}</p>
               </section>
             )}
+
+            <section className="portal-chat-panel" aria-labelledby="portal-chat-title">
+              <div className="portal-chat-head">
+                <div>
+                  <span>Conversation</span>
+                  <h3 id="portal-chat-title">Chat with the quote team</h3>
+                </div>
+                <button type="button" className="ghost compact" onClick={() => load(quote.portalKey)} disabled={state.loading}>Refresh</button>
+              </div>
+              <div className="portal-chat-thread" aria-live="polite">
+                {messages.length === 0 && <p className="source-note">No messages yet. Ask a question about this proposal.</p>}
+                {messages.map((message) => (
+                  <article className={`portal-chat-message ${message.authorType}`} key={message.id}>
+                    <div><strong>{message.authorName || (message.authorType === "staff" ? "Quote team" : "Customer")}</strong><time>{fmtDate(message.createdAtISO)}</time></div>
+                    <p>{message.body}</p>
+                  </article>
+                ))}
+              </div>
+              <label className="field portal-chat-compose">
+                <span>Message</span>
+                <textarea rows="3" maxLength="1200" value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} placeholder="Ask about menu, timing, pricing, or requested changes" />
+              </label>
+              <div className="portal-decision-submit">
+                <button type="button" className="cta" onClick={sendMessage} disabled={chatBusy || !chatDraft.trim()}>{chatBusy ? "Sending..." : "Send Message"}</button>
+              </div>
+            </section>
           </div>
         )}
       </section>

@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment
 } from "@firebase/rules-unit-testing";
-import { deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 
 const PROJECT_ID = "quote-wizard-rules";
 const RULES_PATH = path.resolve(process.cwd(), "firestore.rules");
@@ -413,6 +413,51 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         viewedAtISO: "2026-03-21T00:00:00.000Z"
       }
     }));
+  });
+
+  test("portal chat allows immutable customer and same-org staff messages only", async () => {
+    const customerDb = testEnv.unauthenticatedContext().firestore();
+    const customerMessageRef = doc(customerDb, "customerPortalQuotes", VALID_PORTAL_KEY, "messages", "m-customer");
+    const customerMessage = {
+      portalKey: VALID_PORTAL_KEY,
+      quoteId: "q1",
+      organizationId: "org-a",
+      authorType: "customer",
+      authorName: "Avery Customer",
+      body: "Can we adjust the entree?",
+      createdAtISO: "2026-03-21T03:00:00.000Z",
+      createdAt: serverTimestamp()
+    };
+    await assertSucceeds(setDoc(customerMessageRef, customerMessage));
+    await assertSucceeds(getDoc(customerMessageRef));
+    await assertFails(updateDoc(customerMessageRef, { body: "Changed history" }));
+
+    await assertFails(setDoc(
+      doc(customerDb, "customerPortalQuotes", VALID_PORTAL_KEY, "messages", "m-forged-staff"),
+      { ...customerMessage, authorType: "staff" }
+    ));
+
+    const staffDb = testEnv.authenticatedContext("sales-org-a", { email: "sales-a@example.com" }).firestore();
+    await assertSucceeds(setDoc(
+      doc(staffDb, "customerPortalQuotes", VALID_PORTAL_KEY, "messages", "m-staff"),
+      {
+        ...customerMessage,
+        authorType: "staff",
+        authorName: "Quote Team",
+        body: "Yes, we can revise it."
+      }
+    ));
+
+    const otherOrgDb = testEnv.authenticatedContext("sales-org-b", { email: "sales-b@example.com" }).firestore();
+    await assertFails(setDoc(
+      doc(otherOrgDb, "customerPortalQuotes", VALID_PORTAL_KEY, "messages", "m-other-org"),
+      { ...customerMessage, authorType: "staff" }
+    ));
+
+    await assertFails(setDoc(
+      doc(customerDb, "customerPortalQuotes", EXPIRED_PORTAL_KEY, "messages", "m-expired"),
+      { ...customerMessage, portalKey: EXPIRED_PORTAL_KEY, quoteId: "q-expired" }
+    ));
   });
 
   test("org quote portal status patch requires active portal snapshot", async () => {

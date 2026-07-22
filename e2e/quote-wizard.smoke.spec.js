@@ -107,15 +107,14 @@ test("step 1 soft-lock keeps next disabled until required fields are complete", 
   await expect(nextButton).toBeEnabled();
 });
 
-test("staffing overrides only show bartender rate fields when bartenders are above zero", async ({ page }) => {
-  const staffingToggle = page.getByRole("button", { name: /Staffing Overrides/i });
-  await staffingToggle.click();
-  await expect(page.getByText(/Set bartenders above 0/i)).toBeVisible();
-  await expect(page.getByLabel(/Bartender rate type/i)).toHaveCount(0);
-
+test("direct staffing controls update role counts and keep rate overrides available", async ({ page }) => {
+  await expect(page.getByRole("spinbutton", { name: "Servers" })).toHaveValue("0");
+  await expect(page.getByRole("spinbutton", { name: "Chefs" })).toHaveValue("0");
+  await expect(page.getByRole("spinbutton", { name: "Bartenders" })).toHaveValue("0");
   await page.getByRole("button", { name: /Increase Bartenders/i }).click();
   await page.getByRole("button", { name: /Increase Bartenders/i }).click();
-  await expect(page.getByLabel(/Bartender rate type/i)).toBeVisible();
+  await expect(page.getByRole("spinbutton", { name: "Bartenders" })).toHaveValue("2");
+  await expect(page.getByLabel(/Bartender rate override/i)).toBeVisible();
 });
 
 test("hero CTA remains available and returns workflow focus to step 1", async ({ page }) => {
@@ -156,6 +155,24 @@ test("good better best scenarios can be compared and applied", async ({ page }) 
   await expect(dialog).toHaveCount(0);
   await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByLabel("Package tier")).toHaveValue("deluxe");
+});
+
+test("admin can configure package bundles and four branded portal themes", async ({ page }) => {
+  await page.getByRole("button", { name: "Admin Catalog" }).click();
+  const dialog = page.getByRole("dialog");
+  const premiumPackage = dialog.locator(".bundle-config-card").filter({
+    has: page.locator('input[value="Premium"]')
+  });
+  await expect(premiumPackage.getByLabel("Sweet Tea")).toBeChecked();
+
+  await dialog.getByRole("button", { name: "Pricing" }).click();
+  const themes = dialog.getByRole("group", { name: "Portal theme presets" });
+  await expect(themes.getByRole("button")).toHaveCount(4);
+  await expect(themes.getByRole("button", { name: "Midnight Amber" })).toBeVisible();
+  await expect(themes.getByRole("button", { name: "Warm Linen" })).toBeVisible();
+  await expect(themes.getByRole("button", { name: "Garden Sage" })).toBeVisible();
+  await expect(themes.getByRole("button", { name: "Coastal Blue" })).toBeVisible();
+  await expect(dialog.getByLabel("Upload logo image")).toBeVisible();
 });
 
 test("new quote flow allows edits before save and persists in history", async ({ page }) => {
@@ -225,7 +242,7 @@ test("sales workflow persists a follow-up plan", async ({ page }) => {
   await expect(page.getByRole("dialog").getByLabel("Note")).toHaveValue("Confirm final menu after tasting.");
 });
 
-test("portal decision center records a customer change request", async ({ page }) => {
+test("mock quote carries its bundle into the portal and supports customer/staff chat", async ({ page }) => {
   await createQuoteToHistory(page, {
     guests: 88,
     eventName: "E2E Portal Decision",
@@ -236,6 +253,16 @@ test("portal decision center records a customer change request", async ({ page }
     return quotes[0]?.portalKey || "";
   });
   expect(portalKey).toBeTruthy();
+  const customerRecord = await page.evaluate(() => {
+    const customers = JSON.parse(localStorage.getItem("quoteWizard.customers") || "[]");
+    return customers[0] || null;
+  });
+  expect(customerRecord).toMatchObject({
+    email: "client@example.com",
+    name: "E2E Staff",
+    lastQuoteNumber: expect.stringMatching(/^Q-/),
+    lastEventName: "E2E Portal Decision"
+  });
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Customer Portal" }).click();
@@ -245,6 +272,28 @@ test("portal decision center records a customer change request", async ({ page }
   await expect(page.getByRole("heading", {
     name: "E2E Portal Decision on June 14, 2026"
   })).toBeVisible();
+  await expect(page.getByText("Included add-ons", { exact: true })).toBeVisible();
+  await expect(page.getByText("Sweet Tea", { exact: true })).toBeVisible();
+  await page.getByPlaceholder("Ask about menu, timing, pricing, or requested changes").fill("Can we make the entree vegetarian?");
+  await page.getByRole("button", { name: "Send Message" }).click();
+  await expect(page.getByText("Can we make the entree vegetarian?", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Staff Sign In" }).click();
+  await page.getByRole("button", { name: "Quote History" }).click();
+  const quoteRow = quoteRows(page).first();
+  await quoteRow.getByRole("button", { name: "Chat" }).click();
+  const chatDialog = page.getByRole("dialog", { name: /E2E Staff/i });
+  await expect(chatDialog.getByText("Can we make the entree vegetarian?", { exact: true })).toBeVisible();
+  await chatDialog.getByPlaceholder("Reply to the customer").fill("Yes. We will include a vegetarian entree in the revision.");
+  await chatDialog.getByRole("button", { name: "Send Reply" }).click();
+  await expect(chatDialog.getByText("Yes. We will include a vegetarian entree in the revision.", { exact: true })).toBeVisible();
+  await chatDialog.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Customer Portal" }).click();
+  await page.getByPlaceholder("Paste your quote key").fill(portalKey);
+  await page.getByRole("button", { name: "Open Proposal" }).click();
+  await expect(page.getByText("Yes. We will include a vegetarian entree in the revision.", { exact: true })).toBeVisible();
+
   await page.getByRole("button", { name: "Request Changes" }).click();
   await page.getByLabel("Requested changes").fill("Please replace the entree with a vegetarian option.");
   await page.getByRole("button", { name: "Submit Decision" }).click();

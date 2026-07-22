@@ -227,6 +227,9 @@ export function calculateQuote(form, catalog, settings) {
   const staffingLaborEnabled = settings?.staffingLaborEnabled !== false;
   const staffingChargeMode = normalizeStaffingChargeMode(settings?.staffingChargeMode);
   const selectedPkg = catalog.packages.find((p) => p.id === form.pkg) || catalog.packages[0];
+  const includedAddonIds = new Set(Array.isArray(selectedPkg?.includedAddonIds) ? selectedPkg.includedAddonIds : []);
+  const includedRentalIds = new Set(Array.isArray(selectedPkg?.includedRentalIds) ? selectedPkg.includedRentalIds : []);
+  const includedMenuItemIds = new Set(Array.isArray(selectedPkg?.includedMenuItemIds) ? selectedPkg.includedMenuItemIds : []);
   const taxRegion = resolveTaxRegion(form, settings);
   const seasonProfile = resolveSeasonProfile(form, settings);
   const packageMultiplier = Number(seasonProfile?.packageMultiplier || 1);
@@ -309,6 +312,9 @@ export function calculateQuote(form, catalog, settings) {
       addonQuantityMap,
       rentalQuantityMap,
       menuItemQuantityMap,
+      includedAddonIds: [...includedAddonIds],
+      includedRentalIds: [...includedRentalIds],
+      includedMenuItemIds: [...includedMenuItemIds],
       travelBaseMiles: baseMiles,
       travelLongDistanceMiles: longDistanceMiles
     };
@@ -317,7 +323,7 @@ export function calculateQuote(form, catalog, settings) {
   const base = (selectedPkg?.ppp || 0) * guests * packageMultiplier;
 
   const addonSummary = catalog.addons
-    .filter((item) => selectedAddonIds.has(item.id) && item.active !== false)
+    .filter((item) => selectedAddonIds.has(item.id) && !includedAddonIds.has(item.id) && item.active !== false)
     .reduce((acc, item) => {
       const price = Number(item.price || 0);
       const pricingType = normalizePricingType(item.pricingType || item.type);
@@ -341,7 +347,7 @@ export function calculateQuote(form, catalog, settings) {
   const addons = addonSummary.total;
 
   const rentals = catalog.rentals
-    .filter((item) => selectedRentalIds.has(item.id) && item.active !== false)
+    .filter((item) => selectedRentalIds.has(item.id) && !includedRentalIds.has(item.id) && item.active !== false)
     .reduce((sum, item) => {
       const price = Number(item.price || 0);
       const pricingType = normalizePricingType(item.pricingType || item.type || "per_item");
@@ -357,7 +363,7 @@ export function calculateQuote(form, catalog, settings) {
     }, 0);
 
   const menu = menuCatalog
-    .filter((item) => selectedMenuIds.has(item.id) && item.active !== false)
+    .filter((item) => selectedMenuIds.has(item.id) && !includedMenuItemIds.has(item.id) && item.active !== false)
     .reduce((sum, item) => {
       const price = Number(item.price || 0);
       const pricingType = normalizePricingType(item.pricingType || item.type);
@@ -451,6 +457,9 @@ export function calculateQuote(form, catalog, settings) {
     addonQuantityMap,
     rentalQuantityMap,
     menuItemQuantityMap,
+    includedAddonIds: [...includedAddonIds],
+    includedRentalIds: [...includedRentalIds],
+    includedMenuItemIds: [...includedMenuItemIds],
     travelBaseMiles: baseMiles,
     travelLongDistanceMiles: longDistanceMiles
   };

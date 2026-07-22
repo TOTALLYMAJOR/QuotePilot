@@ -3066,6 +3066,203 @@ hr {
   font-size: 0.78rem;
 }
 
+.portal-shell {
+  --portal-primary: #c99334;
+  --portal-accent: #f0d29a;
+  --portal-dark: #8d611a;
+  --portal-surface: #100d09;
+  --portal-surface-alt: #221a12;
+  --portal-canvas: #050505;
+  min-height: 100vh;
+  padding-block: 2rem;
+  background: linear-gradient(145deg, var(--portal-canvas), var(--portal-surface-alt));
+}
+
+.portal-shell .portal-card {
+  border-top: 5px solid var(--portal-primary);
+  box-shadow: 0 24px 70px color-mix(in srgb, var(--portal-dark) 26%, transparent);
+}
+
+.portal-shell .cta,
+.portal-shell .portal-decision-options button.active {
+  border-color: var(--portal-primary);
+  background: var(--portal-primary);
+}
+
+.portal-brand-logo {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 0.5rem;
+  object-fit: contain;
+}
+
+.portal-brand-tagline {
+  margin: 0.25rem 0 0;
+  color: #68716d;
+  font-size: 0.76rem;
+}
+
+.portal-bundle-row {
+  border-left: 3px solid var(--portal-primary);
+  padding-left: 0.55rem;
+}
+
+.portal-chat-panel {
+  border-top: 1px solid #d7d8d2;
+  padding: 1rem 0 0.2rem;
+}
+
+.portal-chat-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.portal-chat-head span {
+  color: #6b746f;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.portal-chat-head h3 {
+  margin: 0.15rem 0 0;
+  color: #2d4037;
+  font-size: 0.92rem;
+}
+
+.portal-chat-thread {
+  max-height: 320px;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  overflow: auto;
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid #d8ddd9;
+  border-radius: 8px;
+  background: #f4f6f4;
+}
+
+.portal-chat-message {
+  width: min(82%, 680px);
+  border: 1px solid #d3d9d5;
+  border-radius: 8px 8px 8px 2px;
+  background: #fff;
+  padding: 0.55rem 0.65rem;
+}
+
+.portal-chat-message.customer {
+  justify-self: end;
+  border-color: color-mix(in srgb, var(--portal-primary) 45%, #d3d9d5);
+  border-radius: 8px 8px 2px 8px;
+  background: color-mix(in srgb, var(--portal-accent) 24%, #fff);
+}
+
+.portal-chat-message > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  color: #4c5a54;
+  font-size: 0.68rem;
+}
+
+.portal-chat-message time {
+  color: #7a827f;
+}
+
+.portal-chat-message p {
+  margin: 0.28rem 0 0;
+  color: #303a36;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.portal-chat-compose {
+  margin-top: 0.7rem;
+}
+
+.portal-chat-modal {
+  width: min(760px, calc(100vw - 2rem));
+  max-height: min(760px, calc(100vh - 2rem));
+  overflow: auto;
+}
+
+.bundle-config-card {
+  margin-bottom: 0.8rem;
+  border: 1px solid #d8d2c5;
+  border-radius: 10px;
+  background: #fffdf8;
+  padding: 0.7rem;
+}
+
+.bundle-config-groups,
+.theme-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.bundle-config-groups fieldset {
+  min-width: 0;
+  border: 1px solid #ddd6c9;
+  border-radius: 8px;
+  padding: 0.55rem;
+}
+
+.bundle-config-groups legend {
+  padding-inline: 0.25rem;
+  color: #5e5548;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.bundle-config-groups label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  color: #504b43;
+  font-size: 0.72rem;
+}
+
+.bundle-config-groups input {
+  width: auto;
+}
+
+.theme-preset-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 0.85rem;
+}
+
+.theme-preset {
+  border: 1px solid #d7d1c5;
+  background: #fff;
+  color: #413c35;
+  padding: 0.65rem;
+  text-align: left;
+}
+
+.theme-preset.active {
+  border-color: #9a6a23;
+  box-shadow: 0 0 0 2px rgba(154, 106, 35, 0.16);
+}
+
+.theme-preset-swatches {
+  display: flex;
+  margin-bottom: 0.45rem;
+}
+
+.theme-preset-swatches i {
+  width: 28px;
+  height: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.theme-preset-swatches i:first-child { border-radius: 5px 0 0 5px; }
+.theme-preset-swatches i:last-child { border-radius: 0 5px 5px 0; }
+
 .schedule-production-checklist {
   margin-top: 0.5rem;
   border-top: 1px solid #d5d8d2;
@@ -3439,6 +3636,15 @@ hr {
 
   .approval-audit {
     justify-items: start;
+  }
+
+  .bundle-config-groups,
+  .theme-preset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-chat-message {
+    width: 94%;
   }
 }
 

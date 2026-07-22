@@ -7,7 +7,7 @@ Last updated: July 22, 2026
 - Platform identity: QuotePilot by MBMApps is the product identity; Tasteful Touch Catering remains a customer organization with its own persisted branding and organization-scoped admin role.
 - Build: `npm run build` passes locally for this branch.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
-- Current branch workflow delivery: proposal readiness, Good/Better/Best scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action approval requests, the customer decision center, and event production checklists are implemented and locally covered.
+- Current branch workflow delivery: configurable package bundles, organization-scoped customer records, four branded portal themes with logo support, quote-scoped customer/staff chat, proposal readiness, Good/Better/Best scenarios, lifecycle timelines, lead follow-ups, the customer decision center, and event production checklists are implemented and locally covered.
 - Workflow authority boundaries: approval resolution does not execute a sensitive action; customer acceptance does not prove payment or booking; production checklist completion does not prove inventory availability.
 - CI gates: classifier-driven lane gates are configured (`lane:quick`, `lane:core`, `Docker Build Smoke`, `lane:playwright-smoke`, `lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`).
 - P0 fallback-retirement safeguard: classifier now elevates `menuService`/`useCatalogData`/`organizationService`/`OrganizationContext` edits to `high_risk`, so Firebase heavy lanes are required (not advisory) on feature branches.
@@ -18,6 +18,7 @@ Last updated: July 22, 2026
 - Production migration execution evidence captured for project/org (`tonicatering` / `250`) under `.cache/migration-runs/` with structured totals (`source=496`, `created=1`, `patched=0`).
 - Migration operator resilience: `scripts/migrate-to-multi-tenant.mjs` now supports Firestore REST execution (dry-run and apply) via Firebase CLI auth token when ADC credentials are unavailable.
 - Portal token rule hardening is implemented and emulator-validated: portal snapshot reads/status updates now require active (non-deleted + non-expired) snapshots at the Firestore rule layer.
+- Portal chat rules are emulator-validated: customers may append customer messages only through an active bearer link; staff replies require same-organization authorization; messages are immutable.
 - Portal snapshot expiry-ms backfill was executed for production org `250` (`customerPortalQuotes patched=2`) to preserve existing portal-link behavior under hardened rules.
 - Legacy quote safety: Firebase quote writes now auto-migrate legacy global quote docs into org-scoped paths during write/version flows when org context is present.
 - Functions emulator compatibility: `functions.config()` v7 removal path now degrades safely to environment values instead of throwing at runtime.
@@ -34,8 +35,10 @@ Last updated: July 22, 2026
   - workflow run: `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
 
 ## Active Risks
+- The checked local Firebase configuration files still contain placeholders. Real Firebase Web App values must be supplied through ignored `.env.local` files and the hosting provider before hosted verification or deployment.
 - The proposed `quotepilot.mbmapps.com` shared application hostname is code-ready but not yet connected in Firebase Hosting, authorized in Firebase Authentication, or published in the externally managed MBMApps DNS zone.
 - The new `portalDecision` Firestore rule changes and enriched portal snapshots are implemented locally but are not deployed or hosted-smoke-verified in this branch.
+- Package bundles, customer record upserts, portal themes/logo snapshots, and portal chat are local branch capabilities only until their app and Firestore rule changes are deployed together.
 - Approval requests are role-gated in the application workflow, but stronger server-authoritative action-specific enforcement and end-to-end audit linkage remain follow-up work.
 - Existing portal snapshots need refresh/backfill before older links can display every newly added event, selection, and pricing field.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
@@ -44,7 +47,7 @@ Last updated: July 22, 2026
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
 
 ## Current Focus (Near-Term)
-1. Deploy the updated `firestore.rules` and run hosted portal decision smoke checks, including active, expired, deleted, and change-request paths.
+1. Deploy the updated app and `firestore.rules` together, then run hosted portal decision/chat smoke checks, including active, expired, deleted, cross-org, and change-request paths.
 2. Refresh/backfill existing customer portal snapshots with the new customer-safe event and pricing fields.
 3. Add server-authoritative enforcement and audit linkage for approval-request-to-admin-action execution.
 4. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
