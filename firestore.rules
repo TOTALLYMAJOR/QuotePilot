@@ -22,6 +22,13 @@ service cloud.firestore {
         : "";
     }
 
+    function claimOrganizationId() {
+      return isSignedIn()
+        && request.auth.token.get("organizationId", "") is string
+        ? request.auth.token.get("organizationId", "")
+        : "";
+    }
+
     function roleOrganizationId(uid) {
       return isSignedIn()
         && exists(/databases/$(database)/documents/userRoles/$(uid))
@@ -48,7 +55,11 @@ service cloud.firestore {
     function sameOrg(orgId) {
       return isSignedIn()
         && orgId is string
-        && orgId == userOrganizationId();
+        && orgId == userOrganizationId()
+        && (
+          claimOrganizationId() == ""
+          || claimOrganizationId() == userOrganizationId()
+        );
     }
 
     function isOrgAdmin(orgId) {
@@ -207,6 +218,19 @@ service cloud.firestore {
       allow create, update, delete: if isOrgAdmin(orgId);
     }
 
+    match /tenantDomains/{hostname} {
+      allow read: if resource.data.organizationId is string
+        && isOrgAdmin(resource.data.organizationId);
+      allow create: if request.resource.data.organizationId is string
+        && isOrgAdmin(request.resource.data.organizationId);
+      allow update: if resource.data.organizationId is string
+        && request.resource.data.organizationId is string
+        && resource.data.organizationId == request.resource.data.organizationId
+        && isOrgAdmin(resource.data.organizationId);
+      allow delete: if resource.data.organizationId is string
+        && isOrgAdmin(resource.data.organizationId);
+    }
+
     match /organizations/{orgId}/settings/{docId} {
       allow read: if isOrgStaff(orgId);
       allow write: if isOrgAdmin(orgId);
@@ -245,6 +269,19 @@ service cloud.firestore {
     match /organizations/{orgId}/customers/{docId} {
       allow read: if isOrgStaff(orgId);
       allow write: if isOrgStaff(orgId);
+    }
+
+    match /organizations/{orgId}/importBatches/{batchId} {
+      allow read: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId)
+        && request.resource.data.organizationId == orgId
+        && request.resource.data.importBatchId == batchId;
+      allow update: if isOrgAdmin(orgId)
+        && resource.data.organizationId == orgId
+        && request.resource.data.organizationId == orgId
+        && resource.data.importBatchId == batchId
+        && request.resource.data.importBatchId == batchId;
+      allow delete: if false;
     }
 
     match /organizations/{orgId}/quotes/{quoteId} {

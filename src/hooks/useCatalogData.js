@@ -215,6 +215,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     eventTypes: deriveEventTypesFromSettings(baseCatalog.settings),
     ...baseCatalog
   }));
+  const [reloadVersion, setReloadVersion] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -244,9 +245,12 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
             getEventTypes({ organizationId })
           ]);
           if (!alive) return;
-          const hasRecords = catalog.packages.length || catalog.addons.length || catalog.rentals.length;
-          if (!hasRecords) {
+          if (!hasCatalogRecords(catalog)) {
             const defaults = defaultCatalog();
+            const emptyOrgCatalog = {
+              ...defaults,
+              settings: catalog.settings
+            };
             if (alive) {
               setState((prev) => ({
                 ...prev,
@@ -254,7 +258,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
                 source: `${source}-empty-defaults`,
                 requiresFirebase: false,
                 eventTypes,
-                ...defaults
+                ...emptyOrgCatalog
               }));
             }
             return;
@@ -323,7 +327,12 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     return () => {
       alive = false;
     };
-  }, [enabled, organizationId]);
+  }, [enabled, organizationId, reloadVersion]);
+
+  const reload = useCallback(() => {
+    setState((prev) => ({ ...prev, loading: true, error: "" }));
+    setReloadVersion((version) => version + 1);
+  }, []);
 
   const saveCatalog = useCallback(async (nextCatalog) => {
     if (!enabled) {
@@ -399,6 +408,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
 
   return {
     ...state,
+    reload,
     saveCatalog,
     loadMenuByEvent
   };

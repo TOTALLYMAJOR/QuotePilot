@@ -35,6 +35,7 @@ import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionD
 const AdminCatalogModal = lazy(() => import("./components/AdminCatalogModal"));
 const EventScheduleModal = lazy(() => import("./components/EventScheduleModal"));
 const IntegrationOpsModal = lazy(() => import("./components/IntegrationOpsModal"));
+const ImportStudioModal = lazy(() => import("./components/ImportStudioModal"));
 const DiagnosticsModal = lazy(() => import("./components/DiagnosticsModal"));
 const QuoteCompareModal = lazy(() => import("./components/QuoteCompareModal"));
 const QuoteHistoryModal = lazy(() => import("./components/QuoteHistoryModal"));
@@ -304,6 +305,7 @@ export default function App() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
+  const [importStudioOpen, setImportStudioOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -465,9 +467,9 @@ export default function App() {
     [form, catalog, totals, effectiveSettings]
   );
   const isEditingQuote = Boolean(editingQuote.id);
-  const brandName = catalog.settings?.brandName || "Tasteful Touch Catering";
-  const brandTagline = catalog.settings?.brandTagline || "Chef Toni and Grill Master Ervin";
-  const brandLogoUrl = catalog.settings?.brandLogoUrl || "/brand/logo.png";
+  const brandName = String(catalog.settings?.brandName || "").trim() || "Quote Operations";
+  const brandTagline = String(catalog.settings?.brandTagline || "").trim();
+  const brandLogoUrl = String(catalog.settings?.brandLogoUrl || "").trim();
   const brandPrimaryColor = catalog.settings?.brandPrimaryColor || "#c99334";
   const brandAccentColor = catalog.settings?.brandAccentColor || "#f0d29a";
   const brandDarkAccentColor = catalog.settings?.brandDarkAccentColor || "#8d611a";
@@ -479,11 +481,11 @@ export default function App() {
     .map((member) => String(member?.label || "").trim())
     .filter(Boolean);
   const scheduleCapacityLimit = Math.max(1, Number(catalog.settings?.capacityLimit || 400));
-  const heroEyebrow = catalog.settings?.heroEyebrow || "Premium Event Catering Workbench";
-  const heroHeadline = catalog.settings?.heroHeadline || "Signature flavor. Configurable quotes.";
+  const heroEyebrow = catalog.settings?.heroEyebrow || "Event Catering Workspace";
+  const heroHeadline = catalog.settings?.heroHeadline || `${brandName} Quote Operations`;
   const heroDescription =
     catalog.settings?.heroDescription ||
-    "A polished sales cockpit for weddings, corporate events, and celebrations up to 400 guests. Build scenarios, apply smart upsells, and send better proposals faster.";
+    "Build quotes, configure pricing, and manage proposals from one workspace.";
   const appThemeVars = {
     "--tone-gold-1": brandAccentColor,
     "--tone-gold-2": brandPrimaryColor,
@@ -1342,16 +1344,22 @@ export default function App() {
       <header className="site-header">
         <div className="container nav">
           <div className="brand-lockup">
-            <img
-              className="brand-logo"
-              src={brandLogoUrl}
-              alt={`${brandName} logo`}
-              loading="eager"
-              decoding="async"
-            />
+            {brandLogoUrl ? (
+              <img
+                className="brand-logo"
+                src={brandLogoUrl}
+                alt={`${brandName} logo`}
+                loading="eager"
+                decoding="async"
+              />
+            ) : (
+              <span className="brand-logo brand-logo-placeholder" aria-hidden="true">
+                {brandName.slice(0, 2).toUpperCase()}
+              </span>
+            )}
             <div className="brand-copy">
               <div className="brand">{brandName}</div>
-              <p>{brandTagline}</p>
+              {brandTagline && <p>{brandTagline}</p>}
             </div>
           </div>
           {brandCrew.length > 0 && (
@@ -1360,8 +1368,12 @@ export default function App() {
                 <figure className="crew-chip" key={`${member.label || "member"}-${idx}`}>
                   {member.imageUrl ? (
                     <img src={member.imageUrl} alt={member.label || `Team member ${idx + 1}`} loading="lazy" decoding="async" />
-                  ) : (
+                  ) : brandLogoUrl ? (
                     <img src={brandLogoUrl} alt={member.label || `Team member ${idx + 1}`} loading="lazy" decoding="async" />
+                  ) : (
+                    <span className="crew-chip-placeholder" aria-hidden="true">
+                      {String(member.label || "TM").slice(0, 2).toUpperCase()}
+                    </span>
                   )}
                   <figcaption>{member.label || `Team member ${idx + 1}`}</figcaption>
                 </figure>
@@ -1376,6 +1388,7 @@ export default function App() {
             {dashboardEnabled && <button className="ghost" onClick={() => setDashboardOpen(true)}>Dashboard</button>}
             <button className="ghost" onClick={() => setHistoryOpen(true)}>Quote History</button>
             {authSession.isAdmin && <button className="ghost" onClick={() => setAdminOpen(true)}>Admin Catalog</button>}
+            {authSession.isAdmin && <button className="ghost" onClick={() => setImportStudioOpen(true)}>Import Studio</button>}
             {customerPortalEnabled && <button className="ghost" onClick={openPortalMode}>Customer Portal</button>}
             <button className="cta header-quick-cta" onClick={handleGetInstantQuote}>Quick Quote</button>
             <button className="ghost" onClick={handleSignOut}>Sign Out</button>
@@ -1613,6 +1626,25 @@ export default function App() {
             selectedEventType={globalEventTypeId}
             onEventTypeChange={setGlobalEventTypeId}
             onToast={pushToast}
+          />
+        )}
+
+        {authSession.isAdmin && (
+          <ImportStudioModal
+            open={importStudioOpen}
+            onClose={() => setImportStudioOpen(false)}
+            organizationId={authSession.organizationId}
+            organizationName={catalog.settings?.brandName || brandName}
+            currentUserUid={authSession.user?.uid || ""}
+            currentUserEmail={authSession.user?.email || ""}
+            onImported={(result) => {
+              catalog.reload();
+              if (result?.status === "rolled_back") {
+                pushToast(`Import ${result.importBatchId} was undone.`, "info");
+              } else {
+                pushToast(`Imported ${result?.createdCount || 0} record(s) into ${authSession.organizationId}.`, "success");
+              }
+            }}
           />
         )}
 

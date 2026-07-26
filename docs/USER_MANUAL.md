@@ -84,6 +84,21 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - In order-enforced mode each module row is labeled as either `Included in order` or `Locked (not in order)`.
 - To change what is included/locked, update entitlements through customer provisioning, then reopen `Admin Catalog`.
 
+## Import Studio
+- Open `Import Studio` from the top navigation. Admin access is required.
+- The destination organization is locked to the authenticated admin's organization and cannot be supplied or changed by uploaded data.
+- The first release accepts CSV files up to 2 MB and supports:
+  - Customers
+  - Packages
+  - Add-ons
+  - Rentals
+  - Menu items
+- Upload a CSV, confirm the suggested record type, and review the proposed column mappings.
+- Rows labeled `Need attention` are not imported. Correct the source file or change the mapping, then review again.
+- Import creates ready records only, skips existing duplicate emails/names, sends no outbound messages, and saves an organization-scoped receipt.
+- `Undo this import` removes only unchanged documents whose `importBatchId` matches that receipt. Records edited after import are protected from rollback, and pre-existing records are never deleted by the batch.
+- Active quotes, payments, contracts, bookings, and staff accounts are outside the first Import Studio release and must not be represented as imported operational history.
+
 ## Customer Onboarding (No Stripe Flow)
 Use provisioning to create/update a customer org, apply paid module entitlements, and generate a send-ready onboarding email.
 

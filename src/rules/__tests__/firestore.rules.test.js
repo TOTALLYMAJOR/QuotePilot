@@ -328,6 +328,48 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }));
   });
 
+  test("import receipts are tenant-locked and admin-only", async () => {
+    const ownReceipt = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "importBatches",
+      "batch-a"
+    );
+    await assertSucceeds(setDoc(ownReceipt, {
+      organizationId: "org-a",
+      importBatchId: "batch-a",
+      status: "completed"
+    }));
+    await assertSucceeds(getDoc(ownReceipt));
+
+    const crossOrgReceipt = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-b",
+      "importBatches",
+      "batch-b"
+    );
+    await assertFails(setDoc(crossOrgReceipt, {
+      organizationId: "org-b",
+      importBatchId: "batch-b",
+      status: "completed"
+    }));
+
+    const salesReceipt = orgScopedRefFor(
+      "sales-org-a",
+      "sales-a@example.com",
+      "org-a",
+      "importBatches",
+      "batch-sales"
+    );
+    await assertFails(setDoc(salesReceipt, {
+      organizationId: "org-a",
+      importBatchId: "batch-sales",
+      status: "completed"
+    }));
+  });
+
   test("customer cannot write staff-only org quote/catalog/menu/settings paths", async () => {
     const customerQuoteRef = quoteRefFor("customer-org-a", "customer-a@example.com", "org-a", "q-customer-own");
     await assertFails(setDoc(customerQuoteRef, buildQuotePayload("customer-org-a", "org-a")));

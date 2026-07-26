@@ -113,6 +113,10 @@ function buildJsonDrafts(catalog) {
   };
 }
 
+function catalogDraftFingerprint(draft, jsonDrafts) {
+  return JSON.stringify({ draft, jsonDrafts });
+}
+
 function toDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -150,6 +154,9 @@ export default function AdminCatalogModal({
   const [status, setStatus] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [jsonDrafts, setJsonDrafts] = useState(() => buildJsonDrafts(catalog));
+  const [savedFingerprint, setSavedFingerprint] = useState(() =>
+    catalogDraftFingerprint(catalog, buildJsonDrafts(catalog))
+  );
   const [selectedEventType, setSelectedEventType] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [menuEventTypes, setMenuEventTypes] = useState([]);
@@ -214,14 +221,17 @@ export default function AdminCatalogModal({
 
   useEffect(() => {
     if (open) {
-      setDraft({
+      const nextDraft = {
         ...catalog,
         settings: {
           ...(catalog?.settings || {}),
           featureFlags: { ...(catalog?.settings?.featureFlags || {}) }
         }
-      });
-      setJsonDrafts(buildJsonDrafts(catalog));
+      };
+      const nextJsonDrafts = buildJsonDrafts(catalog);
+      setDraft(nextDraft);
+      setJsonDrafts(nextJsonDrafts);
+      setSavedFingerprint(catalogDraftFingerprint(nextDraft, nextJsonDrafts));
       setStatus("");
       setUploadingLogo(false);
       setActiveTab("packages");
@@ -241,7 +251,7 @@ export default function AdminCatalogModal({
       setCategoryEditName("");
       setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
     }
-  }, [open, catalog, selectedEventTypeProp]);
+  }, [open, scopedOrganizationId]);
 
   useEffect(() => {
     if (!open) return;
@@ -845,6 +855,8 @@ export default function AdminCatalogModal({
 
       const result = await onSave(nextDraft);
       if (result.ok) {
+        setDraft(nextDraft);
+        setSavedFingerprint(catalogDraftFingerprint(nextDraft, jsonDrafts));
         setStatus("Catalog saved.");
         pushToast("Catalog saved.", "success");
         return;
@@ -876,13 +888,28 @@ export default function AdminCatalogModal({
     if (!enforceOrderFeatureAccess) return "Editable in this catalog.";
     return paidFeatureIdSet.has(featureId) ? "Included in order." : "Locked (not in order).";
   };
+  const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
+  const handleClose = () => {
+    if (hasUnsavedChanges && !window.confirm("Discard unsaved catalog and branding changes?")) {
+      return;
+    }
+    onClose();
+  };
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
-      <div className="modal-card">
+      <div className="modal-card admin-catalog-card">
         <div className="modal-head">
           <h2>Catalog Admin</h2>
-          <button type="button" className="ghost" onClick={onClose}>Close</button>
+          <div className="admin-save-actions">
+            <span className={hasUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
+              {saving ? "Saving…" : hasUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "No pending changes"}
+            </span>
+            <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
+              {saving ? "Saving..." : "Save changes"}
+            </button>
+            <button type="button" className="ghost" onClick={handleClose}>Close</button>
+          </div>
         </div>
 
         <div className="admin-tabs" role="tablist" aria-label="Catalog admin sections">
@@ -1696,8 +1723,12 @@ export default function AdminCatalogModal({
         )}
 
         <div className="modal-foot">
-          <span className="source-note">{status}</span>
-          <button type="button" className="cta" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Catalog"}</button>
+          <span className="source-note">
+            {status || (hasUnsavedChanges ? "Your changes are not saved yet." : "Settings are up to date.")}
+          </span>
+          <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
+            {saving ? "Saving..." : "Save changes"}
+          </button>
         </div>
       </div>
     </div>

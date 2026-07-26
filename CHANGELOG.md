@@ -10,6 +10,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 - Accessible glass feature drawer on the QuotePilot landing page, with six selectable workflow capabilities, real app screenshots captured with local demo data, proof-safe state boundaries, keyboard focus containment, and a full-screen mobile layout.
 - Public QuotePilot by MBMapps marketing page at `/`, adapted from the approved Figma direction with animated workflow mapping, scroll-reveal process storytelling, responsive layouts, and reduced-motion support; the existing staff workspace now lives at `/app` while customer `?portal=` links remain compatible.
+- Admin-only Import Studio for tenant-locked customer and catalog CSV intake, automatic record/field recognition, row validation, duplicate-safe create behavior, persistent import receipts, and batch-scoped rollback.
 
 - Proposal readiness scoring in the review step and Sales Workflow, with weighted completion criteria and actionable readiness gaps.
 - Good/Better/Best quote scenarios with comparable package totals and one-click application back into the wizard.
@@ -60,6 +61,8 @@ This changelog is backfilled from git history and will be maintained going forwa
 ### Changed
 
 - Rebranded install metadata and customer-visible runtime fallbacks from the legacy catering identity to QuotePilot by MBMapps, including proposal/email/SMS defaults, neutral staff labels, the QuotePilot favicon, and custom-domain onboarding/payment links; corrected Vite environment/public-asset paths so the project-local `.env`, manifest, favicon, and service worker are included correctly.
+- Firestore tenant authorization now rejects conflicting custom-claim and role-document organization scopes, while tenant-domain mapping writes are explicitly limited to same-organization admins.
+- Tenant branding/contact normalization now preserves intentional blank logo, crew, phone, email, and address values instead of restoring the legacy customer defaults; custom tenants with missing legacy color fields receive neutral appearance defaults. Catalog Admin also keeps edits stable during parent rerenders, shows an always-visible save control and unsaved state, and warns before discarding changes.
 - Customer portal snapshots now include customer-safe event scope, pricing breakdowns, selection labels, payment state, and decision receipts; Firestore portal patches remain constrained to allowed status and portal-decision fields.
 - Sensitive-action approval resolution records admin intent without executing payment, contract, portal-link, or deletion actions; those actions remain separate admin operations.
 - Quote History now uses the authenticated staff role to hide payment, booking, portal rotation, contract conversion, and delete controls from sales users while preserving proposal-prep actions.
@@ -154,6 +157,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Customer provisioning no longer silently substitutes the signed-in administrator's UID when the Owner UID field is blank; assigning the operator's own account now requires the explicit `Use My Account` action.
 - Customer portal date-only event values now render in local time without shifting to the previous calendar day.
 - Quote store unit fixtures now pin their intended validation date so portal-expiry and quote-expiry assertions remain deterministic over time.
 

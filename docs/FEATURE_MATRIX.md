@@ -36,6 +36,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 21 | Optional admin security/audit depth (beyond role gating) | Partial / Optional | Role-gated access and rules are shipped in `src/hooks/useAuthSession.js`, `src/components/AuthGate.jsx`, `firestore.rules`; sync log audit trail exists in `src/lib/quoteStore.js`, but full cross-surface audit pipeline remains limited |
 | 22 | QA acceptance tests and checks | Implemented (core) | Unit tests under `src/lib/__tests__/`, UI snapshots under `src/components/__tests__/`, Firestore rules tests under `src/rules/__tests__/`, Playwright smoke lanes under `e2e/`, and CI scripts in `package.json` |
 | 23 | Sales workflow (readiness, follow-ups, lifecycle, approval queue) | Implemented | `src/lib/quoteWorkflow.js`, `src/components/SalesWorkflowModal.jsx`, `src/lib/quoteStore.js` (`updateQuoteFollowUp`, `requestQuoteApproval`, `resolveQuoteApprovalRequest`) |
+| 24 | Tenant Import Studio (customer/catalog CSV recognition, validation, receipts, rollback) | Implemented (branch) | `src/components/ImportStudioModal.jsx`, `src/lib/importStudio.js`, `src/lib/importBatchService.js`, `firestore.rules` (`importBatches`) |
 
 ## Guided Flow (Where It Lives)
 - Wizard flow entry and steps: `src/App.jsx`

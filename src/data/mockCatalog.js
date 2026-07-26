@@ -635,7 +635,7 @@ function normalizeSeasonalProfiles(input) {
 }
 
 function normalizeBrandCrew(input) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_BRAND_CREW;
+  const source = Array.isArray(input) ? input : DEFAULT_BRAND_CREW;
   return source
     .map((item, idx) => ({
       label: toText(item?.label, `Team Member ${idx + 1}`),
@@ -707,6 +707,15 @@ function normalizeUpsellRules(input, { packages = [], addons = [], rentals = [] 
 function toText(value, fallback = "") {
   const text = String(value ?? "").trim();
   return text || fallback;
+}
+
+function hasOwnSetting(settings, key) {
+  return Object.prototype.hasOwnProperty.call(settings || {}, key);
+}
+
+function toTenantText(settings, key, fallback = "") {
+  if (!hasOwnSetting(settings, key)) return fallback;
+  return String(settings?.[key] ?? "").trim();
 }
 
 function toBoolean(value, fallback = false) {
@@ -833,6 +842,23 @@ export function normalizeCatalog(raw) {
     ? requestedDefaultStaffingRateType
     : staffingRateTypes[0]?.id || "";
 
+  // A provisioned tenant can intentionally leave identity fields blank. Only
+  // missing fields should inherit the legacy single-tenant defaults.
+  const customBrandName = toText(inputSettings.brandName, "");
+  const tenantBrandFallbacks = customBrandName && customBrandName !== DEFAULT_SETTINGS.brandName
+    ? {
+        brandPrimaryColor: "#1f2937",
+        brandAccentColor: "#4b5563",
+        brandDarkAccentColor: "#111827",
+        brandBackgroundStart: "#f3f4f6",
+        brandBackgroundMid: "#e5e7eb",
+        brandBackgroundEnd: "#d1d5db",
+        heroEyebrow: "Event Catering Workspace",
+        heroHeadline: `${customBrandName} Quote Operations`,
+        heroDescription: "Build quotes, configure pricing, and manage proposals from one workspace."
+      }
+    : DEFAULT_SETTINGS;
+
   return {
     packages,
     addons,
@@ -870,24 +896,24 @@ export function normalizeCatalog(raw) {
       ),
       staffingRateTypes,
       defaultStaffingRateType,
-      quotePreparedBy: toText(rawSettings.quotePreparedBy, DEFAULT_SETTINGS.quotePreparedBy),
-      brandName: toText(rawSettings.brandName, DEFAULT_SETTINGS.brandName),
-      brandTagline: toText(rawSettings.brandTagline, DEFAULT_SETTINGS.brandTagline),
-      brandLogoUrl: toText(rawSettings.brandLogoUrl, DEFAULT_SETTINGS.brandLogoUrl),
-      brandPrimaryColor: normalizeHexColor(rawSettings.brandPrimaryColor, DEFAULT_SETTINGS.brandPrimaryColor),
-      brandAccentColor: normalizeHexColor(rawSettings.brandAccentColor, DEFAULT_SETTINGS.brandAccentColor),
-      brandDarkAccentColor: normalizeHexColor(rawSettings.brandDarkAccentColor, DEFAULT_SETTINGS.brandDarkAccentColor),
-      brandBackgroundStart: normalizeHexColor(rawSettings.brandBackgroundStart, DEFAULT_SETTINGS.brandBackgroundStart),
-      brandBackgroundMid: normalizeHexColor(rawSettings.brandBackgroundMid, DEFAULT_SETTINGS.brandBackgroundMid),
-      brandBackgroundEnd: normalizeHexColor(rawSettings.brandBackgroundEnd, DEFAULT_SETTINGS.brandBackgroundEnd),
-      heroEyebrow: toText(rawSettings.heroEyebrow, DEFAULT_SETTINGS.heroEyebrow),
-      heroHeadline: toText(rawSettings.heroHeadline, DEFAULT_SETTINGS.heroHeadline),
-      heroDescription: toText(rawSettings.heroDescription, DEFAULT_SETTINGS.heroDescription),
+      quotePreparedBy: toTenantText(inputSettings, "quotePreparedBy", DEFAULT_SETTINGS.quotePreparedBy),
+      brandName: toTenantText(inputSettings, "brandName", DEFAULT_SETTINGS.brandName),
+      brandTagline: toTenantText(inputSettings, "brandTagline", DEFAULT_SETTINGS.brandTagline),
+      brandLogoUrl: toTenantText(inputSettings, "brandLogoUrl", DEFAULT_SETTINGS.brandLogoUrl),
+      brandPrimaryColor: normalizeHexColor(inputSettings.brandPrimaryColor, tenantBrandFallbacks.brandPrimaryColor),
+      brandAccentColor: normalizeHexColor(inputSettings.brandAccentColor, tenantBrandFallbacks.brandAccentColor),
+      brandDarkAccentColor: normalizeHexColor(inputSettings.brandDarkAccentColor, tenantBrandFallbacks.brandDarkAccentColor),
+      brandBackgroundStart: normalizeHexColor(inputSettings.brandBackgroundStart, tenantBrandFallbacks.brandBackgroundStart),
+      brandBackgroundMid: normalizeHexColor(inputSettings.brandBackgroundMid, tenantBrandFallbacks.brandBackgroundMid),
+      brandBackgroundEnd: normalizeHexColor(inputSettings.brandBackgroundEnd, tenantBrandFallbacks.brandBackgroundEnd),
+      heroEyebrow: toTenantText(inputSettings, "heroEyebrow", tenantBrandFallbacks.heroEyebrow),
+      heroHeadline: toTenantText(inputSettings, "heroHeadline", tenantBrandFallbacks.heroHeadline),
+      heroDescription: toTenantText(inputSettings, "heroDescription", tenantBrandFallbacks.heroDescription),
       brandCrew,
-      businessPhone: toText(rawSettings.businessPhone, DEFAULT_SETTINGS.businessPhone),
-      businessEmail: toText(rawSettings.businessEmail, DEFAULT_SETTINGS.businessEmail),
-      businessAddress: toText(rawSettings.businessAddress, DEFAULT_SETTINGS.businessAddress),
-      acceptanceEmail: toText(rawSettings.acceptanceEmail, DEFAULT_SETTINGS.acceptanceEmail),
+      businessPhone: toTenantText(inputSettings, "businessPhone", DEFAULT_SETTINGS.businessPhone),
+      businessEmail: toTenantText(inputSettings, "businessEmail", DEFAULT_SETTINGS.businessEmail),
+      businessAddress: toTenantText(inputSettings, "businessAddress", DEFAULT_SETTINGS.businessAddress),
+      acceptanceEmail: toTenantText(inputSettings, "acceptanceEmail", DEFAULT_SETTINGS.acceptanceEmail),
       disposablesNote: toText(rawSettings.disposablesNote, DEFAULT_SETTINGS.disposablesNote),
       depositNotice: toText(rawSettings.depositNotice, DEFAULT_SETTINGS.depositNotice),
       crmEnabled: toBoolean(rawSettings.crmEnabled, DEFAULT_SETTINGS.crmEnabled),

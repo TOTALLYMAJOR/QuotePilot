@@ -3,7 +3,8 @@
 Production-ready catering quote application built with React, Vite, Firebase, and jsPDF.
 
 ## Quick Links
-- Live app: https://tonicatering.web.app
+- Live app: https://quotepilot.mbmapps.com
+- Firebase Hosting origin/fallback: https://tonicatering.web.app
 - Repository: https://github.com/TOTALLYMAJOR/Firebase-quote-wizard
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
@@ -18,7 +19,7 @@ Production-ready catering quote application built with React, Vite, Firebase, an
 - `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal; existing token links remain compatible.
 
 ## Product Scope
-The app supports a 5-step quote wizard, dynamic event-type menus, pricing configuration, proposal export, customer portal updates, and operations workflows (history, scheduling, reporting, diagnostics).
+The app supports a 5-step quote wizard, dynamic event-type menus, pricing configuration, proposal export, customer portal updates, tenant-locked customer/catalog CSV imports, and operations workflows (history, scheduling, reporting, diagnostics).
 
 Tenant safety mode:
 - Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
@@ -27,7 +28,8 @@ Tenant safety mode:
 ## Architecture Snapshot
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
-- Deploy target: Firebase Hosting (primary), Vercel (optional)
+- Public custom domain: Vercel (`https://quotepilot.mbmapps.com`)
+- Firebase Hosting origin/fallback: `https://tonicatering.web.app`
 - Local runtime options: VS Code Dev Container (recommended), Node (`npm run dev`), or Docker Compose (`web-dev` / `web`)
 
 ## Local Setup

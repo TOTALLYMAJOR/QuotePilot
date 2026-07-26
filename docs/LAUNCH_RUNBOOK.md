@@ -49,30 +49,43 @@ For intentional functions deploy windows only:
 - Run the controlled deploy.
 - Immediately set it back to `false`.
 
-## 5) Optional Functions (Stripe + Twilio)
-Set production fail-safe default first:
+## 5) Optional Functions (Stripe + Twilio + Resend)
+These values are server-only Firebase Functions configuration. Do not add them
+to `.env`, `.env.example`, any `VITE_*` variable, or a committed file.
+
+Set production fail-safe defaults first:
 ```bash
 npx firebase-tools functions:config:set \
-  notifications.sms_provider="none"
+  notifications.sms_provider="none" \
+  notifications.email_provider="none"
 ```
 
 Set configuration with buyer-owned credentials (never commit real secrets):
 ```bash
 npx firebase-tools functions:config:set \
   notifications.sms_provider="twilio" \
+  notifications.email_provider="resend" \
   stripe.secret_key="<your_stripe_secret>" \
   stripe.webhook_secret="<your_stripe_webhook_secret>" \
   twilio.account_sid="<your_twilio_account_sid>" \
   twilio.auth_token="<your_twilio_auth_token>" \
   twilio.from_number="<your_twilio_from_number>" \
   notifications.owner_phone="<your_owner_phone>" \
+  email.from_email="<verified_sender@yourdomain.com>" \
+  email.from_name="QuotePilot by MBMapps" \
+  resend.api_key="<your_resend_api_key>" \
   app.base_url="https://quotepilot.mbmapps.com"
 ```
 
-If buyer wants Stripe checkout but no SMS yet:
+Before enabling Resend, verify the sender/domain in Resend. Provider
+configuration is not delivery proof; send a real test and confirm the provider
+delivery event.
+
+If the buyer wants Stripe checkout but no SMS or email yet:
 ```bash
 npx firebase-tools functions:config:set \
   notifications.sms_provider="none" \
+  notifications.email_provider="none" \
   stripe.secret_key="<your_stripe_secret>" \
   stripe.webhook_secret="<your_stripe_webhook_secret>" \
   app.base_url="https://quotepilot.mbmapps.com"

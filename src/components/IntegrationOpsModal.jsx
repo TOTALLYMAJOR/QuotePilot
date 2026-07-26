@@ -6,6 +6,7 @@ import {
   provisionCustomerOrder
 } from "../lib/organizationService";
 import { currency } from "../lib/quoteCalculator";
+import { resolveProvisionOwnerUid } from "../lib/importStudio";
 import {
   getQuoteHistory,
   purgeDeletedQuotesForOrganization,
@@ -174,7 +175,7 @@ export default function IntegrationOpsModal({
     organizationId: "",
     ownerEmail: normalizeEmail(currentUserEmail),
     ownerName: "",
-    ownerUid: String(currentUserUid || "").trim(),
+    ownerUid: "",
     plan: "growth",
     orderId: "",
     supportEmail: "",
@@ -289,7 +290,7 @@ export default function IntegrationOpsModal({
 
     const organizationName = String(provisionForm.organizationName || "").trim();
     const ownerEmail = normalizeEmail(provisionForm.ownerEmail || currentUserEmail);
-    const ownerUid = String(provisionForm.ownerUid || currentUserUid || "").trim();
+    const ownerUid = resolveProvisionOwnerUid(provisionForm.ownerUid);
     if (!organizationName || !ownerEmail) {
       setProvisionState((prev) => ({ ...prev, error: "Organization name and owner email are required." }));
       return;
@@ -542,7 +543,7 @@ export default function IntegrationOpsModal({
     setProvisionForm((prev) => ({
       ...prev,
       ownerEmail: prev.ownerEmail || normalizeEmail(currentUserEmail),
-      ownerUid: prev.ownerUid || String(currentUserUid || "").trim(),
+      ownerUid: resolveProvisionOwnerUid(prev.ownerUid),
       appUrl: prev.appUrl || getWindowBaseUrl()
     }));
     setCleanupState({
@@ -910,7 +911,7 @@ export default function IntegrationOpsModal({
                   />
                 </label>
                 <label>
-                  Owner UID (recommended)
+                  Owner UID (optional; never defaults to your account)
                   <input
                     type="text"
                     placeholder="firebase-auth-uid"
