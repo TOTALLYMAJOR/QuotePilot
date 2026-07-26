@@ -3,7 +3,7 @@
 Last updated: July 26, 2026
 
 ## Operational Health
-- Runtime: the public custom domain responds from Vercel (`https://quotepilot.mbmapps.com`), but as of July 26, 2026 its deployed HTML still carries the pre-rebrand `Tony Catering Quote Wizard` title. Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`).
+- Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment `dpl_DmKUyvdgm16jmNgWRerAwoAXx8Ek`, which reached `READY` on July 26, 2026 from source commit `f4d1ba002378a20f2ab714399a40db9db3b93cef`. Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
 - Build: `npm run build` passes locally for this branch.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
@@ -37,7 +37,7 @@ Last updated: July 26, 2026
   - workflow run: `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
 
 ## Active Risks
-- The QuotePilot rebrand and current branch changes are not yet deployed to `quotepilot.mbmapps.com`; a successful Git push is source publication only and does not prove Vercel production acceptance.
+- The Vercel deployment and custom-domain alias are provider-verified, but the authenticated production quote/save/export workflow still needs post-release browser acceptance.
 - Import Studio and its `importBatches` Firestore rules are implemented locally but are not deployed or hosted-smoke-verified. Excel intake, merge/update policies, saved import history UI, and active quote/payment/contract/booking imports are intentionally not included in this first slice.
 - The new `portalDecision` Firestore rule changes and enriched portal snapshots are implemented locally but are not deployed or hosted-smoke-verified in this branch.
 - Approval requests are role-gated in the application workflow, but stronger server-authoritative action-specific enforcement and end-to-end audit linkage remain follow-up work.
