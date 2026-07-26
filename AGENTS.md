@@ -3,7 +3,7 @@
 Last updated: March 16, 2026
 
 ## Mission
-Maintain Firebase Quote Wizard as a reliable production system.
+Maintain QuotePilot as a reliable production system.
 Ship safe changes with validation evidence and canonical documentation sync.
 
 ## Core Facts

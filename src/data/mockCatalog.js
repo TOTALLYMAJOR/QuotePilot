@@ -274,10 +274,7 @@ export const DEFAULT_SEASONAL_PROFILES = [
   }
 ];
 
-export const DEFAULT_BRAND_CREW = [
-  { label: "Chef Toni", imageUrl: "/brand/chef-toni.png" },
-  { label: "Grill Master Ervin", imageUrl: "/brand/grillmaster-irvin.png" }
-];
+export const DEFAULT_BRAND_CREW = [];
 
 export const DEFAULT_BARTENDER_RATE_TYPES = [
   { id: "standard", name: "Standard Bartender", rate: 30 },
@@ -366,25 +363,25 @@ export const DEFAULT_SETTINGS = {
   staffingChargeMode: "per_hour",
   staffingRateTypes: DEFAULT_STAFFING_RATE_TYPES,
   defaultStaffingRateType: "standard",
-  quotePreparedBy: "Chef Toni North",
-  brandName: "Tasteful Touch Catering",
-  brandTagline: "Chef Toni and Grill Master Ervin",
-  brandLogoUrl: "/brand/logo.png",
+  quotePreparedBy: "Sales Team",
+  brandName: "QuotePilot",
+  brandTagline: "Quote-to-event operations by MBMapps",
+  brandLogoUrl: "",
   brandPrimaryColor: "#c99334",
   brandAccentColor: "#f0d29a",
   brandDarkAccentColor: "#8d611a",
   brandBackgroundStart: "#100d09",
   brandBackgroundMid: "#221a12",
   brandBackgroundEnd: "#ae7d2b",
-  heroEyebrow: "Premium Event Catering Workbench",
-  heroHeadline: "Signature flavor. Configurable quotes.",
+  heroEyebrow: "Quote-to-Event Operations",
+  heroHeadline: "Clearer quotes. Connected event operations.",
   heroDescription:
-    "A polished sales cockpit for weddings, corporate events, and celebrations up to 400 guests. Build scenarios, apply smart upsells, and send better proposals faster.",
+    "Build guided quotes, compare scenarios, send proposals, and keep customer decisions, payment state, and event production connected.",
   brandCrew: DEFAULT_BRAND_CREW,
-  businessPhone: "(205) 593-2004",
-  businessEmail: "tonitastefultouch@yahoo.com",
-  businessAddress: "6230 Eagle Ridge Cir, Pinson, AL 35126",
-  acceptanceEmail: "tonitastefultouch@yahoo.com",
+  businessPhone: "",
+  businessEmail: "",
+  businessAddress: "",
+  acceptanceEmail: "",
   disposablesNote: "All disposables are included in this quote.",
   depositNotice: "30% deposit is required to lock in your date.",
   crmEnabled: false,

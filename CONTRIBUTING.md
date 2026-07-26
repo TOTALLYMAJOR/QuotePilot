@@ -1,4 +1,4 @@
-# Contributing to Firebase Quote Wizard
+# Contributing to QuotePilot
 
 Last updated: March 27, 2026
 

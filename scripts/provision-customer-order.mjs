@@ -81,7 +81,7 @@ function parseArgs(argv) {
     ownerEmail: "",
     ownerName: "",
     ownerUid: "",
-    appUrl: "https://tonicatering.web.app",
+    appUrl: "https://quotepilot.mbmapps.com",
     supportEmail: "",
     orderId: "",
     plan: "growth",

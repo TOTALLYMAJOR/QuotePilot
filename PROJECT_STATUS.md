@@ -1,9 +1,10 @@
 # Project Status
 
-Last updated: July 21, 2026
+Last updated: July 26, 2026
 
 ## Operational Health
 - Runtime: app is live on Firebase Hosting (`https://tonicatering.web.app`).
+- Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
 - Build: `npm run build` passes locally for this branch.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action approval requests, the customer decision center, and event production checklists are implemented and locally covered.

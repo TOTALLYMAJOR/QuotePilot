@@ -59,6 +59,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Rebranded install metadata and customer-visible runtime fallbacks from the legacy catering identity to QuotePilot by MBMapps, including proposal/email/SMS defaults, neutral staff labels, the QuotePilot favicon, and custom-domain onboarding/payment links; corrected Vite environment/public-asset paths so the project-local `.env`, manifest, favicon, and service worker are included correctly.
 - Customer portal snapshots now include customer-safe event scope, pricing breakdowns, selection labels, payment state, and decision receipts; Firestore portal patches remain constrained to allowed status and portal-decision fields.
 - Sensitive-action approval resolution records admin intent without executing payment, contract, portal-link, or deletion actions; those actions remain separate admin operations.
 - Quote History now uses the authenticated staff role to hide payment, booking, portal rotation, contract conversion, and delete controls from sales users while preserving proposal-prep actions.

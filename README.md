@@ -1,4 +1,4 @@
-# Firebase Quote Wizard
+# QuotePilot by MBMapps
 
 Production-ready catering quote application built with React, Vite, Firebase, and jsPDF.
 

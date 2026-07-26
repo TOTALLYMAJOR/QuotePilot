@@ -318,7 +318,7 @@ export async function exportQuoteProposal(quote, {
     title: `${text(proposal.quoteNumber)} Proposal`,
     subject: `${text(proposal.branding.brandName)} Catering Proposal`,
     author: text(meta.quotePreparedBy || proposal.branding.brandName),
-    creator: "Quote Wizard",
+    creator: "QuotePilot",
     keywords: "proposal, catering, quote"
   });
 

@@ -183,7 +183,7 @@ describe("quoteStore portal token policy", () => {
 
     const result = await rotateQuotePortalKey({
       quoteId: "quote-portal-1",
-      actorEmail: "ops@tonycatering.com"
+      actorEmail: "ops@acme.test"
     });
     expect(result.portalKey).not.toBe("portal-key-12345678901234567890");
     expect(result.portalExpiresAtISO).toBeTruthy();

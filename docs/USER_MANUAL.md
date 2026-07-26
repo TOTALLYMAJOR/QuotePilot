@@ -3,7 +3,7 @@
 Last updated: July 21, 2026
 
 ## Purpose
-This guide explains day-to-day usage of the Firebase Quote Wizard for staff users and admins.
+This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Access and Roles
 - Staff access (`sales` or `admin`) is required for the quote builder workspace.

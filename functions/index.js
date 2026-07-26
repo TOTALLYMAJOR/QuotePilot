@@ -595,7 +595,7 @@ function getEmailConfig() {
   return {
     provider: getEmailProvider(),
     fromEmail: normalizeEmail(readConfig("email.from_email", readConfig("notifications.owner_email"))),
-    fromName: normalizeText(readConfig("email.from_name", "Tasteful Touch Catering")),
+    fromName: normalizeText(readConfig("email.from_name", "QuotePilot by MBMapps")),
     resendApiKey: normalizeText(readConfig("resend.api_key"))
   };
 }
@@ -1149,7 +1149,7 @@ function resolvePortalLink(quote, fallbackPortalLink = "") {
   }
   const portalKey = normalizeText(quote?.portalKey);
   if (!portalKey) return "";
-  const appBaseUrl = normalizeText(readConfig("app.base_url", "https://tonicatering.web.app"));
+  const appBaseUrl = normalizeText(readConfig("app.base_url", "https://quotepilot.mbmapps.com"));
   if (!appBaseUrl) return "";
   return `${appBaseUrl}?portal=${encodeURIComponent(portalKey)}`;
 }
@@ -1490,7 +1490,7 @@ exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (da
 
   const entitlements = resolveFeatureEntitlements(data);
   const appUrl = parseUrlOrThrow(
-    normalizeText(data?.appUrl || readConfig("app.base_url", "https://tonicatering.web.app")),
+    normalizeText(data?.appUrl || readConfig("app.base_url", "https://quotepilot.mbmapps.com")),
     "appUrl"
   );
   const supportEmail = normalizeEmail(data?.supportEmail || readConfig("notifications.owner_email"));
@@ -1996,7 +1996,7 @@ exports.sendQuoteToCustomer = functions.region(REGION).https.onCall(async (data,
   const portalLink = resolvePortalLink(quote, data?.portalLink);
   const paymentLink = normalizeText(quote?.payment?.depositLink);
   const attachment = normalizeAttachment(data?.attachment);
-  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "Tasteful Touch Catering";
+  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "QuotePilot";
 
   const lines = [
     `Hi ${customerName},`,
@@ -2058,7 +2058,7 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
   const customerName = normalizeText(quote.customer?.name) || "there";
   const eventName = normalizeText(quote.event?.name) || "your event";
   const deposit = currencyLabel(quote.totals?.deposit);
-  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "Tasteful Touch Catering";
+  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "QuotePilot";
 
   const lines = [
     `Hi ${customerName},`,
@@ -2108,7 +2108,7 @@ exports.sendIntegrationTestSms = functions.region(REGION).https.onCall(async (da
   const customMessage = normalizeText(data?.message);
   const message =
     customMessage ||
-    `Integration SMS test from Firebase Quote Wizard (${new Date().toISOString()}) sent by ${actorEmail}.`;
+    `Integration SMS test from QuotePilot (${new Date().toISOString()}) sent by ${actorEmail}.`;
   const sms = await sendOwnerSms(message);
 
   return {
@@ -2131,7 +2131,7 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
 
   const quotePortalKey = normalizeText(quote.portalKey);
   const appBaseUrl = readConfig("app.base_url");
-  const defaultBase = appBaseUrl || "https://tonicatering.web.app";
+  const defaultBase = appBaseUrl || "https://quotepilot.mbmapps.com";
   const defaultSuccess = quotePortalKey
     ? `${defaultBase}?portal=${encodeURIComponent(quotePortalKey)}&payment=success`
     : `${defaultBase}?payment=success`;
