@@ -8,6 +8,7 @@ Last updated: July 26, 2026
 - Build: `npm run build` passes locally for this branch.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action approval requests, the customer decision center, and event production checklists are implemented and locally covered.
+- Current branch marketing delivery: a hospitality-first prospect page is implemented at `/`, while the prior dark product overview is preserved at `/system`; `/app` and customer portal query routes retain their existing responsibilities.
 - Current branch tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch. The provisioning form no longer defaults a blank owner UID to the operator's account.
 - Current branch tenant identity fix: explicit blank tenant logo/contact/address/crew values no longer fall back to the legacy customer profile, and Catalog Admin branding edits retain their draft through parent rerenders with persistent save/discard affordances.
 - Current branch tenant authorization hardening: Firestore denies conflicting claim/role organization scopes and permits tenant-domain mapping changes only for same-organization admins; the focused 11-case rules matrix, authenticated Firebase save smoke, and server-authoritative pricing smoke pass on isolated emulator ports.
@@ -37,6 +38,7 @@ Last updated: July 26, 2026
   - workflow run: `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
 
 ## Active Risks
+- The hospitality-first `/` and preserved `/system` routing are current-branch changes only and are not yet deployed or hosted-smoke-verified.
 - The Vercel deployment and custom-domain alias are provider-verified, but the authenticated production quote/save/export workflow still needs post-release browser acceptance.
 - Import Studio and its `importBatches` Firestore rules are implemented locally but are not deployed or hosted-smoke-verified. Excel intake, merge/update policies, saved import history UI, and active quote/payment/contract/booking imports are intentionally not included in this first slice.
 - The new `portalDecision` Firestore rule changes and enriched portal snapshots are implemented locally but are not deployed or hosted-smoke-verified in this branch.

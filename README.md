@@ -14,7 +14,8 @@ Production-ready catering quote application built with React, Vite, Firebase, an
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
 
 ## Application Routes
-- `/`: public QuotePilot marketing page.
+- `/`: hospitality-first public QuotePilot marketing page.
+- `/system`: saved dark product and operating-system overview.
 - `/app`: authenticated staff quote workspace.
 - `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal; existing token links remain compatible.
 

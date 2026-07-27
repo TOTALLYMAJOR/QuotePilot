@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: July 21, 2026
+Last updated: July 26, 2026
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -18,13 +18,13 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 ## Active Exceptions
 
-- Date: July 21, 2026
+- Date: July 26, 2026
 - Owner: QuotePilot maintainers
-- Change: Refresh the aggregate JavaScript baseline after adding the public animated QuotePilot marketing route.
+- Change: Retain the current aggregate JavaScript baseline while adding the hospitality-first public route and lazy route boundaries for the saved system page and authenticated workspace.
 - Exception type: `other`
-- Rationale: The March baseline is stale against the current feature branch; the existing application build measured 1,678,596 bytes before the marketing route, already 149 bytes above its 15% allowance. The completed marketing page adds 13,251 bytes (0.79%) without adding an animation dependency. Policy normally refreshes from clean `main`, but this branch contains the current canonical workflow implementation and the requested marketing surface.
+- Rationale: The baseline was established from this feature branch rather than clean `main`. The redesigned marketing surface adds no animation dependency, and the heavy workspace, Firebase, export, and saved-system code is no longer part of the default route entry.
 - Risk impact: The aggregate baseline resets from the current branch instead of a clean-main checkout, so the next release review must compare the merged build before accepting further bundle growth.
-- Performance impact: Expected aggregate JavaScript is 1,691,847 bytes; the largest chunk remains 397,827 bytes, materially below the prior 615,421-byte largest-chunk baseline.
-- Rollback plan: Revert the marketing route, its route handoff, and this baseline refresh together.
+- Performance impact: Current aggregate JavaScript is 1,731,347 bytes against a 1,691,847-byte baseline, and the largest chunk is 397,905 bytes. The default route entry is 19,667 bytes plus the shared React chunk; its generated hero is 155,574 bytes. Local Lighthouse measured performance 0.88, LCP 3,722 ms, CLS 0.0012, and TBT 1 ms.
+- Rollback plan: Revert the hospitality landing, route handoff, and saved-system route together.
 - Exit criteria: Reconfirm or tighten the baseline from clean `main` after this feature lands and before approving another intentional aggregate-bundle increase.
-- Verification evidence: `npm run build`, `npm run check:perf:bundle`, focused public-page Playwright coverage, and focused `/app` workflow smoke coverage.
+- Verification evidence: `npm run build`, `npm run check:perf:bundle`, `npm run check:perf:cwv` with Linux Chromium, focused public/system-page Playwright coverage, and focused `/app` route coverage.

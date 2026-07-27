@@ -1,42 +1,71 @@
 import { expect, test } from "@playwright/test";
 
-test("public marketing page presents the QuotePilot system and routes staff into the app", async ({ page }) => {
+test("public landing page presents QuotePilot for catering teams with truthful routes", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: /Move from first inquiry/i })).toBeVisible();
-  await expect(page.getByRole("img", { name: /workflow map connecting inquiry/i })).toBeVisible();
-  await expect(page.getByText("Connected is", { exact: false })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "The workflow." })).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: /Build confident catering quotes without the spreadsheet chase/i
+  })).toBeVisible();
+  await expect(page.getByText("Built for catering teams", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", {
+    name: /catering team serving guests at an outdoor dinner event/i
+  })).toBeVisible();
 
-  const appLinks = page.getByRole("link", { name: /Launch app|Open workspace|Launch QuotePilot/i });
-  await expect(appLinks.first()).toHaveAttribute("href", "/app");
+  const demoLinks = page.getByRole("link", { name: "Book a demo" });
+  await expect(demoLinks.first()).toHaveAttribute("href", "https://mbmapps.com/contact");
+  await expect(page.getByRole("link", { name: "Staff login" }).first()).toHaveAttribute("href", "/app");
+  await expect(page.getByRole("link", { name: "Explore the platform" })).toHaveAttribute("href", "/system");
 
-  await page.getByRole("button", { name: "Features" }).click();
-  const drawer = page.getByRole("dialog", { name: "Guided quote builder" });
-  await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole("img", { name: /guided quote builder/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "The full quote-to-event toolkit" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Make every customer decision easier to review" })).toBeVisible();
+  await expect(page.getByText(
+    "Acceptance records the customer decision. Payment and booking remain separate facts."
+  )).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: "Keep event operations connected to the approved scope"
+  })).toBeVisible();
 
-  await drawer.getByRole("button", { name: /Good, Better, Best/i }).click();
-  const scenarioDrawer = page.getByRole("dialog", { name: "Good, Better, Best" });
-  await expect(scenarioDrawer).toBeVisible();
-  await expect(scenarioDrawer.getByRole("img", { name: /scenario comparison/i })).toBeVisible();
-
-  await page.keyboard.press("Escape");
-  await expect(scenarioDrawer).toHaveCount(0);
+  const visibleCopy = await page.locator("body").innerText();
+  expect(visibleCopy).not.toMatch(/QuoteFlow|Tony Catering|Toni Catering|Start quoting free/i);
 });
 
-test("marketing page stays contained on mobile and honors reduced motion", async ({ page }) => {
+test("public landing page stays contained on mobile and honors reduced motion", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: /Move from first inquiry/i })).toBeVisible();
-  await page.getByRole("button", { name: "Features" }).click();
-  await expect(page.getByRole("dialog", { name: "Guided quote builder" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  await expect(page.getByRole("heading", {
+    name: /Build confident catering quotes without the spreadsheet chase/i
+  })).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
   expect(overflow).toBeLessThanOrEqual(1);
 
-  const orbitDuration = await page.locator(".marketing-orbit-a").evaluate((node) => getComputedStyle(node).animationDuration);
-  expect(Number.parseFloat(orbitDuration)).toBeLessThanOrEqual(0.01);
+  const animationDuration = await page.locator(".qp-landing-hero-copy h1").evaluate(
+    (node) => getComputedStyle(node).animationDuration
+  );
+  expect(Number.parseFloat(animationDuration)).toBeLessThanOrEqual(0.01);
+});
+
+test("customer portal query takes precedence over the public landing page", async ({ page }) => {
+  await page.goto("/?portal=e2e-route-precedence");
+
+  await expect(page.getByRole("heading", { name: "Proposal Decision Center" })).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: /Build confident catering quotes without the spreadsheet chase/i
+  })).toHaveCount(0);
+});
+
+test("staff route loads the workspace boundary rather than the public landing page", async ({ page }) => {
+  await page.goto("/app");
+
+  const workspaceSurface = page.getByRole("button", { name: "Get Instant Quote" }).or(
+    page.getByRole("heading", { name: "Catalog Unavailable" })
+  );
+  await expect(workspaceSurface).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: /Build confident catering quotes without the spreadsheet chase/i
+  })).toHaveCount(0);
 });

@@ -8,8 +8,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
-- Accessible glass feature drawer on the QuotePilot landing page, with six selectable workflow capabilities, real app screenshots captured with local demo data, proof-safe state boundaries, keyboard focus containment, and a full-screen mobile layout.
-- Public QuotePilot by MBMapps marketing page at `/`, adapted from the approved Figma direction with animated workflow mapping, scroll-reveal process storytelling, responsive layouts, and reduced-motion support; the existing staff workspace now lives at `/app` while customer `?portal=` links remain compatible.
+- Hospitality-first QuotePilot landing page at `/`, adapted from the approved Magic Patterns direction with original catered-event imagery, real QuotePilot interfaces, proof-safe quote-to-event language, responsive and dark layouts, restrained reveal motion, and reduced-motion support.
+- Durable landing-page design brief at `marketing/LandingPage.md`, including customer, copy, route, asset, preservation, and acceptance criteria.
+- Saved dark QuotePilot product overview at `/system`, including its six-capability feature drawer, animated workflow map, real app screenshots, keyboard focus containment, and full-screen mobile layout.
 - Admin-only Import Studio for tenant-locked customer and catalog CSV intake, automatic record/field recognition, row validation, duplicate-safe create behavior, persistent import receipts, and batch-scoped rollback.
 
 - Proposal readiness scoring in the review step and Sales Workflow, with weighted completion criteria and actionable readiness gaps.
@@ -60,6 +61,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Public-route handoff now keeps `/` prospect-focused, lazy-loads the previous landing at `/system` and the authenticated workspace at `/app`, and gives customer `?portal=` links precedence over both marketing surfaces.
 - Rebranded install metadata and customer-visible runtime fallbacks from the legacy catering identity to QuotePilot by MBMapps, including proposal/email/SMS defaults, neutral staff labels, the QuotePilot favicon, and custom-domain onboarding/payment links; corrected Vite environment/public-asset paths so the project-local `.env`, manifest, favicon, and service worker are included correctly.
 - Firestore tenant authorization now rejects conflicting custom-claim and role-document organization scopes, while tenant-domain mapping writes are explicitly limited to same-organization admins.
 - Tenant branding/contact normalization now preserves intentional blank logo, crew, phone, email, and address values instead of restoring the legacy customer defaults; custom tenants with missing legacy color fields receive neutral appearance defaults. Catalog Admin also keeps edits stable during parent rerenders, shows an always-visible save control and unsaved state, and warns before discarding changes.

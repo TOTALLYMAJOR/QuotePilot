@@ -1,556 +1,379 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
+import cateringEventHero from "../assets/marketing/quotepilot/catering-event-hero.webp";
 import customerDecisionImage from "../assets/marketing/quotepilot/customer-decision.png";
 import eventProductionImage from "../assets/marketing/quotepilot/event-production.png";
 import quoteBuilderImage from "../assets/marketing/quotepilot/quote-builder.png";
-import quoteHistoryImage from "../assets/marketing/quotepilot/quote-history.png";
 import salesWorkflowImage from "../assets/marketing/quotepilot/sales-workflow.png";
 import scenarioCompareImage from "../assets/marketing/quotepilot/scenario-compare.png";
-import "../marketing.css";
+import "../landing.css";
 
-const operatingModel = [
-  { number: "01", label: "Capture", detail: "Turn an inquiry into a structured event brief." },
-  { number: "02", label: "Configure", detail: "Build packages, menus, staffing, rentals, and terms." },
-  { number: "03", label: "Compare", detail: "Shape Good, Better, and Best paths without losing the baseline." },
-  { number: "04", label: "Propose", detail: "Send a customer-ready proposal with a clear decision path." },
-  { number: "05", label: "Confirm", detail: "Track acceptance, payment, and booking as separate facts." },
-  { number: "06", label: "Produce", detail: "Carry the approved scope into the event-readiness checklist." }
-];
-
-const principles = [
+const outcomeStrip = [
   {
-    title: "Authority stays visible",
-    copy: "A customer decision, a payment confirmation, and an operations-ready event are connected, but never treated as the same thing.",
-    mark: "A"
+    title: "Guided quote building",
+    detail: "Keep event scope, menus, staffing, rentals, and terms in one flow."
   },
   {
-    title: "Every revision has context",
-    copy: "Quote versions, lifecycle changes, and staff actions stay traceable so the team can move without reconstructing what happened.",
-    mark: "V"
+    title: "Live pricing",
+    detail: "See each selection and total change while the quote is being built."
   },
   {
-    title: "Complexity becomes usable",
-    copy: "Catalog rules, labor, tax, menus, rentals, proposals, and follow-up live in one guided operating flow.",
-    mark: "C"
+    title: "Version history",
+    detail: "Compare options and revisions without losing the original record."
   }
 ];
 
-const capabilities = ["Lead follow-up", "Guided quoting", "Scenario compare", "Customer decisions", "Payment state", "Event production"];
+const workflow = [
+  {
+    title: "Capture the event",
+    copy: "Turn the inquiry into a structured event brief your team can actually use."
+  },
+  {
+    title: "Build the offer",
+    copy: "Configure packages, menus, staffing, rentals, taxes, and terms in one guided workspace."
+  },
+  {
+    title: "Review the numbers",
+    copy: "See the pricing breakdown and compare Good, Better, and Best options before anything is sent."
+  },
+  {
+    title: "Share the proposal",
+    copy: "Give the customer a focused portal to accept, decline, or request a change."
+  },
+  {
+    title: "Prepare the handoff",
+    copy: "Carry the approved scope forward while payment, booking, and readiness remain separate states."
+  }
+];
 
-const featureDrawerItems = [
+const operations = [
   {
-    id: "guided-quote",
-    title: "Guided quote builder",
-    summary: "Move from event basics to a customer-ready proposal through one structured five-part flow.",
-    value: "Sales teams can capture the event, configure selections, review pricing, and prepare the proposal without rebuilding context.",
-    boundary: "A complete draft can be ready for review without being accepted, paid, or booked.",
-    image: quoteBuilderImage,
-    imageAlt: "QuotePilot guided quote builder with event fields and a live pricing breakdown",
-    trace: ["Capture event scope", "Configure the offer", "Review and propose"]
-  },
-  {
-    id: "scenario-compare",
-    title: "Good, Better, Best",
-    summary: "Shape clear package options while keeping the original quote available as the baseline.",
-    value: "Teams can compare realistic alternatives, understand total changes, and apply the selected direction back to the active draft.",
-    boundary: "A scenario is a sales option. It does not change the customer decision until the proposal is reviewed and accepted.",
-    image: scenarioCompareImage,
-    imageAlt: "QuotePilot scenario comparison showing Good, Better, and Best pricing options",
-    trace: ["Build the baseline", "Compare options", "Apply one direction"]
-  },
-  {
-    id: "decision-center",
-    title: "Customer decision center",
-    summary: "Give customers a focused place to review scope, pricing, and the next decision.",
-    value: "Customers can accept, decline, or request changes from a time-bound portal while staff retain the operating record.",
-    boundary: "Acceptance records the customer decision. Payment and booking confirmation remain separate facts.",
-    image: customerDecisionImage,
-    imageAlt: "QuotePilot customer decision center with event details, pricing, and decision controls",
-    trace: ["Share the proposal", "Record the decision", "Return context to staff"]
-  },
-  {
-    id: "payment-state",
-    title: "Payment state",
-    summary: "Keep payment context visible beside the proposal without collapsing commercial milestones.",
-    value: "Staff can see where a proposal, deposit request, and payment confirmation sit in the broader event workflow.",
-    boundary: "A payment link is a handoff. Only confirmed provider state should be treated as payment evidence.",
-    image: quoteHistoryImage,
-    imageAlt: "QuotePilot quote history with proposal, payment, contract, and lifecycle controls",
-    trace: ["Prepare the handoff", "Track provider state", "Preserve the record"]
-  },
-  {
-    id: "sales-workflow",
     title: "Sales follow-up",
-    summary: "Keep readiness gaps, due follow-ups, lifecycle context, and approval requests in one staff workflow.",
-    value: "Sales can prepare the next customer action while admins retain control of sensitive payment, booking, and deletion operations.",
-    boundary: "An approved request records intent. The authorized admin still completes the separate operational action.",
-    image: salesWorkflowImage,
-    imageAlt: "QuotePilot sales workflow with proposal readiness, follow-up planning, and lifecycle history",
-    trace: ["Find the gap", "Plan the follow-up", "Route sensitive work"]
+    copy: "Keep readiness gaps, due actions, and customer context visible."
   },
   {
-    id: "event-production",
-    title: "Event production",
-    summary: "Carry approved quote context into a practical checklist for the team preparing the event.",
-    value: "Kitchen, logistics, staffing, service, and closeout tasks stay connected to the event record after the sales decision.",
-    boundary: "Checklist completion records work performed. It does not prove inventory availability or final event readiness.",
-    image: eventProductionImage,
-    imageAlt: "QuotePilot event schedule with an accepted event and its production checklist",
-    trace: ["Carry the scope forward", "Coordinate the team", "Close out the work"]
+    title: "Event schedule",
+    copy: "Review confirmed work, conflicts, and the dates that need attention."
+  },
+  {
+    title: "Crew coordination",
+    copy: "Keep staffing context connected to the approved event scope."
+  },
+  {
+    title: "Production checklist",
+    copy: "Track kitchen, logistics, service, and closeout work without overstating readiness."
   }
 ];
 
-function ArrowIcon() {
+function BrandLockup() {
   return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M3 8h9M8.5 3.5 13 8l-4.5 4.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function BrandMark() {
-  return (
-    <span className="marketing-brand-mark" aria-hidden="true">
-      <span />
-      <span />
-      <span />
+    <span className="qp-landing-brand-lockup">
+      <img src="/brand/quotepilot-mark.svg" alt="" width="44" height="44" />
+      <span>
+        <strong>QuotePilot</strong>
+        <small>by MBMapps</small>
+      </span>
     </span>
   );
 }
 
-function AnimatedMetric({ value, suffix = "", label }) {
-  const ref = useRef(null);
-  const [display, setDisplay] = useState(0);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return undefined;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduceMotion) {
-      setDisplay(value);
-      return undefined;
-    }
-
-    let frame = 0;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
-      const startedAt = performance.now();
-      const tick = (now) => {
-        const progress = Math.min(1, (now - startedAt) / 900);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        setDisplay(Math.round(value * eased));
-        if (progress < 1) frame = requestAnimationFrame(tick);
-      };
-      frame = requestAnimationFrame(tick);
-    }, { threshold: 0.45 });
-    observer.observe(node);
-    return () => {
-      observer.disconnect();
-      cancelAnimationFrame(frame);
-    };
-  }, [value]);
-
-  return (
-    <div className="marketing-metric" ref={ref}>
-      <strong>{display}{suffix}</strong>
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function OrbitConsole() {
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return undefined;
-    const onPointerMove = (event) => {
-      const bounds = node.getBoundingClientRect();
-      const x = (event.clientX - bounds.left) / bounds.width - 0.5;
-      const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-      node.style.setProperty("--pointer-x", `${x * 16}px`);
-      node.style.setProperty("--pointer-y", `${y * 16}px`);
-    };
-    const reset = () => {
-      node.style.setProperty("--pointer-x", "0px");
-      node.style.setProperty("--pointer-y", "0px");
-    };
-    node.addEventListener("pointermove", onPointerMove);
-    node.addEventListener("pointerleave", reset);
-    return () => {
-      node.removeEventListener("pointermove", onPointerMove);
-      node.removeEventListener("pointerleave", reset);
-    };
-  }, []);
-
-  return (
-    <div className="marketing-console" ref={ref} role="img" aria-label="Animated QuotePilot workflow map connecting inquiry, quote, customer decision, payment, and event operations">
-      <div className="marketing-console-topline">
-        <span><i /> Workflow map</span>
-        <span>6 connected stages</span>
-      </div>
-      <div className="marketing-orbit-field">
-        <div className="marketing-orbit marketing-orbit-a" />
-        <div className="marketing-orbit marketing-orbit-b" />
-        <div className="marketing-orbit marketing-orbit-c" />
-        <div className="marketing-sweep" />
-        <div className="marketing-core">
-          <BrandMark />
-          <b>QUOTE</b>
-          <span>single source</span>
-        </div>
-        <span className="marketing-node marketing-node-inquiry"><i />Inquiry<small>captured</small></span>
-        <span className="marketing-node marketing-node-proposal"><i />Proposal<small>review</small></span>
-        <span className="marketing-node marketing-node-decision"><i />Decision<small>recorded</small></span>
-        <span className="marketing-node marketing-node-payment"><i />Payment<small>separate</small></span>
-        <span className="marketing-node marketing-node-ops"><i />Event ops<small>readiness</small></span>
-      </div>
-      <div className="marketing-console-footer">
-        <span>Version history <b>on</b></span>
-        <span>Authority boundaries <b>clear</b></span>
-      </div>
-    </div>
-  );
-}
-
-function ProcessVisual({ index }) {
-  if (index === 0) {
-    return <div className="process-map"><i /><i /><i /><span /></div>;
-  }
-  if (index === 1) {
-    return <div className="process-wireframe"><span /><span /><b /><em /></div>;
-  }
-  if (index === 2) {
-    return <div className="process-scenarios"><span>GOOD</span><span>BETTER</span><span>BEST</span></div>;
-  }
-  if (index === 3) {
-    return <div className="process-proposal"><span>PROPOSAL</span><b /><b /><em>READY FOR REVIEW</em></div>;
-  }
-  if (index === 4) {
-    return <div className="process-authority"><span>ACCEPTED</span><span>PAYMENT</span><span>BOOKING</span></div>;
-  }
-  return <div className="process-checklist"><span>scope</span><span>kitchen</span><span>logistics</span><i /></div>;
-}
-
-function FeatureDrawer({ open, selectedId, onSelect, onClose, returnFocusRef }) {
-  const drawerRef = useRef(null);
-  const closeRef = useRef(null);
-  const activeFeature = featureDrawerItems.find((item) => item.id === selectedId) || featureDrawerItems[0];
-
-  useEffect(() => {
-    if (!open) return undefined;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const focusFrame = requestAnimationFrame(() => closeRef.current?.focus());
-
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (event.key !== "Tab" || !drawerRef.current) return;
-      const focusable = [...drawerRef.current.querySelectorAll(
-        'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
-      )];
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      cancelAnimationFrame(focusFrame);
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      returnFocusRef.current?.focus();
-    };
-  }, [open, onClose, returnFocusRef]);
-
-  if (!open) return null;
-
-  return (
-    <div className="marketing-feature-layer">
-      <button
-        className="marketing-feature-backdrop"
-        type="button"
-        tabIndex="-1"
-        aria-label="Close feature drawer"
-        onClick={onClose}
-      />
-      <aside
-        className="marketing-feature-drawer"
-        ref={drawerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="marketing-feature-title"
-      >
-        <div className="marketing-feature-drawer-head">
-          <div>
-            <span>Inside QuotePilot</span>
-            <p>Follow the work from quote to event.</p>
-          </div>
-          <button ref={closeRef} type="button" onClick={onClose}>Close</button>
-        </div>
-
-        <div className="marketing-feature-drawer-body">
-          <div className="marketing-feature-index" aria-label="QuotePilot features">
-            {featureDrawerItems.map((feature) => (
-              <button
-                key={feature.id}
-                type="button"
-                className={feature.id === activeFeature.id ? "is-active" : ""}
-                aria-pressed={feature.id === activeFeature.id}
-                onClick={() => onSelect(feature.id)}
-              >
-                <span>{feature.title}</span>
-                <small>{feature.summary}</small>
-              </button>
-            ))}
-          </div>
-
-          <article className="marketing-feature-detail" key={activeFeature.id}>
-            <p className="marketing-feature-label">Feature overview</p>
-            <h2 id="marketing-feature-title">{activeFeature.title}</h2>
-            <p className="marketing-feature-summary">{activeFeature.summary}</p>
-
-            <figure className="marketing-feature-media">
-              <img
-                src={activeFeature.image}
-                alt={activeFeature.imageAlt}
-                width="1440"
-                height="960"
-                decoding="async"
-              />
-              <figcaption>Actual QuotePilot interface shown with local demo data.</figcaption>
-            </figure>
-
-            <div className="marketing-feature-copy">
-              <section>
-                <span>Operational value</span>
-                <p>{activeFeature.value}</p>
-              </section>
-              <section>
-                <span>Kept distinct</span>
-                <p>{activeFeature.boundary}</p>
-              </section>
-            </div>
-
-            <ol className="marketing-feature-trace" aria-label={`${activeFeature.title} workflow`}>
-              {activeFeature.trace.map((item) => <li key={item}>{item}</li>)}
-            </ol>
-          </article>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
 export default function MarketingPage() {
-  const [featureDrawerOpen, setFeatureDrawerOpen] = useState(false);
-  const [selectedFeatureId, setSelectedFeatureId] = useState(featureDrawerItems[0].id);
-  const featureTriggerRef = useRef(null);
-
-  const openFeatureDrawer = useCallback((trigger) => {
-    featureTriggerRef.current = trigger;
-    setFeatureDrawerOpen(true);
-  }, []);
-  const closeFeatureDrawer = useCallback(() => setFeatureDrawerOpen(false), []);
-
   useEffect(() => {
-    document.documentElement.classList.add("marketing-active");
-    const nodes = [...document.querySelectorAll("[data-reveal]")];
+    const root = document.documentElement;
+    const revealNodes = [...document.querySelectorAll("[data-landing-reveal]")];
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduceMotion) {
-      nodes.forEach((node) => node.classList.add("is-revealed"));
-      return () => document.documentElement.classList.remove("marketing-active");
+
+    root.classList.add("qp-landing-motion");
+
+    if (reduceMotion || !("IntersectionObserver" in window)) {
+      revealNodes.forEach((node) => node.classList.add("is-visible"));
+      return () => root.classList.remove("qp-landing-motion");
     }
+
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (!entry.isIntersecting) return;
-        entry.target.classList.add("is-revealed");
+        entry.target.classList.add("is-visible");
         observer.unobserve(entry.target);
       });
-    }, { rootMargin: "0px 0px -8%", threshold: 0.12 });
-    nodes.forEach((node) => observer.observe(node));
+    }, {
+      rootMargin: "0px 0px -8%",
+      threshold: 0.12
+    });
+
+    revealNodes.forEach((node) => observer.observe(node));
+
     return () => {
       observer.disconnect();
-      document.documentElement.classList.remove("marketing-active");
+      root.classList.remove("qp-landing-motion");
     };
   }, []);
 
   return (
-    <div className="marketing-page">
-      <a className="marketing-skip" href="#marketing-main">Skip to content</a>
-      <div className="marketing-noise" aria-hidden="true" />
-      <header className="marketing-header">
-        <a className="marketing-brand" href="#top" aria-label="QuotePilot home">
-          <BrandMark />
-          <span><b>QUOTEPILOT</b><small>BY MBMAPPS</small></span>
+    <div className="qp-landing" id="top">
+      <a className="qp-landing-skip" href="#landing-main">Skip to content</a>
+
+      <header className="qp-landing-header">
+        <a className="qp-landing-brand" href="#top" aria-label="QuotePilot home">
+          <BrandLockup />
         </a>
-        <nav aria-label="Marketing navigation">
-          <a href="#system">System</a>
-          <a href="#workflow">Workflow</a>
-          <a href="#principles">Principles</a>
-          <button
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={featureDrawerOpen}
-            onClick={(event) => openFeatureDrawer(event.currentTarget)}
-          >
-            Features
-          </button>
+
+        <nav className="qp-landing-nav" aria-label="Marketing navigation">
+          <a href="#features">Features</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#portal">Portal</a>
+          <a href="#operations">Operations</a>
         </nav>
-        <div className="marketing-header-actions">
-          <button
-            className="marketing-header-feature"
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={featureDrawerOpen}
-            onClick={(event) => openFeatureDrawer(event.currentTarget)}
-          >
-            Features
-          </button>
-          <a className="marketing-header-cta" href="/app">Launch app <ArrowIcon /></a>
+
+        <div className="qp-landing-header-actions">
+          <a className="qp-landing-header-login" href="/app">Staff login</a>
+          <a className="qp-landing-button qp-landing-button-dark" href="https://mbmapps.com/contact">
+            Book a demo
+          </a>
         </div>
       </header>
 
-      <main id="marketing-main">
-        <section className="marketing-hero" id="top">
-          <div className="marketing-hero-copy">
-            <p className="marketing-kicker marketing-hero-stagger">Quote-to-event operating system</p>
-            <h1>
-              <span className="marketing-hero-stagger">Move from first inquiry</span>
-              <span className="marketing-hero-stagger">to a clearer event.</span>
-              <em className="marketing-hero-stagger">Without losing the truth.</em>
+      <main id="landing-main">
+        <section className="qp-landing-hero" aria-labelledby="landing-hero-title">
+          <div className="qp-landing-hero-copy">
+            <p className="qp-landing-eyebrow">Built for catering teams</p>
+            <h1 id="landing-hero-title">
+              Build confident catering quotes
+              <span>without the spreadsheet chase.</span>
             </h1>
-            <p className="marketing-hero-description marketing-hero-stagger">
-              QuotePilot connects guided quoting, customer decisions, payment state, and event production while keeping authority explicit.
+            <p className="qp-landing-hero-description">
+              Build accurate catering quotes, share polished proposals, and carry confirmed decisions into event operations.
             </p>
-            <div className="marketing-hero-actions marketing-hero-stagger">
-              <a className="marketing-button marketing-button-primary" href="/app">Open workspace <ArrowIcon /></a>
-              <a className="marketing-button marketing-button-quiet" href="#workflow">Explore the system <span>↓</span></a>
+            <div className="qp-landing-hero-actions">
+              <a className="qp-landing-button qp-landing-button-dark" href="https://mbmapps.com/contact">
+                Book a demo
+              </a>
+              <a className="qp-landing-button qp-landing-button-light" href="/app">
+                Staff login
+              </a>
             </div>
           </div>
-          <div className="marketing-hero-visual marketing-hero-stagger">
-            <OrbitConsole />
-          </div>
+
+          <figure className="qp-landing-hero-media">
+            <img
+              src={cateringEventHero}
+              alt="A catering team serving guests at an outdoor dinner event"
+              width="1440"
+              height="960"
+              decoding="async"
+            />
+            <figcaption>A clear quote is the start of a well-run event.</figcaption>
+          </figure>
         </section>
 
-        <section className="marketing-philosophy" id="system" data-reveal>
-          <div className="marketing-philosophy-title">
-            <p className="marketing-kicker">Core operating principle</p>
-            <h2>Connected is<br />not collapsed.</h2>
+        <section className="qp-landing-outcomes" aria-label="QuotePilot outcomes">
+          <div className="qp-landing-outcome-grid">
+            {outcomeStrip.map((item) => (
+              <article key={item.title}>
+                <h2>{item.title}</h2>
+                <p>{item.detail}</p>
+              </article>
+            ))}
           </div>
-          <div className="marketing-philosophy-rule" aria-hidden="true"><i /><span /></div>
-          <div className="marketing-philosophy-copy">
-            <p>A quote can be ready for customer review without being accepted. A proposal can be accepted without being paid. A paid event can still need operational checks.</p>
-            <p>QuotePilot keeps those states connected and visible, giving sales, admins, customers, and event teams one shared record without inventing certainty.</p>
-            <p>That clarity turns a complicated catering workflow into a system people can actually operate.</p>
-          </div>
+          <a className="qp-landing-text-link" href="/system">
+            Explore the platform
+          </a>
         </section>
 
-        <section className="marketing-blueprint" data-reveal>
-          <p className="marketing-kicker">System blueprint</p>
-          <h2>One operating model.</h2>
-          <div className="marketing-capability-rail">
-            {capabilities.map((item, index) => (
-              <div key={item} className={index === 0 ? "is-active" : ""}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <b>{item}</b>
+        <section className="qp-landing-section qp-landing-features" id="features" data-landing-reveal>
+          <div className="qp-landing-section-heading">
+            <h2>The full quote-to-event toolkit</h2>
+            <p>
+              Replace the spreadsheet, scattered email threads, and disconnected status updates with one accountable workflow.
+            </p>
+          </div>
+
+          <div className="qp-landing-feature-grid">
+            <article className="qp-landing-feature qp-landing-feature-primary">
+              <div className="qp-landing-feature-copy">
+                <span>Guided quote builder</span>
+                <h3>Build the offer with the total in view</h3>
+                <p>
+                  Configure the event, menu, services, staffing, and terms while the pricing breakdown stays visible.
+                </p>
               </div>
+              <img
+                src={quoteBuilderImage}
+                alt="QuotePilot quote builder with event fields and a live pricing breakdown"
+                width="1440"
+                height="960"
+                loading="lazy"
+                decoding="async"
+              />
+            </article>
+
+            <article className="qp-landing-feature qp-landing-feature-portal">
+              <img
+                src={customerDecisionImage}
+                alt="QuotePilot customer portal showing event scope, pricing, and decision controls"
+                width="1440"
+                height="960"
+                loading="lazy"
+                decoding="async"
+              />
+              <div className="qp-landing-feature-copy">
+                <span>Customer decisions</span>
+                <h3>Make the next decision easy to understand</h3>
+                <p>Customers can accept, decline, or request changes from a focused, time-bound portal.</p>
+              </div>
+            </article>
+
+            <article className="qp-landing-feature qp-landing-feature-compare">
+              <div className="qp-landing-feature-copy">
+                <span>Scenario comparison</span>
+                <h3>Shape Good, Better, and Best paths</h3>
+                <p>Compare realistic options while keeping the original quote as the baseline.</p>
+              </div>
+              <img
+                src={scenarioCompareImage}
+                alt="QuotePilot scenario comparison with Good, Better, and Best options"
+                width="1440"
+                height="960"
+                loading="lazy"
+                decoding="async"
+              />
+            </article>
+
+            <article className="qp-landing-feature qp-landing-feature-versioned">
+              <div className="qp-landing-feature-copy">
+                <span>Versioned records</span>
+                <h3>Keep every revision in context</h3>
+                <p>
+                  Reopen, compare, and continue a quote without rebuilding the history of what changed.
+                </p>
+              </div>
+            </article>
+
+            <article className="qp-landing-feature qp-landing-feature-followup">
+              <img
+                src={salesWorkflowImage}
+                alt="QuotePilot sales workflow with readiness gaps, follow-up planning, and lifecycle history"
+                width="1440"
+                height="960"
+                loading="lazy"
+                decoding="async"
+              />
+              <div className="qp-landing-feature-copy">
+                <span>Sales follow-up</span>
+                <h3>Know what needs attention next</h3>
+                <p>Keep proposal readiness, due actions, and approval requests in one staff workflow.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section className="qp-landing-section qp-landing-workflow" id="how-it-works" data-landing-reveal>
+          <div className="qp-landing-workflow-heading">
+            <h2>From inquiry to a prepared event</h2>
+            <p>
+              Each stage leaves useful context for the next without claiming more than your team actually knows.
+            </p>
+          </div>
+
+          <ol className="qp-landing-workflow-list">
+            {workflow.map((item) => (
+              <li key={item.title}>
+                <h3>{item.title}</h3>
+                <p>{item.copy}</p>
+              </li>
             ))}
+          </ol>
+        </section>
+
+        <section className="qp-landing-section qp-landing-portal" id="portal" data-landing-reveal>
+          <div className="qp-landing-portal-media">
+            <img
+              src={customerDecisionImage}
+              alt="A customer reviewing a QuotePilot proposal and decision options"
+              width="1440"
+              height="960"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
-          <div className="marketing-marquee" aria-hidden="true">
-            <div>{[...capabilities, ...capabilities].map((item, index) => <span key={`${item}-${index}`}>{item}<i>✦</i></span>)}</div>
+
+          <div className="qp-landing-portal-copy">
+            <h2>Make every customer decision easier to review</h2>
+            <p>
+              Give customers one place to review the event, pricing, and proposal before they choose the next step.
+            </p>
+            <ul>
+              <li>Review event scope and pricing on any device</li>
+              <li>Accept, decline, or request a change</li>
+              <li>Keep the customer decision tied to the event record</li>
+            </ul>
+            <p className="qp-landing-boundary">
+              Acceptance records the customer decision. Payment and booking remain separate facts.
+            </p>
           </div>
         </section>
 
-        <section className="marketing-process" id="workflow">
-          <div className="marketing-section-heading" data-reveal>
-            <p className="marketing-kicker">Methodology</p>
-            <h2>The workflow.</h2>
-            <p>Six connected stages. Each leaves evidence for the next without claiming more than it knows.</p>
+        <section className="qp-landing-section qp-landing-operations" id="operations" data-landing-reveal>
+          <div className="qp-landing-operations-heading">
+            <h2>Keep event operations connected to the approved scope</h2>
+            <p>
+              QuotePilot carries useful context forward so sales and production teams can coordinate without flattening every milestone into one status.
+            </p>
           </div>
-          <div className="marketing-process-line" aria-hidden="true" />
-          <div className="marketing-process-list">
-            {operatingModel.map((step, index) => (
-              <article className="marketing-process-step" key={step.label} data-reveal>
-                <div className="marketing-process-copy">
-                  <span>{step.number}</span>
-                  <h3>{step.label}</h3>
-                  <p>{step.detail}</p>
-                </div>
-                <div className="marketing-process-dot" aria-hidden="true" />
-                <div className="marketing-process-visual" aria-hidden="true">
-                  <div className="marketing-visual-label">{step.label.toUpperCase()} / {step.number}</div>
-                  <ProcessVisual index={index} />
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
 
-        <section className="marketing-principles" id="principles">
-          <div className="marketing-section-heading" data-reveal>
-            <p className="marketing-kicker">Built for accountable work</p>
-            <h2>Operating principles.</h2>
-          </div>
-          <div className="marketing-principle-list">
-            {principles.map((principle, index) => (
-              <article key={principle.title} data-reveal>
-                <span className="marketing-principle-mark">{principle.mark}</span>
-                <div><small>0{index + 1}</small><h3>{principle.title}</h3><p>{principle.copy}</p></div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="marketing-metrics" data-reveal aria-label="Product model at a glance">
-          <AnimatedMetric value={5} label="guided quote steps" />
-          <AnimatedMetric value={3} label="separate authority domains" />
-          <AnimatedMetric value={6} label="connected workflow stages" />
-          <AnimatedMetric value={1} label="shared source of context" />
-        </section>
-
-        <section className="marketing-final-cta" data-reveal>
-          <div className="marketing-cta-orbits" aria-hidden="true"><i /><i /><i /><span /></div>
-          <div className="marketing-cta-content">
-            <BrandMark />
-            <p className="marketing-kicker">The next quote starts here</p>
-            <h2>Ready to run a clearer event?</h2>
-            <p>Open the staff workspace to build a quote, manage customer decisions, or continue event production.</p>
-            <div>
-              <a className="marketing-button marketing-button-primary" href="/app">Launch QuotePilot <ArrowIcon /></a>
-              <a className="marketing-button marketing-button-quiet" href="#top">Back to top <span>↑</span></a>
+          <div className="qp-landing-operations-layout">
+            <img
+              src={eventProductionImage}
+              alt="QuotePilot event production view with schedule and preparation checklist"
+              width="1440"
+              height="960"
+              loading="lazy"
+              decoding="async"
+            />
+            <div className="qp-landing-operations-list">
+              {operations.map((item) => (
+                <article key={item.title}>
+                  <h3>{item.title}</h3>
+                  <p>{item.copy}</p>
+                </article>
+              ))}
             </div>
+          </div>
+        </section>
+
+        <section className="qp-landing-final" data-landing-reveal>
+          <div>
+            <h2>Ready to quote with less back-and-forth?</h2>
+            <p>See how QuotePilot fits your catering workflow.</p>
+          </div>
+          <div className="qp-landing-final-actions">
+            <a className="qp-landing-button qp-landing-button-accent" href="https://mbmapps.com/contact">
+              Book a demo
+            </a>
+            <a className="qp-landing-button qp-landing-button-inverse" href="/app">
+              Staff login
+            </a>
           </div>
         </section>
       </main>
 
-      <footer className="marketing-footer">
-        <div className="marketing-brand"><BrandMark /><span><b>QUOTEPILOT</b><small>BY MBMAPPS</small></span></div>
-        <p>Quote, proposal, payment state, and event readiness, connected with their boundaries intact.</p>
-        <div><a href="#system">System</a><a href="#workflow">Workflow</a><a href="/app">Staff app</a></div>
-        <small>© {new Date().getFullYear()} MBMapps. QuotePilot.</small>
+      <footer className="qp-landing-footer">
+        <div>
+          <a className="qp-landing-brand" href="#top" aria-label="QuotePilot home">
+            <BrandLockup />
+          </a>
+          <p>
+            Guided catering quotes, clear customer decisions, and accountable event handoff in one workspace.
+          </p>
+        </div>
+        <nav aria-label="Footer navigation">
+          <a href="#features">Features</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="/system">Platform</a>
+          <a href="/app">Staff login</a>
+          <a href="https://mbmapps.com/contact">Contact</a>
+        </nav>
+        <small>© 2026 MBMapps. QuotePilot.</small>
       </footer>
-
-      <FeatureDrawer
-        open={featureDrawerOpen}
-        selectedId={selectedFeatureId}
-        onSelect={setSelectedFeatureId}
-        onClose={closeFeatureDrawer}
-        returnFocusRef={featureTriggerRef}
-      />
     </div>
   );
 }
