@@ -8,7 +8,17 @@ import path from "node:path";
 import process from "node:process";
 
 const require = createRequire(import.meta.url);
-const admin = require("../functions/node_modules/firebase-admin");
+
+function loadFirebaseAdmin() {
+  try {
+    return require("../functions/node_modules/firebase-admin");
+  } catch (cause) {
+    throw new Error(
+      "Firebase Admin dependency is unavailable. Run `npm ci --prefix functions` before migration.",
+      { cause }
+    );
+  }
+}
 
 const MAX_BATCH_WRITES = 450;
 
@@ -1206,6 +1216,7 @@ async function main() {
     }
   }
 
+  const admin = loadFirebaseAdmin();
   let summary;
   let mode = "firebase-admin";
   try {

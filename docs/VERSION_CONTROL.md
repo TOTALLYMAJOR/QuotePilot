@@ -55,6 +55,9 @@ git checkout -b feature/<scope>-<topic>
        production project ID, while host/provider secrets remain absent.
    - `lane:core (Unit + Build + Governance + Bundle)`
    - heavy lanes (`lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`) when required by risk classifier or `main` push policy
+     - Firebase heavy lanes install the independently locked `functions/`
+       dependencies before starting emulators; root installation alone is not
+       a Functions runtime proof.
    - `Docker Build Smoke`
    - `lane:playwright-smoke`
 4. Complete pre-merge 10-minute UAT checklist from `docs/LAUNCH_RUNBOOK.md`.

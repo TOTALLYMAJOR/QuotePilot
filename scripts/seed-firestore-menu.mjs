@@ -14,7 +14,17 @@ import {
 } from "../src/data/mockCatalog.js";
 
 const require = createRequire(import.meta.url);
-const admin = require("../functions/node_modules/firebase-admin");
+
+function loadFirebaseAdmin() {
+  try {
+    return require("../functions/node_modules/firebase-admin");
+  } catch (cause) {
+    throw new Error(
+      "Firebase Admin dependency is unavailable. Run `npm ci --prefix functions` before seeding.",
+      { cause }
+    );
+  }
+}
 
 const MAX_BATCH_WRITES = 450;
 const VALUE_FLAGS = new Set([
@@ -432,6 +442,7 @@ async function seedSettingsDoc({ db, docPath, data, dryRun }) {
 
 async function main() {
   const { projectId, organizationId, dryRun } = parseSeedArgs(process.argv.slice(2));
+  const admin = loadFirebaseAdmin();
 
   if (!admin.apps.length) {
     admin.initializeApp({ projectId });

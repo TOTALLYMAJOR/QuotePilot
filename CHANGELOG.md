@@ -82,6 +82,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - The production environment check now uses only Node built-ins so the
   dependency-free CI preflight can validate canonical Firebase settings and
   unsafe flag overrides before package installation.
+- Migration and seed CLIs now validate arguments and overwrite guards before
+  loading Firebase Admin, while Firebase emulator lanes install the separately
+  locked Functions dependencies explicitly.
 - Local Firebase environment generation now writes only `.env.local`, refuses
   to overwrite an existing file by default, and requires an explicit
   project-scoped confirmation for replacement. Development catalog fallback is
