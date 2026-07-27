@@ -118,7 +118,7 @@ describe("proposal payload snapshots", () => {
       Thank you for considering Acme Events Catering for Spring Gala on 2026-04-20 at Pine Hall.
       Your quote (Q-2026-0042) total is $8379.21.
       To reserve your date, the deposit due is $2513.76.
-      Deposit payment link: https://pay.example.com/deposits/q-2026-0042
+      Deposit payment link: https://checkout.stripe.com/c/pay/cs_test_q_2026_0042
       Deposit status: sent.
       This quote is valid through 2026-04-09.
       Please reply with any questions or requested adjustments.
@@ -140,5 +140,22 @@ describe("proposal payload snapshots", () => {
 
     expect(email.subject).toBe("QuotePilot Quote Q-1 - 2026-05-01");
     expect(email.body).toContain("QuotePilot");
+  });
+
+  test("removes unapproved stored payment links from customer-facing artifacts", () => {
+    const unsafeQuote = {
+      ...proposalPayloadFixtureQuote,
+      payment: {
+        ...proposalPayloadFixtureQuote.payment,
+        depositLink: "https://checkout.stripe.com.evil.test/phishing"
+      }
+    };
+
+    const proposal = buildProposalPayload(unsafeQuote);
+    const email = buildQuoteEmailPayload(unsafeQuote);
+
+    expect(proposal.payment.depositLink).toBe("");
+    expect(email.body).not.toContain("evil.test");
+    expect(email.body).toContain("Reply to this email if you need a payment link.");
   });
 });

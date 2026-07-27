@@ -6,13 +6,15 @@ const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  if (await signInHeading.count()) {
+  const quoteButton = page.getByRole("button", { name: "Get Instant Quote" });
+  await expect(signInHeading.or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();
     await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
     await page.getByLabel(/^Password$/i).fill(STAFF_PASSWORD);
     await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
   }
-  await expect(page.getByRole("button", { name: "Get Instant Quote" })).toBeVisible({ timeout: 45_000 });
+  await expect(quoteButton).toBeVisible({ timeout: 45_000 });
 }
 
 async function fillRequiredQuoteFields(page) {
@@ -51,8 +53,8 @@ async function advanceToSave(page, saveLabel = "Save & Submit") {
   throw new Error(`Unable to reach ${saveLabel}`);
 }
 
-test("firebase authoritative pricing callable is required for save flow", async ({ page }) => {
-  test.setTimeout(120_000);
+test("owner saves an authoritative quote and the customer accepts it", async ({ page, browser }) => {
+  test.setTimeout(180_000);
   await signInAsStaff(page);
   await fillRequiredQuoteFields(page);
   await advanceToSave(page, "Save & Submit");
@@ -74,5 +76,33 @@ test("firebase authoritative pricing callable is required for save flow", async 
     return await rows.filter({ hasText: "96" }).count();
   }, { timeout: 90_000 }).toBeGreaterThan(0);
 
+  const quoteRow = rows.filter({ hasText: "96" }).first();
+  const statusSelect = quoteRow.locator("td").nth(7).locator("select");
+  await expect(statusSelect).toHaveValue("draft");
+  await statusSelect.selectOption("sent");
+  await expect(statusSelect).toHaveValue("sent");
+
+  await quoteRow.getByRole("button", { name: "Copy Portal" }).click();
+  const portalLink = await page.evaluate(() => navigator.clipboard.readText());
+  expect(portalLink).toMatch(/\/app\?portal=[A-Za-z0-9_-]{20,}/);
+
+  const customerContext = await browser.newContext();
+  try {
+    const customerPage = await customerContext.newPage();
+    await customerPage.goto(portalLink);
+    await expect(customerPage.getByRole("heading", { name: "Proposal Decision Center" })).toBeVisible({
+      timeout: 45_000
+    });
+    await expect(customerPage.getByText("Authoritative Pricing E2E")).toBeVisible();
+    await customerPage.getByLabel(/I reviewed the event details and proposal total/i).check();
+    await customerPage.getByRole("button", { name: "Submit Decision" }).click();
+    await expect(customerPage.getByText("Proposal accepted")).toBeVisible({ timeout: 45_000 });
+    await expect(customerPage.getByText("Acceptance is recorded")).toBeVisible();
+  } finally {
+    await customerContext.close();
+  }
+
+  await refreshButton.click();
+  await expect(statusSelect).toHaveValue("accepted", { timeout: 45_000 });
   await expect(page.getByText(/Failed to calculate authoritative quote pricing/i)).toHaveCount(0);
 });

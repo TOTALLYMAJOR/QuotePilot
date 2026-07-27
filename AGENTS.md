@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: March 16, 2026
+Last updated: July 27, 2026
 
 ## Mission
 Maintain QuotePilot as a reliable production system.
@@ -9,8 +9,10 @@ Ship safe changes with validation evidence and canonical documentation sync.
 ## Core Facts
 - Frontend: React 18 + Vite 7
 - Services: Firebase Auth, Firestore, Firebase Hosting
-- Main deploy target: Firebase Hosting (`https://tonicatering.web.app`)
-- Secondary deploy target: Vercel (optional)
+- Public production edge: Vercel (`https://quotepilot.mbmapps.com`)
+- Firebase origin/fallback: Firebase Hosting (`https://tonicatering.web.app`)
+- Legacy Firebase project/site ID `tonicatering` is an infrastructure identifier,
+  not the customer-facing product name.
 
 ## Required Workflow
 1. Read canonical ownership policy in `docs/DOC_SYSTEM.md`.

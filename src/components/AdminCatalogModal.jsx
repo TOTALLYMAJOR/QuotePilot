@@ -346,7 +346,7 @@ export default function AdminCatalogModal({
     const id = `${key}-${Date.now()}`;
     const template =
       key === "packages"
-        ? { id, name: "New Package", ppp: 0 }
+        ? { id, name: "", ppp: 0 }
       : key === "addons"
           ? {
               id,
@@ -821,22 +821,11 @@ export default function AdminCatalogModal({
       const eventTemplates = parseJsonArray("eventTemplates", "Event Templates JSON");
       const seasonalProfiles = parseJsonArray("seasonalProfiles", "Seasonal Profiles JSON");
       const brandCrew = parseJsonArray("brandCrew", "Brand Crew JSON");
-      const paidFeatureIds = Array.isArray(draft.settings?.featureFlagsPaid)
-        ? draft.settings.featureFlagsPaid.map((value) => String(value || "").trim()).filter(Boolean)
-        : [];
-      const paidFeatureIdSet = new Set(paidFeatureIds);
-      const enforceOrderFeatureAccess = draft.settings?.featureFlagsLocked === true && paidFeatureIdSet.size > 0;
+      const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
       const normalizedFeatureFlags = {
         ...(draft.settings?.featureFlags || {})
       };
-      if (enforceOrderFeatureAccess) {
-        FEATURE_FLAG_META.forEach((flag) => {
-          if (!paidFeatureIdSet.has(flag.id)) {
-            normalizedFeatureFlags[flag.id] = false;
-          }
-        });
-      }
-      if (normalizedFeatureFlags.aiAssist === false) {
+      if (!featureFlagsLocked && normalizedFeatureFlags.aiAssist === false) {
         normalizedFeatureFlags.aiAutopilot = false;
       }
 
@@ -875,18 +864,16 @@ export default function AdminCatalogModal({
     ? draft.settings.featureFlagsPaid.map((value) => String(value || "").trim()).filter(Boolean)
     : [];
   const paidFeatureIdSet = new Set(featureFlagsPaid);
-  const enforceOrderFeatureAccess = featureFlagsLocked && paidFeatureIdSet.size > 0;
-  const isFeatureEditable = (featureId) => {
-    if (!enforceOrderFeatureAccess) return true;
-    return paidFeatureIdSet.has(featureId);
-  };
+  const enforceOrderFeatureAccess = featureFlagsLocked;
   const isFeatureEnabled = (featureId) => {
     if (enforceOrderFeatureAccess && !paidFeatureIdSet.has(featureId)) return false;
     return draft.settings?.featureFlags?.[featureId] !== false;
   };
   const getFeatureAccessLabel = (featureId) => {
     if (!enforceOrderFeatureAccess) return "Editable in this catalog.";
-    return paidFeatureIdSet.has(featureId) ? "Included in order." : "Locked (not in order).";
+    return paidFeatureIdSet.has(featureId)
+      ? "Included in order (read only)."
+      : "Not included in order (read only).";
   };
   const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
   const handleClose = () => {
@@ -927,11 +914,32 @@ export default function AdminCatalogModal({
 
         {activeTab === "packages" && (
           <Section title="Packages" onAdd={() => addRow("packages")}>
+          <p className="source-note">
+            Add a customer-specific package name and its per-person price. Generic placeholder names and $0 packages cannot complete setup.
+          </p>
+          <div className="admin-row admin-row-headings" aria-hidden="true">
+            <span>Package ID</span>
+            <span>Display Name</span>
+            <span>Price Per Person</span>
+            <span>Actions</span>
+          </div>
           {draft.packages.map((item, i) => (
             <div className="admin-row" key={item.id}>
-              <input value={item.id} disabled />
-              <input value={item.name} onChange={(e) => patchArrayItem("packages", i, "name", e.target.value)} />
-              <input type="number" value={item.ppp} onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))} />
+              <input aria-label={`Package ${i + 1} ID`} value={item.id} disabled />
+              <input
+                aria-label={`Package ${i + 1} name`}
+                placeholder="Customer package name"
+                value={item.name}
+                onChange={(e) => patchArrayItem("packages", i, "name", e.target.value)}
+              />
+              <input
+                aria-label={`Package ${i + 1} price per person`}
+                type="number"
+                min="0"
+                step="0.01"
+                value={item.ppp}
+                onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))}
+              />
               <button type="button" className="ghost" onClick={() => removeRow("packages", i)}>Delete</button>
             </div>
           ))}
@@ -1215,6 +1223,33 @@ export default function AdminCatalogModal({
         {activeTab === "pricing" && (
           <>
             <section className="admin-section">
+              <div className="admin-section-head"><h3>Pricing Review Required</h3></div>
+              <div className="admin-section-body">
+                <p className="source-note">
+                  Review every fee, tax, deposit, travel, staffing, tier, and seasonal value below for this organization. These values affect customer totals.
+                </p>
+                <label className="admin-inline-toggle">
+                  <span>I reviewed and approve this organization&apos;s pricing settings.</span>
+                  <input
+                    type="checkbox"
+                    aria-label="Pricing setup reviewed and approved"
+                    checked={draft.settings?.pricingSetupConfirmed === true}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setDraft((prev) => ({
+                        ...prev,
+                        settings: {
+                          ...prev.settings,
+                          pricingSetupConfirmed: checked
+                        }
+                      }));
+                    }}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="admin-section">
           <div className="admin-section-head"><h3>Numeric Settings</h3></div>
           <div className="admin-grid-settings">
             <label>
@@ -1408,7 +1443,7 @@ export default function AdminCatalogModal({
           <div className="admin-section-head"><h3>Optional Modules</h3></div>
           {enforceOrderFeatureAccess && (
             <p className="source-note">
-              Modules not included in this order are locked. To change access, update provisioning entitlements for this org and reopen this modal.
+              Module access is read only because this organization&apos;s order controls entitlements. To change access, update provisioning entitlements for this org and reopen this modal.
             </p>
           )}
           <div className="admin-grid-settings">
@@ -1420,7 +1455,8 @@ export default function AdminCatalogModal({
                   type="checkbox"
                   checked={isFeatureEnabled(flag.id)}
                   onChange={(e) => patchFeatureFlag(flag.id, e.target.checked)}
-                  disabled={!isFeatureEditable(flag.id)}
+                  disabled={featureFlagsLocked}
+                  aria-readonly={featureFlagsLocked}
                   title={getFeatureAccessLabel(flag.id)}
                 />
               </label>

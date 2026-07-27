@@ -162,6 +162,32 @@ describe("quoteStore portal token policy", () => {
     expect(refreshed.portalDecision.decision).toBe("changes_requested");
   });
 
+  test("rejects decisions for drafts and prevents terminal decision rewrites", async () => {
+    seedQuotes([makeQuote({ status: "draft" })]);
+    await expect(updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "accepted"
+    })).rejects.toThrow(/has not been sent/i);
+
+    seedQuotes([
+      makeQuote({
+        status: "accepted",
+        portalDecision: {
+          decision: "accepted",
+          message: "",
+          submittedAtISO: "2026-03-20T10:00:00.000Z"
+        },
+        lifecycle: {
+          acceptedAtISO: "2026-03-20T10:00:00.000Z"
+        }
+      })
+    ]);
+    await expect(updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "declined"
+    })).rejects.toThrow(/decision is final/i);
+  });
+
   test("blocks expired portal tokens", async () => {
     seedQuotes([
       makeQuote({

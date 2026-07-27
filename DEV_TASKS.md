@@ -1,6 +1,19 @@
 # Dev Tasks
 
-Last updated: July 21, 2026
+Last updated: July 27, 2026
+
+## P0 - Tenant Provisioning Release
+- Commit and review the current provisioning slice, then deploy the
+  role-authoritative Firestore rules, provisioning/repair/cleanup Functions,
+  and `/app` frontend from that one revision.
+- Run a disposable second-tenant acceptance: platform-admin create, exact owner
+  email verification/invite activation, cross-tenant denial, neutral default
+  inspection, reviewed package/event/pricing setup, conflict-safe catalog save,
+  trusted quote create/readback/version proof, signed-out portal acceptance,
+  staff decision verification, and exact cleanup/tombstone proof.
+- Verify `quotepilot.mbmapps.com` in Resend and authoritative DNS before
+  activating `QuotePilot by MBMapps <onboarding@quotepilot.mbmapps.com>`;
+  capture provider accepted, delivered-event, and recipient-inbox proof.
 
 ## P0 - Multi-Tenant Hardening (Post Rollout)
 - Completed execution track: org-scoped quote/catalog write paths now enforce cross-org denial with migration evidence attached.

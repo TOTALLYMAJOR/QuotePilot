@@ -55,28 +55,21 @@ function assertAttachmentWithinEmailLimit(attachment) {
   throw new Error("Attachment is too large (max 7 MB). Reduce PDF size before sending.");
 }
 
-export async function notifyOwnerNewQuote({ quoteId, portalLink = "" }) {
+export async function notifyOwnerNewQuote({ quoteId }) {
   ensureFunctionsReady();
   const call = httpsCallable(cloudFunctions, "notifyOwnerNewQuote");
   const result = await withTimeout(
-    call({
-      quoteId,
-      portalLink
-    }),
+    call({ quoteId }),
     SAVE_CALLABLE_TIMEOUT_MS,
     "notifyOwnerNewQuote"
   );
   return result.data || {};
 }
 
-export async function createDepositCheckout({ quoteId, successUrl = "", cancelUrl = "" }) {
+export async function createDepositCheckout({ quoteId }) {
   ensureFunctionsReady();
   const call = httpsCallable(cloudFunctions, "createDepositCheckout");
-  const result = await call({
-    quoteId,
-    successUrl,
-    cancelUrl
-  });
+  const result = await call({ quoteId });
   return result.data || {};
 }
 
@@ -114,13 +107,12 @@ export async function calculateQuotePricing({ organizationId = "", pricingInput 
   return result.data || {};
 }
 
-export async function sendQuoteToCustomerEmail({ quoteId, portalLink = "", attachment = null } = {}) {
+export async function sendQuoteToCustomerEmail({ quoteId, attachment = null } = {}) {
   ensureFunctionsReady();
   assertAttachmentWithinEmailLimit(attachment);
   const call = httpsCallable(cloudFunctions, "sendQuoteToCustomer");
   const result = await call({
     quoteId,
-    portalLink,
     attachment
   });
   return result.data || {};
@@ -128,8 +120,6 @@ export async function sendQuoteToCustomerEmail({ quoteId, portalLink = "", attac
 
 export async function sendPaymentRequestToCustomerEmail({
   quoteId,
-  paymentLink = "",
-  portalLink = "",
   attachment = null
 } = {}) {
   ensureFunctionsReady();
@@ -137,8 +127,6 @@ export async function sendPaymentRequestToCustomerEmail({
   const call = httpsCallable(cloudFunctions, "sendPaymentRequestEmail");
   const result = await call({
     quoteId,
-    paymentLink,
-    portalLink,
     attachment
   });
   return result.data || {};

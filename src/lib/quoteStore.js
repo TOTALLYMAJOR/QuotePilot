@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -8,13 +7,13 @@ import {
   orderBy,
   query,
   runTransaction,
-  serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
   where
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { cloudFunctions, db, firebaseReady } from "./firebase";
+import { auth, cloudFunctions, db, firebaseReady } from "./firebase";
 import {
   getActiveOrganizationId,
   getOrganizationCollectionRef,
@@ -27,7 +26,7 @@ import {
   normalizePricingOutput,
   normalizeVersionMetadata
 } from "./pricingContracts";
-import { buildCrmAdapterRequest, resolveCrmProvider } from "./crmAdapters";
+import { resolveCrmProvider } from "./crmAdapters";
 import { buildQuoteEmailPayload } from "./proposalPayload";
 import {
   APPROVAL_ACTION_IDS,
@@ -45,15 +44,16 @@ const QUOTE_VERSIONS_COLLECTION = "versions";
 const DEFAULT_VALIDITY_DAYS = 30;
 const PORTAL_TOKEN_VALIDITY_DAYS = 30;
 const PORTAL_TOKEN_EXPIRED_ERROR = "Quote link is invalid or expired.";
+const PORTAL_VISIBLE_STATUSES = new Set(["sent", "viewed", "accepted", "declined", "booked"]);
 const HARD_DELETE_QUOTE_CALLABLE = "hardDeleteQuote";
 const PURGE_DELETED_QUOTES_CALLABLE = "purgeDeletedQuotesForOrganization";
+const UPDATE_QUOTE_DRAFT_CALLABLE = "updateQuoteDraft";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
 const BOOKING_CONFIRMATION_STATUSES = ["pending", "sent", "confirmed", "cancelled"];
 const INTEGRATION_PROVIDER_SET = new Set(["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"]);
 const INTEGRATION_STATE_SET = new Set(["queued", "success", "error", "retrying", "skipped"]);
-const DEFAULT_CRM_SYNC_TIMEOUT_MS = 12000;
 const MAX_DIETARY_RESTRICTIONS_LENGTH = 1200;
 const MAX_RATE_MIX_CSV_LENGTH = 300;
 const MAX_FOLLOW_UP_NOTE_LENGTH = 1200;
@@ -84,7 +84,7 @@ const STATUS_FLOW = {
   draft: ["draft", "sent", "declined", "expired", "deleted"],
   sent: ["sent", "viewed", "accepted", "declined", "expired", "deleted"],
   viewed: ["viewed", "accepted", "declined", "expired", "deleted"],
-  accepted: ["accepted", "booked", "declined", "deleted"],
+  accepted: ["accepted", "booked", "deleted"],
   booked: ["booked", "deleted"],
   declined: ["declined", "deleted"],
   expired: ["expired", "draft", "sent", "deleted"],
@@ -411,39 +411,25 @@ function normalizePortalDecision(input) {
   };
 }
 
-function normalizeFeatureFlags(input) {
-  const source = input && typeof input === "object" ? input : {};
-  return {
-    crmSync: source.crmSync !== false
-  };
-}
-
-function resolveQuoteCrmSettings(quote = {}) {
-  const quoteMeta = quote?.quoteMeta || {};
-  const integrationsProvider = quote?.integrations?.providers?.crm?.provider;
-  return {
-    crmEnabled: Boolean(quoteMeta.crmEnabled),
-    crmProvider: resolveCrmProvider(quoteMeta.crmProvider || integrationsProvider || "webhook", "webhook"),
-    crmWebhookUrl: toText(quoteMeta.crmWebhookUrl),
-    crmWebhookBridgeUrl: toText(quoteMeta.crmWebhookBridgeUrl),
-    crmHubspotBridgeUrl: toText(quoteMeta.crmHubspotBridgeUrl),
-    crmSalesforceBridgeUrl: toText(quoteMeta.crmSalesforceBridgeUrl),
-    crmBridgeAuthToken: toText(quoteMeta.crmBridgeAuthToken),
-    crmAutoSyncOnSent: Boolean(quoteMeta.crmAutoSyncOnSent),
-    crmAutoSyncOnBooked: Boolean(quoteMeta.crmAutoSyncOnBooked),
-    featureFlags: normalizeFeatureFlags(quoteMeta.featureFlags)
-  };
-}
-
-function isCrmSyncEnabled(settings = {}) {
-  return Boolean(settings.crmEnabled) && settings.featureFlags?.crmSync !== false;
-}
-
-function shouldAutoSyncCrmForStatus(settings, status) {
-  if (!isCrmSyncEnabled(settings)) return false;
-  if (status === "sent") return Boolean(settings.crmAutoSyncOnSent);
-  if (status === "booked") return Boolean(settings.crmAutoSyncOnBooked);
-  return false;
+function hasTerminalDecisionEvidence(quote = {}) {
+  const source = quote && typeof quote === "object" ? quote : {};
+  const status = String(source.status || "").trim().toLowerCase();
+  const decision = String(source.portalDecision?.decision || "").trim().toLowerCase();
+  const lifecycle = source.lifecycle && typeof source.lifecycle === "object" ? source.lifecycle : {};
+  const booking = source.booking && typeof source.booking === "object" ? source.booking : {};
+  const payment = source.payment && typeof source.payment === "object" ? source.payment : {};
+  return (
+    ["accepted", "declined", "booked"].includes(status)
+    || ["accepted", "declined"].includes(decision)
+    || Boolean(String(lifecycle.acceptedAtISO || "").trim())
+    || Boolean(String(lifecycle.declinedAtISO || "").trim())
+    || Boolean(String(lifecycle.bookedAtISO || "").trim())
+    || Boolean(String(booking.bookedAtISO || "").trim())
+    || Boolean(String(booking.contractNumber || "").trim())
+    || Boolean(String(booking.contractConvertedAtISO || "").trim())
+    || ["paid", "refunded"].includes(String(payment.depositStatus || "").trim().toLowerCase())
+    || Boolean(String(payment.depositConfirmedAtISO || "").trim())
+  );
 }
 
 function normalizeIntegrationState(value) {
@@ -636,6 +622,24 @@ function buildPortalSnapshot(quoteId, quote) {
   };
 }
 
+export function buildClientWritablePortalPayment(payment) {
+  const clientWritablePayment = {
+    ...hydratePayment(payment)
+  };
+  for (const field of [
+    "depositLink",
+    "stripeSessionId",
+    "lastCheckoutCreatedAtISO",
+    "lastHost",
+    "lastEventType",
+    "lastOrganizationId",
+    "checkoutGeneration"
+  ]) {
+    delete clientWritablePayment[field];
+  }
+  return clientWritablePayment;
+}
+
 async function ensureQuoteWriteTarget(
   quoteId,
   { organizationId = undefined, action = "quote write" } = {}
@@ -706,13 +710,15 @@ async function syncPortalSnapshotFromQuoteDoc(quoteId, organizationId = "") {
   const data = quoteSnap.data();
   const portalKey = data.portalKey;
   if (!portalKey) return;
+  const portalSnapshot = buildPortalSnapshot(quoteId, {
+    ...data,
+    organizationId: writeOrganizationId,
+    createdAtISO: timestampToISO(data.createdAtISO || data.createdAt)
+  });
+  portalSnapshot.payment = buildClientWritablePortalPayment(data.payment);
   await setDoc(
     portalDocRef(portalKey),
-    buildPortalSnapshot(quoteId, {
-      ...data,
-      organizationId: writeOrganizationId,
-      createdAtISO: timestampToISO(data.createdAtISO || data.createdAt)
-    }),
+    portalSnapshot,
     { merge: true }
   );
 }
@@ -1193,6 +1199,7 @@ export async function ensureLegacyQuoteCompatibility(
       ownerEmail: quote.ownerEmail,
       reason: latest.reason || "legacy_existing_history"
     });
+    latestVersionMeta.versionId = latestVersionId;
 
     if (firebaseReady) {
       await ensureQuoteWriteTarget(quote.id, {
@@ -1256,6 +1263,11 @@ export async function saveQuoteVersion(
   const normalizedReason = normalizeVersionMetadata({ reason }).reason;
 
   if (firebaseReady) {
+    const actorUid = String(auth?.currentUser?.uid || "").trim();
+    const actorEmail = normalizeEmail(auth?.currentUser?.email);
+    if (!actorUid || !actorEmail) {
+      throw new Error("Authenticated user identity is required to create a quote version.");
+    }
     const writeTarget = await ensureQuoteWriteTarget(quote.id, {
       organizationId: resolvedOrganizationId,
       action: "saveQuoteVersion"
@@ -1273,10 +1285,13 @@ export async function saveQuoteVersion(
       const versionMeta = normalizeVersionMetadata({
         versionNumber: nextVersionNumber,
         createdAt: timestamp,
-        ownerUid: quote.ownerUid,
-        ownerEmail: quote.ownerEmail,
+        createdBy: {
+          uid: actorUid,
+          email: actorEmail
+        },
         reason: normalizedReason
       });
+      versionMeta.versionId = versionId;
       const versionRef = doc(
         quoteVersionsWriteCollectionRef(quote.id, writeOrganizationId, "saveQuoteVersion"),
         versionId
@@ -1325,6 +1340,7 @@ export async function saveQuoteVersion(
     ownerEmail: quote.ownerEmail,
     reason: normalizedReason
   });
+  versionMeta.versionId = versionId;
 
   const existingQuotes = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const nextQuotes = existingQuotes.map((item) => {
@@ -1717,148 +1733,15 @@ export async function recordQuoteIntegrationSync({
 }
 
 export async function syncQuoteToCrm({
-  quoteId,
-  provider = "",
-  actorEmail = "",
-  trigger = "manual"
+  quoteId
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
     throw new Error("Quote id is required.");
   }
-
-  const quote = await readQuoteById(id);
-  const crmSettings = resolveQuoteCrmSettings(quote);
-  const requestedProvider = String(provider || "").trim().toLowerCase();
-  const resolvedProvider = resolveCrmProvider(requestedProvider || crmSettings.crmProvider || "webhook", "webhook");
-  const providerKey = normalizeIntegrationProvider(resolvedProvider);
-  const currentAttempt = toNumber(quote.integrations?.providers?.[providerKey]?.attempt, 0);
-  const attempt = Math.max(1, Math.round(currentAttempt + 1));
-
-  if (!isCrmSyncEnabled(crmSettings)) {
-    const reason = crmSettings.crmEnabled ? "CRM sync module is disabled by feature flag." : "CRM sync is disabled.";
-    const log = await recordQuoteIntegrationSync({
-      quoteId: id,
-      provider: providerKey,
-      state: "skipped",
-      message: reason,
-      actorEmail,
-      attempt,
-      payloadRef: trigger
-    });
-    return { ok: false, skipped: true, reason, entry: log.entry };
-  }
-
-  if (typeof fetch !== "function") {
-    const reason = "CRM sync unavailable: fetch API is not supported in this runtime.";
-    await recordQuoteIntegrationSync({
-      quoteId: id,
-      provider: providerKey,
-      state: "error",
-      message: reason,
-      actorEmail,
-      attempt,
-      payloadRef: trigger
-    });
-    throw new Error(reason);
-  }
-
-  let loggedError = false;
-  try {
-    const request = buildCrmAdapterRequest({
-      quote,
-      settings: crmSettings,
-      provider: resolvedProvider,
-      trigger
-    });
-    const timeoutMs = Math.max(1000, toNumber(quote.quoteMeta?.integrationTimeoutMs, DEFAULT_CRM_SYNC_TIMEOUT_MS));
-    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timeout = controller
-      ? globalThis.setTimeout(() => {
-        controller.abort();
-      }, timeoutMs)
-      : null;
-
-    let response;
-    try {
-      response = await fetch(request.endpoint, {
-        method: request.method || "POST",
-        headers: request.headers || { "Content-Type": "application/json" },
-        body: JSON.stringify(request.body || {}),
-        signal: controller?.signal
-      });
-    } finally {
-      if (timeout) {
-        globalThis.clearTimeout(timeout);
-      }
-    }
-
-    let responseText = "";
-    try {
-      responseText = String(await response.text());
-    } catch {
-      responseText = "";
-    }
-
-    const payloadRef =
-      response.headers.get("x-request-id") ||
-      response.headers.get("x-correlation-id") ||
-      response.headers.get("x-amzn-requestid") ||
-      "";
-
-    if (!response.ok) {
-      const detail = responseText.trim().slice(0, 180);
-      const message = `CRM sync failed (${response.status})${detail ? `: ${detail}` : ""}`;
-      await recordQuoteIntegrationSync({
-        quoteId: id,
-        provider: providerKey,
-        state: "error",
-        message,
-        actorEmail,
-        attempt,
-        payloadRef: payloadRef || trigger
-      });
-      loggedError = true;
-      throw new Error(message);
-    }
-
-    const successMessage = `CRM sync success (${response.status})`;
-    const log = await recordQuoteIntegrationSync({
-      quoteId: id,
-      provider: providerKey,
-      state: "success",
-      message: successMessage,
-      actorEmail,
-      attempt,
-      payloadRef: payloadRef || trigger
-    });
-
-    return {
-      ok: true,
-      quoteId: id,
-      provider: providerKey,
-      endpoint: request.endpoint,
-      status: response.status,
-      entry: log.entry
-    };
-  } catch (err) {
-    if (!loggedError) {
-      const message = err?.name === "AbortError"
-        ? `CRM sync timed out after ${DEFAULT_CRM_SYNC_TIMEOUT_MS}ms.`
-        : String(err?.message || "CRM sync failed.");
-      await recordQuoteIntegrationSync({
-        quoteId: id,
-        provider: providerKey,
-        state: "error",
-        message,
-        actorEmail,
-        attempt,
-        payloadRef: trigger
-      });
-      throw new Error(message);
-    }
-    throw err;
-  }
+  throw new Error(
+    "Direct browser CRM sends are disabled. A server-authorized admin integration is required."
+  );
 }
 
 async function persistQuotePatch({
@@ -2448,26 +2331,37 @@ export async function submitQuote({
   };
 
   if (firebaseReady) {
-    const ref = await addDoc(quoteWriteCollectionRef(resolvedOrganizationId, "submitQuote"), {
-      ...payload,
-      createdAt: serverTimestamp()
-    });
-    await setDoc(
-      portalDocRef(portalKey),
-      buildPortalSnapshot(ref.id, payload),
-      { merge: true }
+    const writeOrganizationId = requireWriteOrganizationId(
+      resolvedOrganizationId,
+      "submitQuote"
     );
-    await saveQuoteVersion(ref.id, {
-      reason: "initial_quote_create",
-      setActive: true,
-      organizationId: resolvedOrganizationId
+    ensureCallableReady("submitQuote");
+    const call = httpsCallable(cloudFunctions, "createQuoteDraft");
+    const response = await call({
+      organizationId: writeOrganizationId,
+      form
     });
+    const created = response?.data && typeof response.data === "object"
+      ? response.data
+      : {};
+    const createdOrganizationId = normalizeOrganizationId(created.organizationId);
+    if (
+      created.ok !== true
+      || createdOrganizationId !== writeOrganizationId
+      || !String(created.id || "").trim()
+      || !String(created.quoteNumber || "").trim()
+      || !String(created.portalKey || "").trim()
+    ) {
+      throw new Error("Trusted quote creation returned an invalid response.");
+    }
     return {
-      id: ref.id,
-      quoteNumber,
-      portalKey,
-      portalIssuedAtISO,
-      portalExpiresAtISO,
+      id: String(created.id).trim(),
+      quoteNumber: String(created.quoteNumber).trim(),
+      portalKey: String(created.portalKey).trim(),
+      portalIssuedAtISO: String(created.portalIssuedAtISO || "").trim(),
+      portalExpiresAtISO: String(created.portalExpiresAtISO || "").trim(),
+      activeVersionId: String(created.activeVersionId || "v0001").trim(),
+      latestVersionNumber: Math.max(1, Number(created.latestVersionNumber || 1)),
       storage: "firebase"
     };
   }
@@ -2506,6 +2400,51 @@ export async function updateQuote({
   const id = String(quoteId || "").trim();
   if (!id) {
     throw new Error("Quote id is required.");
+  }
+
+  if (firebaseReady) {
+    const writeOrganizationId = requireWriteOrganizationId(
+      organizationId,
+      "updateQuote"
+    );
+    ensureCallableReady("updateQuote");
+    const call = httpsCallable(cloudFunctions, UPDATE_QUOTE_DRAFT_CALLABLE);
+    const response = await call({
+      organizationId: writeOrganizationId,
+      quoteId: id,
+      form
+    });
+    const updated = response?.data && typeof response.data === "object"
+      ? response.data
+      : {};
+    const updatedOrganizationId = normalizeOrganizationId(updated.organizationId);
+    const updatedQuoteId = String(updated.quoteId || updated.id || "").trim();
+    if (
+      updated.ok !== true
+      || updatedOrganizationId !== writeOrganizationId
+      || updatedQuoteId !== id
+      || updated.status !== "draft"
+      || !String(updated.quoteNumber || "").trim()
+      || !String(updated.portalKey || "").trim()
+      || !String(updated.activeVersionId || updated.versionId || "").trim()
+    ) {
+      throw new Error("Trusted quote edit returned an invalid response.");
+    }
+    return {
+      id: updatedQuoteId,
+      quoteNumber: String(updated.quoteNumber).trim(),
+      portalKey: String(updated.portalKey).trim(),
+      portalIssuedAtISO: String(updated.portalIssuedAtISO || "").trim(),
+      portalExpiresAtISO: String(updated.portalExpiresAtISO || "").trim(),
+      expiresAtISO: String(updated.expiresAtISO || "").trim(),
+      status: "draft",
+      storage: "firebase",
+      activeVersionId: String(updated.activeVersionId || updated.versionId).trim(),
+      latestVersionNumber: Math.max(
+        1,
+        Number(updated.latestVersionNumber || updated.versionNumber || 1)
+      )
+    };
   }
 
   const existing = await readQuoteById(id);
@@ -2777,32 +2716,6 @@ export async function updateQuote({
     updatedAtISO: nowISO
   };
 
-  if (firebaseReady) {
-    const writeTarget = await ensureQuoteWriteTarget(id, {
-      organizationId: nextOrganizationId,
-      action: "updateQuote"
-    });
-    const writeOrganizationId = writeTarget.organizationId;
-    patch.organizationId = writeOrganizationId;
-    await updateDoc(quoteWriteDocRef(id, writeOrganizationId, "updateQuote"), patch);
-    await syncPortalSnapshotFromQuoteDoc(id, writeOrganizationId);
-    const versionResult = await saveQuoteVersion(id, {
-      reason: "quote_edit",
-      setActive: true,
-      organizationId: writeOrganizationId
-    });
-    return {
-      id,
-      quoteNumber: existing.quoteNumber || "",
-      portalKey,
-      portalIssuedAtISO,
-      portalExpiresAtISO,
-      storage: "firebase",
-      activeVersionId: versionResult.versionId,
-      latestVersionNumber: versionResult.versionNumber
-    };
-  }
-
   const existingQuotes = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   let found = false;
   const next = existingQuotes.map((item) => {
@@ -2841,8 +2754,42 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
   }
 
   const quote = await readQuoteById(id);
+  if (firebaseReady) {
+    const organizationId = requireWriteOrganizationId(
+      quote.organizationId,
+      "rotateQuotePortalKey"
+    );
+    ensureCallableReady("rotateQuotePortalKey");
+    const call = httpsCallable(cloudFunctions, "rotateQuotePortalKey");
+    const response = await call({
+      organizationId,
+      quoteId: id
+    });
+    const rotated = response?.data && typeof response.data === "object"
+      ? response.data
+      : {};
+    if (
+      rotated.ok !== true
+      || normalizeOrganizationId(rotated.organizationId) !== organizationId
+      || String(rotated.quoteId || "").trim() !== id
+      || !String(rotated.portalKey || "").trim()
+      || !String(rotated.portalIssuedAtISO || "").trim()
+      || !String(rotated.portalExpiresAtISO || "").trim()
+    ) {
+      throw new Error("Trusted portal rotation returned an invalid response.");
+    }
+    return {
+      ok: true,
+      storage: "firebase",
+      portalKey: String(rotated.portalKey).trim(),
+      portalIssuedAtISO: String(rotated.portalIssuedAtISO).trim(),
+      portalExpiresAtISO: String(rotated.portalExpiresAtISO).trim(),
+      versionId: String(rotated.versionId || "").trim(),
+      versionNumber: Math.max(1, Number(rotated.versionNumber || 1))
+    };
+  }
+
   const nowISO = isoNow();
-  const previousPortalKey = String(quote.portalKey || "").trim();
   const nextPortalKey = buildPortalKey();
   const portalIssuedAtISO = nowISO;
   const portalExpiresAtISO = resolvePortalExpiresAtISO(
@@ -2859,31 +2806,6 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
     reason: "portal_key_rotate",
     organizationId: quote.organizationId
   });
-
-  if (firebaseReady) {
-    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "rotateQuotePortalKey"), {
-      portalKey: nextPortalKey,
-      portalIssuedAtISO,
-      portalExpiresAtISO,
-      updatedAtISO: nowISO,
-      ...(normalizedActorEmail ? { "quoteMeta.portalRotatedByEmail": normalizedActorEmail } : {})
-    });
-    await syncPortalSnapshotFromQuoteDoc(id, quote.organizationId);
-    if (previousPortalKey && previousPortalKey !== nextPortalKey) {
-      try {
-        await deleteDoc(portalDocRef(previousPortalKey));
-      } catch {
-        // Ignore best-effort cleanup errors for stale portal snapshots.
-      }
-    }
-    return {
-      ok: true,
-      storage: "firebase",
-      portalKey: nextPortalKey,
-      portalIssuedAtISO,
-      portalExpiresAtISO
-    };
-  }
 
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   let found = false;
@@ -3020,26 +2942,32 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
   };
 
   if (firebaseReady) {
-    const ref = await addDoc(quoteWriteCollectionRef(organizationId, "duplicateQuote"), {
-      ...payload,
-      createdAt: serverTimestamp()
+    ensureCallableReady("duplicateQuote");
+    const call = httpsCallable(cloudFunctions, "duplicateQuoteDraft");
+    const response = await call({
+      organizationId,
+      sourceQuoteId: String(source.id || quoteId || "").trim()
     });
-    await setDoc(
-      portalDocRef(portalKey),
-      buildPortalSnapshot(ref.id, payload),
-      { merge: true }
-    );
-    await saveQuoteVersion(ref.id, {
-      reason: "duplicate_quote_create",
-      setActive: true,
-      organizationId
-    });
+    const created = response?.data && typeof response.data === "object"
+      ? response.data
+      : {};
+    if (
+      created.ok !== true
+      || normalizeOrganizationId(created.organizationId) !== organizationId
+      || !String(created.id || "").trim()
+      || !String(created.quoteNumber || "").trim()
+      || !String(created.portalKey || "").trim()
+    ) {
+      throw new Error("Trusted quote duplication returned an invalid response.");
+    }
     return {
-      id: ref.id,
-      quoteNumber,
-      portalKey,
-      portalIssuedAtISO,
-      portalExpiresAtISO,
+      id: String(created.id).trim(),
+      quoteNumber: String(created.quoteNumber).trim(),
+      portalKey: String(created.portalKey).trim(),
+      portalIssuedAtISO: String(created.portalIssuedAtISO || "").trim(),
+      portalExpiresAtISO: String(created.portalExpiresAtISO || "").trim(),
+      activeVersionId: String(created.activeVersionId || "v0001").trim(),
+      latestVersionNumber: Math.max(1, Number(created.latestVersionNumber || 1)),
       storage: "firebase"
     };
   }
@@ -3251,34 +3179,15 @@ export async function updateQuoteStatus(quoteId, status) {
     localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
   }
 
-  let crmSync = null;
-  if (nextStatus === "sent" || nextStatus === "booked") {
-    try {
-      const updatedQuote = await readQuoteById(id);
-      const crmSettings = resolveQuoteCrmSettings(updatedQuote);
-      if (shouldAutoSyncCrmForStatus(crmSettings, nextStatus)) {
-        try {
-          crmSync = await syncQuoteToCrm({
-            quoteId: id,
-            provider: crmSettings.crmProvider,
-            trigger: `status:${nextStatus}`
-          });
-        } catch (err) {
-          crmSync = {
-            ok: false,
-            error: err?.message || "CRM auto-sync failed."
-          };
-        }
-      }
-    } catch {
-      crmSync = {
-        ok: false,
-        error: "CRM auto-sync skipped: quote refresh failed."
-      };
+  return {
+    ok: true,
+    storage: firebaseReady ? "firebase" : "local",
+    crmSync: {
+      ok: false,
+      skipped: true,
+      reason: "Direct browser CRM sends are disabled."
     }
-  }
-
-  return { ok: true, storage: firebaseReady ? "firebase" : "local", crmSync };
+  };
 }
 
 export async function updateQuotePaymentStatus(quoteId, paymentStatus) {
@@ -3340,6 +3249,52 @@ export async function reopenQuote(id) {
   }
 
   const quote = await readQuoteById(quoteId);
+  if (firebaseReady) {
+    const organizationId = requireWriteOrganizationId(
+      quote.organizationId,
+      "reopenQuote"
+    );
+    ensureCallableReady("reopenQuote");
+    const call = httpsCallable(cloudFunctions, "reopenQuote");
+    const response = await call({
+      organizationId,
+      quoteId
+    });
+    const reopened = response?.data && typeof response.data === "object"
+      ? response.data
+      : {};
+    if (
+      reopened.ok !== true
+      || normalizeOrganizationId(reopened.organizationId) !== organizationId
+      || String(reopened.quoteId || "").trim() !== quoteId
+      || String(reopened.status || "").trim().toLowerCase() !== "draft"
+      || !String(reopened.portalKey || "").trim()
+      || !String(reopened.portalIssuedAtISO || "").trim()
+      || !String(reopened.portalExpiresAtISO || "").trim()
+      || !String(reopened.expiresAtISO || "").trim()
+    ) {
+      throw new Error("Trusted quote reopen returned an invalid response.");
+    }
+    return {
+      ok: true,
+      storage: "firebase",
+      status: "draft",
+      portalKey: String(reopened.portalKey).trim(),
+      portalIssuedAtISO: String(reopened.portalIssuedAtISO).trim(),
+      portalExpiresAtISO: String(reopened.portalExpiresAtISO).trim(),
+      expiresAtISO: String(reopened.expiresAtISO).trim(),
+      versionId: String(reopened.versionId || "").trim(),
+      versionNumber: Math.max(1, Number(reopened.versionNumber || 1))
+    };
+  }
+
+  const status = normalizeStatus(quote.status);
+  if (!["expired", "deleted"].includes(status)) {
+    throw new Error("Only expired or deleted quotes can be reopened.");
+  }
+  if (status === "deleted" && !String(quote.deletedAtISO || "").trim()) {
+    throw new Error("Deleted quotes require a valid deletion audit timestamp before reopen.");
+  }
   const activeVersionResult = await getActiveQuoteVersion(quoteId, {
     organizationId: quote.organizationId
   });
@@ -3347,10 +3302,38 @@ export async function reopenQuote(id) {
     activeVersionResult?.version?.snapshot && typeof activeVersionResult.version.snapshot === "object"
       ? activeVersionResult.version.snapshot
       : null;
+  const baseline = activeSnapshot || quote;
+  if (
+    (
+      String(baseline.organizationId || "").trim()
+      && normalizeOrganizationId(baseline.organizationId) !== normalizeOrganizationId(quote.organizationId)
+    )
+    || (
+      String(baseline.id || "").trim()
+      && String(baseline.id).trim() !== quoteId
+    )
+    || (
+      String(baseline.quoteNumber || "").trim()
+      && String(baseline.quoteNumber).trim() !== String(quote.quoteNumber || "").trim()
+    )
+    || String(baseline.ownerUid || "").trim() !== String(quote.ownerUid || "").trim()
+    || normalizeEmail(baseline.ownerEmail) !== normalizeEmail(quote.ownerEmail)
+  ) {
+    throw new Error("Quote active version identity does not match the terminal quote.");
+  }
+  if (["deleted", "expired"].includes(normalizeStatus(baseline.status))) {
+    throw new Error("Quote active version must be a nonterminal commercial snapshot.");
+  }
+  if (hasTerminalDecisionEvidence(quote) || hasTerminalDecisionEvidence(baseline)) {
+    throw new Error("Accepted, declined, booked, or paid quotes cannot be reopened. Duplicate the quote instead.");
+  }
+
   const nowISO = isoNow();
-  const lifecycle = lifecycleObject("draft", nowISO, quote.lifecycle);
+  const lifecycle = {
+    ...(quote.lifecycle || {}),
+    reopenedAtISO: nowISO
+  };
   const nextPortalKey = buildPortalKey();
-  const previousPortalKey = String(quote.portalKey || "").trim();
   const restoredPatch = activeSnapshot
     ? {
       customer: activeSnapshot.customer || quote.customer,
@@ -3361,55 +3344,32 @@ export async function reopenQuote(id) {
         activeSnapshot.customerNameKey || activeSnapshot.customer?.name || quote.customerNameKey
       ),
       eventTypeId: String(activeSnapshot.eventTypeId || activeSnapshot.selection?.eventTypeId || quote.eventTypeId || "").trim(),
-      ownerUid: String(activeSnapshot.ownerUid || quote.ownerUid || "").trim(),
-      ownerEmail: normalizeEmail(activeSnapshot.ownerEmail || quote.ownerEmail || ""),
       event: activeSnapshot.event || quote.event,
       selection: activeSnapshot.selection || quote.selection,
-      payment: hydratePayment(activeSnapshot.payment || quote.payment),
-      booking: hydrateBooking(activeSnapshot.booking || quote.booking),
       totals: activeSnapshot.totals || quote.totals,
       pricing: resolveQuotePricingSnapshot(activeSnapshot),
-      quoteMeta: activeSnapshot.quoteMeta || quote.quoteMeta,
-      source: activeSnapshot.source || quote.source,
-      expiresAtISO: activeSnapshot.expiresAtISO || quote.expiresAtISO
+      source: activeSnapshot.source || quote.source
     }
     : {};
   const nextPortalIssuedAtISO = nowISO;
+  const validityDays = Math.max(
+    1,
+    Math.min(365, Math.round(Number(quote.quoteMeta?.quoteValidityDays || DEFAULT_VALIDITY_DAYS)))
+  );
+  const nextExpiresAtISO = addDaysISO(nowISO, validityDays);
   const nextPortalExpiresAtISO = resolvePortalExpiresAtISO(
     {
-      expiresAtISO: restoredPatch.expiresAtISO || quote.expiresAtISO || addDaysISO(nowISO, DEFAULT_VALIDITY_DAYS),
+      expiresAtISO: nextExpiresAtISO,
       portalIssuedAtISO: nextPortalIssuedAtISO
     },
     nextPortalIssuedAtISO,
     nowISO
   );
 
-  await saveQuoteVersion(quoteId, {
+  const versionResult = await saveQuoteVersion(quoteId, {
     reason: "reopen_quote_before_restore",
     organizationId: quote.organizationId
   });
-
-  if (firebaseReady) {
-    await updateDoc(quoteWriteDocRef(quoteId, quote.organizationId, "reopenQuote"), {
-      ...restoredPatch,
-      status: "draft",
-      portalKey: nextPortalKey,
-      portalIssuedAtISO: nextPortalIssuedAtISO,
-      portalExpiresAtISO: nextPortalExpiresAtISO,
-      deletedAtISO: "",
-      updatedAtISO: nowISO,
-      lifecycle
-    });
-    await syncPortalSnapshotFromQuoteDoc(quoteId, quote.organizationId);
-    if (previousPortalKey && previousPortalKey !== nextPortalKey) {
-      try {
-        await deleteDoc(portalDocRef(previousPortalKey));
-      } catch {
-        // Ignore best-effort cleanup errors for stale portal snapshots.
-      }
-    }
-    return { ok: true, storage: "firebase" };
-  }
 
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const next = existing.map((item) => {
@@ -3421,13 +3381,29 @@ export async function reopenQuote(id) {
       portalKey: nextPortalKey,
       portalIssuedAtISO: nextPortalIssuedAtISO,
       portalExpiresAtISO: nextPortalExpiresAtISO,
+      expiresAtISO: nextExpiresAtISO,
       deletedAtISO: "",
       updatedAtISO: nowISO,
-      lifecycle
+      lifecycle,
+      portalDecision: normalizePortalDecision(quote.portalDecision),
+      quoteMeta: {
+        ...(item.quoteMeta || {}),
+        reopenedAtISO: nowISO
+      }
     };
   });
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
-  return { ok: true, storage: "local" };
+  return {
+    ok: true,
+    storage: "local",
+    status: "draft",
+    portalKey: nextPortalKey,
+    portalIssuedAtISO: nextPortalIssuedAtISO,
+    portalExpiresAtISO: nextPortalExpiresAtISO,
+    expiresAtISO: nextExpiresAtISO,
+    versionId: versionResult.versionId,
+    versionNumber: versionResult.versionNumber
+  };
 }
 
 export async function deleteQuote(id, { organizationId = undefined } = {}) {
@@ -3537,7 +3513,7 @@ export async function getPortalQuote(portalKey) {
       throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
     }
     const portalValidity = assertPortalTokenActive(portalData, nowISO);
-    if (normalizeStatus(portalData.status) === "deleted") {
+    if (!PORTAL_VISIBLE_STATUSES.has(normalizeStatus(portalData.status))) {
       throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
     }
     return {
@@ -3554,7 +3530,7 @@ export async function getPortalQuote(portalKey) {
   }
   const snapshot = buildPortalSnapshot(quote.id, quote);
   const portalValidity = assertPortalTokenActive(snapshot, nowISO);
-  if (normalizeStatus(snapshot.status) === "deleted") {
+  if (!PORTAL_VISIBLE_STATUSES.has(normalizeStatus(snapshot.status))) {
     throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
   }
   return {
@@ -3604,25 +3580,34 @@ export async function updatePortalDecision({
       throw new Error(PORTAL_TOKEN_EXPIRED_ERROR);
     }
     assertPortalTokenActive(portalData, nowISO);
-    if (normalizeStatus(portalData.status) === "booked") {
-      throw new Error("This quote is already booked and can no longer be changed from the portal.");
+    const currentStatus = normalizeStatus(portalData.status);
+    if (!["sent", "viewed"].includes(currentStatus)) {
+      throw new Error(
+        currentStatus === "draft"
+          ? "This proposal has not been sent and cannot be accepted yet."
+          : "This customer decision is final and can no longer be changed from the portal."
+      );
     }
     const lifecycle = lifecycleObject(nextStatus, nowISO, portalData.lifecycle);
-    await updateDoc(portalRef, {
+    const decisionPatch = {
       status: nextStatus,
       updatedAtISO: nowISO,
       lifecycle,
       ...portalDecisionPatch
-    });
+    };
 
-    if (portalData.quoteId) {
-      await updateDoc(quoteWriteDocRef(portalData.quoteId, portalData.organizationId, "updatePortalDecision"), {
-        status: nextStatus,
-        updatedAtISO: nowISO,
-        lifecycle,
-        ...portalDecisionPatch
-      });
+    const quoteId = String(portalData.quoteId || "").trim();
+    const organizationId = normalizeOrganizationId(portalData.organizationId);
+    if (!quoteId || !organizationId) {
+      throw new Error("This quote link needs an administrator data repair before a decision can be recorded.");
     }
+    const batch = writeBatch(db);
+    batch.update(portalRef, decisionPatch);
+    batch.update(
+      quoteWriteDocRef(quoteId, organizationId, "updatePortalDecision"),
+      decisionPatch
+    );
+    await batch.commit();
     return { ok: true, storage: "firebase", status: nextStatus, portalDecision };
   }
 
@@ -3632,9 +3617,13 @@ export async function updatePortalDecision({
     throw new Error("Quote not found.");
   }
   assertPortalTokenActive(localTarget, nowISO);
-  const locked = existing.find((quote) => quote.portalKey === key && normalizeStatus(quote.status) === "booked");
-  if (locked) {
-    throw new Error("This quote is already booked and can no longer be changed from the portal.");
+  const currentStatus = normalizeStatus(localTarget.status);
+  if (!["sent", "viewed"].includes(currentStatus)) {
+    throw new Error(
+      currentStatus === "draft"
+        ? "This proposal has not been sent and cannot be accepted yet."
+        : "This customer decision is final and can no longer be changed from the portal."
+    );
   }
   const next = existing.map((quote) => {
     if (quote.portalKey !== key) return quote;

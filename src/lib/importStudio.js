@@ -244,7 +244,3 @@ export function buildImportPreview({ rows = [], mapping = {}, importType = "cust
     };
   });
 }
-
-export function resolveProvisionOwnerUid(value = "") {
-  return cleanText(value);
-}

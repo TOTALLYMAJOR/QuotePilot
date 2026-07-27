@@ -1,4 +1,5 @@
 import { currency } from "./quoteCalculator";
+import { sanitizeStripePaymentLink } from "./paymentLink";
 
 const DEFAULT_BRANDING = {
   name: "QuotePilot",
@@ -124,7 +125,7 @@ export function buildProposalPayload(quote) {
       chefRateMixCsv: cleanText(quote.selection?.chefRateMixCsv)
     },
     payment: {
-      depositLink: cleanText(quote.payment?.depositLink),
+      depositLink: sanitizeStripePaymentLink(quote.payment?.depositLink),
       depositStatus: cleanText(quote.payment?.depositStatus, "unpaid")
     },
     totals: {

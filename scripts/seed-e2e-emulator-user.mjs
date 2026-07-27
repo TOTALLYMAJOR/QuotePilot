@@ -69,6 +69,9 @@ async function main() {
     slug: organizationId,
     ownerUid: uid,
     ownerEmail: email,
+    active: true,
+    archived: false,
+    status: "active",
     updatedAt: now,
     updatedAtISO: new Date().toISOString(),
     createdAt: now

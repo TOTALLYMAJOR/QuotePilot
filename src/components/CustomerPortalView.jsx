@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { currency } from "../lib/quoteCalculator";
 import { getPortalQuote, updatePortalDecision } from "../lib/quoteStore";
+import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 
 const DECISION_OPTIONS = [
   ["accepted", "Accept"],
   ["changes_requested", "Request Changes"],
   ["declined", "Decline"]
 ];
-
 function fmtDate(iso) {
   if (!iso) return "-";
   const raw = String(iso).trim();
@@ -92,6 +92,7 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
   const scope = quote?.selection || {};
   const totals = quote?.totals || {};
   const payment = quote?.payment || {};
+  const approvedPaymentLink = sanitizeStripePaymentLink(payment.depositLink);
 
   const load = async (nextPortalKey = portalKey) => {
     const key = String(nextPortalKey || "").trim();
@@ -261,8 +262,8 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
                   <strong>{payment.depositStatus || "unpaid"}</strong>
                   {payment.depositConfirmedAtISO && <small>Confirmed {fmtDate(payment.depositConfirmedAtISO)}</small>}
                 </div>
-                {payment.depositLink && ["accepted", "booked"].includes(quote.status) && payment.depositStatus !== "paid" && (
-                  <a className="cta portal-pay-link" href={payment.depositLink} target="_blank" rel="noreferrer">
+                {approvedPaymentLink && ["accepted", "booked"].includes(quote.status) && payment.depositStatus !== "paid" && (
+                  <a className="cta portal-pay-link" href={approvedPaymentLink} target="_blank" rel="noreferrer">
                     Pay Deposit
                   </a>
                 )}

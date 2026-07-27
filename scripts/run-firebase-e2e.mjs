@@ -31,10 +31,6 @@ function run(cmd, args, options = {}) {
 }
 
 run("bash", ["./scripts/ensure-local-jre.sh"]);
-run("bash", [
-  "-lc",
-  `for port in 9099 8080 ${includeFunctions ? "5001 " : ""}4000 4400 4500; do fuser -k "$port/tcp" >/dev/null 2>&1 || true; done`
-]);
 
 const localJre = path.join(rootDir, ".cache", "tools", "jre21");
 const env = {
@@ -46,10 +42,13 @@ const env = {
   E2E_PLAYWRIGHT_CONFIG: playwrightConfig,
   E2E_PLAYWRIGHT_SPEC: playwrightSpec,
   E2E_ALLOW_NON_AUTHORITATIVE_PRICING: allowNonAuthoritativePricing ? "true" : "false",
+  E2E_FIREBASE_AUTH_EMULATOR_PORT: "9399",
+  E2E_FIRESTORE_EMULATOR_PORT: "8383",
+  E2E_FIREBASE_FUNCTIONS_EMULATOR_PORT: "5601",
   FUNCTIONS_DISCOVERY_TIMEOUT: process.env.FUNCTIONS_DISCOVERY_TIMEOUT || "30000",
-  TMPDIR: process.env.TMPDIR || "/tmp",
-  TMP: process.env.TMP || "/tmp",
-  TEMP: process.env.TEMP || "/tmp"
+  TMPDIR: "/tmp",
+  TMP: "/tmp",
+  TEMP: "/tmp"
 };
 
 if (!process.env.JAVA_HOME && fs.existsSync(path.join(localJre, "bin", "java"))) {
@@ -61,6 +60,8 @@ run(
   "npx",
   [
     "firebase-tools",
+    "--config",
+    "firebase.e2e.json",
     "emulators:exec",
     "--project",
     projectId,

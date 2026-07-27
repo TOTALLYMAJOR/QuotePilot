@@ -128,7 +128,7 @@ describe("menuService write fallback behavior", () => {
     ).rejects.toThrow(/organizationId is required for createMenuItem/i);
   });
 
-  test("createEventType seeds canonical categories and items atomically", async () => {
+  test("createEventType starts blank unless canonical seeding is explicitly requested", async () => {
     const batch = {
       set: vi.fn(),
       delete: vi.fn(),
@@ -142,6 +142,28 @@ describe("menuService write fallback behavior", () => {
     });
 
     expect(created.id).toBe("event-type-seeded");
+    expect(created.seeded).toEqual({
+      categories: 0,
+      items: 0
+    });
+    expect(batch.set).toHaveBeenCalledTimes(1);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  test("createEventType can seed the canonical menu only through an explicit opt-in", async () => {
+    const batch = {
+      set: vi.fn(),
+      delete: vi.fn(),
+      commit: vi.fn().mockResolvedValue(undefined)
+    };
+    mockState.writeBatch.mockReturnValue(batch);
+
+    const created = await createEventType({
+      name: "New Event Type",
+      organizationId: "Org 123",
+      seedCanonical: true
+    });
+
     expect(created.seeded).toEqual({
       categories: 10,
       items: 93

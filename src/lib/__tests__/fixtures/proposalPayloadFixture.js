@@ -40,7 +40,7 @@ export const proposalPayloadFixtureQuote = {
     chefRateMixCsv: "60,65,70"
   },
   payment: {
-    depositLink: "https://pay.example.com/deposits/q-2026-0042",
+    depositLink: "https://checkout.stripe.com/c/pay/cs_test_q_2026_0042",
     depositStatus: "sent"
   },
   totals: {

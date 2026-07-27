@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: March 27, 2026
+Last updated: July 27, 2026
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -27,7 +27,9 @@ git checkout -b feature/<scope>-<topic>
 ## Release-Only Main Rule
 - `main` is for production-intent merges only.
 - Feature work lands in topic branches and merges only after required CI and pre-merge UAT evidence are complete.
-- Deploy workflow is gated by successful `CI Quality` runs on `main` pushes (manual dispatch remains available for controlled operations).
+- Production deployment is manual-only after the required `CI Quality` and UAT
+  evidence; the deploy entrypoint accepts only a clean, remotely published,
+  semantically tagged `main` revision.
 - If branch protection is not enabled, `Mainline Safety Net (Auto-Revert Failed Pushes)` provides fallback protection by reverting failed `main` push heads after CI failure.
 
 ## Branch Naming
@@ -74,8 +76,8 @@ If a topic changes, only update the owning doc and cross-link from others.
 - GitHub variable: `ENABLE_FUNCTIONS_DEPLOY`
   - Default production value: `false`.
   - Set to `true` only for intentional, validated functions deploy windows, then return to `false`.
-- Firebase Functions config: `notifications.sms_provider`
-  - Default production value: `"none"` unless buyer-approved SMS enablement is validated.
+- Project-scoped Functions environment: `NOTIFICATIONS_SMS_PROVIDER`
+  - Default production value: `none` unless buyer-approved SMS enablement is validated.
 
 ## Orchestration References
 - Blueprint: `docs/ORCHESTRATION_BLUEPRINT.md`

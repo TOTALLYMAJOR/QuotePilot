@@ -22,6 +22,7 @@ export default function AuthGate({ sessionError = "" }) {
     try {
       if (mode === "register") {
         await registerWithEmail({ email, password });
+        setStatus("Account created. Check your inbox and verify your email before workspace access is activated.");
       } else {
         await signInWithEmail({ email, password });
       }
@@ -99,7 +100,7 @@ export default function AuthGate({ sessionError = "" }) {
           </button>
         </div>
 
-        {status && <p className="error-note">{status}</p>}
+        {status && <p className="source-note">{status}</p>}
       </section>
     </main>
   );

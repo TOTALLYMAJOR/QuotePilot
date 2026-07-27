@@ -1,6 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: March 27, 2026
+Last updated: July 27, 2026
 
 ## Goal
 Accelerate delivery while preserving production safety by using:
@@ -19,7 +19,8 @@ Accelerate delivery while preserving production safety by using:
 
 3. Main CI Hard Gate
 - Pushes to `main` require full hard-gate CI matrix.
-- Deploy workflow consumes only successful `CI Quality` runs from `main`.
+- Production deployment remains a separate manual release action after the
+  required hard-gate CI, UAT evidence, and published semantic tag.
 
 4. Release Control Plane
 - Human approval remains mandatory for `main` merges and deploy actions.

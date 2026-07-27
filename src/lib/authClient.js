@@ -1,6 +1,7 @@
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut
@@ -35,7 +36,12 @@ export async function registerWithEmail({ email, password }) {
   if (password.length < 8) {
     throw new Error("Password must be at least 8 characters.");
   }
-  await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+  const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+  await sendEmailVerification(credential.user);
+  return {
+    email: normalizedEmail,
+    verificationSent: true
+  };
 }
 
 export async function signInWithGoogle() {
@@ -48,4 +54,24 @@ export async function signInWithGoogle() {
 export async function signOutCurrentUser() {
   ensureAuth();
   await signOut(auth);
+}
+
+export async function resendCurrentUserVerification() {
+  ensureAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sign in before requesting a verification email.");
+  if (user.emailVerified) return { alreadyVerified: true };
+  await sendEmailVerification(user);
+  return { verificationSent: true };
+}
+
+export async function refreshCurrentUserVerification() {
+  ensureAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sign in before checking email verification.");
+  await user.reload();
+  if (user.emailVerified) {
+    await user.getIdToken(true);
+  }
+  return { emailVerified: user.emailVerified === true };
 }

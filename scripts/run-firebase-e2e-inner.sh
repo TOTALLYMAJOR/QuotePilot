@@ -8,7 +8,11 @@ PASSWORD="${E2E_FIREBASE_PASSWORD:-Passw0rd!}"
 PLAYWRIGHT_CONFIG="${E2E_PLAYWRIGHT_CONFIG:-playwright.firebase.config.js}"
 PLAYWRIGHT_SPEC="${E2E_PLAYWRIGHT_SPEC:-e2e/firebase-auth-rules.smoke.spec.js}"
 
-node ./scripts/seed-firestore-menu.mjs --project "$PROJECT_ID" --organization "$ORG_ID"
 node ./scripts/seed-e2e-emulator-user.mjs --project "$PROJECT_ID" --organization "$ORG_ID" --email "$EMAIL" --password "$PASSWORD"
+node ./scripts/seed-firestore-menu.mjs \
+  --project "$PROJECT_ID" \
+  --organization "$ORG_ID" \
+  --apply \
+  --confirm "SEED $PROJECT_ID $ORG_ID"
 
 bash ./scripts/run-playwright.sh test --config="$PLAYWRIGHT_CONFIG" "$PLAYWRIGHT_SPEC"

@@ -23,14 +23,14 @@ describe("quote history action permissions", () => {
     });
   });
 
-  test("sales can prepare proposal artifacts without payment or booking authority", () => {
+  test("sales can prepare proposal artifacts without provider, payment, or booking authority", () => {
     expect(getQuoteHistoryActionPermissions("sales")).toMatchObject({
       role: "sales",
       isStaff: true,
       canEditQuote: true,
       canDuplicateQuote: true,
       canExportProposal: true,
-      canSendQuoteEmail: true,
+      canSendQuoteEmail: false,
       canCopyArtifacts: true,
       canCopyPaymentLink: false,
       canSendPaymentRequest: false,

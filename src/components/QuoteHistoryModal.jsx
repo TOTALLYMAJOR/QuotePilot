@@ -6,6 +6,7 @@ import {
 } from "../lib/commerceOps";
 import { currency } from "../lib/quoteCalculator";
 import { getEventTypes } from "../lib/menuService";
+import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import {
   BOOKING_CONFIRMATION_STATUSES,
   buildQuoteEmailTemplate,
@@ -73,7 +74,7 @@ export function getQuoteHistoryActionPermissions(role) {
     canEditQuote: isStaff,
     canDuplicateQuote: isStaff,
     canExportProposal: isStaff,
-    canSendQuoteEmail: isStaff,
+    canSendQuoteEmail: isAdmin,
     canCopyArtifacts: isStaff,
     canCopyPaymentLink: isAdmin,
     canSendPaymentRequest: isAdmin,
@@ -469,9 +470,9 @@ export default function QuoteHistoryModal({
       if (!navigator.clipboard) {
         throw new Error("Clipboard unavailable in this browser.");
       }
-      const paymentLink = quote.payment?.depositLink;
+      const paymentLink = sanitizeStripePaymentLink(quote.payment?.depositLink);
       if (!paymentLink) {
-        throw new Error("No deposit link saved for this quote.");
+        throw new Error("No approved Stripe deposit link is saved for this quote.");
       }
       await navigator.clipboard.writeText(paymentLink);
       setState((prev) => ({ ...prev, feedback: `Deposit link copied for ${quote.quoteNumber}.` }));
@@ -543,22 +544,12 @@ export default function QuoteHistoryModal({
       throw new Error("Portal link expired. Rotate the portal link before sending payment requests.");
     }
 
-    const base = basePortalUrl || `${window.location.origin}${window.location.pathname}`;
-    const successUrl = quote.portalKey
-      ? `${base}?portal=${encodeURIComponent(quote.portalKey)}&payment=success`
-      : `${base}?payment=success`;
-    const cancelUrl = quote.portalKey
-      ? `${base}?portal=${encodeURIComponent(quote.portalKey)}&payment=cancelled`
-      : `${base}?payment=cancelled`;
-
     const result = await createDepositCheckout({
-      quoteId: quote.id,
-      successUrl,
-      cancelUrl
+      quoteId: quote.id
     });
-    const paymentLink = String(result?.url || "").trim();
+    const paymentLink = sanitizeStripePaymentLink(result?.url);
     if (!paymentLink) {
-      throw new Error("Checkout URL was not returned.");
+      throw new Error("An approved Stripe checkout URL was not returned.");
     }
     applyPaymentLinkLocally(quote.id, paymentLink);
     return paymentLink;
@@ -592,11 +583,8 @@ export default function QuoteHistoryModal({
         output: "base64",
         compact: true
       });
-      const portalLink = resolveQuotePortalLink(quote);
-
       await sendQuoteToCustomerEmail({
         quoteId: quote.id,
-        portalLink,
         attachment
       });
 
@@ -625,7 +613,7 @@ export default function QuoteHistoryModal({
         throw new Error("Portal link expired. Rotate the portal link before sending payment requests.");
       }
 
-      let paymentLink = String(quote.payment?.depositLink || "").trim();
+      let paymentLink = sanitizeStripePaymentLink(quote.payment?.depositLink);
       if (!paymentLink) {
         paymentLink = await createCheckoutLink(quote);
       }
@@ -636,12 +624,8 @@ export default function QuoteHistoryModal({
         output: "base64",
         compact: true
       });
-      const portalLink = resolveQuotePortalLink(quote);
-
       await sendPaymentRequestToCustomerEmail({
         quoteId: quote.id,
-        paymentLink,
-        portalLink,
         attachment
       });
 

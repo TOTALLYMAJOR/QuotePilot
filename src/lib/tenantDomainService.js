@@ -2,6 +2,9 @@ import { httpsCallable } from "firebase/functions";
 import { cloudFunctions } from "./firebase";
 
 const BASE_DOMAIN = String(import.meta.env.VITE_BASE_DOMAIN || "mbmapps.com").trim().toLowerCase() || "mbmapps.com";
+const APP_HOST = normalizeHostname(
+  import.meta.env.VITE_APP_HOST || "quotepilot.mbmapps.com"
+);
 const TENANT_CACHE_KEY = "quoteWizard.tenantContext.v1";
 const TENANT_CACHE_TTL_MS = Math.max(60_000, Number(import.meta.env.VITE_TENANT_CONTEXT_TTL_MS || 600_000) || 600_000);
 const TENANT_NEGATIVE_CACHE_TTL_MS = Math.max(5_000, Number(import.meta.env.VITE_TENANT_NEGATIVE_TTL_MS || 30_000) || 30_000);
@@ -24,6 +27,7 @@ export function getHostType(hostname = "") {
   if (normalizedHost === "localhost" || normalizedHost.endsWith(".localhost")) return "local";
   if (normalizedHost === "127.0.0.1" || normalizedHost === "::1") return "local";
   if (normalizedHost.endsWith(".web.app") || normalizedHost.endsWith(".firebaseapp.com")) return "app";
+  if (APP_HOST && normalizedHost === APP_HOST) return "app";
   if (normalizedHost === BASE_DOMAIN || normalizedHost === `www.${BASE_DOMAIN}`) return "marketing";
   if (normalizedHost === `app.${BASE_DOMAIN}`) return "app";
   if (normalizedHost.endsWith(`.${BASE_DOMAIN}`)) {
@@ -119,4 +123,3 @@ export async function resolveTenantByHost(hostname = "") {
     source: "resolver"
   };
 }
-

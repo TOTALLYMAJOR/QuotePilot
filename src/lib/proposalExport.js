@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import { currency } from "./quoteCalculator";
+import { sanitizeStripePaymentLink } from "./paymentLink";
 import { buildProposalPayload } from "./proposalPayload";
 
 const BRAND_ASSET_CACHE = new Map();
@@ -290,6 +291,7 @@ export async function exportQuoteProposal(quote, {
   }
 
   const proposal = buildProposalPayload(quote);
+  const depositPaymentLink = sanitizeStripePaymentLink(proposal.payment.depositLink);
   const { branding, meta } = proposal;
   const includeBrandImages = compact !== true;
   const brandAssets = includeBrandImages
@@ -421,12 +423,12 @@ export async function exportQuoteProposal(quote, {
   row("Tax Region", proposal.totals.taxRegionName || proposal.selection.taxRegion);
   row("Season Profile", proposal.totals.seasonProfileName || proposal.selection.seasonProfileId);
   row("Payment Method", proposal.selection.payMethod);
-  row("Deposit Link", proposal.payment.depositLink || "-");
+  row("Deposit Link", depositPaymentLink || "-");
 
   section("Action and Acceptance");
   row("Acceptance Contact", meta.acceptanceEmail || meta.businessEmail || "-");
   row("Customer Portal", portalLink || (quote.portalKey ? `Portal Key: ${quote.portalKey}` : "-"));
-  row("Deposit Payment Link", proposal.payment.depositLink || "-");
+  row("Deposit Payment Link", depositPaymentLink || "-");
   row("Deposit Status", proposal.payment.depositStatus || "unpaid");
 
   section("Pricing");

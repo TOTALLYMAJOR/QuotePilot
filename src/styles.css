@@ -1921,10 +1921,6 @@ hr {
   gap: 0.5rem;
 }
 
-.deposit-link-field {
-  margin-top: 0.8rem;
-}
-
 .row-actions {
   display: flex;
   gap: 0.4rem;
@@ -2025,6 +2021,13 @@ hr {
   grid-column: 1 / -1;
 }
 
+.provisioning-controls {
+  min-inline-size: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
 .provisioning-send-email {
   grid-column: 1 / -1;
   display: inline-flex !important;
@@ -2036,6 +2039,42 @@ hr {
 
 .provisioning-send-email input[type="checkbox"] {
   width: auto;
+}
+
+.provisioning-existing-update {
+  margin: 0.65rem 0 0.25rem;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4f3c23;
+  font-size: 0.84rem;
+}
+
+.provisioning-existing-update input[type="checkbox"] {
+  width: auto;
+}
+
+.provisioning-next-steps {
+  margin-top: 0.75rem;
+  border: 1px solid rgba(188, 142, 62, 0.4);
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: rgba(255, 250, 239, 0.72);
+}
+
+.provisioning-next-steps h4 {
+  margin: 0;
+}
+
+.provisioning-next-steps ol {
+  margin: 0.55rem 0;
+  padding-left: 1.25rem;
+  color: #4f3c23;
+  font-size: 0.84rem;
+}
+
+.provisioning-next-steps li + li {
+  margin-top: 0.3rem;
 }
 
 .integration-filters {

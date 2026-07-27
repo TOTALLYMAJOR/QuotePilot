@@ -302,7 +302,10 @@ export async function createEventType(data = {}) {
   const createdAtISO = new Date().toISOString();
   const eventTypeRef = doc(targetCollectionRef);
   const eventTypeId = eventTypeRef.id;
-  const canonicalSeed = buildCanonicalMenuForEventType(eventTypeId);
+  const seedCanonical = data.seedCanonical === true;
+  const canonicalSeed = seedCanonical
+    ? buildCanonicalMenuForEventType(eventTypeId)
+    : { categories: [], items: [] };
   const payload = {
     name: asText(data.name, "New Event Type"),
     createdAtISO

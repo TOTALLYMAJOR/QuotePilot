@@ -3,7 +3,6 @@ import {
   buildImportPreview,
   detectImportType,
   parseCsvText,
-  resolveProvisionOwnerUid,
   suggestFieldMapping
 } from "../importStudio";
 
@@ -52,12 +51,5 @@ describe("Import Studio CSV intake", () => {
       "eventTypeId is required",
       "categoryId is required"
     ]));
-  });
-});
-
-describe("provisioning owner identity guardrail", () => {
-  test("never substitutes the signed-in administrator when owner UID is blank", () => {
-    expect(resolveProvisionOwnerUid("")).toBe("");
-    expect(resolveProvisionOwnerUid("  firebase-owner-uid  ")).toBe("firebase-owner-uid");
   });
 });

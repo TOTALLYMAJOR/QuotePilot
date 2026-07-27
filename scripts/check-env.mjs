@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import path from "node:path";
+import { loadEnv } from "vite";
 
 const REQUIRED = [
   "VITE_FIREBASE_API_KEY",
@@ -9,35 +9,74 @@ const REQUIRED = [
   "VITE_FIREBASE_MESSAGING_SENDER_ID",
   "VITE_FIREBASE_APP_ID"
 ];
-
-function readDotEnv(filePath) {
-  if (!fs.existsSync(filePath)) return {};
-  const raw = fs.readFileSync(filePath, "utf8");
-  const out = {};
-  raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#"))
-    .forEach((line) => {
-      const idx = line.indexOf("=");
-      if (idx === -1) return;
-      const key = line.slice(0, idx).trim();
-      const value = line.slice(idx + 1).trim();
-      out[key] = value;
-    });
-  return out;
-}
+const EXPECTED_FIREBASE_PROJECT_ID = "tonicatering";
+const PRODUCTION_UNSAFE_FLAGS = [
+  "VITE_E2E_BYPASS_AUTH",
+  "VITE_USE_FIREBASE_EMULATORS",
+  "VITE_ALLOW_LOCAL_CATALOG_FALLBACK",
+  "VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING"
+];
 
 const cwd = process.cwd();
-const envPath = path.join(cwd, ".env");
-const dotEnv = readDotEnv(envPath);
+const productionEnv = loadEnv("production", cwd, "");
 
-const missing = REQUIRED.filter((key) => !(process.env[key] || dotEnv[key]));
+function effectiveValue(key) {
+  if (Object.prototype.hasOwnProperty.call(process.env, key)) {
+    return String(process.env[key] || "").trim();
+  }
+  return String(productionEnv[key] || "").trim();
+}
+
+function isPlaceholder(value) {
+  return /^your_/i.test(value)
+    || /^replace_/i.test(value)
+    || /^<[^>]+>$/.test(value)
+    || /^changeme$/i.test(value);
+}
+
+function isTruthy(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
+const missing = REQUIRED.filter((key) => !effectiveValue(key));
+const placeholders = REQUIRED.filter((key) => isPlaceholder(effectiveValue(key)));
 
 if (missing.length) {
   console.error("Missing required Firebase env vars:");
   missing.forEach((key) => console.error(`- ${key}`));
-  console.error("\nAdd them to .env (local) or host environment settings (Vercel/GitHub Actions).");
+  console.error("\nAdd them to .env.local, .env, or host environment settings (Vercel/GitHub Actions).");
+  process.exit(1);
+}
+
+if (placeholders.length) {
+  console.error("Placeholder Firebase env vars are not deployable:");
+  placeholders.forEach((key) => console.error(`- ${key}`));
+  process.exit(1);
+}
+
+const configuredProjectIds = [
+  effectiveValue("VITE_FIREBASE_PROJECT_ID"),
+  process.env.FIREBASE_PROJECT_ID
+]
+  .map((value) => String(value || "").trim())
+  .filter(Boolean);
+
+if (
+  configuredProjectIds.some((projectId) => projectId !== EXPECTED_FIREBASE_PROJECT_ID)
+  || effectiveValue("VITE_FIREBASE_PROJECT_ID") !== EXPECTED_FIREBASE_PROJECT_ID
+) {
+  console.error(
+    `Firebase project mismatch. QuotePilot production configuration must target ${EXPECTED_FIREBASE_PROJECT_ID}.`
+  );
+  process.exit(1);
+}
+
+const enabledUnsafeFlags = PRODUCTION_UNSAFE_FLAGS.filter((key) => (
+  isTruthy(effectiveValue(key))
+));
+if (enabledUnsafeFlags.length) {
+  console.error("Production-unsafe browser flags must be disabled:");
+  enabledUnsafeFlags.forEach((key) => console.error(`- ${key}`));
   process.exit(1);
 }
 

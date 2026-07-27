@@ -1,6 +1,6 @@
 # QuotePilot by MBMapps
 
-Production-ready catering quote application built with React, Vite, Firebase, and jsPDF.
+Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
 ## Quick Links
 - Live app: https://quotepilot.mbmapps.com
@@ -55,7 +55,7 @@ Prerequisites:
 - VS Code with Dev Containers extension
 
 Steps:
-1. Open the `react-firebase-quote-wizard` folder in VS Code.
+1. Open the QuotePilot repository folder in VS Code.
 2. Run `Dev Containers: Reopen in Container`.
 3. In the container terminal, run:
 
@@ -87,7 +87,37 @@ Create `.env` from `.env.example` and set required Firebase keys:
 
 Optional:
 - `VITE_FIREBASE_FUNCTIONS_REGION`
-- `VITE_BOOTSTRAP_ADMIN_EMAILS`
+- `VITE_APP_HOST`
+- `VITE_APP_URL`
+
+To create `.env.local` from the authenticated Firebase project config without
+touching `.env`, run:
+```bash
+npm run env:local:firebase -- --project tonicatering
+```
+The command is create-only by default. If `.env.local` already exists, it
+refuses to overwrite it. An intentional replacement requires both `--replace`
+and the exact confirmation token printed by the command.
+
+The root `.env.example` is for browser-safe `VITE_*` values only. Server-side
+Firebase Functions placeholders live in
+[`functions/.env.example`](functions/.env.example). Copy that template to an
+ignored `functions/.env.<firebase-project-id>` file and replace only the values
+needed for the intended provider deployment; never commit real provider
+credentials. Confirm the target is ignored with
+`git check-ignore -v functions/.env.<firebase-project-id>` before adding any
+secret.
+
+When the controlled GitHub deploy enables Functions, CI runs
+`scripts/materialize-functions-env.mjs` before deployment. The script fails
+closed unless it receives the canonical QuotePilot `/app` URL and domain, a
+non-placeholder platform-admin allowlist, the approved
+`QuotePilot by MBMapps <onboarding@quotepilot.mbmapps.com>` sender identity,
+Stripe server secrets, and any credentials required by an explicitly enabled
+email or SMS provider. It writes the project-specific Functions environment
+file with restricted permissions and does not print secret values. The approved
+sender identity in configuration does not prove the Resend domain is verified
+or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider truth.
 
 ## Quality Gates
 ```bash
@@ -121,6 +151,9 @@ npm run lane:release:cwv
 - `npm run test:e2e:firebase`
   - Firebase emulator browser lane for real Auth + Firestore rules coverage.
   - Starts `auth` + `firestore` emulators, seeds org/menu/userRole fixtures, signs in via UI, and validates quote save path.
+  - Uses the isolated `firebase.e2e.json` configuration and dedicated high
+    ports. A port conflict fails the lane; the runner does not terminate another
+    local process.
   - Auto-prepares local JRE under `.cache/tools/jre21` when system Java is unavailable.
 - `npm run test:e2e:firebase:authoritative`
   - Firebase emulator browser lane that also starts Functions emulator.
@@ -132,80 +165,158 @@ Optional env vars for Firebase emulator lane:
 - `E2E_FIREBASE_EMAIL` (default: `e2e-admin@local.test`)
 - `E2E_FIREBASE_PASSWORD` (default: `Passw0rd!`)
 
-## Firestore Menu Seed
-Populate baseline dynamic menu collections (`eventTypes`, `menuCategories`, `menuItems`) without touching quotes or pricing.
-
-Dry run:
+## Firestore Tenant Seed
+Preview baseline event types, menu records, catalog items, and pricing settings
+for one existing organization that is not marked inactive or archived. The
+command is read-only by default:
 ```bash
-npm run seed:menu:firestore -- --project <your-project-id> --dry-run
+npm run seed:menu:firestore -- \
+  --project <firebase-project-id> \
+  --organization <organization-id>
 ```
 
-Apply seed:
+Apply requires both `--apply` and an exact project-and-tenant confirmation:
 ```bash
-npm run seed:menu:firestore -- --project <your-project-id>
+npm run seed:menu:firestore -- \
+  --project <firebase-project-id> \
+  --organization <organization-id> \
+  --apply \
+  --confirm "SEED <firebase-project-id> <organization-id>"
 ```
 
 Notes:
-- The script is idempotent and only creates missing docs.
-- It never deletes or rewrites existing menu docs.
+- Project and organization scope must be explicit; environment-derived targets
+  and unknown arguments are rejected.
+- The target organization must already exist and must not be marked inactive
+  or archived.
+- Apply creates only missing seed documents. Create operations fail on a
+  concurrent identity collision instead of replacing the new record.
+- Existing menu items are patched only when `pricingType`, `type`, or `active`
+  is missing. Other existing fields and documents are not replaced or deleted.
+- The organization record itself is read for validation and is not rewritten.
 - Auth uses Firebase Admin ADC/service credentials (`GOOGLE_APPLICATION_CREDENTIALS`) or emulator config.
 
+## Multi-Tenant Migration Safety
+
+The legacy-to-tenant migration is read-only unless `--apply` is explicitly
+selected. Both modes require exact project and organization scope:
+
+```bash
+npm run migrate:multi-tenant -- \
+  --project <firebase-project-id> \
+  --organization <organization-id> \
+  --dry-run
+```
+
+Apply additionally requires an exact scope-bound confirmation:
+
+```bash
+npm run migrate:multi-tenant -- \
+  --project <firebase-project-id> \
+  --organization <organization-id> \
+  --apply \
+  --confirm "MIGRATE <firebase-project-id> <organization-id>"
+```
+
+Do not reuse a confirmation for a different project or tenant.
+
 ## Customer Provisioning (No Stripe)
-Provision a customer organization, enforce order-based feature entitlements (unpaid modules locked off), and generate a copy-ready onboarding email template.
+Provision a customer organization, enforce order-based feature entitlements
+(unpaid modules locked off), and generate a copy-ready onboarding message.
 
-Server-side option (recommended):
-- Callable Firebase Function: `provisionCustomerOrder`
-- Behavior:
-  - writes org + settings + invite + `provisioningOrders/{orderId}` audit record
-  - applies ordered feature entitlements
-  - optionally sends onboarding email via configured email provider
+Release status: this hardened workflow is implemented and locally validated in
+the current release candidate. It is not production-accepted. Do not assume the
+live `/app` exposes it until the reviewed frontend, Functions, and rules are
+deployed from one committed revision. See
+[PROJECT_STATUS.md](PROJECT_STATUS.md) for current operational truth.
 
-Basic usage:
+Recommended operator path:
+1. Sign in at `/app` with a verified Firebase email as an authorized platform
+   admin. Tenant admins cannot create tenants or change paid-plan entitlements.
+2. Open `Integrations Ops` → `Customer Provisioning (Admin)`.
+3. Select an explicit plan and review the generated order id, canonical owner
+   URL, and confirmation prompt before provisioning.
+4. For an existing organization, explicitly select
+   `Update an existing organization (plan entitlements only)`. That mode does
+   not change owner identity, branding, catalog data, invites, or email state.
+
+The in-app workflow uses the `provisionCustomerOrder` callable, writes an
+auditable `provisioningOrders/{orderId}` record, and exposes the post-provision
+owner acceptance steps. Matching interrupted orders can be resumed
+only after the organization, settings, owner access, and catalog artifacts
+still match; conflicting or incomplete replay is rejected without sending
+email. Optional email dispatch uses an order-scoped idempotency key and an
+expiring audit-backed lease so concurrent retries cannot start another send.
+Pending email invitations expire after seven days, and the exact invited email
+must be verified before organization bootstrap can consume the invitation.
+New tenants begin with a blank catalog so an unreviewed zero-price placeholder
+cannot reach a customer quote. The owner workspace remains in catalog setup
+mode until an organization admin saves at least one named package priced above
+zero, creates at least one event type, and explicitly confirms the tenant's
+pricing setup. Catalog saves compare the loaded server state and patch only
+locally changed records; a concurrent edit or reused identifier is rejected
+instead of overwritten. Firebase quote creation and duplication use trusted
+callables that re-price from current tenant data and create the draft quote,
+portal snapshot, and first version atomically; direct Firestore quote creation
+is denied. Client totals, pricing snapshots, owner/record identities, and
+deposit links are not creation authority. Trusted edits also re-price and
+atomically update quote/portal state with a new version; terminal commercial
+evidence blocks overwrite. Reopen and permanent cleanup are admin-callable
+operations, and direct quote/portal deletes are denied. Portal decisions update
+the public snapshot and organization quote in one atomic batch; accepted and
+declined outcomes are terminal. The provisioning callable is the only supported
+write path for tenant creation and existing-organization entitlement changes.
+
+### CLI safety preview
+
+The local CLI is preview-only and performs no provisioning writes. Live CLI
+writes are disabled because sequential provider operations cannot guarantee an
+atomic tenant handoff. `--apply` is rejected; use the audited in-app workflow.
+
+Preview the proposed new tenant:
 ```bash
 npm run customer:provision -- \
   --project <your-project-id> \
+  --organization acme-events \
+  --order-id acme-events-001 \
   --name "Acme Events" \
   --owner-email owner@acme.com \
   --owner-name "Avery Owner" \
   --plan growth \
-  --sequence-start 250 \
   --email-out ./artifacts/onboarding/acme-events-email.txt
 ```
 
-Custom feature set:
-```bash
-npm run customer:provision -- \
-  --project <your-project-id> \
-  --organization <orgId> \
-  --name "Acme Events" \
-  --owner-email owner@acme.com \
-  --features customerPortal,eventSchedule,guidedSelling \
-  --disable-features crmSync,diagnostics
-```
+What the preview script does:
+- Requires explicit `--organization`, `--order-id`, `--name`,
+  `--owner-email`, and `--plan` values; it never guesses a tenant or order
+  identity.
+- Requires an explicit starter, growth, or enterprise plan.
+- Previews ordered feature entitlements and onboarding copy without creating
+  catalog defaults.
+- Rejects unknown arguments and any `--app-url` that does not exactly match the
+  configured canonical `APP_BASE_URL`.
+- Prints a `DRAFT - DO NOT SEND` handoff and optionally creates it with
+  `--email-out`; an existing file is never overwritten.
+- Uses `https://quotepilot.mbmapps.com/app` as the default owner sign-in URL.
 
-What the provisioning script does:
-- Auto-assigns numeric org IDs when `--organization` is omitted (starts at `--sequence-start`, default `250`).
-- Sets `orderId` to `orgId + 1` when `--order-id` is omitted and org id is numeric.
-- Skips menu/event seeding by default to avoid inheriting prior client menu content.
-- Seeds menu/event defaults only when `--seed-menu` is explicitly passed.
-- Creates/updates `organizations/<orgId>`.
-- Writes ordered feature entitlements to `organizations/<orgId>/settings/config`:
-  - paid features remain editable
-  - unpaid features are locked off in Admin Catalog
-- Applies neutral white-label branding/contact defaults so new orgs do not inherit another client's brand identity.
-- Ensures a minimal neutral catalog skeleton exists to prevent fallback to legacy client defaults.
-- Writes a provisioning audit record to `provisioningOrders/<orderId>`.
-- Grants admin via `userRoles/<uid>` when `--owner-uid` is provided.
-- Otherwise creates an email-based invite in `organizationInvites/<owner-email-key>` that is consumed on first sign-in.
-- Uses Firebase Admin credentials when available; if ADC is missing and `--project` is provided, it falls back to Firestore REST writes with the current Firebase CLI login token.
-- Prints an onboarding email template and optionally writes it to `--email-out`.
+Do not use the CLI to create or update an organization. Use the explicit in-app
+platform-admin workflow.
 
 ## Deploy Entry Points
-- Firebase hosting/functions: `npm run deploy:firebase`
-- Firebase functions only: `npm run deploy:firebase:functions`
-- Firebase primary hosting site (`app` target): `npm run deploy:firebase:hosting`
-- Firebase customer hosting site (`customer` target): `npm run deploy:firebase:hosting:customer -- --site <siteId>`
-- Vercel (optional): `npm run deploy:vercel`
+- Firebase hosting/rules/functions: `npm run deploy:firebase -- --confirm "DEPLOY tonicatering hosting:app,firestore,functions"`
+- Firebase rules/functions only: `npm run deploy:firebase:functions -- --confirm "DEPLOY tonicatering firestore,functions"`
+- Firebase primary hosting site (`app` target): `npm run deploy:firebase:hosting -- --confirm "DEPLOY tonicatering hosting:app"`
+- Firebase customer hosting site (`customer` target): `npm run deploy:firebase:hosting:customer -- --site <siteId> --project tonicatering --confirm "DEPLOY tonicatering hosting:<siteId>"`
+- Vercel production: `npm run deploy:vercel -- --confirm "DEPLOY quotepilot.mbmapps.com via vercel"`
+
+The primary Firebase scripts require a clean pushed `main` revision that
+matches `origin/main`, a semantic release tag on the same commit that is
+published to `origin`, and an exact scope-bound confirmation. The same
+published-revision gate applies to Vercel production. Functions scopes also
+validate the ignored
+`functions/.env.tonicatering` file before deployment. The scripts bind Hosting
+target `app` to site `tonicatering`; do not replace this with an unscoped
+default Hosting deploy.
 
 ### Multi-Site Hosting (Per Customer)
 Use one Firebase project with multiple Hosting sites, then map each customer domain to its site.
@@ -217,12 +328,14 @@ npx firebase-tools hosting:sites:create <siteId>
 
 Deploy to a specific customer site:
 ```bash
-npm run deploy:firebase:hosting:customer -- --site <siteId>
+npm run deploy:firebase:hosting:customer -- \
+  --site <siteId> \
+  --project tonicatering \
+  --confirm "DEPLOY tonicatering hosting:<siteId>"
 ```
 
-Optional flags:
-- `--project <projectId>` to override current Firebase project
-- `--skip-build` to reuse an existing `dist/` build
+The customer deploy always runs a fresh environment check and build; it rejects
+implicit projects and stale `dist` reuse.
 
 ## Governance Docs
 - Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)

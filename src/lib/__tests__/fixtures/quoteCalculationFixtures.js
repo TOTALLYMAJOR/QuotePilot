@@ -12,6 +12,7 @@ const rawFixtureCatalog = {
   ],
   rentals: [{ id: "chairs", name: "Banquet Chairs", price: 4, qtyPerGuests: 10 }],
   settings: {
+    pricingSetupConfirmed: true,
     perMileRate: 1,
     longDistancePerMileRate: 2,
     deliveryThresholdMiles: 20,
@@ -24,6 +25,7 @@ const rawFixtureCatalog = {
     serverRate: 20,
     chefRate: 40,
     staffingChargeMode: "per_hour",
+    staffingLaborEnabled: true,
     staffingRateTypes: [
       { id: "standard", name: "Standard Staffing", serverRate: 20, chefRate: 40 },
       { id: "premium", name: "Premium Staffing", serverRate: 30, chefRate: 55 }
