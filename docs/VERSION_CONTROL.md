@@ -54,6 +54,8 @@ git checkout -b feature/<scope>-<topic>
      - CI uses canonical non-secret Firebase test identifiers, including the
        production project ID, while host/provider secrets remain absent.
    - `lane:core (Unit + Build + Governance + Bundle)`
+     - checks out full branch history so governance can compare the PR head
+       against its actual `origin/main` merge base.
    - heavy lanes (`lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`) when required by risk classifier or `main` push policy
      - Firebase heavy lanes install the independently locked `functions/`
        dependencies before starting emulators; root installation alone is not

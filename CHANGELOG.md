@@ -85,6 +85,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Migration and seed CLIs now validate arguments and overwrite guards before
   loading Firebase Admin, while Firebase emulator lanes install the separately
   locked Functions dependencies explicitly.
+- The core CI lane now fetches full Git history so documentation governance
+  evaluates the real PR merge-base range instead of failing on a shallow
+  checkout.
 - Local Firebase environment generation now writes only `.env.local`, refuses
   to overwrite an existing file by default, and requires an explicit
   project-scoped confirmation for replacement. Development catalog fallback is
