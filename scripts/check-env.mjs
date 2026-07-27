@@ -1,5 +1,6 @@
+import fs from "node:fs";
 import path from "node:path";
-import { loadEnv } from "vite";
+import { parseEnv } from "node:util";
 
 const REQUIRED = [
   "VITE_FIREBASE_API_KEY",
@@ -18,7 +19,17 @@ const PRODUCTION_UNSAFE_FLAGS = [
 ];
 
 const cwd = process.cwd();
-const productionEnv = loadEnv("production", cwd, "");
+const productionEnv = {};
+for (const fileName of [
+  ".env",
+  ".env.local",
+  ".env.production",
+  ".env.production.local"
+]) {
+  const filePath = path.resolve(cwd, fileName);
+  if (!fs.existsSync(filePath)) continue;
+  Object.assign(productionEnv, parseEnv(fs.readFileSync(filePath, "utf8")));
+}
 
 function effectiveValue(key) {
   if (Object.prototype.hasOwnProperty.call(process.env, key)) {

@@ -7,12 +7,12 @@ on:
       - main
 
 env:
-  VITE_FIREBASE_API_KEY: ci-placeholder-api-key
-  VITE_FIREBASE_AUTH_DOMAIN: ci-placeholder-auth-domain
-  VITE_FIREBASE_PROJECT_ID: ci-placeholder-project-id
-  VITE_FIREBASE_STORAGE_BUCKET: ci-placeholder-storage-bucket
-  VITE_FIREBASE_MESSAGING_SENDER_ID: ci-placeholder-messaging-sender
-  VITE_FIREBASE_APP_ID: ci-placeholder-app-id
+  VITE_FIREBASE_API_KEY: ci-test-browser-key
+  VITE_FIREBASE_AUTH_DOMAIN: tonicatering.firebaseapp.com
+  VITE_FIREBASE_PROJECT_ID: tonicatering
+  VITE_FIREBASE_STORAGE_BUCKET: tonicatering.firebasestorage.app
+  VITE_FIREBASE_MESSAGING_SENDER_ID: "1234567890"
+  VITE_FIREBASE_APP_ID: "1:1234567890:web:ci-test"
 
 concurrency:
   group: ci-quality-${{ github.workflow }}-${{ github.ref }}

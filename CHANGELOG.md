@@ -79,6 +79,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   semantically tagged `main` revision and run the production environment check
   before building, preventing E2E bypass, emulator, or local-fallback flags
   from being promoted.
+- The production environment check now uses only Node built-ins so the
+  dependency-free CI preflight can validate canonical Firebase settings and
+  unsafe flag overrides before package installation.
 - Local Firebase environment generation now writes only `.env.local`, refuses
   to overwrite an existing file by default, and requires an explicit
   project-scoped confirmation for replacement. Development catalog fallback is

@@ -5,7 +5,7 @@ Last updated: July 27, 2026
 ## Operational Health
 - Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment `dpl_AsPnyL3M8o5rF8GUSMgJ8HvZWmRh`, which reached `READY` on July 27, 2026. Hosted HTTP checks returned the QuotePilot application shell with status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the stable combined runtime passes 219 unit
+- Build and local validation: the stable combined runtime passes 220 unit
   tests and 33 focused Firestore rules tests. The provisioning emulator
   acceptance matrix, the authoritative owner/customer browser acceptance test (1/1),
   organization-scoped provisioning UI tests (7/7), and the unscoped

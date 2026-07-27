@@ -49,6 +49,10 @@ git checkout -b feature/<scope>-<topic>
 2. Finalize `CHANGELOG.md` and `PROJECT_STATUS.md`.
 3. Run release checks (CI must be green):
    - `lane:quick (Preflight + Secrets)`
+     - runs before dependency installation, so its environment and secret
+       checks must use only Node built-ins and repository scripts;
+     - CI uses canonical non-secret Firebase test identifiers, including the
+       production project ID, while host/provider secrets remain absent.
    - `lane:core (Unit + Build + Governance + Bundle)`
    - heavy lanes (`lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`) when required by risk classifier or `main` push policy
    - `Docker Build Smoke`

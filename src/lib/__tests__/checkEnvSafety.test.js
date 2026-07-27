@@ -59,6 +59,12 @@ afterEach(() => {
 });
 
 describe("Firebase browser environment safety", { timeout: 30_000 }, () => {
+  test("the pre-install CI check uses only Node built-ins", () => {
+    expect(fs.readFileSync(SCRIPT_PATH, "utf8")).not.toMatch(
+      /from\s+["'](?:vite|dotenv)["']/
+    );
+  });
+
   test("accepts the canonical production project", () => {
     expect(runCheck().status).toBe(0);
   });
