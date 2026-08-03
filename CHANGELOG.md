@@ -82,6 +82,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Authenticated operator workspaces now defer their lazy modal modules until
+  first use, keep opened modules mounted after close, and show an accessible
+  loading surface during the first chunk fetch instead of downloading every
+  admin tool during initial `/app` startup.
 - Firebase-backed Sales Workflow approval mutations now use trusted callables;
   direct browser writes to `workflow.approvalRequests` are denied for both
   sales and admin roles. A confirmed missing-callable response may use the

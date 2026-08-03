@@ -149,6 +149,9 @@ Last updated: August 3, 2026
   production portal record was changed by that validation.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
 - Bundle size remains a watch item; budget/CWV gates now prevent uncontrolled regressions.
+- Authenticated workspace modal chunks now load on first use instead of during
+  initial `/app` startup; local request-level browser coverage verifies the
+  boundary, while hosted transfer/CWV evidence remains pending publication.
 - Functions integrations (Stripe, Twilio, and Resend) remain optional and require secure runtime configuration plus provider-level acceptance/delivery proof; committed placeholder templates are not provider configuration.
 - CRM outbound synchronization is intentionally disabled until a
   server-authorized connector with provider acceptance evidence is implemented.

@@ -73,11 +73,9 @@ async function advanceToSaveButton(page, saveButtonLabel) {
 async function createQuoteToHistory(page, { guests = 72, eventName, venue, date } = {}) {
   await fillRequiredQuoteFields(page, { guests, eventName, venue, date });
   await advanceToSaveButton(page, "Save & Submit");
+  await expect(page.getByText(/Quote .* saved to/i)).toBeVisible();
 
   const historyHeading = page.getByRole("heading", { name: "Quote History" });
-  if (!(await historyHeading.isVisible())) {
-    await page.getByRole("button", { name: "Quote History" }).click();
-  }
   await expect(historyHeading).toBeVisible();
 }
 
@@ -100,6 +98,29 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto("/app");
   await expect(page.getByRole("button", { name: "Get Instant Quote" })).toBeVisible();
+});
+
+test("operator workspaces load only when first opened and stay mounted after close", async ({ page }) => {
+  const modalResourceNames = async () => page.evaluate(() => (
+    performance
+      .getEntriesByType("resource")
+      .map((entry) => entry.name)
+      .filter((name) => /(?:AdminCatalog|ImportStudio|QuoteHistory|SalesWorkflow|EventSchedule|IntegrationOps|Diagnostics|QuoteCompare|ReportingDashboard)Modal(?:-[^/?]+\.js|\.jsx)/.test(name))
+  ));
+
+  expect(await modalResourceNames()).toEqual([]);
+
+  await page.getByRole("button", { name: "Sales Workflow" }).click();
+  await expect(page.getByRole("heading", { name: "Sales Workflow" })).toBeVisible();
+  await expect.poll(modalResourceNames).toEqual([
+    expect.stringMatching(/SalesWorkflowModal(?:-[^/?]+\.js|\.jsx)/)
+  ]);
+
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("heading", { name: "Sales Workflow" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Sales Workflow" }).click();
+  await expect(page.getByRole("heading", { name: "Sales Workflow" })).toBeVisible();
+  expect(await modalResourceNames()).toHaveLength(1);
 });
 
 test("step 1 soft-lock keeps next disabled until required fields are complete", async ({ page }) => {

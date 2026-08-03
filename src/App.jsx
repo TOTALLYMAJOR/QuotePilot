@@ -150,6 +150,27 @@ function toOptionalNumber(value) {
   return Number.isFinite(n) ? n : "";
 }
 
+function useStickyMount(active) {
+  const [hasMounted, setHasMounted] = useState(Boolean(active));
+
+  useEffect(() => {
+    if (active) setHasMounted(true);
+  }, [active]);
+
+  return Boolean(active) || hasMounted;
+}
+
+function WorkspaceModalFallback() {
+  return (
+    <div className="modal-overlay modal-loading-overlay" role="status" aria-live="polite">
+      <div className="modal-card modal-loading-card">
+        <strong>Opening workspace...</strong>
+        <span>Loading this tool only when it is needed.</span>
+      </div>
+    </div>
+  );
+}
+
 function normalizeFeatureFlags(input) {
   const source = input && typeof input === "object" ? input : {};
   const aiAssist = source.aiAssist !== false;
@@ -334,6 +355,15 @@ export default function App() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [salesWorkflowOpen, setSalesWorkflowOpen] = useState(false);
+  const adminMounted = useStickyMount(adminOpen);
+  const scheduleMounted = useStickyMount(scheduleOpen);
+  const integrationsMounted = useStickyMount(integrationsOpen);
+  const importStudioMounted = useStickyMount(importStudioOpen);
+  const diagnosticsMounted = useStickyMount(diagnosticsOpen);
+  const historyMounted = useStickyMount(historyOpen);
+  const dashboardMounted = useStickyMount(dashboardOpen);
+  const compareMounted = useStickyMount(compareOpen);
+  const salesWorkflowMounted = useStickyMount(salesWorkflowOpen);
   const [submitState, setSubmitState] = useState({
     saving: false,
     sendingQuoteEmail: false,
@@ -1446,18 +1476,20 @@ export default function App() {
           </section>
         </main>
 
-        <Suspense fallback={null}>
-          <IntegrationOpsModal
-            open={integrationsOpen}
-            onClose={() => setIntegrationsOpen(false)}
-            organizationId=""
-            settings={{}}
-            currentUserEmail={authSession.user?.email || ""}
-            currentUserUid={authSession.user?.uid || ""}
-            canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
-            canManageProviders={authSession.isAdmin}
-            provisioningOnly
-          />
+        <Suspense fallback={<WorkspaceModalFallback />}>
+          {integrationsMounted && (
+            <IntegrationOpsModal
+              open={integrationsOpen}
+              onClose={() => setIntegrationsOpen(false)}
+              organizationId=""
+              settings={{}}
+              currentUserEmail={authSession.user?.email || ""}
+              currentUserUid={authSession.user?.uid || ""}
+              canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
+              canManageProviders={authSession.isAdmin}
+              provisioningOnly
+            />
+          )}
         </Suspense>
       </div>
     );
@@ -1523,8 +1555,8 @@ export default function App() {
           </section>
         </main>
 
-        <Suspense fallback={null}>
-          {authSession.isAdmin && (
+        <Suspense fallback={<WorkspaceModalFallback />}>
+          {authSession.isAdmin && adminMounted && (
             <AdminCatalogModal
               open={adminOpen}
               catalog={catalog}
@@ -1808,8 +1840,8 @@ export default function App() {
         </div>
       )}
 
-      <Suspense fallback={null}>
-        {authSession.isAdmin && (
+      <Suspense fallback={<WorkspaceModalFallback />}>
+        {authSession.isAdmin && adminMounted && (
           <AdminCatalogModal
             open={adminOpen}
             catalog={catalog}
@@ -1823,7 +1855,7 @@ export default function App() {
           />
         )}
 
-        {authSession.isAdmin && (
+        {authSession.isAdmin && importStudioMounted && (
           <ImportStudioModal
             open={importStudioOpen}
             onClose={() => setImportStudioOpen(false)}
@@ -1842,33 +1874,37 @@ export default function App() {
           />
         )}
 
-        <QuoteHistoryModal
-          open={historyOpen}
-          onClose={() => setHistoryOpen(false)}
-          basePortalUrl={`${window.location.origin}${window.location.pathname}`}
-          organizationId={authSession.organizationId}
-          currentUserUid={authSession.user?.uid || ""}
-          currentUserEmail={authSession.user?.email || ""}
-          currentUserRole={authSession.role}
-          onEditQuote={handleEditQuote}
-          canDeleteQuotes={authSession.isAdmin}
-          onToast={pushToast}
-        />
+        {historyMounted && (
+          <QuoteHistoryModal
+            open={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+            basePortalUrl={`${window.location.origin}${window.location.pathname}`}
+            organizationId={authSession.organizationId}
+            currentUserUid={authSession.user?.uid || ""}
+            currentUserEmail={authSession.user?.email || ""}
+            currentUserRole={authSession.role}
+            onEditQuote={handleEditQuote}
+            canDeleteQuotes={authSession.isAdmin}
+            onToast={pushToast}
+          />
+        )}
 
-        <SalesWorkflowModal
-          open={salesWorkflowOpen}
-          onClose={() => setSalesWorkflowOpen(false)}
-          onOpenQuoteHistory={() => {
-            setSalesWorkflowOpen(false);
-            setHistoryOpen(true);
-          }}
-          organizationId={authSession.organizationId}
-          currentUserEmail={authSession.user?.email || ""}
-          currentUserRole={authSession.role}
-          onToast={pushToast}
-        />
+        {salesWorkflowMounted && (
+          <SalesWorkflowModal
+            open={salesWorkflowOpen}
+            onClose={() => setSalesWorkflowOpen(false)}
+            onOpenQuoteHistory={() => {
+              setSalesWorkflowOpen(false);
+              setHistoryOpen(true);
+            }}
+            organizationId={authSession.organizationId}
+            currentUserEmail={authSession.user?.email || ""}
+            currentUserRole={authSession.role}
+            onToast={pushToast}
+          />
+        )}
 
-        {eventScheduleEnabled && (
+        {eventScheduleEnabled && scheduleMounted && (
           <EventScheduleModal
             open={scheduleOpen}
             onClose={() => setScheduleOpen(false)}
@@ -1879,7 +1915,7 @@ export default function App() {
           />
         )}
 
-        {integrationsEnabled && (
+        {integrationsEnabled && integrationsMounted && (
           <IntegrationOpsModal
             open={integrationsOpen}
             onClose={() => setIntegrationsOpen(false)}
@@ -1892,14 +1928,14 @@ export default function App() {
           />
         )}
 
-        {diagnosticsEnabled && (
+        {diagnosticsEnabled && diagnosticsMounted && (
           <DiagnosticsModal
             open={diagnosticsOpen}
             onClose={() => setDiagnosticsOpen(false)}
           />
         )}
 
-        {quoteCompareEnabled && (
+        {quoteCompareEnabled && compareMounted && (
           <QuoteCompareModal
             open={compareOpen}
             onClose={() => setCompareOpen(false)}
@@ -1912,7 +1948,7 @@ export default function App() {
           />
         )}
 
-        {dashboardEnabled && (
+        {dashboardEnabled && dashboardMounted && (
           <ReportingDashboardModal
             open={dashboardOpen}
             onClose={() => setDashboardOpen(false)}
