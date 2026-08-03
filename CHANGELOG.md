@@ -82,6 +82,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Phone and tablet quote building now keeps Total and Deposit in a sticky
+  summary throughout all five steps, exposes the single full breakdown as a
+  focus-contained sheet with background isolation and Close/Escape recovery,
+  recenters the active step after navigation or resize, and uses compact
+  scrollable header actions without covering workflow controls.
 - Authenticated operator workspaces now defer their lazy modal modules until
   first use, keep opened modules mounted after close, and show an accessible
   loading surface during the first chunk fetch instead of downloading every

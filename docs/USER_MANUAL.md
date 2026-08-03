@@ -23,7 +23,10 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
    - `Add-ons / Rentals`
    - `Pricing Summary`
    - `Save / Submit`
-3. Review the sticky Live Breakdown panel while editing.
+3. Review the sticky Live Breakdown panel while editing. After entering the
+   wizard on a phone or tablet, all five steps keep Total and Deposit in view.
+   Use `View breakdown` for the focus-contained itemized sheet and `Close` or
+   Escape to return focus to the workflow.
 4. Save or submit from the final step.
 5. Copy/share the generated customer portal link if needed.
 

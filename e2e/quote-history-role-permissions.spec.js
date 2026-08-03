@@ -56,9 +56,7 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(page.getByText(/Quote .* saved to/i)).toBeVisible();
 
   const historyHeading = page.getByRole("heading", { name: "Quote History" });
-  if (!(await historyHeading.isVisible())) {
-    await page.getByRole("button", { name: "Quote History" }).click();
-  }
+  await expect(historyHeading).toBeVisible();
 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();

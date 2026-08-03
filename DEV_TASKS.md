@@ -32,7 +32,8 @@ Last updated: August 3, 2026
 
 ## P1 - Performance and UX
 - Reduce largest JavaScript chunk size (split proposal/export-heavy paths where practical).
-- Improve wizard mobile layout for dense review/pricing states.
+- Continue mobile-density cleanup beyond the implemented persistent pricing
+  summary, active-step rail, and compact operator action rail.
 - Add intentional transition/motion polish for step changes and live breakdown updates.
 
 ## P1 - Product Capability

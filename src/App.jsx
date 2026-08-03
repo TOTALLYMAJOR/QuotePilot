@@ -171,6 +171,36 @@ function WorkspaceModalFallback() {
   );
 }
 
+function MobilePricingSummary({ step, totals, open, onToggle, toggleRef }) {
+  if (step < 1 || step > 5) return null;
+
+  return (
+    <section
+      className="mobile-pricing-summary"
+      aria-label="Current quote pricing"
+      data-testid="mobile-pricing-summary"
+    >
+      <div className="mobile-pricing-value">
+        <span>Total</span>
+        <strong data-testid="mobile-pricing-total">{currency(totals.total)}</strong>
+      </div>
+      <div className="mobile-pricing-value">
+        <span>Deposit</span>
+        <strong>{currency(totals.deposit)}</strong>
+      </div>
+      <button
+        ref={toggleRef}
+        type="button"
+        aria-expanded={open}
+        aria-controls="live-breakdown"
+        onClick={onToggle}
+      >
+        {open ? "Hide breakdown" : "View breakdown"}
+      </button>
+    </section>
+  );
+}
+
 function normalizeFeatureFlags(input) {
   const source = input && typeof input === "object" ? input : {};
   const aiAssist = source.aiAssist !== false;
@@ -304,6 +334,8 @@ function buildTotalsFromPricingSnapshot(pricingSnapshot = {}, fallbackTotals = {
 
 export default function App() {
   const wizardRef = useRef(null);
+  const stepperRef = useRef(null);
+  const mobilePricingToggleRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { setOrganizationId } = useOrganization();
@@ -346,6 +378,115 @@ export default function App() {
   const [dynamicMenuLoading, setDynamicMenuLoading] = useState(false);
   const [dynamicMenuError, setDynamicMenuError] = useState("");
   const [step, setStep] = useState(1);
+  const [mobilePricingOpen, setMobilePricingOpen] = useState(false);
+
+  const closeMobilePricing = () => {
+    setMobilePricingOpen(false);
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => mobilePricingToggleRef.current?.focus());
+    }
+  };
+
+  useEffect(() => {
+    setMobilePricingOpen(false);
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    let frame = 0;
+    const centerCurrentStep = () => {
+      if (!window.matchMedia("(max-width: 640px)").matches) return;
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const stepper = stepperRef.current;
+        const currentStep = stepper?.querySelector('[aria-current="step"]');
+        if (!stepper || !currentStep) return;
+        const railRect = stepper.getBoundingClientRect();
+        const stepRect = currentStep.getBoundingClientRect();
+        stepper.scrollTo({
+          left: Math.max(
+            0,
+            stepper.scrollLeft
+              + (stepRect.left - railRect.left)
+              - ((railRect.width - stepRect.width) / 2)
+          ),
+          behavior: "auto"
+        });
+      });
+    };
+
+    centerCurrentStep();
+    window.addEventListener("resize", centerCurrentStep);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", centerCurrentStep);
+    };
+  }, [step]);
+
+  useEffect(() => {
+    if (!mobilePricingOpen || typeof window === "undefined") return undefined;
+    const mobileLayout = window.matchMedia("(max-width: 980px)");
+    const backgroundTargets = [
+      document.querySelector(".site-header"),
+      document.querySelector(".hero"),
+      wizardRef.current?.querySelector(".wizard-panel"),
+      document.querySelector(".toast-stack")
+    ].filter(Boolean);
+    const previousInertValues = backgroundTargets.map((element) => element.inert);
+    const previousBodyOverflow = document.body.style.overflow;
+
+    backgroundTargets.forEach((element) => {
+      element.inert = true;
+    });
+    document.body.style.overflow = "hidden";
+
+    const frame = window.requestAnimationFrame(() => {
+      document.querySelector("#live-breakdown .breakdown-mobile-close")?.focus();
+    });
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMobilePricing();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const breakdown = document.querySelector("#live-breakdown");
+      const focusable = Array.from(breakdown?.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) || []).filter((element) => element.getClientRects().length > 0);
+      if (!focusable.length) {
+        event.preventDefault();
+        breakdown?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !breakdown?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !breakdown?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    const handleLayoutChange = (event) => {
+      if (event.matches) return;
+      setMobilePricingOpen(false);
+      window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    mobileLayout.addEventListener("change", handleLayoutChange);
+    if (!mobileLayout.matches) handleLayoutChange(mobileLayout);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", handleKeyDown);
+      mobileLayout.removeEventListener("change", handleLayoutChange);
+      backgroundTargets.forEach((element, index) => {
+        element.inert = previousInertValues[index];
+      });
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [mobilePricingOpen]);
+
   const [adminOpen, setAdminOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
@@ -1662,15 +1803,20 @@ export default function App() {
         </div>
       </section>
 
-      <main className="container wizard-grid" ref={wizardRef}>
+      <main
+        className="container wizard-grid"
+        ref={wizardRef}
+        tabIndex={-1}
+      >
         <section className="panel wizard-panel">
-          <ol className="stepper">
+          <ol className="stepper" ref={stepperRef}>
             {stepperModel.map((stepMeta) => {
               const stepOneMissing = stepMeta.stepNumber === 1 && !step1Validation.valid;
               return (
                 <li
                   key={stepMeta.label}
                   className={`stepper-item status-${stepMeta.status} ${stepMeta.isLocked ? "is-locked" : ""}`.trim()}
+                  aria-current={stepMeta.stepNumber === step ? "step" : undefined}
                 >
                   <span className="step-badge">
                     {stepMeta.status === "completed" ? "✓" : stepOneMissing ? "!" : stepMeta.stepNumber}
@@ -1686,6 +1832,14 @@ export default function App() {
               );
             })}
           </ol>
+
+          <MobilePricingSummary
+            step={step}
+            totals={totals}
+            open={mobilePricingOpen}
+            onToggle={() => setMobilePricingOpen((current) => !current)}
+            toggleRef={mobilePricingToggleRef}
+          />
 
           <div className="step-stage" key={step}>
             {catalog.loading && <p className="source-note">Loading catalog...</p>}
@@ -1827,7 +1981,14 @@ export default function App() {
           {submitState.message && <p className="source-note">{submitState.message}</p>}
         </section>
 
-        <LiveBreakdown form={form} totals={totals} settings={effectiveSettings} catalog={catalog} />
+        <LiveBreakdown
+          form={form}
+          totals={totals}
+          settings={effectiveSettings}
+          catalog={catalog}
+          mobileExpanded={mobilePricingOpen}
+          onMobileClose={closeMobilePricing}
+        />
       </main>
 
       {toasts.length > 0 && (

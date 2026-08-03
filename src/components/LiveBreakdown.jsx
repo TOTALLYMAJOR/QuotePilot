@@ -75,7 +75,14 @@ function BreakdownTextRow({ rowKey, label, value }) {
   );
 }
 
-export default function LiveBreakdown({ form, totals, settings, catalog }) {
+export default function LiveBreakdown({
+  form,
+  totals,
+  settings,
+  catalog,
+  mobileExpanded = false,
+  onMobileClose
+}) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const effectTimersRef = useRef([]);
   const animationFrameRef = useRef(0);
@@ -299,11 +306,44 @@ export default function LiveBreakdown({ form, totals, settings, catalog }) {
   }, [prefersReducedMotion, valueTargets]);
 
   return (
-    <aside className="panel breakdown-panel" aria-live="polite">
-      <div className="breakdown-head">
-        <h3>Live Breakdown</h3>
-        <p className="muted">Auto-updates as options change.</p>
-      </div>
+    <>
+      <p
+        className="visually-hidden"
+        role="status"
+        aria-atomic="true"
+        data-pricing-live-status
+      >
+        Quote total {money(totals.total)}. Deposit {money(totals.deposit)}.
+      </p>
+      {mobileExpanded && (
+        <div
+          className="breakdown-mobile-scrim"
+          aria-hidden="true"
+          onClick={onMobileClose}
+        />
+      )}
+      <aside
+        id="live-breakdown"
+        className={`panel breakdown-panel ${mobileExpanded ? "is-mobile-expanded" : ""}`.trim()}
+        aria-labelledby="live-breakdown-heading"
+        aria-describedby="live-breakdown-description"
+        role={mobileExpanded ? "dialog" : undefined}
+        aria-modal={mobileExpanded ? "true" : undefined}
+        tabIndex="-1"
+      >
+        <div className="breakdown-head">
+          <div>
+            <h3 id="live-breakdown-heading">Live Breakdown</h3>
+            <p className="muted" id="live-breakdown-description">Auto-updates as options change.</p>
+          </div>
+          <button
+            type="button"
+            className="ghost breakdown-mobile-close"
+            onClick={onMobileClose}
+          >
+            Close
+          </button>
+        </div>
 
       <section className="breakdown-stat-grid">
         <article>
@@ -472,6 +512,7 @@ export default function LiveBreakdown({ form, totals, settings, catalog }) {
           <p>{selectedMenuItems.map((item) => item.label).join(", ") || "-"}</p>
         </div>
       </section>
-    </aside>
+      </aside>
+    </>
   );
 }

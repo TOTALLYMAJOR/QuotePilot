@@ -161,6 +161,125 @@ test("live breakdown shows transient change cues when quote inputs update", asyn
   await expect(totalRow.locator(".row-delta")).toBeVisible();
 });
 
+test("mobile quote pricing stays visible through the workflow without covering controls", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileSummary = page.getByTestId("mobile-pricing-summary");
+  const mobileTotal = page.getByTestId("mobile-pricing-total");
+  const liveStatus = page.locator("[data-pricing-live-status]");
+  const breakdown = page.locator("#live-breakdown");
+  const breakdownToggle = mobileSummary.locator('button[aria-controls="live-breakdown"]');
+  const expectCurrentStepContained = async (stepLabel) => {
+    const currentStep = page.locator('.stepper-item[aria-current="step"]');
+    await expect(currentStep).toContainText(stepLabel);
+    await expect.poll(() => currentStep.evaluate((element) => {
+      const item = element.getBoundingClientRect();
+      const rail = element.parentElement.getBoundingClientRect();
+      return item.left >= rail.left - 1 && item.right <= rail.right + 1;
+    })).toBe(true);
+  };
+
+  await page.getByRole("button", { name: "Get Instant Quote" }).click();
+  await expect(mobileSummary).toBeVisible();
+  await expect(mobileSummary).toBeInViewport();
+  await expect(breakdownToggle).toHaveAccessibleName("View breakdown");
+  await expect(breakdown).toBeHidden();
+  await fillRequiredQuoteFields(page, { guests: 72 });
+  await page.getByRole("button", { name: "Next" }).click();
+
+  await expect(mobileSummary).toBeVisible();
+  await expect(mobileSummary).toBeInViewport();
+  const initialTotal = parseMoney(await mobileTotal.innerText());
+  const initialLiveStatus = await liveStatus.innerText();
+
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("110");
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect.poll(async () => parseMoney(await mobileTotal.innerText())).toBeGreaterThan(initialTotal);
+  await expect.poll(async () => liveStatus.innerText()).not.toBe(initialLiveStatus);
+  await expect(liveStatus).toContainText(await mobileTotal.innerText());
+
+  await page.setViewportSize({ width: 768, height: 900 });
+  await expect(mobileSummary).toBeVisible();
+  await expect(mobileSummary).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(mobileSummary).toBeInViewport();
+
+  const stepLabels = ["Add-ons / Rentals", "Pricing Summary", "Save / Submit"];
+  for (const stepLabel of stepLabels) {
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(mobileSummary).toBeVisible();
+    await expect(mobileSummary).toBeInViewport();
+    await expectCurrentStepContained(stepLabel);
+  }
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await expect(mobileSummary).toBeVisible();
+  await expect(mobileSummary).toBeInViewport();
+  await expectCurrentStepContained("Save / Submit");
+  const saveButton = page.getByRole("button", { name: "Save & Submit" });
+  await saveButton.evaluate((element) => element.scrollIntoView({ block: "center" }));
+
+  const [summaryBox, saveBox, layout] = await Promise.all([
+    mobileSummary.boundingBox(),
+    saveButton.boundingBox(),
+    page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      viewportHeight: window.innerHeight
+    }))
+  ]);
+  expect(summaryBox).not.toBeNull();
+  expect(saveBox).not.toBeNull();
+  expect(summaryBox.x).toBeGreaterThanOrEqual(0);
+  expect(summaryBox.x + summaryBox.width).toBeLessThanOrEqual(layout.clientWidth + 1);
+  expect(summaryBox.y + summaryBox.height).toBeLessThanOrEqual(layout.viewportHeight + 1);
+  expect(saveBox.y).toBeGreaterThan(summaryBox.y + summaryBox.height);
+  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
+
+  await expect(breakdownToggle).toHaveAccessibleName("View breakdown");
+  const toggleBox = await breakdownToggle.boundingBox();
+  expect(toggleBox.height).toBeGreaterThanOrEqual(44);
+  await expect(breakdownToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(liveStatus).toHaveCount(1);
+  await expect(breakdown).not.toHaveAttribute("aria-live");
+  await breakdownToggle.click();
+  await expect(breakdownToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(breakdownToggle).toHaveAccessibleName("Hide breakdown");
+  await expect(breakdown).toBeVisible();
+  await expect(breakdown).toHaveAttribute("role", "dialog");
+  await expect(breakdown).toHaveAttribute("aria-modal", "true");
+  await expect.poll(() => page.locator(".wizard-panel").evaluate((element) => element.inert)).toBe(true);
+  const closeBreakdown = page.getByRole("button", { name: "Close" });
+  await expect(closeBreakdown).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(closeBreakdown).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(closeBreakdown).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(breakdown).toBeHidden();
+  await expect(breakdownToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(breakdownToggle).toHaveAccessibleName("View breakdown");
+  await expect(breakdownToggle).toBeFocused();
+  await expect.poll(() => page.locator(".wizard-panel").evaluate((element) => element.inert)).toBe(false);
+
+  await breakdownToggle.click();
+  await expect(closeBreakdown).toBeFocused();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(mobileSummary).toBeHidden();
+  await expect(breakdownToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(breakdown).not.toHaveClass(/is-mobile-expanded/);
+  await expect(breakdown).not.toHaveAttribute("role", "dialog");
+  await expect(page.locator("main.wizard-grid")).toBeFocused();
+  expect(await breakdown.evaluate((element) => getComputedStyle(element).position)).toBe("sticky");
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await expect(mobileSummary).toBeVisible();
+  await expect(mobileSummary).toBeInViewport();
+  await expect(breakdown).toBeHidden();
+  await expectCurrentStepContained("Save / Submit");
+});
+
 test("good better best scenarios can be compared and applied", async ({ page }) => {
   await fillRequiredQuoteFields(page, {
     guests: 96,

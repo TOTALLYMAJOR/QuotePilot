@@ -11,9 +11,9 @@ Last updated: August 3, 2026
   returned status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains
   the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the release candidate passes 236 unit tests (34
+- Build and local validation: the release candidate passes 248 unit tests (35
   intentionally skipped), 34 focused Firestore rules tests, and the default
-  Playwright suite (27 passed, 2 intentionally gated provisioning-role cases
+  Playwright suite (29 passed, 2 intentionally gated provisioning-role cases
   skipped). The Firebase Auth/catalog browser lane, authoritative
   pricing/quote/portal browser lane, and full provisioning emulator acceptance
   matrix also pass. Both the browser application and Functions production
@@ -149,6 +149,13 @@ Last updated: August 3, 2026
   production portal record was changed by that validation.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
 - Bundle size remains a watch item; budget/CWV gates now prevent uncontrolled regressions.
+- The quote builder now has a locally accepted mobile pricing path: after the
+  user enters the wizard, Total and Deposit remain in view throughout steps
+  1–5 at tested 320px, 390px, and 768px widths; the active step recenters after
+  navigation and resize; and the one full breakdown opens as a focus-contained
+  sheet with background isolation, Close/Escape recovery, and one concise live
+  announcement. The 320px Save action remains unobstructed. Hosted mobile
+  acceptance is pending publication.
 - Authenticated workspace modal chunks now load on first use instead of during
   initial `/app` startup; local request-level browser coverage verifies the
   boundary, while hosted transfer/CWV evidence remains pending publication.
