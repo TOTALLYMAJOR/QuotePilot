@@ -2868,6 +2868,33 @@ hr {
 
 .sales-workflow-card {
   width: min(1240px, 100%);
+  max-height: calc(100dvh - 2rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overscroll-behavior: contain;
+  scroll-padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+.sales-workflow-card [role="tabpanel"][hidden] {
+  display: none;
+}
+
+.workflow-attention-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.workflow-attention-badge {
+  min-width: 1.35rem;
+  min-height: 1.35rem;
+  border-radius: 999px;
+  background: #9f3d32;
+  color: #fff;
+  padding: 0.1rem 0.38rem;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1;
 }
 
 .sales-workflow-card .modal-head h2 {
@@ -2926,6 +2953,148 @@ hr {
 .workflow-tabs button.active {
   border-bottom-color: #2f6e57;
   color: #1e4d3d;
+}
+
+.workflow-attention-panel {
+  padding-top: 0.7rem;
+}
+
+.workflow-attention-boundary {
+  margin: 0;
+  border-left: 3px solid #6d8178;
+  background: #f2f5f3;
+  color: #4f5d57;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.workflow-attention-empty {
+  margin-top: 0.65rem;
+  border: 1px dashed #c7c7be;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.workflow-attention-empty h3,
+.workflow-attention-empty p {
+  margin: 0;
+}
+
+.workflow-attention-empty h3 {
+  color: #2f3c36;
+  font-size: 0.95rem;
+}
+
+.workflow-attention-empty p {
+  margin-top: 0.25rem;
+  color: #666d68;
+  font-size: 0.75rem;
+}
+
+.workflow-attention-list {
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.workflow-attention-row {
+  min-width: 0;
+  border: 1px solid #cec9be;
+  border-left: 4px solid #9a6a29;
+  border-radius: 8px;
+  background: #fffefb;
+  padding: 0.7rem;
+}
+
+.workflow-attention-row.attention-change_request.state-new,
+.workflow-attention-row.attention-change_request.state-invalid {
+  border-left-color: #a4463b;
+}
+
+.workflow-attention-row.attention-change_request.state-acknowledged {
+  border-left-color: #4f7190;
+}
+
+.workflow-attention-row.attention-follow_up.state-overdue {
+  border-left-color: #a45a35;
+}
+
+.workflow-attention-row.attention-approval {
+  border-left-color: #795c98;
+}
+
+.workflow-attention-head {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.workflow-attention-head > div {
+  min-width: 0;
+}
+
+.workflow-attention-head h3,
+.workflow-attention-head p,
+.workflow-attention-message {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.workflow-attention-head h3 {
+  margin-top: 0.12rem;
+  color: #2d3732;
+  font-size: 0.92rem;
+}
+
+.workflow-attention-head p,
+.workflow-attention-head time {
+  color: #686962;
+  font-size: 0.7rem;
+}
+
+.workflow-attention-head time {
+  flex: 0 0 auto;
+  overflow-wrap: anywhere;
+}
+
+.workflow-attention-priority {
+  color: #7b382f;
+  font-size: 0.65rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.workflow-attention-message {
+  margin-top: 0.55rem;
+  border-left: 2px solid #d8d2c5;
+  color: #4f534f;
+  padding-left: 0.55rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.workflow-handling-note {
+  margin-top: 0.6rem;
+}
+
+.workflow-attention-actions {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.workflow-attention-actions button {
+  min-height: 44px;
 }
 
 .sales-workflow-layout {
@@ -3987,6 +4156,54 @@ hr {
 }
 
 @media (max-width: 640px) {
+  .workflow-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-width: 100%;
+  }
+
+  .workflow-tabs button {
+    min-width: 0;
+    min-height: 44px;
+    padding-inline: 0.28rem;
+    font-size: 0.72rem;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .sales-workflow-card .workflow-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sales-workflow-card .workflow-metrics > div {
+    border-right: 1px solid #d7d2c5;
+    border-bottom: 0;
+  }
+
+  .sales-workflow-card .workflow-metrics > div:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .sales-workflow-card .workflow-metrics > div:nth-child(-n + 2) {
+    border-bottom: 1px solid #d7d2c5;
+  }
+
+  .workflow-attention-head {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .workflow-attention-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workflow-attention-actions button {
+    width: 100%;
+  }
+
   .hero {
     padding-top: 1.4rem;
   }

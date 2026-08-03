@@ -62,6 +62,13 @@ const MAX_RATE_MIX_CSV_LENGTH = 300;
 const MAX_FOLLOW_UP_NOTE_LENGTH = 1200;
 const MAX_APPROVAL_NOTE_LENGTH = 800;
 const MAX_PORTAL_DECISION_MESSAGE_LENGTH = 1200;
+const WORKFLOW_ATTENTION_STATUSES = [
+  "draft",
+  "sent",
+  "viewed",
+  "accepted"
+];
+const MAX_CHANGE_REQUEST_HANDLING_NOTE_LENGTH = 800;
 const KITCHEN_CHECKPOINT_DEFS = [
   { id: "prep-start", label: "Prep kickoff", minuteOffset: -180 },
   { id: "line-check", label: "Line check", minuteOffset: -120 },
@@ -423,10 +430,36 @@ function normalizePortalDecision(input) {
     ? source.decision
     : "";
   if (!decision) return {};
-  return {
+  const normalized = {
     decision,
     message: String(source.message || "").trim().slice(0, MAX_PORTAL_DECISION_MESSAGE_LENGTH),
     submittedAtISO: String(source.submittedAtISO || "").trim()
+  };
+  const requestId = String(source.requestId || "").trim();
+  if (requestId) normalized.requestId = requestId;
+  return normalized;
+}
+
+function normalizeChangeRequestHandling(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const state = ["acknowledged", "handled"].includes(source.state) ? source.state : "";
+  const sourceRequestId = String(source.sourceRequestId || "");
+  const sourceSubmittedAtISO = String(source.sourceSubmittedAtISO || "");
+  if (!state || !sourceSubmittedAtISO.trim()) return {};
+  return {
+    sourceRequestId,
+    sourceSubmittedAtISO,
+    sourceMessage: String(source.sourceMessage || ""),
+    state,
+    acknowledgedAtISO: String(source.acknowledgedAtISO || "").trim(),
+    acknowledgedByEmail: normalizeEmail(source.acknowledgedByEmail),
+    handledAtISO: state === "handled"
+      ? String(source.handledAtISO || "").trim()
+      : "",
+    handledByEmail: state === "handled" ? normalizeEmail(source.handledByEmail) : "",
+    note: state === "handled"
+      ? String(source.note || "").trim().slice(0, MAX_CHANGE_REQUEST_HANDLING_NOTE_LENGTH)
+      : ""
   };
 }
 
@@ -483,7 +516,11 @@ function buildPortalKey() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID().replace(/-/g, "");
   }
-  return `${Date.now()}${Math.floor(Math.random() * 1e9)}`;
+  const timestampPart = Date.now().toString(36).padStart(10, "0");
+  const randomPart = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
+    .toString(36)
+    .padStart(11, "0");
+  return `${timestampPart}${randomPart}`;
 }
 
 function timestampToISO(value, fallback = isoNow()) {
@@ -868,7 +905,8 @@ function hydrateQuote(item, nowISO = isoNow()) {
     workflow: {
       ...(item.workflow || {}),
       followUp: normalizeFollowUp(item.workflow?.followUp),
-      approvalRequests: normalizeApprovalRequests(item.workflow?.approvalRequests)
+      approvalRequests: normalizeApprovalRequests(item.workflow?.approvalRequests),
+      changeRequestHandling: normalizeChangeRequestHandling(item.workflow?.changeRequestHandling)
     },
     portalDecision: normalizePortalDecision(item.portalDecision),
     integrations: {
@@ -1964,6 +2002,175 @@ export async function updateQuoteFollowUp({
     })
   });
   return { ok: true, storage, followUp: nextFollowUp };
+}
+
+export async function updateQuoteChangeRequestHandling({
+  organizationId,
+  quoteId,
+  sourceRequestId = "",
+  sourceSubmittedAtISO,
+  sourceMessage,
+  action,
+  note = "",
+  actorEmail = "",
+  actorRole = ""
+} = {}) {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
+  }
+  const normalizedRole = String(actorRole || "").trim().toLowerCase();
+  if (!["admin", "sales"].includes(normalizedRole)) {
+    throw new Error("Staff role required to handle customer change requests.");
+  }
+  const normalizedAction = String(action || "").trim().toLowerCase();
+  if (!["acknowledge", "mark_handled"].includes(normalizedAction)) {
+    throw new Error("Change request action must be acknowledge or mark_handled.");
+  }
+  const requestSource = String(sourceSubmittedAtISO || "").trim();
+  if (!requestSource) {
+    throw new Error("Customer change request timestamp is required.");
+  }
+  const requestId = String(sourceRequestId || "").trim();
+  const requestMessage = String(sourceMessage || "").trim().slice(0, MAX_PORTAL_DECISION_MESSAGE_LENGTH);
+  if (!requestMessage) {
+    throw new Error("Customer change request message is required.");
+  }
+  const normalizedNote = String(note || "").trim();
+  if (normalizedNote.length > MAX_CHANGE_REQUEST_HANDLING_NOTE_LENGTH) {
+    throw new Error(`Handling note must be ${MAX_CHANGE_REQUEST_HANDLING_NOTE_LENGTH} characters or fewer.`);
+  }
+  if (normalizedAction === "mark_handled" && !normalizedNote) {
+    throw new Error("A handling note is required before marking a change request handled.");
+  }
+  const auditActorEmail = firebaseReady
+    ? normalizeEmail(auth?.currentUser?.email)
+    : normalizeEmail(actorEmail);
+  if (!auditActorEmail) {
+    throw new Error("Authenticated email is required for the change request handling record.");
+  }
+  const nextState = normalizedAction === "mark_handled" ? "handled" : "acknowledged";
+  const staleRequestError = () => {
+    const error = new Error("This customer change request is stale. Refresh the workflow and try again.");
+    error.code = "workflow/stale-change-request";
+    return error;
+  };
+  const buildNextHandling = (current, nowISO, persistedSource) => {
+    const matchesCurrentRequest = (
+      String(current.sourceRequestId || "").trim() === requestId
+      && String(current.sourceSubmittedAtISO || "").trim() === requestSource
+      && String(current.sourceMessage || "").trim() === requestMessage
+    );
+    if (matchesCurrentRequest && current.state === "handled") {
+      if (nextState === "handled") return current;
+      throw new Error("A handled change request cannot be returned to acknowledged.");
+    }
+    if (matchesCurrentRequest && current.state === nextState) return current;
+    const acknowledgedAtISO = matchesCurrentRequest && current.acknowledgedAtISO
+      ? current.acknowledgedAtISO
+      : nowISO;
+    const acknowledgedByEmail = matchesCurrentRequest && current.acknowledgedByEmail
+      ? current.acknowledgedByEmail
+      : auditActorEmail;
+    return {
+      sourceRequestId: persistedSource.sourceRequestId,
+      sourceSubmittedAtISO: persistedSource.sourceSubmittedAtISO,
+      sourceMessage: persistedSource.sourceMessage,
+      state: nextState,
+      acknowledgedAtISO,
+      acknowledgedByEmail,
+      handledAtISO: nextState === "handled" ? nowISO : "",
+      handledByEmail: nextState === "handled" ? auditActorEmail : "",
+      note: nextState === "handled" ? normalizedNote : ""
+    };
+  };
+
+  const writeOrganizationId = requireWriteOrganizationId(
+    organizationId,
+    "change request handling"
+  );
+  if (firebaseReady) {
+    const quoteRef = quoteWriteDocRef(id, writeOrganizationId, "change request handling");
+    let result = null;
+    await runTransaction(db, async (transaction) => {
+      const quoteSnap = await transaction.get(quoteRef);
+      if (!quoteSnap.exists()) throw new Error("Quote not found.");
+      const quote = quoteSnap.data();
+      if (
+        quote.status === "deleted"
+        || quote.portalDecision?.decision !== "changes_requested"
+        || String(quote.portalDecision?.requestId || "").trim() !== requestId
+        || String(quote.portalDecision?.submittedAtISO || "").trim() !== requestSource
+        || String(quote.portalDecision?.message || "").trim() !== requestMessage
+      ) {
+        throw staleRequestError();
+      }
+      const current = normalizeChangeRequestHandling(quote.workflow?.changeRequestHandling);
+      const persistedSource = {
+        sourceRequestId: String(quote.portalDecision?.requestId || ""),
+        sourceSubmittedAtISO: String(quote.portalDecision?.submittedAtISO || ""),
+        sourceMessage: String(quote.portalDecision?.message || "")
+      };
+      const nextHandling = buildNextHandling(current, isoNow(), persistedSource);
+      if (
+        current.sourceRequestId === nextHandling.sourceRequestId
+        && current.sourceSubmittedAtISO === nextHandling.sourceSubmittedAtISO
+        && current.sourceMessage === nextHandling.sourceMessage
+        && current.state === nextHandling.state
+      ) {
+        result = { ok: true, storage: "unchanged", handling: current };
+        return;
+      }
+      transaction.update(quoteRef, {
+        "workflow.changeRequestHandling": nextHandling,
+        updatedAtISO: nextHandling.handledAtISO || nextHandling.acknowledgedAtISO
+      });
+      result = { ok: true, storage: "firebase", handling: nextHandling };
+    });
+    return result;
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  const quoteIndex = existing.findIndex((item) => (
+    item.id === id
+    && normalizeOrganizationId(item.organizationId) === writeOrganizationId
+  ));
+  if (quoteIndex < 0) throw new Error("Quote not found.");
+  const quote = existing[quoteIndex];
+  if (
+    quote.status === "deleted"
+    || quote.portalDecision?.decision !== "changes_requested"
+    || String(quote.portalDecision?.requestId || "").trim() !== requestId
+    || String(quote.portalDecision?.submittedAtISO || "").trim() !== requestSource
+    || String(quote.portalDecision?.message || "").trim() !== requestMessage
+  ) {
+    throw staleRequestError();
+  }
+  const current = normalizeChangeRequestHandling(quote.workflow?.changeRequestHandling);
+  const persistedSource = {
+    sourceRequestId: String(quote.portalDecision?.requestId || ""),
+    sourceSubmittedAtISO: String(quote.portalDecision?.submittedAtISO || ""),
+    sourceMessage: String(quote.portalDecision?.message || "")
+  };
+  const nextHandling = buildNextHandling(current, isoNow(), persistedSource);
+  if (
+    current.sourceRequestId === nextHandling.sourceRequestId
+    && current.sourceSubmittedAtISO === nextHandling.sourceSubmittedAtISO
+    && current.sourceMessage === nextHandling.sourceMessage
+    && current.state === nextHandling.state
+  ) {
+    return { ok: true, storage: "unchanged", handling: current };
+  }
+  existing[quoteIndex] = {
+    ...quote,
+    updatedAtISO: nextHandling.handledAtISO || nextHandling.acknowledgedAtISO,
+    workflow: {
+      ...(quote.workflow || {}),
+      changeRequestHandling: nextHandling
+    }
+  };
+  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+  return { ok: true, storage: "local", handling: nextHandling };
 }
 
 export async function requestQuoteApproval({
@@ -3187,6 +3394,47 @@ function applyQuoteHistoryFilters(quotes, { eventTypeId = "", customerName = "",
   });
 }
 
+export async function getWorkflowAttentionSnapshot({ organizationId = "" } = {}) {
+  const scopedOrgId = normalizeOrganizationId(organizationId);
+  if (!scopedOrgId) {
+    throw new Error("organizationId is required for workflow attention read.");
+  }
+  const nowISO = isoNow();
+
+  if (firebaseReady) {
+    const readableOrgId = requireReadOrganizationId(scopedOrgId, "workflow attention read");
+    const snap = await getDocs(query(
+      quotesCollectionRef(readableOrgId),
+      where("status", "in", WORKFLOW_ATTENTION_STATUSES)
+    ));
+    return {
+      source: "firebase",
+      quotes: sortQuotesDesc(snap.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const createdAtISO = timestampToISO(data.createdAtISO || data.createdAt, nowISO);
+        return applyExpiry(hydrateQuote({
+          id: docSnap.id,
+          ...data,
+          organizationId: normalizeOrganizationId(data.organizationId || readableOrgId),
+          createdAtISO
+        }, nowISO), nowISO);
+      }))
+    };
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  const quotes = existing
+    .filter((quote) => (
+      normalizeOrganizationId(quote?.organizationId) === scopedOrgId
+      && WORKFLOW_ATTENTION_STATUSES.includes(normalizeStatus(quote?.status))
+    ))
+    .map((quote) => applyExpiry(hydrateQuote(quote, nowISO), nowISO));
+  return {
+    source: "local",
+    quotes: sortQuotesDesc(quotes)
+  };
+}
+
 export async function getQuoteHistory(filters = {}) {
   const normalizedEventTypeId = String(filters?.eventTypeId || "").trim();
   const normalizedCustomerName = normalizeCustomerNameKey(filters?.customerName || "");
@@ -3748,6 +3996,7 @@ export async function updatePortalDecision({
     : {
       decision: normalizedDecision,
       message: normalizedMessage,
+      requestId: buildPortalKey(),
       submittedAtISO: nowISO
     };
   const portalDecisionPatch = normalizedDecision === "viewed" ? {} : { portalDecision };

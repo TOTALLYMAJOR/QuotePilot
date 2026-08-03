@@ -123,6 +123,60 @@ test("operator workspaces load only when first opened and stay mounted after clo
   expect(await modalResourceNames()).toHaveLength(1);
 });
 
+test("workflow attention throttles passive reads and retains a known count on refresh failure", async ({ page }) => {
+  const emptyTrigger = page.getByRole("button", {
+    name: /Sales Workflow, no quotes need attention/i
+  });
+  await expect(emptyTrigger).toBeVisible();
+
+  await page.evaluate(() => {
+    const nativeGetItem = Storage.prototype.getItem;
+    window.__quoteAttentionReadCount = 0;
+    Storage.prototype.getItem = function countedGetItem(key) {
+      if (key === "quoteWizard.quotes") window.__quoteAttentionReadCount += 1;
+      return nativeGetItem.call(this, key);
+    };
+  });
+
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect.poll(() => page.evaluate(() => window.__quoteAttentionReadCount)).toBe(0);
+
+  await page.evaluate(() => {
+    const submittedAtISO = new Date().toISOString();
+    localStorage.setItem("quoteWizard.quotes", JSON.stringify([{
+      id: "attention-refresh-quote",
+      organizationId: "e2e-org",
+      quoteNumber: "Q-ATTENTION-REFRESH",
+      status: "viewed",
+      customer: { name: "Refresh Customer", email: "refresh@example.com" },
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Please revise the service plan.",
+        requestId: "request-attention-refresh",
+        submittedAtISO
+      },
+      createdAtISO: submittedAtISO,
+      updatedAtISO: submittedAtISO
+    }]));
+    window.dispatchEvent(new StorageEvent("storage", { key: "quoteWizard.quotes" }));
+  });
+  await expect(page.getByRole("button", {
+    name: /Sales Workflow, 1 quote needs attention/i
+  })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__quoteAttentionReadCount)).toBe(1);
+
+  await page.evaluate(() => {
+    const futureNow = Date.now() + 61000;
+    Date.now = () => futureNow;
+    localStorage.setItem("quoteWizard.quotes", "not-json");
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect.poll(() => page.evaluate(() => window.__quoteAttentionReadCount)).toBe(2);
+  await expect(page.getByRole("button", {
+    name: /Sales Workflow, 1 quote needs attention/i
+  })).toBeVisible();
+});
+
 test("step 1 soft-lock keeps next disabled until required fields are complete", async ({ page }) => {
   const nextButton = page.getByRole("button", { name: "Next" });
   await expect(nextButton).toBeDisabled();
@@ -411,6 +465,7 @@ test("quote history supports export and safely blocks an unconfigured payment li
 });
 
 test("sales workflow persists a follow-up plan", async ({ page }) => {
+  const dueDate = futureDateISO(10);
   await createQuoteToHistory(page, {
     guests: 78,
     eventName: "E2E Follow-up Dinner",
@@ -421,14 +476,35 @@ test("sales workflow persists a follow-up plan", async ({ page }) => {
 
   const workflow = page.getByRole("dialog");
   await expect(workflow.getByRole("heading", { name: "Sales Workflow" })).toBeVisible();
-  await workflow.getByLabel("Due date").fill("2026-06-10");
+  await workflow.getByLabel("Due date").fill(dueDate);
   await workflow.getByLabel("Note").fill("Confirm final menu after tasting.");
   await workflow.getByRole("button", { name: "Save Follow-up" }).click();
   await expect(workflow.getByText(/Follow-up saved for/i)).toBeVisible();
 
-  await workflow.getByRole("button", { name: "Close" }).click();
+  const quoteLabel = (await workflow.locator(".workflow-detail-head .eyebrow").textContent())?.trim() || "";
+  await workflow.getByRole("button", { name: "Request", exact: true }).click();
+  await expect(workflow.getByText(/Send payment request approval requested/i)).toBeVisible();
+  await workflow.getByRole("tab", { name: "Attention (1)" }).click();
+  await workflow.getByRole("button", { name: `Review approvals for ${quoteLabel}` }).click();
+  const pendingApproval = workflow.locator(".approval-row[data-pending='true']");
+  await expect(pendingApproval).toBeFocused();
+  await workflow.getByLabel(`Resolution note for Send payment request on ${quoteLabel}`).fill(
+    "Approved for the test workflow."
+  );
+  await workflow.getByRole("button", {
+    name: `Approve Send payment request for ${quoteLabel}`
+  }).click();
+  await expect(pendingApproval).toHaveCount(0);
+  const resolvedApproval = workflow.locator(".approval-row[data-pending='false']");
+  await expect(resolvedApproval).toBeFocused();
+
+  await workflow.getByRole("button", { name: "Open Quote History" }).click();
+  const history = page.getByRole("dialog", { name: "Quote History" });
+  await expect(history.locator(".history-card")).toBeFocused();
+  await history.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("button", { name: "Quote History" })).toBeFocused();
   await page.getByRole("button", { name: "Sales Workflow" }).click();
-  await expect(page.getByRole("dialog").getByLabel("Due date")).toHaveValue("2026-06-10");
+  await expect(page.getByRole("dialog").getByLabel("Due date")).toHaveValue(dueDate);
   await expect(page.getByRole("dialog").getByLabel("Note")).toHaveValue("Confirm final menu after tasting.");
 });
 
@@ -453,6 +529,9 @@ test("portal decision center records a customer change request", async ({ page }
   expect(portalKey).toBeTruthy();
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("button", {
+    name: /Sales Workflow, no quotes need attention/i
+  })).toBeVisible();
   await page.getByRole("button", { name: "Customer Portal" }).click();
   await expect(page.getByRole("heading", { name: "Proposal Decision Center" })).toBeVisible();
   await page.getByPlaceholder("Paste your quote key").fill(portalKey);
@@ -465,6 +544,112 @@ test("portal decision center records a customer change request", async ({ page }
   await page.getByRole("button", { name: "Submit Decision" }).click();
   await expect(page.getByText("Changes requested", { exact: true })).toBeVisible();
   await expect(page.getByText(/current proposal remains unaccepted/i)).toBeVisible();
+
+  await page.getByRole("button", { name: "Staff Sign In" }).click();
+  const salesWorkflowResources = async () => page.evaluate(() => (
+    performance
+      .getEntriesByType("resource")
+      .map((entry) => entry.name)
+      .filter((name) => /SalesWorkflowModal(?:-[^/?]+\.js|\.jsx)/.test(name))
+  ));
+  expect(await salesWorkflowResources()).toEqual([]);
+
+  const workflowTrigger = page.getByRole("button", {
+    name: /Sales Workflow, 1 quote needs attention/i
+  });
+  await expect(workflowTrigger).toBeVisible();
+  expect(await salesWorkflowResources()).toEqual([]);
+  await workflowTrigger.click();
+
+  const workflow = page.getByRole("dialog");
+  const attentionTab = workflow.getByRole("tab", { name: "Attention (1)" });
+  await expect(attentionTab).toHaveAttribute("aria-selected", "true");
+  await expect(workflow.locator("#workflow-panel-attention")).toBeVisible();
+  await expect(workflow.locator("#workflow-panel-followups")).toBeHidden();
+  await expect(workflow.locator("#workflow-panel-approvals")).toBeHidden();
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
+  await expect(workflow.getByText(/in-app queue/i)).toBeVisible();
+  await expect(workflow.getByText("New customer change request")).toBeVisible();
+  await expect(workflow.locator("#workflow-panel-attention").getByText(
+    "Please replace the entree with a vegetarian option."
+  )).toBeVisible();
+
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const containment = await workflow.locator(".workflow-attention-row").evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth
+      };
+    });
+    expect(containment.left).toBeGreaterThanOrEqual(-1);
+    expect(containment.right).toBeLessThanOrEqual(containment.clientWidth + 1);
+    expect(containment.scrollWidth).toBeLessThanOrEqual(containment.clientWidth + 1);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await attentionTab.focus();
+  await attentionTab.press("ArrowRight");
+  await expect(workflow.getByRole("tab", { name: "Follow-ups" })).toBeFocused();
+  await workflow.getByRole("tab", { name: "Follow-ups" }).press("ArrowLeft");
+  await expect(attentionTab).toBeFocused();
+  await attentionTab.press("End");
+  await expect(workflow.getByRole("tab", { name: "Approvals (0)" })).toBeFocused();
+  await workflow.getByRole("tab", { name: "Approvals (0)" }).press("Home");
+  await expect(attentionTab).toBeFocused();
+
+  const attentionRow = workflow.locator(".workflow-attention-row");
+  const quoteLabel = (await attentionRow.getByRole("heading").textContent())?.trim() || "";
+  await expect(attentionRow).toHaveAccessibleName(`New customer change request ${quoteLabel}`);
+  await expect(workflow.getByLabel(
+    `Internal handling note (required to mark handled) — ${quoteLabel}`
+  )).toBeVisible();
+
+  await workflow.getByRole("button", { name: `Edit quote — ${quoteLabel}` }).click();
+  await expect(workflow).toHaveCount(0);
+  await expect(page.locator("main.wizard-grid")).toBeFocused();
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
+  await page.getByRole("button", { name: /Sales Workflow, 1 quote needs attention/i }).click();
+  await expect(workflow.getByRole("tab", { name: "Attention (1)" })).toHaveAttribute("aria-selected", "true");
+
+  await workflow.getByRole("button", { name: `Acknowledge internally — ${quoteLabel}` }).click();
+  await expect(workflow.getByText("Acknowledged change request")).toBeVisible();
+  await expect(workflow.getByText(/No customer message was sent/i)).toBeVisible();
+  await expect(workflow.locator(".workflow-attention-row")).toBeFocused();
+  await workflow.getByLabel(`Internal handling note (required to mark handled) — ${quoteLabel}`).fill(
+    "Updated the menu selection and prepared the revised proposal."
+  );
+  await workflow.getByRole("button", { name: `Mark handled internally — ${quoteLabel}` }).click();
+  const emptyAttentionHeading = workflow.getByRole("heading", { name: "No workflow attention needed" });
+  await expect(emptyAttentionHeading).toBeVisible();
+  await expect(emptyAttentionHeading).toBeFocused();
+
+  const storedDecision = await page.evaluate(() => {
+    const quote = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]")[0];
+    return {
+      portalDecision: quote?.portalDecision,
+      handling: quote?.workflow?.changeRequestHandling
+    };
+  });
+  expect(storedDecision.portalDecision).toMatchObject({
+    decision: "changes_requested",
+    message: "Please replace the entree with a vegetarian option."
+  });
+  expect(storedDecision.portalDecision.requestId).toMatch(/^[a-zA-Z0-9-]{20,80}$/);
+  expect(storedDecision.handling).toMatchObject({
+    sourceRequestId: storedDecision.portalDecision.requestId,
+    state: "handled",
+    sourceSubmittedAtISO: storedDecision.portalDecision.submittedAtISO,
+    sourceMessage: storedDecision.portalDecision.message,
+    note: "Updated the menu selection and prepared the revised proposal."
+  });
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: /Sales Workflow, no quotes need attention/i })).toBeFocused();
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
 });
 
 test("accepted event production checklist persists completion", async ({ page }) => {

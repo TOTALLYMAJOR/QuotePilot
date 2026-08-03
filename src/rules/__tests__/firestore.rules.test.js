@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { beforeAll, beforeEach, afterAll, describe, test } from "vitest";
+import { beforeAll, beforeEach, afterAll, describe, expect, test } from "vitest";
 import {
   assertFails,
   assertSucceeds,
@@ -878,6 +878,208 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }));
   });
 
+  test("change-request handling is exact-request, tenant, actor, and transition bound", async () => {
+    const requestSubmittedAtISO = "2026-03-22T02:00:00.000Z";
+    const requestId = "change-request-000000000001";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "organizations", "org-a", "quotes", "q1"), {
+        status: "viewed",
+        portalDecision: {
+          decision: "changes_requested",
+          message: "Please revise the service plan.",
+          requestId,
+          submittedAtISO: requestSubmittedAtISO
+        },
+        lifecycle: { viewedAtISO: requestSubmittedAtISO },
+        updatedAtISO: requestSubmittedAtISO,
+        workflow: {}
+      }, { merge: true });
+    });
+
+    const salesQuoteRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q1");
+    const adminQuoteRef = quoteRefFor("admin-org-a", "admin-a@example.com", "org-a", "q1");
+    const customerQuoteRef = quoteRefFor("customer-org-a", "customer-a@example.com", "org-a", "q1");
+    const foreignQuoteRef = quoteRefFor("sales-org-b", "sales-b@example.com", "org-a", "q1");
+    const conflictingClaimRef = quoteRefForWithClaims(
+      "sales-org-a",
+      "sales-a@example.com",
+      { organizationId: "org-b" },
+      "org-a",
+      "q1"
+    );
+    const unverifiedQuoteRef = doc(
+      testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: false
+      }).firestore(),
+      "organizations",
+      "org-a",
+      "quotes",
+      "q1"
+    );
+    const acknowledgedAtISO = "2026-03-22T02:10:00.000Z";
+    const acknowledged = {
+      sourceRequestId: requestId,
+      sourceSubmittedAtISO: requestSubmittedAtISO,
+      sourceMessage: "Please revise the service plan.",
+      state: "acknowledged",
+      acknowledgedAtISO,
+      acknowledgedByEmail: "sales-a@example.com",
+      handledAtISO: "",
+      handledByEmail: "",
+      note: ""
+    };
+
+    await assertFails(updateDoc(customerQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(foreignQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(conflictingClaimRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(unverifiedQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        acknowledgedByEmail: "forged@example.com"
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        sourceRequestId: "change-request-000000000099"
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        sourceSubmittedAtISO: "2026-03-22T01:00:00.000Z"
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        sourceMessage: "A different customer request."
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        state: "handled",
+        handledAtISO: acknowledgedAtISO,
+        handledByEmail: "sales-a@example.com",
+        note: ""
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        state: "handled",
+        handledAtISO: acknowledgedAtISO,
+        handledByEmail: "sales-a@example.com",
+        note: "x".repeat(801)
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      "workflow.followUp": {
+        stage: "contacted",
+        dueDate: "2026-03-30",
+        note: "Compound write",
+        completed: false,
+        completedAtISO: "",
+        updatedAtISO: acknowledgedAtISO,
+        updatedByEmail: "sales-a@example.com"
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+
+    await assertSucceeds(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+
+    const handledAtISO = "2026-03-22T02:20:00.000Z";
+    const handled = {
+      ...acknowledged,
+      state: "handled",
+      handledAtISO,
+      handledByEmail: "admin-a@example.com",
+      note: "Revised the proposal and recorded the customer follow-up."
+    };
+    await assertSucceeds(updateDoc(adminQuoteRef, {
+      "workflow.changeRequestHandling": handled,
+      updatedAtISO: handledAtISO
+    }));
+    await assertFails(updateDoc(adminQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...handled,
+        handledAtISO: "2026-03-22T02:30:00.000Z"
+      },
+      updatedAtISO: "2026-03-22T02:30:00.000Z"
+    }));
+    await assertFails(updateDoc(adminQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: "2026-03-22T02:30:00.000Z"
+    }));
+
+    const persisted = await getDoc(adminQuoteRef);
+    expect(persisted.data().portalDecision).toEqual({
+      decision: "changes_requested",
+      message: "Please revise the service plan.",
+      requestId,
+      submittedAtISO: requestSubmittedAtISO
+    });
+    expect(persisted.data().workflow.changeRequestHandling).toEqual(handled);
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY), {
+        status: "viewed",
+        portalDecision: persisted.data().portalDecision,
+        lifecycle: { viewedAtISO: requestSubmittedAtISO },
+        updatedAtISO: requestSubmittedAtISO
+      });
+    });
+    const replayedAtISO = "2026-03-22T02:40:00.000Z";
+    await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+      status: "viewed",
+      portalDecision: {
+        decision: "changes_requested",
+        message: "A replayed request must not inherit handled state.",
+        requestId,
+        submittedAtISO: replayedAtISO
+      },
+      lifecycle: { viewedAtISO: replayedAtISO },
+      updatedAtISO: replayedAtISO
+    }));
+    const nextRequestAtISO = "2026-03-22T02:45:00.000Z";
+    await assertSucceeds(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+      status: "viewed",
+      portalDecision: {
+        decision: "changes_requested",
+        message: "A new request identity reopens staff attention.",
+        requestId: "change-request-000000000002",
+        submittedAtISO: nextRequestAtISO
+      },
+      lifecycle: { viewedAtISO: nextRequestAtISO },
+      updatedAtISO: nextRequestAtISO
+    }));
+  });
+
   test("approval execution audit is admin-readable and server-write-only", async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
@@ -1242,7 +1444,34 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "changes_requested",
         message: "Please revise the entree.",
+        requestId: "portal-decision-000000000001",
         submittedAtISO: "2026-03-21T01:00:00.000Z"
+      }
+    }));
+    await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T01:10:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T01:10:00.000Z"
+      },
+      portalDecision: {
+        decision: "changes_requested",
+        message: " Please revise the entree. ",
+        requestId: "portal-decision-000000000015",
+        submittedAtISO: "2026-03-21T01:10:00.000Z"
+      }
+    }));
+    await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T01:20:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T01:20:00.000Z"
+      },
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Please revise the entree.",
+        requestId: " portal-decision-000000000016 ",
+        submittedAtISO: "2026-03-21T01:20:00.000Z"
       }
     }));
     await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
@@ -1254,6 +1483,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "changes_requested",
         message: "",
+        requestId: "portal-decision-000000000002",
         submittedAtISO: "2026-03-21T02:00:00.000Z"
       }
     }));
@@ -1267,6 +1497,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "declined",
         message: "",
+        requestId: "portal-decision-000000000003",
         submittedAtISO: "2026-03-21T02:30:00.000Z"
       }
     }));
@@ -1288,6 +1519,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000004",
         submittedAtISO: "2026-03-21T03:00:00.000Z"
       }
     }));
@@ -1301,6 +1533,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "declined",
         message: "",
+        requestId: "portal-decision-000000000005",
         submittedAtISO: "2026-03-21T03:15:00.000Z"
       }
     }));
@@ -1367,6 +1600,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000006",
         submittedAtISO: acceptedAtISO
       }
     };
@@ -1385,6 +1619,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         portalDecision: {
           decision: "accepted",
           message: "",
+          requestId: "portal-decision-000000000007",
           submittedAtISO: portalAcceptedAtISO
         }
       },
@@ -1395,6 +1630,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         portalDecision: {
           decision: "accepted",
           message: "",
+          requestId: "portal-decision-000000000007",
           submittedAtISO: quoteAcceptedAtISO
         }
       }
@@ -1410,6 +1646,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000008",
         submittedAtISO: acceptedAtISO
       }
     }));
@@ -1428,6 +1665,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000009",
         submittedAtISO: acceptedAtISO
       }
     };
@@ -1492,6 +1730,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000010",
         submittedAtISO: "2026-03-21T03:00:00.000Z"
       }
     }));
@@ -1508,6 +1747,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "changes_requested",
         message: "Please revise the entree.",
+        requestId: "portal-decision-000000000011",
         submittedAtISO: "2026-03-21T00:00:00.000Z"
       }
     }));
@@ -1520,6 +1760,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "changes_requested",
         message: "Please revise the entree.",
+        requestId: "portal-decision-000000000011",
         submittedAtISO: "2026-03-21T00:00:00.000Z"
       }
     }));
@@ -1541,6 +1782,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000012",
         submittedAtISO: "2026-03-21T01:15:00.000Z"
       }
     }));
@@ -1555,6 +1797,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "declined",
         message: "",
+        requestId: "portal-decision-000000000013",
         submittedAtISO: "2026-03-21T01:30:00.000Z"
       }
     }));
@@ -1627,6 +1870,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000014",
         submittedAtISO: acceptedAtISO
       }
     }));

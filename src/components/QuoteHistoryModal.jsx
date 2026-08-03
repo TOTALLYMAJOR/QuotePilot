@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createDepositCheckout,
   sendPaymentRequestToCustomerEmail,
@@ -134,6 +134,50 @@ export default function QuoteHistoryModal({
   const [sendingPaymentEmailId, setSendingPaymentEmailId] = useState("");
   const [rotatingPortalId, setRotatingPortalId] = useState("");
   const [pendingDeleteQuote, setPendingDeleteQuote] = useState(null);
+  const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => dialogRef.current?.focus());
+    const handleDialogKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(dialogRef.current?.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) || []).filter((element) => element.getClientRects().length > 0);
+      if (!focusable.length) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleDialogKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleDialogKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [open]);
 
   const pushToast = (message, tone = "info") => {
     if (typeof onToast === "function") {
@@ -700,10 +744,10 @@ export default function QuoteHistoryModal({
   };
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
-      <div className="modal-card history-card">
+    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="quote-history-title">
+      <div className="modal-card history-card" ref={dialogRef} tabIndex={-1}>
         <div className="modal-head">
-          <h2>Quote History</h2>
+          <h2 id="quote-history-title">Quote History</h2>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}

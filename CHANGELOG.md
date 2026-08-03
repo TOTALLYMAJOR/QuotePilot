@@ -8,6 +8,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Tenant-scoped Workflow Attention queue for active quotes, with a post-idle
+  header count, due/overdue follow-ups, pending approvals, new and acknowledged
+  customer change requests, request-ID-bound current handling records, and
+  responsive keyboard-accessible operator controls. The queue is in-app only;
+  it does not send email or SMS or alter customer decision evidence.
 - Dry-run-first, tenant-scoped customer portal projection backfill tooling for
   active legacy links, with canonical customer-safe quote projection, guarded
   preservation of decision/payment/booking evidence, transactional apply-time
@@ -82,6 +87,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Customer change-request acknowledgment and handling now use a narrow
+  transaction that revalidates the exact portal request, derives the actor from
+  the authenticated Firebase user, preserves the original customer decision,
+  writes no quote version or portal snapshot, and requires an internal note
+  before work can be marked handled. Firestore rules constrain the same
+  tenant, actor, source-request, field, and state-transition boundaries.
 - Step 1 now groups guest and role counts under Attendance & Staffing while
   keeping five exceptional staffing-rate fields inside the collapsed Advanced
   Pricing section. Saved or template-applied rate values remain visible through

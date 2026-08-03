@@ -7,8 +7,10 @@ vi.mock("../firebase", () => ({
 
 import {
   getQuoteHistory,
+  getWorkflowAttentionSnapshot,
   requestQuoteApproval,
   resolveQuoteApprovalRequest,
+  updateQuoteChangeRequestHandling,
   updateQuoteFollowUp,
   updateQuoteProductionChecklist
 } from "../quoteStore";
@@ -36,6 +38,7 @@ function createStorageMock() {
 function seedQuote() {
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify([{
     id: "workflow-quote",
+    organizationId: "org-local",
     quoteNumber: "Q-WORKFLOW",
     status: "sent",
     createdAtISO: "2026-05-01T10:00:00.000Z",
@@ -93,6 +96,153 @@ describe("quoteStore workflow persistence", () => {
       updatedByEmail: "sales@example.com"
     });
     expect((await readQuote()).workflow.followUp.completedAtISO).toBeTruthy();
+  });
+
+  test("reads workflow attention quotes without expiry writes and keeps tenant scope exact", async () => {
+    const sameTenant = await getWorkflowAttentionSnapshot({ organizationId: "org-local" });
+    const otherTenant = await getWorkflowAttentionSnapshot({ organizationId: "org-other" });
+
+    expect(sameTenant).toMatchObject({ source: "local" });
+    expect(sameTenant.quotes.map((quote) => quote.id)).toEqual(["workflow-quote"]);
+    expect(otherTenant.quotes).toEqual([]);
+    await expect(getWorkflowAttentionSnapshot()).rejects.toThrow(/organizationId is required/i);
+  });
+
+  test("binds internal change-request handling to the current customer request", async () => {
+    const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY));
+    existing[0].portalDecision = {
+      decision: "changes_requested",
+      message: "Please remove coffee service.",
+      requestId: "request-remove-coffee",
+      submittedAtISO: "2026-05-02T11:00:00.000Z"
+    };
+    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+
+    await expect(updateQuoteChangeRequestHandling({
+      quoteId: "workflow-quote",
+      organizationId: "org-local",
+      sourceRequestId: "request-remove-coffee",
+      sourceSubmittedAtISO: "2026-05-02T11:00:00.000Z",
+      sourceMessage: "Please remove coffee service.",
+      action: "acknowledge",
+      actorEmail: "customer@example.com",
+      actorRole: "customer"
+    })).rejects.toThrow(/staff role required/i);
+
+    const acknowledged = await updateQuoteChangeRequestHandling({
+      quoteId: "workflow-quote",
+      organizationId: "org-local",
+      sourceRequestId: "request-remove-coffee",
+      sourceSubmittedAtISO: "2026-05-02T11:00:00.000Z",
+      sourceMessage: "Please remove coffee service.",
+      action: "acknowledge",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    });
+    expect(acknowledged.handling).toMatchObject({
+      sourceSubmittedAtISO: "2026-05-02T11:00:00.000Z",
+      state: "acknowledged",
+      acknowledgedByEmail: "sales@example.com"
+    });
+
+    vi.setSystemTime(new Date("2026-05-02T13:00:00.000Z"));
+    const handled = await updateQuoteChangeRequestHandling({
+      quoteId: "workflow-quote",
+      organizationId: "org-local",
+      sourceRequestId: "request-remove-coffee",
+      sourceSubmittedAtISO: "2026-05-02T11:00:00.000Z",
+      sourceMessage: "Please remove coffee service.",
+      action: "mark_handled",
+      note: "Updated the proposal and confirmed the revision with the customer.",
+      actorEmail: "admin@example.com",
+      actorRole: "admin"
+    });
+    expect(handled.handling).toMatchObject({
+      state: "handled",
+      acknowledgedAtISO: acknowledged.handling.acknowledgedAtISO,
+      acknowledgedByEmail: "sales@example.com",
+      handledAtISO: "2026-05-02T13:00:00.000Z",
+      handledByEmail: "admin@example.com",
+      note: "Updated the proposal and confirmed the revision with the customer."
+    });
+
+    const quote = await readQuote();
+    expect(quote.portalDecision).toEqual(existing[0].portalDecision);
+    expect(quote.workflow.changeRequestHandling).toMatchObject({
+      sourceSubmittedAtISO: existing[0].portalDecision.submittedAtISO,
+      state: "handled"
+    });
+  });
+
+  test("fails stale or unnoted handling closed and keeps repeated handling idempotent", async () => {
+    const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY));
+    existing[0].portalDecision = {
+      decision: "changes_requested",
+      message: "Change the service time.",
+      requestId: "request-service-time",
+      submittedAtISO: "2026-05-02T11:00:00.000Z"
+    };
+    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+
+    await expect(updateQuoteChangeRequestHandling({
+      organizationId: "org-local",
+      quoteId: "workflow-quote",
+      sourceRequestId: "request-service-time",
+      sourceSubmittedAtISO: "2026-05-02T10:00:00.000Z",
+      sourceMessage: "Change the service time.",
+      action: "acknowledge",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    })).rejects.toMatchObject({ code: "workflow/stale-change-request" });
+    await expect(updateQuoteChangeRequestHandling({
+      organizationId: "org-local",
+      quoteId: "workflow-quote",
+      sourceRequestId: "replayed-request-id",
+      sourceSubmittedAtISO: "2026-05-02T11:00:00.000Z",
+      sourceMessage: "A different request.",
+      action: "acknowledge",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    })).rejects.toMatchObject({ code: "workflow/stale-change-request" });
+    await expect(updateQuoteChangeRequestHandling({
+      organizationId: "org-local",
+      quoteId: "workflow-quote",
+      sourceRequestId: "request-service-time",
+      sourceSubmittedAtISO: "2026-05-02T11:00:00.000Z",
+      sourceMessage: "Change the service time.",
+      action: "mark_handled",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    })).rejects.toThrow(/handling note is required/i);
+
+    const handled = await updateQuoteChangeRequestHandling({
+      organizationId: "org-local",
+      quoteId: "workflow-quote",
+      sourceRequestId: "request-service-time",
+      sourceSubmittedAtISO: "2026-05-02T11:00:00.000Z",
+      sourceMessage: "Change the service time.",
+      action: "mark_handled",
+      note: "Adjusted the service time in the draft.",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    });
+    const persistedAfterFirstWrite = localStorage.getItem(LOCAL_QUOTES_KEY);
+    const repeated = await updateQuoteChangeRequestHandling({
+      organizationId: "org-local",
+      quoteId: "workflow-quote",
+      sourceRequestId: "request-service-time",
+      sourceSubmittedAtISO: "2026-05-02T11:00:00.000Z",
+      sourceMessage: "Change the service time.",
+      action: "mark_handled",
+      note: "A different note must not rewrite immutable handling.",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    });
+
+    expect(handled.storage).toBe("local");
+    expect(repeated.storage).toBe("unchanged");
+    expect(repeated.handling.note).toBe("Adjusted the service time in the draft.");
+    expect(localStorage.getItem(LOCAL_QUOTES_KEY)).toBe(persistedAfterFirstWrite);
   });
 
   test("keeps sensitive approval execution separate from admin resolution", async () => {

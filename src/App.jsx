@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "./components/CustomerPortalView";
 import LiveBreakdown from "./components/LiveBreakdown";
@@ -13,7 +13,7 @@ import { calculateQuotePricing, notifyOwnerNewQuote, sendQuoteToCustomerEmail } 
 import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
-import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import { buildProposalReadiness, buildWorkflowAttentionSummary } from "./lib/quoteWorkflow";
 import {
   applyEventTypeTemplateDefaults,
   buildStepperModel,
@@ -25,6 +25,7 @@ import {
 import {
   checkEventAvailability,
   getQuoteById,
+  getWorkflowAttentionSnapshot,
   setQuoteStoreOrganizationId,
   submitQuote,
   updateQuote,
@@ -336,6 +337,7 @@ export default function App() {
   const wizardRef = useRef(null);
   const stepperRef = useRef(null);
   const mobilePricingToggleRef = useRef(null);
+  const historyTriggerRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { setOrganizationId } = useOrganization();
@@ -496,6 +498,51 @@ export default function App() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [salesWorkflowOpen, setSalesWorkflowOpen] = useState(false);
+  const workflowAttentionScopeKey = `${String(authSession.organizationId || "").trim()}:${String(authSession.role || "").trim().toLowerCase()}`;
+  const [workflowAttentionBadge, setWorkflowAttentionBadge] = useState({ scopeKey: "", count: null });
+  const workflowAttentionCount = workflowAttentionBadge.scopeKey === workflowAttentionScopeKey
+    ? workflowAttentionBadge.count
+    : null;
+  const [workflowAttentionRefreshToken, setWorkflowAttentionRefreshToken] = useState(0);
+  const workflowAttentionGenerationRef = useRef(0);
+  const workflowAttentionForceRefreshRef = useRef(false);
+  const workflowAttentionRequestRef = useRef({
+    scopeKey: "",
+    inFlight: null,
+    lastSuccessAt: 0,
+    pendingForce: false
+  });
+  const requestWorkflowAttentionRefresh = useCallback(({ force = false } = {}) => {
+    const requestState = workflowAttentionRequestRef.current;
+    if (force && requestState.inFlight) {
+      requestState.pendingForce = true;
+      return;
+    }
+    if (!force && (
+      requestState.inFlight
+      || (requestState.lastSuccessAt > 0 && Date.now() - requestState.lastSuccessAt < 60000)
+    )) {
+      return;
+    }
+    workflowAttentionForceRefreshRef.current = force;
+    setWorkflowAttentionRefreshToken((value) => value + 1);
+  }, []);
+  const handleWorkflowAttentionSummary = useCallback((summary) => {
+    const summaryOrganizationId = String(summary?.organizationId || "").trim();
+    if (summaryOrganizationId !== String(authSession.organizationId || "").trim()) return;
+    const nextCount = Number(summary?.quoteCount || 0);
+    setWorkflowAttentionBadge((current) => (
+      current.scopeKey === workflowAttentionScopeKey && current.count === nextCount
+        ? current
+        : { scopeKey: workflowAttentionScopeKey, count: nextCount }
+    ));
+    const requestState = workflowAttentionRequestRef.current;
+    if (requestState.scopeKey !== workflowAttentionScopeKey) return;
+    requestState.lastSuccessAt = Date.now();
+    if (requestState.inFlight) {
+      workflowAttentionGenerationRef.current += 1;
+    }
+  }, [authSession.organizationId, workflowAttentionScopeKey]);
   const adminMounted = useStickyMount(adminOpen);
   const scheduleMounted = useStickyMount(scheduleOpen);
   const integrationsMounted = useStickyMount(integrationsOpen);
@@ -618,6 +665,132 @@ export default function App() {
     setActiveOrganizationId(authSession.organizationId);
     setQuoteStoreOrganizationId(authSession.organizationId);
   }, [authSession.organizationId, setOrganizationId]);
+
+  useEffect(() => {
+    const organizationId = String(authSession.organizationId || "").trim();
+    const role = String(authSession.role || "").trim().toLowerCase();
+    const isStaff = ["admin", "sales"].includes(role);
+    const scopeKey = `${organizationId}:${role}`;
+    const generation = workflowAttentionGenerationRef.current + 1;
+    workflowAttentionGenerationRef.current = generation;
+    let cancelled = false;
+    let idleId = 0;
+    let timeoutId = 0;
+
+    if (!organizationId || !isStaff) {
+      workflowAttentionRequestRef.current = {
+        scopeKey: "",
+        inFlight: null,
+        lastSuccessAt: 0,
+        pendingForce: false
+      };
+      setWorkflowAttentionBadge({ scopeKey: "", count: null });
+      return undefined;
+    }
+
+    const scopeChanged = workflowAttentionRequestRef.current.scopeKey !== scopeKey;
+    if (scopeChanged) {
+      workflowAttentionRequestRef.current = {
+        scopeKey,
+        inFlight: null,
+        lastSuccessAt: 0,
+        pendingForce: false
+      };
+      setWorkflowAttentionBadge({ scopeKey, count: null });
+    }
+    if (catalog.loading) return undefined;
+
+    const force = workflowAttentionForceRefreshRef.current;
+    workflowAttentionForceRefreshRef.current = false;
+    const currentRequestState = workflowAttentionRequestRef.current;
+    if (!force && (
+      currentRequestState.inFlight
+      || (currentRequestState.lastSuccessAt > 0 && Date.now() - currentRequestState.lastSuccessAt < 60000)
+    )) {
+      return undefined;
+    }
+
+    const loadAttention = async () => {
+      const requestState = workflowAttentionRequestRef.current;
+      if (requestState.scopeKey !== scopeKey || requestState.inFlight) return;
+      if (!force && requestState.lastSuccessAt > 0 && Date.now() - requestState.lastSuccessAt < 60000) {
+        return;
+      }
+      const request = getWorkflowAttentionSnapshot({ organizationId });
+      requestState.inFlight = request;
+      try {
+        const result = await request;
+        if (
+          cancelled
+          || workflowAttentionGenerationRef.current !== generation
+          || workflowAttentionRequestRef.current !== requestState
+          || requestState.pendingForce
+        ) return;
+        requestState.lastSuccessAt = Date.now();
+        setWorkflowAttentionBadge({
+          scopeKey,
+          count: buildWorkflowAttentionSummary(result.quotes).quoteCount
+        });
+      } catch {
+        // Preserve a same-tenant count when a background refresh fails.
+      } finally {
+        if (workflowAttentionRequestRef.current !== requestState || requestState.inFlight !== request) return;
+        requestState.inFlight = null;
+        if (requestState.pendingForce || cancelled) {
+          requestState.pendingForce = false;
+          workflowAttentionForceRefreshRef.current = true;
+          setWorkflowAttentionRefreshToken((value) => value + 1);
+        }
+      }
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(loadAttention, { timeout: 2500 });
+    } else {
+      timeoutId = window.setTimeout(loadAttention, 900);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleId && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [authSession.organizationId, authSession.role, catalog.loading, workflowAttentionRefreshToken]);
+
+  useEffect(() => {
+    const organizationId = String(authSession.organizationId || "").trim();
+    const isStaff = ["admin", "sales"].includes(String(authSession.role || "").trim().toLowerCase());
+    if (!organizationId || !isStaff) return undefined;
+    const requestRefresh = () => requestWorkflowAttentionRefresh();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") requestRefresh();
+    };
+    const handleStorage = (event) => {
+      if (event.key === "quoteWizard.quotes") requestWorkflowAttentionRefresh({ force: true });
+    };
+    let midnightTimer = 0;
+    const scheduleMidnightRefresh = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 0, 100);
+      midnightTimer = window.setTimeout(() => {
+        requestWorkflowAttentionRefresh({ force: true });
+        scheduleMidnightRefresh();
+      }, Math.max(1000, nextMidnight.getTime() - now.getTime()));
+    };
+    scheduleMidnightRefresh();
+    window.addEventListener("focus", requestRefresh);
+    window.addEventListener("storage", handleStorage);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearTimeout(midnightTimer);
+      window.removeEventListener("focus", requestRefresh);
+      window.removeEventListener("storage", handleStorage);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [authSession.organizationId, authSession.role, requestWorkflowAttentionRefresh]);
 
   useEffect(() => {
     if (isUnscopedPlatformOperator || catalog.loading) return;
@@ -1220,6 +1393,7 @@ export default function App() {
         quoteNumber: result.quoteNumber || ""
       });
       pushToast(`Quote ${result.quoteNumber} saved.`, "success");
+      requestWorkflowAttentionRefresh({ force: true });
       setHistoryOpen(true);
     } catch (err) {
       recordDiagnosticError(err, {
@@ -1351,6 +1525,7 @@ export default function App() {
       quoteNumber: ""
     });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
   };
 
   const handleCopyPortalLink = async () => {
@@ -1494,6 +1669,7 @@ export default function App() {
   const closePortalMode = () => {
     setPortalMode(false);
     setPortalKey("");
+    requestWorkflowAttentionRefresh({ force: true });
     const nextUrl = `${window.location.pathname}${window.location.hash}`;
     window.history.replaceState({}, "", nextUrl);
   };
@@ -1757,12 +1933,31 @@ export default function App() {
             </div>
           )}
           <div className="right-actions header-actions">
-            <button className="ghost" onClick={() => setSalesWorkflowOpen(true)}>Sales Workflow</button>
+            <button
+              className="ghost workflow-attention-trigger"
+              onClick={() => setSalesWorkflowOpen(true)}
+              aria-label={workflowAttentionCount === null
+                ? "Sales Workflow"
+                : workflowAttentionCount > 0
+                  ? `Sales Workflow, ${workflowAttentionCount} ${workflowAttentionCount === 1 ? "quote needs" : "quotes need"} attention`
+                  : "Sales Workflow, no quotes need attention"}
+            >
+              <span>Sales Workflow</span>
+              {workflowAttentionCount > 0 && (
+                <span className="workflow-attention-badge" aria-hidden="true">{workflowAttentionCount}</span>
+              )}
+            </button>
             {eventScheduleEnabled && <button className="ghost" onClick={() => setScheduleOpen(true)}>Schedule</button>}
             {integrationsEnabled && <button className="ghost" onClick={() => setIntegrationsOpen(true)}>Integrations</button>}
             {diagnosticsEnabled && <button className="ghost" onClick={() => setDiagnosticsOpen(true)}>Diagnostics</button>}
             {dashboardEnabled && <button className="ghost" onClick={() => setDashboardOpen(true)}>Dashboard</button>}
-            <button className="ghost" onClick={() => setHistoryOpen(true)}>Quote History</button>
+            <button
+              className="ghost"
+              ref={historyTriggerRef}
+              onClick={() => setHistoryOpen(true)}
+            >
+              Quote History
+            </button>
             {authSession.isAdmin && <button className="ghost" onClick={() => setAdminOpen(true)}>Admin Catalog</button>}
             {authSession.isAdmin && <button className="ghost" onClick={() => setImportStudioOpen(true)}>Import Studio</button>}
             {customerPortalEnabled && <button className="ghost" onClick={openPortalMode}>Customer Portal</button>}
@@ -2038,13 +2233,20 @@ export default function App() {
         {historyMounted && (
           <QuoteHistoryModal
             open={historyOpen}
-            onClose={() => setHistoryOpen(false)}
+            onClose={() => {
+              setHistoryOpen(false);
+              requestWorkflowAttentionRefresh({ force: true });
+              window.requestAnimationFrame(() => historyTriggerRef.current?.focus());
+            }}
             basePortalUrl={`${window.location.origin}${window.location.pathname}`}
             organizationId={authSession.organizationId}
             currentUserUid={authSession.user?.uid || ""}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
-            onEditQuote={handleEditQuote}
+            onEditQuote={(quote) => {
+              requestWorkflowAttentionRefresh({ force: true });
+              handleEditQuote(quote);
+            }}
             canDeleteQuotes={authSession.isAdmin}
             onToast={pushToast}
           />
@@ -2061,6 +2263,11 @@ export default function App() {
             organizationId={authSession.organizationId}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
+            onEditQuote={(quote) => {
+              setSalesWorkflowOpen(false);
+              handleEditQuote(quote);
+            }}
+            onAttentionSummaryChange={handleWorkflowAttentionSummary}
             onToast={pushToast}
           />
         )}

@@ -71,7 +71,22 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Sales Workflow
 - Open `Sales Workflow` from the top navigation.
+- When active quotes need action, the navigation control shows the number of
+  affected quotes. One quote counts once even when it has multiple attention
+  reasons. The count loads after the main workspace becomes interactive and
+  does not eagerly load the Sales Workflow modal.
 - Summary metrics show active opportunities, readiness gaps, follow-ups due, and pending approval requests.
+- `Attention` opens first when work is present. It consolidates new or
+  acknowledged customer change requests, overdue or due-today follow-ups, and
+  pending approvals. Use `Review follow-up` or `Review approvals` to move to
+  the exact operating view.
+- For a customer change request, `Acknowledge internally` records that staff
+  saw the exact current request but keeps it in Attention. `Mark handled
+  internally` requires a short internal note and clears only that exact request.
+  A later customer request automatically reappears. These actions do not edit
+  or resend the quote, contact the customer, accept/decline the proposal,
+  confirm payment, or create a booking. Use `Edit quote` and the normal
+  send/review workflow for the actual revision.
 - The `Follow-ups` view supports lead stage, due date, note, completion state, proposal readiness, and a lifecycle timeline for each quote.
 - Sales staff can request approval for sensitive actions such as payment requests, contract conversion, portal-link rotation, or quote deletion.
 - Admins can approve or reject those requests with a resolution note. Approval
@@ -274,6 +289,8 @@ Complete every item before calling the new tenant operational:
 
 ## Notifications and Confirmations
 - Toast notifications are shown for save/update/delete and key operational actions.
+- Workflow Attention is an in-app queue only. It does not send email or SMS and
+  does not prove that a customer or staff member received a notification.
 - Permanent quote deletion uses an explicit admin confirmation and
   callable-owned quote/version/portal cleanup.
 

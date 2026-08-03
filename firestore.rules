@@ -101,11 +101,13 @@ service cloud.firestore {
           && request.resource.data.portalDecision.keys().hasAll([
             "decision",
             "message",
+            "requestId",
             "submittedAtISO"
           ])
           && request.resource.data.portalDecision.keys().hasOnly([
             "decision",
             "message",
+            "requestId",
             "submittedAtISO"
           ])
           && request.resource.data.portalDecision.decision in [
@@ -123,13 +125,30 @@ service cloud.firestore {
           && request.resource.data.portalDecision.message is string
           && request.resource.data.portalDecision.message.size() <= 1200
           && (
+            request.resource.data.portalDecision.message.size() == 0
+            || request.resource.data.portalDecision.message.matches('^(\\S|\\S[\\s\\S]*\\S)$')
+          )
+          && (
             request.resource.data.portalDecision.decision != "changes_requested"
             || request.resource.data.portalDecision.message.size() > 0
           )
           && request.resource.data.portalDecision.submittedAtISO is string
           && request.resource.data.portalDecision.submittedAtISO.size() > 0
+          && request.resource.data.portalDecision.submittedAtISO.matches(
+            '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$'
+          )
           && request.resource.data.portalDecision.submittedAtISO == request.resource.data.updatedAtISO
+          && request.resource.data.portalDecision.requestId is string
+          && request.resource.data.portalDecision.requestId.matches('^[A-Za-z0-9-]{20,80}$')
         );
+    }
+
+    function portalChangeRequestDoesNotReplayHandledRecord() {
+      let nextDecision = request.resource.data.get("portalDecision", {});
+      let handling = resource.data.get("workflow", {}).get("changeRequestHandling", {});
+      return nextDecision.get("decision", "") != "changes_requested"
+        || handling.get("state", "") != "handled"
+        || nextDecision.get("requestId", "") != handling.get("sourceRequestId", "");
     }
 
     function validPortalLifecyclePatch() {
@@ -230,6 +249,104 @@ service cloud.firestore {
         && followUp.updatedByEmail == request.auth.token.email;
     }
 
+    function changeRequestHandlingPatchOnly() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      let previousWorkflow = resource.data.get("workflow", {});
+      let nextWorkflow = request.resource.data.get("workflow", {});
+      let previousHandling = previousWorkflow.get("changeRequestHandling", {});
+      let nextHandling = nextWorkflow.get("changeRequestHandling", {});
+      let sameRequest = previousHandling.get("sourceRequestId", "")
+          == nextHandling.get("sourceRequestId", "")
+        && previousHandling.get("sourceSubmittedAtISO", "")
+          == nextHandling.get("sourceSubmittedAtISO", "")
+        && previousHandling.get("sourceMessage", "")
+          == nextHandling.get("sourceMessage", "");
+      return affectedKeys.hasOnly(["workflow", "updatedAtISO"])
+        && affectedKeys.hasAll(["workflow", "updatedAtISO"])
+        && previousWorkflow is map
+        && nextWorkflow is map
+        && nextWorkflow.diff(previousWorkflow).affectedKeys().hasOnly(["changeRequestHandling"])
+        && nextWorkflow.diff(previousWorkflow).affectedKeys().hasAll(["changeRequestHandling"])
+        && resource.data.status != "deleted"
+        && resource.data.get("portalDecision", {}).get("decision", "") == "changes_requested"
+        && nextHandling is map
+        && nextHandling.keys().hasOnly([
+          "sourceRequestId",
+          "sourceSubmittedAtISO",
+          "sourceMessage",
+          "state",
+          "acknowledgedAtISO",
+          "acknowledgedByEmail",
+          "handledAtISO",
+          "handledByEmail",
+          "note"
+        ])
+        && nextHandling.keys().hasAll([
+          "sourceRequestId",
+          "sourceSubmittedAtISO",
+          "sourceMessage",
+          "state",
+          "acknowledgedAtISO",
+          "acknowledgedByEmail",
+          "handledAtISO",
+          "handledByEmail",
+          "note"
+        ])
+        && nextHandling.sourceRequestId is string
+        && nextHandling.sourceRequestId
+          == resource.data.get("portalDecision", {}).get("requestId", "")
+        && nextHandling.sourceSubmittedAtISO is string
+        && nextHandling.sourceSubmittedAtISO.size() > 0
+        && nextHandling.sourceSubmittedAtISO
+          == resource.data.get("portalDecision", {}).get("submittedAtISO", "")
+        && nextHandling.sourceMessage is string
+        && nextHandling.sourceMessage.size() > 0
+        && nextHandling.sourceMessage.size() <= 1200
+        && nextHandling.sourceMessage
+          == resource.data.get("portalDecision", {}).get("message", "")
+        && nextHandling.state in ["acknowledged", "handled"]
+        && request.resource.data.updatedAtISO is string
+        && request.resource.data.updatedAtISO.size() > 0
+        && nextHandling.acknowledgedAtISO is string
+        && nextHandling.acknowledgedAtISO.size() > 0
+        && nextHandling.acknowledgedByEmail is string
+        && nextHandling.handledAtISO is string
+        && nextHandling.handledByEmail is string
+        && nextHandling.note is string
+        && nextHandling.note.size() <= 800
+        && (
+          (
+            !sameRequest
+            && nextHandling.acknowledgedAtISO == request.resource.data.updatedAtISO
+            && nextHandling.acknowledgedByEmail == request.auth.token.email
+            && (
+              (
+                nextHandling.state == "acknowledged"
+                && nextHandling.handledAtISO == ""
+                && nextHandling.handledByEmail == ""
+                && nextHandling.note == ""
+              )
+              || (
+                nextHandling.state == "handled"
+                && nextHandling.handledAtISO == request.resource.data.updatedAtISO
+                && nextHandling.handledByEmail == request.auth.token.email
+                && nextHandling.note.size() > 0
+              )
+            )
+          )
+          || (
+            sameRequest
+            && previousHandling.get("state", "") == "acknowledged"
+            && nextHandling.state == "handled"
+            && nextHandling.acknowledgedAtISO == previousHandling.get("acknowledgedAtISO", "")
+            && nextHandling.acknowledgedByEmail == previousHandling.get("acknowledgedByEmail", "")
+            && nextHandling.handledAtISO == request.resource.data.updatedAtISO
+            && nextHandling.handledByEmail == request.auth.token.email
+            && nextHandling.note.size() > 0
+          )
+        );
+    }
+
     function staffVersionPointerPatchAllowed(orgId, quoteId) {
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
       let previousVersionNumber = resource.data.get("latestVersionNumber", 0);
@@ -301,6 +418,7 @@ service cloud.firestore {
           && (
             !affectedKeys.hasAny(["workflow"])
             || salesFollowUpPatchOnly()
+            || changeRequestHandlingPatchOnly()
           )
           && (
             !affectedKeys.hasAny(["integrations"])
@@ -455,6 +573,7 @@ service cloud.firestore {
           || !isOrgStaff(orgId)
         )
         && statusPatchOnly()
+        && portalChangeRequestDoesNotReplayHandledRecord()
         && portalMatchesOrgQuoteAfter(resource.data.portalKey, quoteId, orgId);
     }
 

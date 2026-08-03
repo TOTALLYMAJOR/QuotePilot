@@ -20,6 +20,7 @@ const mockState = vi.hoisted(() => ({
   query: vi.fn(),
   runTransaction: vi.fn(),
   transactionSet: vi.fn(),
+  transactionUpdate: vi.fn(),
   serverTimestamp: vi.fn(),
   setDoc: vi.fn(),
   updateDoc: vi.fn(),
@@ -78,6 +79,7 @@ vi.mock("../organizationService", () => ({
 import {
   buildClientWritablePortalPayment,
   convertQuoteToContract,
+  getWorkflowAttentionSnapshot,
   requestQuoteApproval,
   reopenQuote,
   resolveQuoteApprovalRequest,
@@ -87,6 +89,7 @@ import {
   submitQuote,
   syncQuoteToCrm,
   updateQuote,
+  updateQuoteChangeRequestHandling,
   updatePortalDecision
 } from "../quoteStore";
 
@@ -113,7 +116,8 @@ describe("quoteStore Firebase write safety", () => {
           exists: () => true,
           data: () => ({ latestVersionNumber: 0 })
         }),
-        set: mockState.transactionSet
+        set: mockState.transactionSet,
+        update: mockState.transactionUpdate
       };
       return handler(tx);
     });
@@ -860,6 +864,122 @@ describe("quoteStore Firebase write safety", () => {
 
     await expect(saveQuoteVersion("legacy-global-quote")).rejects.toThrow(/quote not found/i);
     expect(mockState.setDoc).not.toHaveBeenCalled();
+  });
+
+  test("change-request handling re-reads transactionally and writes only internal workflow audit", async () => {
+    const requestSubmittedAtISO = "2026-08-03T14:00:00.000Z";
+    mockState.runTransaction.mockImplementationOnce(async (_db, handler) => handler({
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          status: "viewed",
+          portalDecision: {
+            decision: "changes_requested",
+            message: "Please revise the service plan.",
+            requestId: "request-service-plan",
+            submittedAtISO: requestSubmittedAtISO
+          },
+          workflow: {}
+        })
+      }),
+      update: mockState.transactionUpdate
+    }));
+
+    const result = await updateQuoteChangeRequestHandling({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      sourceRequestId: "request-service-plan",
+      sourceSubmittedAtISO: requestSubmittedAtISO,
+      sourceMessage: "Please revise the service plan.",
+      action: "mark_handled",
+      note: "Prepared the revised proposal for customer review.",
+      actorEmail: "forged@example.com",
+      actorRole: "sales"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      handling: {
+        sourceRequestId: "request-service-plan",
+        sourceSubmittedAtISO: requestSubmittedAtISO,
+        sourceMessage: "Please revise the service plan.",
+        state: "handled",
+        acknowledgedByEmail: "current.admin@example.com",
+        handledByEmail: "current.admin@example.com",
+        note: "Prepared the revised proposal for customer review."
+      }
+    });
+    expect(mockState.runTransaction).toHaveBeenCalledTimes(1);
+    expect(mockState.transactionUpdate).toHaveBeenCalledTimes(1);
+    const [quoteRef, patch] = mockState.transactionUpdate.mock.calls[0];
+    expect(quoteRef).toMatchObject({
+      refType: "org-doc",
+      name: "quotes",
+      docId: "quote-1",
+      orgId: "org-one"
+    });
+    expect(Object.keys(patch).sort()).toEqual([
+      "updatedAtISO",
+      "workflow.changeRequestHandling"
+    ]);
+    expect(patch["workflow.changeRequestHandling"]).toMatchObject({
+      acknowledgedByEmail: "current.admin@example.com",
+      handledByEmail: "current.admin@example.com"
+    });
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.transactionSet).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
+    expect(mockState.httpsCallable).not.toHaveBeenCalled();
+  });
+
+  test("workflow attention snapshot is a one-shot active-status read with no operational writes", async () => {
+    const result = await getWorkflowAttentionSnapshot({ organizationId: "org-one" });
+
+    expect(result).toEqual({ source: "firebase", quotes: [] });
+    expect(mockState.where).toHaveBeenCalledWith(
+      "status",
+      "in",
+      ["draft", "sent", "viewed", "accepted"]
+    );
+    expect(mockState.getDocs).toHaveBeenCalledTimes(1);
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.runTransaction).not.toHaveBeenCalled();
+    expect(mockState.transactionSet).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
+  });
+
+  test("change-request handling rejects a stale source before any write", async () => {
+    mockState.runTransaction.mockImplementationOnce(async (_db, handler) => handler({
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          status: "viewed",
+          portalDecision: {
+            decision: "changes_requested",
+            message: "Please revise the service plan.",
+            requestId: "request-service-plan-new",
+            submittedAtISO: "2026-08-03T15:00:00.000Z"
+          },
+          workflow: {}
+        })
+      }),
+      update: mockState.transactionUpdate
+    }));
+
+    await expect(updateQuoteChangeRequestHandling({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      sourceRequestId: "request-service-plan",
+      sourceSubmittedAtISO: "2026-08-03T14:00:00.000Z",
+      sourceMessage: "Please revise the service plan.",
+      action: "acknowledge",
+      actorRole: "sales"
+    })).rejects.toMatchObject({ code: "workflow/stale-change-request" });
+
+    expect(mockState.transactionUpdate).not.toHaveBeenCalled();
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.transactionSet).not.toHaveBeenCalled();
   });
 
   test("portal acceptance commits the public snapshot and tenant quote atomically", async () => {

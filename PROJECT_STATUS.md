@@ -11,9 +11,9 @@ Last updated: August 3, 2026
   returned status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains
   the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the release candidate passes 249 unit tests (35
-  intentionally skipped), 34 focused Firestore rules tests, and the default
-  Playwright suite (29 passed, 2 intentionally gated provisioning-role cases
+- Build and local validation: the release candidate passes 262 unit tests (36
+  intentionally skipped), 35 focused Firestore rules tests, and the default
+  Playwright suite (30 passed, 2 intentionally gated provisioning-role cases
   skipped). The Firebase Auth/catalog browser lane, authoritative
   pricing/quote/portal browser lane, and full provisioning emulator acceptance
   matrix also pass. Both the browser application and Functions production
@@ -23,7 +23,14 @@ Last updated: August 3, 2026
   Admin 14 modular app, Auth, and Firestore APIs. The local authoritative and
   provisioning matrices pass with that runtime candidate.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
-- Current branch workflow delivery: proposal readiness, Good/Better/Best scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action approval requests, the customer decision center, and event production checklists are implemented and locally covered.
+- Current branch workflow delivery: proposal readiness, Good/Better/Best
+  scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action
+  approval requests, the customer decision center, and event production
+  checklists are implemented and locally covered. A tenant-scoped Workflow
+  Attention queue now consolidates due follow-ups, pending approvals, and
+  current customer change requests. Its post-idle header count preserves the
+  lazy workspace boundary; request-ID-bound acknowledge/handled state is internal
+  only and never edits customer decision evidence or sends email/SMS.
 - Current branch quote-entry simplification: Step 1 keeps attendance and role
   counts in the primary flow while placing five exceptional staffing-rate
   values in Advanced Pricing. Existing saved/template values trigger a visible
@@ -147,6 +154,11 @@ Last updated: August 3, 2026
 - Approval request creation, admin resolution, and action-specific execution
   linkage are server-authoritative in the current source candidate, but the
   matching Functions/rules deployment and hosted acceptance remain pending.
+- Workflow Attention and its change-request handling rules are locally covered
+  only. Until this branch is reviewed, merged, and the matching Firestore rules
+  are deployed, do not represent the header count or internal handling records as
+  hosted production behavior. Automated customer/staff notifications and
+  escalation delivery remain unimplemented.
 - Existing portal snapshots still need a reviewed production dry run and apply
   before older links can display every newly added event, selection, and
   pricing field. A dry-run-first, tenant-scoped backfill tool is implemented

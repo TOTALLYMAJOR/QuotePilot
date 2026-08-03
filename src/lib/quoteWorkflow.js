@@ -35,6 +35,20 @@ export const APPROVAL_STATES = ["pending", "approved", "rejected"];
 export const PRODUCTION_CHECKLIST_ITEMS = PRODUCTION_CHECKLIST_DEFINITIONS.map((item) => ({ ...item }));
 export const PRODUCTION_CHECKLIST_IDS = PRODUCTION_CHECKLIST_DEFINITIONS.map((item) => item.id);
 
+const WORKFLOW_ATTENTION_STATUSES = new Set([
+  "draft",
+  "sent",
+  "viewed",
+  "accepted"
+]);
+const WORKFLOW_ATTENTION_PRIORITY = {
+  new_change_request: 0,
+  overdue_follow_up: 1,
+  pending_approval: 2,
+  acknowledged_change_request: 3,
+  due_follow_up: 4
+};
+
 function text(value) {
   return String(value || "").trim();
 }
@@ -53,6 +67,138 @@ function safeIso(value) {
   if (!raw) return "";
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
+function localDateIso(value = new Date()) {
+  const parsed = value instanceof Date ? value : new Date(value);
+  const safeDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const year = safeDate.getFullYear();
+  const month = String(safeDate.getMonth() + 1).padStart(2, "0");
+  const day = String(safeDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function daysBetweenDates(earlierDateIso, laterDateIso) {
+  const earlier = Date.parse(`${earlierDateIso}T00:00:00.000Z`);
+  const later = Date.parse(`${laterDateIso}T00:00:00.000Z`);
+  if (!Number.isFinite(earlier) || !Number.isFinite(later)) return 0;
+  return Math.max(0, Math.round((later - earlier) / 86400000));
+}
+
+export function buildWorkflowAttentionSummary(quotes = [], options = {}) {
+  const todayISO = /^\d{4}-\d{2}-\d{2}$/.test(text(options.todayISO))
+    ? text(options.todayISO)
+    : localDateIso(options.now);
+  const items = [];
+
+  (Array.isArray(quotes) ? quotes : []).forEach((quote) => {
+    const quoteId = text(quote?.id);
+    const quoteStatus = text(quote?.status).toLowerCase();
+    if (!quoteId || !WORKFLOW_ATTENTION_STATUSES.has(quoteStatus)) return;
+
+    const portalDecision = quote?.portalDecision || {};
+    const requestSubmittedAtISO = safeIso(portalDecision.submittedAtISO);
+    if (portalDecision.decision === "changes_requested") {
+      const handling = quote?.workflow?.changeRequestHandling || {};
+      const requestId = text(portalDecision.requestId);
+      const requestMessage = text(portalDecision.message);
+      const matchesCurrentRequest = (
+        text(handling.sourceSubmittedAtISO) === text(portalDecision.submittedAtISO)
+        && text(handling.sourceMessage) === requestMessage
+        && (
+          requestId
+            ? text(handling.sourceRequestId) === requestId
+            : !text(handling.sourceRequestId)
+        )
+      );
+      const handlingState = matchesCurrentRequest ? text(handling.state).toLowerCase() : "";
+      if (!requestSubmittedAtISO || !requestMessage) {
+        items.push({
+          id: `change-request:${quoteId}:invalid`,
+          type: "change_request",
+          state: "invalid",
+          priority: WORKFLOW_ATTENTION_PRIORITY.new_change_request,
+          dateISO: safeIso(quote?.updatedAtISO) || safeIso(quote?.createdAtISO),
+          quote,
+          quoteId,
+          sourceRequestId: requestId,
+          sourceSubmittedAtISO: text(portalDecision.submittedAtISO),
+          sourceMessage: requestMessage,
+          unhandleable: true
+        });
+      } else if (handlingState !== "handled") {
+        const acknowledged = handlingState === "acknowledged";
+        items.push({
+          id: `change-request:${quoteId}:${text(portalDecision.submittedAtISO)}`,
+          type: "change_request",
+          state: acknowledged ? "acknowledged" : "new",
+          priority: WORKFLOW_ATTENTION_PRIORITY[
+            acknowledged ? "acknowledged_change_request" : "new_change_request"
+          ],
+          dateISO: requestSubmittedAtISO,
+          quote,
+          quoteId,
+          sourceRequestId: requestId,
+          sourceSubmittedAtISO: text(portalDecision.submittedAtISO),
+          sourceMessage: requestMessage
+        });
+      }
+    }
+
+    const followUp = quote?.workflow?.followUp || {};
+    const dueDate = text(followUp.dueDate);
+    const followUpClosed = followUp.completed === true || ["won", "lost"].includes(text(followUp.stage));
+    if (!followUpClosed && /^\d{4}-\d{2}-\d{2}$/.test(dueDate) && dueDate <= todayISO) {
+      const daysOverdue = daysBetweenDates(dueDate, todayISO);
+      items.push({
+        id: `follow-up:${quoteId}`,
+        type: "follow_up",
+        state: daysOverdue > 0 ? "overdue" : "due_today",
+        priority: WORKFLOW_ATTENTION_PRIORITY[daysOverdue > 0 ? "overdue_follow_up" : "due_follow_up"],
+        dateISO: dueDate,
+        daysOverdue,
+        quote,
+        quoteId
+      });
+    }
+
+    const pendingRequests = (Array.isArray(quote?.workflow?.approvalRequests)
+      ? quote.workflow.approvalRequests
+      : [])
+      .filter((request) => request?.state === "pending")
+      .sort((left, right) => text(left?.requestedAtISO).localeCompare(text(right?.requestedAtISO)));
+    if (pendingRequests.length > 0) {
+      items.push({
+        id: `approval:${quoteId}`,
+        type: "approval",
+        state: "pending",
+        priority: WORKFLOW_ATTENTION_PRIORITY.pending_approval,
+        dateISO: safeIso(pendingRequests[0]?.requestedAtISO) || safeIso(quote?.updatedAtISO),
+        pendingRequests,
+        quote,
+        quoteId
+      });
+    }
+  });
+
+  items.sort((left, right) => (
+    left.priority - right.priority
+    || text(left.dateISO).localeCompare(text(right.dateISO))
+    || text(left.quote?.quoteNumber || left.quoteId).localeCompare(text(right.quote?.quoteNumber || right.quoteId))
+    || left.type.localeCompare(right.type)
+  ));
+
+  return {
+    todayISO,
+    quoteCount: new Set(items.map((item) => item.quoteId)).size,
+    itemCount: items.length,
+    counts: {
+      changeRequests: items.filter((item) => item.type === "change_request").length,
+      followUps: items.filter((item) => item.type === "follow_up").length,
+      approvals: items.filter((item) => item.type === "approval").length
+    },
+    items
+  };
 }
 
 function cloneForm(form = {}) {
@@ -231,6 +377,40 @@ export function buildQuoteLifecycleTimeline(quote = {}) {
       portalDecision.decision,
       portalDecision.submittedAtISO
     );
+  }
+
+  const changeRequestHandling = quote.workflow?.changeRequestHandling || {};
+  const handlingMatchesCurrentRequest = (
+    text(changeRequestHandling.sourceSubmittedAtISO) === text(portalDecision.submittedAtISO)
+    && text(changeRequestHandling.sourceMessage) === text(portalDecision.message)
+    && (
+      text(portalDecision.requestId)
+        ? text(changeRequestHandling.sourceRequestId) === text(portalDecision.requestId)
+        : !text(changeRequestHandling.sourceRequestId)
+    )
+  );
+  if (
+    portalDecision.decision === "changes_requested"
+    && handlingMatchesCurrentRequest
+  ) {
+    pushTimelineEvent(
+      events,
+      "change-request-acknowledged",
+      "Change request acknowledged internally",
+      text(changeRequestHandling.acknowledgedByEmail) || "Sales workflow",
+      "follow_up",
+      changeRequestHandling.acknowledgedAtISO
+    );
+    if (changeRequestHandling.state === "handled") {
+      pushTimelineEvent(
+        events,
+        "change-request-handled",
+        "Change request marked handled internally",
+        text(changeRequestHandling.note) || text(changeRequestHandling.handledByEmail) || "Sales workflow",
+        "follow_up",
+        changeRequestHandling.handledAtISO
+      );
+    }
   }
 
   const followUp = quote.workflow?.followUp || {};

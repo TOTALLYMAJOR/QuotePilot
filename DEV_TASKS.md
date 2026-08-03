@@ -38,7 +38,9 @@ Last updated: August 3, 2026
 - Add intentional transition/motion polish for step changes and live breakdown updates.
 
 ## P1 - Product Capability
-- Add automated notifications and escalation rules for due follow-ups and new customer change requests.
+- Add opt-in, provider-backed notifications and configurable escalation rules
+  for due follow-ups and new customer change requests; preserve the in-app
+  Workflow Attention queue as operational tracking rather than delivery proof.
 - Run and review the tenant-scoped production portal-projection dry run, resolve
   conflicts, then explicitly authorize the guarded apply so older active links
   receive the new decision-center event, selection, and pricing fields. The
