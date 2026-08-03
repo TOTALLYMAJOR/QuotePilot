@@ -225,6 +225,25 @@ evidence only; repeat the customer-visible flow against the exact hosted
 release before calling production onboarding seamless.
 
 ## 7) Post-Launch Verification
+
+Before testing legacy customer links, run the customer portal projection
+backfill as a separately reviewed production-data operation. Start with a
+tenant-scoped dry run and retain its aggregate evidence:
+
+```bash
+npm run portal:backfill -- \
+  --project tonicatering \
+  --organization <organization-id> \
+  --dry-run \
+  --evidence-out <new-dry-run-evidence-file.json>
+```
+
+Resolve all reported identity or commercial-evidence conflicts before apply.
+Apply requires Firebase Admin ADC, a new evidence file, and the exact
+scope-bound confirmation shown in the README. Do not infer permission to apply
+from deployment or merge approval, and never copy portal tokens or customer
+data into release evidence.
+
 1. Create a quote end-to-end.
 2. Confirm quote appears in history.
 3. Export PDF proposal.

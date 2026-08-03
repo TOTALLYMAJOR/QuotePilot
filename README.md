@@ -242,6 +242,41 @@ npm run migrate:multi-tenant -- \
 
 Do not reuse a confirmation for a different project or tenant.
 
+## Customer Portal Projection Backfill
+
+Legacy active customer portal records can be inspected and refreshed from their
+organization-scoped quote without replacing customer decisions, payment or
+booking evidence, lifecycle history, or unrecognized operator fields. The
+command is read-only by default and requires explicit project and organization
+scope:
+
+```bash
+npm run portal:backfill -- \
+  --project <firebase-project-id> \
+  --organization <organization-id> \
+  --dry-run \
+  --evidence-out <new-evidence-file.json>
+```
+
+Review the count-only evidence and resolve every conflict before applying. An
+apply requires Firebase Admin Application Default Credentials, a new evidence
+path, and an exact scope-bound confirmation:
+
+```bash
+npm run portal:backfill -- \
+  --project <firebase-project-id> \
+  --organization <organization-id> \
+  --apply \
+  --confirm "BACKFILL PORTALS <firebase-project-id> <organization-id>" \
+  --evidence-out <new-evidence-file.json>
+```
+
+Apply mode re-reads each quote and portal in a transaction before writing. It
+skips foreign-tenant, deleted, expired, identity-mismatched, and conflicting
+commercial records. The create-only private (`0600`) evidence destination is
+reserved before any database work and completed atomically with aggregate
+counts rather than portal tokens or customer data.
+
 ## Customer Provisioning (No Stripe)
 Provision a customer organization, enforce order-based feature entitlements
 (unpaid modules locked off), and generate a copy-ready onboarding message.

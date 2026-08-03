@@ -142,7 +142,11 @@ Last updated: August 3, 2026
 - Approval request creation, admin resolution, and action-specific execution
   linkage are server-authoritative in the current source candidate, but the
   matching Functions/rules deployment and hosted acceptance remain pending.
-- Existing portal snapshots need refresh/backfill before older links can display every newly added event, selection, and pricing field.
+- Existing portal snapshots still need a reviewed production dry run and apply
+  before older links can display every newly added event, selection, and
+  pricing field. A dry-run-first, tenant-scoped backfill tool is implemented
+  and locally validated, including transactional emulator acceptance; no
+  production portal record was changed by that validation.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
 - Bundle size remains a watch item; budget/CWV gates now prevent uncontrolled regressions.
 - Functions integrations (Stripe, Twilio, and Resend) remain optional and require secure runtime configuration plus provider-level acceptance/delivery proof; committed placeholder templates are not provider configuration.
@@ -156,7 +160,9 @@ Last updated: August 3, 2026
    checklist against the already-live Vercel frontend.
 2. Verify the intended Resend sender domain in the Resend dashboard and authoritative DNS; only then configure `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and recipient proof from one controlled test.
 3. Deploy the updated `firestore.rules` and run hosted portal decision smoke checks, including active, expired, deleted, and change-request paths.
-4. Refresh/backfill existing customer portal snapshots with the new customer-safe event and pricing fields.
+4. Run and review the scoped production portal-projection dry run, resolve any
+   reported conflicts, then explicitly authorize the guarded apply and retain
+   its count-only evidence.
 5. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
 6. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 

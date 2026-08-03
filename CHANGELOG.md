@@ -8,6 +8,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Dry-run-first, tenant-scoped customer portal projection backfill tooling for
+  active legacy links, with canonical customer-safe quote projection, guarded
+  preservation of decision/payment/booking evidence, transactional apply-time
+  revalidation, pre-reserved count-only private evidence, and Firestore
+  emulator acceptance.
 - Server-authoritative quote approval request and resolution callables with
   same-tenant staff enforcement, admin-only resolution, transaction-backed
   duplicate/replay protection, and server-owned actor/timestamp audit fields.

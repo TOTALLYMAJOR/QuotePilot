@@ -37,7 +37,10 @@ Last updated: August 3, 2026
 
 ## P1 - Product Capability
 - Add automated notifications and escalation rules for due follow-ups and new customer change requests.
-- Refresh/backfill existing portal snapshots so older active links receive the new decision-center event, selection, and pricing fields.
+- Run and review the tenant-scoped production portal-projection dry run, resolve
+  conflicts, then explicitly authorize the guarded apply so older active links
+  receive the new decision-center event, selection, and pricing fields. The
+  tool and emulator acceptance are complete; production execution is not.
 - Add basic analytics events for funnel drop-off and add-on selection trends.
 - Extend operations audit controls (retry dashboards, sync health trends, role-based action logs).
 
