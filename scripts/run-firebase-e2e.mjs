@@ -11,7 +11,7 @@ const orgId = process.env.E2E_FIREBASE_ORG_ID || "e2e-org";
 const email = process.env.E2E_FIREBASE_EMAIL || "e2e-admin@local.test";
 const password = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 const includeFunctions = ["1", "true", "yes", "on"].includes(
-  String(process.env.E2E_INCLUDE_FUNCTIONS || "").trim().toLowerCase()
+  String(process.env.E2E_INCLUDE_FUNCTIONS || "true").trim().toLowerCase()
 );
 const playwrightConfig = process.env.E2E_PLAYWRIGHT_CONFIG || "playwright.firebase.config.js";
 const playwrightSpec = process.env.E2E_PLAYWRIGHT_SPEC || "e2e/firebase-auth-rules.smoke.spec.js";
@@ -51,7 +51,7 @@ const env = {
   TEMP: "/tmp"
 };
 
-if (!process.env.JAVA_HOME && fs.existsSync(path.join(localJre, "bin", "java"))) {
+if (fs.existsSync(path.join(localJre, "bin", "java"))) {
   env.JAVA_HOME = localJre;
   env.PATH = `${path.join(localJre, "bin")}${path.delimiter}${process.env.PATH || ""}`;
 }

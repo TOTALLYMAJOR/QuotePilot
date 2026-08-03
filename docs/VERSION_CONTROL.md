@@ -59,7 +59,12 @@ git checkout -b feature/<scope>-<topic>
    - heavy lanes (`lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`) when required by risk classifier or `main` push policy
      - Firebase heavy lanes install the independently locked `functions/`
        dependencies before starting emulators; root installation alone is not
-       a Functions runtime proof.
+       a Functions runtime proof;
+     - Firebase emulator runners require Java 21 or newer and automatically
+       select an isolated repository-local JRE when the runner's system Java is
+       older.
+     - The CWV lane builds a fresh production bundle and explicitly selects the
+       installed Playwright Chromium binary before Lighthouse starts.
    - `Docker Build Smoke`
    - `lane:playwright-smoke`
 4. Complete pre-merge 10-minute UAT checklist from `docs/LAUNCH_RUNBOOK.md`.

@@ -1,8 +1,8 @@
 {
   "ci": {
     "collect": {
-      "startServerCommand": "npm run preview -- --host 127.0.0.1 --port 4173",
-      "startServerReadyPattern": "Local:",
+      "startServerCommand": "npm run preview -- --host 127.0.0.1 --port 4173 --strictPort",
+      "startServerReadyPattern": "Local",
       "numberOfRuns": 1,
       "settings": {
         "chromeFlags": "--headless=new --no-sandbox --disable-dev-shm-usage"

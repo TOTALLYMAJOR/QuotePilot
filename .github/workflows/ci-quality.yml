@@ -44,7 +44,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Classify CI lanes
         id: classify
@@ -61,7 +61,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Run lane:quick
         run: npm run lane:quick
@@ -79,7 +79,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -114,17 +114,21 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Build production app for Lighthouse
+        run: npm run build
+
       - name: Install Playwright browser + Linux deps for Lighthouse
         run: npx playwright install --with-deps chromium
 
       - name: Resolve Chromium path for Lighthouse
-        run: echo "CHROME_PATH=$(node -e 'const { chromium } = require(\"playwright\"); process.stdout.write(chromium.executablePath());')" >> "$GITHUB_ENV"
+        run: |
+          node -p "'CHROME_PATH=' + require('playwright').chromium.executablePath()" >> "$GITHUB_ENV"
 
       - name: Run CWV smoke gate
         run: npm run check:perf:cwv
@@ -146,7 +150,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -190,7 +194,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -237,7 +241,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies

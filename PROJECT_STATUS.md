@@ -1,16 +1,21 @@
 # Project Status
 
-Last updated: July 27, 2026
+Last updated: August 3, 2026
 
 ## Operational Health
 - Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment `dpl_AsPnyL3M8o5rF8GUSMgJ8HvZWmRh`, which reached `READY` on July 27, 2026. Hosted HTTP checks returned the QuotePilot application shell with status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the stable combined runtime passes 220 unit
-  tests and 33 focused Firestore rules tests. The provisioning emulator
-  acceptance matrix, the authoritative owner/customer browser acceptance test (1/1),
-  organization-scoped provisioning UI tests (7/7), and the unscoped
-  platform-admin provisioning UI test (1/1) also pass. This is local/emulator evidence,
-  not hosted tenant acceptance.
+- Build and local validation: the release candidate passes 223 unit tests (33
+  intentionally skipped), 33 focused Firestore rules tests, and the default
+  Playwright suite (27 passed, 2 intentionally gated provisioning-role cases
+  skipped). The Firebase Auth/catalog browser lane, authoritative
+  pricing/quote/portal browser lane, and full provisioning emulator acceptance
+  matrix also pass. Both the browser application and Functions production
+  dependency trees report zero known vulnerabilities under `npm audit
+  --omit=dev`. This is local/emulator evidence, not hosted tenant acceptance.
+- Functions runtime readiness: Functions now target Node.js 22 and use Firebase
+  Admin 14 modular app, Auth, and Firestore APIs. The local authoritative and
+  provisioning matrices pass with that runtime candidate.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action approval requests, the customer decision center, and event production checklists are implemented and locally covered.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
@@ -88,6 +93,8 @@ Last updated: July 27, 2026
   - workflow run: `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
 
 ## Active Risks
+- The Node.js 22/Firebase Admin 14 Functions candidate is locally validated but
+  has not been deployed or observed on the production Functions runtime.
 - The live Vercel SPA rewrite was deployed from an isolated hotfix based on
   commit `3a9918910bf1bb224cf0b92d5061d0359107a7b9`; the release-candidate source
   now contains the matching route and runbook changes, but the next production

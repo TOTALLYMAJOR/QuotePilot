@@ -2,7 +2,6 @@
 
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
-import { createRequire } from "node:module";
 import { deleteApp, initializeApp } from "firebase/app";
 import {
   connectAuthEmulator,
@@ -21,9 +20,9 @@ import {
   updateDoc,
   writeBatch
 } from "firebase/firestore";
+import { loadFirebaseAdmin } from "./firebase-admin-modular.mjs";
 
-const require = createRequire(import.meta.url);
-const admin = require("../functions/node_modules/firebase-admin");
+const admin = loadFirebaseAdmin();
 
 const projectId = String(process.env.GCLOUD_PROJECT || process.env.E2E_FIREBASE_PROJECT_ID || "").trim();
 const authHost = String(process.env.FIREBASE_AUTH_EMULATOR_HOST || "").trim();
@@ -36,12 +35,12 @@ if (!projectId.startsWith("demo-") || !authHost || !firestoreHost || !functionsH
   );
 }
 
-if (!admin.apps.length) {
+if (!admin.getApps().length) {
   admin.initializeApp({ projectId });
 }
 
-const db = admin.firestore();
-const auth = admin.auth();
+const db = admin.getFirestore();
+const auth = admin.getAuth();
 const region = "us-central1";
 const acceptanceCredential = `Provisioning-E2E-${randomUUID()}!`;
 const canonicalAppUrl = "https://quotepilot.mbmapps.com/app";
@@ -112,8 +111,8 @@ async function createPrincipal({ email, role, organizationId, platformAdmin = fa
     role,
     email,
     organizationId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    createdAt: admin.FieldValue.serverTimestamp(),
+    updatedAt: admin.FieldValue.serverTimestamp()
   });
   await auth.setCustomUserClaims(user.uid, {
     role,

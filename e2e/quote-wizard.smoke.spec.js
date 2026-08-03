@@ -9,11 +9,15 @@ function historyDialogMessage(page, textPattern) {
   return page.getByRole("dialog").getByText(textPattern).first();
 }
 
+function futureDateISO(days = 60) {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 async function fillRequiredQuoteFields(page, {
   guests = 72,
   eventName = "E2E Launch Dinner",
   venue = "Birmingham Civic Hall",
-  date = "2026-06-14"
+  date = futureDateISO()
 } = {}) {
   const eventType = page.getByLabel(/Event type/i);
   if (await eventType.count()) {
@@ -47,7 +51,7 @@ async function advanceToSaveButton(page, saveButtonLabel) {
     }
     const depositLink = page.getByLabel("Deposit payment link (optional)");
     if (await depositLink.count()) {
-      await depositLink.fill("https://pay.example.com/e2e-deposit");
+      await depositLink.fill("https://checkout.stripe.com/c/pay/cs_test_e2e_deposit");
     }
 
     const saveButton = page.getByRole("button", { name: saveButtonLabel });
@@ -107,15 +111,14 @@ test("step 1 soft-lock keeps next disabled until required fields are complete", 
   await expect(nextButton).toBeEnabled();
 });
 
-test("staffing overrides only show bartender rate fields when bartenders are above zero", async ({ page }) => {
-  const staffingToggle = page.getByRole("button", { name: /Staffing Overrides/i });
-  await staffingToggle.click();
-  await expect(page.getByText(/Set bartenders above 0/i)).toBeVisible();
-  await expect(page.getByLabel(/Bartender rate type/i)).toHaveCount(0);
-
+test("staffing inputs support per-role counts and direct rate overrides", async ({ page }) => {
+  const bartenderRateOverride = page.getByLabel(/Bartender rate override/i);
+  await expect(bartenderRateOverride).toBeVisible();
   await page.getByRole("button", { name: /Increase Bartenders/i }).click();
   await page.getByRole("button", { name: /Increase Bartenders/i }).click();
-  await expect(page.getByLabel(/Bartender rate type/i)).toBeVisible();
+  await expect(page.getByRole("spinbutton", { name: "Bartenders" })).toHaveValue("2");
+  await bartenderRateOverride.fill("48");
+  await expect(bartenderRateOverride).toHaveValue("48");
 });
 
 test("hero CTA remains available and returns workflow focus to step 1", async ({ page }) => {
@@ -182,7 +185,7 @@ test("new quote flow allows edits before save and persists in history", async ({
   await expect(firstQuoteRow).toContainText("110");
 });
 
-test("quote history supports export and send actions", async ({ page }) => {
+test("quote history supports export and safely blocks an unconfigured payment link", async ({ page }) => {
   await createQuoteToHistory(page, { guests: 84 });
 
   const firstQuoteRow = page.locator(".history-table-wrap tbody tr").filter({
@@ -200,7 +203,7 @@ test("quote history supports export and send actions", async ({ page }) => {
   expect(pdfDownload.suggestedFilename()).toMatch(/\.pdf$/i);
 
   await firstQuoteRow.getByRole("button", { name: "Copy Pay Link" }).click();
-  await expect(historyDialogMessage(page, /Deposit link copied/i)).toBeVisible();
+  await expect(historyDialogMessage(page, /No approved Stripe deposit link/i)).toBeVisible();
 });
 
 test("sales workflow persists a follow-up plan", async ({ page }) => {
@@ -226,11 +229,19 @@ test("sales workflow persists a follow-up plan", async ({ page }) => {
 });
 
 test("portal decision center records a customer change request", async ({ page }) => {
+  const eventDate = futureDateISO(75);
+  const eventDateLabel = new Date(`${eventDate}T12:00:00`).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
   await createQuoteToHistory(page, {
     guests: 88,
     eventName: "E2E Portal Decision",
-    venue: "Decision Hall"
+    venue: "Decision Hall",
+    date: eventDate
   });
+  await setQuoteStatus(quoteRows(page).first(), "sent");
   const portalKey = await page.evaluate(() => {
     const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
     return quotes[0]?.portalKey || "";
@@ -243,7 +254,7 @@ test("portal decision center records a customer change request", async ({ page }
   await page.getByPlaceholder("Paste your quote key").fill(portalKey);
   await page.getByRole("button", { name: "Open Proposal" }).click();
   await expect(page.getByRole("heading", {
-    name: "E2E Portal Decision on June 14, 2026"
+    name: `E2E Portal Decision on ${eventDateLabel}`
   })).toBeVisible();
   await page.getByRole("button", { name: "Request Changes" }).click();
   await page.getByLabel("Requested changes").fill("Please replace the entree with a vegetarian option.");

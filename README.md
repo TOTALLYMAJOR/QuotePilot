@@ -29,13 +29,14 @@ Tenant safety mode:
 ## Architecture Snapshot
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
+- Server runtime: Firebase Functions on Node.js 22 with modular Firebase Admin SDK APIs
 - Public custom domain: Vercel (`https://quotepilot.mbmapps.com`)
 - Firebase Hosting origin/fallback: `https://tonicatering.web.app`
 - Local runtime options: VS Code Dev Container (recommended), Node (`npm run dev`), or Docker Compose (`web-dev` / `web`)
 
 ## Local Setup
 ### Prerequisites
-- Node.js 20+
+- Node.js 22+
 - npm
 
 ### Install + Validate
@@ -144,20 +145,32 @@ npm run lane:release
 npm run lane:release:cwv
 ```
 
+The CWV release lane uses `LHCI_COLLECT__CHROME_PATH` when supplied; otherwise
+it selects the installed Playwright Chromium and fails with an installation
+instruction if that browser is unavailable.
+
 ## E2E Test Lanes
 - `npm run test:e2e`
   - Default browser smoke lane.
+  - Excludes Firebase emulator-only specs; those run in the dedicated Firebase
+    lanes below.
   - Uses `scripts/run-playwright.sh`, which auto-prepares Linux Playwright runtime libs under `.cache/playwright-libs` when needed.
 - `npm run test:e2e:firebase`
-  - Firebase emulator browser lane for real Auth + Firestore rules coverage.
-  - Starts `auth` + `firestore` emulators, seeds org/menu/userRole fixtures, signs in via UI, and validates quote save path.
+  - Firebase emulator browser lane for real Auth, organization bootstrap, and
+    Firestore rules coverage.
+  - Starts `auth`, `firestore`, and `functions` emulators, seeds
+    org/menu/userRole fixtures, signs in via UI, and validates the
+    organization-scoped catalog loaded through the application.
   - Uses the isolated `firebase.e2e.json` configuration and dedicated high
     ports. A port conflict fails the lane; the runner does not terminate another
     local process.
-  - Auto-prepares local JRE under `.cache/tools/jre21` when system Java is unavailable.
+  - Requires Java 21 or newer. When the system Java is missing or older, the
+    runner prepares and explicitly selects a local JRE under
+    `.cache/tools/jre21`.
 - `npm run test:e2e:firebase:authoritative`
   - Firebase emulator browser lane that also starts Functions emulator.
-  - Requires authoritative pricing callable success in the quote save path (no client-only pricing fallback).
+  - Requires authoritative pricing callable success and trusted quote creation
+    in the save path (no client-only pricing fallback).
 
 Optional env vars for Firebase emulator lane:
 - `E2E_FIREBASE_PROJECT_ID` (default: `demo-e2e`)

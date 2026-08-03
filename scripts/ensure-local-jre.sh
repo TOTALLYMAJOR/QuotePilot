@@ -5,12 +5,29 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOLS_DIR="$ROOT_DIR/.cache/tools"
 JRE_ROOT="$TOOLS_DIR/jre21"
 
+java_major_version() {
+  "$1" -version 2>&1 | awk -F'[".]' '/version/ {
+    if ($2 == "1") {
+      print $3
+    } else {
+      print $2
+    }
+    exit
+  }'
+}
+
 if command -v java >/dev/null 2>&1; then
-  exit 0
+  SYSTEM_JAVA_MAJOR="$(java_major_version "$(command -v java)")"
+  if [[ "$SYSTEM_JAVA_MAJOR" =~ ^[0-9]+$ ]] && (( SYSTEM_JAVA_MAJOR >= 21 )); then
+    exit 0
+  fi
 fi
 
 if [[ -x "$JRE_ROOT/bin/java" ]]; then
-  exit 0
+  LOCAL_JAVA_MAJOR="$(java_major_version "$JRE_ROOT/bin/java")"
+  if [[ "$LOCAL_JAVA_MAJOR" =~ ^[0-9]+$ ]] && (( LOCAL_JAVA_MAJOR >= 21 )); then
+    exit 0
+  fi
 fi
 
 mkdir -p "$TOOLS_DIR"

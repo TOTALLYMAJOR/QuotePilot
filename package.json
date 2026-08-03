@@ -30,7 +30,7 @@
     "check:secrets": "node ./scripts/check-secret-assets.mjs",
     "check:docs:governance": "node ./scripts/check-doc-governance.mjs",
     "check:perf:bundle": "node ./scripts/check-bundle-budget.mjs",
-    "check:perf:cwv": "lhci autorun --config=./.lighthouserc.json",
+    "check:perf:cwv": "bash ./scripts/run-lighthouse-cwv.sh",
     "deploy:firebase:functions": "node ./scripts/deploy-firebase-production.mjs --scope functions",
     "deploy:firebase:hosting": "node ./scripts/deploy-firebase-production.mjs --scope hosting",
     "deploy:firebase:hosting:customer": "node ./scripts/deploy-hosting-customer.mjs",
@@ -46,10 +46,14 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
-    "@lhci/cli": "^0.14.0",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.54.2",
     "@vitejs/plugin-react": "^5.2.0",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "tmp": "^0.2.6",
+    "uuid": "^11.1.1"
   }
 }

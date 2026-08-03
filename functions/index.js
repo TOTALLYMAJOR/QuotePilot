@@ -1,7 +1,8 @@
 const functions = require("firebase-functions/v1");
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
 const { randomUUID } = require("node:crypto");
-const { FieldValue } = require("firebase-admin/firestore");
+const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 const Stripe = require("stripe");
 const twilio = require("twilio");
 const {
@@ -43,9 +44,10 @@ const {
   validateStripeCheckoutCompletion
 } = require("./paymentSafety");
 
-admin.initializeApp();
+initializeApp();
 
-const db = admin.firestore();
+const auth = getAuth();
+const db = getFirestore();
 const REGION = "us-central1";
 const ROLES_COLLECTION = "userRoles";
 const ORGANIZATIONS_COLLECTION = "organizations";
@@ -953,7 +955,7 @@ async function retireOrganizationRoleAssignments(organizationId) {
 
     await Promise.all(snapshot.docs.map(async (roleSnap) => {
       try {
-        const user = await admin.auth().getUser(roleSnap.id);
+        const user = await auth.getUser(roleSnap.id);
         await syncPrincipalClaims({
           uid: roleSnap.id,
           role: "customer",
@@ -1149,7 +1151,7 @@ async function syncPrincipalClaims({
 
   const normalizedRole = normalizeRole(role);
   const normalizedOrgId = normalizeOrganizationId(organizationId);
-  const currentRecord = await admin.auth().getUser(normalizedUid);
+  const currentRecord = await auth.getUser(normalizedUid);
   const existingClaims = currentRecord.customClaims && typeof currentRecord.customClaims === "object"
     ? currentRecord.customClaims
     : {};
@@ -1173,7 +1175,7 @@ async function syncPrincipalClaims({
   if (typeof platformAdmin === "boolean") {
     nextClaims.platformAdmin = platformAdmin;
   }
-  await admin.auth().setCustomUserClaims(normalizedUid, nextClaims);
+  await auth.setCustomUserClaims(normalizedUid, nextClaims);
 }
 
 async function resolveTenantByHostInternal(hostname = "", { enforceActive = true, requestIp = "" } = {}) {
@@ -2209,7 +2211,7 @@ exports.syncUserClaimsFromRole = functions.region(REGION).https.onCall(async (da
     throw new functions.https.HttpsError("permission-denied", "Target user is outside your organization scope.");
   }
 
-  const targetUser = await admin.auth().getUser(targetUid);
+  const targetUser = await auth.getUser(targetUid);
   await syncPrincipalClaims({
     uid: targetUid,
     role: targetRole.role,
@@ -2374,7 +2376,7 @@ function isAuthUserNotFoundError(err) {
 
 async function findAuthUserByEmail(ownerEmail = "") {
   try {
-    return await admin.auth().getUserByEmail(ownerEmail);
+    return await auth.getUserByEmail(ownerEmail);
   } catch (err) {
     if (isAuthUserNotFoundError(err)) return null;
     throw err;
@@ -2389,7 +2391,7 @@ async function assertCustomerProvisioningOwnerAvailable({
   let uidUser = null;
   if (ownerUid) {
     try {
-      uidUser = await admin.auth().getUser(ownerUid);
+      uidUser = await auth.getUser(ownerUid);
     } catch (err) {
       if (isAuthUserNotFoundError(err)) {
         throw new functions.https.HttpsError(

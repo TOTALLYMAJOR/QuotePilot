@@ -185,7 +185,7 @@ export default function QuoteHistoryModal({
   const authorityCopy = permissions.role === "admin"
     ? "Admin can change quote, payment, booking, portal, and contract state."
     : permissions.role === "sales"
-      ? "Sales can prepare and send proposals; admin approval is required for payment, booking, portal, and delete actions."
+      ? "Sales can prepare proposal artifacts; admin approval is required to send email or change payment, booking, portal, and delete state."
       : "Customers can review portal content only; staff authority is required for quote history actions.";
   const normalizedCustomerQuery = query.trim().toLowerCase();
   const eventTypeNameById = new Map(

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { loadFirebaseAdmin } from "./firebase-admin-modular.mjs";
 import {
   DEFAULT_ADDONS,
   DEFAULT_EVENT_TEMPLATES,
@@ -12,19 +12,6 @@ import {
   DEFAULT_RENTALS,
   DEFAULT_SETTINGS
 } from "../src/data/mockCatalog.js";
-
-const require = createRequire(import.meta.url);
-
-function loadFirebaseAdmin() {
-  try {
-    return require("../functions/node_modules/firebase-admin");
-  } catch (cause) {
-    throw new Error(
-      "Firebase Admin dependency is unavailable. Run `npm ci --prefix functions` before seeding.",
-      { cause }
-    );
-  }
-}
 
 const MAX_BATCH_WRITES = 450;
 const VALUE_FLAGS = new Set([
@@ -444,11 +431,11 @@ async function main() {
   const { projectId, organizationId, dryRun } = parseSeedArgs(process.argv.slice(2));
   const admin = loadFirebaseAdmin();
 
-  if (!admin.apps.length) {
+  if (!admin.getApps().length) {
     admin.initializeApp({ projectId });
   }
 
-  const db = admin.firestore();
+  const db = admin.getFirestore();
   const nowISO = new Date().toISOString();
   const basePath = `organizations/${organizationId}`;
   const organizationRef = db.doc(basePath);

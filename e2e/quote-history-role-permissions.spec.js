@@ -23,7 +23,7 @@ async function advanceToSave(page) {
 
     const depositLink = page.getByLabel("Deposit payment link (optional)");
     if (await depositLink.count()) {
-      await depositLink.fill("https://pay.example.com/sales-review");
+      await depositLink.fill("https://checkout.stripe.com/c/pay/cs_test_sales_review");
     }
 
     const saveButton = page.getByRole("button", { name: "Save & Submit" });
@@ -63,7 +63,7 @@ test("sales quote history preserves proposal actions and hides payment and booki
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute("aria-modal", "true");
-  await expect(dialog).toContainText("Sales can prepare and send proposals");
+  await expect(dialog).toContainText("Sales can prepare proposal artifacts");
 
   const row = dialog.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })
@@ -73,7 +73,7 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(row.getByRole("button", { name: "Edit" })).toBeVisible();
   await expect(row.getByRole("button", { name: "Duplicate" })).toBeVisible();
   await expect(row.getByRole("button", { name: "PDF" })).toBeVisible();
-  await expect(row.getByRole("button", { name: "Send Quote Email" })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Send Quote Email" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Copy Email" })).toBeVisible();
   await expect(row.getByRole("button", { name: "Copy Portal" })).toBeVisible();
 

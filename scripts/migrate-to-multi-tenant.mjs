@@ -1,24 +1,11 @@
 #!/usr/bin/env node
 
-import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-
-const require = createRequire(import.meta.url);
-
-function loadFirebaseAdmin() {
-  try {
-    return require("../functions/node_modules/firebase-admin");
-  } catch (cause) {
-    throw new Error(
-      "Firebase Admin dependency is unavailable. Run `npm ci --prefix functions` before migration.",
-      { cause }
-    );
-  }
-}
+import { loadFirebaseAdmin } from "./firebase-admin-modular.mjs";
 
 const MAX_BATCH_WRITES = 450;
 
@@ -1220,10 +1207,10 @@ async function main() {
   let summary;
   let mode = "firebase-admin";
   try {
-    if (!admin.apps.length) {
+    if (!admin.getApps().length) {
       admin.initializeApp(projectId ? { projectId } : {});
     }
-    const db = admin.firestore();
+    const db = admin.getFirestore();
     summary = await runMigrationWithAdmin({ db, organizationId, dryRun });
   } catch (error) {
     if (!isAdcMissingError(error)) {

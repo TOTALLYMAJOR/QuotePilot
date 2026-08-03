@@ -65,6 +65,33 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- The repository, CI, Docker image, and Firebase Functions now target Node.js
+  22. Functions use Firebase Admin 14 modular app, Auth, and Firestore APIs
+  across runtime, emulator seed, provisioning, tenant migration, and catalog
+  seed paths. Production dependency audits for both the browser app and
+  Functions now report zero known vulnerabilities.
+- Playwright now runs admin and sales role acceptance against separate runtime
+  servers, keeps Firebase-only specs in their emulator lanes, and aligns quote
+  workflow coverage with future event dates, per-role staffing, configured-only
+  payment links, portal lifecycle eligibility, and hardened sales authority.
+- The canonical CWV command now pins Lighthouse to the installed Playwright
+  Chromium when no explicit browser is configured, preventing a host Windows
+  browser path from leaking into Linux validation regardless of which release
+  wrapper invokes it.
+- Lighthouse CI is updated to its current release with narrow patched `tmp` and
+  `uuid` overrides, removing the remaining development-tool audit findings.
+- The Firebase Auth/rules browser lane now starts Functions so it can validate
+  authenticated organization bootstrap and catalog loading; trusted quote save
+  behavior remains covered by the authoritative pricing lane.
+- Quote History now states the actual sales boundary: sales may prepare
+  proposal artifacts, while email send and payment, booking, portal, and delete
+  state changes require admin authority.
+- Firebase browser configuration now trims deployment-provider whitespace before
+  SDK initialization, preventing malformed Google Auth iframe URLs while
+  preserving the existing fail-closed behavior when configuration is missing.
+- The default Playwright smoke lane now excludes Firebase emulator-only specs;
+  those acceptance flows run only in their dedicated Auth/Firestore and
+  authoritative-pricing lanes, avoiding fallback-mode retries in generic CI.
 - Firestore tenant seeding now defaults to a read-only preview, requires explicit
   project and organization scope, and requires an exact scope-bound
   confirmation before apply. Apply validates an existing non-retired tenant,
@@ -88,6 +115,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - The core CI lane now fetches full Git history so documentation governance
   evaluates the real PR merge-base range instead of failing on a shallow
   checkout.
+- Firebase emulator runners now detect system Java versions older than 21,
+  provision a repository-local Java 21 runtime, and explicitly prefer it over
+  stale runner-level `JAVA_HOME` settings.
 - Local Firebase environment generation now writes only `.env.local`, refuses
   to overwrite an existing file by default, and requires an explicit
   project-scoped confirmation for replacement. Development catalog fallback is
