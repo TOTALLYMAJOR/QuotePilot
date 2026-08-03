@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
-import { createRequire } from "node:module";
+import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { loadFirebaseAdmin } from "./firebase-admin-modular.mjs";
 import {
   DEFAULT_ADDONS,
   DEFAULT_EVENT_TEMPLATES,
@@ -11,10 +13,14 @@ import {
   DEFAULT_SETTINGS
 } from "../src/data/mockCatalog.js";
 
-const require = createRequire(import.meta.url);
-const admin = require("../functions/node_modules/firebase-admin");
-
 const MAX_BATCH_WRITES = 450;
+const VALUE_FLAGS = new Set([
+  "--project",
+  "--organization",
+  "--org",
+  "--confirm"
+]);
+const BOOLEAN_FLAGS = new Set(["--dry-run", "--apply"]);
 
 function slugify(value, fallback = "item") {
   const raw = String(value || fallback).trim().toLowerCase();
@@ -186,38 +192,76 @@ function buildCatalogDocs(nowISO) {
   return { packageDocs, addonDocs, rentalDocs, settingsData };
 }
 
-function parseArgs(argv) {
+function takeValue(argv, index, flag) {
+  const value = argv[index + 1];
+  const normalized = String(value || "").trim();
+  if (!normalized || normalized.startsWith("--")) {
+    throw new Error(`${flag} requires a value.`);
+  }
+  return normalized;
+}
+
+export function parseSeedArgs(argv) {
   const args = Array.isArray(argv) ? argv : [];
-  let projectId = "";
-  let organizationId = "";
-  let organizationProvided = false;
-  let dryRun = false;
+  const values = new Map();
+  const modes = new Set();
+  const seen = new Set();
 
   for (let i = 0; i < args.length; i += 1) {
     const token = String(args[i] || "").trim();
-    if (token === "--dry-run") {
-      dryRun = true;
+    const canonicalToken = token === "--org" ? "--organization" : token;
+    if (BOOLEAN_FLAGS.has(token)) {
+      if (seen.has(token)) {
+        throw new Error(`Duplicate argument: ${token}`);
+      }
+      seen.add(token);
+      modes.add(token);
       continue;
     }
-    if (token === "--project") {
-      projectId = String(args[i + 1] || "").trim();
+    if (VALUE_FLAGS.has(token)) {
+      if (seen.has(canonicalToken)) {
+        throw new Error(`Duplicate argument: ${canonicalToken}`);
+      }
+      seen.add(canonicalToken);
+      values.set(canonicalToken, takeValue(args, i, token));
       i += 1;
       continue;
     }
-    if (token === "--organization" || token === "--org") {
-      organizationId = slugify(args[i + 1], "default-org");
-      organizationProvided = true;
-      i += 1;
-    }
+    throw new Error(`Unknown argument: ${token || "(empty)"}`);
+  }
+
+  if (modes.has("--dry-run") && modes.has("--apply")) {
+    throw new Error("Choose exactly one seed mode: --dry-run or --apply.");
+  }
+
+  const projectId = String(values.get("--project") || "").trim();
+  const organizationId = slugify(values.get("--organization"), "");
+  if (!projectId) {
+    throw new Error("Missing project id. Run with --project <firebase-project-id>.");
+  }
+  if (!/^[a-z0-9][a-z0-9-]{4,28}[a-z0-9]$/.test(projectId)) {
+    throw new Error("--project must be an explicit valid Firebase project id.");
+  }
+  if (!organizationId) {
+    throw new Error("Missing organization id. Run with --organization <organization-id>.");
+  }
+
+  const apply = modes.has("--apply");
+  const confirmation = String(values.get("--confirm") || "").trim();
+  const expectedConfirmation = `SEED ${projectId} ${organizationId}`;
+  if (!apply && confirmation) {
+    throw new Error("--confirm is valid only with --apply.");
+  }
+  if (apply && confirmation !== expectedConfirmation) {
+    throw new Error(`Apply requires --confirm "${expectedConfirmation}". The default mode is read-only.`);
   }
 
   return {
-    projectId:
-      projectId ||
-      String(process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "").trim(),
+    projectId,
     organizationId,
-    organizationProvided,
-    dryRun
+    dryRun: !apply,
+    apply,
+    expectedConfirmation
   };
 }
 
@@ -247,7 +291,12 @@ async function createDocsInBatches(db, collectionPath, docs, { merge = false } =
     const chunk = docs.slice(i, i + MAX_BATCH_WRITES);
     const batch = db.batch();
     chunk.forEach((entry) => {
-      batch.set(db.collection(collectionPath).doc(entry.id), entry.data, { merge });
+      const ref = db.collection(collectionPath).doc(entry.id);
+      if (merge) {
+        batch.set(ref, entry.data, { merge: true });
+      } else {
+        batch.create(ref, entry.data);
+      }
     });
     await batch.commit();
     created += chunk.length;
@@ -313,8 +362,8 @@ async function seedMenuItemsCollection({ db, collectionPath, docs, dryRun }) {
     const current = snapshot.data() || {};
     const resolvedPricingType = normalizePricingType(current.pricingType || current.type || entry.data.pricingType, "per_event");
     const patch = {};
-    if (current.pricingType !== resolvedPricingType) patch.pricingType = resolvedPricingType;
-    if (current.type !== resolvedPricingType) patch.type = resolvedPricingType;
+    if (!String(current.pricingType || "").trim()) patch.pricingType = resolvedPricingType;
+    if (!String(current.type || "").trim()) patch.type = resolvedPricingType;
     if (typeof current.active !== "boolean") patch.active = true;
     if (!Object.keys(patch).length) return;
     backfill.push({
@@ -369,7 +418,7 @@ async function seedSettingsDoc({ db, docPath, data, dryRun }) {
       wouldCreate: 1
     };
   }
-  await ref.set(data);
+  await ref.create(data);
   return {
     total: 1,
     existing: 0,
@@ -379,19 +428,32 @@ async function seedSettingsDoc({ db, docPath, data, dryRun }) {
 }
 
 async function main() {
-  const { projectId, organizationId, organizationProvided, dryRun } = parseArgs(process.argv.slice(2));
-  if (!organizationProvided || !organizationId) {
-    throw new Error("Missing organization id. Run with --organization <orgId>.");
+  const { projectId, organizationId, dryRun } = parseSeedArgs(process.argv.slice(2));
+  const admin = loadFirebaseAdmin();
+
+  if (!admin.getApps().length) {
+    admin.initializeApp({ projectId });
   }
 
-  if (!admin.apps.length) {
-    const options = projectId ? { projectId } : {};
-    admin.initializeApp(options);
-  }
-
-  const db = admin.firestore();
+  const db = admin.getFirestore();
   const nowISO = new Date().toISOString();
   const basePath = `organizations/${organizationId}`;
+  const organizationRef = db.doc(basePath);
+  const organizationSnapshot = await organizationRef.get();
+  if (!organizationSnapshot.exists) {
+    throw new Error(
+      `Organization ${organizationId} does not exist in project ${projectId}. Provision the tenant before seeding it.`
+    );
+  }
+  const organization = organizationSnapshot.data() || {};
+  const organizationStatus = String(organization.status || "").trim().toLowerCase();
+  if (
+    organization.active === false
+    || organization.archived === true
+    || (organizationStatus && organizationStatus !== "active")
+  ) {
+    throw new Error(`Organization ${organizationId} is inactive or archived; refusing to seed it.`);
+  }
   const paths = {
     eventTypes: `${basePath}/eventTypes`,
     menuCategories: `${basePath}/menuCategories`,
@@ -401,12 +463,6 @@ async function main() {
     catalogRentals: `${basePath}/catalogRentals`,
     settingsConfigDoc: `${basePath}/settings/config`
   };
-  if (!dryRun) {
-    await db.doc(`organizations/${organizationId}`).set({
-      updatedAtISO: nowISO,
-      seededByScriptAtISO: nowISO
-    }, { merge: true });
-  }
   const { eventTypeDocs, categoryDocs, itemDocs } = buildSeedDocs(nowISO);
   const { packageDocs, addonDocs, rentalDocs, settingsData } = buildCatalogDocs(nowISO);
 
@@ -420,9 +476,9 @@ async function main() {
     seedSettingsDoc({ db, docPath: paths.settingsConfigDoc, data: settingsData, dryRun })
   ]);
 
-  const label = dryRun ? "Dry run completed." : "Seed completed.";
+  const label = dryRun ? "Dry run completed. No writes were attempted." : "Seed apply completed.";
   console.log(label);
-  console.log(`Project: ${projectId || "(auto-detected)"}`);
+  console.log(`Project: ${projectId}`);
   console.log(`Organization: ${organizationId}`);
   console.log(
     `eventTypes -> total:${eventTypeSummary.total} existing:${eventTypeSummary.existing} created:${eventTypeSummary.created}`
@@ -456,7 +512,14 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error("Menu seed failed:", error?.message || error);
-  process.exitCode = 1;
-});
+const isDirectExecution = Boolean(
+  process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+);
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error("Menu seed failed:", error?.message || error);
+    process.exitCode = 1;
+  });
+}

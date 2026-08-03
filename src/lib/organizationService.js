@@ -3,12 +3,28 @@ import { httpsCallable } from "firebase/functions";
 import { cloudFunctions, db, firebaseReady } from "./firebase";
 
 export const ORGANIZATIONS_COLLECTION = "organizations";
-export const DEFAULT_ORGANIZATION_ID = String(import.meta.env.VITE_DEFAULT_ORGANIZATION_ID || "default-org").trim();
+export const DEFAULT_ORGANIZATION_ID = String(import.meta.env.VITE_DEFAULT_ORGANIZATION_ID || "").trim();
 
 let activeOrganizationId = "";
+const PREFLIGHT_CUSTOMER_ORDER_CALLABLE = "preflightCustomerOrder";
 const PROVISION_CUSTOMER_ORDER_CALLABLE = "provisionCustomerOrder";
+const REPAIR_CUSTOMER_PROVISIONING_CALLABLE = "repairCustomerProvisioningOrder";
+const SYNC_USER_CLAIMS_CALLABLE = "syncUserClaimsFromRole";
 const ARCHIVE_ORGANIZATION_CALLABLE = "archiveOrganizationWorkspace";
 const DELETE_ORGANIZATION_CALLABLE = "deleteOrganizationWorkspace";
+const E2E_FUNCTION_ADAPTER_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_E2E_BYPASS_AUTH || "").trim().toLowerCase()
+);
+
+async function callE2eFunctionAdapter(name, payload) {
+  if (!E2E_FUNCTION_ADAPTER_ENABLED) return null;
+  const adapter = globalThis.__quotePilotE2eFunctions;
+  if (typeof adapter?.[name] !== "function") return null;
+  return {
+    handled: true,
+    result: await adapter[name](payload)
+  };
+}
 
 export function normalizeOrganizationId(value, fallback = "") {
   const raw = String(value || "").trim();
@@ -122,10 +138,45 @@ export function getOrganizationSubDocRef(collectionName, docId, orgId = "") {
 }
 
 export async function provisionCustomerOrder(payload = {}) {
+  const e2e = await callE2eFunctionAdapter("provisionCustomerOrder", payload);
+  if (e2e?.handled) return e2e.result;
   if (!cloudFunctions) {
     throw new Error("Cloud Functions are not configured.");
   }
   const call = httpsCallable(cloudFunctions, PROVISION_CUSTOMER_ORDER_CALLABLE);
+  const result = await call(payload);
+  return result?.data || { ok: false };
+}
+
+export async function preflightCustomerOrder(payload = {}) {
+  const e2e = await callE2eFunctionAdapter("preflightCustomerOrder", payload);
+  if (e2e?.handled) return e2e.result;
+  if (!cloudFunctions) {
+    throw new Error("Cloud Functions are not configured.");
+  }
+  const call = httpsCallable(cloudFunctions, PREFLIGHT_CUSTOMER_ORDER_CALLABLE);
+  const result = await call(payload);
+  return result?.data || { ok: false, preflight: false, exists: false };
+}
+
+export async function repairCustomerProvisioningOrder(payload = {}) {
+  const e2e = await callE2eFunctionAdapter("repairCustomerProvisioningOrder", payload);
+  if (e2e?.handled) return e2e.result;
+  if (!cloudFunctions) {
+    throw new Error("Cloud Functions are not configured.");
+  }
+  const call = httpsCallable(cloudFunctions, REPAIR_CUSTOMER_PROVISIONING_CALLABLE);
+  const result = await call(payload);
+  return result?.data || { ok: false };
+}
+
+export async function syncUserClaimsFromRole(payload = {}) {
+  const e2e = await callE2eFunctionAdapter("syncUserClaimsFromRole", payload);
+  if (e2e?.handled) return e2e.result;
+  if (!cloudFunctions) {
+    throw new Error("Cloud Functions are not configured.");
+  }
+  const call = httpsCallable(cloudFunctions, SYNC_USER_CLAIMS_CALLABLE);
   const result = await call(payload);
   return result?.data || { ok: false };
 }

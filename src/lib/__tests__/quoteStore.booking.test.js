@@ -138,14 +138,14 @@ describe("quoteStore booking workflow", () => {
 
     const result = await convertQuoteToContract({
       quoteId: "q1",
-      actorEmail: "sales@tonycatering.com",
+      actorEmail: "sales@acme.test",
       capacityLimit: 400
     });
 
     expect(result.status).toBe("booked");
     expect(result.contractNumber).toMatch(/^C-\d{6}-\d{5}$/);
     expect(result.booking.contractNumber).toBe(result.contractNumber);
-    expect(result.booking.bookedByEmail).toBe("sales@tonycatering.com");
+    expect(result.booking.bookedByEmail).toBe("sales@acme.test");
     expect(result.booking.availabilitySummary.acceptedConflictCount).toBe(1);
     expect(result.booking.availabilitySummary.bookedConflictCount).toBe(0);
 
@@ -173,7 +173,7 @@ describe("quoteStore booking workflow", () => {
     await expect(
       convertQuoteToContract({
         quoteId: "q1",
-        actorEmail: "sales@tonycatering.com"
+        actorEmail: "sales@acme.test"
       })
     ).rejects.toThrow(/already booked/i);
   });
@@ -196,7 +196,7 @@ describe("quoteStore booking workflow", () => {
     const sent = await updateQuoteBookingConfirmation({
       quoteId: "q1",
       confirmationStatus: "sent",
-      actorEmail: "ops@tonycatering.com"
+      actorEmail: "ops@acme.test"
     });
     expect(sent.booking.confirmationStatus).toBe("sent");
     expect(sent.booking.confirmationSentAtISO).not.toBe("");
@@ -205,7 +205,7 @@ describe("quoteStore booking workflow", () => {
     const confirmed = await updateQuoteBookingConfirmation({
       quoteId: "q1",
       confirmationStatus: "confirmed",
-      actorEmail: "ops@tonycatering.com"
+      actorEmail: "ops@acme.test"
     });
     expect(confirmed.booking.confirmationStatus).toBe("confirmed");
     expect(confirmed.booking.confirmationSentAtISO).not.toBe("");

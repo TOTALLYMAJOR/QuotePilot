@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: March 16, 2026
+Last updated: July 27, 2026
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -33,7 +33,10 @@ Run baseline updates only from a clean `main` checkout unless an exception is re
 
 ## CWV Smoke Policy
 Lighthouse CI config: `.lighthouserc.json`
-The gate runs a local `vite preview` server on `127.0.0.1:4173` for deterministic checks.
+The CI lane builds a fresh production bundle, explicitly selects the
+Playwright-managed Chromium binary, and runs a local `vite preview` server on
+the strict `127.0.0.1:4173` endpoint. Readiness detection matches Vite's stable
+`Local` label so ANSI terminal formatting cannot delay the audit.
 
 Current enforced assertions:
 - Performance category score minimum

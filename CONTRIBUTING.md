@@ -1,9 +1,9 @@
-# Contributing to Firebase Quote Wizard
+# Contributing to QuotePilot
 
 Last updated: March 27, 2026
 
 ## Setup
-1. Use Node.js 20+.
+1. Use Node.js 22+.
 2. Run `npm install`.
 3. Create `.env` from `.env.example`.
 4. Validate setup with `npm run check:env`.

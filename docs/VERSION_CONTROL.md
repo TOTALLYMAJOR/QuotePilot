@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: March 27, 2026
+Last updated: July 27, 2026
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -27,7 +27,9 @@ git checkout -b feature/<scope>-<topic>
 ## Release-Only Main Rule
 - `main` is for production-intent merges only.
 - Feature work lands in topic branches and merges only after required CI and pre-merge UAT evidence are complete.
-- Deploy workflow is gated by successful `CI Quality` runs on `main` pushes (manual dispatch remains available for controlled operations).
+- Production deployment is manual-only after the required `CI Quality` and UAT
+  evidence; the deploy entrypoint accepts only a clean, remotely published,
+  semantically tagged `main` revision.
 - If branch protection is not enabled, `Mainline Safety Net (Auto-Revert Failed Pushes)` provides fallback protection by reverting failed `main` push heads after CI failure.
 
 ## Branch Naming
@@ -47,8 +49,22 @@ git checkout -b feature/<scope>-<topic>
 2. Finalize `CHANGELOG.md` and `PROJECT_STATUS.md`.
 3. Run release checks (CI must be green):
    - `lane:quick (Preflight + Secrets)`
+     - runs before dependency installation, so its environment and secret
+       checks must use only Node built-ins and repository scripts;
+     - CI uses canonical non-secret Firebase test identifiers, including the
+       production project ID, while host/provider secrets remain absent.
    - `lane:core (Unit + Build + Governance + Bundle)`
+     - checks out full branch history so governance can compare the PR head
+       against its actual `origin/main` merge base.
    - heavy lanes (`lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`) when required by risk classifier or `main` push policy
+     - Firebase heavy lanes install the independently locked `functions/`
+       dependencies before starting emulators; root installation alone is not
+       a Functions runtime proof;
+     - Firebase emulator runners require Java 21 or newer and automatically
+       select an isolated repository-local JRE when the runner's system Java is
+       older.
+     - The CWV lane builds a fresh production bundle and explicitly selects the
+       installed Playwright Chromium binary before Lighthouse starts.
    - `Docker Build Smoke`
    - `lane:playwright-smoke`
 4. Complete pre-merge 10-minute UAT checklist from `docs/LAUNCH_RUNBOOK.md`.
@@ -74,8 +90,8 @@ If a topic changes, only update the owning doc and cross-link from others.
 - GitHub variable: `ENABLE_FUNCTIONS_DEPLOY`
   - Default production value: `false`.
   - Set to `true` only for intentional, validated functions deploy windows, then return to `false`.
-- Firebase Functions config: `notifications.sms_provider`
-  - Default production value: `"none"` unless buyer-approved SMS enablement is validated.
+- Project-scoped Functions environment: `NOTIFICATIONS_SMS_PROVIDER`
+  - Default production value: `none` unless buyer-approved SMS enablement is validated.
 
 ## Orchestration References
 - Blueprint: `docs/ORCHESTRATION_BLUEPRINT.md`

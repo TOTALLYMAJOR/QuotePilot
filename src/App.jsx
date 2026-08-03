@@ -13,6 +13,7 @@ import { calculateQuotePricing, notifyOwnerNewQuote, sendQuoteToCustomerEmail } 
 import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
+import { buildProposalReadiness } from "./lib/quoteWorkflow";
 import {
   applyEventTypeTemplateDefaults,
   buildStepperModel,
@@ -34,10 +35,12 @@ import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionD
 const AdminCatalogModal = lazy(() => import("./components/AdminCatalogModal"));
 const EventScheduleModal = lazy(() => import("./components/EventScheduleModal"));
 const IntegrationOpsModal = lazy(() => import("./components/IntegrationOpsModal"));
+const ImportStudioModal = lazy(() => import("./components/ImportStudioModal"));
 const DiagnosticsModal = lazy(() => import("./components/DiagnosticsModal"));
 const QuoteCompareModal = lazy(() => import("./components/QuoteCompareModal"));
 const QuoteHistoryModal = lazy(() => import("./components/QuoteHistoryModal"));
 const ReportingDashboardModal = lazy(() => import("./components/ReportingDashboardModal"));
+const SalesWorkflowModal = lazy(() => import("./components/SalesWorkflowModal"));
 
 const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING || "").trim().toLowerCase()
@@ -80,7 +83,6 @@ const INITIAL_FORM = {
   seasonProfileId: "auto",
   milesRT: 0,
   includeDisposables: true,
-  depositLink: "",
   payMethod: "card"
 };
 
@@ -288,13 +290,37 @@ export default function App() {
   const authSession = useAuthSession({ tenantContext });
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
+  const isUnscopedPlatformOperator = (
+    tenantContext.ready
+    && (tenantContext.hostType === "app" || tenantContext.hostType === "local")
+    && authSession.isAdmin
+    && authSession.platformAdmin
+    && !String(authSession.organizationId || "").trim()
+  );
   const catalogEnabled = authSession.isStaff
     && tenantContext.ready
+    && !isUnscopedPlatformOperator
     && (!tenantContext.requiresTenant || authSession.organizationId === tenantContext.organizationId);
   const catalog = useCatalogData({
     enabled: catalogEnabled,
     organizationId: authSession.organizationId
   });
+  const hasConfiguredPackage = catalog.packages.some((item) => {
+    const name = String(item?.name || "").trim();
+    return name
+      && name.toLowerCase() !== "new package"
+      && Number(item?.ppp || 0) > 0;
+  });
+  const hasConfiguredEventType = Boolean(
+    String(globalEventTypeId || "").trim()
+    || (catalog.eventTypes || []).some(
+      (item) => String(item?.id || "").trim() && String(item?.name || "").trim()
+    )
+  );
+  const pricingSetupConfirmed = catalog.settings?.pricingSetupConfirmed === true;
+  const catalogSetupComplete = hasConfiguredPackage
+    && hasConfiguredEventType
+    && pricingSetupConfirmed;
   const [dynamicMenuSections, setDynamicMenuSections] = useState([]);
   const [dynamicMenuLoading, setDynamicMenuLoading] = useState(false);
   const [dynamicMenuError, setDynamicMenuError] = useState("");
@@ -302,10 +328,12 @@ export default function App() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
+  const [importStudioOpen, setImportStudioOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [salesWorkflowOpen, setSalesWorkflowOpen] = useState(false);
   const [submitState, setSubmitState] = useState({
     saving: false,
     sendingQuoteEmail: false,
@@ -421,7 +449,27 @@ export default function App() {
   }, [authSession.organizationId, setOrganizationId]);
 
   useEffect(() => {
-    if (catalog.loading) return;
+    if (isUnscopedPlatformOperator || catalog.loading) return;
+    const availablePackageIds = catalog.packages
+      .filter((item) => {
+        const name = String(item?.name || "").trim();
+        return name
+          && name.toLowerCase() !== "new package"
+          && Number(item?.ppp || 0) > 0;
+      })
+      .map((item) => String(item.id || "").trim())
+      .filter(Boolean);
+    setForm((prev) => {
+      if (availablePackageIds.includes(String(prev.pkg || "").trim())) return prev;
+      return {
+        ...prev,
+        pkg: availablePackageIds[0] || ""
+      };
+    });
+  }, [catalog.loading, catalog.packages, isUnscopedPlatformOperator]);
+
+  useEffect(() => {
+    if (isUnscopedPlatformOperator || catalog.loading) return;
     const currentEventTypeId = String(form.eventTypeId || "").trim();
     if (currentEventTypeId) return;
     const fallbackEventTypeId = String(catalog.eventTypes?.[0]?.id || "").trim();
@@ -434,7 +482,7 @@ export default function App() {
         eventTypeId: fallbackEventTypeId
       };
     });
-  }, [catalog.eventTypes, catalog.loading, form.eventTypeId, setGlobalEventTypeId]);
+  }, [catalog.eventTypes, catalog.loading, form.eventTypeId, isUnscopedPlatformOperator, setGlobalEventTypeId]);
 
   useEffect(() => {
     const nextGlobal = String(globalEventTypeId || "").trim();
@@ -452,15 +500,19 @@ export default function App() {
     () => calculateQuote(form, catalog, effectiveSettings),
     [form, catalog, effectiveSettings]
   );
+  const proposalReadiness = useMemo(
+    () => buildProposalReadiness(form, totals),
+    [form, totals]
+  );
 
   const recommendations = useMemo(
     () => buildUpsellRecommendations({ form, catalog, totals, settings: effectiveSettings }),
     [form, catalog, totals, effectiveSettings]
   );
   const isEditingQuote = Boolean(editingQuote.id);
-  const brandName = catalog.settings?.brandName || "Tasteful Touch Catering";
-  const brandTagline = catalog.settings?.brandTagline || "Chef Toni and Grill Master Ervin";
-  const brandLogoUrl = catalog.settings?.brandLogoUrl || "/brand/logo.png";
+  const brandName = String(catalog.settings?.brandName || "").trim() || "Quote Operations";
+  const brandTagline = String(catalog.settings?.brandTagline || "").trim();
+  const brandLogoUrl = String(catalog.settings?.brandLogoUrl || "").trim();
   const brandPrimaryColor = catalog.settings?.brandPrimaryColor || "#c99334";
   const brandAccentColor = catalog.settings?.brandAccentColor || "#f0d29a";
   const brandDarkAccentColor = catalog.settings?.brandDarkAccentColor || "#8d611a";
@@ -472,11 +524,11 @@ export default function App() {
     .map((member) => String(member?.label || "").trim())
     .filter(Boolean);
   const scheduleCapacityLimit = Math.max(1, Number(catalog.settings?.capacityLimit || 400));
-  const heroEyebrow = catalog.settings?.heroEyebrow || "Premium Event Catering Workbench";
-  const heroHeadline = catalog.settings?.heroHeadline || "Signature flavor. Configurable quotes.";
+  const heroEyebrow = catalog.settings?.heroEyebrow || "Event Catering Workspace";
+  const heroHeadline = catalog.settings?.heroHeadline || `${brandName} Quote Operations`;
   const heroDescription =
     catalog.settings?.heroDescription ||
-    "A polished sales cockpit for weddings, corporate events, and celebrations up to 400 guests. Build scenarios, apply smart upsells, and send better proposals faster.";
+    "Build quotes, configure pricing, and manage proposals from one workspace.";
   const appThemeVars = {
     "--tone-gold-1": brandAccentColor,
     "--tone-gold-2": brandPrimaryColor,
@@ -489,7 +541,7 @@ export default function App() {
   useEffect(() => {
     let alive = true;
 
-    if (catalog.loading) {
+    if (isUnscopedPlatformOperator || catalog.loading) {
       return () => {
         alive = false;
       };
@@ -528,7 +580,7 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [catalog.loading, catalog.loadMenuByEvent, form.eventTypeId]);
+  }, [catalog.loading, catalog.loadMenuByEvent, form.eventTypeId, isUnscopedPlatformOperator]);
 
   useEffect(() => {
     const availableMenuItemIds = new Set(
@@ -966,12 +1018,11 @@ export default function App() {
       }
 
       let smsSuffix = "";
-      if (result.storage === "firebase") {
+      if (result.storage === "firebase" && authSession.isAdmin) {
         try {
           const smsResult = await withTimeout(
             notifyOwnerNewQuote({
-              quoteId: result.id,
-              portalLink
+              quoteId: result.id
             }),
             OWNER_SMS_TIMEOUT_MS,
             "notifyOwnerNewQuote"
@@ -1109,7 +1160,6 @@ export default function App() {
       seasonProfileId: selection.seasonProfileId || prev.seasonProfileId || "auto",
       milesRT: toNumber(selection.milesRT, 0),
       includeDisposables: quote.quoteMeta?.includeDisposables !== false,
-      depositLink: quote.payment?.depositLink || "",
       payMethod: selection.payMethod || prev.payMethod
     }));
 
@@ -1171,12 +1221,8 @@ export default function App() {
         output: "base64",
         compact: true
       });
-      const fallbackPortalLink = quote.portalKey ? `${basePortalUrl}?portal=${quote.portalKey}` : "";
-      const portalLink = submitState.portalLink || fallbackPortalLink;
-
       await sendQuoteToCustomerEmail({
         quoteId,
-        portalLink,
         attachment
       });
 
@@ -1234,6 +1280,40 @@ export default function App() {
     }
   };
 
+  const handleResendVerification = async () => {
+    try {
+      await authSession.resendVerification();
+      setSubmitState((prev) => ({
+        ...prev,
+        message: "Verification email sent. Open it, verify this address, then return and check again."
+      }));
+    } catch (err) {
+      setSubmitState((prev) => ({
+        ...prev,
+        message: err?.message || "Unable to send the verification email."
+      }));
+    }
+  };
+
+  const handleRefreshVerification = async () => {
+    try {
+      const result = await authSession.refreshVerification();
+      if (result.emailVerified) {
+        window.location.reload();
+        return;
+      }
+      setSubmitState((prev) => ({
+        ...prev,
+        message: "This email is not verified yet. Open the verification link, then check again."
+      }));
+    } catch (err) {
+      setSubmitState((prev) => ({
+        ...prev,
+        message: err?.message || "Unable to refresh email verification."
+      }));
+    }
+  };
+
   const openPortalMode = () => {
     if (!customerPortalEnabled) return;
     setPortalKey("");
@@ -1245,6 +1325,20 @@ export default function App() {
     setPortalKey("");
     const nextUrl = `${window.location.pathname}${window.location.hash}`;
     window.history.replaceState({}, "", nextUrl);
+  };
+
+  const saveCatalogDuringSetup = async (nextCatalog) => {
+    if (!hasConfiguredEventType) {
+      return {
+        ok: false,
+        error: "Open the Menu tab and add at least one customer-specific event type before saving setup."
+      };
+    }
+    const result = await catalog.saveCatalog(nextCatalog);
+    if (result.ok) {
+      setAdminOpen(false);
+    }
+    return result;
   };
 
   if (tenantContext.loading) {
@@ -1296,18 +1390,85 @@ export default function App() {
   }
 
   if (!authSession.isStaff) {
+    const needsEmailVerification = authSession.user.emailVerified !== true;
     return (
       <main className="auth-shell container">
         <section className="panel auth-card">
-          <h1>Access Restricted</h1>
-          <p className="muted">
-            Signed in as {authSession.user.email}. Your account role is <strong>{authSession.role}</strong>.
-          </p>
-          <p className="source-note">Ask an admin to set your role to `sales` or `admin` and refresh claims for your account.</p>
+          <h1>{needsEmailVerification ? "Verify Your Email" : "Access Restricted"}</h1>
+          {needsEmailVerification ? (
+            <>
+              <p className="muted">
+                Signed in as {authSession.user.email}. Organization invites and staff authority stay locked until this exact address is verified.
+              </p>
+              <p className="source-note">Use the verification link from Firebase, then return here and check again.</p>
+            </>
+          ) : (
+            <>
+              <p className="muted">
+                Signed in as {authSession.user.email}. Your account role is <strong>{authSession.role}</strong>.
+              </p>
+              <p className="source-note">Ask an admin to assign your role and organization, then refresh your session.</p>
+            </>
+          )}
+          {authSession.error && <p className="warning-note">{authSession.error}</p>}
+          {submitState.message && <p className="source-note">{submitState.message}</p>}
           <div className="auth-actions">
+            {needsEmailVerification && (
+              <>
+                <button type="button" className="cta" onClick={handleRefreshVerification}>I Verified My Email</button>
+                <button type="button" className="ghost" onClick={handleResendVerification}>Resend Verification</button>
+              </>
+            )}
             {customerPortalEnabled && <button type="button" className="ghost" onClick={openPortalMode}>Open Customer Portal</button>}
-            <button type="button" className="cta" onClick={handleSignOut}>Sign Out</button>
+            <button type="button" className={needsEmailVerification ? "ghost" : "cta"} onClick={handleSignOut}>Sign Out</button>
           </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (isUnscopedPlatformOperator) {
+    return (
+      <div className="app-shell" style={appThemeVars}>
+        <main className="auth-shell container">
+          <section className="panel auth-card">
+            <p className="eyebrow">Platform Operations</p>
+            <h1>Customer Provisioning</h1>
+            <p className="muted">
+              Create a customer workspace and complete its owner handoff before entering an organization-scoped workspace.
+            </p>
+            <div className="auth-actions">
+              <button type="button" className="cta" onClick={() => setIntegrationsOpen(true)}>
+                Open Customer Provisioning
+              </button>
+              <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
+            </div>
+          </section>
+        </main>
+
+        <Suspense fallback={null}>
+          <IntegrationOpsModal
+            open={integrationsOpen}
+            onClose={() => setIntegrationsOpen(false)}
+            organizationId=""
+            settings={{}}
+            currentUserEmail={authSession.user?.email || ""}
+            currentUserUid={authSession.user?.uid || ""}
+            canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
+            canManageProviders={authSession.isAdmin}
+            provisioningOnly
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
+  if (catalog.loading) {
+    return (
+      <main className="auth-shell container">
+        <section className="panel auth-card">
+          <h1>Loading Catalog</h1>
+          <p className="muted">Checking this organization’s configured products and pricing...</p>
         </section>
       </main>
     );
@@ -1330,21 +1491,78 @@ export default function App() {
     );
   }
 
+  if (!catalogSetupComplete) {
+    return (
+      <div className="app-shell" style={appThemeVars}>
+        <main className="auth-shell container">
+          <section className="panel auth-card">
+            <p className="eyebrow">Owner Setup Required</p>
+            <h1>Configure Your Catalog</h1>
+            <p className="muted">
+              Quote creation stays locked until this organization has customer-specific products and reviewed pricing.
+            </p>
+            <p className="source-note">
+              New tenants start blank so another customer’s products or unreviewed placeholder pricing can never enter a quote.
+            </p>
+            <ul className="source-note">
+              <li>Packages: add a specifically named package priced above $0.</li>
+              <li>Menu: add at least one event type; new event types start without seeded menu records.</li>
+              <li>Pricing: review every fee, tax, deposit, travel, staffing, tier, and seasonal value, then approve the pricing setup.</li>
+            </ul>
+            <div className="auth-actions">
+              {authSession.isAdmin && (
+                <button type="button" className="cta" onClick={() => setAdminOpen(true)}>
+                  Open Admin Catalog
+                </button>
+              )}
+              <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
+            </div>
+            {!authSession.isAdmin && (
+              <p className="warning-note">Ask an organization admin to configure and save the catalog.</p>
+            )}
+          </section>
+        </main>
+
+        <Suspense fallback={null}>
+          {authSession.isAdmin && (
+            <AdminCatalogModal
+              open={adminOpen}
+              catalog={catalog}
+              organizationId={authSession.organizationId}
+              onClose={() => setAdminOpen(false)}
+              onSave={saveCatalogDuringSetup}
+              saving={catalog.saving}
+              selectedEventType={globalEventTypeId}
+              onEventTypeChange={setGlobalEventTypeId}
+              onToast={pushToast}
+            />
+          )}
+        </Suspense>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell" style={appThemeVars}>
       <header className="site-header">
         <div className="container nav">
           <div className="brand-lockup">
-            <img
-              className="brand-logo"
-              src={brandLogoUrl}
-              alt={`${brandName} logo`}
-              loading="eager"
-              decoding="async"
-            />
+            {brandLogoUrl ? (
+              <img
+                className="brand-logo"
+                src={brandLogoUrl}
+                alt={`${brandName} logo`}
+                loading="eager"
+                decoding="async"
+              />
+            ) : (
+              <span className="brand-logo brand-logo-placeholder" aria-hidden="true">
+                {brandName.slice(0, 2).toUpperCase()}
+              </span>
+            )}
             <div className="brand-copy">
               <div className="brand">{brandName}</div>
-              <p>{brandTagline}</p>
+              {brandTagline && <p>{brandTagline}</p>}
             </div>
           </div>
           {brandCrew.length > 0 && (
@@ -1353,8 +1571,12 @@ export default function App() {
                 <figure className="crew-chip" key={`${member.label || "member"}-${idx}`}>
                   {member.imageUrl ? (
                     <img src={member.imageUrl} alt={member.label || `Team member ${idx + 1}`} loading="lazy" decoding="async" />
-                  ) : (
+                  ) : brandLogoUrl ? (
                     <img src={brandLogoUrl} alt={member.label || `Team member ${idx + 1}`} loading="lazy" decoding="async" />
+                  ) : (
+                    <span className="crew-chip-placeholder" aria-hidden="true">
+                      {String(member.label || "TM").slice(0, 2).toUpperCase()}
+                    </span>
                   )}
                   <figcaption>{member.label || `Team member ${idx + 1}`}</figcaption>
                 </figure>
@@ -1362,12 +1584,14 @@ export default function App() {
             </div>
           )}
           <div className="right-actions header-actions">
+            <button className="ghost" onClick={() => setSalesWorkflowOpen(true)}>Sales Workflow</button>
             {eventScheduleEnabled && <button className="ghost" onClick={() => setScheduleOpen(true)}>Schedule</button>}
             {integrationsEnabled && <button className="ghost" onClick={() => setIntegrationsOpen(true)}>Integrations</button>}
             {diagnosticsEnabled && <button className="ghost" onClick={() => setDiagnosticsOpen(true)}>Diagnostics</button>}
             {dashboardEnabled && <button className="ghost" onClick={() => setDashboardOpen(true)}>Dashboard</button>}
             <button className="ghost" onClick={() => setHistoryOpen(true)}>Quote History</button>
             {authSession.isAdmin && <button className="ghost" onClick={() => setAdminOpen(true)}>Admin Catalog</button>}
+            {authSession.isAdmin && <button className="ghost" onClick={() => setImportStudioOpen(true)}>Import Studio</button>}
             {customerPortalEnabled && <button className="ghost" onClick={openPortalMode}>Customer Portal</button>}
             <button className="cta header-quick-cta" onClick={handleGetInstantQuote}>Quick Quote</button>
             <button className="ghost" onClick={handleSignOut}>Sign Out</button>
@@ -1476,7 +1700,14 @@ export default function App() {
                 onSelectionTouched={handleSelectionTouched}
               />
             )}
-            {!catalog.loading && step === 4 && <StepReview form={form} totals={totals} settings={effectiveSettings} />}
+            {!catalog.loading && step === 4 && (
+              <StepReview
+                form={form}
+                totals={totals}
+                settings={effectiveSettings}
+                readiness={proposalReadiness}
+              />
+            )}
             {!catalog.loading && step === 5 && (
               <div className="grid two-col">
                 <label className="field">
@@ -1492,15 +1723,6 @@ export default function App() {
                     <option value="ach">Pay by ACH/Check</option>
                   </select>
                 </label>
-              <label className="field deposit-link-field">
-                <span>Deposit payment link (optional)</span>
-                <input
-                  type="url"
-                  placeholder="https://payment-link.example.com"
-                  value={form.depositLink}
-                  onChange={(e) => setForm((f) => ({ ...f, depositLink: e.target.value }))}
-                />
-              </label>
                 <article className="summary-total">
                   <p><strong>Final total:</strong> {currency(totals.total)}</p>
                   <p><strong>Deposit due:</strong> {currency(totals.deposit)}</p>
@@ -1548,7 +1770,7 @@ export default function App() {
               {submitState.portalLink && (
                 <button type="button" className="ghost" onClick={handleCopyPortalLink}>Copy Portal Link</button>
               )}
-              {submitState.quoteId && (
+              {submitState.quoteId && authSession.isAdmin && (
                 <button
                   type="button"
                   className="cta"
@@ -1601,6 +1823,25 @@ export default function App() {
           />
         )}
 
+        {authSession.isAdmin && (
+          <ImportStudioModal
+            open={importStudioOpen}
+            onClose={() => setImportStudioOpen(false)}
+            organizationId={authSession.organizationId}
+            organizationName={catalog.settings?.brandName || brandName}
+            currentUserUid={authSession.user?.uid || ""}
+            currentUserEmail={authSession.user?.email || ""}
+            onImported={(result) => {
+              catalog.reload();
+              if (result?.status === "rolled_back") {
+                pushToast(`Import ${result.importBatchId} was undone.`, "info");
+              } else {
+                pushToast(`Imported ${result?.createdCount || 0} record(s) into ${authSession.organizationId}.`, "success");
+              }
+            }}
+          />
+        )}
+
         <QuoteHistoryModal
           open={historyOpen}
           onClose={() => setHistoryOpen(false)}
@@ -1608,8 +1849,22 @@ export default function App() {
           organizationId={authSession.organizationId}
           currentUserUid={authSession.user?.uid || ""}
           currentUserEmail={authSession.user?.email || ""}
+          currentUserRole={authSession.role}
           onEditQuote={handleEditQuote}
           canDeleteQuotes={authSession.isAdmin}
+          onToast={pushToast}
+        />
+
+        <SalesWorkflowModal
+          open={salesWorkflowOpen}
+          onClose={() => setSalesWorkflowOpen(false)}
+          onOpenQuoteHistory={() => {
+            setSalesWorkflowOpen(false);
+            setHistoryOpen(true);
+          }}
+          organizationId={authSession.organizationId}
+          currentUserEmail={authSession.user?.email || ""}
+          currentUserRole={authSession.role}
           onToast={pushToast}
         />
 
@@ -1620,6 +1875,7 @@ export default function App() {
             organizationId={authSession.organizationId}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
+            currentUserEmail={authSession.user?.email || ""}
           />
         )}
 
@@ -1631,7 +1887,8 @@ export default function App() {
             settings={effectiveSettings}
             currentUserEmail={authSession.user?.email || ""}
             currentUserUid={authSession.user?.uid || ""}
-            canProvisionCustomer={authSession.isAdmin}
+            canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
+            canManageProviders={authSession.isAdmin}
           />
         )}
 

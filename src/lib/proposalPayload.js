@@ -1,13 +1,11 @@
 import { currency } from "./quoteCalculator";
+import { sanitizeStripePaymentLink } from "./paymentLink";
 
 const DEFAULT_BRANDING = {
-  name: "Tasteful Touch Catering",
-  tagline: "Chef Toni and Grill Master Ervin",
-  logoPath: "/brand/logo.png",
-  crewMembers: [
-    { label: "Chef Toni", imagePath: "/brand/chef-toni.png" },
-    { label: "Grill Master Ervin", imagePath: "/brand/grillmaster-irvin.png" }
-  ]
+  name: "QuotePilot",
+  tagline: "Quote-to-event operations by MBMapps",
+  logoPath: "",
+  crewMembers: []
 };
 
 function cleanText(value, fallback = "") {
@@ -127,7 +125,7 @@ export function buildProposalPayload(quote) {
       chefRateMixCsv: cleanText(quote.selection?.chefRateMixCsv)
     },
     payment: {
-      depositLink: cleanText(quote.payment?.depositLink),
+      depositLink: sanitizeStripePaymentLink(quote.payment?.depositLink),
       depositStatus: cleanText(quote.payment?.depositStatus, "unpaid")
     },
     totals: {

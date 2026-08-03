@@ -16,12 +16,13 @@
     "lane:release:cwv": "bash ./scripts/orchestration-lanes.sh lane:release --with-cwv",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
-    "test:rules:firestore": "npx firebase-tools emulators:exec --only firestore \"vitest run src/rules/__tests__/firestore.rules.test.js\"",
+    "test:rules:firestore": "npx firebase-tools --config firebase.e2e.json --project demo-quote-wizard-rules emulators:exec --only firestore \"vitest run src/rules/__tests__/firestore.rules.test.js\"",
     "test:e2e": "bash ./scripts/run-playwright.sh test",
     "test:e2e:headed": "bash ./scripts/run-playwright.sh test --headed",
     "test:e2e:firebase": "node ./scripts/run-firebase-e2e.mjs",
     "test:e2e:firebase:authoritative": "node ./scripts/run-firebase-e2e-authoritative.mjs",
     "check:env": "node ./scripts/check-env.mjs",
+    "env:local:firebase": "node ./scripts/configure-local-firebase-env.mjs",
     "seed:menu:firestore": "node ./scripts/seed-firestore-menu.mjs",
     "customer:provision": "node ./scripts/provision-customer-order.mjs",
     "migrate:multi-tenant": "node ./scripts/migrate-to-multi-tenant.mjs",
@@ -29,13 +30,13 @@
     "check:secrets": "node ./scripts/check-secret-assets.mjs",
     "check:docs:governance": "node ./scripts/check-doc-governance.mjs",
     "check:perf:bundle": "node ./scripts/check-bundle-budget.mjs",
-    "check:perf:cwv": "lhci autorun --config=./.lighthouserc.json",
-    "deploy:firebase:functions": "npx firebase-tools deploy --only functions",
-    "deploy:firebase:hosting": "npm run build && npx firebase-tools deploy --only hosting:app",
+    "check:perf:cwv": "bash ./scripts/run-lighthouse-cwv.sh",
+    "deploy:firebase:functions": "node ./scripts/deploy-firebase-production.mjs --scope functions",
+    "deploy:firebase:hosting": "node ./scripts/deploy-firebase-production.mjs --scope hosting",
     "deploy:firebase:hosting:customer": "node ./scripts/deploy-hosting-customer.mjs",
-    "deploy:firebase": "npm run build && npx firebase-tools deploy --only hosting:app,firestore,functions",
-    "deploy:vercel": "npx vercel --prod",
-    "deploy:vercel:build": "npm run build && npx vercel --prod --prebuilt"
+    "deploy:firebase": "node ./scripts/deploy-firebase-production.mjs --scope all",
+    "deploy:vercel": "node ./scripts/deploy-vercel-production.mjs",
+    "deploy:vercel:build": "node ./scripts/deploy-vercel-production.mjs"
   },
   "dependencies": {
     "firebase": "^11.0.0",
@@ -45,10 +46,14 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
-    "@lhci/cli": "^0.14.0",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.54.2",
     "@vitejs/plugin-react": "^5.2.0",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "tmp": "^0.2.6",
+    "uuid": "^11.1.1"
   }
 }

@@ -1,28 +1,16 @@
 name: Deploy Firebase Hosting (+ Optional Functions)
 
 on:
-  workflow_run:
-    workflows:
-      - CI Quality
-    types:
-      - completed
   workflow_dispatch:
 
 concurrency:
-  group: deploy-firebase-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+  group: deploy-firebase-production
   cancel-in-progress: false
 
 jobs:
   deploy_hosting:
     name: Build + Deploy Firebase
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.name == 'CI Quality' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main' &&
-       github.event.workflow_run.head_repository.full_name == github.repository)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,16 +22,32 @@ jobs:
       VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID || secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
       VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID || secrets.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_FUNCTIONS_REGION: ${{ vars.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1' }}
+      FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID || secrets.VITE_FIREBASE_PROJECT_ID }}
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      APP_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
+      AUTH_PLATFORM_ADMIN_EMAILS: ${{ secrets.AUTH_PLATFORM_ADMIN_EMAILS }}
+      NOTIFICATIONS_EMAIL_PROVIDER: ${{ vars.NOTIFICATIONS_EMAIL_PROVIDER || 'none' }}
+      EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
+      EMAIL_FROM_EMAIL: ${{ vars.EMAIL_FROM_EMAIL }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      NOTIFICATIONS_SMS_PROVIDER: ${{ vars.NOTIFICATIONS_SMS_PROVIDER || 'none' }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_FROM_NUMBER: ${{ vars.TWILIO_FROM_NUMBER }}
+      NOTIFICATIONS_OWNER_PHONE: ${{ vars.NOTIFICATIONS_OWNER_PHONE }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: main
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -53,23 +57,23 @@ jobs:
         if: vars.ENABLE_FUNCTIONS_DEPLOY == 'true'
         run: npm ci --prefix functions
 
-      - name: Validate Firebase env
-        run: npm run check:env
-
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Build app
-        run: npm run build
+      - name: Validate and materialize Functions runtime env
+        if: vars.ENABLE_FUNCTIONS_DEPLOY == 'true'
+        run: node ./scripts/materialize-functions-env.mjs
 
       - name: Deploy to Firebase (hosting always, functions optional)
         run: |
           if [ "${{ vars.ENABLE_FUNCTIONS_DEPLOY }}" = "true" ]; then
-            echo "ENABLE_FUNCTIONS_DEPLOY=true -> deploying hosting + functions."
-            npx firebase-tools deploy --only hosting,functions --project tonicatering --non-interactive --force
+            node ./scripts/deploy-firebase-production.mjs \
+              --scope all \
+              --confirm "DEPLOY tonicatering hosting:app,firestore,functions"
           else
-            echo "Deploying hosting only. Set repo variable ENABLE_FUNCTIONS_DEPLOY=true after upgrading the Firebase project to Blaze."
-            npx firebase-tools deploy --only hosting --project tonicatering --non-interactive
+            node ./scripts/deploy-firebase-production.mjs \
+              --scope hosting \
+              --confirm "DEPLOY tonicatering hosting:app"
           fi
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

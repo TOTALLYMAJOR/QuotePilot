@@ -1,9 +1,9 @@
-const CACHE_VERSION = "ttqw-static-v1";
+const CACHE_VERSION = "quotepilot-static-v2";
 const CORE_ASSETS = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/brand/logo.png"
+  "/brand/quotepilot-mark.svg"
 ];
 
 self.addEventListener("install", (event) => {

@@ -1,13 +1,18 @@
 # User Manual
 
-Last updated: March 28, 2026
+Last updated: July 27, 2026
 
 ## Purpose
-This guide explains day-to-day usage of the Firebase Quote Wizard for staff users and admins.
+This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Access and Roles
 - Staff access (`sales` or `admin`) is required for the quote builder workspace.
 - Admin access is required for Catalog Admin configuration.
+- Sales users can prepare quotes through the trusted edit workflow and send an
+  exact draft quote. They cannot set another lifecycle state, alter payment or
+  customer-decision evidence, rotate portals, reopen, or delete. Their schedule
+  updates are limited to staff assignment, kitchen checkpoints, and production
+  checklist fields that do not prove booking, payment, or acceptance.
 - Customer Portal links are generated from saved quotes and can be shared with clients.
 
 ## Staff Workflow (Quote Builder)
@@ -24,6 +29,8 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
 
 ## Quote Builder Details
 - Event Type drives dynamic menu categories and items.
+- The review step shows a proposal readiness score and any missing customer, event, menu, or total details.
+- `Compare Scenario` presents Good/Better/Best package options with recalculated totals; applying a scenario updates the active quote draft.
 - Pricing supports:
   - `per_person`
   - `per_item` (with quantity input)
@@ -33,17 +40,37 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
 ## Quote History Operations
 - Open `Quote History` from the top navigation.
 - Available actions per quote:
-  - Edit existing quote
+  - Edit an eligible draft, sent, or viewed quote. Firebase re-prices the edit
+    from current tenant settings and atomically updates the quote/portal while
+    creating the next version; terminal customer, booking, or payment evidence
+    blocks the edit.
   - Duplicate to a new draft
-  - Soft delete
-  - Reopen deleted quote
+  - Permanently delete through the admin-only cleanup callable. Direct quote or
+    portal document deletion is denied.
+  - Admin-only safe reopen for an expired or legacy `status=deleted` quote when
+    its active version is valid and nonterminal. Accepted, declined, booked,
+    paid, or refunded evidence blocks reopen; a permanently deleted quote cannot
+    be restored.
   - Export PDF
-  - Copy email template, portal link, and payment link
-  - Create Stripe deposit link
-  - Rotate customer portal token when a link expires or should be reissued
+  - Copy email template and portal link
+  - Admin only: send customer email, copy a verified Stripe payment link,
+    create/send a Stripe deposit request, and rotate a customer portal token
+    when a link expires or should be reissued
 - Status filtering supports grouped views:
   - `Submitted` (sent/viewed/accepted)
   - `Archived` (booked/declined/expired)
+
+## Sales Workflow
+- Open `Sales Workflow` from the top navigation.
+- Summary metrics show active opportunities, readiness gaps, follow-ups due, and pending approval requests.
+- The `Follow-ups` view supports lead stage, due date, note, completion state, proposal readiness, and a lifecycle timeline for each quote.
+- Sales staff can request approval for sensitive actions such as payment requests, contract conversion, portal-link rotation, or quote deletion.
+- Admins can approve or reject those requests with a resolution note. Approval records intent only; it does not execute the sensitive action. The admin must complete the separate action in Quote History.
+
+## Event Schedule and Production Checklist
+- Open `Schedule` to review accepted and booked events by month or week, inspect conflicts, and assign a staff lead.
+- Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.
+- Checklist completion is an operational task record only. The app does not track inventory, so checklist state does not confirm stock counts or item availability.
 
 ## Admin Catalog Operations
 - Open `Admin Catalog` (admin users only).
@@ -66,75 +93,167 @@ This guide explains day-to-day usage of the Firebase Quote Wizard for staff user
 - Save overall catalog changes with `Save Catalog`.
 - `Optional Modules` behavior depends on entitlement mode:
   - Standard mode: all module toggles are editable by admins.
-  - Order-enforced mode: modules paid for in the order remain editable; modules not paid for are locked off.
-- In order-enforced mode each module row is labeled as either `Included in order` or `Locked (not in order)`.
+  - Order-enforced mode: all module toggles are read-only; modules not paid for are locked off.
+- In order-enforced mode each module row is labeled as either `Included in order (read only)` or `Not included in order (read only)`.
 - To change what is included/locked, update entitlements through customer provisioning, then reopen `Admin Catalog`.
 
+## Import Studio
+- Open `Import Studio` from the top navigation. Admin access is required.
+- The destination organization is locked to the authenticated admin's organization and cannot be supplied or changed by uploaded data.
+- The first release accepts CSV files up to 2 MB and supports:
+  - Customers
+  - Packages
+  - Add-ons
+  - Rentals
+  - Menu items
+- Upload a CSV, confirm the suggested record type, and review the proposed column mappings.
+- Rows labeled `Need attention` are not imported. Correct the source file or change the mapping, then review again.
+- Import creates ready records only, skips existing duplicate emails/names, sends no outbound messages, and saves an organization-scoped receipt.
+- `Undo this import` removes only unchanged documents whose `importBatchId` matches that receipt. Records edited after import are protected from rollback, and pre-existing records are never deleted by the batch.
+- Active quotes, payments, contracts, bookings, and staff accounts are outside the first Import Studio release and must not be represented as imported operational history.
+
 ## Customer Onboarding (No Stripe Flow)
-Use provisioning to create/update a customer org, apply paid module entitlements, and generate a send-ready onboarding email.
+Use the admin provisioning workflow to create a customer organization, apply
+paid module entitlements, and prepare owner access. Provisioning success is not
+the same as completed owner onboarding or production acceptance.
+
+Release status: this runbook describes locally validated release-candidate
+behavior. The slice is not deployed or
+production-accepted. Use it for live tenant changes only after the frontend,
+Functions, and rules are deployed together from the reviewed commit. See
+[`PROJECT_STATUS.md`](../PROJECT_STATUS.md) for current operational truth.
 
 Backend source of truth:
 - Firebase Callable Function `provisionCustomerOrder` handles provisioning logic server-side.
 - Firestore `provisioningOrders/{orderId}` stores onboarding status, feature entitlements, and email send outcome.
 
 ### Operator Runbook
-1. Confirm project access and local setup:
-   - `firebase login`
-   - `npm install`
-   - `npm run check:env`
-2. Run provisioning for a new customer:
-```bash
-npm run customer:provision -- \
-  --project <your-project-id> \
-  --name "Customer Org Name" \
-  --owner-email owner@example.com \
-  --owner-name "Owner Name" \
-  --plan growth \
-  --sequence-start 250 \
-  --email-out ./artifacts/onboarding/customer-email.txt
-```
-3. (Optional) Update paid/unpaid modules for an existing customer org:
-```bash
-npm run customer:provision -- \
-  --project <your-project-id> \
-  --organization <orgId> \
-  --order-id <orderId> \
-  --name "Customer Org Name" \
-  --owner-email owner@example.com \
-  --owner-name "Owner Name" \
-  --features customerPortal,eventSchedule,guidedSelling \
-  --disable-features crmSync,diagnostics \
-  --email-out ./artifacts/onboarding/customer-email-updated.txt
-```
-4. Send the generated email template from `--email-out`.
-5. Verify in-app:
-   - Sign in as org admin.
-   - Open `Admin Catalog` → `Pricing` → `Optional Modules`.
-   - Confirm paid modules are editable and unpaid modules show `Locked (not in order)`.
+1. Sign in at `/app` as an authorized platform admin on the canonical
+   QuotePilot host with a verified Firebase email. Customer tenant admins
+   cannot create tenants or change paid entitlements.
+2. Open `Integrations Ops` → `Customer Provisioning (Admin)`.
+3. For a new organization:
+   - Leave `Update an existing organization` off.
+   - Enter the customer organization and exact owner email.
+   - Supply an owner UID only when it belongs to that same Firebase Auth user.
+   - Use `Use My Account` only when intentionally assigning the signed-in
+     operator as the customer owner.
+   - Select an explicit plan and review the generated order id, read-only
+     canonical app URL, and confirmation prompt.
+   - Keep `Send onboarding email now` off for customer onboarding until the
+     production custom-domain Resend sender is verified and delivery-tested.
+     The prior `onboarding@resend.dev` check was an external, manual Resend
+     dashboard sandbox test—not a deployable QuotePilot Functions
+     configuration and not customer-ready sender-domain or inbox proof. The
+     app provides copy-ready manual email text while the provider stays off.
+4. Confirm the preflight result, then select `Provision Customer`. If the same
+   order was interrupted, the exact matching request can resume only while its
+   organization, settings, owner access, and catalog artifacts still match;
+   changed or incomplete state is rejected without sending email.
+   If an email dispatch lease is already active, wait for it to expire and retry
+   the exact order rather than creating a second order to resend.
+5. Review the returned organization, order, plan, email, and claims-sync state
+   before sending access instructions.
+6. A pending owner invitation expires after seven days. The owner must register
+   or sign in with the exact invited address, verify that Firebase email, and
+   then return to `/app`; organization bootstrap does not consume an unverified
+   or expired invitation.
+7. A new tenant starts with a blank catalog and neutral zero-valued fee, tax,
+   deposit, travel, and staffing settings. Configure or import reviewed
+   customer pricing before building or sharing a quote. The owner sees a
+   catalog-setup screen, and the quote workspace stays locked until an admin
+   adds a specifically named package above $0, creates at least one event type,
+   and checks the pricing review approval in `Admin Catalog` → `Pricing`.
+8. Catalog save is conflict-safe: only locally changed records/settings are
+   patched. If another session changed or deleted the same record, or reused a
+   new record id, QuotePilot rejects the save and asks for a reload instead of
+   overwriting the other change.
 
-Provisioning behavior:
-- Auto-assigns org id when `--organization` is omitted using numeric sequence (default starts at `250`).
-- Defaults `orderId` to `orgId + 1` when org id is numeric and `--order-id` is omitted.
-- Skips menu/event seed by default (`--seed-menu` to opt in).
-- Applies ordered feature entitlements in org settings:
-  - unpaid modules are locked off
-  - paid modules remain editable
-- Applies neutral white-label branding defaults so new orgs do not inherit another customer's branding.
-- Ensures a minimal neutral catalog skeleton exists so runtime does not fall back to legacy defaults.
-- Grants owner admin access immediately when `--owner-uid` is provided.
-- Otherwise creates an email-based invite consumed at first sign-in for the owner email.
-- Uses Firebase Admin credentials when available; otherwise falls back to Firestore REST writes using your Firebase CLI login token (requires `--project`).
+### Existing Organization Entitlement Update
+
+Do not rerun the CLI or new-customer mode against an existing organization.
+
+1. In `Customer Provisioning (Admin)`, explicitly select
+   `Update an existing organization (plan entitlements only)`.
+2. Enter the exact organization id, a new auditable order id, and the intended
+   plan/feature selection.
+3. Confirm the warning before applying the update.
+4. Verify the resulting optional-module state in `Admin Catalog` → `Pricing` →
+   `Optional Modules`.
+
+This mode updates plan entitlements and the associated provisioning order only.
+It does not change owner identity, branding, catalog records, invitations, or
+onboarding email state.
+
+### CLI Preview
+
+The local `npm run customer:provision` path is preview-only. It prints the
+proposed organization, explicit plan, entitlements, and onboarding copy but
+does not write Firebase. `--apply` is intentionally rejected because the
+legacy sequential write path cannot guarantee atomic tenant creation. Use the
+in-app platform-admin workflow for all live changes.
+
+Preview behavior:
+- Requires explicit organization name/id, owner email, plan, and order id; it
+  never derives a tenant or order identifier.
+- Requires an explicit starter, growth, or enterprise plan.
+- Shows paid/unpaid entitlement choices without changing provider state.
+- Rejects unknown arguments, a noncanonical owner application URL, and
+  `--apply`.
+- Produces a `DRAFT - DO NOT SEND` handoff for review. `--email-out` creates a
+  new file and refuses to overwrite an existing draft.
+
+### Owner and Tenant Acceptance Checklist
+
+Complete every item before calling the new tenant operational:
+
+- Confirm the provisioning result and `provisioningOrders/{orderId}` status
+  match the intended organization and plan.
+- For direct owner assignment, confirm claims synchronization succeeded. For an
+  email invitation, confirm the owner registers or signs in using the exact
+  invited email, verifies that address before the seven-day invitation expiry,
+  and the invitation is consumed only after verification.
+- Confirm the owner reaches `/app`, sees the correct organization identity, and
+  cannot access another organization's data.
+- Confirm paid modules are available and unpaid modules remain locked.
+- Confirm the initial pricing settings are neutral and unapproved, then
+  configure or import the real customer catalog; provisioning intentionally
+  creates no placeholder packages, add-ons, rentals, event types, tiers, or
+  templates.
+- Add at least one specifically named package above $0 and one event type,
+  review every fee/tax/deposit/travel/staffing setting, and explicitly approve
+  the pricing setup.
+- Create a representative quote, save it, open it again from `Quote History`, and
+  verify the organization-specific catalog and server-authoritative totals.
+  The Firebase create path must return a server-generated quote number, portal
+  token, and initial version; client-supplied totals, pricing, record/owner
+  identities, and deposit links are not quote-creation authority. Direct
+  Firestore quote creation must remain denied.
+- Copy the customer portal link, open it in a signed-out/private browser,
+  complete a representative decision, and confirm the result appears in staff
+  quote history. The public snapshot and organization quote must change in the
+  same atomic commit, and accepted/declined outcomes cannot be flipped by a
+  later portal request. Proposal acceptance remains separate from payment and
+  booking.
+- If onboarding email was enabled, confirm the Resend request was accepted, a
+  provider delivery event exists, and the owner received it. Otherwise send the
+  copy-ready onboarding message manually.
 
 ## Customer Portal
-- Customers can open portal links and view quote details.
-- Portal actions allow customer status responses (for example accept/decline).
+- Customers can open portal links and review event details, selected package/menu/add-ons/rentals, itemized pricing, total, deposit, and payment state.
+- Portal decisions support `Accept`, `Request Changes`, and `Decline`; change requests require a customer note.
+- Proposal acceptance is recorded separately from payment and booking confirmation.
 - Portal updates are reflected in staff quote history.
+- Portal decisions persist atomically to the public snapshot and organization
+  quote; a terminal accepted or declined decision is immutable from the public
+  portal.
 - Portal tokens are time-bound and expire automatically.
-- Staff can use `Rotate Portal` in `Quote History` to issue a fresh link and invalidate the old one.
+- Admins can use `Rotate Portal` in `Quote History` to issue a fresh link and invalidate the old one.
 
 ## Notifications and Confirmations
 - Toast notifications are shown for save/update/delete and key operational actions.
-- Soft delete uses an explicit confirmation step.
+- Permanent quote deletion uses an explicit admin confirmation and
+  callable-owned quote/version/portal cleanup.
 
 ## Troubleshooting
 - If catalog fails to load in non-dev environments, Firebase catalog access is required and the app blocks edits until resolved.

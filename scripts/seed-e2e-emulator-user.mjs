@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
-import { createRequire } from "node:module";
 import process from "node:process";
+import { loadFirebaseAdmin } from "./firebase-admin-modular.mjs";
 
-const require = createRequire(import.meta.url);
-const admin = require("../functions/node_modules/firebase-admin");
+const admin = loadFirebaseAdmin();
 
 function readArg(name, fallback = "") {
   const idx = process.argv.indexOf(name);
@@ -55,20 +54,23 @@ async function main() {
     throw new Error("email and password are required.");
   }
 
-  if (!admin.apps.length) {
+  if (!admin.getApps().length) {
     admin.initializeApp({ projectId });
   }
 
-  const auth = admin.auth();
-  const db = admin.firestore();
+  const auth = admin.getAuth();
+  const db = admin.getFirestore();
   const uid = await ensureUser({ auth, email, password });
-  const now = admin.firestore.FieldValue.serverTimestamp();
+  const now = admin.FieldValue.serverTimestamp();
 
   await db.doc(`organizations/${organizationId}`).set({
     name: "E2E Organization",
     slug: organizationId,
     ownerUid: uid,
     ownerEmail: email,
+    active: true,
+    archived: false,
+    status: "active",
     updatedAt: now,
     updatedAtISO: new Date().toISOString(),
     createdAt: now

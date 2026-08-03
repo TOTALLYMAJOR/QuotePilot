@@ -5,62 +5,58 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function hasVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function roleDocExists() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/userRoles/$(request.auth.uid));
     }
 
-    function hasRole(role) {
-      return roleDocExists()
-        && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.role == role;
-    }
-
-    function userOrganizationId() {
-      return roleDocExists()
-        && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.organizationId is string
-        ? get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.organizationId
+    function claimOrganizationId() {
+      return isSignedIn()
+        && request.auth.token.get("organizationId", "") is string
+        ? request.auth.token.get("organizationId", "")
         : "";
     }
 
-    function roleOrganizationId(uid) {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/userRoles/$(uid))
-        && get(/databases/$(database)/documents/userRoles/$(uid)).data.organizationId is string
-        ? get(/databases/$(database)/documents/userRoles/$(uid)).data.organizationId
-        : "";
-    }
-
-    function isBootstrapAdmin() {
-      return isSignedIn()
-        && request.auth.token.email in [
-          "tonitastefultouch@yahoo.com"
-        ];
-    }
-
-    function isAdmin() {
-      return isBootstrapAdmin() || hasRole("admin");
-    }
-
-    function isStaff() {
-      return isAdmin() || hasRole("sales");
+    function organizationActive(orgId) {
+      return orgId is string
+        && orgId.size() > 0
+        && exists(/databases/$(database)/documents/organizations/$(orgId))
+        && !exists(/databases/$(database)/documents/organizationTombstones/$(orgId))
+        && get(/databases/$(database)/documents/organizations/$(orgId)).data.get("active", true) != false
+        && get(/databases/$(database)/documents/organizations/$(orgId)).data.get("archived", false) != true
+        && get(/databases/$(database)/documents/organizations/$(orgId)).data.get("status", "") in ["", "active"];
     }
 
     function sameOrg(orgId) {
-      return isSignedIn()
+      return hasVerifiedEmail()
+        && roleDocExists()
         && orgId is string
-        && orgId == userOrganizationId();
+        && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.organizationId == orgId
+        && organizationActive(orgId)
+        && (
+          claimOrganizationId() == ""
+          || claimOrganizationId() == orgId
+        );
     }
 
     function isOrgAdmin(orgId) {
-      return isBootstrapAdmin() || (sameOrg(orgId) && hasRole("admin"));
+      return sameOrg(orgId)
+        && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.role == "admin";
     }
 
     function isOrgStaff(orgId) {
-      return isOrgAdmin(orgId) || (sameOrg(orgId) && hasRole("sales"));
+      return sameOrg(orgId)
+        && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.role in ["admin", "sales"];
     }
 
     function quoteBelongsToUser(data, orgId) {
-      return isSignedIn()
+      return hasVerifiedEmail()
+        && organizationActive(orgId)
+        && data.organizationId == orgId
         && (
           (sameOrg(orgId) && data.ownerUid == request.auth.uid)
           || (
@@ -72,13 +68,385 @@ service cloud.firestore {
     }
 
     function statusPatchOnly() {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return affectedKeys.hasOnly([
         "status",
+        "updatedAtISO",
+        "lifecycle",
+        "portalDecision"
+      ])
+      && affectedKeys.hasAll([
         "updatedAtISO",
         "lifecycle"
       ])
+      && affectedKeys.hasAny([
+        "status",
+        "portalDecision"
+      ])
+      && resource.data.status in ["sent", "viewed"]
       && request.resource.data.status in ["viewed", "accepted", "declined"]
+      && validPortalDecisionPatch()
+      && validPortalLifecyclePatch()
       && request.resource.data.portalKey == resource.data.portalKey;
+    }
+
+    function validPortalDecisionPatch() {
+      return (
+          request.resource.data.status == "viewed"
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["portalDecision"])
+        )
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(["portalDecision"])
+          && request.resource.data.portalDecision is map
+          && request.resource.data.portalDecision.keys().hasAll([
+            "decision",
+            "message",
+            "submittedAtISO"
+          ])
+          && request.resource.data.portalDecision.keys().hasOnly([
+            "decision",
+            "message",
+            "submittedAtISO"
+          ])
+          && request.resource.data.portalDecision.decision in [
+            "accepted",
+            "declined",
+            "changes_requested"
+          ]
+          && (
+            (
+              request.resource.data.portalDecision.decision == "changes_requested"
+              && request.resource.data.status == "viewed"
+            )
+            || request.resource.data.portalDecision.decision == request.resource.data.status
+          )
+          && request.resource.data.portalDecision.message is string
+          && request.resource.data.portalDecision.message.size() <= 1200
+          && (
+            request.resource.data.portalDecision.decision != "changes_requested"
+            || request.resource.data.portalDecision.message.size() > 0
+          )
+          && request.resource.data.portalDecision.submittedAtISO is string
+          && request.resource.data.portalDecision.submittedAtISO.size() > 0
+          && request.resource.data.portalDecision.submittedAtISO == request.resource.data.updatedAtISO
+        );
+    }
+
+    function validPortalLifecyclePatch() {
+      let previousLifecycle = resource.data.get("lifecycle", {});
+      let nextLifecycle = request.resource.data.get("lifecycle", {});
+      let lifecycleDiff = nextLifecycle.diff(previousLifecycle);
+      return request.resource.data.updatedAtISO is string
+        && request.resource.data.updatedAtISO.size() > 0
+        && nextLifecycle is map
+        && (
+          (
+            request.resource.data.status == "viewed"
+            && lifecycleDiff.affectedKeys().hasOnly(["viewedAtISO"])
+            && lifecycleDiff.affectedKeys().hasAll(["viewedAtISO"])
+            && nextLifecycle.viewedAtISO == request.resource.data.updatedAtISO
+          )
+          || (
+            request.resource.data.status == "accepted"
+            && lifecycleDiff.affectedKeys().hasOnly(["acceptedAtISO"])
+            && lifecycleDiff.affectedKeys().hasAll(["acceptedAtISO"])
+            && nextLifecycle.acceptedAtISO == request.resource.data.updatedAtISO
+          )
+          || (
+            request.resource.data.status == "declined"
+            && lifecycleDiff.affectedKeys().hasOnly(["declinedAtISO"])
+            && lifecycleDiff.affectedKeys().hasAll(["declinedAtISO"])
+            && nextLifecycle.declinedAtISO == request.resource.data.updatedAtISO
+          )
+        );
+    }
+
+    function customerDecisionEvidenceUnchanged() {
+      let previousLifecycle = resource.data.get("lifecycle", {});
+      let nextLifecycle = request.resource.data.get("lifecycle", {});
+      return request.resource.data.get("portalDecision", {}) == resource.data.get("portalDecision", {})
+        && nextLifecycle.get("acceptedAtISO", "") == previousLifecycle.get("acceptedAtISO", "")
+        && nextLifecycle.get("declinedAtISO", "") == previousLifecycle.get("declinedAtISO", "");
+    }
+
+    function salesBookingOperationsOnly() {
+      let previousBooking = resource.data.get("booking", {});
+      let nextBooking = request.resource.data.get("booking", {});
+      return previousBooking is map
+        && nextBooking is map
+        && nextBooking.diff(previousBooking).affectedKeys().hasOnly([
+          "staffLead",
+          "staffAssignedAtISO",
+          "kitchenCheckpoints",
+          "productionChecklist"
+        ]);
+    }
+
+    function salesFollowUpPatchOnly() {
+      let previousWorkflow = resource.data.get("workflow", {});
+      let nextWorkflow = request.resource.data.get("workflow", {});
+      let followUp = nextWorkflow.get("followUp", {});
+      return previousWorkflow is map
+        && nextWorkflow is map
+        && nextWorkflow.diff(previousWorkflow).affectedKeys().hasOnly(["followUp"])
+        && followUp is map
+        && followUp.keys().hasOnly([
+          "stage",
+          "dueDate",
+          "note",
+          "completed",
+          "completedAtISO",
+          "updatedAtISO",
+          "updatedByEmail"
+        ])
+        && followUp.keys().hasAll([
+          "stage",
+          "dueDate",
+          "note",
+          "completed",
+          "completedAtISO",
+          "updatedAtISO",
+          "updatedByEmail"
+        ])
+        && followUp.stage in [
+          "new",
+          "contacted",
+          "proposal_sent",
+          "awaiting_response",
+          "won",
+          "lost"
+        ]
+        && followUp.dueDate is string
+        && followUp.dueDate.size() <= 10
+        && followUp.note is string
+        && followUp.note.size() <= 1200
+        && followUp.completed is bool
+        && followUp.completedAtISO is string
+        && (
+          (followUp.completed && followUp.completedAtISO.size() > 0)
+          || (!followUp.completed && followUp.completedAtISO == "")
+        )
+        && followUp.updatedAtISO == request.resource.data.updatedAtISO
+        && followUp.updatedByEmail == request.auth.token.email;
+    }
+
+    function salesApprovalRequestAppendOnly() {
+      let previousWorkflow = resource.data.get("workflow", {});
+      let nextWorkflow = request.resource.data.get("workflow", {});
+      let previousRequests = previousWorkflow.get("approvalRequests", []);
+      let nextRequests = nextWorkflow.get("approvalRequests", []);
+      let addedRequests = nextRequests.removeAll(previousRequests);
+      let requestItem = addedRequests.size() == 1 ? addedRequests[0] : {};
+      return previousWorkflow is map
+        && nextWorkflow is map
+        && previousRequests is list
+        && nextRequests is list
+        && nextWorkflow.diff(previousWorkflow).affectedKeys().hasOnly(["approvalRequests"])
+        && nextRequests.size() == previousRequests.size() + 1
+        && previousRequests.removeAll(nextRequests).size() == 0
+        && addedRequests.size() == 1
+        && requestItem is map
+        && requestItem.keys().hasOnly([
+          "id",
+          "action",
+          "state",
+          "note",
+          "requestedAtISO",
+          "requestedByEmail",
+          "resolvedAtISO",
+          "resolvedByEmail",
+          "resolutionNote"
+        ])
+        && requestItem.keys().hasAll([
+          "id",
+          "action",
+          "state",
+          "note",
+          "requestedAtISO",
+          "requestedByEmail",
+          "resolvedAtISO",
+          "resolvedByEmail",
+          "resolutionNote"
+        ])
+        && requestItem.id is string
+        && requestItem.id.size() >= 20
+        && requestItem.id.size() <= 160
+        && requestItem.action in [
+          "send_payment_request",
+          "convert_to_contract",
+          "rotate_portal_link",
+          "delete_quote"
+        ]
+        && requestItem.state == "pending"
+        && requestItem.note is string
+        && requestItem.note.size() <= 800
+        && requestItem.requestedAtISO == request.resource.data.updatedAtISO
+        && requestItem.requestedByEmail == request.auth.token.email
+        && requestItem.resolvedAtISO == ""
+        && requestItem.resolvedByEmail == ""
+        && requestItem.resolutionNote == "";
+    }
+
+    function salesWorkflowPatchOnly() {
+      return salesFollowUpPatchOnly() || salesApprovalRequestAppendOnly();
+    }
+
+    function staffVersionPointerPatchAllowed(orgId, quoteId) {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      let previousVersionNumber = resource.data.get("latestVersionNumber", 0);
+      let nextVersionNumber = request.resource.data.get("latestVersionNumber", 0);
+      let versionMeta = request.resource.data.get("versionMeta", {});
+      let versionId = versionMeta.get("versionId", "");
+      let versionPath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId)/versions/$(versionId);
+      return affectedKeys.hasOnly([
+          "activeVersionId",
+          "latestVersionNumber",
+          "versionMeta"
+        ])
+        && affectedKeys.hasAll([
+          "latestVersionNumber",
+          "versionMeta"
+        ])
+        && previousVersionNumber is int
+        && nextVersionNumber is int
+        && nextVersionNumber == previousVersionNumber + 1
+        && versionMeta is map
+        && versionMeta.get("versionNumber", 0) == nextVersionNumber
+        && versionMeta.get("createdAt", "") is string
+        && versionMeta.get("createdAt", "").size() > 0
+        && versionMeta.get("reason", "") is string
+        && versionMeta.get("reason", "").size() > 0
+        && versionId is string
+        && versionId.size() >= 5
+        && existsAfter(versionPath)
+        && getAfter(versionPath).data.versionId == versionId
+        && getAfter(versionPath).data.versionNumber == nextVersionNumber
+        && getAfter(versionPath).data.createdAtISO == versionMeta.createdAt
+        && getAfter(versionPath).data.reason == versionMeta.reason
+        && getAfter(versionPath).data.createdBy == versionMeta.createdBy
+        && (
+          !affectedKeys.hasAny(["activeVersionId"])
+          || (
+            isOrgAdmin(orgId)
+            && resource.data.get("activeVersionId", "") == ""
+            && request.resource.data.activeVersionId == versionId
+          )
+        );
+    }
+
+    function staffOperationalPatchAllowed(orgId, quoteId) {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return staffVersionPointerPatchAllowed(orgId, quoteId)
+        || (
+          affectedKeys.hasOnly([
+            "payment",
+            "booking",
+            "workflow",
+            "integrations",
+            "updatedAtISO"
+          ])
+          && (
+            !affectedKeys.hasAny(["payment"])
+            || isOrgAdmin(orgId)
+          )
+          && (
+            !affectedKeys.hasAny(["booking"])
+            || isOrgAdmin(orgId)
+            || salesBookingOperationsOnly()
+          )
+          && (
+            !affectedKeys.hasAny(["workflow"])
+            || isOrgAdmin(orgId)
+            || salesWorkflowPatchOnly()
+          )
+          && (
+            !affectedKeys.hasAny(["integrations"])
+            || isOrgAdmin(orgId)
+          )
+        );
+    }
+
+    function staffNonterminalTransitionPatchOnly() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return affectedKeys.hasOnly([
+          "status",
+          "deletedAtISO",
+          "updatedAtISO",
+          "lifecycle"
+        ])
+        && affectedKeys.hasAll([
+          "status",
+          "updatedAtISO"
+        ]);
+    }
+
+    function staffAcceptedBookingTransitionPatchOnly() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return affectedKeys.hasOnly([
+          "status",
+          "booking",
+          "updatedAtISO",
+          "lifecycle"
+        ])
+        && affectedKeys.hasAll([
+          "status",
+          "booking",
+          "updatedAtISO",
+          "lifecycle"
+        ]);
+    }
+
+    function serverOwnedPaymentReferencesUnchanged() {
+      let previousPayment = resource.data.get("payment", {});
+      let nextPayment = request.resource.data.get("payment", {});
+      return previousPayment is map
+        && nextPayment is map
+        && nextPayment.get("depositLink", "") == previousPayment.get("depositLink", "")
+        && nextPayment.get("stripeSessionId", "") == previousPayment.get("stripeSessionId", "")
+        && nextPayment.get("lastCheckoutCreatedAtISO", "") == previousPayment.get("lastCheckoutCreatedAtISO", "")
+        && nextPayment.get("lastHost", "") == previousPayment.get("lastHost", "")
+        && nextPayment.get("lastEventType", "") == previousPayment.get("lastEventType", "")
+        && nextPayment.get("lastOrganizationId", "") == previousPayment.get("lastOrganizationId", "")
+        && nextPayment.get("checkoutGeneration", 0) == previousPayment.get("checkoutGeneration", 0);
+    }
+
+    function salesDraftSendTransitionOnly() {
+      let previousLifecycle = resource.data.get("lifecycle", {});
+      let nextLifecycle = request.resource.data.get("lifecycle", {});
+      let lifecycleKeys = nextLifecycle.diff(previousLifecycle).affectedKeys();
+      return resource.data.status == "draft"
+        && request.resource.data.status == "sent"
+        && lifecycleKeys.hasOnly(["sentAtISO"])
+        && lifecycleKeys.hasAll(["sentAtISO"])
+        && nextLifecycle.sentAtISO == request.resource.data.updatedAtISO;
+    }
+
+    function staffQuoteStatusUpdateAllowed(orgId, quoteId) {
+      return serverOwnedPaymentReferencesUnchanged()
+        && customerDecisionEvidenceUnchanged()
+        && (
+          (
+            request.resource.data.status == resource.data.status
+            && staffOperationalPatchAllowed(orgId, quoteId)
+          )
+          || (
+            request.resource.data.status != resource.data.status
+            && !(resource.data.status in ["accepted", "declined", "booked", "expired", "deleted"])
+            && request.resource.data.status in ["draft", "sent", "viewed", "expired", "deleted"]
+            && staffNonterminalTransitionPatchOnly()
+            && (
+              isOrgAdmin(orgId)
+              || salesDraftSendTransitionOnly()
+            )
+          )
+          || (
+            isOrgAdmin(orgId)
+            && resource.data.status == "accepted"
+            && request.resource.data.status == "booked"
+            && resource.data.get("portalDecision", {}).get("decision", "") == "accepted"
+            && staffAcceptedBookingTransitionPatchOnly()
+          )
+        );
     }
 
     function portalSnapshotExists(portalKey) {
@@ -87,30 +455,49 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/customerPortalQuotes/$(portalKey));
     }
 
-    function portalSnapshotActive(portalKey) {
-      return portalSnapshotExists(portalKey)
-        && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.portalKey == portalKey
-        && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.status != "deleted"
+    function portalSnapshotDataActive(data, portalKey) {
+      return data.portalKey == portalKey
+        && data.organizationId is string
+        && organizationActive(data.organizationId)
+        && data.status in ["sent", "viewed", "accepted", "declined", "booked"]
         && (
-          get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.portalExpiresAtMs is int
-          || get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.portalExpiresAtMs is float
+          data.portalExpiresAtMs is int
+          || data.portalExpiresAtMs is float
         )
-        && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.portalExpiresAtMs > request.time.toMillis();
+        && data.portalExpiresAtMs > request.time.toMillis();
     }
 
-    function portalMatchesOrgQuote(portalKey, quoteId, orgId) {
-      return portalSnapshotActive(portalKey)
-        && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.quoteId == quoteId
-        && (
-          (
-            get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.organizationId is string
-            && get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.organizationId == orgId
-          )
-          || (
-            !(get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.organizationId is string)
-            || get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data.organizationId == ""
-          )
+    function portalSnapshotActive(portalKey) {
+      return portalSnapshotExists(portalKey)
+        && portalSnapshotDataActive(
+          get(/databases/$(database)/documents/customerPortalQuotes/$(portalKey)).data,
+          portalKey
         );
+    }
+
+    function portalMatchesOrgQuoteAfter(portalKey, quoteId, orgId) {
+      let portalPath = /databases/$(database)/documents/customerPortalQuotes/$(portalKey);
+      let portalData = getAfter(portalPath).data;
+      return existsAfter(portalPath)
+        && portalSnapshotDataActive(portalData, portalKey)
+        && portalData.quoteId == quoteId
+        && portalData.organizationId == orgId
+        && portalData.status == request.resource.data.status
+        && portalData.get("portalDecision", {}) == request.resource.data.get("portalDecision", {})
+        && portalData.get("updatedAtISO", "") == request.resource.data.get("updatedAtISO", "")
+        && portalData.get("lifecycle", {}) == request.resource.data.get("lifecycle", {});
+    }
+
+    function portalUpdateMatchesOrgQuoteAfter(orgId, quoteId, portalKey) {
+      let quotePath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId);
+      let quoteData = getAfter(quotePath).data;
+      return existsAfter(quotePath)
+        && quoteData.organizationId == orgId
+        && quoteData.portalKey == portalKey
+        && quoteData.status == request.resource.data.status
+        && quoteData.get("portalDecision", {}) == request.resource.data.get("portalDecision", {})
+        && quoteData.get("updatedAtISO", "") == request.resource.data.get("updatedAtISO", "")
+        && quoteData.get("lifecycle", {}) == request.resource.data.get("lifecycle", {});
     }
 
     function portalStatusPatchOnly(portalKey) {
@@ -119,58 +506,225 @@ service cloud.firestore {
         && resource.data.portalKey == portalKey;
     }
 
+    function orgQuoteStaffUpdateAllowed(orgId, quoteId) {
+      return isSignedIn()
+        && isOrgStaff(orgId)
+        && resource.data.organizationId == orgId
+        && request.resource.data.organizationId == orgId
+        && request.resource.data.portalKey == resource.data.portalKey
+        && staffQuoteStatusUpdateAllowed(orgId, quoteId);
+    }
+
+    function orgQuotePortalUpdateAllowed(orgId, quoteId) {
+      return (
+          !isSignedIn()
+          || !isOrgStaff(orgId)
+        )
+        && statusPatchOnly()
+        && portalMatchesOrgQuoteAfter(resource.data.portalKey, quoteId, orgId);
+    }
+
+    function portalStaffUpdateAllowed(portalKey) {
+      let orgId = resource.data.organizationId;
+      return isSignedIn()
+        && orgId is string
+        && isOrgStaff(orgId)
+        && request.resource.data.organizationId == orgId
+        && request.resource.data.portalKey == resource.data.portalKey
+        && request.resource.data.quoteId == resource.data.quoteId
+        && staffQuoteStatusUpdateAllowed(orgId, resource.data.quoteId);
+    }
+
+    function portalCustomerUpdateAllowed(portalKey) {
+      let orgId = resource.data.organizationId;
+      return orgId is string
+        && (
+          !isSignedIn()
+          || !isOrgStaff(orgId)
+        )
+        && portalStatusPatchOnly(portalKey)
+        && portalSnapshotDataActive(resource.data, portalKey)
+        && resource.data.quoteId is string
+        && resource.data.quoteId.size() > 0
+        && portalUpdateMatchesOrgQuoteAfter(
+          orgId,
+          resource.data.quoteId,
+          portalKey
+        );
+    }
+
+    function validQuoteVersionCreate(orgId, quoteId, versionId) {
+      let quotePath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId);
+      let quoteData = get(quotePath).data;
+      let quoteDataAfter = getAfter(quotePath).data;
+      let snapshot = request.resource.data.snapshot;
+      return exists(quotePath)
+        && request.resource.data.organizationId == orgId
+        && request.resource.data.quoteId == quoteId
+        && request.resource.data.versionId == versionId
+        && request.resource.data.versionNumber is int
+        && request.resource.data.versionNumber > 0
+        && quoteDataAfter.latestVersionNumber == request.resource.data.versionNumber
+        && quoteDataAfter.versionMeta.versionId == versionId
+        && quoteDataAfter.versionMeta.versionNumber == request.resource.data.versionNumber
+        && request.resource.data.createdAtISO is string
+        && request.resource.data.createdAtISO.size() > 0
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 120
+        && request.resource.data.status is string
+        && request.resource.data.createdBy is map
+        && request.resource.data.createdBy.uid == request.auth.uid
+        && request.resource.data.createdBy.email == request.auth.token.email
+        && request.resource.data.pricing is map
+        && request.resource.data.snapshot is map
+        && request.resource.data.pricing == quoteData.pricing
+        && snapshot.organizationId == orgId
+        && snapshot.id == quoteId
+        && snapshot.quoteNumber == quoteData.quoteNumber
+        && snapshot.portalKey == quoteData.portalKey
+        && snapshot.ownerUid == quoteData.ownerUid
+        && snapshot.ownerEmail == quoteData.ownerEmail
+        && snapshot.customer == quoteData.customer
+        && snapshot.event == quoteData.event
+        && snapshot.selection == quoteData.selection
+        && snapshot.totals == quoteData.totals
+        && snapshot.pricing == quoteData.pricing
+        && snapshot.get("payment", {}) == quoteData.get("payment", {})
+        && snapshot.status == quoteData.status
+        && quoteData.status == request.resource.data.status;
+    }
+
+    function validPortalSnapshotCreate(portalKey) {
+      let orgId = request.resource.data.organizationId;
+      let quoteId = request.resource.data.quoteId;
+      let quotePath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId);
+      let quoteData = get(quotePath).data;
+      let portalPayment = request.resource.data.get("payment", {});
+      let quotePayment = quoteData.get("payment", {});
+      return exists(quotePath)
+        && request.resource.data.portalKey == portalKey
+        && portalKey.size() >= 20
+        && orgId is string
+        && quoteId is string
+        && quoteData.organizationId == orgId
+        && quoteData.portalKey == portalKey
+        && request.resource.data.status == quoteData.status
+        && request.resource.data.get("portalDecision", {}) == quoteData.get("portalDecision", {})
+        && request.resource.data.get("lifecycle", {}) == quoteData.get("lifecycle", {})
+        && request.resource.data.quoteNumber == quoteData.quoteNumber
+        && request.resource.data.customerName == quoteData.customer.name
+        && request.resource.data.customerEmail == quoteData.customer.email
+        && request.resource.data.eventName == quoteData.event.name
+        && request.resource.data.eventDate == quoteData.event.date
+        && request.resource.data.eventTime == quoteData.event.time
+        && request.resource.data.eventHours == quoteData.event.hours
+        && request.resource.data.eventGuests == quoteData.event.guests
+        && request.resource.data.eventStyle == quoteData.event.style
+        && request.resource.data.venue == quoteData.event.venue
+        && request.resource.data.venueAddress == quoteData.event.venueAddress
+        && request.resource.data.dietaryRestrictions == quoteData.event.dietaryRestrictions
+        && request.resource.data.total == quoteData.totals.total
+        && request.resource.data.deposit == quoteData.totals.deposit
+        && request.resource.data.expiresAtISO == quoteData.expiresAtISO
+        && portalPayment is map
+        && quotePayment is map
+        && portalPayment.get("depositLink", "") == ""
+        && portalPayment.get("stripeSessionId", "") == ""
+        && portalPayment.get("lastCheckoutCreatedAtISO", "") == ""
+        && portalPayment.get("lastHost", "") == ""
+        && portalPayment.get("lastEventType", "") == ""
+        && portalPayment.get("lastOrganizationId", "") == ""
+        && portalPayment.get("checkoutGeneration", 0) == 0
+        && portalPayment.get("depositStatus", "") == quotePayment.get("depositStatus", "");
+    }
+
+    function commercialSettingsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "plan",
+        "featureFlagsLocked",
+        "featureFlagsPaid",
+        "featureFlagsLockReason",
+        "featureFlagsLockUpdatedAtISO",
+        "orderId",
+        "onboarding"
+      ])
+      && (
+        resource.data.get("featureFlagsLocked", false) != true
+        || !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          "featureFlags"
+        ])
+      );
+    }
+
+    function commercialSettingsCreateSafe() {
+      return !request.resource.data.keys().hasAny([
+        "plan",
+        "featureFlags",
+        "featureFlagsLocked",
+        "featureFlagsPaid",
+        "featureFlagsLockReason",
+        "featureFlagsLockUpdatedAtISO",
+        "orderId",
+        "onboarding"
+      ]);
+    }
+
     match /userRoles/{uid} {
       allow read: if isSignedIn() && (
         request.auth.uid == uid
-        || isBootstrapAdmin()
         || (
-          hasRole("admin")
-          && userOrganizationId() != ""
-          && roleOrganizationId(uid) == userOrganizationId()
+          resource.data.organizationId is string
+          && isOrgAdmin(resource.data.organizationId)
         )
       );
       allow create: if (
-          isBootstrapAdmin()
-          && isSignedIn()
-          && request.auth.uid == uid
-          && request.resource.data.role == "admin"
-          && request.resource.data.email == request.auth.token.email
-        )
-        || (
           isSignedIn()
           && request.auth.uid == uid
           && request.resource.data.role == "customer"
           && request.resource.data.email == request.auth.token.email
         )
         || (
-          hasRole("admin")
-          && request.resource.data.organizationId is string
-          && request.resource.data.organizationId == userOrganizationId()
+          request.resource.data.organizationId is string
+          && isOrgAdmin(request.resource.data.organizationId)
         );
-      allow update: if isBootstrapAdmin()
-        || (
-          hasRole("admin")
-          && resource.data.organizationId is string
+      allow update: if (
+          resource.data.organizationId is string
           && request.resource.data.organizationId is string
-          && resource.data.organizationId == userOrganizationId()
-          && request.resource.data.organizationId == userOrganizationId()
+          && request.resource.data.organizationId == resource.data.organizationId
+          && isOrgAdmin(resource.data.organizationId)
         );
-      allow delete: if isBootstrapAdmin()
-        || (
-          hasRole("admin")
-          && resource.data.organizationId is string
-          && resource.data.organizationId == userOrganizationId()
+      allow delete: if (
+          resource.data.organizationId is string
+          && isOrgAdmin(resource.data.organizationId)
         );
     }
 
     match /organizations/{orgId} {
       allow read: if isOrgStaff(orgId);
-      allow create, update, delete: if isOrgAdmin(orgId);
+      allow create, update, delete: if false;
+    }
+
+    match /tenantDomains/{hostname} {
+      allow read: if resource.data.organizationId is string
+        && isOrgAdmin(resource.data.organizationId);
+      allow create: if request.resource.data.organizationId is string
+        && isOrgAdmin(request.resource.data.organizationId);
+      allow update: if resource.data.organizationId is string
+        && request.resource.data.organizationId is string
+        && resource.data.organizationId == request.resource.data.organizationId
+        && isOrgAdmin(resource.data.organizationId);
+      allow delete: if resource.data.organizationId is string
+        && isOrgAdmin(resource.data.organizationId);
     }
 
     match /organizations/{orgId}/settings/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow write: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId)
+        && commercialSettingsCreateSafe();
+      allow delete: if false;
+      allow update: if isOrgAdmin(orgId)
+        && commercialSettingsUnchanged();
     }
 
     match /organizations/{orgId}/catalogPackages/{docId} {
@@ -208,20 +762,31 @@ service cloud.firestore {
       allow write: if isOrgStaff(orgId);
     }
 
-    match /organizations/{orgId}/quotes/{quoteId} {
-      allow create: if isOrgStaff(orgId)
-        && request.resource.data.ownerUid == request.auth.uid
+    match /organizations/{orgId}/importBatches/{batchId} {
+      allow read: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId)
         && request.resource.data.organizationId == orgId
-        && request.resource.data.portalKey is string
-        && request.resource.data.portalKey.size() >= 20;
+        && request.resource.data.importBatchId == batchId;
+      allow update: if isOrgAdmin(orgId)
+        && resource.data.organizationId == orgId
+        && request.resource.data.organizationId == orgId
+        && resource.data.importBatchId == batchId
+        && request.resource.data.importBatchId == batchId;
+      allow delete: if false;
+    }
+
+    match /organizations/{orgId}/quotes/{quoteId} {
+      allow create: if false;
       allow read: if isOrgStaff(orgId) || quoteBelongsToUser(resource.data, orgId);
-      allow update: if isOrgStaff(orgId)
-        || (statusPatchOnly() && portalMatchesOrgQuote(resource.data.portalKey, quoteId, orgId));
-      allow delete: if isOrgAdmin(orgId);
+      allow update: if orgQuoteStaffUpdateAllowed(orgId, quoteId);
+      allow update: if orgQuotePortalUpdateAllowed(orgId, quoteId);
+      allow delete: if false;
     }
 
     match /organizations/{orgId}/quotes/{quoteId}/versions/{versionId} {
-      allow read, create: if isOrgStaff(orgId);
+      allow read: if isOrgStaff(orgId);
+      allow create: if isOrgStaff(orgId)
+        && validQuoteVersionCreate(orgId, quoteId, versionId);
       allow update, delete: if false;
     }
 
@@ -259,30 +824,14 @@ service cloud.firestore {
     }
 
     match /customerPortalQuotes/{portalKey} {
-      allow get: if portalKey.size() >= 20
-        && resource.data.portalKey == portalKey
-        && resource.data.quoteId is string
-        && resource.data.quoteId.size() > 0
-        && resource.data.status != "deleted"
-        && (
-          resource.data.portalExpiresAtMs is int
-          || resource.data.portalExpiresAtMs is float
-        )
-        && resource.data.portalExpiresAtMs > request.time.toMillis();
+      allow get: if portalSnapshotActive(portalKey);
       allow list: if false;
-      allow create, delete: if isStaff();
-      allow update: if isStaff()
-        || (
-          portalStatusPatchOnly(portalKey)
-          && resource.data.quoteId is string
-          && resource.data.quoteId.size() > 0
-          && resource.data.status != "deleted"
-          && (
-            resource.data.portalExpiresAtMs is int
-            || resource.data.portalExpiresAtMs is float
-          )
-          && resource.data.portalExpiresAtMs > request.time.toMillis()
-        );
+      allow create: if request.resource.data.organizationId is string
+        && isOrgStaff(request.resource.data.organizationId)
+        && validPortalSnapshotCreate(portalKey);
+      allow delete: if false;
+      allow update: if portalStaffUpdateAllowed(portalKey);
+      allow update: if portalCustomerUpdateAllowed(portalKey);
     }
 
     match /quoteHistory/{historyId} {

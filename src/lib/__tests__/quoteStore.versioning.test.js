@@ -137,10 +137,13 @@ function seedQuotes(quotes) {
 
 describe("quoteStore versioning and delete behavior", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-20T12:00:00.000Z"));
     vi.stubGlobal("localStorage", createStorageMock());
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -562,8 +565,15 @@ describe("quoteStore versioning and delete behavior", () => {
         id: "q4",
         status: "deleted",
         deletedAtISO: "2026-03-11T12:00:00.000Z",
+        lifecycle: {
+          acceptedAtISO: "",
+          draftAtISO: "2026-03-10T12:00:00.000Z",
+          deletedAtISO: "2026-03-11T12:00:00.000Z"
+        },
         activeVersionId: "v0002",
         latestVersionNumber: 3,
+        ownerUid: "staff-1",
+        ownerEmail: "staff@example.com",
         customer: {
           name: "Deleted Record Name",
           email: "deleted@example.com"

@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-03-16",
+  "generatedAt": "2026-07-21",
   "allowancePercent": 15,
   "metrics": {
-    "totalJsBytes": 1459519,
-    "largestJsChunkBytes": 615421
+    "totalJsBytes": 1691847,
+    "largestJsChunkBytes": 397827
   }
 }

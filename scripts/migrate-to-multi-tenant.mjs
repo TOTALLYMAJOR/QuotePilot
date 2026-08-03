@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 
-import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-
-const require = createRequire(import.meta.url);
-const admin = require("../functions/node_modules/firebase-admin");
+import { loadFirebaseAdmin } from "./firebase-admin-modular.mjs";
 
 const MAX_BATCH_WRITES = 450;
 
-function slugify(value, fallback = "default-org") {
+function slugify(value, fallback = "") {
   const raw = String(value || "").trim().toLowerCase();
   const normalized = raw
     .replace(/[^\w-]+/g, "-")
@@ -33,14 +30,25 @@ function parseArgs(argv) {
   const args = Array.isArray(argv) ? argv : [];
   let projectId = "";
   let organizationId = "";
-  let dryRun = false;
+  let requestedMode = "";
+  let confirmation = "";
   let evidenceOut = "";
 
   for (let i = 0; i < args.length; i += 1) {
     const token = String(args[i] || "").trim();
     if (!token) continue;
     if (token === "--dry-run") {
-      dryRun = true;
+      if (requestedMode === "apply") {
+        throw new Error("Choose exactly one migration mode: --dry-run or --apply.");
+      }
+      requestedMode = "dry-run";
+      continue;
+    }
+    if (token === "--apply") {
+      if (requestedMode === "dry-run") {
+        throw new Error("Choose exactly one migration mode: --dry-run or --apply.");
+      }
+      requestedMode = "apply";
       continue;
     }
     if (token === "--project") {
@@ -58,17 +66,28 @@ function parseArgs(argv) {
       continue;
     }
     if (token === "--organization" || token === "--org") {
-      organizationId = slugify(args[i + 1], "default-org");
+      organizationId = slugify(args[i + 1]);
+      i += 1;
+      continue;
+    }
+    if (token === "--confirm") {
+      confirmation = String(args[i + 1] || "").trim();
       i += 1;
     }
   }
 
+  const resolvedProjectId =
+    projectId ||
+    String(process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "").trim();
+  const resolvedOrganizationId =
+    organizationId || slugify(process.env.FIREBASE_ORGANIZATION_ID);
+  const dryRun = requestedMode !== "apply";
+
   return {
-    projectId:
-      projectId ||
-      String(process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "").trim(),
-    organizationId: organizationId || slugify(process.env.FIREBASE_ORGANIZATION_ID || "default-org", "default-org"),
+    projectId: resolvedProjectId,
+    organizationId: resolvedOrganizationId,
     dryRun,
+    confirmation,
     evidenceOut
   };
 }
@@ -733,7 +752,11 @@ async function writeEvidenceFile(outputPath, payload) {
   if (!outputPath) return "";
   const resolvedPath = path.resolve(outputPath);
   await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-  await fs.writeFile(resolvedPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  await fs.writeFile(
+    resolvedPath,
+    `${JSON.stringify(payload, null, 2)}\n`,
+    { encoding: "utf8", flag: "wx", mode: 0o600 }
+  );
   return resolvedPath;
 }
 
@@ -1153,15 +1176,41 @@ async function runMigrationViaRest({ projectId, organizationId, dryRun = false }
 }
 
 async function main() {
-  const { projectId, organizationId, dryRun, evidenceOut } = parseArgs(process.argv.slice(2));
+  const {
+    projectId,
+    organizationId,
+    dryRun,
+    confirmation,
+    evidenceOut
+  } = parseArgs(process.argv.slice(2));
+  if (!projectId) {
+    throw new Error("Missing Firebase project id. Run with --project <projectId>.");
+  }
+  if (!organizationId) {
+    throw new Error("Missing organization id. Run with --organization <orgId>.");
+  }
+  if (evidenceOut && fsSync.existsSync(path.resolve(evidenceOut))) {
+    throw new Error(
+      `Evidence output already exists: ${path.resolve(evidenceOut)}. Refusing to overwrite it.`
+    );
+  }
+  if (!dryRun) {
+    const expectedConfirmation = `MIGRATE ${projectId} ${organizationId}`;
+    if (confirmation !== expectedConfirmation) {
+      throw new Error(
+        `Apply requires --confirm "${expectedConfirmation}". The default mode is read-only.`
+      );
+    }
+  }
 
+  const admin = loadFirebaseAdmin();
   let summary;
   let mode = "firebase-admin";
   try {
-    if (!admin.apps.length) {
+    if (!admin.getApps().length) {
       admin.initializeApp(projectId ? { projectId } : {});
     }
-    const db = admin.firestore();
+    const db = admin.getFirestore();
     summary = await runMigrationWithAdmin({ db, organizationId, dryRun });
   } catch (error) {
     if (!isAdcMissingError(error)) {

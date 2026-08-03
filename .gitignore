@@ -10,6 +10,11 @@ dist/
 coverage/
 playwright-report/
 test-results/
+.playwright-cli/
+output/
+playwright.firebase.isolated.config.js
+firebase.isolated.local.json
+/C:\\Users\\Administrator\\AppData\\Local\\lighthouse.*/
 .lighthouseci/
 .vscode/
 .idea/

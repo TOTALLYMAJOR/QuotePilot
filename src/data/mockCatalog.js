@@ -274,10 +274,7 @@ export const DEFAULT_SEASONAL_PROFILES = [
   }
 ];
 
-export const DEFAULT_BRAND_CREW = [
-  { label: "Chef Toni", imageUrl: "/brand/chef-toni.png" },
-  { label: "Grill Master Ervin", imageUrl: "/brand/grillmaster-irvin.png" }
-];
+export const DEFAULT_BRAND_CREW = [];
 
 export const DEFAULT_BARTENDER_RATE_TYPES = [
   { id: "standard", name: "Standard Bartender", rate: 30 },
@@ -366,25 +363,25 @@ export const DEFAULT_SETTINGS = {
   staffingChargeMode: "per_hour",
   staffingRateTypes: DEFAULT_STAFFING_RATE_TYPES,
   defaultStaffingRateType: "standard",
-  quotePreparedBy: "Chef Toni North",
-  brandName: "Tasteful Touch Catering",
-  brandTagline: "Chef Toni and Grill Master Ervin",
-  brandLogoUrl: "/brand/logo.png",
+  quotePreparedBy: "Sales Team",
+  brandName: "QuotePilot",
+  brandTagline: "Quote-to-event operations by MBMapps",
+  brandLogoUrl: "",
   brandPrimaryColor: "#c99334",
   brandAccentColor: "#f0d29a",
   brandDarkAccentColor: "#8d611a",
   brandBackgroundStart: "#100d09",
   brandBackgroundMid: "#221a12",
   brandBackgroundEnd: "#ae7d2b",
-  heroEyebrow: "Premium Event Catering Workbench",
-  heroHeadline: "Signature flavor. Configurable quotes.",
+  heroEyebrow: "Quote-to-Event Operations",
+  heroHeadline: "Clearer quotes. Connected event operations.",
   heroDescription:
-    "A polished sales cockpit for weddings, corporate events, and celebrations up to 400 guests. Build scenarios, apply smart upsells, and send better proposals faster.",
+    "Build guided quotes, compare scenarios, send proposals, and keep customer decisions, payment state, and event production connected.",
   brandCrew: DEFAULT_BRAND_CREW,
-  businessPhone: "(205) 593-2004",
-  businessEmail: "tonitastefultouch@yahoo.com",
-  businessAddress: "6230 Eagle Ridge Cir, Pinson, AL 35126",
-  acceptanceEmail: "tonitastefultouch@yahoo.com",
+  businessPhone: "",
+  businessEmail: "",
+  businessAddress: "",
+  acceptanceEmail: "",
   disposablesNote: "All disposables are included in this quote.",
   depositNotice: "30% deposit is required to lock in your date.",
   crmEnabled: false,
@@ -400,6 +397,7 @@ export const DEFAULT_SETTINGS = {
   integrationAuditRetention: 50,
   pricingSettingsVersion: 0,
   pricingSettingsUpdatedAtISO: "",
+  pricingSetupConfirmed: true,
   featureFlags: { ...DEFAULT_FEATURE_FLAGS },
   guidedSellingEnabled: true,
   staffingLaborEnabled: true,
@@ -479,7 +477,7 @@ function normalizeCrmProvider(value, fallback = "webhook") {
 }
 
 function normalizeServiceFeeTiers(input) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_SERVICE_FEE_TIERS;
+  const source = Array.isArray(input) ? input : DEFAULT_SERVICE_FEE_TIERS;
   return source
     .map((item, idx) => {
       const minGuests = toNumber(item.minGuests, 0, 0);
@@ -495,7 +493,7 @@ function normalizeServiceFeeTiers(input) {
 }
 
 function normalizeTaxRegions(input) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_TAX_REGIONS;
+  const source = Array.isArray(input) ? input : DEFAULT_TAX_REGIONS;
   return source.map((item, idx) => ({
     id: normalizeId(item.id, `region-${idx + 1}`),
     name: String(item.name || `Region ${idx + 1}`),
@@ -539,12 +537,12 @@ function normalizeTemplate(item, idx) {
 }
 
 function normalizeEventTemplates(input) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_EVENT_TEMPLATES;
+  const source = Array.isArray(input) ? input : DEFAULT_EVENT_TEMPLATES;
   return source.map((item, idx) => normalizeTemplate(item, idx));
 }
 
 function normalizeBartenderRateTypes(input, fallbackRate = DEFAULT_SETTINGS.bartenderRate) {
-  const source = Array.isArray(input) && input.length
+  const source = Array.isArray(input)
     ? input
     : [{ id: "default", name: "Default Bartender", rate: fallbackRate }];
   const seen = new Set();
@@ -565,7 +563,7 @@ function normalizeStaffingRateTypes(input, {
   fallbackServerRate = DEFAULT_SETTINGS.serverRate,
   fallbackChefRate = DEFAULT_SETTINGS.chefRate
 } = {}) {
-  const source = Array.isArray(input) && input.length
+  const source = Array.isArray(input)
     ? input
     : [{ id: "default", name: "Default Staffing", serverRate: fallbackServerRate, chefRate: fallbackChefRate }];
   const seen = new Set();
@@ -623,7 +621,7 @@ function normalizeMenuSections(input) {
 }
 
 function normalizeSeasonalProfiles(input) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_SEASONAL_PROFILES;
+  const source = Array.isArray(input) ? input : DEFAULT_SEASONAL_PROFILES;
   return source.map((item, idx) => ({
     id: normalizeId(item.id, `season-${idx + 1}`),
     name: String(item.name || `Season ${idx + 1}`),
@@ -638,7 +636,7 @@ function normalizeSeasonalProfiles(input) {
 }
 
 function normalizeBrandCrew(input) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_BRAND_CREW;
+  const source = Array.isArray(input) ? input : DEFAULT_BRAND_CREW;
   return source
     .map((item, idx) => ({
       label: toText(item?.label, `Team Member ${idx + 1}`),
@@ -667,7 +665,7 @@ function defaultUpsellName(kind) {
 }
 
 function normalizeUpsellRules(input, { packages = [], addons = [], rentals = [] } = {}) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_UPSELL_RULES;
+  const source = Array.isArray(input) ? input : DEFAULT_UPSELL_RULES;
   const addonIds = new Set(addons.map((item) => String(item.id)));
   const rentalIds = new Set(rentals.map((item) => String(item.id)));
   const packageIds = new Set(packages.map((item) => String(item.id)));
@@ -710,6 +708,15 @@ function normalizeUpsellRules(input, { packages = [], addons = [], rentals = [] 
 function toText(value, fallback = "") {
   const text = String(value ?? "").trim();
   return text || fallback;
+}
+
+function hasOwnSetting(settings, key) {
+  return Object.prototype.hasOwnProperty.call(settings || {}, key);
+}
+
+function toTenantText(settings, key, fallback = "") {
+  if (!hasOwnSetting(settings, key)) return fallback;
+  return String(settings?.[key] ?? "").trim();
 }
 
 function toBoolean(value, fallback = false) {
@@ -770,6 +777,20 @@ export function normalizeRental(item) {
 
 export function normalizeCatalog(raw) {
   const inputSettings = raw.settings && typeof raw.settings === "object" ? raw.settings : {};
+  const pricingSetupConfirmed = hasOwnSetting(inputSettings, "pricingSetupConfirmed")
+    && toBoolean(inputSettings.pricingSetupConfirmed, false);
+  const pricingValue = (key, confirmedFallback, unconfirmedFallback) => {
+    if (hasOwnSetting(inputSettings, key)) return inputSettings[key];
+    return pricingSetupConfirmed ? confirmedFallback : unconfirmedFallback;
+  };
+  const hasEmptyServiceFeeTiers = Array.isArray(inputSettings.serviceFeeTiers)
+    && inputSettings.serviceFeeTiers.length === 0;
+  const hasEmptyTaxRegions = Array.isArray(inputSettings.taxRegions)
+    && inputSettings.taxRegions.length === 0;
+  const hasEmptyBartenderRateTypes = Array.isArray(inputSettings.bartenderRateTypes)
+    && inputSettings.bartenderRateTypes.length === 0;
+  const hasEmptyStaffingRateTypes = Array.isArray(inputSettings.staffingRateTypes)
+    && inputSettings.staffingRateTypes.length === 0;
   const rawSettings = {
     ...DEFAULT_SETTINGS,
     ...inputSettings
@@ -799,35 +820,125 @@ export function normalizeCatalog(raw) {
       active: r.active !== false
     })
   );
-  const serviceFeeTiers = normalizeServiceFeeTiers(rawSettings.serviceFeeTiers);
-  const taxRegions = normalizeTaxRegions(rawSettings.taxRegions);
-  const eventTemplates = normalizeEventTemplates(rawSettings.eventTemplates);
+  const serviceFeeTiers = normalizeServiceFeeTiers(pricingValue(
+    "serviceFeeTiers",
+    DEFAULT_SERVICE_FEE_TIERS,
+    [{ id: "unconfigured", minGuests: 0, maxGuests: 9999, pct: 0 }]
+  ));
+  const taxRegions = normalizeTaxRegions(pricingValue(
+    "taxRegions",
+    DEFAULT_TAX_REGIONS,
+    [{ id: "unconfigured", name: "Not configured", rate: 0 }]
+  ));
+  const packageIds = new Set(packages.map((item) => String(item.id || "").trim()).filter(Boolean));
+  const eventTemplates = normalizeEventTemplates(pricingValue(
+    "eventTemplates",
+    DEFAULT_EVENT_TEMPLATES,
+    []
+  ))
+    .filter((template) => packageIds.has(String(template.pkg || "").trim()));
   const menuSections = normalizeMenuSections(rawSettings.menuSections);
-  const seasonalProfiles = normalizeSeasonalProfiles(rawSettings.seasonalProfiles);
-  const bartenderRateTypes = normalizeBartenderRateTypes(inputSettings.bartenderRateTypes, rawSettings.bartenderRate);
-  const staffingRateTypes = normalizeStaffingRateTypes(inputSettings.staffingRateTypes, {
-    fallbackServerRate: rawSettings.serverRate,
-    fallbackChefRate: rawSettings.chefRate
+  const seasonalProfiles = normalizeSeasonalProfiles(pricingValue(
+    "seasonalProfiles",
+    DEFAULT_SEASONAL_PROFILES,
+    [{
+      id: "standard",
+      name: "Standard pricing",
+      startMonth: 1,
+      startDay: 1,
+      endMonth: 12,
+      endDay: 31,
+      packageMultiplier: 1,
+      addonMultiplier: 1,
+      rentalMultiplier: 1
+    }]
+  ));
+  const bartenderRate = toNumber(
+    pricingValue(
+      "bartenderRate",
+      hasEmptyBartenderRateTypes ? 0 : DEFAULT_SETTINGS.bartenderRate,
+      0
+    ),
+    0,
+    0
+  );
+  const serverRate = toNumber(
+    pricingValue(
+      "serverRate",
+      hasEmptyStaffingRateTypes ? 0 : DEFAULT_SETTINGS.serverRate,
+      0
+    ),
+    0,
+    0
+  );
+  const chefRate = toNumber(
+    pricingValue(
+      "chefRate",
+      hasEmptyStaffingRateTypes ? 0 : DEFAULT_SETTINGS.chefRate,
+      0
+    ),
+    0,
+    0
+  );
+  const bartenderRateTypes = normalizeBartenderRateTypes(pricingValue(
+    "bartenderRateTypes",
+    DEFAULT_BARTENDER_RATE_TYPES,
+    [{ id: "unconfigured", name: "Unconfigured bartender rate", rate: 0 }]
+  ), bartenderRate);
+  const staffingRateTypes = normalizeStaffingRateTypes(pricingValue(
+    "staffingRateTypes",
+    DEFAULT_STAFFING_RATE_TYPES,
+    [{
+      id: "unconfigured",
+      name: "Unconfigured staffing rate",
+      serverRate: 0,
+      chefRate: 0
+    }]
+  ), {
+    fallbackServerRate: serverRate,
+    fallbackChefRate: chefRate
   });
   const brandCrew = normalizeBrandCrew(rawSettings.brandCrew);
-  const upsellRules = normalizeUpsellRules(rawSettings.upsellRules, { packages, addons, rentals });
+  const upsellRules = normalizeUpsellRules(pricingValue(
+    "upsellRules",
+    DEFAULT_UPSELL_RULES,
+    []
+  ), { packages, addons, rentals });
   const featureFlags = normalizeFeatureFlags(rawSettings.featureFlags, rawSettings);
-  const defaultTaxRegion = taxRegions.some((region) => region.id === rawSettings.defaultTaxRegion)
-    ? rawSettings.defaultTaxRegion
-    : taxRegions[0]?.id || DEFAULT_SETTINGS.defaultTaxRegion;
+  const requestedDefaultTaxRegion = String(pricingValue(
+    "defaultTaxRegion",
+    DEFAULT_SETTINGS.defaultTaxRegion,
+    taxRegions[0]?.id || ""
+  ) || "").trim();
+  const defaultTaxRegion = taxRegions.some((region) => region.id === requestedDefaultTaxRegion)
+    ? requestedDefaultTaxRegion
+    : taxRegions[0]?.id || "";
+  const requestedDefaultSeasonProfile = String(pricingValue(
+    "defaultSeasonProfile",
+    DEFAULT_SETTINGS.defaultSeasonProfile,
+    seasonalProfiles[0]?.id || "auto"
+  ) || "").trim();
   const defaultSeasonProfile =
-    rawSettings.defaultSeasonProfile === "auto" ||
-    seasonalProfiles.some((profile) => profile.id === rawSettings.defaultSeasonProfile)
-      ? rawSettings.defaultSeasonProfile
-      : "auto";
+    requestedDefaultSeasonProfile === "auto" ||
+    seasonalProfiles.some((profile) => profile.id === requestedDefaultSeasonProfile)
+      ? requestedDefaultSeasonProfile
+      : seasonalProfiles[0]?.id || "auto";
   const fallbackTaxRate = taxRegions.find((region) => region.id === defaultTaxRegion)?.rate;
   const requestedDefaultBartenderRateType = toText(
-    inputSettings.defaultBartenderRateType,
-    rawSettings.defaultBartenderRateType
+    pricingValue(
+      "defaultBartenderRateType",
+      DEFAULT_SETTINGS.defaultBartenderRateType,
+      bartenderRateTypes[0]?.id || ""
+    ),
+    bartenderRateTypes[0]?.id || ""
   );
   const requestedDefaultStaffingRateType = toText(
-    inputSettings.defaultStaffingRateType,
-    rawSettings.defaultStaffingRateType
+    pricingValue(
+      "defaultStaffingRateType",
+      DEFAULT_SETTINGS.defaultStaffingRateType,
+      staffingRateTypes[0]?.id || ""
+    ),
+    staffingRateTypes[0]?.id || ""
   );
   const defaultBartenderRateType = bartenderRateTypes.some((item) => item.id === requestedDefaultBartenderRateType)
     ? requestedDefaultBartenderRateType
@@ -836,63 +947,123 @@ export function normalizeCatalog(raw) {
     ? requestedDefaultStaffingRateType
     : staffingRateTypes[0]?.id || "";
 
+  // A provisioned tenant can intentionally leave identity fields blank. Only
+  // missing fields should inherit the legacy single-tenant defaults.
+  const customBrandName = toText(inputSettings.brandName, "");
+  const tenantBrandFallbacks = customBrandName && customBrandName !== DEFAULT_SETTINGS.brandName
+    ? {
+        brandPrimaryColor: "#1f2937",
+        brandAccentColor: "#4b5563",
+        brandDarkAccentColor: "#111827",
+        brandBackgroundStart: "#f3f4f6",
+        brandBackgroundMid: "#e5e7eb",
+        brandBackgroundEnd: "#d1d5db",
+        heroEyebrow: "Event Catering Workspace",
+        heroHeadline: `${customBrandName} Quote Operations`,
+        heroDescription: "Build quotes, configure pricing, and manage proposals from one workspace."
+      }
+    : DEFAULT_SETTINGS;
+
   return {
     packages,
     addons,
     rentals,
     settings: {
       ...rawSettings,
-      perMileRate: toNumber(rawSettings.perMileRate, DEFAULT_SETTINGS.perMileRate, 0),
+      perMileRate: toNumber(
+        pricingValue("perMileRate", DEFAULT_SETTINGS.perMileRate, 0),
+        0,
+        0
+      ),
       longDistancePerMileRate: toNumber(
-        rawSettings.longDistancePerMileRate,
-        DEFAULT_SETTINGS.longDistancePerMileRate,
+        pricingValue("longDistancePerMileRate", DEFAULT_SETTINGS.longDistancePerMileRate, 0),
+        0,
         0
       ),
       deliveryThresholdMiles: toNumber(
-        rawSettings.deliveryThresholdMiles,
-        DEFAULT_SETTINGS.deliveryThresholdMiles,
+        pricingValue("deliveryThresholdMiles", DEFAULT_SETTINGS.deliveryThresholdMiles, 0),
+        0,
         0
       ),
-      capacityLimit: toNumber(rawSettings.capacityLimit, DEFAULT_SETTINGS.capacityLimit, 1),
-      bartenderRate: toNumber(rawSettings.bartenderRate, DEFAULT_SETTINGS.bartenderRate, 0),
+      capacityLimit: toNumber(
+        pricingValue("capacityLimit", DEFAULT_SETTINGS.capacityLimit, 1),
+        1,
+        1
+      ),
+      bartenderRate,
       bartenderRateTypes,
       defaultBartenderRateType,
-      serviceFeePct: toNumber(rawSettings.serviceFeePct, DEFAULT_SETTINGS.serviceFeePct, 0, 1),
+      serviceFeePct: toNumber(
+        pricingValue(
+          "serviceFeePct",
+          hasEmptyServiceFeeTiers ? 0 : DEFAULT_SETTINGS.serviceFeePct,
+          0
+        ),
+        0,
+        0,
+        1
+      ),
       serviceFeeTiers,
-      taxRate: toNumber(rawSettings.taxRate, fallbackTaxRate ?? DEFAULT_SETTINGS.taxRate, 0, 1),
+      taxRate: toNumber(
+        pricingValue(
+          "taxRate",
+          hasEmptyTaxRegions ? 0 : fallbackTaxRate ?? DEFAULT_SETTINGS.taxRate,
+          0
+        ),
+        0,
+        0,
+        1
+      ),
       taxRegions,
       defaultTaxRegion,
       menuSections,
-      depositPct: toNumber(rawSettings.depositPct, DEFAULT_SETTINGS.depositPct, 0, 1),
-      quoteValidityDays: toNumber(rawSettings.quoteValidityDays, DEFAULT_SETTINGS.quoteValidityDays, 1),
-      serverRate: toNumber(rawSettings.serverRate, DEFAULT_SETTINGS.serverRate, 0),
-      chefRate: toNumber(rawSettings.chefRate, DEFAULT_SETTINGS.chefRate, 0),
+      depositPct: toNumber(
+        pricingValue("depositPct", DEFAULT_SETTINGS.depositPct, 0),
+        0,
+        0,
+        1
+      ),
+      quoteValidityDays: toNumber(
+        pricingValue("quoteValidityDays", DEFAULT_SETTINGS.quoteValidityDays, 1),
+        1,
+        1
+      ),
+      serverRate,
+      chefRate,
       staffingChargeMode: normalizeStaffingChargeMode(
         rawSettings.staffingChargeMode,
         DEFAULT_SETTINGS.staffingChargeMode
       ),
       staffingRateTypes,
       defaultStaffingRateType,
-      quotePreparedBy: toText(rawSettings.quotePreparedBy, DEFAULT_SETTINGS.quotePreparedBy),
-      brandName: toText(rawSettings.brandName, DEFAULT_SETTINGS.brandName),
-      brandTagline: toText(rawSettings.brandTagline, DEFAULT_SETTINGS.brandTagline),
-      brandLogoUrl: toText(rawSettings.brandLogoUrl, DEFAULT_SETTINGS.brandLogoUrl),
-      brandPrimaryColor: normalizeHexColor(rawSettings.brandPrimaryColor, DEFAULT_SETTINGS.brandPrimaryColor),
-      brandAccentColor: normalizeHexColor(rawSettings.brandAccentColor, DEFAULT_SETTINGS.brandAccentColor),
-      brandDarkAccentColor: normalizeHexColor(rawSettings.brandDarkAccentColor, DEFAULT_SETTINGS.brandDarkAccentColor),
-      brandBackgroundStart: normalizeHexColor(rawSettings.brandBackgroundStart, DEFAULT_SETTINGS.brandBackgroundStart),
-      brandBackgroundMid: normalizeHexColor(rawSettings.brandBackgroundMid, DEFAULT_SETTINGS.brandBackgroundMid),
-      brandBackgroundEnd: normalizeHexColor(rawSettings.brandBackgroundEnd, DEFAULT_SETTINGS.brandBackgroundEnd),
-      heroEyebrow: toText(rawSettings.heroEyebrow, DEFAULT_SETTINGS.heroEyebrow),
-      heroHeadline: toText(rawSettings.heroHeadline, DEFAULT_SETTINGS.heroHeadline),
-      heroDescription: toText(rawSettings.heroDescription, DEFAULT_SETTINGS.heroDescription),
+      quotePreparedBy: toTenantText(inputSettings, "quotePreparedBy", DEFAULT_SETTINGS.quotePreparedBy),
+      brandName: toTenantText(inputSettings, "brandName", DEFAULT_SETTINGS.brandName),
+      brandTagline: toTenantText(inputSettings, "brandTagline", DEFAULT_SETTINGS.brandTagline),
+      brandLogoUrl: toTenantText(inputSettings, "brandLogoUrl", DEFAULT_SETTINGS.brandLogoUrl),
+      brandPrimaryColor: normalizeHexColor(inputSettings.brandPrimaryColor, tenantBrandFallbacks.brandPrimaryColor),
+      brandAccentColor: normalizeHexColor(inputSettings.brandAccentColor, tenantBrandFallbacks.brandAccentColor),
+      brandDarkAccentColor: normalizeHexColor(inputSettings.brandDarkAccentColor, tenantBrandFallbacks.brandDarkAccentColor),
+      brandBackgroundStart: normalizeHexColor(inputSettings.brandBackgroundStart, tenantBrandFallbacks.brandBackgroundStart),
+      brandBackgroundMid: normalizeHexColor(inputSettings.brandBackgroundMid, tenantBrandFallbacks.brandBackgroundMid),
+      brandBackgroundEnd: normalizeHexColor(inputSettings.brandBackgroundEnd, tenantBrandFallbacks.brandBackgroundEnd),
+      heroEyebrow: toTenantText(inputSettings, "heroEyebrow", tenantBrandFallbacks.heroEyebrow),
+      heroHeadline: toTenantText(inputSettings, "heroHeadline", tenantBrandFallbacks.heroHeadline),
+      heroDescription: toTenantText(inputSettings, "heroDescription", tenantBrandFallbacks.heroDescription),
       brandCrew,
-      businessPhone: toText(rawSettings.businessPhone, DEFAULT_SETTINGS.businessPhone),
-      businessEmail: toText(rawSettings.businessEmail, DEFAULT_SETTINGS.businessEmail),
-      businessAddress: toText(rawSettings.businessAddress, DEFAULT_SETTINGS.businessAddress),
-      acceptanceEmail: toText(rawSettings.acceptanceEmail, DEFAULT_SETTINGS.acceptanceEmail),
-      disposablesNote: toText(rawSettings.disposablesNote, DEFAULT_SETTINGS.disposablesNote),
-      depositNotice: toText(rawSettings.depositNotice, DEFAULT_SETTINGS.depositNotice),
+      businessPhone: toTenantText(inputSettings, "businessPhone", DEFAULT_SETTINGS.businessPhone),
+      businessEmail: toTenantText(inputSettings, "businessEmail", DEFAULT_SETTINGS.businessEmail),
+      businessAddress: toTenantText(inputSettings, "businessAddress", DEFAULT_SETTINGS.businessAddress),
+      acceptanceEmail: toTenantText(inputSettings, "acceptanceEmail", DEFAULT_SETTINGS.acceptanceEmail),
+      disposablesNote: toTenantText(
+        inputSettings,
+        "disposablesNote",
+        pricingSetupConfirmed ? DEFAULT_SETTINGS.disposablesNote : ""
+      ),
+      depositNotice: toTenantText(
+        inputSettings,
+        "depositNotice",
+        pricingSetupConfirmed ? DEFAULT_SETTINGS.depositNotice : ""
+      ),
       crmEnabled: toBoolean(rawSettings.crmEnabled, DEFAULT_SETTINGS.crmEnabled),
       crmProvider: normalizeCrmProvider(rawSettings.crmProvider, DEFAULT_SETTINGS.crmProvider),
       crmWebhookUrl: toText(rawSettings.crmWebhookUrl, DEFAULT_SETTINGS.crmWebhookUrl),
@@ -911,11 +1082,15 @@ export function normalizeCatalog(raw) {
       ),
       pricingSettingsVersion: Math.max(0, Math.round(toNumber(rawSettings.pricingSettingsVersion, 0))),
       pricingSettingsUpdatedAtISO: normalizeISO(rawSettings.pricingSettingsUpdatedAtISO, ""),
+      pricingSetupConfirmed,
       featureFlags,
       guidedSellingEnabled:
         toBoolean(rawSettings.guidedSellingEnabled, DEFAULT_SETTINGS.guidedSellingEnabled) &&
         featureFlags.guidedSelling,
-      staffingLaborEnabled: toBoolean(rawSettings.staffingLaborEnabled, DEFAULT_SETTINGS.staffingLaborEnabled),
+      staffingLaborEnabled: toBoolean(
+        pricingValue("staffingLaborEnabled", DEFAULT_SETTINGS.staffingLaborEnabled, false),
+        false
+      ),
       upsellRules,
       eventTemplates,
       seasonalProfiles,

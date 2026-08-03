@@ -1,6 +1,6 @@
 # Orchestration Runbook
 
-Last updated: March 27, 2026
+Last updated: July 27, 2026
 
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
@@ -67,7 +67,8 @@ Auth/rules/store high-risk:
 
 `main` pushes:
 - Full hard-gate matrix required.
-- Deploy workflow triggers only from successful `CI Quality` run.
+- Production deployment is a separate manual action after the required
+  `CI Quality` run, UAT evidence, and published semantic release tag.
 - If `CI Quality` fails on a `main` push, `Mainline Safety Net (Auto-Revert Failed Pushes)` reverts the failed head commit when it is still current `main` head.
 
 ## PR Evidence Checklist
@@ -85,6 +86,10 @@ LOG_PATH=".cache/migration-dry-runs/${STAMP}--<firebaseProjectId>--<orgId>--dry-
 JSON_PATH=".cache/migration-dry-runs/${STAMP}--<firebaseProjectId>--<orgId>--dry-run.json"
 npm run migrate:multi-tenant -- --project <firebaseProjectId> --organization <orgId> --dry-run --evidence-out "${JSON_PATH}" 2>&1 | tee "${LOG_PATH}"
 ```
+
+The migration defaults to read-only. A write requires `--apply` plus the exact
+confirmation token `--confirm "MIGRATE <firebaseProjectId> <orgId>"`; project
+and organization scope are always required.
 
 Artifact file naming/location:
 - Path: `.cache/migration-dry-runs/`

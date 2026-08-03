@@ -585,8 +585,8 @@ function normalizeMenuSections(sections = []) {
   });
 }
 
-function normalizeServiceFeeTiers(tiers = []) {
-  const source = Array.isArray(tiers) && tiers.length ? tiers : DEFAULT_SERVICE_FEE_TIERS;
+function normalizeServiceFeeTiers(tiers) {
+  const source = Array.isArray(tiers) ? tiers : DEFAULT_SERVICE_FEE_TIERS;
   return source.map((tier, idx) => {
     const minGuests = Math.max(0, toInt(tier?.minGuests, 0));
     const maxGuests = Math.max(minGuests, toInt(tier?.maxGuests, 9999));
@@ -599,8 +599,8 @@ function normalizeServiceFeeTiers(tiers = []) {
   });
 }
 
-function normalizeTaxRegions(regions = [], fallbackRate = 0.1) {
-  const source = Array.isArray(regions) && regions.length ? regions : DEFAULT_TAX_REGIONS;
+function normalizeTaxRegions(regions, fallbackRate = 0.1) {
+  const source = Array.isArray(regions) ? regions : DEFAULT_TAX_REGIONS;
   return source.map((region, idx) => ({
     id: toCatalogId(region?.id, `tax-${idx + 1}`),
     name: toText(region?.name, `Region ${idx + 1}`),
@@ -608,8 +608,8 @@ function normalizeTaxRegions(regions = [], fallbackRate = 0.1) {
   }));
 }
 
-function normalizeSeasonalProfiles(profiles = []) {
-  const source = Array.isArray(profiles) && profiles.length ? profiles : DEFAULT_SEASONAL_PROFILES;
+function normalizeSeasonalProfiles(profiles) {
+  const source = Array.isArray(profiles) ? profiles : DEFAULT_SEASONAL_PROFILES;
   return source.map((profile, idx) => ({
     id: toCatalogId(profile?.id, `season-${idx + 1}`),
     name: toText(profile?.name, `Season ${idx + 1}`),
@@ -623,8 +623,8 @@ function normalizeSeasonalProfiles(profiles = []) {
   }));
 }
 
-function normalizeBartenderRateTypes(rateTypes = [], fallbackRate = 30) {
-  const source = Array.isArray(rateTypes) && rateTypes.length ? rateTypes : DEFAULT_BARTENDER_RATE_TYPES;
+function normalizeBartenderRateTypes(rateTypes, fallbackRate = 30) {
+  const source = Array.isArray(rateTypes) ? rateTypes : DEFAULT_BARTENDER_RATE_TYPES;
   return source.map((item, idx) => ({
     id: toCatalogId(item?.id, `bartender-rate-${idx + 1}`),
     name: toText(item?.name, `Bartender Type ${idx + 1}`),
@@ -632,8 +632,8 @@ function normalizeBartenderRateTypes(rateTypes = [], fallbackRate = 30) {
   }));
 }
 
-function normalizeStaffingRateTypes(rateTypes = [], fallbackServerRate = 22, fallbackChefRate = 28) {
-  const source = Array.isArray(rateTypes) && rateTypes.length ? rateTypes : DEFAULT_STAFFING_RATE_TYPES;
+function normalizeStaffingRateTypes(rateTypes, fallbackServerRate = 22, fallbackChefRate = 28) {
+  const source = Array.isArray(rateTypes) ? rateTypes : DEFAULT_STAFFING_RATE_TYPES;
   return source.map((item, idx) => ({
     id: toCatalogId(item?.id, `staffing-rate-${idx + 1}`),
     name: toText(item?.name, `Staffing Type ${idx + 1}`),
@@ -644,12 +644,31 @@ function normalizeStaffingRateTypes(rateTypes = [], fallbackServerRate = 22, fal
 
 function normalizePricingSettings(settings = {}) {
   const source = settings && typeof settings === "object" ? settings : {};
-  const taxRate = Math.max(0, toNumber(source.taxRate, DEFAULT_PRICING_SETTINGS.taxRate));
-  const bartenderRate = Math.max(0, toNumber(source.bartenderRate, DEFAULT_PRICING_SETTINGS.bartenderRate));
-  const serverRate = Math.max(0, toNumber(source.serverRate, DEFAULT_PRICING_SETTINGS.serverRate));
-  const chefRate = Math.max(0, toNumber(source.chefRate, DEFAULT_PRICING_SETTINGS.chefRate));
+  const hasEmptyServiceFeeTiers = Array.isArray(source.serviceFeeTiers) && source.serviceFeeTiers.length === 0;
+  const hasEmptyTaxRegions = Array.isArray(source.taxRegions) && source.taxRegions.length === 0;
+  const hasEmptyBartenderRateTypes = Array.isArray(source.bartenderRateTypes)
+    && source.bartenderRateTypes.length === 0;
+  const hasEmptyStaffingRateTypes = Array.isArray(source.staffingRateTypes)
+    && source.staffingRateTypes.length === 0;
+  const taxRate = Math.max(0, toNumber(
+    source.taxRate,
+    hasEmptyTaxRegions ? 0 : DEFAULT_PRICING_SETTINGS.taxRate
+  ));
+  const bartenderRate = Math.max(0, toNumber(
+    source.bartenderRate,
+    hasEmptyBartenderRateTypes ? 0 : DEFAULT_PRICING_SETTINGS.bartenderRate
+  ));
+  const serverRate = Math.max(0, toNumber(
+    source.serverRate,
+    hasEmptyStaffingRateTypes ? 0 : DEFAULT_PRICING_SETTINGS.serverRate
+  ));
+  const chefRate = Math.max(0, toNumber(
+    source.chefRate,
+    hasEmptyStaffingRateTypes ? 0 : DEFAULT_PRICING_SETTINGS.chefRate
+  ));
 
   const normalized = {
+    pricingSetupConfirmed: source.pricingSetupConfirmed === true,
     perMileRate: Math.max(0, toNumber(source.perMileRate, DEFAULT_PRICING_SETTINGS.perMileRate)),
     longDistancePerMileRate: Math.max(0, toNumber(source.longDistancePerMileRate, DEFAULT_PRICING_SETTINGS.longDistancePerMileRate)),
     deliveryThresholdMiles: Math.max(0, toNumber(source.deliveryThresholdMiles, DEFAULT_PRICING_SETTINGS.deliveryThresholdMiles)),
@@ -661,18 +680,30 @@ function normalizePricingSettings(settings = {}) {
       DEFAULT_PRICING_SETTINGS.staffingChargeMode
     ),
     staffingLaborEnabled: source.staffingLaborEnabled !== false,
-    serviceFeePct: Math.max(0, toNumber(source.serviceFeePct, DEFAULT_PRICING_SETTINGS.serviceFeePct)),
+    serviceFeePct: Math.max(0, toNumber(
+      source.serviceFeePct,
+      hasEmptyServiceFeeTiers ? 0 : DEFAULT_PRICING_SETTINGS.serviceFeePct
+    )),
     serviceFeeTiers: normalizeServiceFeeTiers(source.serviceFeeTiers),
     taxRate,
     taxRegions: normalizeTaxRegions(source.taxRegions, taxRate),
-    defaultTaxRegion: toText(source.defaultTaxRegion, DEFAULT_PRICING_SETTINGS.defaultTaxRegion),
+    defaultTaxRegion: toText(
+      source.defaultTaxRegion,
+      hasEmptyTaxRegions ? "" : DEFAULT_PRICING_SETTINGS.defaultTaxRegion
+    ),
     depositPct: Math.max(0, toNumber(source.depositPct, DEFAULT_PRICING_SETTINGS.depositPct)),
     seasonalProfiles: normalizeSeasonalProfiles(source.seasonalProfiles),
     defaultSeasonProfile: toText(source.defaultSeasonProfile, DEFAULT_PRICING_SETTINGS.defaultSeasonProfile),
     bartenderRateTypes: normalizeBartenderRateTypes(source.bartenderRateTypes, bartenderRate),
-    defaultBartenderRateType: toText(source.defaultBartenderRateType, DEFAULT_PRICING_SETTINGS.defaultBartenderRateType),
+    defaultBartenderRateType: toText(
+      source.defaultBartenderRateType,
+      hasEmptyBartenderRateTypes ? "" : DEFAULT_PRICING_SETTINGS.defaultBartenderRateType
+    ),
     staffingRateTypes: normalizeStaffingRateTypes(source.staffingRateTypes, serverRate, chefRate),
-    defaultStaffingRateType: toText(source.defaultStaffingRateType, DEFAULT_PRICING_SETTINGS.defaultStaffingRateType),
+    defaultStaffingRateType: toText(
+      source.defaultStaffingRateType,
+      hasEmptyStaffingRateTypes ? "" : DEFAULT_PRICING_SETTINGS.defaultStaffingRateType
+    ),
     menuSections: normalizeMenuSections(source.menuSections),
     pricingSettingsVersion: Math.max(0, toInt(source.pricingSettingsVersion, DEFAULT_PRICING_SETTINGS.pricingSettingsVersion)),
     pricingSettingsUpdatedAtISO: normalizeISO(
@@ -692,6 +723,7 @@ function buildRulesSettingsSnapshot(settings = {}) {
   const staffingRateTypes = Array.isArray(settings.staffingRateTypes) ? settings.staffingRateTypes : [];
 
   return {
+    pricingSetupConfirmed: settings.pricingSetupConfirmed === true,
     pricingSettingsVersion: Math.max(0, toInt(settings.pricingSettingsVersion, 0)),
     pricingSettingsUpdatedAtISO: normalizeISO(settings.pricingSettingsUpdatedAtISO, ""),
     serviceFeePct: toNumber(settings.serviceFeePct, 0),
@@ -1429,6 +1461,12 @@ async function calculateQuotePricingAuthoritative({
   const catalogBundle = await loadCatalogAndSettings(db, organizationsCollection, {
     organizationId: normalizedInput.organizationId
   });
+  if (catalogBundle.settings.pricingSetupConfirmed !== true) {
+    throw new PricingEngineError(
+      "failed-precondition",
+      "Pricing setup must be reviewed and confirmed before authoritative quotes can be calculated."
+    );
+  }
 
   const pricing = calculateAuthoritativePricing(
     normalizedInput,

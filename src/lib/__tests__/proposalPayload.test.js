@@ -37,16 +37,16 @@ describe("proposal payload snapshots", () => {
     }).toMatchInlineSnapshot(`
       {
         "branding": {
-          "brandName": "Tony Catering Co.",
+          "brandName": "Acme Events Catering",
           "brandTagline": "Bold Southern Flavor",
           "crewMembers": [
             {
-              "imagePath": "/brand/chef-toni.png",
-              "label": "Chef Toni",
+              "imagePath": "/brand/custom-crew.png",
+              "label": "Culinary Lead",
             },
           ],
           "logoPath": "/brand/custom-logo.png",
-          "title": "Tony Catering Co. Proposal",
+          "title": "Acme Events Catering Proposal",
         },
         "createdOn": "2026-03-10",
         "customer": {
@@ -71,9 +71,9 @@ describe("proposal payload snapshots", () => {
         },
         "expiresOn": "2026-04-09",
         "meta": {
-          "acceptanceEmail": "events@tonycatering.com",
+          "acceptanceEmail": "events@acme.test",
           "includeDisposables": true,
-          "quotePreparedBy": "Chef Toni North",
+          "quotePreparedBy": "Alex Rivera",
           "quoteValidityDays": 30,
         },
         "quoteNumber": "Q-2026-0042",
@@ -115,15 +115,15 @@ describe("proposal payload snapshots", () => {
     }).toMatchInlineSnapshot(`
       {
         "body": "Hi Jordan Lee,
-      Thank you for considering Tony Catering Co. for Spring Gala on 2026-04-20 at Pine Hall.
+      Thank you for considering Acme Events Catering for Spring Gala on 2026-04-20 at Pine Hall.
       Your quote (Q-2026-0042) total is $8379.21.
       To reserve your date, the deposit due is $2513.76.
-      Deposit payment link: https://pay.example.com/deposits/q-2026-0042
+      Deposit payment link: https://checkout.stripe.com/c/pay/cs_test_q_2026_0042
       Deposit status: sent.
       This quote is valid through 2026-04-09.
       Please reply with any questions or requested adjustments.
-      Chef Toni North",
-        "subject": "Tony Catering Co. Quote Q-2026-0042 - 2026-04-20",
+      Alex Rivera",
+        "subject": "Acme Events Catering Quote Q-2026-0042 - 2026-04-20",
       }
     `);
   });
@@ -138,7 +138,24 @@ describe("proposal payload snapshots", () => {
       quoteMeta: {}
     });
 
-    expect(email.subject).toBe("Tasteful Touch Catering Quote Q-1 - 2026-05-01");
-    expect(email.body).toContain("Tasteful Touch Catering");
+    expect(email.subject).toBe("QuotePilot Quote Q-1 - 2026-05-01");
+    expect(email.body).toContain("QuotePilot");
+  });
+
+  test("removes unapproved stored payment links from customer-facing artifacts", () => {
+    const unsafeQuote = {
+      ...proposalPayloadFixtureQuote,
+      payment: {
+        ...proposalPayloadFixtureQuote.payment,
+        depositLink: "https://checkout.stripe.com.evil.test/phishing"
+      }
+    };
+
+    const proposal = buildProposalPayload(unsafeQuote);
+    const email = buildQuoteEmailPayload(unsafeQuote);
+
+    expect(proposal.payment.depositLink).toBe("");
+    expect(email.body).not.toContain("evil.test");
+    expect(email.body).toContain("Reply to this email if you need a payment link.");
   });
 });

@@ -1,22 +1,52 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getIntegrationSetupStatus, sendIntegrationTestSms } from "../lib/commerceOps";
 import {
   archiveOrganizationWorkspace,
   deleteOrganizationWorkspace,
-  provisionCustomerOrder
+  preflightCustomerOrder,
+  provisionCustomerOrder,
+  repairCustomerProvisioningOrder
 } from "../lib/organizationService";
+import {
+  buildCustomerProvisioningConfirmationMessage,
+  buildCustomerProvisioningPayload,
+  createCustomerProvisioningForm,
+  ensureCustomerProvisioningOrderId,
+  validateCustomerProvisioningPayload
+} from "../lib/customerProvisioning";
 import { currency } from "../lib/quoteCalculator";
 import {
   getQuoteHistory,
   purgeDeletedQuotesForOrganization,
-  recordQuoteIntegrationSync,
-  syncQuoteToCrm
+  recordQuoteIntegrationSync
 } from "../lib/quoteStore";
 
 const PROVIDERS = ["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"];
 const STATES = ["queued", "success", "error", "retrying", "skipped"];
 const DIRECTIONS = ["push", "pull"];
 const PROVISION_PLANS = ["starter", "growth", "enterprise"];
+const FUNCTIONS_ENV_SETUP_GUIDANCE = [
+  "Edit the ignored local file functions/.env.tonicatering (mode 0600).",
+  "Set provider values outside the browser; never commit or paste secrets here:",
+  "NOTIFICATIONS_SMS_PROVIDER=twilio",
+  "TWILIO_ACCOUNT_SID=",
+  "TWILIO_AUTH_TOKEN=",
+  "TWILIO_FROM_NUMBER=",
+  "NOTIFICATIONS_OWNER_PHONE=",
+  "STRIPE_SECRET_KEY=",
+  "STRIPE_WEBHOOK_SECRET=",
+  "",
+  "Validate without rewriting:",
+  "FIREBASE_PROJECT_ID=tonicatering node --env-file=functions/.env.tonicatering scripts/materialize-functions-env.mjs --validate-only"
+].join("\n");
+const SMS_DISABLE_GUIDANCE = [
+  "Set NOTIFICATIONS_SMS_PROVIDER=none in functions/.env.tonicatering,",
+  "validate the ignored file, then use the controlled Functions deploy."
+].join(" ");
+const DEPLOY_FUNCTIONS_COMMAND = [
+  "npm run deploy:firebase:functions --",
+  '  --confirm "DEPLOY tonicatering firestore,functions"'
+].join(" \\\n");
 
 function toIso(value) {
   const date = new Date(value || "");
@@ -45,9 +75,54 @@ function toDirection(value) {
   return String(value || "").trim().toLowerCase() === "pull" ? "pull" : "push";
 }
 
-function getWindowBaseUrl() {
+function getCanonicalAppUrl() {
+  const configuredUrl = String(import.meta.env.VITE_APP_URL || "").trim();
+  if (configuredUrl) return configuredUrl;
+  if (import.meta.env.PROD) {
+    const configuredHost = String(import.meta.env.VITE_APP_HOST || "quotepilot.mbmapps.com")
+      .trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/.*$/, "");
+    return `https://${configuredHost}/app`;
+  }
   if (typeof window === "undefined") return "";
-  return `${window.location.origin}${window.location.pathname}`;
+  return `${window.location.origin}/app`;
+}
+
+function getLastProvisioningResultKey(uid = "") {
+  const normalizedUid = String(uid || "").trim();
+  return normalizedUid ? `quotepilot:last-provisioning-result:${normalizedUid}` : "";
+}
+
+function readLastProvisioningResult(uid = "") {
+  const key = getLastProvisioningResultKey(uid);
+  if (!key || typeof window === "undefined") return null;
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(key) || "null");
+    return parsed?.ok ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLastProvisioningResult(uid = "", result = null) {
+  const key = getLastProvisioningResultKey(uid);
+  if (!key || !result?.ok || typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(result));
+  } catch {
+    // The on-screen result remains available when browser storage is blocked.
+  }
+}
+
+function clearLastProvisioningResult(uid = "") {
+  const key = getLastProvisioningResultKey(uid);
+  if (!key || typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // The on-screen state is still cleared when browser storage is blocked.
+  }
 }
 
 function formatMissingFields(fields) {
@@ -81,6 +156,7 @@ function buildDeleteToken(organizationId = "") {
 function describeProvisionEmailStatus(email = {}) {
   if (email?.sent) return "sent";
   if (email?.reason === "send_email_disabled") return "disabled";
+  if (email?.reason === "existing_org_update") return "not applicable";
   if (email?.error) return "failed";
   return "not sent";
 }
@@ -89,7 +165,7 @@ function describeSmsOutcome(sms) {
   if (sms?.sent) return "Test SMS sent successfully.";
   const reason = String(sms?.reason || "").trim();
   if (reason === "sms_not_configured") return "SMS not configured yet. Add Twilio values and redeploy functions.";
-  if (reason === "sms_disabled") return "SMS is intentionally disabled (`notifications.sms_provider=\"none\"`).";
+  if (reason === "sms_disabled") return "SMS is intentionally disabled (`NOTIFICATIONS_SMS_PROVIDER=none`).";
   if (reason === "sms_provider_unsupported") return "Configured SMS provider is unsupported in this build.";
   if (reason === "sms_send_failed") return `SMS send failed${sms?.message ? `: ${sms.message}` : "."}`;
   return "SMS test did not send.";
@@ -136,7 +212,9 @@ export default function IntegrationOpsModal({
   settings = {},
   currentUserEmail = "",
   currentUserUid = "",
-  canProvisionCustomer = false
+  canProvisionCustomer = false,
+  canManageProviders = false,
+  provisioningOnly = false
 }) {
   const defaultProvider = toProvider(settings.crmProvider || "crm");
   const [state, setState] = useState({
@@ -150,7 +228,6 @@ export default function IntegrationOpsModal({
   const [providerFilter, setProviderFilter] = useState("all");
   const [syncStateFilter, setSyncStateFilter] = useState("all");
   const [saving, setSaving] = useState(false);
-  const [runningSync, setRunningSync] = useState(false);
   const [setupState, setSetupState] = useState({
     loading: false,
     testing: false,
@@ -159,28 +236,17 @@ export default function IntegrationOpsModal({
     status: null,
     testMessage: ""
   });
-  const [setupForm, setSetupForm] = useState({
-    appBaseUrl: getWindowBaseUrl(),
-    twilioFromNumber: "",
-    ownerPhone: ""
-  });
   const [provisionState, setProvisionState] = useState({
     loading: false,
+    phase: "",
     error: "",
     result: null
   });
-  const [provisionForm, setProvisionForm] = useState({
-    organizationName: "",
-    organizationId: "",
-    ownerEmail: normalizeEmail(currentUserEmail),
-    ownerName: "",
-    ownerUid: String(currentUserUid || "").trim(),
-    plan: "growth",
-    orderId: "",
-    supportEmail: "",
-    appUrl: getWindowBaseUrl(),
-    sendEmail: false
-  });
+  const [lastProvisioningResult, setLastProvisioningResult] = useState(null);
+  const [provisionForm, setProvisionForm] = useState(
+    () => createCustomerProvisioningForm(getCanonicalAppUrl())
+  );
+  const wasOpenRef = useRef(false);
   const [cleanupState, setCleanupState] = useState({
     loading: false,
     error: "",
@@ -226,6 +292,7 @@ export default function IntegrationOpsModal({
   };
 
   const refreshSetupStatus = async () => {
+    if (!canManageProviders) return;
     setSetupState((prev) => ({ ...prev, loading: true, error: "" }));
     try {
       const result = await getIntegrationSetupStatus();
@@ -255,6 +322,13 @@ export default function IntegrationOpsModal({
   };
 
   const handleSendTestSms = async () => {
+    if (!canManageProviders) {
+      setSetupState((prev) => ({
+        ...prev,
+        error: "Admin role is required for provider setup and test sends."
+      }));
+      return;
+    }
     setSetupState((prev) => ({
       ...prev,
       testing: true,
@@ -287,38 +361,106 @@ export default function IntegrationOpsModal({
       return;
     }
 
-    const organizationName = String(provisionForm.organizationName || "").trim();
-    const ownerEmail = normalizeEmail(provisionForm.ownerEmail || currentUserEmail);
-    const ownerUid = String(provisionForm.ownerUid || currentUserUid || "").trim();
-    if (!organizationName || !ownerEmail) {
-      setProvisionState((prev) => ({ ...prev, error: "Organization name and owner email are required." }));
+    const payload = buildCustomerProvisioningPayload(provisionForm, getCanonicalAppUrl());
+    const validationError = validateCustomerProvisioningPayload(payload);
+    if (validationError) {
+      setProvisionState((prev) => ({ ...prev, error: validationError }));
+      return;
+    }
+    payload.orderId = ensureCustomerProvisioningOrderId(payload.orderId);
+    setProvisionForm((prev) => (
+      prev.orderId === payload.orderId
+        ? prev
+        : { ...prev, orderId: payload.orderId }
+    ));
+
+    setProvisionState({ loading: true, phase: "checking", error: "", result: null });
+    setFeedback("");
+    setState((prev) => ({ ...prev, error: "" }));
+    let completedPreflight = null;
+    try {
+      const preflight = await preflightCustomerOrder(payload);
+      completedPreflight = preflight;
+      if (!preflight?.ok || !preflight?.preflight) {
+        throw new Error("Organization preflight did not complete.");
+      }
+      if (preflight.orderExists) {
+        if (preflight.canResume) {
+          setFeedback(
+            `Matching order "${payload.orderId}" found with status ${preflight.orderStatus || "pending"}. Confirm to resume it safely.`
+          );
+        } else {
+          const artifactsBlocked = Array.isArray(preflight.resumeBlockedReasons)
+            && preflight.resumeBlockedReasons.length > 0;
+          setProvisionState({
+            loading: false,
+            phase: "",
+            error: artifactsBlocked
+              ? `Provisioning order "${payload.orderId}" cannot be resumed because its tenant artifacts are incomplete or no longer match. No email was sent.`
+              : `Provisioning order "${payload.orderId}" already exists. No changes were made. Use a new order id.`,
+            result: null
+          });
+          return;
+        }
+      }
+      if (preflight.unsafeResidue) {
+        setProvisionState({
+          loading: false,
+          phase: "",
+          error: `Organization id "${preflight.organizationId || payload.organizationId}" has retired or orphaned state and cannot be provisioned automatically. No changes were made.`,
+          result: null
+        });
+        return;
+      }
+      if (preflight.exists && !payload.updateExistingOrganization && !preflight.canResume) {
+        setProvisionState({
+          loading: false,
+          phase: "",
+          error: `Organization "${preflight.organizationId || payload.organizationId || payload.organizationName}" already exists. No changes were made. Use an explicit tenant update workflow instead.`,
+          result: null
+        });
+        return;
+      }
+      if (!preflight.exists && payload.updateExistingOrganization) {
+        setProvisionState({
+          loading: false,
+          phase: "",
+          error: `Organization "${preflight.organizationId || payload.organizationId}" does not exist. No changes were made.`,
+          result: null
+        });
+        return;
+      }
+      if (payload.updateExistingOrganization && !preflight.canUpdate && !preflight.canResume) {
+        setProvisionState({
+          loading: false,
+          phase: "",
+          error: `Organization "${preflight.organizationId || payload.organizationId}" cannot be updated safely. No changes were made.`,
+          result: null
+        });
+        return;
+      }
+      if (preflight.organizationId) {
+        payload.organizationId = preflight.organizationId;
+      }
+    } catch (err) {
+      setProvisionState({
+        loading: false,
+        phase: "",
+        error: err?.message || "Failed to check the organization before provisioning.",
+        result: null
+      });
       return;
     }
 
-    const payload = {
-      organizationName,
-      ownerEmail,
-      ownerName: String(provisionForm.ownerName || "").trim(),
-      ownerUid,
-      plan: String(provisionForm.plan || "growth").trim().toLowerCase(),
-      orderId: String(provisionForm.orderId || "").trim(),
-      supportEmail: normalizeEmail(provisionForm.supportEmail),
-      appUrl: String(provisionForm.appUrl || "").trim() || getWindowBaseUrl(),
-      sendEmail: Boolean(provisionForm.sendEmail)
-    };
-    const organizationSlug = normalizeOrganizationSlug(provisionForm.organizationId);
-    if (organizationSlug) {
-      payload.organizationId = organizationSlug;
+    const confirmed = window.confirm(
+      buildCustomerProvisioningConfirmationMessage(payload, completedPreflight)
+    );
+    if (!confirmed) {
+      setProvisionState({ loading: false, phase: "", error: "", result: null });
+      return;
     }
 
-    const confirmed = window.confirm(
-      `Provision ${organizationName} for ${ownerEmail}? This writes org settings, invite/role access, and a provisioning order record.`
-    );
-    if (!confirmed) return;
-
-    setProvisionState({ loading: true, error: "", result: null });
-    setFeedback("");
-    setState((prev) => ({ ...prev, error: "" }));
+    setProvisionState({ loading: true, phase: "provisioning", error: "", result: null });
     try {
       const result = await provisionCustomerOrder(payload);
       if (!result?.ok) {
@@ -326,23 +468,92 @@ export default function IntegrationOpsModal({
       }
       setProvisionState({
         loading: false,
+        phase: "",
         error: "",
         result
       });
-      setProvisionForm((prev) => ({
-        ...prev,
-        organizationId: String(result.organizationId || prev.organizationId || ""),
-        ownerEmail,
-        ownerUid: ownerUid || prev.ownerUid,
-        organizationName
-      }));
-      setFeedback(`Provisioned ${result.organizationName || organizationName} (${result.organizationId || "n/a"}).`);
+      setLastProvisioningResult(result);
+      writeLastProvisioningResult(currentUserUid, result);
+      setProvisionForm(createCustomerProvisioningForm(getCanonicalAppUrl()));
+      setFeedback(result.operation === "updated_entitlements"
+        ? `Updated plan entitlements for ${result.organizationName || result.organizationId || "organization"}.`
+        : `Provisioned ${result.organizationName || payload.organizationName} (${result.organizationId || "n/a"}).`);
     } catch (err) {
       setProvisionState({
         loading: false,
+        phase: "",
         error: err?.message || "Failed to provision customer order.",
         result: null
       });
+    }
+  };
+
+  const invalidateProvisioningHandoff = () => {
+    setProvisionState((prev) => ({
+      ...prev,
+      error: "",
+      result: null
+    }));
+    setLastProvisioningResult(null);
+    clearLastProvisioningResult(currentUserUid);
+  };
+
+  const updateProvisionForm = (updater) => {
+    invalidateProvisioningHandoff();
+    setProvisionForm(updater);
+  };
+
+  const handleRetryOwnerClaims = async () => {
+    const previous = provisionState.result || lastProvisioningResult;
+    const ownerUid = String(previous?.ownerUid || "").trim();
+    if (!ownerUid) {
+      setProvisionState((prev) => ({
+        ...prev,
+        error: "The completed order does not contain an owner UID to repair."
+      }));
+      return;
+    }
+
+    setProvisionState((prev) => ({
+      ...prev,
+      loading: true,
+      phase: "repairing-claims",
+      error: ""
+    }));
+    try {
+      const repaired = await repairCustomerProvisioningOrder({
+        orderId: previous.orderId,
+        organizationId: previous.organizationId,
+        ownerUid
+      });
+      if (
+        !repaired?.ok
+        || String(repaired.ownerUid || "").trim() !== ownerUid
+        || normalizeOrganizationSlug(repaired.organizationId)
+          !== normalizeOrganizationSlug(previous.organizationId)
+        || String(repaired.orderId || "").trim() !== String(previous.orderId || "").trim()
+        || repaired?.claimsSync?.succeeded !== true
+        || repaired?.email?.auditPersisted !== true
+      ) {
+        throw new Error("Owner claims repair returned an unexpected identity or organization.");
+      }
+      const result = repaired;
+      setProvisionState({
+        loading: false,
+        phase: "",
+        error: "",
+        result
+      });
+      setLastProvisioningResult(result);
+      writeLastProvisioningResult(currentUserUid, result);
+      setFeedback(`Owner access and onboarding order repaired for ${previous.ownerEmail || ownerUid}.`);
+    } catch (error) {
+      setProvisionState((prev) => ({
+        ...prev,
+        loading: false,
+        phase: "",
+        error: error?.message || "Owner claims repair failed."
+      }));
     }
   };
 
@@ -525,41 +736,47 @@ export default function IntegrationOpsModal({
   };
 
   useEffect(() => {
-    if (!open) return;
+    setLastProvisioningResult(readLastProvisioningResult(currentUserUid));
+  }, [currentUserUid]);
+
+  useEffect(() => {
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
     setFeedback("");
-    setForm((prev) => ({ ...prev, provider: toProvider(settings.crmProvider || prev.provider || "crm") }));
-    load();
-    refreshSetupStatus();
-    setSetupForm((prev) => ({
-      ...prev,
-      appBaseUrl: prev.appBaseUrl || getWindowBaseUrl()
-    }));
+    if (!provisioningOnly) {
+      setForm((prev) => ({ ...prev, provider: toProvider(settings.crmProvider || prev.provider || "crm") }));
+      load();
+      if (canManageProviders) refreshSetupStatus();
+    }
     setProvisionState({
       loading: false,
+      phase: "",
       error: "",
       result: null
     });
-    setProvisionForm((prev) => ({
-      ...prev,
-      ownerEmail: prev.ownerEmail || normalizeEmail(currentUserEmail),
-      ownerUid: prev.ownerUid || String(currentUserUid || "").trim(),
-      appUrl: prev.appUrl || getWindowBaseUrl()
-    }));
-    setCleanupState({
-      loading: false,
-      error: "",
-      result: null
-    });
-    setPurgingDeletedQuotes(false);
-    setCleanupForm((prev) => {
-      const targetOrganizationId = normalizeOrganizationSlug(prev.organizationId || organizationId);
-      return {
-        organizationId: targetOrganizationId,
-        archiveToken: prev.archiveToken,
-        deleteToken: prev.deleteToken
-      };
-    });
-  }, [open, organizationId, settings.crmProvider, currentUserEmail, currentUserUid]);
+    setLastProvisioningResult(readLastProvisioningResult(currentUserUid));
+    setProvisionForm(createCustomerProvisioningForm(getCanonicalAppUrl()));
+    if (!provisioningOnly) {
+      setCleanupState({
+        loading: false,
+        error: "",
+        result: null
+      });
+      setPurgingDeletedQuotes(false);
+      setCleanupForm((prev) => {
+        const targetOrganizationId = normalizeOrganizationSlug(prev.organizationId || organizationId);
+        return {
+          organizationId: targetOrganizationId,
+          archiveToken: prev.archiveToken,
+          deleteToken: prev.deleteToken
+        };
+      });
+    }
+  }, [open, provisioningOnly, canManageProviders]);
 
   const activityRows = useMemo(() => flattenLogs(state.quotes), [state.quotes]);
 
@@ -603,29 +820,18 @@ export default function IntegrationOpsModal({
   const stripeStatus = integrationStatus.stripe || {};
   const twilioMissingFields = Array.isArray(twilioStatus.missingFields) ? twilioStatus.missingFields : [];
   const stripeMissingFields = Array.isArray(stripeStatus.missingFields) ? stripeStatus.missingFields : [];
-  const provisioningResult = provisionState.result || {};
+  const canShowRecoveredProvisioningResult = !provisionState.loading && !provisionState.error;
+  const provisioningResult = provisionState.result
+    || (canShowRecoveredProvisioningResult ? lastProvisioningResult : null)
+    || {};
   const provisioningEmailStatus = describeProvisionEmailStatus(provisioningResult.email);
-
-  const setupCommand = useMemo(() => {
-    const appBaseUrl = setupForm.appBaseUrl.trim() || "https://your-live-domain.example";
-    const twilioFromNumber = setupForm.twilioFromNumber.trim() || "<your_twilio_from_number>";
-    const ownerPhone = setupForm.ownerPhone.trim() || "<your_owner_phone>";
-
-    return [
-      "npx firebase-tools functions:config:set \\",
-      "  notifications.sms_provider=\"twilio\" \\",
-      "  stripe.secret_key=\"<your_stripe_secret>\" \\",
-      "  stripe.webhook_secret=\"<your_stripe_webhook_secret>\" \\",
-      "  twilio.account_sid=\"<your_twilio_account_sid>\" \\",
-      "  twilio.auth_token=\"<your_twilio_auth_token>\" \\",
-      `  twilio.from_number=\"${twilioFromNumber}\" \\`,
-      `  notifications.owner_phone=\"${ownerPhone}\" \\`,
-      `  app.base_url=\"${appBaseUrl}\"`
-    ].join("\n");
-  }, [setupForm.appBaseUrl, setupForm.ownerPhone, setupForm.twilioFromNumber]);
-
-  const disableSmsCommand = "npx firebase-tools functions:config:set notifications.sms_provider=\"none\"";
-  const deployFunctionsCommand = "npm run deploy:firebase:functions";
+  const provisioningOnboarding = provisioningResult.onboarding || {};
+  const updatedExistingOrganization = provisioningResult.operation === "updated_entitlements";
+  const ownerClaimsIncomplete = provisioningResult?.claimsSync?.required
+    && !provisioningResult.claimsSync.succeeded;
+  const showingRecoveredProvisioningResult = !provisionState.result
+    && canShowRecoveredProvisioningResult
+    && Boolean(lastProvisioningResult?.ok);
 
   const handleRecord = async () => {
     if (!form.quoteId) {
@@ -660,62 +866,33 @@ export default function IntegrationOpsModal({
     }
   };
 
-  const handleRunSync = async () => {
-    if (!form.quoteId) {
-      setState((prev) => ({ ...prev, error: "Choose a quote before running CRM sync." }));
-      return;
-    }
-
-    setRunningSync(true);
-    setFeedback("");
-    setState((prev) => ({ ...prev, error: "" }));
-    try {
-      const result = await syncQuoteToCrm({
-        quoteId: form.quoteId,
-        provider: form.provider,
-        actorEmail: currentUserEmail,
-        trigger: "manual"
-      });
-      if (result?.skipped) {
-        setFeedback(result.reason || "CRM sync skipped.");
-      } else {
-        const providerLabel = result?.provider || form.provider;
-        setFeedback(`CRM sync completed via ${providerLabel}.`);
-      }
-      await load();
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        error: err?.message || "CRM sync failed."
-      }));
-    } finally {
-      setRunningSync(false);
-    }
-  };
-
   if (!open) return null;
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal-card integration-card">
         <div className="modal-head">
-          <h2>Integrations Ops</h2>
+          <h2>{provisioningOnly ? "Customer Provisioning" : "Integrations Ops"}</h2>
           <div className="right-actions">
-            <button type="button" className="ghost" onClick={load} disabled={state.loading}>
-              {state.loading ? "Refreshing..." : "Refresh"}
-            </button>
-            <button type="button" className="ghost" onClick={refreshSetupStatus} disabled={setupState.loading}>
-              {setupState.loading ? "Checking Setup..." : "Check Setup"}
-            </button>
+            {!provisioningOnly && (
+              <>
+                <button type="button" className="ghost" onClick={load} disabled={state.loading}>
+                  {state.loading ? "Refreshing..." : "Refresh"}
+                </button>
+                {canManageProviders && <button type="button" className="ghost" onClick={refreshSetupStatus} disabled={setupState.loading}>
+                  {setupState.loading ? "Checking Setup..." : "Check Setup"}
+                </button>}
+              </>
+            )}
             <button type="button" className="ghost" onClick={onClose}>Close</button>
           </div>
         </div>
 
-        <p className="source-note">Source: {state.source || "-"}</p>
+        {!provisioningOnly && <p className="source-note">Source: {state.source || "-"}</p>}
         {state.error && <p className="error-note">{state.error}</p>}
         {feedback && <p className="source-note">{feedback}</p>}
 
-        <section className="admin-section">
+        {!provisioningOnly && canManageProviders && <section className="admin-section">
           <div className="admin-section-head">
             <h3>Provider Config</h3>
           </div>
@@ -736,9 +913,9 @@ export default function IntegrationOpsModal({
               </label>
             ))}
           </div>
-        </section>
+        </section>}
 
-        <section className="admin-section">
+        {!provisioningOnly && canManageProviders && <section className="admin-section">
           <div className="admin-section-head">
             <h3>Buyer Setup Assistant (Optional Twilio)</h3>
           </div>
@@ -762,33 +939,6 @@ export default function IntegrationOpsModal({
             <p className="warning-note">Stripe missing fields: {formatMissingFields(stripeMissingFields)}</p>
           )}
           <div className="admin-grid-settings integration-form-grid">
-            <label>
-              App base URL
-              <input
-                type="url"
-                placeholder="https://your-live-domain.example"
-                value={setupForm.appBaseUrl}
-                onChange={(event) => setSetupForm((prev) => ({ ...prev, appBaseUrl: event.target.value }))}
-              />
-            </label>
-            <label>
-              Twilio from number
-              <input
-                type="text"
-                placeholder="+15551234567"
-                value={setupForm.twilioFromNumber}
-                onChange={(event) => setSetupForm((prev) => ({ ...prev, twilioFromNumber: event.target.value }))}
-              />
-            </label>
-            <label>
-              Owner SMS number
-              <input
-                type="text"
-                placeholder="+15557654321"
-                value={setupForm.ownerPhone}
-                onChange={(event) => setSetupForm((prev) => ({ ...prev, ownerPhone: event.target.value }))}
-              />
-            </label>
             <label className="integration-message-field">
               Test SMS message (optional)
               <input
@@ -799,23 +949,25 @@ export default function IntegrationOpsModal({
               />
             </label>
           </div>
-          <p className="source-note">Run in buyer environment, then redeploy functions.</p>
-          <pre className="integration-command-block"><code>{setupCommand}</code></pre>
+          <p className="source-note">
+            Provider secrets are configured only in the ignored local Functions environment, never in this browser.
+          </p>
+          <pre className="integration-command-block"><code>{FUNCTIONS_ENV_SETUP_GUIDANCE}</code></pre>
           <div className="right-actions">
-            <button type="button" className="ghost" onClick={() => handleCopyValue(setupCommand, "Setup command")}>
-              Copy Setup Command
+            <button type="button" className="ghost" onClick={() => handleCopyValue(FUNCTIONS_ENV_SETUP_GUIDANCE, "Setup guidance")}>
+              Copy Setup Guidance
             </button>
             <button
               type="button"
               className="ghost"
-              onClick={() => handleCopyValue(disableSmsCommand, "SMS disable command")}
+              onClick={() => handleCopyValue(SMS_DISABLE_GUIDANCE, "SMS disable guidance")}
             >
               Copy SMS Off Command
             </button>
             <button
               type="button"
               className="ghost"
-              onClick={() => handleCopyValue(deployFunctionsCommand, "Deploy command")}
+              onClick={() => handleCopyValue(DEPLOY_FUNCTIONS_COMMAND, "Deploy command")}
             >
               Copy Deploy Command
             </button>
@@ -828,7 +980,7 @@ export default function IntegrationOpsModal({
               {setupState.testing ? "Sending Test..." : "Send Test SMS"}
             </button>
           </div>
-        </section>
+        </section>}
 
         <section className="admin-section">
           <div className="admin-section-head">
@@ -842,63 +994,96 @@ export default function IntegrationOpsModal({
           )}
           {canProvisionCustomer && (
             <>
-              <div className="right-actions">
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() =>
-                    setProvisionForm((prev) => ({
-                      ...prev,
-                      ownerEmail: normalizeEmail(currentUserEmail),
-                      ownerUid: String(currentUserUid || "").trim()
-                    }))}
-                >
-                  Use My Account
-                </button>
-              </div>
-              <p className="source-note">
-                Signed-in account: <strong>{normalizeEmail(currentUserEmail) || "-"}</strong> • UID:{" "}
-                <strong>{String(currentUserUid || "").trim() || "-"}</strong>
-              </p>
-              {provisionState.error && <p className="error-note">{provisionState.error}</p>}
-              <div className="admin-grid-settings integration-form-grid">
+              <fieldset
+                className="provisioning-controls"
+                disabled={provisionState.loading}
+                aria-busy={provisionState.loading}
+              >
+                <div className="right-actions">
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() =>
+                      updateProvisionForm((prev) => ({
+                        ...prev,
+                        ownerEmail: normalizeEmail(currentUserEmail),
+                        ownerUid: String(currentUserUid || "").trim()
+                      }))}
+                    disabled={provisionForm.updateExistingOrganization}
+                  >
+                    Use My Account
+                  </button>
+                </div>
+                <p className="source-note">
+                  Signed-in account: <strong>{normalizeEmail(currentUserEmail) || "-"}</strong> • UID:{" "}
+                  <strong>{String(currentUserUid || "").trim() || "-"}</strong>
+                </p>
+                <label className="provisioning-existing-update">
+                  <input
+                    type="checkbox"
+                    checked={provisionForm.updateExistingOrganization}
+                    onChange={(event) => {
+                      const updateExistingOrganization = event.target.checked;
+                      const nextForm = createCustomerProvisioningForm(getCanonicalAppUrl());
+                      updateProvisionForm({
+                        ...nextForm,
+                        appUrl: updateExistingOrganization ? "" : nextForm.appUrl,
+                        updateExistingOrganization
+                      });
+                    }}
+                  />
+                  Update an existing organization (plan entitlements only)
+                </label>
+                {provisionForm.updateExistingOrganization && (
+                  <p className="warning-note">
+                    Requires an exact organization id. This does not change owner identity, branding, catalog data, or invites.
+                  </p>
+                )}
+                {provisionState.error && <p className="error-note">{provisionState.error}</p>}
+                <div className="admin-grid-settings integration-form-grid">
                 <label>
                   Organization name
                   <input
                     type="text"
                     placeholder="Acme Events"
                     value={provisionForm.organizationName}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, organizationName: event.target.value }))}
+                    disabled={provisionForm.updateExistingOrganization}
+                    onChange={(event) => updateProvisionForm((prev) => ({ ...prev, organizationName: event.target.value }))}
                   />
                 </label>
                 <label>
-                  Organization id (optional)
+                  Organization id {provisionForm.updateExistingOrganization ? "(required)" : "(optional)"}
                   <input
                     type="text"
                     placeholder="acme-events"
                     value={provisionForm.organizationId}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, organizationId: event.target.value }))}
+                    onChange={(event) => updateProvisionForm((prev) => ({ ...prev, organizationId: event.target.value }))}
                   />
                 </label>
                 <label>
                   Plan
                   <select
                     value={provisionForm.plan}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, plan: event.target.value }))}
+                    onChange={(event) => updateProvisionForm((prev) => ({ ...prev, plan: event.target.value }))}
                   >
+                    <option value="">Select a plan...</option>
                     {PROVISION_PLANS.map((plan) => (
                       <option key={plan} value={plan}>{plan}</option>
                     ))}
                   </select>
                 </label>
                 <label>
-                  Owner email (defaults to signed-in account)
+                  Owner email
                   <input
                     type="email"
                     placeholder="owner@example.com"
                     value={provisionForm.ownerEmail}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, ownerEmail: event.target.value }))}
+                    disabled={provisionForm.updateExistingOrganization}
+                    onChange={(event) => updateProvisionForm((prev) => ({ ...prev, ownerEmail: event.target.value }))}
                   />
+                  <small className="source-note">
+                    Enter the customer owner email. Your signed-in account is used only when you choose Use My Account.
+                  </small>
                 </label>
                 <label>
                   Owner name (optional)
@@ -906,25 +1091,27 @@ export default function IntegrationOpsModal({
                     type="text"
                     placeholder="Avery Owner"
                     value={provisionForm.ownerName}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, ownerName: event.target.value }))}
+                    disabled={provisionForm.updateExistingOrganization}
+                    onChange={(event) => updateProvisionForm((prev) => ({ ...prev, ownerName: event.target.value }))}
                   />
                 </label>
                 <label>
-                  Owner UID (recommended)
+                  Owner UID (optional; never defaults to your account)
                   <input
                     type="text"
                     placeholder="firebase-auth-uid"
                     value={provisionForm.ownerUid}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, ownerUid: event.target.value }))}
+                    disabled={provisionForm.updateExistingOrganization}
+                    onChange={(event) => updateProvisionForm((prev) => ({ ...prev, ownerUid: event.target.value }))}
                   />
                 </label>
                 <label>
-                  Order id (optional)
+                  Order id (auto-generated if blank)
                   <input
                     type="text"
                     placeholder="acme-order-2026-001"
                     value={provisionForm.orderId}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, orderId: event.target.value }))}
+                    onChange={(event) => updateProvisionForm((prev) => ({ ...prev, orderId: event.target.value }))}
                   />
                 </label>
                 <label>
@@ -933,7 +1120,8 @@ export default function IntegrationOpsModal({
                     type="email"
                     placeholder="support@example.com"
                     value={provisionForm.supportEmail}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, supportEmail: event.target.value }))}
+                    disabled={provisionForm.updateExistingOrganization}
+                    onChange={(event) => updateProvisionForm((prev) => ({ ...prev, supportEmail: event.target.value }))}
                   />
                 </label>
                 <label>
@@ -942,31 +1130,47 @@ export default function IntegrationOpsModal({
                     type="url"
                     placeholder="https://your-live-domain.example"
                     value={provisionForm.appUrl}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, appUrl: event.target.value }))}
+                    disabled={provisionForm.updateExistingOrganization}
+                    readOnly
                   />
+                  <small className="source-note">Canonical owner sign-in URL from application configuration.</small>
                 </label>
                 <label className="provisioning-send-email">
                   <input
                     type="checkbox"
                     checked={provisionForm.sendEmail}
-                    onChange={(event) => setProvisionForm((prev) => ({ ...prev, sendEmail: event.target.checked }))}
+                    disabled={provisionForm.updateExistingOrganization}
+                    onChange={(event) => updateProvisionForm((prev) => ({ ...prev, sendEmail: event.target.checked }))}
                   />
                   Send onboarding email now
                 </label>
-              </div>
-              <div className="right-actions">
-                <button
-                  type="button"
-                  className="cta"
-                  onClick={handleProvisionCustomer}
-                  disabled={provisionState.loading}
-                >
-                  {provisionState.loading ? "Provisioning..." : "Provision Customer"}
-                </button>
-              </div>
+                </div>
+                <div className="right-actions">
+                  <button
+                    type="button"
+                    className="cta"
+                    onClick={handleProvisionCustomer}
+                    disabled={provisionState.loading}
+                  >
+                    {provisionState.phase === "checking"
+                      ? "Checking Organization..."
+                      : provisionState.phase === "provisioning"
+                        ? "Provisioning..."
+                        : provisionForm.updateExistingOrganization
+                          ? "Update Entitlements"
+                          : "Provision Customer"}
+                  </button>
+                </div>
+              </fieldset>
               {provisioningResult.ok && (
                 <>
+                  {showingRecoveredProvisioningResult && (
+                    <p className="source-note">
+                      Most recent successful provisioning order from this browser session.
+                    </p>
+                  )}
                   <div className="status-strip">
+                    <span>Operation: <strong>{updatedExistingOrganization ? "Entitlements updated" : "Organization created"}</strong></span>
                     <span>Organization: <strong>{provisioningResult.organizationId || "-"}</strong></span>
                     <span>Order: <strong>{provisioningResult.orderId || "-"}</strong></span>
                     <span>Plan: <strong>{provisioningResult.plan || "-"}</strong></span>
@@ -975,13 +1179,77 @@ export default function IntegrationOpsModal({
                   {provisioningResult?.email?.error && (
                     <p className="warning-note">Onboarding email error: {provisioningResult.email.error}</p>
                   )}
+                  {provisioningResult?.email?.warning && (
+                    <p className="warning-note">{provisioningResult.email.warning}</p>
+                  )}
+                  {ownerClaimsIncomplete && (
+                    <>
+                      <p className="error-note">
+                        Owner onboarding is incomplete: the role was saved, but Auth claims did not synchronize.
+                        Do not hand off access until this repair succeeds.
+                      </p>
+                      <div className="right-actions">
+                        <button
+                          type="button"
+                          className="cta"
+                          onClick={handleRetryOwnerClaims}
+                          disabled={provisionState.loading}
+                        >
+                          {provisionState.phase === "repairing-claims"
+                            ? "Repairing Owner Access..."
+                            : "Retry Owner Access Repair"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  {!ownerClaimsIncomplete && (
+                    <div className="provisioning-next-steps">
+                    <h4>Next steps</h4>
+                    {updatedExistingOrganization ? (
+                      <ol>
+                        <li>Have an organization admin refresh the workspace and reopen Admin Catalog.</li>
+                        <li>Verify included modules are editable and excluded modules remain locked.</li>
+                        <li>Confirm existing owner access, branding, catalog data, and invites remain unchanged.</li>
+                      </ol>
+                    ) : (
+                      <ol>
+                        <li>
+                          {provisioningResult?.email?.sent
+                            ? `Confirm ${provisioningResult.ownerEmail || "the owner"} received the onboarding email.`
+                            : `Copy and send the onboarding message to ${provisioningResult.ownerEmail || "the owner"}.`}
+                        </li>
+                        <li>Have the owner register or sign in with that exact email and confirm the organization name.</li>
+                        <li>Configure branding and catalog data, then create, save, and reopen a test quote.</li>
+                        <li>Configure and verify any customer-specific domain separately before sharing it.</li>
+                      </ol>
+                    )}
+                    {provisioningOnboarding.emailText && !provisioningResult?.email?.sent && (
+                      <>
+                        <pre className="integration-command-block"><code>{`Subject: ${provisioningOnboarding.emailSubject || "Your QuotePilot workspace is ready"}\n\n${provisioningOnboarding.emailText}`}</code></pre>
+                        <div className="right-actions">
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() =>
+                              handleCopyValue(
+                                `Subject: ${provisioningOnboarding.emailSubject || "Your QuotePilot workspace is ready"}\n\n${provisioningOnboarding.emailText}`,
+                                "Onboarding message"
+                              )}
+                          >
+                            Copy Onboarding Message
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    </div>
+                  )}
                 </>
               )}
             </>
           )}
         </section>
 
-        <section className="admin-section">
+        {!provisioningOnly && canManageProviders && <section className="admin-section">
           <div className="admin-section-head">
             <h3>Organization Cleanup (Admin)</h3>
           </div>
@@ -1092,12 +1360,16 @@ export default function IntegrationOpsModal({
               )}
             </>
           )}
-        </section>
+        </section>}
 
-        <section className="admin-section">
+        {!provisioningOnly && canManageProviders && <section className="admin-section">
           <div className="admin-section-head">
-            <h3>Run CRM Sync / Record Event</h3>
+            <h3>Record Integration Event</h3>
           </div>
+          <p className="source-note">
+            Outbound browser CRM sends are disabled. Use this admin-only form
+            for audit events until a server-authorized CRM connector is enabled.
+          </p>
           <div className="admin-grid-settings integration-form-grid">
             <label>
               Quote
@@ -1181,21 +1453,13 @@ export default function IntegrationOpsModal({
             </p>
           )}
           <div className="right-actions">
-            <button
-              type="button"
-              className="cta"
-              onClick={handleRunSync}
-              disabled={runningSync || state.loading}
-            >
-              {runningSync ? "Syncing..." : "Run CRM Sync"}
-            </button>
             <button type="button" className="cta" onClick={handleRecord} disabled={saving || state.loading}>
               {saving ? "Recording..." : "Record Event"}
             </button>
           </div>
-        </section>
+        </section>}
 
-        <section className="admin-section">
+        {!provisioningOnly && <section className="admin-section">
           <div className="admin-section-head">
             <h3>Integration Activity</h3>
           </div>
@@ -1256,7 +1520,7 @@ export default function IntegrationOpsModal({
               </tbody>
             </table>
           </div>
-        </section>
+        </section>}
       </div>
     </div>
   );

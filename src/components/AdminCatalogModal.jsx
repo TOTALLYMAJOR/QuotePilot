@@ -113,6 +113,10 @@ function buildJsonDrafts(catalog) {
   };
 }
 
+function catalogDraftFingerprint(draft, jsonDrafts) {
+  return JSON.stringify({ draft, jsonDrafts });
+}
+
 function toDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -150,6 +154,9 @@ export default function AdminCatalogModal({
   const [status, setStatus] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [jsonDrafts, setJsonDrafts] = useState(() => buildJsonDrafts(catalog));
+  const [savedFingerprint, setSavedFingerprint] = useState(() =>
+    catalogDraftFingerprint(catalog, buildJsonDrafts(catalog))
+  );
   const [selectedEventType, setSelectedEventType] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [menuEventTypes, setMenuEventTypes] = useState([]);
@@ -214,14 +221,17 @@ export default function AdminCatalogModal({
 
   useEffect(() => {
     if (open) {
-      setDraft({
+      const nextDraft = {
         ...catalog,
         settings: {
           ...(catalog?.settings || {}),
           featureFlags: { ...(catalog?.settings?.featureFlags || {}) }
         }
-      });
-      setJsonDrafts(buildJsonDrafts(catalog));
+      };
+      const nextJsonDrafts = buildJsonDrafts(catalog);
+      setDraft(nextDraft);
+      setJsonDrafts(nextJsonDrafts);
+      setSavedFingerprint(catalogDraftFingerprint(nextDraft, nextJsonDrafts));
       setStatus("");
       setUploadingLogo(false);
       setActiveTab("packages");
@@ -241,7 +251,7 @@ export default function AdminCatalogModal({
       setCategoryEditName("");
       setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
     }
-  }, [open, catalog, selectedEventTypeProp]);
+  }, [open, scopedOrganizationId]);
 
   useEffect(() => {
     if (!open) return;
@@ -336,7 +346,7 @@ export default function AdminCatalogModal({
     const id = `${key}-${Date.now()}`;
     const template =
       key === "packages"
-        ? { id, name: "New Package", ppp: 0 }
+        ? { id, name: "", ppp: 0 }
       : key === "addons"
           ? {
               id,
@@ -811,22 +821,11 @@ export default function AdminCatalogModal({
       const eventTemplates = parseJsonArray("eventTemplates", "Event Templates JSON");
       const seasonalProfiles = parseJsonArray("seasonalProfiles", "Seasonal Profiles JSON");
       const brandCrew = parseJsonArray("brandCrew", "Brand Crew JSON");
-      const paidFeatureIds = Array.isArray(draft.settings?.featureFlagsPaid)
-        ? draft.settings.featureFlagsPaid.map((value) => String(value || "").trim()).filter(Boolean)
-        : [];
-      const paidFeatureIdSet = new Set(paidFeatureIds);
-      const enforceOrderFeatureAccess = draft.settings?.featureFlagsLocked === true && paidFeatureIdSet.size > 0;
+      const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
       const normalizedFeatureFlags = {
         ...(draft.settings?.featureFlags || {})
       };
-      if (enforceOrderFeatureAccess) {
-        FEATURE_FLAG_META.forEach((flag) => {
-          if (!paidFeatureIdSet.has(flag.id)) {
-            normalizedFeatureFlags[flag.id] = false;
-          }
-        });
-      }
-      if (normalizedFeatureFlags.aiAssist === false) {
+      if (!featureFlagsLocked && normalizedFeatureFlags.aiAssist === false) {
         normalizedFeatureFlags.aiAutopilot = false;
       }
 
@@ -845,6 +844,8 @@ export default function AdminCatalogModal({
 
       const result = await onSave(nextDraft);
       if (result.ok) {
+        setDraft(nextDraft);
+        setSavedFingerprint(catalogDraftFingerprint(nextDraft, jsonDrafts));
         setStatus("Catalog saved.");
         pushToast("Catalog saved.", "success");
         return;
@@ -863,26 +864,39 @@ export default function AdminCatalogModal({
     ? draft.settings.featureFlagsPaid.map((value) => String(value || "").trim()).filter(Boolean)
     : [];
   const paidFeatureIdSet = new Set(featureFlagsPaid);
-  const enforceOrderFeatureAccess = featureFlagsLocked && paidFeatureIdSet.size > 0;
-  const isFeatureEditable = (featureId) => {
-    if (!enforceOrderFeatureAccess) return true;
-    return paidFeatureIdSet.has(featureId);
-  };
+  const enforceOrderFeatureAccess = featureFlagsLocked;
   const isFeatureEnabled = (featureId) => {
     if (enforceOrderFeatureAccess && !paidFeatureIdSet.has(featureId)) return false;
     return draft.settings?.featureFlags?.[featureId] !== false;
   };
   const getFeatureAccessLabel = (featureId) => {
     if (!enforceOrderFeatureAccess) return "Editable in this catalog.";
-    return paidFeatureIdSet.has(featureId) ? "Included in order." : "Locked (not in order).";
+    return paidFeatureIdSet.has(featureId)
+      ? "Included in order (read only)."
+      : "Not included in order (read only).";
+  };
+  const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
+  const handleClose = () => {
+    if (hasUnsavedChanges && !window.confirm("Discard unsaved catalog and branding changes?")) {
+      return;
+    }
+    onClose();
   };
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
-      <div className="modal-card">
+      <div className="modal-card admin-catalog-card">
         <div className="modal-head">
           <h2>Catalog Admin</h2>
-          <button type="button" className="ghost" onClick={onClose}>Close</button>
+          <div className="admin-save-actions">
+            <span className={hasUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
+              {saving ? "Saving…" : hasUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "No pending changes"}
+            </span>
+            <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
+              {saving ? "Saving..." : "Save changes"}
+            </button>
+            <button type="button" className="ghost" onClick={handleClose}>Close</button>
+          </div>
         </div>
 
         <div className="admin-tabs" role="tablist" aria-label="Catalog admin sections">
@@ -900,11 +914,32 @@ export default function AdminCatalogModal({
 
         {activeTab === "packages" && (
           <Section title="Packages" onAdd={() => addRow("packages")}>
+          <p className="source-note">
+            Add a customer-specific package name and its per-person price. Generic placeholder names and $0 packages cannot complete setup.
+          </p>
+          <div className="admin-row admin-row-headings" aria-hidden="true">
+            <span>Package ID</span>
+            <span>Display Name</span>
+            <span>Price Per Person</span>
+            <span>Actions</span>
+          </div>
           {draft.packages.map((item, i) => (
             <div className="admin-row" key={item.id}>
-              <input value={item.id} disabled />
-              <input value={item.name} onChange={(e) => patchArrayItem("packages", i, "name", e.target.value)} />
-              <input type="number" value={item.ppp} onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))} />
+              <input aria-label={`Package ${i + 1} ID`} value={item.id} disabled />
+              <input
+                aria-label={`Package ${i + 1} name`}
+                placeholder="Customer package name"
+                value={item.name}
+                onChange={(e) => patchArrayItem("packages", i, "name", e.target.value)}
+              />
+              <input
+                aria-label={`Package ${i + 1} price per person`}
+                type="number"
+                min="0"
+                step="0.01"
+                value={item.ppp}
+                onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))}
+              />
               <button type="button" className="ghost" onClick={() => removeRow("packages", i)}>Delete</button>
             </div>
           ))}
@@ -1188,6 +1223,33 @@ export default function AdminCatalogModal({
         {activeTab === "pricing" && (
           <>
             <section className="admin-section">
+              <div className="admin-section-head"><h3>Pricing Review Required</h3></div>
+              <div className="admin-section-body">
+                <p className="source-note">
+                  Review every fee, tax, deposit, travel, staffing, tier, and seasonal value below for this organization. These values affect customer totals.
+                </p>
+                <label className="admin-inline-toggle">
+                  <span>I reviewed and approve this organization&apos;s pricing settings.</span>
+                  <input
+                    type="checkbox"
+                    aria-label="Pricing setup reviewed and approved"
+                    checked={draft.settings?.pricingSetupConfirmed === true}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setDraft((prev) => ({
+                        ...prev,
+                        settings: {
+                          ...prev.settings,
+                          pricingSetupConfirmed: checked
+                        }
+                      }));
+                    }}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="admin-section">
           <div className="admin-section-head"><h3>Numeric Settings</h3></div>
           <div className="admin-grid-settings">
             <label>
@@ -1381,7 +1443,7 @@ export default function AdminCatalogModal({
           <div className="admin-section-head"><h3>Optional Modules</h3></div>
           {enforceOrderFeatureAccess && (
             <p className="source-note">
-              Modules not included in this order are locked. To change access, update provisioning entitlements for this org and reopen this modal.
+              Module access is read only because this organization&apos;s order controls entitlements. To change access, update provisioning entitlements for this org and reopen this modal.
             </p>
           )}
           <div className="admin-grid-settings">
@@ -1393,7 +1455,8 @@ export default function AdminCatalogModal({
                   type="checkbox"
                   checked={isFeatureEnabled(flag.id)}
                   onChange={(e) => patchFeatureFlag(flag.id, e.target.checked)}
-                  disabled={!isFeatureEditable(flag.id)}
+                  disabled={featureFlagsLocked}
+                  aria-readonly={featureFlagsLocked}
                   title={getFeatureAccessLabel(flag.id)}
                 />
               </label>
@@ -1696,8 +1759,12 @@ export default function AdminCatalogModal({
         )}
 
         <div className="modal-foot">
-          <span className="source-note">{status}</span>
-          <button type="button" className="cta" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Catalog"}</button>
+          <span className="source-note">
+            {status || (hasUnsavedChanges ? "Your changes are not saved yet." : "Settings are up to date.")}
+          </span>
+          <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
+            {saving ? "Saving..." : "Save changes"}
+          </button>
         </div>
       </div>
     </div>

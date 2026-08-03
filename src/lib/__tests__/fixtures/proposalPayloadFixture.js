@@ -40,7 +40,7 @@ export const proposalPayloadFixtureQuote = {
     chefRateMixCsv: "60,65,70"
   },
   payment: {
-    depositLink: "https://pay.example.com/deposits/q-2026-0042",
+    depositLink: "https://checkout.stripe.com/c/pay/cs_test_q_2026_0042",
     depositStatus: "sent"
   },
   totals: {
@@ -71,18 +71,18 @@ export const proposalPayloadFixtureQuote = {
     rentalMultiplier: 1.02
   },
   quoteMeta: {
-    quotePreparedBy: "Chef Toni North",
-    brandName: "Tony Catering Co.",
+    quotePreparedBy: "Alex Rivera",
+    brandName: "Acme Events Catering",
     brandTagline: "Bold Southern Flavor",
     brandLogoUrl: "/brand/custom-logo.png",
     brandPrimaryColor: "#c99334",
     brandAccentColor: "#f0d29a",
     brandDarkAccentColor: "#8d611a",
-    brandCrew: [{ label: "Chef Toni", imageUrl: "/brand/chef-toni.png" }],
+    brandCrew: [{ label: "Culinary Lead", imageUrl: "/brand/custom-crew.png" }],
     businessPhone: "(205) 593-2004",
-    businessEmail: "hello@tonycatering.com",
+    businessEmail: "hello@acme.test",
     businessAddress: "6230 Eagle Ridge Cir, Pinson, AL 35126",
-    acceptanceEmail: "events@tonycatering.com",
+    acceptanceEmail: "events@acme.test",
     includeDisposables: true,
     disposablesNote: "All disposables are included in this quote.",
     depositNotice: "30% deposit required to hold the date.",

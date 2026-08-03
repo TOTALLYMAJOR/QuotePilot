@@ -1,6 +1,7 @@
 {
   "framework": "vite",
   "cleanUrls": true,
+  "buildCommand": "npm run check:env && npm run build",
   "headers": [
     {
       "source": "/(.*)",
@@ -19,7 +20,7 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ]
 }

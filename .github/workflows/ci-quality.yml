@@ -7,12 +7,12 @@ on:
       - main
 
 env:
-  VITE_FIREBASE_API_KEY: ci-placeholder-api-key
-  VITE_FIREBASE_AUTH_DOMAIN: ci-placeholder-auth-domain
-  VITE_FIREBASE_PROJECT_ID: ci-placeholder-project-id
-  VITE_FIREBASE_STORAGE_BUCKET: ci-placeholder-storage-bucket
-  VITE_FIREBASE_MESSAGING_SENDER_ID: ci-placeholder-messaging-sender
-  VITE_FIREBASE_APP_ID: ci-placeholder-app-id
+  VITE_FIREBASE_API_KEY: ci-test-browser-key
+  VITE_FIREBASE_AUTH_DOMAIN: tonicatering.firebaseapp.com
+  VITE_FIREBASE_PROJECT_ID: tonicatering
+  VITE_FIREBASE_STORAGE_BUCKET: tonicatering.firebasestorage.app
+  VITE_FIREBASE_MESSAGING_SENDER_ID: "1234567890"
+  VITE_FIREBASE_APP_ID: "1:1234567890:web:ci-test"
 
 concurrency:
   group: ci-quality-${{ github.workflow }}-${{ github.ref }}
@@ -44,7 +44,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Classify CI lanes
         id: classify
@@ -61,7 +61,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Run lane:quick
         run: npm run lane:quick
@@ -73,11 +73,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -112,17 +114,21 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Build production app for Lighthouse
+        run: npm run build
+
       - name: Install Playwright browser + Linux deps for Lighthouse
         run: npx playwright install --with-deps chromium
 
       - name: Resolve Chromium path for Lighthouse
-        run: echo "CHROME_PATH=$(node -e 'const { chromium } = require(\"playwright\"); process.stdout.write(chromium.executablePath());')" >> "$GITHUB_ENV"
+        run: |
+          node -p "'CHROME_PATH=' + require('playwright').chromium.executablePath()" >> "$GITHUB_ENV"
 
       - name: Run CWV smoke gate
         run: npm run check:perf:cwv
@@ -144,7 +150,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -188,11 +194,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
 
       - name: Install Playwright browser + Linux deps
         run: npx playwright install --with-deps chromium
@@ -232,11 +241,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
 
       - name: Install Playwright browser + Linux deps
         run: npx playwright install --with-deps chromium

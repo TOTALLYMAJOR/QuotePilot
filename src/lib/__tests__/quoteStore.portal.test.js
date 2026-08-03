@@ -8,6 +8,7 @@ vi.mock("../firebase", () => ({
 import {
   getPortalQuote,
   rotateQuotePortalKey,
+  updatePortalDecision,
   updatePortalQuoteStatus
 } from "../quoteStore";
 
@@ -124,10 +125,13 @@ function seedQuotes(quotes) {
 
 describe("quoteStore portal token policy", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-20T12:00:00.000Z"));
     vi.stubGlobal("localStorage", createStorageMock());
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -137,6 +141,51 @@ describe("quoteStore portal token policy", () => {
     expect(quote.portalKey).toBe("portal-key-12345678901234567890");
     expect(quote.portalExpiresAtISO).toBeTruthy();
     expect(Number(quote.portalExpiresAtMs)).toBeGreaterThan(0);
+  });
+
+  test("stores a customer change request without accepting or booking the quote", async () => {
+    seedQuotes([makeQuote()]);
+
+    const result = await updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "changes_requested",
+      message: "Please replace the salmon entree."
+    });
+
+    expect(result.status).toBe("viewed");
+    expect(result.portalDecision).toMatchObject({
+      decision: "changes_requested",
+      message: "Please replace the salmon entree."
+    });
+    const refreshed = await getPortalQuote("portal-key-12345678901234567890");
+    expect(refreshed.status).toBe("viewed");
+    expect(refreshed.portalDecision.decision).toBe("changes_requested");
+  });
+
+  test("rejects decisions for drafts and prevents terminal decision rewrites", async () => {
+    seedQuotes([makeQuote({ status: "draft" })]);
+    await expect(updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "accepted"
+    })).rejects.toThrow(/has not been sent/i);
+
+    seedQuotes([
+      makeQuote({
+        status: "accepted",
+        portalDecision: {
+          decision: "accepted",
+          message: "",
+          submittedAtISO: "2026-03-20T10:00:00.000Z"
+        },
+        lifecycle: {
+          acceptedAtISO: "2026-03-20T10:00:00.000Z"
+        }
+      })
+    ]);
+    await expect(updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "declined"
+    })).rejects.toThrow(/decision is final/i);
   });
 
   test("blocks expired portal tokens", async () => {
@@ -160,7 +209,7 @@ describe("quoteStore portal token policy", () => {
 
     const result = await rotateQuotePortalKey({
       quoteId: "quote-portal-1",
-      actorEmail: "ops@tonycatering.com"
+      actorEmail: "ops@acme.test"
     });
     expect(result.portalKey).not.toBe("portal-key-12345678901234567890");
     expect(result.portalExpiresAtISO).toBeTruthy();

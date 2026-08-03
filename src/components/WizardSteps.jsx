@@ -807,7 +807,7 @@ export function StepServices({
   );
 }
 
-export function StepReview({ form, totals, settings }) {
+export function StepReview({ form, totals, settings, readiness = null }) {
   const quoteDate = new Date().toLocaleDateString();
   const eventDateLabel = form.date ? new Date(`${form.date}T12:00:00`).toLocaleDateString() : "-";
   const eventTimeLabel = form.time ? new Date(`2000-01-01T${form.time}`).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "-";
@@ -864,6 +864,23 @@ export function StepReview({ form, totals, settings }) {
 
   return (
     <div className="review">
+      {readiness && (
+        <section className={`readiness-panel readiness-${readiness.status?.id || "review"}`}>
+          <div className="readiness-head">
+            <div>
+              <span>Proposal readiness</span>
+              <strong>{readiness.score}%</strong>
+            </div>
+            <em>{readiness.status?.label || "Review"}</em>
+          </div>
+          <progress max="100" value={readiness.score}>{readiness.score}%</progress>
+          {readiness.gaps?.length > 0 && (
+            <div className="readiness-gaps">
+              {readiness.gaps.map((item) => <span key={item.id}>{item.label}</span>)}
+            </div>
+          )}
+        </section>
+      )}
       <article className="quote-sheet">
         <h2>Catering Quote</h2>
 
