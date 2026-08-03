@@ -17,6 +17,8 @@ function buildWebServer(port, role) {
       VITE_E2E_ORGANIZATION_ID: process.env.VITE_E2E_ORGANIZATION_ID ?? "e2e-org",
       VITE_DEFAULT_ORGANIZATION_ID: process.env.VITE_DEFAULT_ORGANIZATION_ID ?? "e2e-org",
       VITE_ALLOW_LOCAL_CATALOG_FALLBACK: "true",
+      VITE_APP_URL: "https://quotepilot.mbmapps.com/app",
+      VITE_APP_HOST: "quotepilot.mbmapps.com",
       VITE_FIREBASE_API_KEY: "",
       VITE_FIREBASE_PROJECT_ID: "",
       VITE_FIREBASE_AUTH_DOMAIN: "",

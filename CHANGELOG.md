@@ -74,6 +74,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   servers, keeps Firebase-only specs in their emulator lanes, and aligns quote
   workflow coverage with future event dates, per-role staffing, configured-only
   payment links, portal lifecycle eligibility, and hardened sales authority.
+- Playwright web servers now receive the canonical QuotePilot application URL
+  explicitly, keeping customer handoff acceptance deterministic in clean CI
+  environments without relying on a developer's local environment file.
 - The canonical CWV command now pins Lighthouse to the installed Playwright
   Chromium when no explicit browser is configured, preventing a host Windows
   browser path from leaking into Linux validation regardless of which release
