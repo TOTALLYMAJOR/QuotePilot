@@ -171,6 +171,15 @@ instruction if that browser is unavailable.
   - Firebase emulator browser lane that also starts Functions emulator.
   - Requires authoritative pricing callable success and trusted quote creation
     in the save path (no client-only pricing fallback).
+- `scripts/provisioning-emulator-acceptance.mjs`
+  - Full emulator-only platform/tenant lifecycle matrix run under Auth,
+    Firestore, and Functions emulators.
+  - Covers provisioning authority, owner activation, trusted quote and portal
+    behavior, provider/payment failure boundaries, cleanup, and
+    server-authoritative approval request/resolution audit identity and replay
+    protection.
+  - The runner refuses non-`demo-*` projects or missing emulator host variables;
+    it is local evidence and does not replace hosted tenant acceptance.
 
 Optional env vars for Firebase emulator lane:
 - `E2E_FIREBASE_PROJECT_ID` (default: `demo-e2e`)

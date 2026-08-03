@@ -3,9 +3,15 @@
 Last updated: August 3, 2026
 
 ## Operational Health
-- Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment `dpl_AsPnyL3M8o5rF8GUSMgJ8HvZWmRh`, which reached `READY` on July 27, 2026. Hosted HTTP checks returned the QuotePilot application shell with status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`).
+- Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is
+  aliased to Vercel production deployment
+  `dpl_9K7pqmZjqAMBbegKq3uyUf6rGVXv`, built from merged `main` commit
+  `dc460e3dca79c0b0eea512bb1902ba20a4b7c67c`; it reached `READY` on August 3,
+  2026. Main CI run `30837136091` passed all eight jobs, and hosted HTTP checks
+  returned status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains
+  the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the release candidate passes 223 unit tests (33
+- Build and local validation: the release candidate passes 229 unit tests (33
   intentionally skipped), 33 focused Firestore rules tests, and the default
   Playwright suite (27 passed, 2 intentionally gated provisioning-role cases
   skipped). The Firebase Auth/catalog browser lane, authoritative
@@ -50,6 +56,16 @@ Last updated: August 3, 2026
   omit retained credentials. Browser CRM networking is disabled; admins can
   record organization-scoped integration audit events without an outbound send.
 - Workflow authority boundaries: approval resolution does not execute a sensitive action; customer acceptance does not prove payment or booking; production checklist completion does not prove inventory availability.
+- Current source-candidate approval authority: Firebase-backed approval request
+  creation and admin resolution use same-tenant callable transactions with
+  server-owned actor identity/timestamps, duplicate/replay rejection, and
+  direct Firestore approval-array writes denied after the rules rollout. A
+  confirmed missing-callable response alone may use the existing
+  rule-authorized path during the Vercel-first deployment window; other
+  callable errors fail closed. Pure planning, client delegation, rules denial,
+  and the full provisioning emulator matrix pass. This boundary is not
+  production behavior until the matching Functions and Firestore rules are
+  deployed together.
 - CI gates: classifier-driven lane gates are configured (`lane:quick`, `lane:core`, `Docker Build Smoke`, `lane:playwright-smoke`, `lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`).
 - P0 fallback-retirement safeguard: classifier now elevates `menuService`/`useCatalogData`/`organizationService`/`OrganizationContext` edits to `high_risk`, so Firebase heavy lanes are required (not advisory) on feature branches.
 - Legacy global runtime fallback retired: frontend tenant data services and authoritative pricing/functions paths now fail closed when org context is missing instead of reading legacy global collections.
@@ -86,7 +102,9 @@ Last updated: August 3, 2026
 - Production fail-safe integration mode:
   `NOTIFICATIONS_SMS_PROVIDER=none` in the ignored project-scoped Functions
   environment.
-- Latest Vercel production operation: SPA rewrite hotfix restoring direct `/app` and `/system` requests on the custom domain.
+- Latest Vercel production operation: merged `main` deployment
+  `dpl_9K7pqmZjqAMBbegKq3uyUf6rGVXv`, including the canonical SPA rewrite and
+  returning `200` for direct `/app` and `/system` requests.
 - Last known good Firebase Hosting deploy:
   - commit: `a4a2568f06eaedcf9805c503bb161d2847d12710`
   - CI run: `CI Quality` #23203096351 (March 17, 2026 UTC)
@@ -95,21 +113,26 @@ Last updated: August 3, 2026
 ## Active Risks
 - The Node.js 22/Firebase Admin 14 Functions candidate is locally validated but
   has not been deployed or observed on the production Functions runtime.
-- The live Vercel SPA rewrite was deployed from an isolated hotfix based on
-  commit `3a9918910bf1bb224cf0b92d5061d0359107a7b9`; the release-candidate source
-  now contains the matching route and runbook changes, but the next production
-  promotion still needs exact committed-revision verification.
 - The Vercel deployment and custom-domain alias are provider-verified, but the authenticated production quote/save/export workflow still needs post-release browser acceptance.
-- Provisioning hardening is release-candidate implementation only. Do not treat the
-  in-app preflight, verified-owner activation, entitlement-only update path,
-  catalog conflict checks, trusted quote creation, CLI safety changes, or
-  onboarding checklist as production behavior until the reviewed
-  Functions/frontend/rules slice is deployed and exercised with a disposable
-  second organization.
+- Provisioning hardening remains production-incomplete. The frontend source is
+  live on Vercel, but do not treat the in-app preflight, verified-owner
+  activation, entitlement-only update path, catalog conflict checks, trusted
+  quote creation, CLI safety changes, or onboarding checklist as production
+  behavior until the reviewed Functions/rules slice is deployed and exercised
+  with a disposable second organization.
 - Resend custom-domain sending remains blocked because the account's one included domain slot is occupied by `leaguepilot.us`; adding `quotepilot.mbmapps.com` requires an account upgrade or explicit authorization to remove/migrate the existing domain, followed by authoritative DNS verification. The production custom-domain sender remains disabled. An external, manual Resend dashboard sandbox message from `QuotePilot by MBMapps <onboarding@resend.dev>` was provider-accepted and recorded as delivered (`34deea9f-8a1c-47ce-8f4e-2ea5164a2eec`), but that address is not an allowed QuotePilot Functions configuration and the result is not custom-domain or recipient-inbox proof.
-- Import Studio and its `importBatches` Firestore rules are implemented locally but are not deployed or hosted-smoke-verified. Excel intake, merge/update policies, saved import history UI, and active quote/payment/contract/booking imports are intentionally not included in this first slice.
-- The new `portalDecision` Firestore rule changes and enriched portal snapshots are implemented locally but are not deployed or hosted-smoke-verified in this branch.
-- Approval requests are role-gated in the application workflow, but stronger server-authoritative action-specific enforcement and end-to-end audit linkage remain follow-up work.
+- Import Studio frontend code is live on Vercel, but its `importBatches`
+  Firestore rules are not deployed or hosted-smoke-verified. Excel intake,
+  merge/update policies, saved import history UI, and active
+  quote/payment/contract/booking imports are intentionally not included in this
+  first slice.
+- The customer decision frontend is live on Vercel, but the new
+  `portalDecision` Firestore rule changes and enriched portal snapshots are not
+  deployed or hosted-smoke-verified.
+- Approval request creation and admin resolution are server-authoritative in
+  the current source candidate, but production deployment and action-specific
+  linkage from an approved request to the later admin execution remain
+  follow-up work.
 - Existing portal snapshots need refresh/backfill before older links can display every newly added event, selection, and pricing field.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
 - Bundle size remains a watch item; budget/CWV gates now prevent uncontrolled regressions.
@@ -119,16 +142,15 @@ Last updated: August 3, 2026
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
 
 ## Current Focus (Near-Term)
-1. Commit and review the locally validated provisioning hardening slice, then
-   perform a controlled rules/Functions/frontend deployment and the hosted
-   owner/quote/portal tenant acceptance checklist.
+1. Perform a controlled rules/Functions deployment from the reviewed merged
+   `main` revision, then run the hosted owner/quote/portal tenant acceptance
+   checklist against the already-live Vercel frontend.
 2. Verify the intended Resend sender domain in the Resend dashboard and authoritative DNS; only then configure `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and recipient proof from one controlled test.
-3. Publish the Vercel SPA rewrite hotfix through normal version control.
-4. Deploy the updated `firestore.rules` and run hosted portal decision smoke checks, including active, expired, deleted, and change-request paths.
-5. Refresh/backfill existing customer portal snapshots with the new customer-safe event and pricing fields.
-6. Add server-authoritative enforcement and audit linkage for approval-request-to-admin-action execution.
-7. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
-8. Improve large-chunk performance while staying inside bundle/CWV guardrails.
+3. Deploy the updated `firestore.rules` and run hosted portal decision smoke checks, including active, expired, deleted, and change-request paths.
+4. Refresh/backfill existing customer portal snapshots with the new customer-safe event and pricing fields.
+5. Link approved requests to the matching separate admin execution and record the action outcome.
+6. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
+7. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)
 - Focus completed: migration execution after fallback retirement and denial-matrix verification.

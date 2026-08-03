@@ -77,7 +77,9 @@ vi.mock("../organizationService", () => ({
 
 import {
   buildClientWritablePortalPayment,
+  requestQuoteApproval,
   reopenQuote,
+  resolveQuoteApprovalRequest,
   rotateQuotePortalKey,
   saveQuoteVersion,
   setQuoteStoreOrganizationId,
@@ -163,6 +165,46 @@ describe("quoteStore Firebase write safety", () => {
             expiresAtISO: "2026-09-11T12:00:00.000Z",
             versionId: "v0002",
             versionNumber: 2
+          }
+        });
+      }
+      if (name === "requestQuoteApproval") {
+        return vi.fn().mockResolvedValue({
+          data: {
+            ok: true,
+            organizationId: "org-one",
+            quoteId: "quote-1",
+            request: {
+              id: "0123456789abcdef0123456789abcdef",
+              action: "delete_quote",
+              state: "pending",
+              note: "Remove duplicate quote.",
+              requestedAtISO: "2026-08-03T18:00:00.000Z",
+              requestedByEmail: "current.admin@example.com",
+              resolvedAtISO: "",
+              resolvedByEmail: "",
+              resolutionNote: ""
+            }
+          }
+        });
+      }
+      if (name === "resolveQuoteApprovalRequest") {
+        return vi.fn().mockResolvedValue({
+          data: {
+            ok: true,
+            organizationId: "org-one",
+            quoteId: "quote-1",
+            request: {
+              id: "0123456789abcdef0123456789abcdef",
+              action: "delete_quote",
+              state: "approved",
+              note: "Remove duplicate quote.",
+              requestedAtISO: "2026-08-03T18:00:00.000Z",
+              requestedByEmail: "sales@example.com",
+              resolvedAtISO: "2026-08-03T18:05:00.000Z",
+              resolvedByEmail: "current.admin@example.com",
+              resolutionNote: "Approved for separate execution."
+            }
           }
         });
       }
@@ -587,6 +629,137 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.setDoc).not.toHaveBeenCalled();
     expect(mockState.deleteDoc).not.toHaveBeenCalled();
     expect(mockState.runTransaction).not.toHaveBeenCalled();
+  });
+
+  test("approval request and resolution use trusted callables without direct Firestore writes", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+
+    const requested = await requestQuoteApproval({
+      quoteId: "quote-1",
+      action: "delete_quote",
+      note: "Remove duplicate quote.",
+      actorEmail: "forged@example.com",
+      actorRole: "sales"
+    });
+    const resolved = await resolveQuoteApprovalRequest({
+      quoteId: "quote-1",
+      requestId: requested.request.id,
+      state: "approved",
+      resolutionNote: "Approved for separate execution.",
+      actorEmail: "forged@example.com",
+      actorRole: "admin"
+    });
+
+    expect(requested).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      request: {
+        state: "pending",
+        requestedByEmail: "current.admin@example.com"
+      }
+    });
+    expect(resolved).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      request: {
+        state: "approved",
+        resolvedByEmail: "current.admin@example.com"
+      }
+    });
+    expect(mockState.httpsCallable).toHaveBeenNthCalledWith(
+      1,
+      mockState.cloudFunctions,
+      "requestQuoteApproval"
+    );
+    expect(mockState.httpsCallable).toHaveBeenNthCalledWith(
+      2,
+      mockState.cloudFunctions,
+      "resolveQuoteApprovalRequest"
+    );
+    expect(mockState.httpsCallable.mock.results[0].value).toHaveBeenCalledWith({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      action: "delete_quote",
+      note: "Remove duplicate quote."
+    });
+    expect(mockState.httpsCallable.mock.results[1].value).toHaveBeenCalledWith({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      requestId: "0123456789abcdef0123456789abcdef",
+      state: "approved",
+      resolutionNote: "Approved for separate execution."
+    });
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.setDoc).not.toHaveBeenCalled();
+    expect(mockState.runTransaction).not.toHaveBeenCalled();
+  });
+
+  test("approval rollout fallback is limited to a confirmed missing callable", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+    const pendingRequest = {
+      id: "0123456789abcdef0123456789abcdef",
+      action: "delete_quote",
+      state: "pending",
+      note: "Remove duplicate quote.",
+      requestedAtISO: "2026-08-03T18:00:00.000Z",
+      requestedByEmail: "sales@example.com",
+      resolvedAtISO: "",
+      resolvedByEmail: "",
+      resolutionNote: ""
+    };
+    mockState.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        id: "quote-1",
+        quoteNumber: "Q-1",
+        organizationId: "org-one",
+        workflow: { approvalRequests: [pendingRequest] }
+      })
+    });
+    mockState.updateDoc.mockResolvedValue(undefined);
+    mockState.httpsCallable
+      .mockImplementationOnce(() => vi.fn().mockRejectedValue({ code: "functions/not-found" }))
+      .mockImplementationOnce(() => vi.fn().mockRejectedValue({ code: "functions/not-found" }))
+      .mockImplementationOnce(() => vi.fn().mockRejectedValue({ code: "functions/permission-denied" }));
+
+    const requested = await requestQuoteApproval({
+      quoteId: "quote-1",
+      action: "convert_to_contract",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    });
+    const resolved = await resolveQuoteApprovalRequest({
+      quoteId: "quote-1",
+      requestId: pendingRequest.id,
+      state: "approved",
+      actorEmail: "admin@example.com",
+      actorRole: "admin"
+    });
+
+    expect(requested).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      request: { requestedByEmail: "current.admin@example.com" }
+    });
+    expect(resolved).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      request: {
+        id: pendingRequest.id,
+        state: "approved",
+        resolvedByEmail: "current.admin@example.com"
+      }
+    });
+    expect(mockState.updateDoc).toHaveBeenCalledTimes(2);
+
+    await expect(requestQuoteApproval({
+      quoteId: "quote-1",
+      action: "rotate_portal_link",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    })).rejects.toMatchObject({ code: "functions/permission-denied" });
+    expect(mockState.updateDoc).toHaveBeenCalledTimes(2);
   });
 
   test("saveQuoteVersion does not auto-migrate legacy global quote into scoped org path", async () => {

@@ -880,6 +880,75 @@ await db.collection("userRoles").doc(tenantMember.uid).update({
   email: "member.provisioning@example.test"
 });
 await expectCallableError(
+  () => callFunction("requestQuoteApproval", tenantMember.idToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    action: "forged_action"
+  }),
+  "INVALID_ARGUMENT"
+);
+const approvalRequested = await callFunction(
+  "requestQuoteApproval",
+  tenantMember.idToken,
+  {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    action: "delete_quote",
+    note: "Duplicate quote requires admin cleanup."
+  }
+);
+assert.equal(approvalRequested.ok, true);
+assert.equal(approvalRequested.request?.state, "pending");
+assert.equal(
+  approvalRequested.request?.requestedByEmail,
+  "member.provisioning@example.test"
+);
+await expectCallableError(
+  () => callFunction("requestQuoteApproval", tenantMember.idToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    action: "delete_quote"
+  }),
+  "ALREADY_EXISTS"
+);
+await expectCallableError(
+  () => callFunction("resolveQuoteApprovalRequest", tenantMember.idToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    requestId: approvalRequested.request.id,
+    state: "approved"
+  }),
+  "PERMISSION_DENIED"
+);
+const approvalResolved = await callFunction(
+  "resolveQuoteApprovalRequest",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    requestId: approvalRequested.request.id,
+    state: "approved",
+    resolutionNote: "Approved for a separate audited admin action."
+  }
+);
+assert.equal(approvalResolved.ok, true);
+assert.equal(approvalResolved.request?.state, "approved");
+assert.equal(approvalResolved.request?.resolvedByEmail, ownerEmail);
+assert.equal(
+  (await orgRef.collection("quotes").doc(acceptanceQuoteId).get())
+    .data()?.workflow?.approvalRequests?.[0]?.id,
+  approvalRequested.request.id
+);
+await expectCallableError(
+  () => callFunction("resolveQuoteApprovalRequest", bootstrapToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    requestId: approvalRequested.request.id,
+    state: "rejected"
+  }),
+  "FAILED_PRECONDITION"
+);
+await expectCallableError(
   () => callFunction("notifyOwnerNewQuote", tenantMember.idToken, {
     quoteId: acceptanceQuoteId
   }),
@@ -1283,6 +1352,7 @@ console.log("- unverified owner could not consume the admin invite; verified ema
 console.log("- pending owner invite received a bounded server-authored expiry");
 console.log("- unauthenticated portal client accepted the quote and persisted the decision to both quote copies");
 console.log("- entitlement-only update preserved branding, catalog, and invite");
+console.log("- approval requests and admin resolutions used server-owned identity, timestamps, and replay protection");
 console.log("- archived tenant resume/update was blocked");
 console.log("- quote cleanup preserved cross-tenant, unscoped, and mismatched portal rows");
 console.log("- provider/payment operations denied sales and rejected caller-supplied links");

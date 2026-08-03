@@ -3,9 +3,10 @@
 Last updated: July 27, 2026
 
 ## P0 - Tenant Provisioning Release
-- Commit and review the current provisioning slice, then deploy the
-  role-authoritative Firestore rules, provisioning/repair/cleanup Functions,
-  and `/app` frontend from that one revision.
+- Deploy the reviewed role-authoritative Firestore rules and
+  provisioning/repair/cleanup Functions from the merged `main` revision; the
+  `/app` frontend is live on Vercel, but the coordinated Firebase runtime slice
+  remains locked.
 - Run a disposable second-tenant acceptance: platform-admin create, exact owner
   email verification/invite activation, cross-tenant denial, neutral default
   inspection, reviewed package/event/pricing setup, conflict-safe catalog save,
@@ -36,7 +37,9 @@ Last updated: July 27, 2026
 
 ## P1 - Product Capability
 - Add automated notifications and escalation rules for due follow-ups and new customer change requests.
-- Add server-authoritative enforcement and audit linkage from approved sensitive-action requests to separate admin execution.
+- Link each approved sensitive-action request to the matching separate admin
+  execution and record the action outcome; request creation and admin
+  resolution are already server-authoritative in the current source candidate.
 - Refresh/backfill existing portal snapshots so older active links receive the new decision-center event, selection, and pricing fields.
 - Add basic analytics events for funnel drop-off and add-on selection trends.
 - Extend operations audit controls (retry dashboards, sync health trends, role-based action logs).

@@ -815,7 +815,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       resolvedByEmail: "",
       resolutionNote: ""
     };
-    await assertSucceeds(updateDoc(salesQuoteRef, {
+    await assertFails(updateDoc(salesQuoteRef, {
       "workflow.approvalRequests": [approvalRequest],
       updatedAtISO: "2026-03-22T00:20:00.000Z"
     }));
@@ -828,6 +828,13 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         resolutionNote: "Forged approval"
       }],
       updatedAtISO: "2026-03-22T00:30:00.000Z"
+    }));
+    await assertFails(updateDoc(adminQuoteRef, {
+      "workflow.approvalRequests": [{
+        ...approvalRequest,
+        requestedByEmail: "admin-a@example.com"
+      }],
+      updatedAtISO: "2026-03-22T00:20:00.000Z"
     }));
     await assertFails(updateDoc(salesQuoteRef, {
       integrations: {

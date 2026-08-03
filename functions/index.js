@@ -43,6 +43,11 @@ const {
   validateStripeCheckoutScope,
   validateStripeCheckoutCompletion
 } = require("./paymentSafety");
+const {
+  ApprovalWorkflowError,
+  buildApprovalRequest,
+  buildApprovalResolution
+} = require("./approvalWorkflow");
 
 initializeApp();
 
@@ -3940,6 +3945,171 @@ exports.updateQuoteDraft = functions.region(REGION).https.onCall(async (data, co
       organizationId,
       failureMessage: "Failed to edit quote."
     });
+  }
+});
+
+exports.requestQuoteApproval = functions.region(REGION).https.onCall(async (data, context) => {
+  const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: requestedOrganizationId
+  });
+  const organizationId = normalizeOrganizationId(
+    requestedOrganizationId || staff.organizationId
+  );
+  const quoteId = normalizeText(data?.quoteId);
+  if (!organizationId || !quoteId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId and quoteId are required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Approval requests require same-organization staff authority."
+    );
+  }
+
+  try {
+    const quoteRef = getQuoteDocRef(quoteId, organizationId);
+    const requestedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const quoteSnap = await tx.get(quoteRef);
+      if (!quoteSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Quote not found.");
+      }
+      const quote = quoteSnap.data() || {};
+      if (normalizeOrganizationId(quote.organizationId || organizationId) !== organizationId) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "Quote is outside your organization."
+        );
+      }
+      if (normalizeText(quote.status).toLowerCase() === "deleted" || normalizeText(quote.deletedAtISO)) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Deleted quotes cannot receive approval requests."
+        );
+      }
+
+      const planned = buildApprovalRequest({
+        workflow: quote.workflow,
+        action: data?.action,
+        note: data?.note,
+        actorEmail: staff.email,
+        nowISO: requestedAtISO,
+        requestId: randomUUID().replace(/-/g, "")
+      });
+      tx.update(quoteRef, {
+        "workflow.approvalRequests": planned.approvalRequests,
+        updatedAtISO: requestedAtISO
+      });
+      return planned.request;
+    });
+
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      request: result
+    };
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (err instanceof ApprovalWorkflowError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    functions.logger.error("Approval request failed", {
+      organizationId,
+      quoteId,
+      actorUid: staff.uid,
+      error: normalizeText(err?.message)
+    });
+    throw new functions.https.HttpsError("internal", "Failed to request quote approval.");
+  }
+});
+
+exports.resolveQuoteApprovalRequest = functions.region(REGION).https.onCall(async (data, context) => {
+  const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: requestedOrganizationId
+  });
+  assertAdminStaff(staff);
+  const organizationId = normalizeOrganizationId(
+    requestedOrganizationId || staff.organizationId
+  );
+  const quoteId = normalizeText(data?.quoteId);
+  const requestId = normalizeText(data?.requestId);
+  if (!organizationId || !quoteId || !requestId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId, quoteId, and requestId are required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Approval resolution requires same-organization admin authority."
+    );
+  }
+
+  try {
+    const quoteRef = getQuoteDocRef(quoteId, organizationId);
+    const resolvedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const quoteSnap = await tx.get(quoteRef);
+      if (!quoteSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Quote not found.");
+      }
+      const quote = quoteSnap.data() || {};
+      if (normalizeOrganizationId(quote.organizationId || organizationId) !== organizationId) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "Quote is outside your organization."
+        );
+      }
+      if (normalizeText(quote.status).toLowerCase() === "deleted" || normalizeText(quote.deletedAtISO)) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Deleted quote approvals cannot be resolved."
+        );
+      }
+
+      const planned = buildApprovalResolution({
+        workflow: quote.workflow,
+        requestId,
+        state: data?.state,
+        resolutionNote: data?.resolutionNote,
+        actorEmail: staff.email,
+        nowISO: resolvedAtISO
+      });
+      tx.update(quoteRef, {
+        "workflow.approvalRequests": planned.approvalRequests,
+        updatedAtISO: resolvedAtISO
+      });
+      return planned.request;
+    });
+
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      request: result
+    };
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (err instanceof ApprovalWorkflowError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    functions.logger.error("Approval resolution failed", {
+      organizationId,
+      quoteId,
+      requestId,
+      actorUid: staff.uid,
+      error: normalizeText(err?.message)
+    });
+    throw new functions.https.HttpsError("internal", "Failed to resolve quote approval.");
   }
 });
 

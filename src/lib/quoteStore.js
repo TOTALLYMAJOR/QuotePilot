@@ -48,6 +48,8 @@ const PORTAL_VISIBLE_STATUSES = new Set(["sent", "viewed", "accepted", "declined
 const HARD_DELETE_QUOTE_CALLABLE = "hardDeleteQuote";
 const PURGE_DELETED_QUOTES_CALLABLE = "purgeDeletedQuotesForOrganization";
 const UPDATE_QUOTE_DRAFT_CALLABLE = "updateQuoteDraft";
+const REQUEST_QUOTE_APPROVAL_CALLABLE = "requestQuoteApproval";
+const RESOLVE_QUOTE_APPROVAL_CALLABLE = "resolveQuoteApprovalRequest";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
@@ -169,6 +171,11 @@ function ensureCallableReady(action = "quote callable") {
   if (!cloudFunctions) {
     throw new Error(`Cloud Functions unavailable for ${action}.`);
   }
+}
+
+function isMissingCallableError(error) {
+  const code = String(error?.code || "").trim().toLowerCase();
+  return code === "functions/not-found" || code === "not-found";
 }
 
 function quoteVersionsWriteCollectionRef(quoteId, organizationId = undefined, action = "quote version write") {
@@ -1935,6 +1942,49 @@ export async function requestQuoteApproval({
     throw new Error("Invalid approval action.");
   }
 
+  if (firebaseReady) {
+    const organizationId = requireWriteOrganizationId(
+      undefined,
+      REQUEST_QUOTE_APPROVAL_CALLABLE
+    );
+    ensureCallableReady(REQUEST_QUOTE_APPROVAL_CALLABLE);
+    const call = httpsCallable(cloudFunctions, REQUEST_QUOTE_APPROVAL_CALLABLE);
+    try {
+      const response = await call({
+        organizationId,
+        quoteId: id,
+        action: normalizedAction,
+        note: String(note || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+      });
+      const result = response?.data && typeof response.data === "object"
+        ? response.data
+        : {};
+      const request = normalizeApprovalRequests([result.request])[0];
+      if (
+        result.ok !== true
+        || normalizeOrganizationId(result.organizationId) !== organizationId
+        || String(result.quoteId || "").trim() !== id
+        || !request
+        || request.action !== normalizedAction
+        || request.state !== "pending"
+      ) {
+        throw new Error("Trusted approval request returned an invalid response.");
+      }
+      return { ok: true, storage: "firebase", request };
+    } catch (err) {
+      // Vercel can promote the browser before the coordinated Functions/rules
+      // release. Only a confirmed missing endpoint may use the existing
+      // rule-authorized write path during that short rollout window.
+      if (!isMissingCallableError(err)) throw err;
+    }
+  }
+
+  const approvalActorEmail = firebaseReady
+    ? normalizeEmail(auth?.currentUser?.email)
+    : normalizeEmail(actorEmail);
+  if (firebaseReady && !approvalActorEmail) {
+    throw new Error("Authenticated email is required for approval audit fallback.");
+  }
   const quote = await readQuoteById(id);
   const current = normalizeApprovalRequests(quote.workflow?.approvalRequests);
   if (current.some((item) => item.action === normalizedAction && item.state === "pending")) {
@@ -1947,7 +1997,7 @@ export async function requestQuoteApproval({
     state: "pending",
     note: String(note || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH),
     requestedAtISO: nowISO,
-    requestedByEmail: normalizeEmail(actorEmail),
+    requestedByEmail: approvalActorEmail,
     resolvedAtISO: "",
     resolvedByEmail: "",
     resolutionNote: ""
@@ -1992,6 +2042,47 @@ export async function resolveQuoteApprovalRequest({
     throw new Error("Approval resolution must be approved or rejected.");
   }
 
+  if (firebaseReady) {
+    const organizationId = requireWriteOrganizationId(
+      undefined,
+      RESOLVE_QUOTE_APPROVAL_CALLABLE
+    );
+    ensureCallableReady(RESOLVE_QUOTE_APPROVAL_CALLABLE);
+    const call = httpsCallable(cloudFunctions, RESOLVE_QUOTE_APPROVAL_CALLABLE);
+    try {
+      const response = await call({
+        organizationId,
+        quoteId: id,
+        requestId: approvalRequestId,
+        state: nextState,
+        resolutionNote: String(resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+      });
+      const result = response?.data && typeof response.data === "object"
+        ? response.data
+        : {};
+      const request = normalizeApprovalRequests([result.request])[0];
+      if (
+        result.ok !== true
+        || normalizeOrganizationId(result.organizationId) !== organizationId
+        || String(result.quoteId || "").trim() !== id
+        || !request
+        || request.id !== approvalRequestId
+        || request.state !== nextState
+      ) {
+        throw new Error("Trusted approval resolution returned an invalid response.");
+      }
+      return { ok: true, storage: "firebase", request };
+    } catch (err) {
+      if (!isMissingCallableError(err)) throw err;
+    }
+  }
+
+  const resolutionActorEmail = firebaseReady
+    ? normalizeEmail(auth?.currentUser?.email)
+    : normalizeEmail(actorEmail);
+  if (firebaseReady && !resolutionActorEmail) {
+    throw new Error("Authenticated email is required for approval resolution audit fallback.");
+  }
   const quote = await readQuoteById(id);
   const current = normalizeApprovalRequests(quote.workflow?.approvalRequests);
   const target = current.find((item) => item.id === approvalRequestId);
@@ -2008,7 +2099,7 @@ export async function resolveQuoteApprovalRequest({
         ...item,
         state: nextState,
         resolvedAtISO: nowISO,
-        resolvedByEmail: normalizeEmail(actorEmail),
+        resolvedByEmail: resolutionActorEmail,
         resolutionNote: String(resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
       }
       : item

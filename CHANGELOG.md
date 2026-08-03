@@ -8,6 +8,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Server-authoritative quote approval request and resolution callables with
+  same-tenant staff enforcement, admin-only resolution, transaction-backed
+  duplicate/replay protection, and server-owned actor/timestamp audit fields.
+- Focused approval workflow coverage across pure server planning, Firebase
+  client delegation, Firestore direct-write denial, and the full
+  Auth/Firestore/Functions emulator acceptance matrix.
 - Hospitality-first QuotePilot landing page at `/`, adapted from the approved Magic Patterns direction with original catered-event imagery, real QuotePilot interfaces, proof-safe quote-to-event language, responsive and dark layouts, restrained reveal motion, and reduced-motion support.
 - Durable landing-page design brief at `marketing/LandingPage.md`, including customer, copy, route, asset, preservation, and acceptance criteria.
 - Saved dark QuotePilot product overview at `/system`, including its six-capability feature drawer, animated workflow map, real app screenshots, keyboard focus containment, and full-screen mobile layout.
@@ -65,6 +71,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Firebase-backed Sales Workflow approval mutations now use trusted callables;
+  direct browser writes to `workflow.approvalRequests` are denied for both
+  sales and admin roles. A confirmed missing-callable response may use the
+  existing rule-authorized path only during a Vercel-first rollout window; all
+  other callable failures remain fail-closed. Local fallback mode retains its
+  existing offline behavior.
 - The repository, CI, Docker image, and Firebase Functions now target Node.js
   22. Functions use Firebase Admin 14 modular app, Auth, and Firestore APIs
   across runtime, emulator seed, provisioning, tenant migration, and catalog

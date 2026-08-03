@@ -230,67 +230,6 @@ service cloud.firestore {
         && followUp.updatedByEmail == request.auth.token.email;
     }
 
-    function salesApprovalRequestAppendOnly() {
-      let previousWorkflow = resource.data.get("workflow", {});
-      let nextWorkflow = request.resource.data.get("workflow", {});
-      let previousRequests = previousWorkflow.get("approvalRequests", []);
-      let nextRequests = nextWorkflow.get("approvalRequests", []);
-      let addedRequests = nextRequests.removeAll(previousRequests);
-      let requestItem = addedRequests.size() == 1 ? addedRequests[0] : {};
-      return previousWorkflow is map
-        && nextWorkflow is map
-        && previousRequests is list
-        && nextRequests is list
-        && nextWorkflow.diff(previousWorkflow).affectedKeys().hasOnly(["approvalRequests"])
-        && nextRequests.size() == previousRequests.size() + 1
-        && previousRequests.removeAll(nextRequests).size() == 0
-        && addedRequests.size() == 1
-        && requestItem is map
-        && requestItem.keys().hasOnly([
-          "id",
-          "action",
-          "state",
-          "note",
-          "requestedAtISO",
-          "requestedByEmail",
-          "resolvedAtISO",
-          "resolvedByEmail",
-          "resolutionNote"
-        ])
-        && requestItem.keys().hasAll([
-          "id",
-          "action",
-          "state",
-          "note",
-          "requestedAtISO",
-          "requestedByEmail",
-          "resolvedAtISO",
-          "resolvedByEmail",
-          "resolutionNote"
-        ])
-        && requestItem.id is string
-        && requestItem.id.size() >= 20
-        && requestItem.id.size() <= 160
-        && requestItem.action in [
-          "send_payment_request",
-          "convert_to_contract",
-          "rotate_portal_link",
-          "delete_quote"
-        ]
-        && requestItem.state == "pending"
-        && requestItem.note is string
-        && requestItem.note.size() <= 800
-        && requestItem.requestedAtISO == request.resource.data.updatedAtISO
-        && requestItem.requestedByEmail == request.auth.token.email
-        && requestItem.resolvedAtISO == ""
-        && requestItem.resolvedByEmail == ""
-        && requestItem.resolutionNote == "";
-    }
-
-    function salesWorkflowPatchOnly() {
-      return salesFollowUpPatchOnly() || salesApprovalRequestAppendOnly();
-    }
-
     function staffVersionPointerPatchAllowed(orgId, quoteId) {
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
       let previousVersionNumber = resource.data.get("latestVersionNumber", 0);
@@ -356,8 +295,7 @@ service cloud.firestore {
           )
           && (
             !affectedKeys.hasAny(["workflow"])
-            || isOrgAdmin(orgId)
-            || salesWorkflowPatchOnly()
+            || salesFollowUpPatchOnly()
           )
           && (
             !affectedKeys.hasAny(["integrations"])
