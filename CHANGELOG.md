@@ -82,6 +82,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Step 1 now groups guest and role counts under Attendance & Staffing while
+  keeping five exceptional staffing-rate fields inside the collapsed Advanced
+  Pricing section. Saved or template-applied rate values remain visible through
+  an active-pricing warning, and values survive collapse/reopen unchanged.
 - Phone and tablet quote building now keeps Total and Deposit in a sticky
   summary throughout all five steps, exposes the single full breakdown as a
   focus-contained sheet with background isolation and Close/Escape recovery,

@@ -11,7 +11,7 @@ Last updated: August 3, 2026
   returned status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains
   the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the release candidate passes 248 unit tests (35
+- Build and local validation: the release candidate passes 249 unit tests (35
   intentionally skipped), 34 focused Firestore rules tests, and the default
   Playwright suite (29 passed, 2 intentionally gated provisioning-role cases
   skipped). The Firebase Auth/catalog browser lane, authoritative
@@ -24,6 +24,11 @@ Last updated: August 3, 2026
   provisioning matrices pass with that runtime candidate.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action approval requests, the customer decision center, and event production checklists are implemented and locally covered.
+- Current branch quote-entry simplification: Step 1 keeps attendance and role
+  counts in the primary flow while placing five exceptional staffing-rate
+  values in Advanced Pricing. Existing saved/template values trigger a visible
+  review warning and survive collapse/reopen; 1440px, 390px, and 320px layout
+  containment is locally covered without changing pricing or persistence code.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
 - Current branch tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
 - Current release-candidate provisioning hardening adds verified-email,

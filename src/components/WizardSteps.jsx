@@ -27,10 +27,11 @@ function AccordionGroup({
   onToggle,
   children,
   optional = false,
-  collapsedHint = ""
+  collapsedHint = "",
+  attention = false
 }) {
   return (
-    <section className={joinClassNames("accordion-group", open && "open")}> 
+    <section className={joinClassNames("accordion-group", open && "open", attention && "has-attention")}>
       <button
         type="button"
         className="accordion-trigger"
@@ -134,6 +135,13 @@ export function StepEvent({
   const staffingChargeModeLabel = staffingChargeMode === "per_event_per_staff"
     ? "Per event x staff count"
     : "Per hour x staff count";
+  const hasStaffingRateValues = [
+    form.serverRateOverride,
+    form.serverRateMixCsv,
+    form.chefRateOverride,
+    form.chefRateMixCsv,
+    form.bartenderRateOverride
+  ].some((value) => String(value ?? "").trim() !== "");
 
   const toggleGroup = (groupId) => {
     setOpenGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -226,105 +234,48 @@ export function StepEvent({
             </div>
           </Field>
 
-          <StepperNumberInput
-            label="Guests (max 400)"
-            min={0}
-            max={400}
-            value={Math.max(0, Number(form.guests || 0))}
-            onChange={(value) => updateField("guests", value)}
-            onBlur={() => markBlur("guests")}
-            error={getError("guests")}
-            required
-          />
+          <fieldset className="wizard-fieldset">
+            <legend>Attendance &amp; staffing</legend>
+            <div className="grid two-col">
+              <StepperNumberInput
+                label="Guests (max 400)"
+                min={0}
+                max={400}
+                value={Math.max(0, Number(form.guests || 0))}
+                onChange={(value) => updateField("guests", value)}
+                onBlur={() => markBlur("guests")}
+                error={getError("guests")}
+                required
+              />
 
-          <StepperNumberInput
-            label="Servers"
-            min={0}
-            max={30}
-            value={Math.max(0, Number(form.servers || 0))}
-            onChange={(value) => updateField("servers", value)}
-            onBlur={() => markBlur("servers")}
-          />
+              <StepperNumberInput
+                label="Servers"
+                min={0}
+                max={30}
+                value={Math.max(0, Number(form.servers || 0))}
+                onChange={(value) => updateField("servers", value)}
+                onBlur={() => markBlur("servers")}
+              />
 
-          <StepperNumberInput
-            label="Chefs"
-            min={0}
-            max={20}
-            value={Math.max(0, Number(form.chefs || 0))}
-            onChange={(value) => updateField("chefs", value)}
-            onBlur={() => markBlur("chefs")}
-          />
+              <StepperNumberInput
+                label="Chefs"
+                min={0}
+                max={20}
+                value={Math.max(0, Number(form.chefs || 0))}
+                onChange={(value) => updateField("chefs", value)}
+                onBlur={() => markBlur("chefs")}
+              />
 
-          <StepperNumberInput
-            label="Bartenders"
-            min={0}
-            max={20}
-            value={Math.max(0, Number(form.bartenders || 0))}
-            onChange={(value) => updateField("bartenders", value)}
-            onBlur={() => markBlur("bartenders")}
-          />
-
-          <Field label="Server rate override (optional)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.serverRateOverride ?? ""}
-              onChange={(e) => updateField("serverRateOverride", e.target.value)}
-              onBlur={() => markBlur("serverRateOverride")}
-              placeholder={`Default from admin (${staffingChargeModeLabel})`}
-            />
-          </Field>
-
-          <Field
-            label="Server rates (optional, one per server)"
-            hint="Applied in order to each server count; remaining servers use Server rate override/default."
-          >
-            <input
-              type="text"
-              value={String(form.serverRateMixCsv || "")}
-              onChange={(e) => updateField("serverRateMixCsv", String(e.target.value || "").slice(0, 300))}
-              onBlur={() => markBlur("serverRateMixCsv")}
-              placeholder="25, 30, 30, 35"
-            />
-          </Field>
-
-          <Field label="Chef rate override (optional)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.chefRateOverride ?? ""}
-              onChange={(e) => updateField("chefRateOverride", e.target.value)}
-              onBlur={() => markBlur("chefRateOverride")}
-              placeholder={`Default from admin (${staffingChargeModeLabel})`}
-            />
-          </Field>
-
-          <Field
-            label="Chef rates (optional, one per chef)"
-            hint="Applied in order to each chef count; remaining chefs use Chef rate override/default."
-          >
-            <input
-              type="text"
-              value={String(form.chefRateMixCsv || "")}
-              onChange={(e) => updateField("chefRateMixCsv", String(e.target.value || "").slice(0, 300))}
-              onBlur={() => markBlur("chefRateMixCsv")}
-              placeholder="45, 50, 55"
-            />
-          </Field>
-
-          <Field label="Bartender rate override (optional)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.bartenderRateOverride ?? ""}
-              onChange={(e) => updateField("bartenderRateOverride", e.target.value)}
-              onBlur={() => markBlur("bartenderRateOverride")}
-              placeholder={`Default from admin (${staffingChargeModeLabel})`}
-            />
-          </Field>
+              <StepperNumberInput
+                label="Bartenders"
+                min={0}
+                max={20}
+                value={Math.max(0, Number(form.bartenders || 0))}
+                onChange={(value) => updateField("bartenders", value)}
+                onBlur={() => markBlur("bartenders")}
+              />
+            </div>
+          </fieldset>
 
           <Field label="Event name" error={getError("eventName")} required>
             <input
@@ -411,9 +362,14 @@ export function StepEvent({
       <AccordionGroup
         id="advancedPricing"
         title="Advanced Pricing Overrides"
-        description="Optional controls for templates, seasonality, and tax context"
+        description={hasStaffingRateValues
+          ? "Staffing rate values are set — open to review"
+          : "Optional templates, seasonality, tax, and staffing rates"}
         optional
-        collapsedHint="Optional: use only when you need custom pricing context beyond core event details."
+        collapsedHint={hasStaffingRateValues
+          ? "Staffing rate values are set on this quote. Show this section to review them before sending."
+          : "Leave closed to use approved admin pricing and automatic defaults."}
+        attention={hasStaffingRateValues}
         open={openGroups.advancedPricing}
         onToggle={toggleGroup}
       >
@@ -470,6 +426,75 @@ export function StepEvent({
               <option value="no">No</option>
             </select>
           </Field>
+          <fieldset className="wizard-fieldset">
+            <legend>Staffing pricing</legend>
+            <p className="field-hint">
+              Leave these values blank to use approved admin rates. Saved quotes may carry rate values forward, so review them before sending.
+            </p>
+            <div className="grid two-col">
+              <Field label="Server rate override (optional)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.serverRateOverride ?? ""}
+                  onChange={(e) => updateField("serverRateOverride", e.target.value)}
+                  onBlur={() => markBlur("serverRateOverride")}
+                  placeholder={`Default from admin (${staffingChargeModeLabel})`}
+                />
+              </Field>
+
+              <Field
+                label="Server rates (optional, one per server)"
+                hint="Applied in order to each server count; remaining servers use Server rate override/default."
+              >
+                <input
+                  type="text"
+                  value={String(form.serverRateMixCsv || "")}
+                  onChange={(e) => updateField("serverRateMixCsv", String(e.target.value || "").slice(0, 300))}
+                  onBlur={() => markBlur("serverRateMixCsv")}
+                  placeholder="25, 30, 30, 35"
+                />
+              </Field>
+
+              <Field label="Chef rate override (optional)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.chefRateOverride ?? ""}
+                  onChange={(e) => updateField("chefRateOverride", e.target.value)}
+                  onBlur={() => markBlur("chefRateOverride")}
+                  placeholder={`Default from admin (${staffingChargeModeLabel})`}
+                />
+              </Field>
+
+              <Field
+                label="Chef rates (optional, one per chef)"
+                hint="Applied in order to each chef count; remaining chefs use Chef rate override/default."
+              >
+                <input
+                  type="text"
+                  value={String(form.chefRateMixCsv || "")}
+                  onChange={(e) => updateField("chefRateMixCsv", String(e.target.value || "").slice(0, 300))}
+                  onBlur={() => markBlur("chefRateMixCsv")}
+                  placeholder="45, 50, 55"
+                />
+              </Field>
+
+              <Field label="Bartender rate override (optional)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.bartenderRateOverride ?? ""}
+                  onChange={(e) => updateField("bartenderRateOverride", e.target.value)}
+                  onBlur={() => markBlur("bartenderRateOverride")}
+                  placeholder={`Default from admin (${staffingChargeModeLabel})`}
+                />
+              </Field>
+            </div>
+          </fieldset>
         </div>
       </AccordionGroup>
 

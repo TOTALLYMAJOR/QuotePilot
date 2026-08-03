@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: July 27, 2026
+Last updated: August 3, 2026
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -32,6 +32,12 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Quote Builder Details
 - Event Type drives dynamic menu categories and items.
+- `Core Event Basics` keeps guest count and the Servers, Chefs, and Bartenders
+  counts together under `Attendance & staffing`.
+- `Advanced Pricing Overrides` starts collapsed. Open it only for exceptional
+  template, tax, season, disposables, or staffing-rate values. If a saved quote
+  or template already contains staffing-rate values, the collapsed section
+  displays a review warning; opening and closing it does not clear those values.
 - The review step shows a proposal readiness score and any missing customer, event, menu, or total details.
 - `Compare Scenario` presents Good/Better/Best package options with recalculated totals; applying a scenario updates the active quote draft.
 - Pricing supports:

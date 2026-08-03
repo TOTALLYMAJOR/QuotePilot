@@ -132,13 +132,77 @@ test("step 1 soft-lock keeps next disabled until required fields are complete", 
   await expect(nextButton).toBeEnabled();
 });
 
-test("staffing inputs support per-role counts and direct rate overrides", async ({ page }) => {
-  const bartenderRateOverride = page.getByLabel(/Bartender rate override/i);
-  await expect(bartenderRateOverride).toBeVisible();
+test("staffing counts stay primary while optional rate values remain reviewable", async ({ page }) => {
+  const staffingGroup = page.getByRole("group", { name: "Attendance & staffing" });
+  const advancedPricing = page.getByRole("button", { name: /Advanced Pricing Overrides/i });
+  const serverRateOverride = page.getByRole("spinbutton", { name: /^Server rate override/i });
+  const serverRateMix = page.getByRole("textbox", { name: /^Server rates \(optional, one per server\)/i });
+  const chefRateOverride = page.getByRole("spinbutton", { name: /^Chef rate override/i });
+  const chefRateMix = page.getByRole("textbox", { name: /^Chef rates \(optional, one per chef\)/i });
+  const bartenderRateOverride = page.getByRole("spinbutton", { name: /^Bartender rate override/i });
+  const rateFields = [
+    serverRateOverride,
+    serverRateMix,
+    chefRateOverride,
+    chefRateMix,
+    bartenderRateOverride
+  ];
+  const expectStaffingLayout = async ({ width, columns }) => {
+    await page.setViewportSize({ width, height: width <= 390 ? 844 : 900 });
+    await expect(staffingGroup).toBeVisible();
+    const layout = await staffingGroup.evaluate((element) => {
+      const fieldset = element.getBoundingClientRect();
+      const panel = element.closest(".accordion-panel")?.getBoundingClientRect();
+      const innerGrid = element.querySelector(":scope > .grid.two-col");
+      return {
+        columns: getComputedStyle(innerGrid).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+        fieldsetLeft: fieldset.left,
+        fieldsetRight: fieldset.right,
+        panelLeft: panel?.left ?? 0,
+        panelRight: panel?.right ?? document.documentElement.clientWidth,
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth
+      };
+    });
+    expect(layout.columns).toBe(columns);
+    expect(layout.fieldsetLeft).toBeGreaterThanOrEqual(layout.panelLeft - 1);
+    expect(layout.fieldsetRight).toBeLessThanOrEqual(layout.panelRight + 1);
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
+  };
+
+  await expectStaffingLayout({ width: 1440, columns: 2 });
+  await expectStaffingLayout({ width: 390, columns: 1 });
+  await expectStaffingLayout({ width: 320, columns: 1 });
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await expect(staffingGroup).toBeVisible();
+  await expect(advancedPricing).toHaveAttribute("aria-expanded", "false");
+  for (const field of rateFields) await expect(field).toHaveCount(0);
+
   await page.getByRole("button", { name: /Increase Bartenders/i }).click();
   await page.getByRole("button", { name: /Increase Bartenders/i }).click();
   await expect(page.getByRole("spinbutton", { name: "Bartenders" })).toHaveValue("2");
+
+  await advancedPricing.click();
+  await expect(advancedPricing).toHaveAttribute("aria-expanded", "true");
+  for (const field of rateFields) await expect(field).toBeVisible();
+
+  await serverRateOverride.fill("32");
+  await serverRateMix.fill("31, 33");
+  await chefRateOverride.fill("48");
+  await chefRateMix.fill("45, 50");
   await bartenderRateOverride.fill("48");
+
+  await advancedPricing.click();
+  await expect(advancedPricing).toHaveAttribute("aria-expanded", "false");
+  await expect(advancedPricing).toContainText("Staffing rate values are set");
+  for (const field of rateFields) await expect(field).toHaveCount(0);
+
+  await advancedPricing.click();
+  await expect(serverRateOverride).toHaveValue("32");
+  await expect(serverRateMix).toHaveValue("31, 33");
+  await expect(chefRateOverride).toHaveValue("48");
+  await expect(chefRateMix).toHaveValue("45, 50");
   await expect(bartenderRateOverride).toHaveValue("48");
 });
 
