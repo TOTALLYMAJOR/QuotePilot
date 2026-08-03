@@ -120,6 +120,7 @@ export async function sendQuoteToCustomerEmail({ quoteId, attachment = null } = 
 
 export async function sendPaymentRequestToCustomerEmail({
   quoteId,
+  approvalRequestId,
   attachment = null
 } = {}) {
   ensureFunctionsReady();
@@ -127,6 +128,7 @@ export async function sendPaymentRequestToCustomerEmail({
   const call = httpsCallable(cloudFunctions, "sendPaymentRequestEmail");
   const result = await call({
     quoteId,
+    approvalRequestId,
     attachment
   });
   return result.data || {};

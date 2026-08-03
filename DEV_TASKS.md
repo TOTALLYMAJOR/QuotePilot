@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: July 27, 2026
+Last updated: August 3, 2026
 
 ## P0 - Tenant Provisioning Release
 - Deploy the reviewed role-authoritative Firestore rules and
@@ -37,9 +37,6 @@ Last updated: July 27, 2026
 
 ## P1 - Product Capability
 - Add automated notifications and escalation rules for due follow-ups and new customer change requests.
-- Link each approved sensitive-action request to the matching separate admin
-  execution and record the action outcome; request creation and admin
-  resolution are already server-authoritative in the current source candidate.
 - Refresh/backfill existing portal snapshots so older active links receive the new decision-center event, selection, and pricing fields.
 - Add basic analytics events for funnel drop-off and add-on selection trends.
 - Extend operations audit controls (retry dashboards, sync health trends, role-based action logs).

@@ -948,6 +948,85 @@ await expectCallableError(
   }),
   "FAILED_PRECONDITION"
 );
+async function requestAndApproveQuoteAction(quoteId, action, note = "Approved emulator action.") {
+  const requested = await callFunction("requestQuoteApproval", tenantMember.idToken, {
+    organizationId,
+    quoteId,
+    action,
+    note
+  });
+  assert.equal(requested.ok, true);
+  const resolved = await callFunction("resolveQuoteApprovalRequest", bootstrapToken, {
+    organizationId,
+    quoteId,
+    requestId: requested.request.id,
+    state: "approved",
+    resolutionNote: "Approved for exact server execution."
+  });
+  assert.equal(resolved.request?.executionState, "awaiting_execution");
+  return resolved.request;
+}
+
+const contractApproval = await requestAndApproveQuoteAction(
+  acceptanceQuoteId,
+  "convert_to_contract",
+  "Customer acceptance is ready for contract conversion."
+);
+const contractConverted = await callFunction("convertQuoteToContract", bootstrapToken, {
+  organizationId,
+  quoteId: acceptanceQuoteId,
+  approvalRequestId: contractApproval.id
+});
+assert.equal(contractConverted.ok, true);
+assert.equal(contractConverted.status, "booked");
+assert.equal(contractConverted.approvalRequest?.executionState, "succeeded");
+assert.equal(
+  (await orgRef.collection("quotes").doc(acceptanceQuoteId).get())
+    .data()?.workflow?.approvalRequests
+    ?.find((item) => item.id === contractApproval.id)
+    ?.executionState,
+  "succeeded"
+);
+const repeatedContractConversion = await callFunction(
+  "convertQuoteToContract",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    approvalRequestId: contractApproval.id
+  }
+);
+assert.equal(repeatedContractConversion.idempotent, true);
+
+const rotationFixture = await callFunction("duplicateQuoteDraft", bootstrapToken, {
+  organizationId,
+  sourceQuoteId: acceptanceQuoteId
+});
+assert.equal(rotationFixture.ok, true);
+const successfulRotateApproval = await requestAndApproveQuoteAction(
+  rotationFixture.id,
+  "rotate_portal_link",
+  "Rotate the duplicate quote portal before customer delivery."
+);
+const successfulRotation = await callFunction("rotateQuotePortalKey", bootstrapToken, {
+  organizationId,
+  quoteId: rotationFixture.id,
+  approvalRequestId: successfulRotateApproval.id
+});
+assert.equal(successfulRotation.ok, true);
+assert.equal(successfulRotation.approvalRequest?.executionState, "succeeded");
+const repeatedRotation = await callFunction("rotateQuotePortalKey", bootstrapToken, {
+  organizationId,
+  quoteId: rotationFixture.id,
+  approvalRequestId: successfulRotateApproval.id
+});
+assert.equal(repeatedRotation.idempotent, true);
+
+const paymentRequestApproval = await requestAndApproveQuoteAction(
+  acceptanceQuoteId,
+  "send_payment_request",
+  "Send the accepted deposit request."
+);
 await expectCallableError(
   () => callFunction("notifyOwnerNewQuote", tenantMember.idToken, {
     quoteId: acceptanceQuoteId
@@ -1030,7 +1109,8 @@ await acceptanceQuoteRef.set({
 await expectCallableError(
   () => callFunction("sendPaymentRequestEmail", bootstrapToken, {
     organizationId,
-    quoteId: acceptanceQuoteId
+    quoteId: acceptanceQuoteId,
+    approvalRequestId: paymentRequestApproval.id
   }),
   "FAILED_PRECONDITION"
 );
@@ -1055,9 +1135,30 @@ await acceptanceQuoteRef.set({
   payment: paymentStateSent
 }, { merge: true });
 await expectCallableError(
+  () => callFunction("sendPaymentRequestEmail", bootstrapToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    approvalRequestId: paymentRequestApproval.id
+  }),
+  "FAILED_PRECONDITION"
+);
+assert.equal(
+  (await acceptanceQuoteRef.get())
+    .data()?.workflow?.approvalRequests
+    ?.find((item) => item.id === paymentRequestApproval.id)
+    ?.executionState,
+  "failed"
+);
+const rotateApproval = await requestAndApproveQuoteAction(
+  acceptanceQuoteId,
+  "rotate_portal_link",
+  "Rotate the customer portal after review."
+);
+await expectCallableError(
   () => callFunction("rotateQuotePortalKey", bootstrapToken, {
     organizationId,
-    quoteId: acceptanceQuoteId
+    quoteId: acceptanceQuoteId,
+    approvalRequestId: rotateApproval.id
   }),
   "FAILED_PRECONDITION"
 );
@@ -1090,7 +1191,11 @@ const paymentEvent = {
   }
 };
 const corruptPortalPaymentAttempt = await callStripeWebhook(paymentEvent);
-assert.equal(corruptPortalPaymentAttempt.status, 500);
+assert.equal(
+  corruptPortalPaymentAttempt.status,
+  500,
+  corruptPortalPaymentAttempt.responseText
+);
 assert.equal(
   (await db.collection("webhookEvents").doc(`stripe-${paymentEventId}`).get()).exists,
   false
@@ -1111,7 +1216,7 @@ const underpaidAttempt = await callStripeWebhook({
     }
   }
 });
-assert.equal(underpaidAttempt.status, 500);
+assert.equal(underpaidAttempt.status, 500, underpaidAttempt.responseText);
 assert.equal(
   (await db.collection("webhookEvents").doc(`stripe-${paymentEventId}`).get()).exists,
   false
@@ -1187,16 +1292,32 @@ await db.collection("customerPortalQuotes").doc(mismatchedFallbackPortalKey).cre
   organizationId,
   status: "sent"
 });
+const isolatedDeleteApproval = await requestAndApproveQuoteAction(
+  isolatedCleanupQuoteId,
+  "delete_quote",
+  "Remove the isolated cleanup fixture."
+);
 const isolatedCleanup = await callFunction(
   "hardDeleteQuote",
-  adminPrincipal.idToken,
+  bootstrapToken,
   {
     organizationId,
-    quoteId: isolatedCleanupQuoteId
+    quoteId: isolatedCleanupQuoteId,
+    approvalRequestId: isolatedDeleteApproval.id
   }
 );
 assert.equal(isolatedCleanup.ok, true);
 assert.equal(isolatedCleanup.portalSnapshotsDeleted, 2);
+const repeatedIsolatedCleanup = await callFunction(
+  "hardDeleteQuote",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: isolatedCleanupQuoteId,
+    approvalRequestId: isolatedDeleteApproval.id
+  }
+);
+assert.equal(repeatedIsolatedCleanup.idempotent, true);
 assert.equal(
   (await orgRef.collection("quotes").doc(isolatedCleanupQuoteId).get()).exists,
   false
@@ -1217,12 +1338,18 @@ assert.equal(
   (await db.collection("customerPortalQuotes").doc(provenLegacyFallbackPortalKey).get()).exists,
   false
 );
+const mismatchedDeleteApproval = await requestAndApproveQuoteAction(
+  mismatchedFallbackQuoteId,
+  "delete_quote",
+  "Remove the mismatched fallback cleanup fixture."
+);
 const mismatchedFallbackCleanup = await callFunction(
   "hardDeleteQuote",
-  adminPrincipal.idToken,
+  bootstrapToken,
   {
     organizationId,
-    quoteId: mismatchedFallbackQuoteId
+    quoteId: mismatchedFallbackQuoteId,
+    approvalRequestId: mismatchedDeleteApproval.id
   }
 );
 assert.equal(mismatchedFallbackCleanup.ok, true);
@@ -1352,7 +1479,7 @@ console.log("- unverified owner could not consume the admin invite; verified ema
 console.log("- pending owner invite received a bounded server-authored expiry");
 console.log("- unauthenticated portal client accepted the quote and persisted the decision to both quote copies");
 console.log("- entitlement-only update preserved branding, catalog, and invite");
-console.log("- approval requests and admin resolutions used server-owned identity, timestamps, and replay protection");
+console.log("- approval requests, resolutions, and exact admin executions used server-owned identity, outcomes, idempotency, and replay protection");
 console.log("- archived tenant resume/update was blocked");
 console.log("- quote cleanup preserved cross-tenant, unscoped, and mismatched portal rows");
 console.log("- provider/payment operations denied sales and rejected caller-supplied links");

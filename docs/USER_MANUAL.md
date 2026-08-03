@@ -65,13 +65,20 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - Summary metrics show active opportunities, readiness gaps, follow-ups due, and pending approval requests.
 - The `Follow-ups` view supports lead stage, due date, note, completion state, proposal readiness, and a lifecycle timeline for each quote.
 - Sales staff can request approval for sensitive actions such as payment requests, contract conversion, portal-link rotation, or quote deletion.
-- Admins can approve or reject those requests with a resolution note. Approval records intent only; it does not execute the sensitive action. The admin must complete the separate action in Quote History.
+- Admins can approve or reject those requests with a resolution note. Approval
+  records authority but does not execute the action; select `Open Quote
+  History` and complete the matching operation there. Firebase-backed actions
+  consume that exact approval once and display awaiting, in-progress,
+  completed, or failed execution evidence. A failed provider action requires a
+  new approval request.
 - In the current source candidate, Firebase-backed request and resolution
   records prefer trusted Functions using the authenticated staff identity and
   server timestamp. A narrowly scoped missing-endpoint fallback preserves the
   existing rule-authorized path during a Vercel-first rollout; other callable
-  errors fail closed. Once the matching Functions and Firestore rules are
-  deployed together, direct approval-array writes are denied.
+  errors fail closed. Sensitive action execution has no browser-write fallback.
+  Once the matching Functions and Firestore rules are deployed together,
+  direct approval-array, contract-evidence, and execution-audit writes are
+  denied.
 
 ## Event Schedule and Production Checklist
 - Open `Schedule` to review accepted and booked events by month or week, inspect conflicts, and assign a staff lead.

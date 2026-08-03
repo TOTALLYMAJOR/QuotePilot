@@ -864,13 +864,59 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       },
       updatedAtISO: "2026-03-22T01:00:00.000Z"
     }));
-    await assertSucceeds(updateDoc(adminQuoteRef, {
+    await assertFails(updateDoc(adminQuoteRef, {
       booking: {
         contractNumber: "ADMIN-CONTRACT",
         contractConvertedAtISO: "2026-03-22T01:30:00.000Z"
       },
       updatedAtISO: "2026-03-22T01:30:00.000Z"
     }));
+    await assertSucceeds(updateDoc(adminQuoteRef, {
+      "booking.confirmationStatus": "sent",
+      "booking.confirmationSentAtISO": "2026-03-22T01:35:00.000Z",
+      updatedAtISO: "2026-03-22T01:35:00.000Z"
+    }));
+  });
+
+  test("approval execution audit is admin-readable and server-write-only", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "organizations", "org-a", "quoteApprovalExecutions", "approval-execution-0001"),
+        {
+          organizationId: "org-a",
+          quoteId: "q1",
+          approvalRequestId: "approval-execution-0001",
+          action: "convert_to_contract",
+          state: "succeeded"
+        }
+      );
+    });
+    const adminRef = doc(
+      testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      }).firestore(),
+      "organizations",
+      "org-a",
+      "quoteApprovalExecutions",
+      "approval-execution-0001"
+    );
+    const salesRef = doc(
+      testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      }).firestore(),
+      "organizations",
+      "org-a",
+      "quoteApprovalExecutions",
+      "approval-execution-0001"
+    );
+    await assertSucceeds(getDoc(adminRef));
+    await assertFails(getDoc(salesRef));
+    await assertFails(updateDoc(adminRef, { state: "failed" }));
+    await assertFails(deleteDoc(adminRef));
   });
 
   test("Stripe payment references and provider audit fields remain server-owned", async () => {

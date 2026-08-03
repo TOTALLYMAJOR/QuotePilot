@@ -11,8 +11,8 @@ Last updated: August 3, 2026
   returned status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains
   the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the release candidate passes 229 unit tests (33
-  intentionally skipped), 33 focused Firestore rules tests, and the default
+- Build and local validation: the release candidate passes 236 unit tests (34
+  intentionally skipped), 34 focused Firestore rules tests, and the default
   Playwright suite (27 passed, 2 intentionally gated provisioning-role cases
   skipped). The Firebase Auth/catalog browser lane, authoritative
   pricing/quote/portal browser lane, and full provisioning emulator acceptance
@@ -55,11 +55,21 @@ Last updated: August 3, 2026
   require the current authoritative admin role. Disabled providers reject and
   omit retained credentials. Browser CRM networking is disabled; admins can
   record organization-scoped integration audit events without an outbound send.
-- Workflow authority boundaries: approval resolution does not execute a sensitive action; customer acceptance does not prove payment or booking; production checklist completion does not prove inventory availability.
+- Workflow authority boundaries: approval resolution authorizes but does not
+  itself execute a sensitive action; the matching Quote History operation must
+  consume that exact approval. Customer acceptance does not prove payment or
+  booking, and production checklist completion does not prove inventory
+  availability.
 - Current source-candidate approval authority: Firebase-backed approval request
   creation and admin resolution use same-tenant callable transactions with
-  server-owned actor identity/timestamps, duplicate/replay rejection, and
-  direct Firestore approval-array writes denied after the rules rollout. A
+  server-owned actor identity/timestamps and duplicate/replay rejection.
+  Payment-request email, contract conversion, portal-link rotation, and
+  permanent deletion require the exact approved request, persist server-owned
+  execution outcome fields, and write a durable org-scoped execution audit.
+  Contract conversion is server-planned, and completed atomic actions replay
+  idempotently; failed provider execution requires a new approval. Direct
+  Firestore approval-array, contract-evidence, and execution-audit writes are
+  denied after the rules rollout. A
   confirmed missing-callable response alone may use the existing
   rule-authorized path during the Vercel-first deployment window; other
   callable errors fail closed. Pure planning, client delegation, rules denial,
@@ -129,10 +139,9 @@ Last updated: August 3, 2026
 - The customer decision frontend is live on Vercel, but the new
   `portalDecision` Firestore rule changes and enriched portal snapshots are not
   deployed or hosted-smoke-verified.
-- Approval request creation and admin resolution are server-authoritative in
-  the current source candidate, but production deployment and action-specific
-  linkage from an approved request to the later admin execution remain
-  follow-up work.
+- Approval request creation, admin resolution, and action-specific execution
+  linkage are server-authoritative in the current source candidate, but the
+  matching Functions/rules deployment and hosted acceptance remain pending.
 - Existing portal snapshots need refresh/backfill before older links can display every newly added event, selection, and pricing field.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
 - Bundle size remains a watch item; budget/CWV gates now prevent uncontrolled regressions.
@@ -148,9 +157,8 @@ Last updated: August 3, 2026
 2. Verify the intended Resend sender domain in the Resend dashboard and authoritative DNS; only then configure `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and recipient proof from one controlled test.
 3. Deploy the updated `firestore.rules` and run hosted portal decision smoke checks, including active, expired, deleted, and change-request paths.
 4. Refresh/backfill existing customer portal snapshots with the new customer-safe event and pricing fields.
-5. Link approved requests to the matching separate admin execution and record the action outcome.
-6. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
-7. Improve large-chunk performance while staying inside bundle/CWV guardrails.
+5. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
+6. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)
 - Focus completed: migration execution after fallback retirement and denial-matrix verification.

@@ -290,8 +290,13 @@ service cloud.firestore {
           )
           && (
             !affectedKeys.hasAny(["booking"])
-            || isOrgAdmin(orgId)
-            || salesBookingOperationsOnly()
+            || (
+              serverOwnedContractEvidenceUnchanged()
+              && (
+                isOrgAdmin(orgId)
+                || salesBookingOperationsOnly()
+              )
+            )
           )
           && (
             !affectedKeys.hasAny(["workflow"])
@@ -318,22 +323,6 @@ service cloud.firestore {
         ]);
     }
 
-    function staffAcceptedBookingTransitionPatchOnly() {
-      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
-      return affectedKeys.hasOnly([
-          "status",
-          "booking",
-          "updatedAtISO",
-          "lifecycle"
-        ])
-        && affectedKeys.hasAll([
-          "status",
-          "booking",
-          "updatedAtISO",
-          "lifecycle"
-        ]);
-    }
-
     function serverOwnedPaymentReferencesUnchanged() {
       let previousPayment = resource.data.get("payment", {});
       let nextPayment = request.resource.data.get("payment", {});
@@ -346,6 +335,20 @@ service cloud.firestore {
         && nextPayment.get("lastEventType", "") == previousPayment.get("lastEventType", "")
         && nextPayment.get("lastOrganizationId", "") == previousPayment.get("lastOrganizationId", "")
         && nextPayment.get("checkoutGeneration", 0) == previousPayment.get("checkoutGeneration", 0);
+    }
+
+    function serverOwnedContractEvidenceUnchanged() {
+      let previousBooking = resource.data.get("booking", {});
+      let nextBooking = request.resource.data.get("booking", {});
+      return previousBooking is map
+        && nextBooking is map
+        && nextBooking.get("bookedAtISO", "") == previousBooking.get("bookedAtISO", "")
+        && nextBooking.get("bookedByEmail", "") == previousBooking.get("bookedByEmail", "")
+        && nextBooking.get("contractNumber", "") == previousBooking.get("contractNumber", "")
+        && nextBooking.get("contractConvertedAtISO", "") == previousBooking.get("contractConvertedAtISO", "")
+        && nextBooking.get("contractConvertedByEmail", "") == previousBooking.get("contractConvertedByEmail", "")
+        && nextBooking.get("availabilityCheckedAtISO", "") == previousBooking.get("availabilityCheckedAtISO", "")
+        && nextBooking.get("availabilitySummary", {}) == previousBooking.get("availabilitySummary", {});
     }
 
     function salesDraftSendTransitionOnly() {
@@ -376,13 +379,6 @@ service cloud.firestore {
               isOrgAdmin(orgId)
               || salesDraftSendTransitionOnly()
             )
-          )
-          || (
-            isOrgAdmin(orgId)
-            && resource.data.status == "accepted"
-            && request.resource.data.status == "booked"
-            && resource.data.get("portalDecision", {}).get("decision", "") == "accepted"
-            && staffAcceptedBookingTransitionPatchOnly()
           )
         );
     }
@@ -711,6 +707,11 @@ service cloud.firestore {
         && resource.data.importBatchId == batchId
         && request.resource.data.importBatchId == batchId;
       allow delete: if false;
+    }
+
+    match /organizations/{orgId}/quoteApprovalExecutions/{executionId} {
+      allow read: if isOrgAdmin(orgId);
+      allow write: if false;
     }
 
     match /organizations/{orgId}/quotes/{quoteId} {

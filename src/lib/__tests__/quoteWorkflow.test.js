@@ -83,12 +83,25 @@ describe("quote workflow helpers", () => {
       booking: {
         contractNumber: "C-100",
         contractConvertedAtISO: "2026-05-04T10:00:00.000Z"
+      },
+      workflow: {
+        approvalRequests: [{
+          id: "approval-1",
+          action: "convert_to_contract",
+          state: "approved",
+          requestedAtISO: "2026-05-03T08:00:00.000Z",
+          resolvedAtISO: "2026-05-03T09:00:00.000Z",
+          executionState: "succeeded",
+          executionCompletedAtISO: "2026-05-04T09:59:00.000Z",
+          executionReference: "C-100"
+        }]
       }
     });
 
     expect(timeline[0].label).toBe("Quote created");
     expect(timeline.at(-1).label).toBe("Contract created");
     expect(timeline.some((item) => item.label === "Customer accepted proposal")).toBe(true);
+    expect(timeline.some((item) => item.label === "Approved action completed")).toBe(true);
   });
 
   test("merges persisted production completion into the fixed checklist", () => {

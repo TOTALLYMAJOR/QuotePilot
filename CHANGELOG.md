@@ -11,6 +11,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Server-authoritative quote approval request and resolution callables with
   same-tenant staff enforcement, admin-only resolution, transaction-backed
   duplicate/replay protection, and server-owned actor/timestamp audit fields.
+- Exact approval-to-execution enforcement for payment-request email, contract
+  conversion, portal-link rotation, and permanent quote deletion, including
+  server-owned execution outcomes, durable org-scoped audit records, and
+  idempotent replay behavior for completed operations.
+- Server-authoritative contract conversion planning and callable execution,
+  including conflict/capacity evidence and server-generated contract identity.
 - Focused approval workflow coverage across pure server planning, Firebase
   client delegation, Firestore direct-write denial, and the full
   Auth/Firestore/Functions emulator acceptance matrix.
@@ -77,6 +83,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   existing rule-authorized path only during a Vercel-first rollout window; all
   other callable failures remain fail-closed. Local fallback mode retains its
   existing offline behavior.
+- Firebase-backed sensitive actions now require the exact approved request id
+  and record awaiting, in-progress, succeeded, or failed execution state.
+  Failed provider delivery requires a new approval; completed atomic actions
+  return their stored result on replay. Direct browser writes cannot create
+  contract evidence or approval-execution audit records.
 - The repository, CI, Docker image, and Firebase Functions now target Node.js
   22. Functions use Firebase Admin 14 modular app, Auth, and Firestore APIs
   across runtime, emulator seed, provisioning, tenant migration, and catalog

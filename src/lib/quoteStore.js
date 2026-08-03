@@ -50,6 +50,7 @@ const PURGE_DELETED_QUOTES_CALLABLE = "purgeDeletedQuotesForOrganization";
 const UPDATE_QUOTE_DRAFT_CALLABLE = "updateQuoteDraft";
 const REQUEST_QUOTE_APPROVAL_CALLABLE = "requestQuoteApproval";
 const RESOLVE_QUOTE_APPROVAL_CALLABLE = "resolveQuoteApprovalRequest";
+const CONVERT_QUOTE_TO_CONTRACT_CALLABLE = "convertQuoteToContract";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
@@ -398,7 +399,18 @@ function normalizeApprovalRequests(input) {
         resolvedByEmail: state === "pending" ? "" : normalizeEmail(item?.resolvedByEmail),
         resolutionNote: state === "pending"
           ? ""
-          : String(item?.resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+          : String(item?.resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH),
+        executionState: ["awaiting_execution", "in_progress", "succeeded", "failed"].includes(
+          String(item?.executionState || "").trim().toLowerCase()
+        )
+          ? String(item.executionState).trim().toLowerCase()
+          : "",
+        executionStartedAtISO: String(item?.executionStartedAtISO || "").trim(),
+        executionCompletedAtISO: String(item?.executionCompletedAtISO || "").trim(),
+        executedByEmail: normalizeEmail(item?.executedByEmail),
+        executionOperationId: String(item?.executionOperationId || "").trim(),
+        executionReference: String(item?.executionReference || "").trim().slice(0, 500),
+        executionError: String(item?.executionError || "").trim().slice(0, 500)
       };
     })
     .filter(Boolean)
@@ -1466,11 +1478,62 @@ export async function getActiveQuoteVersion(quoteId, { organizationId = undefine
 export async function convertQuoteToContract({
   quoteId,
   actorEmail = "",
-  capacityLimit = 400
+  capacityLimit = 400,
+  approvalRequestId = ""
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
     throw new Error("Quote id is required.");
+  }
+
+  if (firebaseReady) {
+    const requestId = String(approvalRequestId || "").trim();
+    if (!requestId) {
+      throw new Error("An approved contract-conversion request is required.");
+    }
+    const organizationId = requireWriteOrganizationId(
+      undefined,
+      CONVERT_QUOTE_TO_CONTRACT_CALLABLE
+    );
+    ensureCallableReady(CONVERT_QUOTE_TO_CONTRACT_CALLABLE);
+    const call = httpsCallable(cloudFunctions, CONVERT_QUOTE_TO_CONTRACT_CALLABLE);
+    const response = await call({
+      organizationId,
+      quoteId: id,
+      approvalRequestId: requestId
+    });
+    const converted = response?.data && typeof response.data === "object"
+      ? response.data
+      : {};
+    const approvalRequest = normalizeApprovalRequests([converted.approvalRequest])[0];
+    if (
+      converted.ok !== true
+      || normalizeOrganizationId(converted.organizationId) !== organizationId
+      || String(converted.quoteId || "").trim() !== id
+      || String(converted.status || "").trim().toLowerCase() !== "booked"
+      || !String(converted.contractNumber || "").trim()
+      || !converted.booking
+      || !converted.lifecycle
+      || !converted.availability
+      || !approvalRequest
+      || approvalRequest.id !== requestId
+      || approvalRequest.action !== "convert_to_contract"
+      || approvalRequest.executionState !== "succeeded"
+    ) {
+      throw new Error("Trusted contract conversion returned an invalid response.");
+    }
+    return {
+      ok: true,
+      storage: "firebase",
+      status: "booked",
+      booking: converted.booking,
+      lifecycle: converted.lifecycle,
+      contractNumber: String(converted.contractNumber).trim(),
+      availability: converted.availability,
+      approvalRequest,
+      versionId: String(converted.versionId || "").trim(),
+      versionNumber: Math.max(1, Number(converted.versionNumber || 1))
+    };
   }
 
   const quote = await readQuoteById(id);
@@ -1508,25 +1571,6 @@ export async function convertQuoteToContract({
   };
 
   await saveQuoteVersion(id);
-
-  if (firebaseReady) {
-    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "convertQuoteToContract"), {
-      status: "booked",
-      booking: nextBooking,
-      lifecycle: nextLifecycle,
-      updatedAtISO: nowISO
-    });
-    await syncPortalSnapshotFromQuoteDoc(id, quote.organizationId);
-    return {
-      ok: true,
-      storage: "firebase",
-      status: "booked",
-      booking: nextBooking,
-      lifecycle: nextLifecycle,
-      contractNumber,
-      availability
-    };
-  }
 
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   let found = false;
@@ -1987,8 +2031,17 @@ export async function requestQuoteApproval({
   }
   const quote = await readQuoteById(id);
   const current = normalizeApprovalRequests(quote.workflow?.approvalRequests);
-  if (current.some((item) => item.action === normalizedAction && item.state === "pending")) {
-    throw new Error("A pending approval request already exists for this action.");
+  if (current.some((item) => (
+    item.action === normalizedAction
+    && (
+      item.state === "pending"
+      || (
+        item.state === "approved"
+        && !["succeeded", "failed"].includes(item.executionState)
+      )
+    )
+  ))) {
+    throw new Error("An unresolved or unexecuted approval request already exists for this action.");
   }
   const nowISO = isoNow();
   const request = {
@@ -2000,7 +2053,14 @@ export async function requestQuoteApproval({
     requestedByEmail: approvalActorEmail,
     resolvedAtISO: "",
     resolvedByEmail: "",
-    resolutionNote: ""
+    resolutionNote: "",
+    executionState: "",
+    executionStartedAtISO: "",
+    executionCompletedAtISO: "",
+    executedByEmail: "",
+    executionOperationId: "",
+    executionReference: "",
+    executionError: ""
   };
   const nextRequests = normalizeApprovalRequests([...current, request]);
 
@@ -2100,7 +2160,14 @@ export async function resolveQuoteApprovalRequest({
         state: nextState,
         resolvedAtISO: nowISO,
         resolvedByEmail: resolutionActorEmail,
-        resolutionNote: String(resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+        resolutionNote: String(resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH),
+        executionState: nextState === "approved" ? "awaiting_execution" : "",
+        executionStartedAtISO: "",
+        executionCompletedAtISO: "",
+        executedByEmail: "",
+        executionOperationId: "",
+        executionReference: "",
+        executionError: ""
       }
       : item
   ));
@@ -2838,7 +2905,11 @@ export async function updateQuote({
   };
 }
 
-export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
+export async function rotateQuotePortalKey({
+  quoteId,
+  actorEmail = "",
+  approvalRequestId = ""
+} = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
     throw new Error("Quote id is required.");
@@ -2846,6 +2917,10 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
 
   const quote = await readQuoteById(id);
   if (firebaseReady) {
+    const requestId = String(approvalRequestId || "").trim();
+    if (!requestId) {
+      throw new Error("An approved portal-rotation request is required.");
+    }
     const organizationId = requireWriteOrganizationId(
       quote.organizationId,
       "rotateQuotePortalKey"
@@ -2854,11 +2929,13 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
     const call = httpsCallable(cloudFunctions, "rotateQuotePortalKey");
     const response = await call({
       organizationId,
-      quoteId: id
+      quoteId: id,
+      approvalRequestId: requestId
     });
     const rotated = response?.data && typeof response.data === "object"
       ? response.data
       : {};
+    const approvalRequest = normalizeApprovalRequests([rotated.approvalRequest])[0];
     if (
       rotated.ok !== true
       || normalizeOrganizationId(rotated.organizationId) !== organizationId
@@ -2866,6 +2943,10 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
       || !String(rotated.portalKey || "").trim()
       || !String(rotated.portalIssuedAtISO || "").trim()
       || !String(rotated.portalExpiresAtISO || "").trim()
+      || !approvalRequest
+      || approvalRequest.id !== requestId
+      || approvalRequest.action !== "rotate_portal_link"
+      || approvalRequest.executionState !== "succeeded"
     ) {
       throw new Error("Trusted portal rotation returned an invalid response.");
     }
@@ -2876,7 +2957,8 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
       portalIssuedAtISO: String(rotated.portalIssuedAtISO).trim(),
       portalExpiresAtISO: String(rotated.portalExpiresAtISO).trim(),
       versionId: String(rotated.versionId || "").trim(),
-      versionNumber: Math.max(1, Number(rotated.versionNumber || 1))
+      versionNumber: Math.max(1, Number(rotated.versionNumber || 1)),
+      approvalRequest
     };
   }
 
@@ -3497,17 +3579,27 @@ export async function reopenQuote(id) {
   };
 }
 
-export async function deleteQuote(id, { organizationId = undefined } = {}) {
+export async function deleteQuote(id, {
+  organizationId = undefined,
+  approvalRequestId = ""
+} = {}) {
   const quoteId = String(id || "").trim();
   if (!quoteId) {
     throw new Error("Quote id is required.");
   }
 
   if (firebaseReady) {
+    const requestId = String(approvalRequestId || "").trim();
+    if (!requestId) {
+      throw new Error("An approved quote-deletion request is required.");
+    }
     ensureCallableReady("hard delete quote");
     const call = httpsCallable(cloudFunctions, HARD_DELETE_QUOTE_CALLABLE);
     const resolvedOrganizationId = normalizeOrganizationId(organizationId) || resolveContextualOrganizationId();
-    const payload = { quoteId };
+    const payload = {
+      quoteId,
+      approvalRequestId: requestId
+    };
     if (resolvedOrganizationId) {
       payload.organizationId = resolvedOrganizationId;
     }

@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: July 27, 2026
+Last updated: August 3, 2026
 
 This matrix maps the master feature checklist to current implementation and source locations.
 
@@ -26,7 +26,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 8 | Quote management UI (list, sort, filters, role-safe actions) | Implemented (branch) | `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js` (`duplicateQuote`, `reopenQuote`, `hardDeleteQuote`, `updateQuotePaymentStatus`), `functions/index.js` (`reopenQuote`, `hardDeleteQuote`, `purgeDeletedQuotesForOrganization`) |
 | 9 | Admin panel tabbed UX + hierarchical menu management | Implemented | `src/components/AdminCatalogModal.jsx`, `src/styles.css` (`.admin-tabs`) |
 | 10 | Inline editing with blur/enter persistence | Implemented | `src/components/AdminCatalogModal.jsx` (`handleManagedMenuItemBlur`, `handleManagedMenuItemKeyDown`) |
-| 11 | Booking lifecycle (availability checks, contract conversion, confirmations, staff assignments) | Implemented | `src/lib/quoteStore.js` (`checkEventAvailability`, `convertQuoteToContract`, `updateQuoteBookingConfirmation`, `updateQuoteBookingAssignment`), `src/components/EventScheduleModal.jsx`, `src/components/QuoteHistoryModal.jsx` |
+| 11 | Booking lifecycle (availability checks, contract conversion, confirmations, staff assignments) | Implemented (contract callable deploy pending) | `functions/contractWorkflow.js`, `functions/index.js` (`convertQuoteToContract`), `src/lib/quoteStore.js` (`checkEventAvailability`, `convertQuoteToContract`, `updateQuoteBookingConfirmation`, `updateQuoteBookingAssignment`), `src/components/EventScheduleModal.jsx`, `src/components/QuoteHistoryModal.jsx` |
 | 12 | Customer decision center (scope/pricing + accept/change request/decline + token lifecycle) | Implemented | `src/components/CustomerPortalView.jsx`, `src/lib/quoteStore.js` (`getPortalQuote`, `updatePortalDecision`, `rotateQuotePortalKey`), `firestore.rules` (`customerPortalQuotes`) |
 | 13 | Admin-only provider operations + scoped integration audit logging | Implemented (branch; provider activation pending) | `src/components/IntegrationOpsModal.jsx`, `src/lib/quoteStore.js` (`recordQuoteIntegrationSync`; browser CRM sends fail closed), `src/lib/commerceOps.js`, `functions/index.js` (admin-only provider callables) |
 | 14 | Reporting dashboard (pipeline, conversion, revenue metrics) | Implemented | `src/components/ReportingDashboardModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`) |
@@ -38,7 +38,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 20 | Good/Better/Best scenario compare workflow | Implemented / Optional | `src/lib/quoteWorkflow.js` (`buildQuoteScenarios`), `src/components/QuoteCompareModal.jsx`, `src/App.jsx` |
 | 21 | Optional admin security/audit depth (beyond role gating) | Partial / Optional | Role-gated access and rules are shipped in `src/hooks/useAuthSession.js`, `src/components/AuthGate.jsx`, `firestore.rules`; sync log audit trail exists in `src/lib/quoteStore.js`, but full cross-surface audit pipeline remains limited |
 | 22 | QA acceptance tests and checks | Implemented (core) | Unit tests under `src/lib/__tests__/`, UI snapshots under `src/components/__tests__/`, Firestore rules tests under `src/rules/__tests__/`, Playwright smoke lanes under `e2e/`, `scripts/provisioning-emulator-acceptance.mjs`, and CI scripts in `package.json` |
-| 23 | Sales workflow (readiness, follow-ups, lifecycle, approval queue) | Implemented (approval callable deploy pending) | `src/lib/quoteWorkflow.js`, `src/components/SalesWorkflowModal.jsx`, `src/lib/quoteStore.js` (`updateQuoteFollowUp`, `requestQuoteApproval`, `resolveQuoteApprovalRequest`), `functions/approvalWorkflow.js`, `functions/index.js` (`requestQuoteApproval`, `resolveQuoteApprovalRequest`), `firestore.rules` |
+| 23 | Sales workflow (readiness, follow-ups, lifecycle, approval queue and exact action execution) | Implemented (approval callables/rules deploy pending) | `src/lib/quoteWorkflow.js`, `src/components/SalesWorkflowModal.jsx`, `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js`, `functions/approvalWorkflow.js`, `functions/contractWorkflow.js`, `functions/index.js` (approval and governed-action callables), `firestore.rules` |
 | 24 | Tenant Import Studio (customer/catalog CSV recognition, validation, receipts, rollback) | Implemented (branch) | `src/components/ImportStudioModal.jsx`, `src/lib/importStudio.js`, `src/lib/importBatchService.js`, `firestore.rules` (`importBatches`) |
 | 25 | Platform tenant provisioning (verified owner, neutral defaults, atomic create, explicit entitlements, repair, cleanup) | Implemented (branch; production acceptance pending) | `functions/index.js` (`preflightCustomerOrder`, `provisionCustomerOrder`, `repairCustomerProvisioningOrder`, cleanup callables), `src/components/IntegrationOpsModal.jsx`, `scripts/provisioning-emulator-acceptance.mjs` |
 
@@ -63,6 +63,10 @@ This matrix maps the master feature checklist to current implementation and sour
   permanent cleanup are admin-callable operations; direct quote/portal deletes
   are denied, and terminal commercial evidence cannot be reopened or
   overwritten.
+- Firebase payment-request email, contract conversion, portal rotation, and
+  permanent deletion require an exact approved request. Functions record the
+  server-owned execution outcome in the quote workflow and in an admin-readable,
+  server-write-only organization audit record.
 - Menu backfill for `pricingType` + `active` is implemented in `scripts/seed-firestore-menu.mjs`.
 - Multi-tenant org scoping is authoritative for protected catalog and quote
   writes. Direct quote creation is denied in Firestore; trusted Functions

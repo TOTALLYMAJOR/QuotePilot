@@ -4,6 +4,8 @@ import { describe, expect, test } from "vitest";
 const require = createRequire(import.meta.url);
 const {
   ApprovalWorkflowError,
+  buildApprovalExecutionOutcome,
+  buildApprovalExecutionStart,
   buildApprovalRequest,
   buildApprovalResolution
 } = require("../../../functions/approvalWorkflow.js");
@@ -28,7 +30,14 @@ describe("server approval workflow planning", () => {
       requestedByEmail: "admin@example.com",
       resolvedAtISO: "",
       resolvedByEmail: "",
-      resolutionNote: ""
+      resolutionNote: "",
+      executionState: "",
+      executionStartedAtISO: "",
+      executionCompletedAtISO: "",
+      executedByEmail: "",
+      executionOperationId: "",
+      executionReference: "",
+      executionError: ""
     });
     expect(result.approvalRequests).toEqual([result.request]);
   });
@@ -114,5 +123,109 @@ describe("server approval workflow planning", () => {
       name: "ApprovalWorkflowError",
       code: "failed-precondition"
     }));
+  });
+
+  test("starts and completes only the exact approved action once", () => {
+    const approved = buildApprovalResolution({
+      workflow: {
+        approvalRequests: [{
+          id: "0123456789abcdef0123456789abcdef",
+          action: "rotate_portal_link",
+          state: "pending"
+        }]
+      },
+      requestId: "0123456789abcdef0123456789abcdef",
+      state: "approved",
+      actorEmail: "approver@example.com",
+      nowISO: "2026-08-03T18:00:00.000Z"
+    });
+    expect(approved.request.executionState).toBe("awaiting_execution");
+
+    const started = buildApprovalExecutionStart({
+      workflow: { approvalRequests: approved.approvalRequests },
+      requestId: approved.request.id,
+      action: "rotate_portal_link",
+      actorEmail: "executor@example.com",
+      nowISO: "2026-08-03T18:05:00.000Z",
+      operationId: approved.request.id
+    });
+    expect(started.request).toMatchObject({
+      executionState: "in_progress",
+      executedByEmail: "executor@example.com",
+      executionOperationId: approved.request.id
+    });
+
+    const completed = buildApprovalExecutionOutcome({
+      workflow: { approvalRequests: started.approvalRequests },
+      requestId: approved.request.id,
+      action: "rotate_portal_link",
+      actorEmail: "executor@example.com",
+      nowISO: "2026-08-03T18:06:00.000Z",
+      operationId: approved.request.id,
+      state: "succeeded",
+      reference: "portal-version-v0002"
+    });
+    expect(completed.request).toMatchObject({
+      executionState: "succeeded",
+      executionCompletedAtISO: "2026-08-03T18:06:00.000Z",
+      executionReference: "portal-version-v0002",
+      executionError: ""
+    });
+    expect(() => buildApprovalExecutionStart({
+      workflow: { approvalRequests: completed.approvalRequests },
+      requestId: approved.request.id,
+      action: "rotate_portal_link",
+      actorEmail: "executor@example.com",
+      nowISO: "2026-08-03T18:07:00.000Z",
+      operationId: approved.request.id
+    })).toThrowError(expect.objectContaining({ code: "already-exists" }));
+  });
+
+  test("rejects mismatched actions and requires a new request after failure", () => {
+    const approvedRequest = {
+      id: "fedcba9876543210fedcba9876543210",
+      action: "send_payment_request",
+      state: "approved",
+      executionState: "awaiting_execution"
+    };
+    expect(() => buildApprovalExecutionStart({
+      workflow: { approvalRequests: [approvedRequest] },
+      requestId: approvedRequest.id,
+      action: "delete_quote",
+      actorEmail: "executor@example.com",
+      nowISO: "2026-08-03T18:05:00.000Z",
+      operationId: approvedRequest.id
+    })).toThrowError(expect.objectContaining({ code: "permission-denied" }));
+
+    const started = buildApprovalExecutionStart({
+      workflow: { approvalRequests: [approvedRequest] },
+      requestId: approvedRequest.id,
+      action: approvedRequest.action,
+      actorEmail: "executor@example.com",
+      nowISO: "2026-08-03T18:05:00.000Z",
+      operationId: approvedRequest.id
+    });
+    const failed = buildApprovalExecutionOutcome({
+      workflow: { approvalRequests: started.approvalRequests },
+      requestId: approvedRequest.id,
+      action: approvedRequest.action,
+      actorEmail: "executor@example.com",
+      nowISO: "2026-08-03T18:06:00.000Z",
+      operationId: approvedRequest.id,
+      state: "failed",
+      error: "Provider unavailable."
+    });
+    expect(failed.request).toMatchObject({
+      executionState: "failed",
+      executionError: "Provider unavailable."
+    });
+    expect(() => buildApprovalExecutionStart({
+      workflow: { approvalRequests: failed.approvalRequests },
+      requestId: approvedRequest.id,
+      action: approvedRequest.action,
+      actorEmail: "executor@example.com",
+      nowISO: "2026-08-03T18:07:00.000Z",
+      operationId: approvedRequest.id
+    })).toThrowError(expect.objectContaining({ code: "failed-precondition" }));
   });
 });

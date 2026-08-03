@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { getQuoteHistoryActionPermissions } from "../QuoteHistoryModal";
+import {
+  getExecutableApprovalRequest,
+  getQuoteHistoryActionPermissions
+} from "../QuoteHistoryModal";
 
 describe("quote history action permissions", () => {
   test("admin can manage quote, payment, booking, portal, and contract state", () => {
@@ -63,5 +66,21 @@ describe("quote history action permissions", () => {
       canRotatePortalLink: false,
       canDeleteQuote: false
     });
+  });
+
+  test("only returns an approved action that is still awaiting execution", () => {
+    const quote = {
+      workflow: {
+        approvalRequests: [
+          { id: "pending", action: "delete_quote", state: "pending", executionState: "" },
+          { id: "completed", action: "delete_quote", state: "approved", executionState: "succeeded" },
+          { id: "executable", action: "delete_quote", state: "approved", executionState: "awaiting_execution" },
+          { id: "other-action", action: "rotate_portal_link", state: "approved", executionState: "awaiting_execution" }
+        ]
+      }
+    };
+
+    expect(getExecutableApprovalRequest(quote, "delete_quote")?.id).toBe("executable");
+    expect(getExecutableApprovalRequest(quote, "send_payment_request")).toBeNull();
   });
 });

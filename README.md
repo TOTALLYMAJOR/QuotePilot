@@ -176,8 +176,8 @@ instruction if that browser is unavailable.
     Firestore, and Functions emulators.
   - Covers provisioning authority, owner activation, trusted quote and portal
     behavior, provider/payment failure boundaries, cleanup, and
-    server-authoritative approval request/resolution audit identity and replay
-    protection.
+    server-authoritative approval request, resolution, exact governed-action
+    execution, outcome audit, idempotency, and replay protection.
   - The runner refuses non-`demo-*` projects or missing emulator host variables;
     it is local evidence and does not replace hosted tenant acceptance.
 

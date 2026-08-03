@@ -44,6 +44,15 @@ function actionLabel(action) {
   return APPROVAL_ACTIONS.find((item) => item.id === action)?.label || action || "Sensitive action";
 }
 
+function approvalOutcomeLabel(request) {
+  if (request?.state === "rejected") return "Rejected";
+  const executionState = String(request?.executionState || "").trim().toLowerCase();
+  if (executionState === "in_progress") return "Admin action in progress";
+  if (executionState === "succeeded") return "Admin action completed";
+  if (executionState === "failed") return "Admin action failed — new approval required";
+  return "Approved, awaiting admin action";
+}
+
 function followUpFromQuote(quote) {
   const followUp = quote?.workflow?.followUp || {};
   return {
@@ -430,9 +439,9 @@ export default function SalesWorkflowModal({
                     </div>
                   </section>
 
-                  {!isAdmin && isStaff && (
+                  {isStaff && (
                     <section className="workflow-form-section">
-                      <h4>Request admin approval</h4>
+                      <h4>Request sensitive action approval</h4>
                       <div className="workflow-approval-request">
                         <select value={approvalAction} onChange={(event) => setApprovalAction(event.target.value)}>
                           {APPROVAL_ACTIONS.map((item) => (
@@ -530,14 +539,29 @@ export default function SalesWorkflowModal({
                 )}
                 {request.state !== "pending" && (
                   <div className="approval-resolution-summary">
-                    <strong>{request.state === "approved" ? "Approved, awaiting admin action" : "Rejected"}</strong>
+                    <strong>{approvalOutcomeLabel(request)}</strong>
                     <span>{request.resolutionNote || "No resolution note."}</span>
                     <small>{request.resolvedByEmail || "admin"} · {fmtDateTime(request.resolvedAtISO)}</small>
+                    {request.executionState && (
+                      <small>
+                        {request.executedByEmail || "admin"}
+                        {request.executionCompletedAtISO
+                          ? ` · ${fmtDateTime(request.executionCompletedAtISO)}`
+                          : request.executionStartedAtISO
+                            ? ` · started ${fmtDateTime(request.executionStartedAtISO)}`
+                            : ""}
+                      </small>
+                    )}
+                    {request.executionReference && <span>{request.executionReference}</span>}
+                    {request.executionError && <span>{request.executionError}</span>}
                   </div>
                 )}
               </article>
             ))}
-            {isAdmin && approvalQueue.some((item) => item.request.state === "approved") && (
+            {isAdmin && approvalQueue.some((item) => (
+              item.request.state === "approved"
+              && (!["in_progress", "succeeded", "failed"].includes(item.request.executionState))
+            )) && (
               <div className="right-actions approval-queue-actions">
                 <button type="button" className="cta" onClick={onOpenQuoteHistory}>
                   Open Quote History

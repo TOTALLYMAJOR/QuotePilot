@@ -77,6 +77,7 @@ vi.mock("../organizationService", () => ({
 
 import {
   buildClientWritablePortalPayment,
+  convertQuoteToContract,
   requestQuoteApproval,
   reopenQuote,
   resolveQuoteApprovalRequest,
@@ -147,7 +148,57 @@ describe("quoteStore Firebase write safety", () => {
             portalIssuedAtISO: "2026-07-28T12:00:00.000Z",
             portalExpiresAtISO: "2026-08-27T12:00:00.000Z",
             versionId: "v0002",
-            versionNumber: 2
+            versionNumber: 2,
+            approvalRequest: {
+              id: "rotate-approval-request-000001",
+              action: "rotate_portal_link",
+              state: "approved",
+              resolvedAtISO: "2026-07-28T11:55:00.000Z",
+              resolvedByEmail: "current.admin@example.com",
+              executionState: "succeeded",
+              executionStartedAtISO: "2026-07-28T12:00:00.000Z",
+              executionCompletedAtISO: "2026-07-28T12:00:00.000Z",
+              executedByEmail: "current.admin@example.com",
+              executionOperationId: "rotate-approval-request-000001",
+              executionReference: "v0002"
+            }
+          }
+        });
+      }
+      if (name === "convertQuoteToContract") {
+        return vi.fn().mockResolvedValue({
+          data: {
+            ok: true,
+            organizationId: "org-one",
+            quoteId: "quote-1",
+            storage: "firebase",
+            status: "booked",
+            contractNumber: "C-260803-12345",
+            booking: {
+              contractNumber: "C-260803-12345",
+              contractConvertedByEmail: "current.admin@example.com"
+            },
+            lifecycle: { bookedAtISO: "2026-08-03T18:00:00.000Z" },
+            availability: {
+              conflicts: [],
+              hasBlockingConflict: false,
+              capacityExceeded: false,
+              capacityLimit: 400,
+              sameVenueLoad: 120
+            },
+            versionId: "v0002",
+            versionNumber: 2,
+            approvalRequest: {
+              id: "contract-approval-request-0001",
+              action: "convert_to_contract",
+              state: "approved",
+              executionState: "succeeded",
+              executionStartedAtISO: "2026-08-03T18:00:00.000Z",
+              executionCompletedAtISO: "2026-08-03T18:00:00.000Z",
+              executedByEmail: "current.admin@example.com",
+              executionOperationId: "contract-approval-request-0001",
+              executionReference: "C-260803-12345"
+            }
           }
         });
       }
@@ -541,7 +592,8 @@ describe("quoteStore Firebase write safety", () => {
 
     const result = await rotateQuotePortalKey({
       quoteId: "quote-1",
-      actorEmail: "forged@example.com"
+      actorEmail: "forged@example.com",
+      approvalRequestId: "rotate-approval-request-000001"
     });
 
     expect(result).toMatchObject({
@@ -560,7 +612,8 @@ describe("quoteStore Firebase write safety", () => {
     );
     expect(callable).toHaveBeenCalledWith({
       organizationId: "org-one",
-      quoteId: "quote-1"
+      quoteId: "quote-1",
+      approvalRequestId: "rotate-approval-request-000001"
     });
     expect(callable.mock.calls[0][0]).not.toHaveProperty("actorEmail");
     expect(callable.mock.calls[0][0]).not.toHaveProperty("portalKey");
@@ -568,6 +621,45 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.updateDoc).not.toHaveBeenCalled();
     expect(mockState.setDoc).not.toHaveBeenCalled();
     expect(mockState.deleteDoc).not.toHaveBeenCalled();
+    expect(mockState.runTransaction).not.toHaveBeenCalled();
+  });
+
+  test("contract conversion requires and consumes a server-approved action", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+
+    const result = await convertQuoteToContract({
+      quoteId: "quote-1",
+      actorEmail: "forged@example.com",
+      capacityLimit: 999999,
+      approvalRequestId: "contract-approval-request-0001"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      status: "booked",
+      contractNumber: "C-260803-12345",
+      approvalRequest: {
+        id: "contract-approval-request-0001",
+        action: "convert_to_contract",
+        executionState: "succeeded"
+      }
+    });
+    const callable = mockState.httpsCallable.mock.results[0].value;
+    expect(mockState.httpsCallable).toHaveBeenCalledWith(
+      mockState.cloudFunctions,
+      "convertQuoteToContract"
+    );
+    expect(callable).toHaveBeenCalledWith({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      approvalRequestId: "contract-approval-request-0001"
+    });
+    expect(callable.mock.calls[0][0]).not.toHaveProperty("actorEmail");
+    expect(callable.mock.calls[0][0]).not.toHaveProperty("capacityLimit");
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.setDoc).not.toHaveBeenCalled();
     expect(mockState.runTransaction).not.toHaveBeenCalled();
   });
 

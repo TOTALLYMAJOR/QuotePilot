@@ -35,6 +35,18 @@ function canConvertToContract(quote) {
   return status === "accepted" || (status === "booked" && !hasContract);
 }
 
+export function getExecutableApprovalRequest(quote, action) {
+  const requests = Array.isArray(quote?.workflow?.approvalRequests)
+    ? quote.workflow.approvalRequests
+    : [];
+  return requests.find((request) => {
+    const executionState = String(request?.executionState || "").trim().toLowerCase();
+    return request?.action === action
+      && request?.state === "approved"
+      && (!executionState || executionState === "awaiting_execution");
+  }) || null;
+}
+
 function statusBucket(status) {
   const normalized = String(status || "draft").trim().toLowerCase();
   if (normalized === "draft") return "draft";
@@ -246,6 +258,19 @@ export default function QuoteHistoryModal({
     }));
   };
 
+  const applyApprovalExecutionLocally = (quoteId, approvalRequest) => {
+    if (!approvalRequest?.id) return;
+    applyQuoteLocally(quoteId, (quote) => ({
+      ...quote,
+      workflow: {
+        ...(quote.workflow || {}),
+        approvalRequests: (quote.workflow?.approvalRequests || []).map((request) => (
+          request.id === approvalRequest.id ? approvalRequest : request
+        ))
+      }
+    }));
+  };
+
   const resolveQuotePortalLink = (quote) => {
     if (!quote?.portalKey) return "";
     const base = basePortalUrl || `${window.location.origin}${window.location.pathname}`;
@@ -304,7 +329,15 @@ export default function QuoteHistoryModal({
     setUpdatingId(quoteId);
     setState((prev) => ({ ...prev, error: "" }));
     try {
-      await deleteQuote(quoteId, { organizationId });
+      const quote = state.quotes.find((item) => item.id === quoteId);
+      const approvalRequest = getExecutableApprovalRequest(quote, "delete_quote");
+      if (state.source === "firebase" && !approvalRequest) {
+        throw new Error("Approve a quote-deletion request in Sales Workflow first.");
+      }
+      await deleteQuote(quoteId, {
+        organizationId,
+        approvalRequestId: approvalRequest?.id || ""
+      });
       setState((prev) => ({
         ...prev,
         quotes: prev.quotes.filter((quote) => quote.id !== quoteId)
@@ -366,9 +399,14 @@ export default function QuoteHistoryModal({
     setConvertingId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
+      const approvalRequest = getExecutableApprovalRequest(quote, "convert_to_contract");
+      if (state.source === "firebase" && !approvalRequest) {
+        throw new Error("Approve a contract-conversion request in Sales Workflow first.");
+      }
       const result = await convertQuoteToContract({
         quoteId: quote.id,
-        actorEmail: currentUserEmail
+        actorEmail: currentUserEmail,
+        approvalRequestId: approvalRequest?.id || ""
       });
       applyQuoteLocally(quote.id, (existing) => ({
         ...existing,
@@ -376,6 +414,7 @@ export default function QuoteHistoryModal({
         booking: result.booking,
         lifecycle: result.lifecycle
       }));
+      applyApprovalExecutionLocally(quote.id, result.approvalRequest);
       const acceptedConflicts = result.availability.conflicts.filter((item) => item.status === "accepted").length;
       const capacityNote = result.availability.capacityExceeded
         ? ` Capacity note: projected load ${result.availability.sameVenueLoad}/${result.availability.capacityLimit}.`
@@ -511,9 +550,14 @@ export default function QuoteHistoryModal({
     setRotatingPortalId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
+      const approvalRequest = getExecutableApprovalRequest(quote, "rotate_portal_link");
+      if (state.source === "firebase" && !approvalRequest) {
+        throw new Error("Approve a portal-rotation request in Sales Workflow first.");
+      }
       const result = await rotateQuotePortalKey({
         quoteId: quote.id,
-        actorEmail: currentUserEmail
+        actorEmail: currentUserEmail,
+        approvalRequestId: approvalRequest?.id || ""
       });
       applyQuoteLocally(quote.id, (existing) => ({
         ...existing,
@@ -521,6 +565,7 @@ export default function QuoteHistoryModal({
         portalIssuedAtISO: result.portalIssuedAtISO,
         portalExpiresAtISO: result.portalExpiresAtISO
       }));
+      applyApprovalExecutionLocally(quote.id, result.approvalRequest);
       setState((prev) => ({
         ...prev,
         feedback: `Portal link rotated for ${quote.quoteNumber}.`
@@ -605,6 +650,10 @@ export default function QuoteHistoryModal({
     setSendingPaymentEmailId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
+      const approvalRequest = getExecutableApprovalRequest(quote, "send_payment_request");
+      if (!approvalRequest) {
+        throw new Error("Approve a payment-request action in Sales Workflow first.");
+      }
       const status = String(quote.status || "").trim().toLowerCase();
       if (!["accepted", "booked"].includes(status)) {
         throw new Error("Payment request email is only available after quote acceptance.");
@@ -624,10 +673,12 @@ export default function QuoteHistoryModal({
         output: "base64",
         compact: true
       });
-      await sendPaymentRequestToCustomerEmail({
+      const sendResult = await sendPaymentRequestToCustomerEmail({
         quoteId: quote.id,
+        approvalRequestId: approvalRequest.id,
         attachment
       });
+      applyApprovalExecutionLocally(quote.id, sendResult.approvalRequest);
 
       if (String(quote.payment?.depositStatus || "unpaid").toLowerCase() === "unpaid") {
         await updateQuotePaymentStatus(quote.id, "sent");
@@ -728,6 +779,11 @@ export default function QuoteHistoryModal({
                 const canSendPaymentRequest = ["accepted", "booked"].includes(
                   String(quote.status || "").trim().toLowerCase()
                 );
+                const approvalRequired = state.source === "firebase";
+                const contractApproval = getExecutableApprovalRequest(quote, "convert_to_contract");
+                const paymentRequestApproval = getExecutableApprovalRequest(quote, "send_payment_request");
+                const portalRotationApproval = getExecutableApprovalRequest(quote, "rotate_portal_link");
+                const deleteApproval = getExecutableApprovalRequest(quote, "delete_quote");
                 const quoteEventTypeId = String(quote.eventTypeId || quote.selection?.eventTypeId || "");
                 const quoteEventTypeLabel = eventTypeNameById.get(quoteEventTypeId) || quoteEventTypeId || "-";
                 return (
@@ -809,7 +865,8 @@ export default function QuoteHistoryModal({
                             type="button"
                             className="cta compact"
                             onClick={() => handleConvertToContract(quote)}
-                            disabled={convertingId === quote.id}
+                            disabled={convertingId === quote.id || (approvalRequired && !contractApproval)}
+                            title={approvalRequired && !contractApproval ? "Approve contract conversion in Sales Workflow first." : ""}
                           >
                             {convertingId === quote.id ? "Converting..." : "Convert"}
                           </button>
@@ -864,7 +921,8 @@ export default function QuoteHistoryModal({
                             type="button"
                             className="cta compact"
                             onClick={() => handleSendPaymentRequestEmail(quote)}
-                            disabled={sendingPaymentEmailId === quote.id}
+                            disabled={sendingPaymentEmailId === quote.id || !paymentRequestApproval}
+                            title={!paymentRequestApproval ? "Approve the payment request in Sales Workflow first." : ""}
                           >
                             {sendingPaymentEmailId === quote.id ? "Sending..." : "Send Pay Request"}
                           </button>
@@ -874,7 +932,8 @@ export default function QuoteHistoryModal({
                             type="button"
                             className="ghost compact"
                             onClick={() => handleRotatePortalLink(quote)}
-                            disabled={rotatingPortalId === quote.id}
+                            disabled={rotatingPortalId === quote.id || (approvalRequired && !portalRotationApproval)}
+                            title={approvalRequired && !portalRotationApproval ? "Approve portal rotation in Sales Workflow first." : ""}
                           >
                             {rotatingPortalId === quote.id ? "Rotating..." : "Rotate Portal"}
                           </button>
@@ -903,7 +962,8 @@ export default function QuoteHistoryModal({
                             type="button"
                             className="ghost compact"
                             onClick={() => requestDeleteQuote(quote)}
-                            disabled={updatingId === quote.id}
+                            disabled={updatingId === quote.id || (approvalRequired && !deleteApproval)}
+                            title={approvalRequired && !deleteApproval ? "Approve quote deletion in Sales Workflow first." : ""}
                           >
                             {updatingId === quote.id ? "Deleting..." : "Delete"}
                           </button>

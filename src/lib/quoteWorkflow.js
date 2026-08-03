@@ -260,6 +260,28 @@ export function buildQuoteLifecycleTimeline(quote = {}) {
         request.resolvedAtISO
       );
     }
+    if (request.executionState === "in_progress") {
+      pushTimelineEvent(
+        events,
+        `approval-execution-started-${request.id}`,
+        "Approved action started",
+        detail,
+        "approval",
+        request.executionStartedAtISO
+      );
+    }
+    if (["succeeded", "failed"].includes(request.executionState)) {
+      pushTimelineEvent(
+        events,
+        `approval-execution-completed-${request.id}`,
+        request.executionState === "succeeded"
+          ? "Approved action completed"
+          : "Approved action failed",
+        request.executionReference || request.executionError || detail,
+        request.executionState === "succeeded" ? "booked" : "rejected",
+        request.executionCompletedAtISO
+      );
+    }
   });
 
   return events.sort((left, right) => new Date(left.atISO).getTime() - new Date(right.atISO).getTime());
