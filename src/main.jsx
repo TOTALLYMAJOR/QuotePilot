@@ -5,6 +5,7 @@ import { initSessionDiagnostics, recordDiagnosticError } from "./lib/sessionDiag
 import "./styles.css";
 
 const SystemMarketingPage = lazy(() => import("./components/SystemMarketingPage"));
+const BuyerAccessPage = lazy(() => import("./components/BuyerAccessPage"));
 const WorkspaceRoute = lazy(() => import("./components/WorkspaceRoute"));
 
 initSessionDiagnostics({
@@ -27,6 +28,7 @@ const isPortalRoute = Boolean(String(searchParams.get("portal") || "").trim());
 const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
 const isMarketingRoute = normalizedPath === "/" && !isPortalRoute;
 const isSystemMarketingRoute = normalizedPath === "/system" && !isPortalRoute;
+const isBuyerAccessRoute = normalizedPath === "/start" && !isPortalRoute;
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -35,6 +37,10 @@ createRoot(document.getElementById("root")).render(
     ) : isSystemMarketingRoute ? (
       <Suspense fallback={<div className="qp-route-loading" role="status">Loading QuotePilot platform...</div>}>
         <SystemMarketingPage />
+      </Suspense>
+    ) : isBuyerAccessRoute ? (
+      <Suspense fallback={<div className="qp-route-loading" role="status">Loading secure buyer access...</div>}>
+        <BuyerAccessPage />
       </Suspense>
     ) : (
       <Suspense fallback={<div className="qp-route-loading" role="status">Loading QuotePilot workspace...</div>}>

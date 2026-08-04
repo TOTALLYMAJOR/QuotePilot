@@ -5,7 +5,10 @@ import eventProductionImage from "../assets/marketing/quotepilot/event-productio
 import quoteBuilderImage from "../assets/marketing/quotepilot/quote-builder.png";
 import salesWorkflowImage from "../assets/marketing/quotepilot/sales-workflow.png";
 import scenarioCompareImage from "../assets/marketing/quotepilot/scenario-compare.png";
+import { isBuyerAccessEnabled } from "../lib/buyerAccessConfig";
 import "../landing.css";
+
+const BUYER_ACCESS_ENABLED = isBuyerAccessEnabled(import.meta.env);
 
 const outcomeStrip = [
   {
@@ -144,6 +147,11 @@ export default function MarketingPage() {
               Build accurate catering quotes, share polished proposals, and carry confirmed decisions into event operations.
             </p>
             <div className="qp-landing-hero-actions">
+              {BUYER_ACCESS_ENABLED && (
+                <a className="qp-landing-button qp-landing-button-accent" href="/start">
+                  Try $1 test access
+                </a>
+              )}
               <a className="qp-landing-button qp-landing-button-dark" href="https://mbmapps.com/contact">
                 Book a demo
               </a>

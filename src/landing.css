@@ -295,6 +295,7 @@
 .qp-landing-hero-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.85rem;
   margin-top: 2rem;
 }

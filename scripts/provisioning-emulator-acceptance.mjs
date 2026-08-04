@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { deleteApp, initializeApp } from "firebase/app";
 import {
   connectAuthEmulator,
@@ -138,6 +138,35 @@ async function createPrincipal({ email, role, organizationId, platformAdmin = fa
   return {
     uid: user.uid,
     idToken: payload.idToken
+  };
+}
+
+async function createVerifiedBuyerWithoutRole(email) {
+  const user = await auth.createUser({
+    email,
+    password: acceptanceCredential,
+    emailVerified: true
+  });
+  const response = await fetch(
+    `http://${authHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-key`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password: acceptanceCredential,
+        returnSecureToken: true
+      })
+    }
+  );
+  assert.equal(response.ok, true, `Auth emulator sign-in failed for ${email}`);
+  const payload = await response.json();
+  assert.ok(payload.idToken, `Auth emulator did not return an ID token for ${email}`);
+  assert.equal((await db.collection("userRoles").doc(user.uid).get()).exists, false);
+  return {
+    email,
+    idToken: payload.idToken,
+    uid: user.uid
   };
 }
 
@@ -1918,6 +1947,188 @@ assert.equal(latePaidFinalBalanceAudit.data()?.status, "processed");
 assert.equal(latePaidFinalBalanceAudit.data()?.providerState, "paid");
 assert.equal(latePaidFinalBalanceAudit.data()?.paymentKind, "final_balance");
 
+const buyerAccessPrincipal = await createVerifiedBuyerWithoutRole(
+  "buyer.access.webhook@example.test"
+);
+const buyerAccessOrderId = `ba-${createHash("sha256")
+  .update(`quotepilot:buyer-access:${buyerAccessPrincipal.uid}`, "utf8")
+  .digest("hex")
+  .slice(0, 40)}`;
+const buyerAccessOrganizationId =
+  "buyer-access-webhook-0123456789abcdef0123456789abcdef";
+const buyerAccessSessionId = "cs_test_buyer_access_webhook_acceptance";
+const buyerAccessOrderRef = db.collection("buyerAccessOrders").doc(buyerAccessOrderId);
+const buyerAccessOrganizationRef = db
+  .collection("organizations")
+  .doc(buyerAccessOrganizationId);
+const buyerAccessSettingsRef = buyerAccessOrganizationRef
+  .collection("settings")
+  .doc("config");
+const buyerAccessRoleRef = db.collection("userRoles").doc(buyerAccessPrincipal.uid);
+const buyerAccessProvisioningOrderRef = db
+  .collection("provisioningOrders")
+  .doc(buyerAccessOrderId);
+await buyerAccessOrderRef.create({
+  orderId: buyerAccessOrderId,
+  flow: "buyer_access",
+  status: "checkout_pending",
+  checkoutState: "open",
+  checkoutGeneration: 1,
+  stripeSessionId: buyerAccessSessionId,
+  stripeCheckoutUrl: "https://checkout.stripe.com/c/pay/buyer-access-acceptance",
+  organizationId: buyerAccessOrganizationId,
+  organizationName: "Buyer Access Webhook Acceptance",
+  ownerUid: buyerAccessPrincipal.uid,
+  ownerEmail: buyerAccessPrincipal.email,
+  ownerName: "Verified Buyer",
+  plan: "starter",
+  amountCents: 100,
+  currency: "usd",
+  accessGranted: false,
+  createdAtISO: new Date().toISOString(),
+  updatedAtISO: new Date().toISOString(),
+  createdAt: admin.FieldValue.serverTimestamp(),
+  updatedAt: admin.FieldValue.serverTimestamp()
+});
+
+function buildBuyerAccessWebhookEvent({ amountTotal = 100, eventId } = {}) {
+  return {
+    id: eventId,
+    object: "event",
+    type: "checkout.session.completed",
+    livemode: false,
+    data: {
+      object: {
+        id: buyerAccessSessionId,
+        object: "checkout.session",
+        livemode: false,
+        mode: "payment",
+        status: "complete",
+        payment_status: "paid",
+        amount_total: amountTotal,
+        currency: "usd",
+        invoice_creation: { enabled: true },
+        client_reference_id: buyerAccessOrderId,
+        customer_email: buyerAccessPrincipal.email,
+        metadata: {
+          flow: "buyer_access",
+          buyerAccessOrderId,
+          ownerUid: buyerAccessPrincipal.uid,
+          checkoutGeneration: "1",
+          plan: "starter"
+        }
+      }
+    }
+  };
+}
+
+const buyerAccessAmountMismatchEvent = buildBuyerAccessWebhookEvent({
+  amountTotal: 99,
+  eventId: "evt_buyer_access_amount_mismatch"
+});
+const buyerAccessAmountMismatchAttempt = await callStripeWebhook(
+  buyerAccessAmountMismatchEvent
+);
+assert.equal(
+  buyerAccessAmountMismatchAttempt.status,
+  200,
+  buyerAccessAmountMismatchAttempt.responseText
+);
+assert.equal(
+  buyerAccessAmountMismatchAttempt.payload?.ignored,
+  "invalid_buyer_access_scope"
+);
+const [
+  buyerAccessOrderAfterMismatch,
+  buyerAccessOrgAfterMismatch,
+  buyerAccessSettingsAfterMismatch,
+  buyerAccessRoleAfterMismatch,
+  buyerAccessProvisioningAfterMismatch,
+  buyerAccessMismatchAudit
+] = await Promise.all([
+  buyerAccessOrderRef.get(),
+  buyerAccessOrganizationRef.get(),
+  buyerAccessSettingsRef.get(),
+  buyerAccessRoleRef.get(),
+  buyerAccessProvisioningOrderRef.get(),
+  db.collection("webhookEvents")
+    .doc(`stripe-${buyerAccessAmountMismatchEvent.id}`)
+    .get()
+]);
+assert.equal(buyerAccessOrderAfterMismatch.data()?.status, "checkout_pending");
+assert.equal(buyerAccessOrderAfterMismatch.data()?.accessGranted, false);
+assert.equal(buyerAccessOrgAfterMismatch.exists, false);
+assert.equal(buyerAccessSettingsAfterMismatch.exists, false);
+assert.equal(buyerAccessRoleAfterMismatch.exists, false);
+assert.equal(buyerAccessProvisioningAfterMismatch.exists, false);
+assert.equal(buyerAccessMismatchAudit.data()?.status, "ignored");
+assert.equal(buyerAccessMismatchAudit.data()?.result, "invalid_buyer_access_scope");
+
+const buyerAccessPaidEvent = buildBuyerAccessWebhookEvent({
+  eventId: "evt_buyer_access_paid"
+});
+const buyerAccessPaidAttempt = await callStripeWebhook(buyerAccessPaidEvent);
+assert.equal(buyerAccessPaidAttempt.status, 200, buyerAccessPaidAttempt.responseText);
+assert.equal(buyerAccessPaidAttempt.payload?.received, true);
+assert.equal(buyerAccessPaidAttempt.payload?.buyerAccessStatus, "active");
+const [
+  buyerAccessOrderAfterPaid,
+  buyerAccessOrganizationAfterPaid,
+  buyerAccessSettingsAfterPaid,
+  buyerAccessRoleAfterPaid,
+  buyerAccessProvisioningAfterPaid,
+  buyerAccessPaidAudit,
+  buyerAccessAuthAfterPaid
+] = await Promise.all([
+  buyerAccessOrderRef.get(),
+  buyerAccessOrganizationRef.get(),
+  buyerAccessSettingsRef.get(),
+  buyerAccessRoleRef.get(),
+  buyerAccessProvisioningOrderRef.get(),
+  db.collection("webhookEvents").doc(`stripe-${buyerAccessPaidEvent.id}`).get(),
+  auth.getUser(buyerAccessPrincipal.uid)
+]);
+assert.equal(buyerAccessOrderAfterPaid.data()?.status, "active");
+assert.equal(buyerAccessOrderAfterPaid.data()?.accessGranted, true);
+assert.equal(buyerAccessOrderAfterPaid.data()?.stripeCheckoutUrl, "");
+assert.equal(
+  buyerAccessOrderAfterPaid.data()?.organizationId,
+  buyerAccessOrganizationId
+);
+assert.equal(buyerAccessOrganizationAfterPaid.data()?.status, "active");
+assert.equal(buyerAccessOrganizationAfterPaid.data()?.plan, "starter");
+assert.equal(buyerAccessOrganizationAfterPaid.data()?.ownerUid, buyerAccessPrincipal.uid);
+assert.equal(buyerAccessSettingsAfterPaid.data()?.plan, "starter");
+assert.equal(buyerAccessSettingsAfterPaid.data()?.featureFlagsLocked, true);
+assert.equal(buyerAccessSettingsAfterPaid.data()?.onboarding?.source, "buyer_access");
+assert.equal(buyerAccessRoleAfterPaid.data()?.role, "admin");
+assert.equal(
+  buyerAccessRoleAfterPaid.data()?.organizationId,
+  buyerAccessOrganizationId
+);
+assert.equal(buyerAccessProvisioningAfterPaid.data()?.status, "provisioned");
+assert.equal(
+  buyerAccessProvisioningAfterPaid.data()?.operation,
+  "buyer_access_purchase"
+);
+assert.equal(buyerAccessProvisioningAfterPaid.data()?.amountCents, 100);
+assert.equal(buyerAccessPaidAudit.data()?.flow, "buyer_access");
+assert.equal(buyerAccessPaidAudit.data()?.status, "processed");
+assert.equal(buyerAccessPaidAudit.data()?.providerState, "paid");
+assert.equal(
+  buyerAccessAuthAfterPaid.customClaims?.organizationId,
+  buyerAccessOrganizationId
+);
+assert.equal(buyerAccessAuthAfterPaid.customClaims?.role, "admin");
+
+const duplicateBuyerAccessPaidAttempt = await callStripeWebhook(buyerAccessPaidEvent);
+assert.equal(
+  duplicateBuyerAccessPaidAttempt.status,
+  200,
+  duplicateBuyerAccessPaidAttempt.responseText
+);
+assert.equal(duplicateBuyerAccessPaidAttempt.payload?.duplicate, true);
+
 const retiredBulkPurgeQuoteId = "retired-bulk-purge-quote";
 const retiredBulkPurgePortalKey = "retired-bulk-purge-portal-key";
 await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).create({
@@ -2229,4 +2440,5 @@ console.log("- provider/payment operations denied sales and rejected caller-supp
 console.log("- Stripe webhook rejected corrupt portals and underpayment, atomically accepted the exact paid session, and acknowledged a signed stale paid session with durable review evidence");
 console.log("- stale final-balance approval scope closed before provider preparation and permitted a fresh exact-scope request");
 console.log("- final-balance Stripe webhook atomically settled the quote ledger and customer-safe portal, deduped replay, and accepted late settlement after provider failure");
+console.log("- buyer-access Stripe webhook rejected an exact-session amount mismatch, atomically provisioned Starter access from a valid paid event, and deduped replay");
 console.log("- hard delete retired roles/invites/portal snapshots and tombstone blocked tenant resurrection");
