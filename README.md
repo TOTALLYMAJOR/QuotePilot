@@ -127,10 +127,17 @@ npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
 npm run build
 npm run check:secrets
+npm run check:workflows
 npm run check:docs:governance
 npm run check:perf:bundle
 npm run check:perf:cwv
 ```
+
+`check:workflows` downloads only the platform-specific official actionlint
+v1.7.12 archive, verifies its repository-pinned SHA-256, and checks every
+tracked GitHub Actions workflow. The required `lane:quick` runs this gate before
+dependency installation and disables host-provided shellcheck/pyflakes
+integrations so runner tool versions cannot change the result.
 
 ## Orchestration Lanes
 ```bash
