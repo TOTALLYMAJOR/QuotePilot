@@ -27,6 +27,8 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Primary Firebase and Vercel workflows now prepare exact-SHA artifacts without
   provider mutation credentials; production mutation remains isolated behind a
   separately authorized deployer.
+- The quick lane now runs a pinned, checksum-verified GitHub workflow lint gate
+  across every tracked workflow before dependency installation.
 
 ## [0.2.3] - 2026-08-05
 
