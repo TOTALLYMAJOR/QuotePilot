@@ -1,11 +1,11 @@
-name: Deploy Vercel Production
-run-name: deploy/v1/vercel/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
+name: Prepare Vercel Production Artifact
+run-name: prepare/v1/vercel/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
 
 on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: Full tagged main commit SHA to deploy
+        description: Full tagged main commit SHA to prepare
         required: true
         type: string
       ci_run_id:
@@ -22,12 +22,12 @@ on:
         type: string
 
 concurrency:
-  group: deploy-vercel-production
+  group: prepare-vercel-production
   cancel-in-progress: false
 
 jobs:
-  deploy_vercel:
-    name: Build + Deploy Vercel
+  prepare_vercel:
+    name: Verify + Prepare Vercel Artifact
     if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -37,12 +37,12 @@ jobs:
       contents: read
     env:
       RELEASE_UAT_ATTESTER_IDS: ${{ vars.RELEASE_UAT_ATTESTER_IDS }}
-      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY || secrets.VITE_FIREBASE_API_KEY }}
-      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN || secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID || secrets.VITE_FIREBASE_PROJECT_ID }}
-      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET || secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID || secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID || secrets.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_FUNCTIONS_REGION: ${{ vars.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1' }}
     steps:
       - name: Checkout exact release SHA
@@ -50,6 +50,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -76,24 +77,58 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Materialize the approved Vercel project link
-        run: |
-          mkdir -p .vercel
-          node --input-type=module -e 'import fs from "node:fs"; fs.writeFileSync(".vercel/project.json", JSON.stringify({ projectId: "prj_epLi14LmBItwYkv25XZoAkWZf4Jk", orgId: "team_AW2QNNgYt5vESEO3eOTJXHp1", projectName: "quoteflow" }));'
+      - name: Validate production browser configuration
+        run: npm run check:env
 
-      - name: Verify evidence and deploy to Vercel
+      - name: Build static production payload
+        run: npm run build
+
+      - name: Re-verify evidence after repository execution
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           UAT_RUN_ID: ${{ inputs.uat_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
           GITHUB_TOKEN: ${{ github.token }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          node ./scripts/deploy-vercel-production.mjs \
-            --confirm "DEPLOY quotepilot.mbmapps.com via vercel" \
+          node ./scripts/production-release-evidence.mjs \
             --release-sha "${RELEASE_SHA}" \
             --ci-run-id "${CI_RUN_ID}" \
             --uat-run-id "${UAT_RUN_ID}" \
-            --rollback-sha "${ROLLBACK_SHA}"
+            --rollback-sha "${ROLLBACK_SHA}" \
+            --target vercel \
+            --output artifacts/release/release-evidence.json
+
+      - name: Stage deployable prebuilt payload
+        run: |
+          node ./scripts/stage-production-payload.mjs \
+            --target vercel \
+            --output artifacts/release/payload/vercel
+
+      - name: Create deterministic production artifact manifest
+        run: |
+          node ./scripts/prepare-production-artifact.mjs \
+            --evidence-file "${GITHUB_WORKSPACE}/artifacts/release/release-evidence.json" \
+            --artifact-root "${GITHUB_WORKSPACE}/artifacts/release/payload/vercel"
+
+      - name: Upload verified prepare-only artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-input-vercel-${{ inputs.release_sha }}
+          path: |
+            artifacts/release/payload/vercel
+            artifacts/release/release-evidence.json
+            artifacts/release/vercel-${{ inputs.release_sha }}-*.manifest.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+      - name: Summarize preparation boundary
+        run: |
+          {
+            echo "### Vercel production artifact prepared"
+            echo "- Target: vercel"
+            echo "- Release SHA: ${{ inputs.release_sha }}"
+            echo "- Production was not mutated. A separately owned trusted deployer is required."
+          } >> "${GITHUB_STEP_SUMMARY}"
