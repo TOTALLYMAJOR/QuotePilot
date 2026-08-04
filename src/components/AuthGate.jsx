@@ -1,11 +1,20 @@
 import { useState } from "react";
-import { registerWithEmail, signInWithEmail, signInWithGoogle } from "../lib/authClient";
+import {
+  registerWithEmail,
+  requestPasswordReset,
+  signInWithEmail,
+  signInWithGoogle
+} from "../lib/authClient";
+
+const PASSWORD_RESET_CONFIRMATION = "If an account exists for that email, password-reset instructions have been sent.";
 
 function friendlyError(err) {
   const text = String(err?.message || "Authentication failed.");
   if (text.includes("auth/invalid-credential")) return "Invalid email or password.";
   if (text.includes("auth/popup-closed-by-user")) return "Google sign-in popup was closed.";
   if (text.includes("auth/email-already-in-use")) return "This email is already registered.";
+  if (text.includes("auth/invalid-email")) return "Enter a valid email address.";
+  if (text.includes("auth/too-many-requests")) return "Too many attempts. Wait a moment and try again.";
   return text;
 }
 
@@ -13,11 +22,18 @@ export default function AuthGate({ sessionError = "" }) {
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState("");
   const [status, setStatus] = useState("");
+  const busy = Boolean(pendingAction);
+
+  const changeMode = (nextMode) => {
+    if (busy) return;
+    setMode(nextMode);
+    setStatus("");
+  };
 
   const submit = async () => {
-    setBusy(true);
+    setPendingAction(mode === "register" ? "register" : "signin");
     setStatus("");
     try {
       if (mode === "register") {
@@ -29,19 +45,32 @@ export default function AuthGate({ sessionError = "" }) {
     } catch (err) {
       setStatus(friendlyError(err));
     } finally {
-      setBusy(false);
+      setPendingAction("");
     }
   };
 
   const submitGoogle = async () => {
-    setBusy(true);
+    setPendingAction("google");
     setStatus("");
     try {
       await signInWithGoogle();
     } catch (err) {
       setStatus(friendlyError(err));
     } finally {
-      setBusy(false);
+      setPendingAction("");
+    }
+  };
+
+  const submitPasswordReset = async () => {
+    setPendingAction("password-reset");
+    setStatus("");
+    try {
+      await requestPasswordReset({ email });
+      setStatus(PASSWORD_RESET_CONFIRMATION);
+    } catch (err) {
+      setStatus(friendlyError(err));
+    } finally {
+      setPendingAction("");
     }
   };
 
@@ -56,14 +85,16 @@ export default function AuthGate({ sessionError = "" }) {
           <button
             type="button"
             className={mode === "signin" ? "cta" : "ghost"}
-            onClick={() => setMode("signin")}
+            onClick={() => changeMode("signin")}
+            disabled={busy}
           >
             Sign In
           </button>
           <button
             type="button"
             className={mode === "register" ? "cta" : "ghost"}
-            onClick={() => setMode("register")}
+            onClick={() => changeMode("register")}
+            disabled={busy}
           >
             Register
           </button>
@@ -75,8 +106,12 @@ export default function AuthGate({ sessionError = "" }) {
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setStatus("");
+            }}
             placeholder="you@business.com"
+            disabled={busy}
           />
         </label>
 
@@ -86,21 +121,38 @@ export default function AuthGate({ sessionError = "" }) {
             type="password"
             autoComplete={mode === "register" ? "new-password" : "current-password"}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setStatus("");
+            }}
             placeholder="At least 8 characters"
+            disabled={busy}
           />
         </label>
 
         <div className="auth-actions">
           <button type="button" className="cta" onClick={submit} disabled={busy}>
-            {busy ? "Working..." : mode === "register" ? "Create Account" : "Sign In"}
+            {pendingAction === "signin" || pendingAction === "register"
+              ? "Working..."
+              : mode === "register" ? "Create Account" : "Sign In"}
           </button>
           <button type="button" className="ghost" onClick={submitGoogle} disabled={busy}>
-            Continue with Google
+            {pendingAction === "google" ? "Connecting..." : "Continue with Google"}
           </button>
+          {mode === "signin" && (
+            <button
+              type="button"
+              className="ghost"
+              onClick={submitPasswordReset}
+              disabled={busy}
+              aria-busy={pendingAction === "password-reset"}
+            >
+              {pendingAction === "password-reset" ? "Sending..." : "Forgot password?"}
+            </button>
+          )}
         </div>
 
-        {status && <p className="source-note">{status}</p>}
+        {status && <p className="source-note" role="status" aria-live="polite">{status}</p>}
       </section>
     </main>
   );

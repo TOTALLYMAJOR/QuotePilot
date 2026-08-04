@@ -2,6 +2,7 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut
@@ -16,6 +17,37 @@ function ensureAuth() {
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function passwordResetContinueUrl() {
+  const configuredUrl = String(import.meta.env.VITE_APP_URL || "").trim();
+  const browserUrl = typeof window === "undefined"
+    ? ""
+    : `${window.location.origin}/app`;
+  const candidate = configuredUrl || browserUrl || "https://quotepilot.mbmapps.com/app";
+
+  let parsed;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new Error("QuotePilot password recovery URL is invalid.");
+  }
+
+  const localHttp = parsed.protocol === "http:"
+    && ["127.0.0.1", "localhost", "::1", "[::1]"].includes(parsed.hostname);
+  const normalizedPath = parsed.pathname.replace(/\/+$/, "") || "/";
+  if (
+    (parsed.protocol !== "https:" && !localHttp)
+    || parsed.username
+    || parsed.password
+    || normalizedPath !== "/app"
+    || parsed.search
+    || parsed.hash
+  ) {
+    throw new Error("QuotePilot password recovery URL must use an approved HTTPS /app location.");
+  }
+
+  return parsed.toString();
 }
 
 export async function signInWithEmail({ email, password }) {
@@ -42,6 +74,29 @@ export async function registerWithEmail({ email, password }) {
     email: normalizedEmail,
     verificationSent: true
   };
+}
+
+export async function requestPasswordReset({ email }) {
+  ensureAuth();
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw new Error("Email is required.");
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, normalizedEmail, {
+      url: passwordResetContinueUrl(),
+      handleCodeInApp: false
+    });
+  } catch (err) {
+    const code = String(err?.code || "").trim().toLowerCase();
+    if (["auth/user-not-found", "auth/user-disabled"].includes(code)) {
+      return { requestAccepted: true };
+    }
+    throw err;
+  }
+
+  return { requestAccepted: true };
 }
 
 export async function signInWithGoogle() {
