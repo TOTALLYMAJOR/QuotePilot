@@ -5,8 +5,10 @@ const require = createRequire(import.meta.url);
 const {
   BUYER_ACCESS_AMOUNT_CENTS,
   BUYER_ACCESS_CURRENCY,
+  BUYER_ACCESS_MODE,
   BUYER_ACCESS_PLAN,
   BuyerAccessError,
+  assertBuyerAccessAllowedEmail,
   assertBuyerAccessRuntime,
   assertBuyerAccessSessionBinding,
   buildBuyerAccessCheckout,
@@ -15,6 +17,8 @@ const {
   buyerAccessOrderIdForUid,
   buyerAccessStatusResponse,
   neutralizeBuyerAccessCheckoutSession,
+  normalizeBuyerAccessAllowedEmails,
+  normalizeBuyerAccessInvoiceId,
   normalizeBuyerAccessRequest,
   planBuyerAccessTransition
 } = require("../../../functions/buyerAccess.js");
@@ -22,6 +26,7 @@ const {
 const order = {
   orderId: buyerAccessOrderIdForUid("verified-owner-uid"),
   flow: "buyer_access",
+  buyerAccessMode: BUYER_ACCESS_MODE,
   ownerUid: "verified-owner-uid",
   ownerEmail: "owner@example.com",
   organizationId: "acme-events-1234567890abcdef1234567890abcdef",
@@ -53,6 +58,31 @@ const session = {
 };
 
 describe("buyer access server contract", () => {
+  test("marks the buyer rail as controlled Stripe test data", () => {
+    expect(BUYER_ACCESS_MODE).toBe("controlled_test");
+  });
+
+  test("requires a valid nonempty tester allowlist and exact email membership", () => {
+    expect(normalizeBuyerAccessAllowedEmails(
+      " First.Owner@example.com,second.owner@example.com,first.owner@example.com "
+    )).toEqual([
+      "first.owner@example.com",
+      "second.owner@example.com"
+    ]);
+    expect(assertBuyerAccessAllowedEmail({
+      allowedEmails: ["first.owner@example.com"],
+      ownerEmail: " FIRST.OWNER@example.com "
+    })).toBe("first.owner@example.com");
+    expect(() => normalizeBuyerAccessAllowedEmails(""))
+      .toThrow(/nonempty valid tester email allowlist/i);
+    expect(() => normalizeBuyerAccessAllowedEmails("not-an-email"))
+      .toThrow(/nonempty valid tester email allowlist/i);
+    expect(() => assertBuyerAccessAllowedEmail({
+      allowedEmails: "first.owner@example.com",
+      ownerEmail: "other.owner@example.com"
+    })).toThrow(/not authorized/i);
+  });
+
   test("fails closed unless the exact enable flag and Stripe test mode are configured", () => {
     expect(assertBuyerAccessRuntime({ enabled: " true ", stripeMode: " TEST " })).toEqual({
       enabled: true,
@@ -185,6 +215,53 @@ describe("buyer access server contract", () => {
         stripeMode: "test"
       })).toThrow(BuyerAccessError);
     }
+  });
+
+  test("requires and binds a normalized Stripe invoice identity for paid activation", () => {
+    const stripeInvoiceId = "in_BuyerAccess101";
+    expect(normalizeBuyerAccessInvoiceId({ id: ` ${stripeInvoiceId} ` })).toBe(
+      stripeInvoiceId
+    );
+    expect(assertBuyerAccessSessionBinding({
+      eventLivemode: false,
+      order,
+      requireInvoice: true,
+      session: {
+        ...session,
+        invoice: { id: stripeInvoiceId },
+        payment_status: "paid",
+        status: "complete"
+      },
+      stripeMode: "test"
+    })).toMatchObject({ invoiceId: stripeInvoiceId });
+
+    expect(() => assertBuyerAccessSessionBinding({
+      eventLivemode: false,
+      order,
+      requireInvoice: true,
+      session: {
+        ...session,
+        payment_status: "paid",
+        status: "complete"
+      },
+      stripeMode: "test"
+    })).toThrow(/requires a valid Stripe invoice identity/i);
+
+    expect(() => assertBuyerAccessSessionBinding({
+      eventLivemode: false,
+      order: { ...order, stripeInvoiceId },
+      requireInvoice: true,
+      session: {
+        ...session,
+        invoice: "in_DifferentInvoice",
+        payment_status: "paid",
+        status: "complete"
+      },
+      stripeMode: "test"
+    })).toThrow(/invoice does not match the buyer order/i);
+
+    expect(() => normalizeBuyerAccessInvoiceId("pi_not_an_invoice"))
+      .toThrow(/invoice identity is invalid/i);
   });
 
   test("keeps failed access closed and permits only paid settlement to grant or restore access", () => {

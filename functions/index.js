@@ -118,8 +118,10 @@ const {
   BUYER_ACCESS_AMOUNT_CENTS,
   BUYER_ACCESS_CURRENCY,
   BUYER_ACCESS_FLOW,
+  BUYER_ACCESS_MODE,
   BUYER_ACCESS_PLAN,
   BuyerAccessError,
+  assertBuyerAccessAllowedEmail,
   assertBuyerAccessRuntime,
   assertBuyerAccessSessionBinding,
   buildBuyerAccessCheckout,
@@ -128,6 +130,7 @@ const {
   buyerAccessStatusResponse,
   isBuyerAccessSession,
   neutralizeBuyerAccessCheckoutSession,
+  normalizeBuyerAccessAllowedEmails,
   normalizeBuyerAccessRequest,
   planBuyerAccessTransition
 } = require("./buyerAccess");
@@ -155,6 +158,8 @@ const PORTAL_COLLECTION = "customerPortalQuotes";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
 const BUYER_ACCESS_ORDERS_COLLECTION = "buyerAccessOrders";
+const BUYER_ACCESS_STRIPE_SECRET_NAME = "BUYER_ACCESS_STRIPE_SECRET_KEY";
+const BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME = "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET";
 const PAYMENT_REQUEST_FLOWS = Object.freeze({
   deposit: Object.freeze({
     paymentKind: "deposit",
@@ -862,6 +867,13 @@ function getStripeConfig() {
   };
 }
 
+function getBuyerAccessStripeConfig() {
+  return {
+    mode: readConfig("buyer_access_stripe_mode"),
+    secretKey: readConfig("buyer_access_stripe_secret_key")
+  };
+}
+
 function getEmailProvider() {
   const provider = normalizeText(
     readConfig("notifications.email_provider", readConfig("email.provider", "none"))
@@ -1254,12 +1266,51 @@ function getStripeMode() {
   }
 }
 
+function getBuyerAccessStripeClient() {
+  const { mode, secretKey } = getBuyerAccessStripeConfig();
+  if (!secretKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access Stripe checkout is not configured."
+    );
+  }
+  try {
+    assertStripeSecretKeyMode(secretKey, mode);
+    assertBuyerAccessRuntime({ enabled: "true", stripeMode: mode });
+  } catch (err) {
+    if (err instanceof StripeProviderStateError || err instanceof BuyerAccessError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+  return new Stripe(secretKey);
+}
+
+function getBuyerAccessStripeMode() {
+  try {
+    const mode = normalizeStripeMode(readConfig("buyer_access_stripe_mode"));
+    assertBuyerAccessRuntime({ enabled: "true", stripeMode: mode });
+    return mode;
+  } catch (err) {
+    if (err instanceof StripeProviderStateError || err instanceof BuyerAccessError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+}
+
 function assertBuyerAccessRuntimeEnabled() {
   try {
-    return assertBuyerAccessRuntime({
+    const runtime = assertBuyerAccessRuntime({
       enabled: readConfig("buyer_access.enabled"),
-      stripeMode: readConfig("stripe.mode")
+      stripeMode: readConfig("buyer_access_stripe_mode")
     });
+    return {
+      ...runtime,
+      allowedEmails: normalizeBuyerAccessAllowedEmails(
+        readConfig("buyer_access_allowed_emails")
+      )
+    };
   } catch (err) {
     if (err instanceof BuyerAccessError) {
       throw new functions.https.HttpsError(err.code, err.message);
@@ -1269,7 +1320,7 @@ function assertBuyerAccessRuntimeEnabled() {
 }
 
 async function assertBuyerAccessPrincipal(context) {
-  assertBuyerAccessRuntimeEnabled();
+  const runtime = assertBuyerAccessRuntimeEnabled();
   const uid = normalizeText(context?.auth?.uid);
   if (!uid) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
@@ -1286,6 +1337,17 @@ async function assertBuyerAccessPrincipal(context) {
       "failed-precondition",
       "A verified authenticated email address is required."
     );
+  }
+  try {
+    assertBuyerAccessAllowedEmail({
+      allowedEmails: runtime.allowedEmails,
+      ownerEmail: tokenEmail
+    });
+  } catch (err) {
+    if (err instanceof BuyerAccessError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
   }
   const authUser = await auth.getUser(uid);
   const ownerEmail = normalizeEmail(authUser.email);
@@ -9329,6 +9391,12 @@ async function prepareBuyerAccessOrder({ input, principal } = {}) {
           "Buyer access order identity is invalid."
         );
       }
+      if (normalizeText(existing.buyerAccessMode) !== BUYER_ACCESS_MODE) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Buyer access order is not marked as controlled test data."
+        );
+      }
       if (normalizeText(existing.status).toLowerCase() === "active") {
         throw new functions.https.HttpsError(
           "failed-precondition",
@@ -9371,6 +9439,7 @@ async function prepareBuyerAccessOrder({ input, principal } = {}) {
     const newOrder = {
       orderId,
       flow: BUYER_ACCESS_FLOW,
+      buyerAccessMode: BUYER_ACCESS_MODE,
       status: "checkout_pending",
       checkoutState: "preparing",
       checkoutGeneration: 1,
@@ -9606,7 +9675,10 @@ async function neutralizeBuyerAccessCheckoutAfterAttachFailure({
   return neutralization;
 }
 
-exports.createBuyerAccessCheckout = functions.region(REGION).https.onCall(async (data, context) => {
+exports.createBuyerAccessCheckout = functions
+  .runWith({ secrets: [BUYER_ACCESS_STRIPE_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
   const principal = await assertBuyerAccessPrincipal(context);
   let input;
   try {
@@ -9615,7 +9687,7 @@ exports.createBuyerAccessCheckout = functions.region(REGION).https.onCall(async 
     throwBuyerAccessHttpsError(err);
   }
   let order = await prepareBuyerAccessOrder({ input, principal });
-  const stripe = getStripeClient();
+  const stripe = getBuyerAccessStripeClient();
 
   if (normalizeText(order.stripeSessionId)) {
     let existingSession;
@@ -9675,7 +9747,7 @@ exports.createBuyerAccessCheckout = functions.region(REGION).https.onCall(async 
   let checkout;
   try {
     checkout = buildBuyerAccessCheckout({
-      appBaseUrl: readConfig("app.base_url", "https://quotepilot.mbmapps.com/app"),
+      appBaseUrl: readConfig("buyer_access_app_base_url"),
       generation: order.checkoutGeneration,
       orderId: order.orderId,
       organizationName: order.organizationName,
@@ -9731,7 +9803,7 @@ exports.createBuyerAccessCheckout = functions.region(REGION).https.onCall(async 
     checkoutUrl: order.stripeCheckoutUrl,
     status: "checkout_pending"
   };
-});
+  });
 
 exports.getBuyerAccessCheckoutStatus = functions.region(REGION).https.onCall(async (data, context) => {
   await assertBuyerAccessPrincipal(context).catch((err) => {
@@ -9832,12 +9904,14 @@ function buyerAccessWebhookAudit({
   requestIp = "",
   result = "processed",
   session = {},
+  stripeInvoiceId = "",
   status = "processed"
 } = {}) {
   return {
     provider: "stripe",
     source: "stripe_webhook",
     flow: BUYER_ACCESS_FLOW,
+    buyerAccessMode: BUYER_ACCESS_MODE,
     eventId,
     eventType: normalizeText(event?.type),
     requestHost,
@@ -9846,6 +9920,7 @@ function buyerAccessWebhookAudit({
     organizationId: normalizeOrganizationId(order.organizationId),
     ownerUid: normalizeText(order.ownerUid || session?.metadata?.ownerUid),
     stripeSessionId: normalizeText(session?.id),
+    stripeInvoiceId: normalizeText(stripeInvoiceId),
     livemode: session?.livemode === true,
     providerState: normalizeText(providerObservation.providerState),
     status,
@@ -9902,6 +9977,7 @@ function assertBuyerAccessProvisioningRecord(data = {}, {
     recordOrderId !== orderId
     || recordOrganizationId !== organizationId
     || recordOwnerUid !== ownerUid
+    || normalizeText(data.buyerAccessMode) !== BUYER_ACCESS_MODE
   ) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -9919,7 +9995,7 @@ async function processBuyerAccessWebhook({
   requestIp,
   session
 } = {}) {
-  assertBuyerAccessRuntimeEnabled();
+  const runtime = assertBuyerAccessRuntimeEnabled();
   const orderId = normalizeText(session?.metadata?.buyerAccessOrderId);
   if (!/^ba-[a-f0-9]{40}$/.test(orderId)) {
     return recordIgnoredBuyerAccessWebhook({
@@ -9948,12 +10024,25 @@ async function processBuyerAccessWebhook({
     });
   }
   const initialOrder = initialOrderSnap.data() || {};
+  const providerState = normalizeText(providerObservation.providerState).toLowerCase();
+  try {
+    assertBuyerAccessAllowedEmail({
+      allowedEmails: runtime.allowedEmails,
+      ownerEmail: initialOrder.ownerEmail
+    });
+  } catch (err) {
+    if (err instanceof BuyerAccessError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
   try {
     assertBuyerAccessSessionBinding({
       eventLivemode: event?.livemode,
       order: initialOrder,
+      requireInvoice: providerState === "paid",
       session,
-      stripeMode: getStripeMode()
+      stripeMode: getBuyerAccessStripeMode()
     });
   } catch (err) {
     functions.logger.warn("Stripe buyer access event ignored: binding validation failed", {
@@ -9975,7 +10064,6 @@ async function processBuyerAccessWebhook({
     });
   }
 
-  const providerState = normalizeText(providerObservation.providerState).toLowerCase();
   let ownerAuthUser = null;
   if (providerState === "paid") {
     ownerAuthUser = await auth.getUser(normalizeText(initialOrder.ownerUid));
@@ -10056,12 +10144,14 @@ async function processBuyerAccessWebhook({
     }
     const order = orderSnap.data() || {};
     assertBuyerAccessOrderOwner(order, { uid: ownerUid, email: ownerEmail });
-    assertBuyerAccessSessionBinding({
+    const binding = assertBuyerAccessSessionBinding({
       eventLivemode: event?.livemode,
       order,
+      requireInvoice: providerState === "paid",
       session,
       stripeMode: "test"
     });
+    const stripeInvoiceId = binding.invoiceId;
     const transition = planBuyerAccessTransition({
       currentStatus: order.status,
       providerState
@@ -10076,8 +10166,23 @@ async function processBuyerAccessWebhook({
       requestIp,
       result: transition.reason,
       session,
+      stripeInvoiceId,
       status: transition.apply ? "processed" : "ignored"
     });
+
+    if (
+      providerState === "paid"
+      && transition.apply === false
+      && transition.reason === "already_active"
+    ) {
+      tx.create(dedupeRef, audit);
+      return {
+        duplicate: false,
+        active: false,
+        ignored: transition.reason,
+        status: transition.status
+      };
+    }
 
     if (providerState !== "paid") {
       if (transition.apply) {
@@ -10105,6 +10210,12 @@ async function processBuyerAccessWebhook({
       throw new functions.https.HttpsError(
         "failed-precondition",
         "Paid buyer access order plan is invalid."
+      );
+    }
+    if (normalizeText(order.buyerAccessMode) !== BUYER_ACCESS_MODE) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Paid buyer access order is not marked as controlled test data."
       );
     }
     if (
@@ -10180,6 +10291,8 @@ async function processBuyerAccessWebhook({
       featureFlagsPaid: entitlements.paidFeatureIds,
       orderId,
       buyerAccessOrderId: orderId,
+      buyerAccessMode: BUYER_ACCESS_MODE,
+      stripeInvoiceId,
       provisionedBy: BUYER_ACCESS_FLOW,
       updatedAtISO: nowISO,
       updatedAt: FieldValue.serverTimestamp()
@@ -10204,6 +10317,7 @@ async function processBuyerAccessWebhook({
       ...neutralSettings,
       orderId,
       buyerAccessOrderId: orderId,
+      buyerAccessMode: BUYER_ACCESS_MODE,
       organizationId,
       ownerUid,
       onboarding: {
@@ -10230,6 +10344,7 @@ async function processBuyerAccessWebhook({
       email: ownerEmail,
       organizationId,
       buyerAccessOrderId: orderId,
+      buyerAccessMode: BUYER_ACCESS_MODE,
       updatedAtISO: nowISO,
       updatedAt: FieldValue.serverTimestamp()
     };
@@ -10246,6 +10361,7 @@ async function processBuyerAccessWebhook({
     const provisioningOrderRecord = {
       orderId,
       buyerAccessOrderId: orderId,
+      buyerAccessMode: BUYER_ACCESS_MODE,
       status: "provisioned",
       operation: "buyer_access_purchase",
       source: BUYER_ACCESS_FLOW,
@@ -10260,6 +10376,7 @@ async function processBuyerAccessWebhook({
       featureFlagsUnpaid: entitlements.unpaidFeatureIds,
       amountCents: BUYER_ACCESS_AMOUNT_CENTS,
       currency: BUYER_ACCESS_CURRENCY,
+      stripeInvoiceId,
       stripeSessionId: normalizeText(session.id),
       requestedBy: { uid: ownerUid, email: ownerEmail },
       updatedAtISO: nowISO,
@@ -10280,6 +10397,7 @@ async function processBuyerAccessWebhook({
       checkoutState: "paid",
       accessGranted: true,
       stripeCheckoutUrl: "",
+      stripeInvoiceId,
       lastProviderState: "paid",
       lastStripeEventId: eventId,
       lastStripeEventType: normalizeText(event?.type),
@@ -10326,6 +10444,124 @@ async function processBuyerAccessWebhook({
   return transactionResult;
 }
 
+exports.buyerAccessStripeWebhook = functions
+  .runWith({ secrets: [BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME] })
+  .region(REGION)
+  .https.onRequest(async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+    const requestHost = getRequestHostnameFromHttp(req);
+    const requestIp = getRequestIpFromHttp(req);
+    const webhookSecret = readConfig("buyer_access_stripe_webhook_secret");
+    if (!webhookSecret || !webhookSecret.startsWith("whsec_")) {
+      res.status(500).send("Buyer access Stripe webhook secret not configured.");
+      return;
+    }
+
+    const signature = req.headers["stripe-signature"];
+    if (!signature) {
+      res.status(400).send("Missing stripe-signature header.");
+      return;
+    }
+
+    let event;
+    try {
+      event = Stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
+    } catch (err) {
+      functions.logger.warn("Buyer access Stripe webhook signature verification failed", {
+        errorCode: normalizeText(
+          err?.code || err?.type || "signature_verification_failed"
+        ).slice(0, 80)
+      });
+      res.status(400).send("Webhook verification failed.");
+      return;
+    }
+
+    const session = event.data?.object || {};
+    if (!isBuyerAccessSession(session)) {
+      res.json({ received: true, ignored: "non_buyer_access_session" });
+      return;
+    }
+
+    const eventId = normalizeText(event?.id);
+    if (!/^[a-zA-Z0-9_:-]+$/.test(eventId)) {
+      res.status(400).send("Stripe event ID is missing or invalid.");
+      return;
+    }
+    const dedupeRef = db.collection(WEBHOOK_EVENTS_COLLECTION).doc(`stripe-buyer-${eventId}`);
+    try {
+      const dedupeSnap = await dedupeRef.get();
+      if (dedupeSnap.exists) {
+        res.json({ received: true, duplicate: true });
+        return;
+      }
+    } catch (err) {
+      functions.logger.error("Failed checking buyer access Stripe webhook deduplication state", {
+        eventId,
+        errorMessage: normalizeText(err?.message).slice(0, 240)
+      });
+      res.status(500).send("Failed to check webhook state.");
+      return;
+    }
+
+    let providerObservation;
+    try {
+      providerObservation = mapStripeCheckoutObservation({
+        eventType: event.type,
+        session
+      });
+    } catch (err) {
+      functions.logger.error("Invalid buyer access Stripe checkout observation", {
+        eventId,
+        eventType: normalizeText(event.type),
+        message: normalizeText(err?.message)
+      });
+      res.status(500).send("Failed to validate checkout observation.");
+      return;
+    }
+    if (!providerObservation.supported) {
+      res.json({ received: true, ignored: "unsupported_event_type" });
+      return;
+    }
+
+    try {
+      assertStripeObjectMode({
+        expectedMode: getBuyerAccessStripeMode(),
+        eventLivemode: event?.livemode,
+        sessionLivemode: session?.livemode
+      });
+      const buyerAccessResult = await processBuyerAccessWebhook({
+        dedupeRef,
+        event,
+        eventId,
+        providerObservation,
+        requestHost,
+        requestIp,
+        session
+      });
+      if (buyerAccessResult.duplicate) {
+        res.json({ received: true, duplicate: true });
+        return;
+      }
+      if (buyerAccessResult.ignored) {
+        res.json({ received: true, ignored: buyerAccessResult.ignored });
+        return;
+      }
+      res.json({ received: true, buyerAccessStatus: buyerAccessResult.status });
+    } catch (err) {
+      functions.logger.error("Failed processing buyer access Stripe checkout event", {
+        eventId,
+        eventType: normalizeText(event.type),
+        requestHost,
+        requestIp,
+        message: normalizeText(err?.message).slice(0, 240)
+      });
+      res.status(500).send("Failed to process buyer access checkout session.");
+    }
+  });
+
 exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).send("Method Not Allowed");
@@ -10361,6 +10597,12 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
     return;
   }
 
+  const session = event.data?.object || {};
+  if (isBuyerAccessSession(session)) {
+    res.json({ received: true, ignored: "buyer_access_uses_dedicated_webhook" });
+    return;
+  }
+
   const eventId = normalizeText(event?.id);
   if (!/^[a-zA-Z0-9_:-]+$/.test(eventId)) {
     res.status(400).send("Stripe event ID is missing or invalid.");
@@ -10382,7 +10624,6 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
     return;
   }
 
-  const session = event.data?.object || {};
   let providerObservation;
   try {
     providerObservation = mapStripeCheckoutObservation({
@@ -10409,27 +10650,6 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
       eventLivemode: event?.livemode,
       sessionLivemode: session?.livemode
     });
-    if (isBuyerAccessSession(session)) {
-      const buyerAccessResult = await processBuyerAccessWebhook({
-        dedupeRef,
-        event,
-        eventId,
-        providerObservation,
-        requestHost,
-        requestIp,
-        session
-      });
-      if (buyerAccessResult.duplicate) {
-        res.json({ received: true, duplicate: true });
-        return;
-      }
-      if (buyerAccessResult.ignored) {
-        res.json({ received: true, ignored: buyerAccessResult.ignored });
-        return;
-      }
-      res.json({ received: true, buyerAccessStatus: buyerAccessResult.status });
-      return;
-    }
     const quoteId = normalizeText(session?.metadata?.quoteId);
     const organizationId = normalizeOrganizationId(session?.metadata?.organizationId);
     const paymentKind = normalizeText(session?.metadata?.paymentKind).toLowerCase() || "deposit";

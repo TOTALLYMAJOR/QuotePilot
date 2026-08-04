@@ -129,6 +129,41 @@ if (!stripeWebhookSecret.startsWith("whsec_")) {
   throw new Error("STRIPE_WEBHOOK_SECRET must be a Stripe endpoint signing secret.");
 }
 
+const buyerAccessEnabled = optional("BUYER_ACCESS_ENABLED", "false").toLowerCase();
+if (!["true", "false"].includes(buyerAccessEnabled)) {
+  throw new Error("BUYER_ACCESS_ENABLED must be true or false.");
+}
+const buyerAccessStripeMode = optional("BUYER_ACCESS_STRIPE_MODE", "test").toLowerCase();
+if (buyerAccessStripeMode !== "test") {
+  throw new Error("BUYER_ACCESS_STRIPE_MODE must remain test for the controlled buyer pilot.");
+}
+const buyerAccessAppBaseUrl = optional(
+  "BUYER_ACCESS_APP_BASE_URL",
+  "https://quotepilot.mbmapps.com/app"
+);
+if (buyerAccessAppBaseUrl !== "https://quotepilot.mbmapps.com/app") {
+  throw new Error("BUYER_ACCESS_APP_BASE_URL must be the canonical QuotePilot application URL.");
+}
+const buyerAccessAllowedEmails = optional("BUYER_ACCESS_ALLOWED_EMAILS");
+if (buyerAccessEnabled === "true" && !buyerAccessAllowedEmails) {
+  throw new Error(
+    "BUYER_ACCESS_ALLOWED_EMAILS is required while the controlled buyer pilot is enabled."
+  );
+}
+const normalizedBuyerAccessAllowedEmails = buyerAccessAllowedEmails
+  ? assertEmailList("BUYER_ACCESS_ALLOWED_EMAILS", buyerAccessAllowedEmails)
+  : "";
+for (const secretName of [
+  "BUYER_ACCESS_STRIPE_SECRET_KEY",
+  "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET"
+]) {
+  if (optional(secretName)) {
+    throw new Error(
+      `${secretName} must be stored in Firebase Secret Manager, not the Functions dotenv file.`
+    );
+  }
+}
+
 const values = {
   APP_BASE_URL: appBaseUrl,
   APP_BASE_DOMAIN: appBaseDomain,
@@ -149,7 +184,13 @@ const values = {
   } : {}),
   STRIPE_MODE: stripeMode,
   STRIPE_SECRET_KEY: stripeSecretKey,
-  STRIPE_WEBHOOK_SECRET: stripeWebhookSecret
+  STRIPE_WEBHOOK_SECRET: stripeWebhookSecret,
+  BUYER_ACCESS_ENABLED: buyerAccessEnabled,
+  BUYER_ACCESS_STRIPE_MODE: buyerAccessStripeMode,
+  BUYER_ACCESS_APP_BASE_URL: buyerAccessAppBaseUrl,
+  ...(normalizedBuyerAccessAllowedEmails
+    ? { BUYER_ACCESS_ALLOWED_EMAILS: normalizedBuyerAccessAllowedEmails }
+    : {})
 };
 
 const lines = [

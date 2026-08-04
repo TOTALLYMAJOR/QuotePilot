@@ -133,12 +133,21 @@ channels, not in the prepare job:
   - `NOTIFICATIONS_SMS_PROVIDER=none` until Twilio is approved
   - `STRIPE_MODE=live` for an authorized production runtime; use `test` only in
     an isolated hosted acceptance environment
+  - `BUYER_ACCESS_ENABLED=false` outside an explicitly approved pilot window
+  - `BUYER_ACCESS_STRIPE_MODE=test`
+  - `BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app`
+  - `BUYER_ACCESS_ALLOWED_EMAILS` containing only designated pilot testers
+    while the buyer gate is enabled
   - provider sender/owner values only when the matching provider is enabled
 - Set trusted runtime secrets:
   - `AUTH_PLATFORM_ADMIN_EMAILS`
   - `STRIPE_SECRET_KEY` (secret or restricted key prefix must match
     `STRIPE_MODE`)
   - `STRIPE_WEBHOOK_SECRET`
+  - `BUYER_ACCESS_STRIPE_SECRET_KEY` and
+    `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET` in Firebase Secret Manager only when
+    the controlled pilot is approved; these never enter dotenv or the prepare
+    workflow
   - `RESEND_API_KEY` only when Resend is enabled
   - Twilio account/auth secrets only when Twilio is enabled
 - Select `firebase_scope=backend` or `firebase_scope=all` only after the
@@ -177,6 +186,8 @@ custom-domain setup (the same values may be used locally for validation):
 NOTIFICATIONS_SMS_PROVIDER=none
 NOTIFICATIONS_EMAIL_PROVIDER=none
 STRIPE_MODE=live
+BUYER_ACCESS_ENABLED=false
+BUYER_ACCESS_STRIPE_MODE=test
 APP_BASE_URL=https://quotepilot.mbmapps.com/app
 EMAIL_FROM_NAME=QuotePilot by MBMapps
 AUTH_PLATFORM_ADMIN_EMAILS=<approved-platform-operator-email>
@@ -240,11 +251,12 @@ Buyer setup assistance is also available in-app:
 ### Stripe activation gate
 
 Stripe and Twilio use the corresponding blank fields in
-`functions/.env.example` only as configuration inventory. Stripe has no
-enabled/disabled provider flag: it requires explicit `STRIPE_MODE=test|live`,
-`STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`. The secret or restricted key
-prefix must match the configured mode, and webhook Event plus Checkout Session
-`livemode` must match it. Missing or mixed-mode configuration fails closed.
+`functions/.env.example` only as configuration inventory. The quote-payment
+Stripe rail has no enabled/disabled provider flag: it requires explicit
+`STRIPE_MODE=test|live`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`. The
+secret or restricted key prefix must match the configured mode, and webhook
+Event plus Checkout Session `livemode` must match it. Missing or mixed-mode
+configuration fails closed.
 Keep the Twilio provider flag at `none` until buyer-owned credentials, sender
 registration, and provider acceptance checks are complete.
 
@@ -262,92 +274,104 @@ Stripe webhook endpoint:
   - `checkout.session.async_payment_failed`
   - `checkout.session.expired`
 
-#### Isolated $1 buyer-access staging rehearsal
+The controlled buyer pilot is not a mode change for that quote-payment rail.
+It has an independent `BUYER_ACCESS_ENABLED` gate,
+`BUYER_ACCESS_STRIPE_MODE=test`, a separate test key and signing secret bound
+from Firebase Secret Manager, and a separate endpoint:
 
-The current branch also contains a distinct buyer-acquisition candidate at
-`/start`. It is separate from the quote deposit and final-balance rails below:
-the server fixes each buyer-access Checkout to one $1 USD Starter order in
-Stripe test mode with post-purchase invoice generation. The browser return URL
-never grants access. Only a signed, deduplicated webhook for the exact
-owner/session-bound order may provision an active Starter organization.
+- `https://us-central1-tonicatering.cloudfunctions.net/buyerAccessStripeWebhook`
 
-This lane is source-only until a hosted rehearsal completes. Production
-Hosting and Functions must keep buyer access disabled, and a staging pass is
-not authorization for live credentials or a commercial launch.
+Subscribe that endpoint only to the same four supported Checkout Session event
+types. Never add the buyer endpoint signing secret to `stripeWebhook`, or the
+quote endpoint signing secret to `buyerAccessStripeWebhook`.
 
-Use this acceptance sequence:
+### Controlled $1 buyer pilot on `tonicatering`
 
-1. Select an existing Firebase project whose id begins with
-   `quotepilot-staging-`. It must contain exactly one Firebase Web app. Enable
-   Email/Password Auth and authorize the staging Hosting domain. The guarded
-   scripts reject the production `tonicatering` project.
-2. In Stripe test mode, create a webhook endpoint at
-   `https://us-central1-<project>.cloudfunctions.net/stripeWebhook` and
-   subscribe it to `checkout.session.completed`,
+The buyer path at `/start` is a bounded test-payment pilot on the existing
+production Firebase project, not a second environment and not a public sales
+channel. Stripe remains in test mode for this buyer rail only. The quote
+deposit/final-balance rail remains on its independently configured mode, key,
+signing secret, and `stripeWebhook` without modification.
+
+This source does not authorize a branch deploy, workstation deploy, or direct
+provider mutation. The production preparation workflows compile
+`VITE_BUYER_ACCESS_ENABLED=true` and
+`VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED=false` into the exact reviewed artifact;
+the route is present but not publicly advertised and is not authorization.
+Keep `BUYER_ACCESS_ENABLED=false` until the candidate passes review and the
+standard merged-main, semantic-tag, target-specific UAT, prepare-artifact, and
+separately owned trusted-deployer controls in section 6. A green source suite,
+Secret Manager entry, endpoint registration, or prepared artifact is not a
+hosted purchase or tenant-activation result.
+
+For the approved pilot window:
+
+1. Use only Firebase project `tonicatering`. Confirm Email/Password Auth,
+   email-enumeration protection, and the canonical email-action domain are
+   configured. Create and verify the designated tester account through the
+   approved operator path before the pilot. `/start` must remain sign-in-only;
+   it cannot create accounts. Do not reuse a customer, operator, or existing
+   tenant member.
+2. In the trusted runtime configuration, set
+   `BUYER_ACCESS_STRIPE_MODE=test`, keep
+   `BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app`, and set
+   `BUYER_ACCESS_ALLOWED_EMAILS` to the exact designated tester addresses.
+   Email verification alone is never pilot authority. Enable
+   `BUYER_ACCESS_ENABLED` only for the approved window.
+3. Store the dedicated Stripe test key as
+   `BUYER_ACCESS_STRIPE_SECRET_KEY` and the dedicated endpoint signing secret
+   as `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET` in Firebase Secret Manager. Never
+   place either value in a Functions dotenv file, browser environment, GitHub
+   preparation workflow, shell transcript, log, artifact, or evidence receipt.
+4. In Stripe test mode, configure
+   `https://us-central1-tonicatering.cloudfunctions.net/buyerAccessStripeWebhook`
+   for `checkout.session.completed`,
    `checkout.session.async_payment_succeeded`,
    `checkout.session.async_payment_failed`, and
-   `checkout.session.expired`. Retain the test signing secret and prefer a
-   least-privilege `rk_test_` key; `sk_test_` is accepted when necessary.
-3. From an isolated credential-injected shell, supply the staging app
-   URL/domain, a real platform-admin email allowlist, independent
-   `BUYER_ACCESS_ENABLED=true` and `STRIPE_MODE=test` server gates, the test
-   Stripe credentials, and `none` email/SMS providers. Materialize the ignored
-   mode-0600 Functions environment without printing values:
+   `checkout.session.expired`. Do not route these pilot events to the existing
+   quote-payment endpoint.
+5. Promote the exact reviewed frontend, Functions, and Firestore-rules surfaces
+   through the evidence-bound release path. The canonical Vercel frontend and
+   Firebase backend must identify the same accepted source revision; a green
+   frontend Preview alone cannot establish buyer fulfillment.
+6. Confirm the promoted artifact exposes the private `/start` route, keeps
+   public account creation and the marketing CTA absent, and labels the path as
+   controlled test access.
+   Enable the server runtime only after the allowlist, dedicated Secret Manager
+   bindings, exact endpoint, and deployed backend are verified. A
+   non-allowlisted, unverified, already-scoped, or cross-account user must not
+   obtain Checkout or app access.
+7. With one allowlisted test identity, complete the fixed $1 USD test Checkout
+   and confirm Stripe generated the post-purchase invoice. The browser return
+   must remain pending or processing until the dedicated signed webhook is
+   accepted. Only then may `/app` become available.
+8. Read back the exact buyer order and the real `tonicatering` Firebase Auth,
+   organization, neutral settings, admin-role, Starter entitlement, and
+   provisioning/audit records. Confirm the server-owned controlled test-mode
+   marker is present everywhere the buyer flow creates commercial/customer
+   classification data. This is production-project data even though the Stripe
+   objects are test mode; it must not be counted as live revenue or a live paid
+   customer. Never include personal data, tokens, provider secrets, webhook
+   signatures, or full private provider identifiers in the evidence.
+9. Exercise malformed return, amount/currency/plan/mode/invoice-ID mismatch,
+   cancelled, failed, expired, replay, distinct signed events after activation,
+   non-allowlisted, cross-account, and already-scoped boundaries. Confirm none
+   creates a second organization or restores removed access.
+10. Separately verify that the quote-payment `STRIPE_MODE`, credential
+    bindings, `stripeWebhook`, deposit state, and final-balance state did not
+    change during the pilot. A buyer test event must never reach or mutate a
+    quote payment rail.
 
-   ```bash
-   npm run staging:firebase:env -- --project quotepilot-staging-<name>
-   ```
-
-4. Commit and push the exact candidate branch so local `HEAD` matches its
-   tracked `origin` branch with no tracked or untracked changes. Set only the
-   non-secret browser gate in the validation shell, then run the read-only
-   target checks and exact staging build:
-
-   ```bash
-   export VITE_BUYER_ACCESS_ENABLED=true
-   npm run staging:firebase:validate -- --project quotepilot-staging-<name>
-   npm run staging:firebase:prepare -- --project quotepilot-staging-<name>
-   ```
-
-5. Review the printed project, branch, SHA, fixed
-   `hosting,functions,firestore` scope (rules and indexes), and confirmation token. A
-   separately authorized staging operator may then deploy those three surfaces
-   together:
-
-   ```bash
-   npm run staging:firebase:deploy -- \
-     --project quotepilot-staging-<name> \
-     --confirm "<exact token printed by prepare>"
-   ```
-
-6. At `https://<project>.web.app/start`, register a unique controlled buyer,
-   verify the email, enter an organization and owner name, and complete the
-   fixed $1 Checkout with a Stripe test payment method. Confirm Stripe created
-   the post-purchase invoice. The return page must remain pending or processing
-   until the signed event is accepted, then expose `/app` only after the order
-   is `active` and the owner has the expected Starter organization, admin role,
-   entitlements, neutral settings, and blank catalog.
-7. Exercise failure boundaries: a forged or malformed success query grants no
-   access; another account cannot read or redeem the order/session; cancelled,
-   failed, and expired attempts remain locked; a retry starts a fresh eligible
-   order; replay creates no duplicate tenant or entitlement state; live-mode or
-   mismatched events fail closed; and an already scoped user cannot buy another
-   workspace through this flow.
-8. Capture provider-bound evidence: Firebase project, exact source SHA,
-   deployment id/time, webhook endpoint and redacted event ids, redacted
-   Checkout/order/invoice ids, final order state, and tenant/role/entitlement
-   readback. Do not capture secrets, webhook signatures, payment details, or
-   customer personal data.
-
-`staging:firebase:validate` is read-only. `staging:firebase:prepare` validates
-and builds but does not mutate Firebase or Stripe. Only the exact-confirmation
-`staging:firebase:deploy` command mutates the explicit staging Firebase target;
-none of these commands creates a Stripe endpoint or proves webhook acceptance.
-
-Stop after the test-mode rehearsal. Keep both production gates off until a
-separately reviewed rollout implements and accepts refund, dispute,
-cancellation, account/access revocation, support, tax/accounting, registration
-abuse controls, and the complete live-mode operating path.
+Capture the Firebase project, exact source SHA, trusted deployment ids and
+times, target-specific UAT receipt, redacted Stripe test Event/Checkout/invoice
+references, final buyer-order state, and production-project tenant/role
+readback. Do not describe the pilot as commercially live until hosted
+acceptance exists, and do not infer cleanup or access revocation from deleting
+or refunding a test Stripe object. After the bounded exercise, disable the
+server gate and retain the absent public CTA unless a separately reviewed
+pilot window remains active. Refund, dispute, cancellation,
+account/access revocation, support, tax/accounting, and unrestricted
+registration-abuse operations remain outside this pilot.
 
 The current source candidate handles deposit and final-balance collection as
 separate payment rails. An exact approved deposit scope binds organization,
@@ -450,6 +474,17 @@ acceptance. A target attestation also does not prove the SHA or identity of an
 unbound frontend/backend dependency, so retain a separate provider acceptance
 record tying the coordinated frontend, Functions, and rules revision together.
 
+For any release containing the controlled buyer pilot, every applicable
+`buyer.pilot-*` item is also mandatory. Browser-target items cover allowlisted
+entry, truthful test labeling, locked pending state, and active `/app` handoff.
+Backend-target items cover the dedicated buyer test Checkout and invoice,
+`buyerAccessStripeWebhook`, real `tonicatering` tenant/role readback,
+server-owned controlled-test markers, negative paths, and proof that the quote
+Stripe rail remained unchanged. A Hosting or Vercel receipt cannot prove an
+unbound backend, and a backend receipt cannot prove the browser surface; retain
+the coordinated provider deployment record. These records are controlled test
+data and must not be counted as live revenue or a live paid customer.
+
 For any release containing email/password recovery, complete
 `auth.password-recovery` with a designated test account and an unknown address.
 Prove the action changes the designated password and returns to the canonical
@@ -540,6 +575,17 @@ registration remains a separate abuse-control boundary.
    - Integrations Ops setup assistant loads and reports status,
    - SMS test path returns disabled/not configured when
      `NOTIFICATIONS_SMS_PROVIDER=none` without blocking core flow.
+   - for the controlled buyer pilot, an exact verified allowlisted tester may
+     request only the fixed $1 USD Stripe test Checkout while a non-allowlisted,
+     unverified, already-scoped, or cross-account identity fails closed; the
+     return remains locked until `buyerAccessStripeWebhook` accepts the exact
+     signed event, then the real `tonicatering` organization/admin-role/Starter
+     records and `/app` handoff agree; every buyer-created record carries the
+     server-owned controlled test-mode marker and operator evidence confirms its
+     exclusion from live revenue and live paid-customer reporting; replay,
+     distinct events after activation, and amount/currency/plan/mode/invoice-ID
+     mismatch create or restore no access, and the existing quote Stripe configuration and
+     deposit/final-balance state remain unchanged.
 3. Confirm rollback target:
    - the provider-specific last-known-good deployment receipt and commit SHA
      are documented,
@@ -630,6 +676,14 @@ Apply requires Firebase Admin ADC, a new evidence file, and the exact
 scope-bound confirmation shown in the README. Do not infer permission to apply
 from deployment or merge approval, and never copy portal tokens or customer
 data into release evidence.
+
+For a release containing the controlled buyer pilot, retain the provider-bound
+acceptance record from the dedicated pilot section and repeat the active-order
+and `/app` handoff after promotion. Confirm the server-owned controlled
+test-mode markers remain present and that reporting excludes the resulting
+records from live revenue and live paid-customer counts. Confirm both buyer
+gates are in their approved post-test state and recheck that the quote Stripe
+rail did not change. The pilot is not post-launch evidence for live billing.
 
 For a release containing either Stripe collection rail, retain a separate
 provider acceptance record for deposit and final balance. Exercise the exact
