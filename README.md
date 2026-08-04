@@ -17,17 +17,17 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - `/`: hospitality-first public QuotePilot marketing page.
 - `/system`: saved dark product and operating-system overview.
 - `/app`: authenticated staff quote workspace.
-- `/start`: controlled $1 Stripe test buyer pilot when
-  `VITE_BUYER_ACCESS_ENABLED=true`; the server still admits only verified,
-  explicitly allowlisted tester emails.
+- `/start`: public invoice-first $1 Stripe test buyer flow when the reviewed
+  browser flags and Turnstile site key are present; the independently disabled
+  server gate still prevents initiation until backend release approval.
 - `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal; existing token links remain compatible.
 
 ## Product Scope
 The app supports a 5-step quote wizard, dynamic event-type menus, pricing
 configuration, proposal export, customer portal updates, tenant-locked
 customer/catalog CSV imports, server-authoritative deposit and final-balance
-collection in the current source candidate, a controlled paid-buyer pilot on
-the existing `tonicatering` Firebase project, and operations workflows
+collection in the current source candidate, public invoice-first buyer
+onboarding on the existing `tonicatering` Firebase project, and operations workflows
 (history, scheduling, reporting, diagnostics).
 
 Tenant safety mode:
@@ -97,13 +97,21 @@ Create `.env` from `.env.example` and set required Firebase keys:
 Optional:
 - `VITE_FIREBASE_FUNCTIONS_REGION`
 - `VITE_APP_HOST`
-- `VITE_APP_URL` (canonical HTTPS `/app` return URL for Firebase email actions;
-  its domain must be authorized in Firebase Authentication)
+- `VITE_APP_URL` (exact canonical
+  `https://quotepilot.mbmapps.com/app` return URL for Firebase email actions;
+  its domain must be authorized in Firebase Authentication; loopback HTTP is
+  accepted only for local development)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
-  preparation workflows source-bind it to `true` so the reviewed private route
-  exists before deployment)
-- `VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED` (defaults off and is fixed to `false`
-  in production preparation workflows; the pilot is not publicly advertised)
+  preparation workflows source-bind it to `true` only alongside syntactically
+  valid non-placeholder public flow configuration; provider setup and human
+  review remain separate evidence)
+- `VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED` (defaults off; production preparation
+  source-binds it to `true`, but `check:env` rejects it unless the route is also
+  enabled and Turnstile is configured)
+- `VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY` (browser-visible public site key;
+  required with valid non-placeholder syntax when buyer access is compiled,
+  never use the Turnstile secret here, and do not treat syntax as provider or
+  human-review evidence)
 
 To create `.env.local` from the authenticated Firebase project config without
 touching `.env`, run:
@@ -130,14 +138,16 @@ tracked Functions template is inventory only; use the credential-isolated
 runtime channel described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and
 never place real Stripe values in a browser environment or committed file.
 
-The buyer pilot uses a separate server-only Stripe test rail. Its non-secret
+Buyer onboarding uses a separate server-only Stripe test rail. Its non-secret
 runtime inventory is `BUYER_ACCESS_ENABLED`, `BUYER_ACCESS_STRIPE_MODE=test`,
 `BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app`, and
-`BUYER_ACCESS_ALLOWED_EMAILS`. Store `BUYER_ACCESS_STRIPE_SECRET_KEY` and
-`BUYER_ACCESS_STRIPE_WEBHOOK_SECRET` only in Firebase Secret Manager; neither
-value belongs in a Functions dotenv file, GitHub preparation job, browser
-variable, log, or release receipt. The existing quote-payment `STRIPE_MODE`,
-credentials, and `stripeWebhook` remain independent and unchanged.
+`BUYER_ACCESS_TURNSTILE_HOSTNAMES=quotepilot.mbmapps.com,tonicatering.web.app`.
+Store `BUYER_ACCESS_STRIPE_SECRET_KEY`,
+`BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`, and `BUYER_ACCESS_TURNSTILE_SECRET` only
+in Firebase Secret Manager; none belongs in a Functions dotenv file, GitHub
+preparation job, browser variable, log, or release receipt. The server gate
+defaults off. The existing quote-payment `STRIPE_MODE`, credentials, and
+`stripeWebhook` remain independent and unchanged.
 
 The policy-enforcing repository preparation workflow packages Functions source without loading or
 materializing runtime secrets. Every `.env` file is excluded from the artifact.
@@ -379,55 +389,64 @@ See the
 [launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--twilio--resend-providers)
 for configuration and proof requirements.
 
-## Controlled $1 Buyer Pilot (`tonicatering`)
+## Public $1 Invoice-First Buyer Access (`tonicatering`)
 
-The `feature/paid-buyer-onboarding` branch adds a bounded acquisition pilot at
-`/start` without creating a second Firebase environment. The Firebase project
-is the existing production project, `tonicatering`. An operator first creates
-the designated verified Firebase email/password account through the approved
-administrative path. The tester signs in at `/start`, enters the business and
-owner names, and continues to Stripe-hosted Checkout. `/start` has no account
-creation action. The server requires the exact authenticated email in
-`BUYER_ACCESS_ALLOWED_EMAILS`; email verification, the browser feature flag, or
-knowledge of the route alone never authorizes a purchase.
+The `feature/paid-buyer-onboarding` source candidate adds a public acquisition
+path at `/start` without creating a second Firebase environment. The buyer
+enters organization, owner, and invoice-email details and completes a fresh
+Turnstile challenge. QuotePilot does not collect a password or card details at
+this step. Server-side Turnstile hostname/action checks, durable rate limits,
+and deterministic idempotency guard initiation; Turnstile is an abuse signal,
+not identity, payment, or authorization evidence.
 
-The Firebase Hosting and Vercel production preparation workflows compile the
-private `/start` route into the exact reviewed artifact and source-bind the
-public marketing CTA off. Runtime access still fails closed until the dedicated
-Functions are deployed and `BUYER_ACCESS_ENABLED=true` with the exact tester
-allowlist; the browser flag is not authorization.
+The Firebase Hosting and Vercel preparation workflows compile `/start` and its
+public marketing CTA only with a syntactically valid, non-placeholder,
+browser-visible Turnstile site key. `check:env` does not verify Cloudflare
+provider setup or human approval. Runtime remains fail closed until the
+dedicated Functions are promoted and the separate
+`BUYER_ACCESS_ENABLED=true` server gate is explicitly approved; browser flags
+never authorize invoice creation.
 
-The server fixes the pilot order to Starter access, $1 USD, Stripe test mode,
-and post-purchase invoice generation. Buyer Checkout uses its own Stripe client
-and Secret Manager values and posts only to
-`buyerAccessStripeWebhook`. It does not reuse or change the existing
-quote-payment `STRIPE_MODE`, key, webhook secret, `stripeWebhook`, deposit, or
-final-balance rail.
+The `createBuyerAccessInvoice` callable fixes the offer to Starter access, $1
+USD, and Stripe test mode. It creates and finalizes a true Stripe invoice before
+payment and returns only the Stripe Hosted Invoice Page. The dedicated buyer
+Stripe client and `buyerAccessStripeWebhook` endpoint are pinned to API version
+`2024-06-20`; the generic quote Stripe client and version remain unchanged.
+Dedicated buyer Secret Manager credentials and the endpoint remain isolated
+from the existing live quote payment mode, key, `stripeWebhook`, deposit, and
+final-balance rails. The buyer endpoint accepts only `invoice.paid`,
+`invoice.payment_failed`, `invoice.voided`, and
+`invoice.marked_uncollectible`. A retry must recover the same still-open invoice
+instead of creating uncontrolled duplicates.
 
-The Checkout return is not fulfillment evidence. QuotePilot polls the exact
-owner/session-bound buyer order and keeps `/app` access locked while payment is
-pending or processing. Only the dedicated signed and deduplicated test webhook,
-with matching owner, order, generation, $1 amount, USD currency, Starter plan,
-invoice configuration, and test-mode objects, may atomically create the active
-organization, neutral blank-catalog settings, admin role, entitlements, and
-audit records. The server marks buyer-created commercial/customer records as
-controlled test-mode data for operator exclusion from live revenue and live
-paid-customer classification. Mismatched, non-allowlisted, cancelled, failed,
-expired, cross-account, already-scoped, and replayed attempts fail closed.
+The browser return and `getBuyerAccessInvoiceStatus` are not fulfillment
+evidence. Only a matching signed and deduplicated invoice lifecycle event may
+establish paid state. `invoice.paid` prepares the organization, neutral
+settings, Starter workspace plan entitlements, provisioning record, and pending
+activation invitation. It creates no user membership, admin role, custom
+claims, or `/app` access. `activation_sent` may be observed only after the
+onboarding email provider has accepted the exact activation-instructions
+message and that acceptance is durably recorded; provider acceptance is not
+delivery. The buyer must use the exact invoice email, separately receive and
+complete Firebase email verification through an authorized continue URL, and
+consume the unexpired invitation before the server creates user access.
+Pending, mismatched, unverified, expired, failed, replayed, and cross-account
+paths expose no `/app` access.
 
-This pilot writes real Firebase Auth and tenant records to `tonicatering` even
-though Stripe is in test mode. Use unique designated tester identities, do not
-use existing customer accounts, and do not assume that deleting a test payment
-revokes or cleans up app access. The pilot is source-only until it is reviewed,
-merged, semantically tagged, attested with the target-specific release UAT
-items, promoted through the trusted deployer, and accepted against the hosted
-providers. It is not an unrestricted sales channel; refund, dispute,
-cancellation, access-revocation, support, tax/accounting, and public abuse
-operations remain separate launch gates.
+Buyer records remain marked as controlled Stripe test-mode data and must be
+excluded from live revenue and live paid-customer classification. This branch
+is source-only until review, merge, semantic tag, exact-target UAT, trusted
+promotion, true Hosted Invoice Page evidence, signed invoice lifecycle
+evidence, activation-instructions provider acceptance, Firebase verification-
+email delivery and continue-URL evidence, and hosted negative-path acceptance
+are complete. No provider configuration or live sale is claimed. Refunds,
+disputes, cancellations, access revocation, support, tax/accounting, and
+separately approved live-mode launch remain open operating gates.
 
 See the
-[launch runbook](docs/LAUNCH_RUNBOOK.md#controlled-1-buyer-pilot-on-tonicatering)
-for Secret Manager, webhook, release, acceptance, and stop requirements.
+[launch runbook](docs/LAUNCH_RUNBOOK.md#public-1-invoice-first-buyer-access-on-tonicatering)
+for Secret Manager, Turnstile, invoice webhook, release, acceptance, and stop
+requirements.
 
 ## Customer Provisioning (No Stripe)
 Provision a customer organization, enforce order-based feature entitlements
@@ -562,13 +581,17 @@ Local tests and emulator events are source evidence only, while a successful
 UAT attestation records the observed application contract; neither alone is
 Stripe test-mode or live-mode provider acceptance.
 
-For a release containing the controlled buyer pilot, every applicable
-`buyer.pilot-*` item is likewise mandatory. Hosting/Vercel items cover the
-allowlisted entry and pending/active browser handoff; backend items cover the
-dedicated test Checkout/invoice, signed buyer webhook, real `tonicatering`
-tenant/role readback, negative paths, and isolation from the quote Stripe rail.
-No single target receipt proves an unbound frontend or backend dependency, so
-retain a coordinated provider record for the exact deployed surfaces.
+For a release containing public buyer onboarding, every applicable `buyer.*`
+item is likewise mandatory. Hosting/Vercel items cover the public Turnstile
+entry and the locked pending/activation instructions; they do not prove email
+provider or backend fulfillment. Backend items cover Turnstile hostname/action
+verification, durable rate limits, idempotent true Hosted Invoice Page creation,
+buyer API and webhook version `2024-06-20`, signed invoice lifecycle, paid
+workspace preparation, pending-invite enforcement, activation-instructions provider acceptance, Firebase
+verification-email delivery and authorized continue URL, exact-email claim,
+negative paths, and isolation from the quote Stripe rail. No single target
+receipt proves an unbound frontend, backend, or provider dependency, so retain
+a coordinated provider record for the exact deployed surfaces.
 
 The `backend` and `all` scopes package Firestore rules plus Functions without
 runtime `.env` files. The manifest binds the Firebase project, Hosting target,
