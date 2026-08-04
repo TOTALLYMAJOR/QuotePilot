@@ -17,8 +17,18 @@ const HIGH_RISK_EXACT = new Set([
   "firestore.rules",
   "firestore.indexes.json",
   "scripts/migrate-to-multi-tenant.mjs",
+  "scripts/ci-lane-classifier.mjs",
+  "scripts/orchestration-lanes.sh",
+  "scripts/deploy-firebase-production.mjs",
+  "scripts/deploy-vercel-production.mjs",
+  "scripts/production-release-evidence.mjs",
+  "scripts/release-uat-attestation.mjs",
+  "docs/release-uat-checklist.json",
   ".github/workflows/ci-quality.yml",
-  ".github/workflows/deploy-firebase-hosting.yml"
+  ".github/workflows/mainline-safety-net.yml",
+  ".github/workflows/deploy-firebase-hosting.yml",
+  ".github/workflows/deploy-vercel-production.yml",
+  ".github/workflows/release-uat-attestation.yml"
 ]);
 
 const HIGH_RISK_PREFIXES = [

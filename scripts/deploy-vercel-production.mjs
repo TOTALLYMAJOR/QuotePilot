@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { verifyProductionReleaseEvidence } from "./production-release-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIRMATION = "DEPLOY quotepilot.mbmapps.com via vercel";
@@ -20,13 +21,23 @@ function readArg(name) {
 
 function validateArgs() {
   const args = process.argv.slice(2);
-  if (
-    args.length !== 2
-    || args[0] !== "--confirm"
-    || !args[1]
-    || args[1].startsWith("--")
-  ) {
-    throw new Error(`Vercel production deployment requires --confirm "${CONFIRMATION}".`);
+  const allowed = new Set([
+    "--confirm",
+    "--release-sha",
+    "--ci-run-id",
+    "--uat-run-id",
+    "--rollback-sha"
+  ]);
+  const seen = new Set();
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (!allowed.has(token)) throw new Error(`Unknown argument: ${token}`);
+    if (seen.has(token)) throw new Error(`Duplicate argument: ${token}`);
+    seen.add(token);
+    if (!args[index + 1] || args[index + 1].startsWith("--")) {
+      throw new Error(`${token} requires a value.`);
+    }
+    index += 1;
   }
 }
 
@@ -85,11 +96,22 @@ function validatePublishedReleaseRevision() {
   if (capture("git", ["status", "--porcelain"])) {
     throw new Error("Refusing Vercel production deployment from a dirty working tree.");
   }
-  if (capture("git", ["branch", "--show-current"]) !== "main") {
+  const branch = capture("git", ["branch", "--show-current"]);
+  const isExactMainDispatch =
+    process.env.GITHUB_ACTIONS === "true"
+    && process.env.GITHUB_EVENT_NAME === "workflow_dispatch"
+    && process.env.GITHUB_REF === "refs/heads/main";
+  if (branch !== "main" && !(branch === "" && isExactMainDispatch)) {
     throw new Error("Refusing Vercel production deployment from anything other than main.");
   }
   const head = capture("git", ["rev-parse", "HEAD"]);
-  if (head !== capture("git", ["rev-parse", "@{upstream}"])) {
+  if (!isExactMainDispatch) {
+    throw new Error("Refusing Vercel production deployment outside an exact main workflow dispatch.");
+  }
+  if (String(process.env.GITHUB_SHA || "").toLowerCase() !== head.toLowerCase()) {
+    throw new Error("Refusing Vercel production deployment because GITHUB_SHA does not match HEAD.");
+  }
+  if (branch === "main" && head !== capture("git", ["rev-parse", "@{upstream}"])) {
     throw new Error("Refusing Vercel production deployment until HEAD matches its upstream.");
   }
   const remoteHead = capture(
@@ -124,6 +146,7 @@ function validatePublishedReleaseRevision() {
       "Refusing Vercel production deployment until HEAD has a semantic release tag published to origin."
     );
   }
+  return head;
 }
 
 validateArgs();
@@ -131,7 +154,23 @@ if (readArg("--confirm") !== CONFIRMATION) {
   throw new Error(`Vercel production deployment requires --confirm "${CONFIRMATION}".`);
 }
 validateVercelProjectLink();
-validatePublishedReleaseRevision();
+async function verifyReleaseEvidence(headSha) {
+  return verifyProductionReleaseEvidence({
+    releaseSha: readArg("--release-sha"),
+    ciRunId: readArg("--ci-run-id"),
+    uatRunId: readArg("--uat-run-id"),
+    rollbackSha: readArg("--rollback-sha"),
+    target: "vercel",
+    headSha,
+    deploymentRunId: process.env.GITHUB_RUN_ID,
+    token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
+    attesterIds: process.env.RELEASE_UAT_ATTESTER_IDS,
+    root: ROOT
+  });
+}
+
+await verifyReleaseEvidence(validatePublishedReleaseRevision());
 run("npm", ["run", "check:env"]);
 run("npx", ["vercel", "build", "--prod"]);
+await verifyReleaseEvidence(validatePublishedReleaseRevision());
 run("npx", ["vercel", "deploy", "--prebuilt", "--prod", "--yes"]);

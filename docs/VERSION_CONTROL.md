@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: July 27, 2026
+Last updated: August 3, 2026
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -27,9 +27,18 @@ git checkout -b feature/<scope>-<topic>
 ## Release-Only Main Rule
 - `main` is for production-intent merges only.
 - Feature work lands in topic branches and merges only after required CI and pre-merge UAT evidence are complete.
-- Production deployment is manual-only after the required `CI Quality` and UAT
-  evidence; the deploy entrypoint accepts only a clean, remotely published,
-  semantically tagged `main` revision.
+- Production deployment is manual-workflow-only. The deploy entrypoints accept
+  only the exact remotely published, semantically tagged `main` SHA and verify
+  the matching successful main-push `CI Quality` run, a fresh allowlisted-human
+  UAT workflow result, a target-specific rollback ancestor, and current
+  protected environment policy before any provider command. Until historical
+  deployment-review evidence is also verified, the UAT result is not by itself
+  proof that the environment approval occurred without bypass.
+- Protect `main` and both GitHub environments (`production-uat`, `production`).
+  Each environment must prevent self-review, require an independent reviewer,
+  and allow protected branches only. Release-critical changes require
+  independent review; same-repository scripts are not an external attestation
+  authority.
 - If branch protection is not enabled, `Mainline Safety Net (Auto-Revert Failed Pushes)` provides fallback protection by reverting failed `main` push heads after CI failure.
 
 ## Branch Naming
@@ -67,17 +76,32 @@ git checkout -b feature/<scope>-<topic>
        installed Playwright Chromium binary before Lighthouse starts.
    - `Docker Build Smoke`
    - `lane:playwright-smoke`
-4. Complete pre-merge 10-minute UAT checklist from `docs/LAUNCH_RUNBOOK.md`.
+4. Complete the pre-merge release-candidate UAT checklist from
+   `docs/LAUNCH_RUNBOOK.md` and record the immutable candidate deployment.
 5. Set/confirm rollback target:
    - Preserve the previous production commit SHA.
    - Record current deployed "last known good" commit in `PROJECT_STATUS.md`.
-6. Merge release PR to `main`.
-7. Tag semantic version:
+6. Merge the reviewed release PR to `main`.
+7. Wait for all eight hard-gate jobs in the exact `main` push `CI Quality` run.
+8. Exercise the exact main SHA on an immutable non-production deployment, then
+   dispatch `Release UAT Attestation` with the release SHA, target, rollback
+   SHA, staging identifier, tracked checklist digest, all checklist item ids,
+   and exact confirmation. A reviewer other than the attester must approve the
+   `production-uat` environment gate.
+9. Tag the same semantic version SHA:
 ```bash
 git tag v<major>.<minor>.<patch>
 git push origin v<major>.<minor>.<patch>
 ```
-8. Deploy from tagged `main` commit.
+10. Dispatch the target production workflow with the release SHA, exact-SHA CI
+    run id, UAT attestation run id, target rollback SHA, and the exact
+    evidence-bound Firebase scope when applicable. A separate
+    `production` environment approval is required.
+
+If Firebase and Vercel have different last-known-good SHAs, use separate
+target-specific UAT attestations and deploy runs. Allowed UAT/deploy profiles
+are `firebase-hosting`, `firebase-backend`, `firebase-all`, and `vercel`;
+there is no cross-provider `all` profile with an ambiguous rollback target.
 
 ## Rollback Control
 If a regression appears in production, roll back immediately to the prior known-good SHA documented in `PROJECT_STATUS.md` using the commands in `docs/LAUNCH_RUNBOOK.md`.
@@ -87,9 +111,11 @@ If a regression appears in production, roll back immediately to the prior known-
 If a topic changes, only update the owning doc and cross-link from others.
 
 ## Production Interface Controls
-- GitHub variable: `ENABLE_FUNCTIONS_DEPLOY`
-  - Default production value: `false`.
-  - Set to `true` only for intentional, validated functions deploy windows, then return to `false`.
+- Firebase workflow input: `firebase_scope`
+  - Default operator selection: `hosting`.
+  - `backend` deploys `firestore,functions`; `backend` and `all` must each use
+    a matching target-specific UAT attestation. The selected scope is bound
+    into the current workflow title and revalidated before provider execution.
 - Project-scoped Functions environment: `NOTIFICATIONS_SMS_PROVIDER`
   - Default production value: `none` unless buyer-approved SMS enablement is validated.
 

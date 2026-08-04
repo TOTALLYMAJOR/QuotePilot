@@ -32,8 +32,14 @@
 ## Production Release Gate
 - Production impact: none / production-triggering
 - [ ] If production-triggering: all hard-gate CI jobs are green (including Firebase/CWV lanes when required)
-- [ ] If production-triggering: 10-minute UAT checklist from `docs/LAUNCH_RUNBOOK.md` passed
+- [ ] If production-triggering: tracked UAT checklist from `docs/release-uat-checklist.json` passed on an immutable candidate deployment
 - [ ] If production-triggering: rollback SHA/path is confirmed against `PROJECT_STATUS.md`
+- Candidate commit SHA:
+- Immutable candidate deployment id/URL:
+- Checklist digest (`npm run release:uat:digest`):
+- Candidate UAT attester and evidence link:
+- Post-merge release SHA / exact-main CI run id (release operator):
+- Protected UAT run id / exact deploy profile / rollback SHA (release operator):
 
 ## Documentation
 - [ ] `CHANGELOG.md` updated (if user-visible change)

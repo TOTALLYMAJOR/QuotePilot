@@ -1,6 +1,6 @@
 # Contributing to QuotePilot
 
-Last updated: March 27, 2026
+Last updated: August 3, 2026
 
 ## Setup
 1. Use Node.js 22+.
@@ -64,10 +64,21 @@ Update only the owning docs for changed topics; link instead of duplicating narr
 ## Release Discipline
 Follow `docs/VERSION_CONTROL.md` for branch/tag/release policy.
 Production-triggering merges to `main` require a completed 10-minute UAT checklist in `docs/LAUNCH_RUNBOOK.md`.
+Production promotion additionally requires successful exact-main CI, a fresh
+protected UAT attestation, and protected production-environment approval.
+Changes to release evidence scripts or deploy workflows require review by a
+person other than the author.
 
 ## GitHub Safety Baseline
 - Keep repository visibility set to **Private** for production/customer code.
-- Branch protection on `main` is strongly recommended, but not required for this orchestration model.
-- If branch protection is not enabled, keep `.github/workflows/mainline-safety-net.yml` active so failed `main` pushes are auto-reverted after `CI Quality` failures.
+- Branch protection on `main` is required for the production release model.
+- Configure `production-uat` and `production` as protected GitHub environments,
+  prevent self-review, require an independent reviewer, and restrict
+  deployments to protected branches. Disable administrator bypass.
+- Confirm the repository plan/ownership supports required reviewers for this
+  private repository; otherwise transfer/upgrade the repository or use an
+  approved external deployment protection rule before release.
+- Keep `.github/workflows/mainline-safety-net.yml` active as recovery defense;
+  it does not replace branch protection or pre-deployment evidence.
 - Keep Dependabot enabled for npm and GitHub Actions dependency updates.
 - Use `Security` tab private advisories for vulnerability intake.
