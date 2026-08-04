@@ -135,6 +135,20 @@ describe("buyer access invoice client", () => {
     );
   });
 
+  test("recovers the same Hosted Invoice Page from an exact payment-failed retry", async () => {
+    setCallableResponse("createBuyerAccessInvoice", validCreateResponse({
+      status: "payment_failed"
+    }));
+
+    await expect(createBuyerAccessInvoice({
+      organizationName: "Acme Events",
+      ownerName: "Avery Owner",
+      ownerEmail: "owner@example.com",
+      requestId: REQUEST_ID,
+      turnstileToken: TURNSTILE_TOKEN
+    })).resolves.toEqual(validCreateResponse({ status: "payment_failed" }));
+  });
+
   test.each([
     "http://invoice.stripe.com/i/acct_test/test_invoice",
     "https://invoice.stripe.com.evil.test/i/acct_test/test_invoice",
@@ -211,7 +225,7 @@ describe("buyer access invoice client", () => {
   });
 
   test.each([false, true])(
-    "allows provisioning to represent workspaceReady=%s without claiming activation email delivery",
+    "allows paid provisioning to represent workspaceReady=%s without Resend acceptance or browser access",
     async (workspaceReady) => {
       setCallableResponse("getBuyerAccessInvoiceStatus", validStatusResponse("provisioning", {
         workspaceReady,
@@ -223,7 +237,8 @@ describe("buyer access invoice client", () => {
       })).resolves.toMatchObject({
         status: "provisioning",
         workspaceReady,
-        activationEmailSent: false
+        activationEmailSent: false,
+        appUrl: null
       });
     }
   );

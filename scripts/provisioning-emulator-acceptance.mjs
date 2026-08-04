@@ -1996,10 +1996,13 @@ assert.equal(
   "BUYER_ACCESS_STRIPE_MODE=test is required for buyer invoice webhook acceptance."
 );
 
-function buyerAccessOrderIdForFixtureEmail(email = "") {
+function buyerAccessOrderIdForFixtureRequest(email = "") {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   return `ba-${createHash("sha256")
-    .update(`quotepilot:buyer-access-email:${normalizedEmail}`, "utf8")
+    .update(
+      `quotepilot:buyer-access-order:v2:${normalizedEmail}:123e4567-e89b-42d3-a456-426614174000`,
+      "utf8"
+    )
     .digest("hex")
     .slice(0, 40)}`;
 }
@@ -2012,7 +2015,7 @@ async function seedBuyerAccessInvoiceFixture({
 } = {}) {
   const normalizedSuffix = String(suffix || "").replace(/[^a-zA-Z0-9]/g, "");
   assert.ok(normalizedSuffix, "Buyer access fixture suffix is required.");
-  const orderId = buyerAccessOrderIdForFixtureEmail(email);
+  const orderId = buyerAccessOrderIdForFixtureRequest(email);
   const organizationId = `buyer-access-${String(suffix || "")
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, "-")}-${createHash("sha256")

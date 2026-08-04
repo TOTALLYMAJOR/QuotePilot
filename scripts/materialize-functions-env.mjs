@@ -106,16 +106,6 @@ if (emailFromEmail !== "onboarding@quotepilot.mbmapps.com") {
   );
 }
 
-const resendApiKey = optional("RESEND_API_KEY");
-if (emailProvider === "resend" && !resendApiKey) {
-  throw new Error("RESEND_API_KEY is required when Resend email is enabled.");
-}
-if (emailProvider === "none" && resendApiKey) {
-  throw new Error(
-    "RESEND_API_KEY must be unset while NOTIFICATIONS_EMAIL_PROVIDER is none."
-  );
-}
-
 const smsProvider = optional("NOTIFICATIONS_SMS_PROVIDER", "none").toLowerCase();
 if (!["none", "twilio"].includes(smsProvider)) {
   throw new Error("NOTIFICATIONS_SMS_PROVIDER must be none or twilio.");
@@ -145,14 +135,6 @@ if (
 const stripeMode = required("STRIPE_MODE").toLowerCase();
 if (stripeMode !== "live") {
   throw new Error("Production Firebase Functions deployment requires STRIPE_MODE=live.");
-}
-const stripeSecretKey = required("STRIPE_SECRET_KEY");
-if (!stripeSecretKey.startsWith("sk_live_") && !stripeSecretKey.startsWith("rk_live_")) {
-  throw new Error("STRIPE_SECRET_KEY must be a live-mode secret or restricted key.");
-}
-const stripeWebhookSecret = required("STRIPE_WEBHOOK_SECRET");
-if (!stripeWebhookSecret.startsWith("whsec_")) {
-  throw new Error("STRIPE_WEBHOOK_SECRET must be a Stripe endpoint signing secret.");
 }
 
 const buyerAccessEnabled = optional("BUYER_ACCESS_ENABLED", "false").toLowerCase();
@@ -185,9 +167,13 @@ const normalizedBuyerAccessTurnstileHostnames = buyerAccessTurnstileHostnames
   ? assertBuyerAccessTurnstileHostnames(buyerAccessTurnstileHostnames)
   : "";
 for (const secretName of [
+  "RESEND_API_KEY",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
-  "BUYER_ACCESS_TURNSTILE_SECRET"
+  "BUYER_ACCESS_TURNSTILE_SECRET",
+  "BUYER_ACCESS_RATE_LIMIT_SECRET"
 ]) {
   if (optional(secretName)) {
     throw new Error(
@@ -206,7 +192,6 @@ const values = {
   NOTIFICATIONS_EMAIL_PROVIDER: emailProvider,
   EMAIL_FROM_NAME: emailFromName,
   EMAIL_FROM_EMAIL: emailFromEmail,
-  ...(emailProvider === "resend" ? { RESEND_API_KEY: resendApiKey } : {}),
   NOTIFICATIONS_SMS_PROVIDER: smsProvider,
   ...(smsProvider === "twilio" ? {
     TWILIO_ACCOUNT_SID: twilioAccountSid,
@@ -215,8 +200,6 @@ const values = {
     NOTIFICATIONS_OWNER_PHONE: ownerPhone
   } : {}),
   STRIPE_MODE: stripeMode,
-  STRIPE_SECRET_KEY: stripeSecretKey,
-  STRIPE_WEBHOOK_SECRET: stripeWebhookSecret,
   BUYER_ACCESS_ENABLED: buyerAccessEnabled,
   BUYER_ACCESS_STRIPE_MODE: buyerAccessStripeMode,
   BUYER_ACCESS_APP_BASE_URL: buyerAccessAppBaseUrl,

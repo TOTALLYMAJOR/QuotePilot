@@ -1,11 +1,16 @@
 {
   "schema": "com.mbmapps.quotepilot.release-uat-checklist/v2",
-  "version": "2026-08-04.6",
+  "version": "2026-08-04.9",
   "maximumAttestationAgeHours": 24,
   "items": [
     {
       "id": "staging.immutable-release",
       "label": "The immutable staging deployment identifies the exact release candidate.",
+      "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
+    },
+    {
+      "id": "security.provider-secret-cutover",
+      "label": "The provider-secret cutover record proves the buyer gate stayed off while fresh generic Resend and Stripe credentials moved to least-privilege Firebase Secret Manager bindings; each applicable Stripe signing secret completed provider-issued new-plus-old overlap, exact signed-delivery UAT, and a new-only backend revision; any Turnstile site-key and secret rotation was coordinated across the exact frontend and backend; any HMAC-key rotation was accepted as fresh rate and reservation windows while old Timestamp records remained for TTL; and old credentials were revoked only after exact hosted/provider UAT plus rollback proof.",
       "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
     },
     {
@@ -20,7 +25,7 @@
     },
     {
       "id": "buyer.public-initiation-controls",
-      "label": "The public initiation endpoint remains disabled until explicitly released, then accepts only a server-verified fresh Turnstile token for an exact approved hostname and action, enforces durable per-network and normalized-email-hash rate limits, uses deterministic idempotency to return one still-open invoice for a retry, and fails closed without leaking account or provider state.",
+      "label": "The public initiation endpoint remains disabled until explicitly released, then accepts only a server-verified fresh Turnstile token for an exact approved hostname and action. Before any Auth, invitation, or order lookup it atomically reserves the request-scoped order identity and consumes HMAC-keyed durable per-network plus one-per-normalized-email rate limits; exact retry consumes network capacity again without duplicate email charge during the 24-hour Timestamp-backed reservation, and a fresh post-window request supersedes only a prior signed-void order while stale events are deduped and ignored. Open and payment-failed orders return the same invoice only to the exact original creation request; uncollectible or expired, paid, and activation orders reject automatic replacement and require the existing status/account path or documented operator stop. No buyer-specific repair callable exists, so live sale remains blocked until audited recovery is implemented, while failures stay generic. Each public status request atomically consumes one 60-request-per-five-minute network lease before its first buyer-order read; well-formed unknown-order and wrong-token attempts consume the same budget, later fulfillment reads remain inside that bounded request, rate configuration or store failure prevents the initial order read, and the configured Firestore TTL expires Timestamp-backed rate and reservation records.",
       "targets": ["firebase-backend", "firebase-all"]
     },
     {
@@ -30,12 +35,12 @@
     },
     {
       "id": "buyer.pending-invite-activation",
-      "label": "A matching paid buyer invoice prepares the server-owned organization, neutral settings, Starter workspace plan entitlements, provisioning record, controlled test-mode markers, audit evidence, and pending invitation but creates no user membership, admin role, custom claims, or application access; activation_sent is observed only after exact activation-instructions email provider acceptance is durably recorded, provider evidence separately confirms Firebase verification-email delivery and the authorized continue URL, and only an exact normalized verified invoice email consuming the unexpired invitation creates user access, while mismatch, failure, expiry, replay, and cross-account paths restore or grant no access and test records remain excluded from live revenue and paid-customer classification.",
+      "label": "A matching paid buyer invoice prepares the server-owned organization, neutral settings, Starter workspace plan entitlements, provisioning record, controlled test-mode markers, audit evidence, and pending invitation but creates no user membership, admin role, custom claims, or application access. Token-bound provisioning with workspaceReady=true may initiate a manual exact-invoice-email Firebase registration and verification path without claiming onboarding-email acceptance; activation_sent is observed only after optional exact activation-instructions provider acceptance is durably recorded. Provider evidence separately confirms Firebase verification-email delivery and the authorized continue URL, and only an exact normalized verified invoice email consuming the unexpired invitation creates user access and active status, while mismatch, failure, expiry, replay, and cross-account paths restore or grant no access and test records remain excluded from live revenue and paid-customer classification.",
       "targets": ["firebase-backend", "firebase-all"]
     },
     {
       "id": "buyer.verified-activation-surface",
-      "label": "The browser pending surface displays truthful locked invoice, workspace-preparation, activation-instructions, and verified-email claim guidance; /app remains unavailable before server-confirmed user access and nonmatching or unverified identities receive no access. This browser observation does not claim onboarding-email provider acceptance, Firebase verification-email delivery, backend provisioning, role creation, or provider configuration.",
+      "label": "The browser pending surface displays truthful locked invoice, workspace-preparation, activation-instructions, and verified-email claim guidance; workspaceReady=true stops automatic status polling, retains manual Check again, and offers /app only as an exact-invoice-email account-setup path, while only active is access-ready. Nonmatching or unverified identities receive no access. This browser observation does not claim onboarding-email provider acceptance, Firebase verification-email delivery, backend provisioning, role creation, or provider configuration.",
       "targets": ["firebase-hosting", "firebase-all", "vercel"]
     },
     {

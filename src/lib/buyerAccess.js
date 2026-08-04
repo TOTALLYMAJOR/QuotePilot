@@ -199,7 +199,7 @@ export async function createBuyerAccessInvoice(input = {}) {
   if (statusToken !== payload.requestId) {
     throw new Error("Buyer invoice status did not match this request.");
   }
-  if (status !== "invoice_open") {
+  if (!REOPENABLE_INVOICE_STATUSES.has(status)) {
     throw new Error("Buyer invoice returned an invalid initial status.");
   }
   return {

@@ -1,6 +1,6 @@
 "use strict";
 
-const { createHash, timingSafeEqual } = require("node:crypto");
+const { createHash, createHmac, timingSafeEqual } = require("node:crypto");
 
 const BUYER_ACCESS_FLOW = "buyer_access";
 const BUYER_ACCESS_PLAN = "starter";
@@ -9,6 +9,8 @@ const BUYER_ACCESS_AMOUNT_CENTS = 100;
 const BUYER_ACCESS_CURRENCY = "usd";
 const BUYER_ACCESS_STRIPE_API_VERSION = "2024-06-20";
 const BUYER_ACCESS_TURNSTILE_ACTION = "buyer_access_invoice";
+const BUYER_ACCESS_STATUS_RATE_LIMIT = 60;
+const BUYER_ACCESS_STATUS_RATE_WINDOW_MS = 5 * 60 * 1000;
 const BUYER_ACCESS_INTERNAL_STATUSES = Object.freeze([
   "invoice_preparing",
   "invoice_open",
@@ -43,6 +45,164 @@ function hashBuyerAccessSecret(value) {
     throw new BuyerAccessError("Buyer access request identity is required.", "invalid-argument");
   }
   return createHash("sha256").update(normalized, "utf8").digest("hex");
+}
+
+function buyerAccessRateLimitDocumentId({ rateLimitSecret, scope, value } = {}) {
+  const secret = text(rateLimitSecret);
+  const normalizedScope = text(scope).toLowerCase();
+  const normalizedValue = text(value).toLowerCase();
+  if (
+    secret.length < 32
+    || secret.length > 512
+    || /[\u0000-\u001f\u007f]/.test(secret)
+  ) {
+    throw new BuyerAccessError("Buyer access rate limiting is not configured.");
+  }
+  if (!/^[a-z][a-z0-9_-]{1,31}$/.test(normalizedScope) || !normalizedValue) {
+    throw new BuyerAccessError("Buyer access rate-limit identity is invalid.", "internal");
+  }
+  const digest = createHmac("sha256", secret)
+    .update(`quotepilot:buyer-access-rate-limit:v1:${normalizedScope}:${normalizedValue}`, "utf8")
+    .digest("hex");
+  return `${normalizedScope}-${digest.slice(0, 40)}`;
+}
+
+function planBuyerAccessRateLimit({ current = null, limit, nowMs, windowMs } = {}) {
+  const normalizedLimit = Number(limit);
+  const normalizedNowMs = Number(nowMs);
+  const normalizedWindowMs = Number(windowMs);
+  if (
+    !Number.isSafeInteger(normalizedLimit)
+    || normalizedLimit < 1
+    || !Number.isSafeInteger(normalizedNowMs)
+    || normalizedNowMs < 0
+    || !Number.isSafeInteger(normalizedWindowMs)
+    || normalizedWindowMs < 1_000
+  ) {
+    throw new BuyerAccessError("Buyer access rate-limit policy is invalid.", "internal");
+  }
+
+  const hasCurrentState = Boolean(
+    current
+    && typeof current === "object"
+    && !Array.isArray(current)
+    && Object.keys(current).length
+  );
+  let currentCount = 0;
+  let currentWindowStartedAtMs = NaN;
+  if (hasCurrentState) {
+    currentCount = Number(current.count);
+    currentWindowStartedAtMs = Date.parse(text(current.windowStartedAtISO));
+    if (
+      !Number.isSafeInteger(currentCount)
+      || currentCount < 0
+      || !Number.isFinite(currentWindowStartedAtMs)
+      || currentWindowStartedAtMs > normalizedNowMs
+    ) {
+      throw new BuyerAccessError("Buyer access rate-limit state is invalid.", "internal");
+    }
+  }
+
+  const inWindow = hasCurrentState
+    && normalizedNowMs - currentWindowStartedAtMs < normalizedWindowMs;
+  const count = inWindow ? currentCount : 0;
+  const windowStartedAtMs = inWindow ? currentWindowStartedAtMs : normalizedNowMs;
+  const windowExpiresAtMs = windowStartedAtMs + normalizedWindowMs;
+  return {
+    blocked: count >= normalizedLimit,
+    expiresAtMs: windowExpiresAtMs,
+    patch: {
+      count: count + 1,
+      windowStartedAtISO: new Date(windowStartedAtMs).toISOString(),
+      windowExpiresAtISO: new Date(windowExpiresAtMs).toISOString()
+    }
+  };
+}
+
+function planBuyerAccessCreationReservation({
+  currentEmailRate = null,
+  currentIpRate = null,
+  currentReservation = null,
+  nowMs,
+  orderId
+} = {}) {
+  const normalizedOrderId = text(orderId).toLowerCase();
+  const normalizedNowMs = Number(nowMs);
+  if (
+    !/^ba-[a-f0-9]{40}$/.test(normalizedOrderId)
+    || !Number.isSafeInteger(normalizedNowMs)
+    || normalizedNowMs < 0
+  ) {
+    throw new BuyerAccessError("Buyer access creation reservation is invalid.", "internal");
+  }
+  const hasReservation = Boolean(
+    currentReservation
+    && typeof currentReservation === "object"
+    && !Array.isArray(currentReservation)
+    && Object.keys(currentReservation).length
+  );
+  let reservationActive = false;
+  if (hasReservation) {
+    const reservationExpiresAtMs = Date.parse(text(currentReservation.expiresAtISO));
+    if (
+      text(currentReservation.scope) !== "invoice_reservation"
+      || text(currentReservation.orderId).toLowerCase() !== normalizedOrderId
+      || !Number.isFinite(reservationExpiresAtMs)
+    ) {
+      throw new BuyerAccessError("Buyer access creation reservation is invalid.", "internal");
+    }
+    reservationActive = reservationExpiresAtMs > normalizedNowMs;
+  }
+
+  const ipRate = planBuyerAccessRateLimit({
+    current: currentIpRate,
+    limit: 3,
+    nowMs: normalizedNowMs,
+    windowMs: 60 * 60 * 1000
+  });
+  const emailRate = reservationActive ? null : planBuyerAccessRateLimit({
+    current: currentEmailRate,
+    limit: 1,
+    nowMs: normalizedNowMs,
+    windowMs: 24 * 60 * 60 * 1000
+  });
+  const reservationExpiresAtMs = normalizedNowMs + 24 * 60 * 60 * 1000;
+  return {
+    blocked: ipRate.blocked || emailRate?.blocked === true,
+    emailRate,
+    ipRate,
+    reservationPatch: reservationActive ? null : {
+      scope: "invoice_reservation",
+      orderId: normalizedOrderId,
+      expiresAtISO: new Date(reservationExpiresAtMs).toISOString()
+    },
+    reused: reservationActive
+  };
+}
+
+async function authorizeBuyerAccessStatusRequest({
+  input,
+  consumeRateLimit,
+  readOrder
+} = {}) {
+  const normalizedInput = normalizeBuyerAccessStatusRequest(input);
+  if (typeof consumeRateLimit !== "function" || typeof readOrder !== "function") {
+    throw new BuyerAccessError("Buyer access status authority is unavailable.", "internal");
+  }
+  await consumeRateLimit();
+  const order = await readOrder(normalizedInput.orderId);
+  if (
+    !order
+    || typeof order !== "object"
+    || Array.isArray(order)
+    || !buyerAccessStatusTokenMatches({
+      expectedHash: order.statusTokenHash,
+      statusToken: normalizedInput.statusToken
+    })
+  ) {
+    throw new BuyerAccessError("Buyer access status is unavailable.", "permission-denied");
+  }
+  return order;
 }
 
 function buyerAccessStatusTokenMatches({ expectedHash, statusToken } = {}) {
@@ -171,21 +331,30 @@ function compactUuid(value) {
   return normalized;
 }
 
-function buyerAccessOrderIdForEmail(ownerEmail) {
+function buyerAccessOrderIdForRequest({ ownerEmail, requestId } = {}) {
   const email = normalizeBuyerAccessEmail(ownerEmail);
+  const normalizedRequestId = normalizeBuyerAccessRequestId(requestId);
   const digest = createHash("sha256")
-    .update(`quotepilot:buyer-access-email:${email}`, "utf8")
+    .update(
+      `quotepilot:buyer-access-order:v2:${email}:${normalizedRequestId}`,
+      "utf8"
+    )
     .digest("hex");
   return `ba-${digest.slice(0, 40)}`;
 }
 
-function buildBuyerAccessIdentifiers({ ownerEmail, organizationName, randomUUID } = {}) {
+function buildBuyerAccessIdentifiers({
+  ownerEmail,
+  organizationName,
+  randomUUID,
+  requestId
+} = {}) {
   if (typeof randomUUID !== "function") {
     throw new BuyerAccessError("Server identity generator is unavailable.", "internal");
   }
   const suffix = compactUuid(randomUUID());
   return {
-    orderId: buyerAccessOrderIdForEmail(ownerEmail),
+    orderId: buyerAccessOrderIdForRequest({ ownerEmail, requestId }),
     organizationId: `${slug(organizationName)}-${suffix}`
   };
 }
@@ -620,17 +789,21 @@ module.exports = {
   BUYER_ACCESS_INTERNAL_STATUSES,
   BUYER_ACCESS_MODE,
   BUYER_ACCESS_PLAN,
+  BUYER_ACCESS_STATUS_RATE_LIMIT,
+  BUYER_ACCESS_STATUS_RATE_WINDOW_MS,
   BUYER_ACCESS_STRIPE_API_VERSION,
   BUYER_ACCESS_TURNSTILE_ACTION,
   BuyerAccessError,
   assertBuyerAccessInvoiceBinding,
   assertBuyerAccessRuntime,
   assertBuyerAccessTurnstileResult,
+  authorizeBuyerAccessStatusRequest,
   buildBuyerAccessIdentifiers,
   buildBuyerAccessMetadata,
   buildBuyerAccessStripePlan,
-  buyerAccessOrderIdForEmail,
+  buyerAccessOrderIdForRequest,
   buyerAccessProviderStateForEvent,
+  buyerAccessRateLimitDocumentId,
   buyerAccessStatusResponse,
   buyerAccessStatusTokenMatches,
   hashBuyerAccessSecret,
@@ -640,6 +813,8 @@ module.exports = {
   normalizeBuyerAccessRequestId,
   normalizeBuyerAccessStatusRequest,
   normalizeBuyerAccessTurnstileHostnames,
+  planBuyerAccessCreationReservation,
+  planBuyerAccessRateLimit,
   planBuyerAccessTransition,
   resolveBuyerAccessBootstrapRecovery
 };

@@ -53,6 +53,7 @@ const DEPLOYMENT_PROFILES = [
 const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   "firebase-hosting": [
     "staging.immutable-release",
+    "security.provider-secret-cutover",
     "auth.password-recovery",
     "buyer.public-entry-turnstile",
     "buyer.verified-activation-surface",
@@ -68,6 +69,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   ],
   "firebase-backend": [
     "staging.immutable-release",
+    "security.provider-secret-cutover",
     "buyer.public-initiation-controls",
     "buyer.hosted-invoice-lifecycle",
     "buyer.pending-invite-activation",
@@ -91,6 +93,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   ],
   "firebase-all": [
     "staging.immutable-release",
+    "security.provider-secret-cutover",
     "auth.password-recovery",
     "buyer.public-entry-turnstile",
     "buyer.public-initiation-controls",
@@ -122,6 +125,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   ],
   vercel: [
     "staging.immutable-release",
+    "security.provider-secret-cutover",
     "auth.password-recovery",
     "buyer.public-entry-turnstile",
     "buyer.verified-activation-surface",
@@ -137,6 +141,12 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   ]
 });
 const CRITICAL_UAT_TARGETS = Object.freeze({
+  "security.provider-secret-cutover": [
+    "firebase-hosting",
+    "firebase-backend",
+    "firebase-all",
+    "vercel"
+  ],
   "auth.password-recovery": ["firebase-hosting", "firebase-all", "vercel"],
   "buyer.public-entry-turnstile": ["firebase-hosting", "firebase-all", "vercel"],
   "buyer.public-initiation-controls": ["firebase-backend", "firebase-all"],
@@ -566,7 +576,7 @@ describe("tracked UAT checklist", () => {
     expect(checklist.checklist.schema).toBe(
       "com.mbmapps.quotepilot.release-uat-checklist/v2"
     );
-    expect(checklist.checklist.version).toBe("2026-08-04.6");
+    expect(checklist.checklist.version).toBe("2026-08-04.9");
     expect(checklist.itemIds).toHaveLength(checklist.checklist.items.length);
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
@@ -605,14 +615,32 @@ describe("tracked UAT checklist", () => {
     expect(labelsByItemId.get("buyer.hosted-invoice-lifecycle")).toMatch(
       /live quote client, API version/i
     );
+    expect(labelsByItemId.get("buyer.public-initiation-controls")).toMatch(
+      /each public status request.*60-request-per-five-minute.*before its first buyer-order read.*wrong-token.*later fulfillment reads.*TTL/is
+    );
+    expect(labelsByItemId.get("buyer.public-initiation-controls")).toMatch(
+      /before any Auth.*request-scoped.*without duplicate email charge.*signed-void.*stale events/is
+    );
+    expect(labelsByItemId.get("buyer.public-initiation-controls")).toMatch(
+      /open and payment-failed.*exact original creation request.*uncollectible or expired, paid, and activation.*reject automatic replacement.*operator stop.*no buyer-specific repair callable.*live sale remains blocked/is
+    );
+    expect(labelsByItemId.get("security.provider-secret-cutover")).toMatch(
+      /buyer gate stayed off.*least-privilege Firebase Secret Manager.*new-plus-old overlap.*Turnstile.*HMAC-key rotation.*revoked only after exact hosted\/provider UAT/is
+    );
     expect(labelsByItemId.get("buyer.pending-invite-activation")).toMatch(
       /Starter workspace plan entitlements/i
     );
     expect(labelsByItemId.get("buyer.pending-invite-activation")).toMatch(
       /activation_sent.*provider acceptance.*Firebase verification-email delivery/is
     );
+    expect(labelsByItemId.get("buyer.pending-invite-activation")).toMatch(
+      /workspaceReady=true.*manual exact-invoice-email/is
+    );
     expect(labelsByItemId.get("buyer.verified-activation-surface")).toMatch(
       /does not claim onboarding-email provider acceptance/i
+    );
+    expect(labelsByItemId.get("buyer.verified-activation-surface")).toMatch(
+      /stops automatic status polling.*manual Check again.*only active/is
     );
   });
 

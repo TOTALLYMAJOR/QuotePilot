@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("public buyer route creates a fixed invoice without requiring sign-in", async ({ page }) => {
+test("public buyer route creates a fixed test invoice without requiring sign-in", async ({ page }) => {
   await page.addInitScript(({ hostedInvoiceUrl, orderId }) => {
     window.__quotePilotE2eFunctions = {
       createBuyerAccessInvoice: async (payload) => {
@@ -37,14 +37,18 @@ test("public buyer route creates a fixed invoice without requiring sign-in", asy
 
   await page.goto("/start");
 
-  await expect(page.getByRole("heading", { name: "Start with a one-dollar invoice." })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Create your $1 invoice" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Test the one-dollar invoice flow." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create a $1 Stripe test invoice" })).toBeVisible();
+  await expect(page.getByText("Stripe test mode — no live charge")).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: /never enter a real card/i }))
+    .toBeVisible();
+  await expect(page.getByText(/4242 4242 4242 4242/)).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Password" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Sign in" })).toHaveCount(0);
   await page.getByRole("textbox", { name: "Business name" }).fill("Browser Buyer Events");
   await page.getByRole("textbox", { name: "Owner name" }).fill("Avery Browser");
   await page.getByRole("textbox", { name: "Owner email" }).fill("OWNER@Example.com");
-  const createButton = page.getByRole("button", { name: "Create my $1 invoice" });
+  const createButton = page.getByRole("button", { name: "Create my $1 test invoice" });
   await expect(createButton).toBeEnabled();
   await createButton.click();
 
@@ -89,7 +93,7 @@ test("public buyer route creates a fixed invoice without requiring sign-in", asy
   expect(JSON.stringify(localValues)).not.toContain("invoice.stripe.com");
 });
 
-test("a failed submission resets Turnstile and reuses the same idempotent request", async ({ page }) => {
+test("a failed submission safely recovers a payment-failed invoice with the same request", async ({ page }) => {
   await page.addInitScript(({ hostedInvoiceUrl, orderId }) => {
     window.__quotePilotE2eFunctions = {
       createBuyerAccessInvoice: async (payload) => {
@@ -105,7 +109,7 @@ test("a failed submission resets Turnstile and reuses the same idempotent reques
           orderId,
           statusToken: payload.requestId,
           hostedInvoiceUrl,
-          status: "invoice_open"
+          status: "payment_failed"
         };
       }
     };
@@ -118,7 +122,7 @@ test("a failed submission resets Turnstile and reuses the same idempotent reques
   await page.getByRole("textbox", { name: "Business name" }).fill("Retry Events");
   await page.getByRole("textbox", { name: "Owner name" }).fill("Riley Retry");
   await page.getByRole("textbox", { name: "Owner email" }).fill("retry@example.com");
-  await page.getByRole("button", { name: "Create my $1 invoice" }).click();
+  await page.getByRole("button", { name: "Create my $1 test invoice" }).click();
 
   await expect(page.getByRole("alert")).toContainText("temporarily unavailable");
   await expect.poll(() => page.evaluate(() => window.__quotePilotE2eTurnstileResetCount)).toBe(1);
@@ -133,7 +137,7 @@ test("a failed submission resets Turnstile and reuses the same idempotent reques
   await expect(page.getByRole("textbox", { name: "Business name" })).toHaveValue("Retry Events");
   await expect(page.getByRole("textbox", { name: "Owner name" })).toHaveValue("Riley Retry");
   await expect(page.getByRole("textbox", { name: "Owner email" })).toHaveValue("retry@example.com");
-  const createButton = page.getByRole("button", { name: "Create my $1 invoice" });
+  const createButton = page.getByRole("button", { name: "Create my $1 test invoice" });
   await expect(createButton).toBeEnabled();
   await createButton.click();
   await expect.poll(() => page.evaluate(() => window.__buyerInvoiceRedirect)).toBe(HOSTED_INVOICE_URL);
@@ -146,13 +150,15 @@ test("a failed submission resets Turnstile and reuses the same idempotent reques
   expect(attempts[1].turnstileToken).toBe(E2E_TURNSTILE_TOKEN);
 });
 
-test("browser return stays locked through invoice, provisioning, and activation states", async ({ page }) => {
+test("paid workspace preparation exposes exact-email setup and stops automatic polling", async ({ page }) => {
   await page.addInitScript(({ hostedInvoiceUrl, orderId, statusStorageKey, statusToken }) => {
     sessionStorage.setItem(statusStorageKey, JSON.stringify({ orderId, statusToken }));
     window.__buyerStatus = "invoice_open";
     window.__buyerProvisioningReady = false;
+    window.__buyerStatusChecks = 0;
     window.__quotePilotE2eFunctions = {
       getBuyerAccessInvoiceStatus: async ({ orderId: requestedOrderId }) => {
+        window.__buyerStatusChecks += 1;
         const status = window.__buyerStatus;
         const activationReady = status === "activation_sent" || status === "active";
         const workspaceReady = status === "provisioning"
@@ -195,15 +201,28 @@ test("browser return stays locked through invoice, provisioning, and activation 
     window.__buyerProvisioningReady = true;
   });
   await page.getByRole("button", { name: "Check again" }).click();
-  await expect(page.getByRole("heading", { name: "Payment confirmed — your workspace is prepared" })).toBeVisible();
-  await expect(page.getByText(/account activation is still pending/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Payment confirmed — continue account setup" })).toBeVisible();
+  await expect(page.getByText(/exact email on the Stripe invoice/i)).toBeVisible();
+  await expect(page.getByText(/does not grant access or claim.*activation email was sent/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Register or sign in with my invoice email" }))
+    .toHaveAttribute("href", "/app");
+  await expect(page.getByRole("button", { name: "Check again" })).toBeVisible();
+
+  const checksAtReady = await page.evaluate(() => window.__buyerStatusChecks);
 
   await page.evaluate(() => {
     window.__buyerStatus = "activation_sent";
   });
+  await page.waitForTimeout(3_000);
+  expect(await page.evaluate(() => window.__buyerStatusChecks)).toBe(checksAtReady);
+  await expect(page.getByRole("heading", { name: "Payment confirmed — continue account setup" })).toBeVisible();
+
   await page.getByRole("button", { name: "Check again" }).click();
-  await expect(page.getByRole("heading", { name: "Check your email to activate QuotePilot" })).toBeVisible();
-  await expect(page.getByText(/access stays locked/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Continue your verified-email setup" })).toBeVisible();
+  await expect(page.getByText(/provider accepted.*inbox delivery is not proven/i)).toBeVisible();
+  await expect(page.getByText(/does not grant access/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Register or sign in with my invoice email" }))
+    .toHaveAttribute("href", "/app");
   await expect(page.getByRole("link", { name: "Sign in to your QuotePilot workspace" })).toHaveCount(0);
 
   await page.evaluate(() => {
@@ -215,15 +234,45 @@ test("browser return stays locked through invoice, provisioning, and activation 
     .toHaveAttribute("href", "/app");
 });
 
+test("a signed-void status can start a fresh same-tab test request", async ({ page }) => {
+  await page.addInitScript(({ orderId, statusStorageKey, statusToken }) => {
+    sessionStorage.setItem(statusStorageKey, JSON.stringify({ orderId, statusToken }));
+    window.__quotePilotE2eFunctions = {
+      getBuyerAccessInvoiceStatus: async ({ orderId: requestedOrderId }) => ({
+        orderId: requestedOrderId,
+        status: "void",
+        activationEmailSent: false,
+        workspaceReady: false,
+        appUrl: null,
+        hostedInvoiceUrl: null
+      })
+    };
+  }, {
+    orderId: ORDER_ID,
+    statusStorageKey: STATUS_STORAGE_KEY,
+    statusToken: STATUS_TOKEN
+  });
+
+  await page.goto("/start");
+
+  await expect(page.getByRole("heading", { name: "This invoice is closed" })).toBeVisible();
+  await expect(page.getByText(/24-hour email window/i)).toBeVisible();
+  await page.getByRole("button", { name: "Start a new test request" }).click();
+
+  await expect(page.getByRole("heading", { name: "Create a $1 Stripe test invoice" }))
+    .toBeVisible();
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), STATUS_STORAGE_KEY)).toBeNull();
+});
+
 test("status identities in the URL are ignored and never claim payment or access", async ({ page }) => {
   await page.goto(`/start?order=${ORDER_ID}`);
   await expect(page.getByText("Invoice status details in the URL were ignored.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Create your $1 invoice" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create a $1 Stripe test invoice" })).toBeVisible();
   await expect(page.getByText("Your workspace is ready", { exact: true })).toHaveCount(0);
 
   await page.goto(`/start?statusToken=${STATUS_TOKEN}`);
   await expect(page.getByText("Invoice status details in the URL were ignored.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Create your $1 invoice" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create a $1 Stripe test invoice" })).toBeVisible();
   await expect(page.getByText("Your workspace is ready", { exact: true })).toHaveCount(0);
 });
 
@@ -231,7 +280,7 @@ test("buyer invoice intake stays contained on a narrow mobile viewport", async (
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/start");
 
-  await expect(page.getByRole("heading", { name: "Start with a one-dollar invoice." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Test the one-dollar invoice flow." })).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth
   );
@@ -242,6 +291,6 @@ test("customer portal query keeps precedence over the public buyer route", async
   await page.goto("/start?portal=e2e-buyer-route-precedence");
 
   await expect(page.getByRole("heading", { name: "Proposal Decision Center" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Start with a one-dollar invoice." }))
+  await expect(page.getByRole("heading", { name: "Test the one-dollar invoice flow." }))
     .toHaveCount(0);
 });
