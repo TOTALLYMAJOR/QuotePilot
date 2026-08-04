@@ -26,19 +26,18 @@ const STATES = ["queued", "success", "error", "retrying", "skipped"];
 const DIRECTIONS = ["push", "pull"];
 const PROVISION_PLANS = ["starter", "growth", "enterprise"];
 const FUNCTIONS_ENV_SETUP_GUIDANCE = [
-  "For local/emulator validation only, edit the ignored file functions/.env.tonicatering (mode 0600).",
-  "Use placeholders or non-production provider values only; never commit or paste secrets here:",
+  "For local validation of the production deploy configuration only, keep non-secret configuration in the ignored functions/.env.tonicatering file (mode 0600):",
   "NOTIFICATIONS_SMS_PROVIDER=twilio",
   "TWILIO_ACCOUNT_SID=",
   "TWILIO_AUTH_TOKEN=",
   "TWILIO_FROM_NUMBER=",
   "NOTIFICATIONS_OWNER_PHONE=",
-  "STRIPE_SECRET_KEY=",
-  "STRIPE_WEBHOOK_SECRET=",
+  "STRIPE_MODE=live",
   "",
-  "Validate without rewriting:",
+  "Validate the production dotenv payload without rewriting:",
   "FIREBASE_PROJECT_ID=tonicatering node --env-file=functions/.env.tonicatering scripts/materialize-functions-env.mjs --validate-only",
-  "Never upload this file or place production credentials in it. Production values belong only in the trusted deployer/runtime secret channel."
+  "The production materializer rejects Resend and Stripe secret values. Do not use it for emulator setup: disposable emulator configuration must use STRIPE_MODE=test, with expendable RESEND_API_KEY, STRIPE_SECRET_KEY, and STRIPE_WEBHOOK_SECRET fixtures only in the separately ignored functions/.secret.local file.",
+  "Never upload either file or use production credentials locally; production provider credentials belong only in Firebase Secret Manager bindings."
 ].join("\n");
 const SMS_DISABLE_GUIDANCE = [
   "Keep NOTIFICATIONS_SMS_PROVIDER=none in the trusted runtime configuration",

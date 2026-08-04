@@ -7,16 +7,20 @@ const {
   BUYER_ACCESS_CURRENCY,
   BUYER_ACCESS_MODE,
   BUYER_ACCESS_PLAN,
+  BUYER_ACCESS_STATUS_RATE_LIMIT,
+  BUYER_ACCESS_STATUS_RATE_WINDOW_MS,
   BUYER_ACCESS_STRIPE_API_VERSION,
   BUYER_ACCESS_TURNSTILE_ACTION,
   BuyerAccessError,
   assertBuyerAccessInvoiceBinding,
   assertBuyerAccessRuntime,
   assertBuyerAccessTurnstileResult,
+  authorizeBuyerAccessStatusRequest,
   buildBuyerAccessIdentifiers,
   buildBuyerAccessStripePlan,
-  buyerAccessOrderIdForEmail,
+  buyerAccessOrderIdForRequest,
   buyerAccessProviderStateForEvent,
+  buyerAccessRateLimitDocumentId,
   buyerAccessStatusResponse,
   buyerAccessStatusTokenMatches,
   hashBuyerAccessSecret,
@@ -24,15 +28,21 @@ const {
   normalizeBuyerAccessHostedInvoiceUrl,
   normalizeBuyerAccessRequest,
   normalizeBuyerAccessStatusRequest,
+  planBuyerAccessCreationReservation,
+  planBuyerAccessRateLimit,
   planBuyerAccessTransition,
   resolveBuyerAccessBootstrapRecovery
 } = require("../../../functions/buyerAccess.js");
 
 const REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000";
 const OTHER_REQUEST_ID = "123e4567-e89b-42d3-b456-426614174001";
+const RATE_LIMIT_SECRET = "test-only-buyer-rate-limit-secret-0123456789abcdef";
 const HOSTED_INVOICE_URL = "https://invoice.stripe.com/i/acct_test/test_invoice_101?s=ap";
 const order = {
-  orderId: buyerAccessOrderIdForEmail("owner@example.com"),
+  orderId: buyerAccessOrderIdForRequest({
+    ownerEmail: "owner@example.com",
+    requestId: REQUEST_ID
+  }),
   flow: "buyer_access",
   buyerAccessMode: BUYER_ACCESS_MODE,
   ownerUid: "",
@@ -167,19 +177,188 @@ describe("buyer access invoice server contract", () => {
     })).toBe(false);
   });
 
-  test("derives a stable email order and collision-resistant organization identity", () => {
+  test("derives secret-keyed rate records without exposing raw network or email identity", () => {
+    const ipId = buyerAccessRateLimitDocumentId({
+      rateLimitSecret: RATE_LIMIT_SECRET,
+      scope: "status_ip",
+      value: "203.0.113.42"
+    });
+    const emailId = buyerAccessRateLimitDocumentId({
+      rateLimitSecret: RATE_LIMIT_SECRET,
+      scope: "invoice_email",
+      value: "owner@example.com"
+    });
+    expect(ipId).toMatch(/^status_ip-[a-f0-9]{40}$/);
+    expect(emailId).toMatch(/^invoice_email-[a-f0-9]{40}$/);
+    expect(ipId).not.toContain("203.0.113.42");
+    expect(emailId).not.toContain("owner@example.com");
+    expect(buyerAccessRateLimitDocumentId({
+      rateLimitSecret: RATE_LIMIT_SECRET,
+      scope: "status_ip",
+      value: "203.0.113.42"
+    })).toBe(ipId);
+    expect(buyerAccessRateLimitDocumentId({
+      rateLimitSecret: `${RATE_LIMIT_SECRET}-different`,
+      scope: "status_ip",
+      value: "203.0.113.42"
+    })).not.toBe(ipId);
+    expect(() => buyerAccessRateLimitDocumentId({
+      rateLimitSecret: "too-short",
+      scope: "status_ip",
+      value: "203.0.113.42"
+    })).toThrow(/not configured/i);
+  });
+
+  test("permits the full client polling budget and blocks the next request in-window", () => {
+    expect(BUYER_ACCESS_STATUS_RATE_LIMIT).toBe(60);
+    expect(BUYER_ACCESS_STATUS_RATE_WINDOW_MS).toBe(5 * 60 * 1000);
+    const startedAtMs = Date.parse("2026-08-04T12:00:00.000Z");
+    let current = null;
+    for (let attempt = 0; attempt < BUYER_ACCESS_STATUS_RATE_LIMIT; attempt += 1) {
+      const rate = planBuyerAccessRateLimit({
+        current,
+        limit: BUYER_ACCESS_STATUS_RATE_LIMIT,
+        nowMs: startedAtMs + attempt * 100,
+        windowMs: BUYER_ACCESS_STATUS_RATE_WINDOW_MS
+      });
+      expect(rate.blocked).toBe(false);
+      current = rate.patch;
+    }
+    const blocked = planBuyerAccessRateLimit({
+      current,
+      limit: BUYER_ACCESS_STATUS_RATE_LIMIT,
+      nowMs: startedAtMs + BUYER_ACCESS_STATUS_RATE_LIMIT * 100,
+      windowMs: BUYER_ACCESS_STATUS_RATE_WINDOW_MS
+    });
+    expect(blocked.blocked).toBe(true);
+
+    const reset = planBuyerAccessRateLimit({
+      current,
+      limit: BUYER_ACCESS_STATUS_RATE_LIMIT,
+      nowMs: startedAtMs + BUYER_ACCESS_STATUS_RATE_WINDOW_MS,
+      windowMs: BUYER_ACCESS_STATUS_RATE_WINDOW_MS
+    });
+    expect(reset).toMatchObject({ blocked: false, patch: { count: 1 } });
+  });
+
+  test("reused create reservations charge every IP attempt but charge email only once", () => {
+    const nowMs = Date.parse("2026-08-04T12:00:00.000Z");
+    const first = planBuyerAccessCreationReservation({
+      nowMs,
+      orderId: order.orderId
+    });
+    expect(first).toMatchObject({
+      blocked: false,
+      reused: false,
+      ipRate: { patch: { count: 1 } },
+      emailRate: { patch: { count: 1 } },
+      reservationPatch: {
+        scope: "invoice_reservation",
+        orderId: order.orderId
+      }
+    });
+
+    const currentReservation = first.reservationPatch;
+    let currentIpRate = first.ipRate.patch;
+    for (let retry = 0; retry < 2; retry += 1) {
+      const repeated = planBuyerAccessCreationReservation({
+        currentEmailRate: first.emailRate.patch,
+        currentIpRate,
+        currentReservation,
+        nowMs: nowMs + (retry + 1) * 100,
+        orderId: order.orderId
+      });
+      expect(repeated.blocked).toBe(false);
+      expect(repeated.reused).toBe(true);
+      expect(repeated.emailRate).toBeNull();
+      expect(repeated.reservationPatch).toBeNull();
+      currentIpRate = repeated.ipRate.patch;
+    }
+    const blockedRetry = planBuyerAccessCreationReservation({
+      currentEmailRate: first.emailRate.patch,
+      currentIpRate,
+      currentReservation,
+      nowMs: nowMs + 400,
+      orderId: order.orderId
+    });
+    expect(blockedRetry.blocked).toBe(true);
+    expect(blockedRetry.reused).toBe(true);
+    expect(blockedRetry.emailRate).toBeNull();
+    expect(blockedRetry.ipRate.patch.count).toBe(4);
+  });
+
+  test("charges well-formed unknown orders and wrong tokens before returning the same denial", async () => {
+    const unknownTrace = [];
+    await expect(authorizeBuyerAccessStatusRequest({
+      input: { orderId: order.orderId, statusToken: REQUEST_ID },
+      consumeRateLimit: async () => unknownTrace.push("rate"),
+      readOrder: async () => {
+        unknownTrace.push("read");
+        return null;
+      }
+    })).rejects.toMatchObject({ code: "permission-denied" });
+    expect(unknownTrace).toEqual(["rate", "read"]);
+
+    const wrongTokenTrace = [];
+    await expect(authorizeBuyerAccessStatusRequest({
+      input: { orderId: order.orderId, statusToken: OTHER_REQUEST_ID },
+      consumeRateLimit: async () => wrongTokenTrace.push("rate"),
+      readOrder: async () => {
+        wrongTokenTrace.push("read");
+        return order;
+      }
+    })).rejects.toMatchObject({ code: "permission-denied" });
+    expect(wrongTokenTrace).toEqual(["rate", "read"]);
+  });
+
+  test("never reads an order when rate infrastructure fails and accepts a valid token after a lease", async () => {
+    let readAttempted = false;
+    await expect(authorizeBuyerAccessStatusRequest({
+      input: { orderId: order.orderId, statusToken: REQUEST_ID },
+      consumeRateLimit: async () => {
+        throw new Error("rate store unavailable");
+      },
+      readOrder: async () => {
+        readAttempted = true;
+        return order;
+      }
+    })).rejects.toThrow(/rate store unavailable/i);
+    expect(readAttempted).toBe(false);
+
+    const trace = [];
+    await expect(authorizeBuyerAccessStatusRequest({
+      input: { orderId: order.orderId, statusToken: REQUEST_ID },
+      consumeRateLimit: async () => trace.push("rate"),
+      readOrder: async () => {
+        trace.push("read");
+        return order;
+      }
+    })).resolves.toBe(order);
+    expect(trace).toEqual(["rate", "read"]);
+  });
+
+  test("derives a stable request-scoped order and collision-resistant organization identity", () => {
     const first = buildBuyerAccessIdentifiers({
       ownerEmail: "OWNER@example.com",
       organizationName: "Acme Events",
-      randomUUID: () => "12345678-90ab-cdef-1234-567890abcdef"
+      randomUUID: () => "12345678-90ab-cdef-1234-567890abcdef",
+      requestId: REQUEST_ID
     });
     const second = buildBuyerAccessIdentifiers({
       ownerEmail: "owner@example.com",
       organizationName: "Acme Events",
-      randomUUID: () => "abcdefab-cdef-abcd-efab-cdefabcdefab"
+      randomUUID: () => "abcdefab-cdef-abcd-efab-cdefabcdefab",
+      requestId: REQUEST_ID
+    });
+    const replacement = buildBuyerAccessIdentifiers({
+      ownerEmail: "owner@example.com",
+      organizationName: "Acme Events",
+      randomUUID: () => "abcdefab-cdef-abcd-efab-cdefabcdefab",
+      requestId: OTHER_REQUEST_ID
     });
     expect(first.orderId).toBe(second.orderId);
     expect(first.orderId).toBe(order.orderId);
+    expect(replacement.orderId).not.toBe(first.orderId);
     expect(first.organizationId).toBe("acme-events-1234567890abcdef1234567890abcdef");
     expect(second.organizationId).not.toBe(first.organizationId);
   });
@@ -189,14 +368,16 @@ describe("buyer access invoice server contract", () => {
     expect(buildBuyerAccessIdentifiers({
       ownerEmail: "underscore@example.com",
       organizationName: "_Acme",
-      randomUUID: uuid
+      randomUUID: uuid,
+      requestId: REQUEST_ID
     }).organizationId).toBe(
       "acme-1234567890abcdef1234567890abcdef"
     );
     expect(buildBuyerAccessIdentifiers({
       ownerEmail: "only-underscores@example.com",
       organizationName: "___",
-      randomUUID: uuid
+      randomUUID: uuid,
+      requestId: REQUEST_ID
     }).organizationId).toBe(
       "workspace-1234567890abcdef1234567890abcdef"
     );
@@ -206,7 +387,8 @@ describe("buyer access invoice server contract", () => {
           ? "underscore@example.com"
           : "only-underscores@example.com",
         organizationName,
-        randomUUID: uuid
+        randomUUID: uuid,
+        requestId: REQUEST_ID
       }).organizationId).toMatch(/^[a-z0-9][a-z0-9_-]*-[a-f0-9]{32}$/);
     }
   });

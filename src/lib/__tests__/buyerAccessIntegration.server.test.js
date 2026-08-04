@@ -25,6 +25,14 @@ function occurrenceCount(source, value) {
   return source.split(value).length - 1;
 }
 
+function exportedFunctionSource(name) {
+  const marker = `exports.${name} =`;
+  const start = FUNCTIONS_INDEX_SOURCE.indexOf(marker);
+  if (start < 0) throw new Error(`Unable to locate ${marker}.`);
+  const next = FUNCTIONS_INDEX_SOURCE.indexOf("\nexports.", start + marker.length);
+  return FUNCTIONS_INDEX_SOURCE.slice(start, next < 0 ? undefined : next);
+}
+
 describe("buyer access Invoice endpoint isolation", () => {
   test("binds least-privilege secrets to public create and dedicated webhook endpoints", () => {
     const create = sourceBetween(
@@ -32,9 +40,9 @@ describe("buyer access Invoice endpoint isolation", () => {
       "exports.createBuyerAccessInvoice =",
       "exports.getBuyerAccessInvoiceStatus ="
     );
-    expect(create).toContain(
-      "secrets: [BUYER_ACCESS_STRIPE_SECRET_NAME, BUYER_ACCESS_TURNSTILE_SECRET_NAME]"
-    );
+    expect(create).toContain("BUYER_ACCESS_STRIPE_SECRET_NAME");
+    expect(create).toContain("BUYER_ACCESS_TURNSTILE_SECRET_NAME");
+    expect(create).toContain("BUYER_ACCESS_RATE_LIMIT_SECRET_NAME");
     expect(create).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME");
 
     const status = sourceBetween(
@@ -45,17 +53,66 @@ describe("buyer access Invoice endpoint isolation", () => {
     expect(status).not.toContain("BUYER_ACCESS_STRIPE_SECRET_NAME");
     expect(status).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME");
     expect(status).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET_NAME");
+    expect(status).toContain("BUYER_ACCESS_RATE_LIMIT_SECRET_NAME");
+    expect(status).toContain("RESEND_API_KEY_SECRET_NAME");
 
     const buyerWebhook = sourceBetween(
       FUNCTIONS_INDEX_SOURCE,
       "exports.buyerAccessStripeWebhook =",
       "exports.stripeWebhook ="
     );
-    expect(buyerWebhook).toContain(
-      ".runWith({ secrets: [BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME] })"
-    );
+    expect(buyerWebhook).toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME");
+    expect(buyerWebhook).toContain("RESEND_API_KEY_SECRET_NAME");
     expect(buyerWebhook).not.toContain("BUYER_ACCESS_STRIPE_SECRET_NAME");
     expect(buyerWebhook).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET_NAME");
+  });
+
+  test("binds generic provider secrets only to their complete call graph", () => {
+    const expected = {
+      provisionCustomerOrder: ["RESEND_API_KEY_SECRET_NAME"],
+      repairCustomerProvisioningOrder: ["RESEND_API_KEY_SECRET_NAME"],
+      sendQuoteToCustomer: ["RESEND_API_KEY_SECRET_NAME"],
+      sendPaymentRequestEmail: ["STRIPE_SECRET_NAME", "RESEND_API_KEY_SECRET_NAME"],
+      sendFinalBalanceRequestEmail: ["STRIPE_SECRET_NAME", "RESEND_API_KEY_SECRET_NAME"],
+      getIntegrationSetupStatus: [
+        "STRIPE_SECRET_NAME",
+        "STRIPE_WEBHOOK_SECRET_NAME",
+        "RESEND_API_KEY_SECRET_NAME"
+      ],
+      sendIntegrationTestSms: [
+        "STRIPE_SECRET_NAME",
+        "STRIPE_WEBHOOK_SECRET_NAME",
+        "RESEND_API_KEY_SECRET_NAME"
+      ],
+      reconcileDepositCheckout: ["STRIPE_SECRET_NAME"],
+      reconcileFinalBalanceCheckout: ["STRIPE_SECRET_NAME"],
+      stripeWebhook: ["STRIPE_WEBHOOK_SECRET_NAME"]
+    };
+    const genericNames = [
+      "STRIPE_SECRET_NAME",
+      "STRIPE_WEBHOOK_SECRET_NAME",
+      "RESEND_API_KEY_SECRET_NAME"
+    ];
+    for (const [exportName, expectedNames] of Object.entries(expected)) {
+      const source = exportedFunctionSource(exportName);
+      expect(source, exportName).toContain(".runWith({");
+      for (const secretName of genericNames) {
+        if (expectedNames.includes(secretName)) {
+          expect(source, `${exportName}:${secretName}`).toContain(secretName);
+        } else {
+          expect(source, `${exportName}:${secretName}`).not.toContain(secretName);
+        }
+      }
+    }
+
+    expect(FUNCTIONS_INDEX_SOURCE).not.toContain('readConfig("stripe.secret_key")');
+    expect(FUNCTIONS_INDEX_SOURCE).not.toContain('readConfig("stripe.webhook_secret")');
+    expect(FUNCTIONS_INDEX_SOURCE).not.toContain('readConfig("resend.api_key")');
+    const genericWebhook = exportedFunctionSource("stripeWebhook");
+    expect(genericWebhook).toContain("constructStripeWebhookEvent({");
+    expect(genericWebhook).not.toContain("getStripeClient()");
+    expect(genericWebhook).toContain('res.status(400).send("Webhook verification failed.")');
+    expect(genericWebhook).not.toContain("err.message");
   });
 
   test("pins only the buyer client and dedicated webhook to Stripe API 2024-06-20", () => {
@@ -87,17 +144,19 @@ describe("buyer access Invoice endpoint isolation", () => {
     );
   });
 
-  test("verifies a fresh Turnstile token before every Auth, invite, or order lookup", () => {
+  test("reserves a durable create lease after Turnstile and before every identity or order lookup", () => {
     const create = sourceBetween(
       FUNCTIONS_INDEX_SOURCE,
       "exports.createBuyerAccessInvoice =",
       "exports.getBuyerAccessInvoiceStatus ="
     );
     const turnstile = create.indexOf("await verifyBuyerAccessTurnstile({");
+    const reservation = create.indexOf("await reservePublicBuyerAccessCreation({");
     const identity = create.indexOf("await assertPublicBuyerIdentityAvailable");
     const order = create.indexOf("await preparePublicBuyerAccessOrder({");
     expect(turnstile).toBeGreaterThan(-1);
-    expect(identity).toBeGreaterThan(turnstile);
+    expect(reservation).toBeGreaterThan(turnstile);
+    expect(identity).toBeGreaterThan(reservation);
     expect(order).toBeGreaterThan(identity);
     expect(create).not.toContain("context?.auth");
     expect(create).not.toContain("assertBuyerAccessPrincipal");
@@ -113,9 +172,24 @@ describe("buyer access Invoice endpoint isolation", () => {
     expect(verification).toContain("remoteip: requestIp");
     expect(verification).not.toContain("idempotency_key");
     expect(verification).not.toContain("requestId");
+
+    const reservationSource = sourceBetween(
+      FUNCTIONS_INDEX_SOURCE,
+      "async function reservePublicBuyerAccessCreation",
+      "async function consumeBuyerAccessStatusRateLimit"
+    );
+    expect(reservationSource).toContain("await db.runTransaction(async (tx)");
+    expect(reservationSource).toContain("const reservationSnap = await tx.get(reservationRef)");
+    expect(reservationSource).toContain("return { identifiers, reused: true }");
+    expect(reservationSource).toContain("planBuyerAccessCreationReservation({");
+    expect(reservationSource).toContain("tx.set(ipRateRef");
+    expect(reservationSource).toContain("if (reservation.reused)");
+    expect(reservationSource).toContain("tx.set(reservationRef");
+    expect(reservationSource).toContain("expiresAt: Timestamp.fromDate(");
+    expect(reservationSource).not.toContain("assertPublicBuyerIdentityAvailable");
   });
 
-  test("uses only trusted request IP seams and stable rolling-window rate documents", () => {
+  test("uses trusted request IP seams and secret-keyed rolling-window rate documents", () => {
     const trustedIp = sourceBetween(
       FUNCTIONS_INDEX_SOURCE,
       "function getTrustedBuyerAccessRequestIp",
@@ -125,17 +199,77 @@ describe("buyer access Invoice endpoint isolation", () => {
     expect(trustedIp).toContain("context?.rawRequest?.socket?.remoteAddress");
     expect(trustedIp.toLowerCase()).not.toContain("x-forwarded-for");
 
-    const rateLimits = sourceBetween(
+    const rateLimitConfig = sourceBetween(
+      FUNCTIONS_INDEX_SOURCE,
+      "function getBuyerAccessRateLimitSecret",
+      "function buyerAccessRateLimitDocumentIds"
+    );
+    expect(rateLimitConfig).toContain('readEnvConfig("buyer_access_rate_limit_secret")');
+    expect(rateLimitConfig).not.toContain('readConfig("buyer_access_rate_limit_secret")');
+
+    const rateLimitIds = sourceBetween(
       FUNCTIONS_INDEX_SOURCE,
       "function buyerAccessRateLimitDocumentIds",
-      "async function persistBuyerAccessProviderStep"
+      "async function consumeBuyerAccessStatusRateLimit"
     );
-    expect(rateLimits).toContain("ip: `ip-");
-    expect(rateLimits).toContain("email: `email-");
-    expect(rateLimits).toContain("windowStartedAtISO");
-    expect(rateLimits).toContain("windowExpiresAtISO");
-    expect(rateLimits).not.toContain("hourBucket");
-    expect(rateLimits).not.toContain("dayBucket");
+    expect(rateLimitIds).toContain("buyerAccessRateLimitDocumentId({");
+    expect(rateLimitIds).toContain('scope: "invoice_ip"');
+    expect(rateLimitIds).toContain('scope: "invoice_email"');
+    expect(rateLimitIds).toContain('scope: "invoice_reservation"');
+    expect(rateLimitIds).toContain('scope: "status_ip"');
+
+    const hmac = sourceBetween(
+      BUYER_ACCESS_SOURCE,
+      "function buyerAccessRateLimitDocumentId",
+      "function planBuyerAccessRateLimit"
+    );
+    expect(hmac).toContain('createHmac("sha256", secret)');
+    expect(hmac).not.toContain("createHash(");
+
+    const rateLimits = sourceBetween(
+      FUNCTIONS_INDEX_SOURCE,
+      "async function consumeBuyerAccessStatusRateLimit",
+      "async function verifyBuyerAccessTurnstile"
+    );
+    expect(rateLimits).toContain("await db.runTransaction(async (tx)");
+    expect(rateLimits).toContain("BUYER_ACCESS_STATUS_RATE_LIMIT");
+    expect(rateLimits).toContain("BUYER_ACCESS_STATUS_RATE_WINDOW_MS");
+    expect(rateLimits).toContain("expiresAt: Timestamp.fromMillis(rate.expiresAtMs)");
+    expect(rateLimits).toContain('scope: "status_ip_5m"');
+    expect(rateLimits).toContain('"unavailable"');
+    const persistedPatch = sourceBetween(
+      rateLimits,
+      "tx.set(rateRef, {",
+      "}, { merge: true });"
+    );
+    expect(persistedPatch).not.toContain("requestIp");
+    expect(persistedPatch).not.toContain("ownerEmail");
+  });
+
+  test("consumes a durable status lease before unknown-order and token-bound reads", () => {
+    const authorization = sourceBetween(
+      BUYER_ACCESS_SOURCE,
+      "async function authorizeBuyerAccessStatusRequest",
+      "function buyerAccessStatusTokenMatches"
+    );
+    const rate = authorization.indexOf("await consumeRateLimit()");
+    const read = authorization.indexOf("await readOrder(normalizedInput.orderId)");
+    const token = authorization.indexOf("buyerAccessStatusTokenMatches({");
+    expect(rate).toBeGreaterThan(-1);
+    expect(read).toBeGreaterThan(rate);
+    expect(token).toBeGreaterThan(read);
+
+    const status = sourceBetween(
+      FUNCTIONS_INDEX_SOURCE,
+      "exports.getBuyerAccessInvoiceStatus =",
+      "exports.createDepositCheckout ="
+    );
+    expect(status).toContain(".https.onCall(async (data, context) =>");
+    expect(status).toContain(
+      "consumeRateLimit: () => consumeBuyerAccessStatusRateLimit(context)"
+    );
+    expect(status).toContain("readOrder: async (orderId) =>");
+    expect(status).toContain("await finalizeBuyerAccessActivation");
   });
 
   test("removes allowlist and legacy buyer Checkout Session code completely", () => {
@@ -189,7 +323,7 @@ describe("buyer access Invoice endpoint isolation", () => {
       "exports.buyerAccessStripeWebhook =",
       "exports.stripeWebhook ="
     );
-    expect(buyerWebhook).toContain("Stripe.webhooks.constructEvent");
+    expect(buyerWebhook).toContain("constructStripeWebhookEvent({");
     expect(buyerWebhook).toContain("isBuyerAccessInvoice(invoice)");
     expect(buyerWebhook).toContain("buyerAccessProviderStateForEvent(event.type)");
     expect(buyerWebhook).toContain('res.status(400).send("Webhook verification failed.")');
@@ -197,11 +331,7 @@ describe("buyer access Invoice endpoint isolation", () => {
   });
 
   test("keeps buyer and quote webhook routing and deduplication separate", () => {
-    const quoteWebhook = sourceBetween(
-      FUNCTIONS_INDEX_SOURCE,
-      "exports.stripeWebhook =",
-      "res.json({ received: true });\n});"
-    );
+    const quoteWebhook = exportedFunctionSource("stripeWebhook");
     const guard = quoteWebhook.indexOf("if (isBuyerAccessStripeObject(session))");
     const dedupe = quoteWebhook.indexOf("stripe-${eventId}");
     expect(guard).toBeGreaterThan(-1);
@@ -218,6 +348,47 @@ describe("buyer access Invoice endpoint isolation", () => {
     );
     expect(buyerWebhook).toContain('.doc("stripe-buyer-" + eventId)');
     expect(buyerWebhook).not.toContain("getStripeClient()");
+  });
+
+  test("requires signed-void evidence for replacement and ignores superseded late payment", () => {
+    const signedVoidEvidence = sourceBetween(
+      FUNCTIONS_INDEX_SOURCE,
+      "function hasSignedBuyerAccessVoidEvidence",
+      "async function preparePublicBuyerAccessOrder"
+    );
+    expect(signedVoidEvidence).toContain('status).toLowerCase() === "void"');
+    expect(signedVoidEvidence).toContain("order.signedVoidObserved === true");
+    expect(signedVoidEvidence).toContain('lastProviderState).toLowerCase() === "void"');
+    expect(signedVoidEvidence).toContain('lastStripeEventType) === "invoice.voided"');
+    expect(signedVoidEvidence).toContain("order.lastStripeEventId");
+
+    const preparation = sourceBetween(
+      FUNCTIONS_INDEX_SOURCE,
+      "async function preparePublicBuyerAccessOrder",
+      "async function persistBuyerAccessProviderStep"
+    );
+    expect(preparation).toContain('.where("ownerEmail", "=="');
+    expect(preparation).toContain("!hasSignedBuyerAccessVoidEvidence");
+    expect(preparation).toContain("supersededByOrderId: identifiers.orderId");
+    expect(preparation).toContain('"Buyer access request cannot be completed."');
+
+    const processing = sourceBetween(
+      FUNCTIONS_INDEX_SOURCE,
+      "async function processBuyerAccessInvoiceWebhook",
+      "exports.buyerAccessStripeWebhook ="
+    );
+    const initialSupersession = processing.indexOf(
+      "if (normalizeText(initialOrder.supersededByOrderId))"
+    );
+    const identityLookup = processing.indexOf(
+      "await assertPublicBuyerIdentityAvailable(initialOrder.ownerEmail)"
+    );
+    expect(initialSupersession).toBeGreaterThan(-1);
+    expect(identityLookup).toBeGreaterThan(initialSupersession);
+    expect(processing).toContain('result: "superseded_order"');
+    expect(processing).toContain("if (normalizeText(order.supersededByOrderId))");
+    expect(processing).toContain('ignored: "superseded_order"');
+    expect(processing).toContain('signedVoidObserved: providerState === "void"');
   });
 
   test("paid settlement creates workspace and pending invite but no role or claims", () => {
@@ -348,7 +519,7 @@ describe("buyer access Invoice endpoint isolation", () => {
 
   test("uses generic public conflict/status errors and privacy-minimal audit fields", () => {
     expect(occurrenceCount(
-      FUNCTIONS_INDEX_SOURCE,
+      FUNCTIONS_INDEX_SOURCE + BUYER_ACCESS_SOURCE,
       '"Buyer access status is unavailable."'
     )).toBe(2);
     expect(occurrenceCount(
