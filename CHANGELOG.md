@@ -16,6 +16,30 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Credential-free production payload staging with deterministic manifests,
   fixed provider identities, path and secret-material rejection, and atomic
   manifest creation for separately authorized deployment.
+- Test-only paid buyer onboarding source for a public `/start` route. The
+  browser creates or signs in to a Firebase email/password account, requires a
+  verified email, collects only business and owner names, and requests one
+  server-fixed Stripe Checkout Session for $1 USD Starter access. Stripe-hosted
+  Checkout generates a post-purchase invoice; the return query is only a poll
+  trigger, and access appears only after the owner-scoped status callable
+  reports that a signed, deduplicated test-mode webhook atomically provisioned
+  the organization, neutral blank-catalog settings, admin role, entitlements,
+  and audit records. Checkout amount, plan, owner identity, return URLs, and
+  provisioning state remain server-owned. The public CTA and route fail closed
+  unless `VITE_BUYER_ACCESS_ENABLED=true`, while the Functions runtime
+  separately requires `BUYER_ACCESS_ENABLED=true` and `STRIPE_MODE=test`.
+- An isolated Firebase staging lane for that buyer flow, including a dedicated
+  `firebase.staging.json`, a create-only ignored Functions environment
+  materializer, read-only validation, exact staging build preparation, and an
+  explicit confirmed deploy command that promotes Hosting, Functions, and
+  Firestore rules/indexes together. It accepts only a clean pushed
+  `quotepilot-staging-*` target and test Stripe credentials, rejects the
+  production `tonicatering` project, live credentials, browser secrets,
+  emulator/bypass flags, ambient provider credentials, and enabled email/SMS
+  providers. This is branch/source evidence only: no staging project was
+  created, no provider was mutated, and no hosted Stripe or tenant acceptance
+  has occurred. Production buyer access remains disabled; refund, dispute,
+  access-revocation, and live commercial rollout workflows remain open.
 - Firebase email/password account recovery on the staff sign-in screen, with
   normalized reset requests, the same on-screen confirmation for unknown or
   disabled account errors, a validated HTTPS `/app` return URL, action-specific
