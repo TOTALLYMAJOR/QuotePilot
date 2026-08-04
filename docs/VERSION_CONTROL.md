@@ -84,6 +84,10 @@ git checkout -b feature/<scope>-<topic>
        installed Playwright Chromium binary before Lighthouse starts.
    - `Docker Build Smoke`
    - `lane:playwright-smoke`
+   - Every `CI Quality` job receives only `contents: read`; checkout credentials
+     are never persisted into local Git configuration before repository code
+     runs. Write-capable recovery remains isolated to the separately reviewed
+     mainline safety-net workflow.
 4. Complete the pre-merge release-candidate UAT checklist from
    `docs/LAUNCH_RUNBOOK.md` and record the immutable candidate deployment.
 5. Set/confirm rollback target:
