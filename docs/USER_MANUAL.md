@@ -301,53 +301,57 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - `Undo this import` removes only unchanged documents whose `importBatchId` matches that receipt. Records edited after import are protected from rollback, and pre-existing records are never deleted by the batch.
 - Active quotes, payments, contracts, bookings, and staff accounts are outside the first Import Studio release and must not be represented as imported operational history.
 
-## Controlled $1 Buyer Pilot
+## Public $1 Invoice-First Buyer Access
 
-This is a bounded Stripe test-payment pilot on the existing `tonicatering`
-Firebase project. It is source-only until the reviewed code is merged, tagged,
-deployed through the guarded release path, and accepted against Firebase and
-Stripe. It is not a public sales channel.
+This source candidate is a public Stripe test-invoice path on the existing
+`tonicatering` Firebase project. It remains unavailable until reviewed code,
+Turnstile, Stripe test credentials and webhook, Firebase verification delivery,
+and guarded hosted release acceptance are complete. It is not an approved live
+sales channel.
 
-Only a designated tester whose exact verified Firebase email is present in the
-server allowlist may use the pilot. The browser flag and knowledge of `/start`
-do not grant authority. A non-allowlisted, unverified, already-scoped, or
-cross-account identity must not receive Checkout or workspace access.
+During an explicitly approved hosted test window:
 
-During an approved pilot window, an allowlisted tester can:
+1. Open `/start`. Enter the organization name, owner name, and the email that
+   will receive and later claim the invoice. Complete the Turnstile challenge.
+   QuotePilot does not collect a password or card details on this form.
+2. Review the fixed Starter, $1 USD, Stripe test-mode disclosure. You cannot
+   change the plan, price, currency, mode, or return URL. Continue to the true
+   Stripe Hosted Invoice Page and pay there.
+3. Return to QuotePilot. The return URL and invoice page are not access proof.
+   `invoice_open` and `payment_processing` mean Stripe has not established paid
+   state. `provisioning` may mean invoice preparation or that a signed
+   `invoice.paid` event has prepared the organization, neutral settings, Starter
+   workspace plan entitlements, provisioning record, and pending invite. It
+   still means there is no user membership, admin role, custom claims, or
+   `/app` access.
+4. When the page reports `activation_sent`, the onboarding email provider has
+   accepted the exact activation-instructions message and QuotePilot has
+   durably recorded that acceptance. Acceptance does not prove delivery. Follow
+   those instructions using the exact invoice email, create or sign in to the
+   Firebase account, separately receive and complete Firebase email verification
+   through the authorized continue URL, then claim activation. A different or
+   unverified email receives no user role or access.
+5. Open `/app` only after the order reports `active` and the server-confirmed
+   Starter organization and admin role exist.
 
-1. Have the approved operator create and verify the designated Firebase
-   email/password account before the pilot. Open `/start` and sign in with that
-   exact account. The controlled buyer surface cannot create accounts.
-2. Enter the organization and owner names. The tester cannot choose the plan,
-   price, currency, Stripe mode, or return URL.
-3. Continue to the dedicated Stripe test Checkout for the fixed $1 USD Starter
-   order. Stripe is configured to generate a post-purchase invoice. The pilot
-   never uses or changes the quote deposit/final-balance Stripe rail.
-4. Return to QuotePilot and wait. The success query, Session id, Checkout page,
-   or invoice does not unlock the app; the page stays pending or processing
-   until `buyerAccessStripeWebhook` verifies the exact signed event.
-5. Open `/app` only after the buyer order reports active and the readback shows
-   the expected Starter organization and admin role.
+A safe retry should return the same open invoice rather than create another.
+Do not bypass a rate limit or failed/void/expired state with additional emails
+or accounts. Report only the approximate time and redacted order/invoice
+references. Never send a payment method, hosted invoice URL, token, provider
+secret, webhook signature, Turnstile response, or customer personal data.
 
-The pilot creates real Firebase Auth, organization, neutral settings,
-admin-role, entitlement, provisioning, and audit records in `tonicatering`.
-The server marks buyer-created commercial/customer classification records as
-controlled test-mode data. Operators must exclude them from live revenue and
-live paid-customer reporting, even when the invoice exists and the app is
-accessible. Use unique test identities and never use an existing customer or
-staff account.
+This flow prepares real organization, neutral settings, Starter workspace plan
+entitlements, provisioning, invitation, and audit records in `tonicatering`
+after signed paid-invoice processing even though Stripe remains test mode. It
+creates user membership, the admin role, custom claims, and application access
+only after the exact-email verified invitation is consumed. Server-owned
+controlled test-mode markers must be excluded from live revenue and live paid-
+customer reporting. Deleting or refunding a Stripe test invoice does not prove
+Firebase access was revoked or data was cleaned up.
 
-If Checkout is cancelled, failed, or expired, follow the displayed retry state;
-do not create additional accounts to bypass it. Report a pending or processing
-state with the approximate time and only redacted order/Session references.
-Never send a payment method, token, provider secret, webhook signature, or
-customer personal data. Deleting or refunding a Stripe test object does not
-prove that Firebase access was revoked or that records were cleaned up.
-
-Refund, dispute, cancellation, account/access revocation, support,
-tax/accounting, unrestricted registration-abuse controls, and public live-mode
-selling remain outside this pilot. See the
-[launch runbook](LAUNCH_RUNBOOK.md#controlled-1-buyer-pilot-on-tonicatering)
+Refunds, disputes, cancellations, account/access revocation, support,
+tax/accounting, and live-mode selling remain separate operating gates. See the
+[launch runbook](LAUNCH_RUNBOOK.md#public-1-invoice-first-buyer-access-on-tonicatering)
 for the operator release and acceptance contract.
 
 ## Customer Onboarding (No Stripe Flow)

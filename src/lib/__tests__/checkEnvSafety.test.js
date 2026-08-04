@@ -18,8 +18,7 @@ const productionUnsafeFlags = [
   "VITE_E2E_BYPASS_AUTH",
   "VITE_USE_FIREBASE_EMULATORS",
   "VITE_ALLOW_LOCAL_CATALOG_FALLBACK",
-  "VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING",
-  "VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED"
+  "VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING"
 ];
 
 function serialize(values) {
@@ -70,13 +69,73 @@ describe("Firebase browser environment safety", { timeout: 30_000 }, () => {
     expect(runCheck().status).toBe(0);
   });
 
-  test("allows only the private buyer route flag for a controlled pilot", () => {
+  test("allows a public buyer artifact with coherent non-placeholder Turnstile syntax", () => {
     expect(runCheck({
       envProductionLocal: {
         VITE_BUYER_ACCESS_ENABLED: "true",
-        VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false"
+        VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true",
+        VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "1x00000000000000000000AA"
       }
     }).status).toBe(0);
+  });
+
+  test("allows a direct buyer route only when its Turnstile site key is configured", () => {
+    expect(runCheck({
+      envProductionLocal: {
+        VITE_BUYER_ACCESS_ENABLED: "true",
+        VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false",
+        VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "1x00000000000000000000AA"
+      }
+    }).status).toBe(0);
+  });
+
+  test("rejects a public CTA without the buyer route", () => {
+    const result = runCheck({
+      envProductionLocal: {
+        VITE_BUYER_ACCESS_ENABLED: "false",
+        VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true",
+        VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "1x00000000000000000000AA"
+      }
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/cannot be enabled unless/i);
+  });
+
+  test.each(["", "replace_me", "invalid key!"])(
+    "rejects buyer access with an unusable Turnstile site key: %s",
+    (siteKey) => {
+      const result = runCheck({
+        envProductionLocal: {
+          VITE_BUYER_ACCESS_ENABLED: "true",
+          VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true",
+          VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: siteKey
+        }
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY");
+      expect(result.stderr).toMatch(/provider setup and human review are separate/i);
+    }
+  );
+
+  test("rejects a Turnstile secret exposed through the browser environment", () => {
+    const result = runCheck({
+      envProductionLocal: {
+        VITE_BUYER_ACCESS_TURNSTILE_SECRET: "secret-fixture"
+      }
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/browser-visible/i);
+  });
+
+  test("rejects ambiguous buyer-access flag values", () => {
+    const result = runCheck({
+      envProductionLocal: {
+        VITE_BUYER_ACCESS_ENABLED: "maybe"
+      }
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/explicit boolean/i);
   });
 
   test("rejects a conflicting .env.local project override", () => {

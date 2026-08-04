@@ -52,39 +52,51 @@ Last updated: August 4, 2026
   email-enumeration protection is enabled. Public registration may still
   return an existing-email error, so this feature is not claimed as full
   account-enumeration resistance.
-- Current branch release UAT contract: checklist version `2026-08-04.4` now
+- Current branch release UAT contract: checklist version `2026-08-04.6` now
   makes hosted password recovery and target-applicable deposit, final-balance,
   webhook/reconciliation, cross-rail isolation, projection privacy, and payment
-  surface observations mandatory. It also binds the controlled buyer pilot to
-  target-specific sign-in-only private entry with no public account creation or
-  marketing CTA, dedicated test-Checkout/invoice, signed webhook,
-  production-project data readback, replay/cross-account denial, and
-  quote-Stripe isolation observations. The regression suite fixes those
-  critical IDs to their intended target profiles so a mechanical checklist edit
-  cannot silently remove them.
-- Current branch controlled buyer pilot: `feature/paid-buyer-onboarding` adds a
-  `/start` flow for the existing `tonicatering` Firebase project behind
-  independent browser and Functions gates. The Firebase and Vercel production
-  preparation workflows compile the private route into the reviewed artifact
-  and fix the public marketing CTA off; the server runtime and exact tester
-  allowlist remain the authorization boundary. `/start` cannot register a new
-  Firebase account; the designated verified account must be created through the
-  approved operator path before the pilot. Firebase email verification is
-  necessary but not sufficient: the server also requires the authenticated
-  address in `BUYER_ACCESS_ALLOWED_EMAILS`. The server fixes the order to
-  Starter, $1 USD, and a dedicated Stripe test-mode client whose key and
-  `buyerAccessStripeWebhook` signing secret are held in Firebase Secret
-  Manager. The existing quote-payment `STRIPE_MODE`, credentials,
-  `stripeWebhook`, deposit, and final-balance rails remain separate and
-  unchanged. A browser success query never grants access; only the exact signed
-  and deduplicated buyer webhook may atomically create real `tonicatering`
-  organization, neutral settings, admin-role, entitlement, provisioning, and
-  buyer-order records. Server-owned controlled test-mode markers make operator
-  exclusion from live revenue and live paid-customer classification explicit;
-  hosted acceptance must verify that exclusion. Focused source, unit, rules,
-  browser, and emulator evidence is local only. The branch has not been merged,
-  tagged, deployed,
-  hosted-accepted, or Stripe-provider-accepted.
+  surface observations mandatory. It also binds public buyer onboarding to
+  target-specific Turnstile entry, durable rate/idempotency controls, true
+  Hosted Invoice Page creation, pinned buyer API/webhook version `2024-06-20`,
+  signed invoice lifecycle, paid workspace preparation, pending invite, durable onboarding-email provider acceptance,
+  separate Firebase verification-email delivery and continue URL, no user role
+  or access before verified claim, replay/cross-account denial, and quote-Stripe
+  isolation observations. Browser targets own locked UI/instructions only;
+  backend targets own provider and fulfillment evidence. The
+  regression suite fixes those critical IDs to their intended target profiles
+  so a mechanical checklist edit cannot silently remove them.
+- Current branch public invoice-first buyer candidate:
+  `feature/paid-buyer-onboarding` adds `/start` on the existing `tonicatering`
+  Firebase project behind independent browser and Functions gates. Preparation
+  workflows compile the route and marketing CTA only with a syntactically valid
+  non-placeholder public Turnstile site key; `check:env` cannot prove provider
+  setup or human review. The server
+  gate remains disabled by default and requires a Secret Manager Turnstile
+  secret plus exact production hostnames. `createBuyerAccessInvoice` applies
+  server-owned Turnstile, durable rate-limit, and idempotency controls, then
+  fixes Starter to $1 USD using a dedicated Stripe test-mode client and returns
+  only a true Stripe Hosted Invoice Page. The dedicated buyer client and
+  endpoint are pinned to Stripe API version `2024-06-20` without changing the
+  generic quote Stripe client or version. `buyerAccessStripeWebhook` accepts
+  only signed, deduplicated `invoice.paid`, `invoice.payment_failed`,
+  `invoice.voided`, and `invoice.marked_uncollectible` events. A paid invoice
+  prepares the organization, neutral settings, Starter workspace plan
+  entitlements, provisioning record, and pending invite, but creates no user
+  membership, admin role, custom claims, or application access. The public
+  status can advance to `activation_sent` only after durable onboarding-email
+  provider acceptance. An exact matching Firebase account must separately
+  verify the invoice email and consume the invite before user access exists.
+  `getBuyerAccessInvoiceStatus` remains a public token-bound callable, so the
+  Functions gate must stay off until enforced edge or App Check throttling is
+  proven before its Firestore order read. The current deterministic rate-record
+  identifiers and ISO-only expiry fields are controlled-test evidence, not a
+  secret-keyed production limiter or Firestore TTL cleanup policy.
+  The existing live quote-payment mode, credentials, `stripeWebhook`,
+  deposit, and final-balance rails remain separate. Controlled test-mode
+  markers require exclusion from live revenue and paid-customer reporting.
+  Focused source, unit, rules, browser, and emulator evidence remains local.
+  The branch has not been merged, tagged, deployed, hosted-accepted,
+  Stripe-provider-accepted, or approved for live-mode sale.
 - Current branch Stripe payment lifecycle: an exact approved deposit scope now
   binds the quote revision, current portal issuance, customer email, currency,
   and amount before one resumable server operation prepares/restores the
@@ -421,31 +433,31 @@ Last updated: August 4, 2026
   insufficient. The final-balance automation is currently source-only on a
   feature branch based on the sell-readiness candidate, not `main`. Refund
   initiation/status and dispute handling remain manual or unimplemented.
-- The `$1` buyer path is a bounded production-project pilot, not a public sales
-  channel. Its dedicated Stripe credentials and webhook are test-mode only,
-  but successful acceptance creates real Firebase Auth, organization, settings,
-  admin-role, entitlement, and audit data in `tonicatering`. The server
-  allowlist, controlled test-mode classification that excludes live revenue and
-  live paid-customer reporting, separate buyer Secret Manager bindings,
-  independent webhook,
-  disabled-by-default gates, and hosted negative-path evidence are therefore
-  release requirements, not optional staging conveniences. No hosted purchase,
-  invoice, webhook activation, production-data readback, or proof that the live
-  quote Stripe rail stayed unchanged exists yet. Refund, dispute, cancellation,
-  account/access revocation, support, tax/accounting, and unrestricted
-  registration-abuse operations remain outside the pilot.
+- The public `$1` invoice-first path is still a Stripe test-mode source
+  candidate, not a live sales launch. Its public initiation surface raises
+  abuse, duplicate-invoice, provider-delivery, and identity-claim risk, so the
+  independently disabled server gate, exact Turnstile host/action checks,
+  durable rate limits, deterministic idempotency, separate buyer Secret Manager
+  bindings, signed invoice events, pending-invite boundary, durable onboarding-
+  email provider acceptance, verified-email claim, and hosted negative-path
+  evidence are release requirements. No hosted invoice, payment, webhook,
+  workspace preparation, onboarding-email acceptance, Firebase verification-
+  email delivery, verified claim, role readback, or proof that the live quote
+  Stripe rail stayed unchanged exists yet. Refund,
+  dispute, cancellation, account/access revocation, support, tax/accounting,
+  and any live-mode launch remain separate operating gates.
 - CRM outbound synchronization is intentionally disabled until a
   server-authorized connector with provider acceptance evidence is implemented.
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
 
 ## Current Focus (Near-Term)
-1. Finish and review the single-project buyer-pilot candidate, keeping the
-   public marketing CTA absent and the server gate disabled until the tester
-   allowlist and dedicated test Stripe Secret Manager bindings are approved.
-   Route the four buyer Checkout
-   events only to `buyerAccessStripeWebhook`, leave the existing quote Stripe
-   configuration and `stripeWebhook` unchanged, and add the exact target-scoped
-   buyer items to release UAT.
+1. Finish and review the single-project invoice-first buyer candidate, keeping
+   the server gate disabled until Turnstile, durable rate/idempotency controls,
+   dedicated test Stripe secrets, and target-scoped UAT are approved. Route the
+   four supported buyer invoice events only to `buyerAccessStripeWebhook`, keep
+   the existing live quote Stripe configuration and `stripeWebhook` unchanged,
+   and treat the compiled public CTA as artifact configuration rather than
+   backend release authority.
 2. Keep draft PR #23 source-green on its exact head and intentionally scope the
    six non-secret Vercel Preview Firebase variables to its release branch, then
    complete hosted release-candidate acceptance on that exact deployment.
@@ -457,13 +469,16 @@ Last updated: August 4, 2026
    rules/Functions/frontend artifacts and run the hosted owner/quote/portal
    tenant acceptance checklist, including current/invalid issuance, active,
    expired, deleted, approval execution, contract, and change-request paths.
-5. Run the bounded buyer pilot through the same reviewed main, semantic tag,
-   exact-main CI, target-specific UAT, prepare-artifact, and trusted-deployer
-   path. Verify one allowlisted buyer, non-allowlisted and cross-account denial,
-   exact $1 invoice, pending return, signed-webhook activation, real
-   `tonicatering` data, replay/failure behavior, and quote-Stripe isolation;
-   then disable the server gate and retain the absent public CTA unless a
-   separately reviewed pilot window remains active.
+5. Run invoice-first buyer onboarding through the same reviewed main, semantic
+   tag, exact-main CI, target-specific UAT, prepare-artifact, and trusted-deployer
+   path. Verify fresh Turnstile and abuse-control paths, one idempotent true $1
+   Hosted Invoice Page, signed invoice transitions, paid workspace preparation,
+   pending invite with no user role/access, durable onboarding-email provider
+   acceptance before `activation_sent`, separate Firebase verification-email
+   delivery and continue URL, successful exact-email verified claim, cross-
+   account/replay/failure denial, controlled test-data classification, and
+   quote-Stripe isolation. Disable the server gate after the bounded acceptance window; a
+   live-mode launch requires separate approval.
 6. As part of the coordinated quote-payment rollout, configure the matching Stripe mode/key
    and all four Checkout Session webhook events, then capture separate hosted
    test-mode approval/send/webhook/reconciliation evidence for deposit and

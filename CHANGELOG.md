@@ -8,38 +8,44 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
-- Controlled paid-buyer pilot source for `/start` on the existing
-  `tonicatering` Firebase project. A verified Firebase email/password user must
-  also match the server-owned `BUYER_ACCESS_ALLOWED_EMAILS` allowlist before
-  QuotePilot will create one server-fixed $1 USD Starter Checkout. The buyer
-  rail uses its own Stripe test-mode client, Secret Manager credentials, and
-  `buyerAccessStripeWebhook`; it does not change the existing quote-payment
-  Stripe mode, credentials, webhook, deposit, or final-balance behavior.
-  Checkout return parameters remain non-authoritative, while the dedicated
-  signed and deduplicated webhook atomically creates real production-project
-  organization, neutral settings, admin-role, entitlement, and audit records.
-  The `/start` surface is sign-in-only and cannot create arbitrary Firebase
-  accounts; the approved tester account must exist before the pilot.
-  Buyer-created commercial/customer records carry a server-owned controlled
-  test-mode marker for mandatory operator exclusion from live revenue and live
-  paid-customer classification.
-  Generic builds and the server gate default off. The production preparation
-  workflows compile the private `/start` route into the reviewed artifact while
-  fixing the public marketing CTA off; the server allowlist remains the access
-  authority. This remains source-only until the reviewed
-  main/tag/UAT/trusted-deployer sequence plus hosted provider acceptance
-  completes.
-- Target-scoped release UAT coverage for the controlled buyer pilot, including
-  allowlisted entry and non-allowlisted denial, dedicated test-Checkout and
-  invoice binding, pending-until-webhook behavior, exact production-project
-  tenant/role readback, replay and cross-account denial, and proof that the
-  existing quote Stripe rail remains unchanged. Browser-target acceptance also
-  requires public account creation and the public marketing CTA to remain
-  absent. The checklist records observed acceptance only; it does not turn the
-  pilot into a public sales channel.
+- Public invoice-first buyer onboarding source for `/start` on the existing
+  `tonicatering` Firebase project. The public organization/owner/email form and
+  marketing CTA require a syntactically valid non-placeholder public Turnstile
+  site key; provider setup and human review remain separate evidence. The
+  independently disabled Functions gate, exact hostname/action verification,
+  durable rate limits, and deterministic idempotency remain server-owned. The
+  dedicated `createBuyerAccessInvoice` callable fixes Starter to $1 USD in
+  Stripe test mode, creates and finalizes a true invoice before payment, and
+  returns only its Stripe Hosted Invoice Page. The dedicated buyer API client
+  and webhook endpoint are pinned to Stripe API version `2024-06-20` without
+  changing the generic quote client. `buyerAccessStripeWebhook` accepts only
+  signed, replay-deduplicated `invoice.paid`, `invoice.payment_failed`,
+  `invoice.voided`, and `invoice.marked_uncollectible` events on this isolated
+  rail. A paid invoice prepares the organization, neutral settings, Starter
+  workspace plan entitlements, provisioning record, and pending invitation, but
+  creates no user membership, admin role, custom claims, or application access.
+  `activation_sent` requires durable provider acceptance of the exact onboarding
+  message. Only a matching Firebase account with separately verified invoice
+  email may consume the invitation and receive user access. Controlled
+  test-mode markers remain mandatory for exclusion from live revenue and
+  paid-customer reporting. Generic builds
+  and the server gate default off, and no hosted/provider or live-sale result is
+  claimed by this source change.
+- Target-scoped release UAT coverage for public buyer onboarding, including
+  Turnstile host/action verification, rate limiting, retry idempotency, a true
+  Hosted Invoice Page, signed invoice lifecycle, paid workspace preparation,
+  pending invitation, onboarding-email provider acceptance, separate Firebase
+  verification-email delivery and continue URL, no user role or access before
+  verified claim, cross-account/replay/failure denial, and proof that the
+  existing quote Stripe rail remains unchanged. Browser targets prove only
+  locked UI and instructions; backend targets own provider and fulfillment
+  evidence. The checklist records observations against an exact target only; it
+  does not prove an unbound dependency, provider setup, or live launch.
 - Firebase email/password account recovery on the staff sign-in screen, with
   normalized reset requests, the same on-screen confirmation for unknown or
   disabled account errors, a validated HTTPS `/app` return URL, action-specific
+  settings shared by registration and verification resends so buyer activation
+  emails carry the same build-owned, fail-closed `/app` continue URL,
   loading state, accessible live status, focused helper coverage, and an
   Auth-emulator browser assertion that completes the password change and signs
   in with the replacement password. Full account-enumeration resistance still

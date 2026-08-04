@@ -55,7 +55,8 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   "firebase-hosting": [
     "staging.immutable-release",
     "auth.password-recovery",
-    "buyer.pilot-entry-guard",
+    "buyer.public-entry-turnstile",
+    "buyer.verified-activation-surface",
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
@@ -68,8 +69,9 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   ],
   "firebase-backend": [
     "staging.immutable-release",
-    "buyer.pilot-dedicated-checkout",
-    "buyer.pilot-controlled-provisioning",
+    "buyer.public-initiation-controls",
+    "buyer.hosted-invoice-lifecycle",
+    "buyer.pending-invite-activation",
     "quote.save",
     "quote.authoritative-create",
     "quote.authoritative-edit",
@@ -91,9 +93,11 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   "firebase-all": [
     "staging.immutable-release",
     "auth.password-recovery",
-    "buyer.pilot-entry-guard",
-    "buyer.pilot-dedicated-checkout",
-    "buyer.pilot-controlled-provisioning",
+    "buyer.public-entry-turnstile",
+    "buyer.public-initiation-controls",
+    "buyer.hosted-invoice-lifecycle",
+    "buyer.pending-invite-activation",
+    "buyer.verified-activation-surface",
     "quote.save",
     "quote.authoritative-create",
     "quote.authoritative-edit",
@@ -120,7 +124,8 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   vercel: [
     "staging.immutable-release",
     "auth.password-recovery",
-    "buyer.pilot-entry-guard",
+    "buyer.public-entry-turnstile",
+    "buyer.verified-activation-surface",
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
@@ -134,9 +139,11 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
 });
 const CRITICAL_UAT_TARGETS = Object.freeze({
   "auth.password-recovery": ["firebase-hosting", "firebase-all", "vercel"],
-  "buyer.pilot-entry-guard": ["firebase-hosting", "firebase-all", "vercel"],
-  "buyer.pilot-dedicated-checkout": ["firebase-backend", "firebase-all"],
-  "buyer.pilot-controlled-provisioning": ["firebase-backend", "firebase-all"],
+  "buyer.public-entry-turnstile": ["firebase-hosting", "firebase-all", "vercel"],
+  "buyer.public-initiation-controls": ["firebase-backend", "firebase-all"],
+  "buyer.hosted-invoice-lifecycle": ["firebase-backend", "firebase-all"],
+  "buyer.pending-invite-activation": ["firebase-backend", "firebase-all"],
+  "buyer.verified-activation-surface": ["firebase-hosting", "firebase-all", "vercel"],
   "payment.deposit-scoped-dispatch": ["firebase-backend", "firebase-all"],
   "payment.final-balance-scoped-dispatch": ["firebase-backend", "firebase-all"],
   "payment.webhook-reconciliation": ["firebase-backend", "firebase-all"],
@@ -563,7 +570,7 @@ describe("tracked UAT checklist", () => {
     expect(checklist.checklist.schema).toBe(
       "com.mbmapps.quotepilot.release-uat-checklist/v2"
     );
-    expect(checklist.checklist.version).toBe("2026-08-04.4");
+    expect(checklist.checklist.version).toBe("2026-08-04.6");
     expect(checklist.itemIds).toHaveLength(checklist.checklist.items.length);
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
@@ -584,14 +591,33 @@ describe("tracked UAT checklist", () => {
     );
   });
 
-  test("cannot silently drop or weaken critical auth, buyer-pilot, or payment UAT coverage", () => {
+  test("cannot silently drop or weaken critical auth, buyer-onboarding, or payment UAT coverage", () => {
     const targetsByItemId = new Map(
       checklist.checklist.items.map((item) => [item.id, item.targets])
+    );
+    const labelsByItemId = new Map(
+      checklist.checklist.items.map((item) => [item.id, item.label])
     );
 
     for (const [itemId, expectedTargets] of Object.entries(CRITICAL_UAT_TARGETS)) {
       expect(targetsByItemId.get(itemId), itemId).toEqual(expectedTargets);
     }
+
+    expect(labelsByItemId.get("buyer.hosted-invoice-lifecycle")).toMatch(
+      /API version 2024-06-20/i
+    );
+    expect(labelsByItemId.get("buyer.hosted-invoice-lifecycle")).toMatch(
+      /live quote client, API version/i
+    );
+    expect(labelsByItemId.get("buyer.pending-invite-activation")).toMatch(
+      /Starter workspace plan entitlements/i
+    );
+    expect(labelsByItemId.get("buyer.pending-invite-activation")).toMatch(
+      /activation_sent.*provider acceptance.*Firebase verification-email delivery/is
+    );
+    expect(labelsByItemId.get("buyer.verified-activation-surface")).toMatch(
+      /does not claim onboarding-email provider acceptance/i
+    );
   });
 
   test("changes the checklist digest when only target applicability changes", () => {

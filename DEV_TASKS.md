@@ -40,35 +40,45 @@ Last updated: August 4, 2026
   email/password self-registration with an invitation-bound flow or add
   equivalent App Check/reCAPTCHA abuse controls; generic reset copy does not
   prevent the registration endpoint from returning an existing-email result.
-- Qualify the controlled `$1` buyer pilot on the existing `tonicatering`
-  Firebase project only after the exact candidate is reviewed and the guarded
-  main/tag/UAT/trusted-deployer path is operational. Compile the private route
-  only through the reviewed production preparation workflows, keep the public
-  marketing CTA off, and keep the server gate off until
-  `BUYER_ACCESS_ALLOWED_EMAILS` contains only designated testers and the
-  dedicated Stripe test credentials are stored in Firebase Secret Manager.
-  Pre-create the designated verified tester account through the approved
-  operator path; `/start` must remain sign-in-only and cannot create accounts.
-  Never put either buyer Stripe secret in dotenv, GitHub preparation jobs,
-  browser variables, logs, or release evidence.
-- Configure the Stripe test endpoint for
-  `buyerAccessStripeWebhook` with all four supported Checkout Session events,
-  then capture provider-bound evidence for the fixed $1 USD Checkout,
-  post-purchase invoice, pending return, signed-webhook activation, real
-  `tonicatering` Auth/organization/admin-role/entitlement records, replay and
-  cross-account denial, failed/expired handling, non-allowlisted denial, and
-  server-owned controlled test-mode markers plus operator evidence that every
-  buyer-created record is excluded from live revenue and live paid-customer
-  reporting.
-  Use unique controlled identities because the pilot writes real production
-  project data; do not infer cleanup or revocation authority from UAT.
-- Prove that enabling the buyer pilot leaves the existing quote-payment
-  `STRIPE_MODE`, Secret Manager/runtime credentials, `stripeWebhook`, deposit,
-  and final-balance rails unchanged. Keep the public marketing CTA absent and
-  disable the server gate again after the bounded pilot unless a separately
-  reviewed window remains active. Refund, dispute, cancellation,
-  access-revocation, support, tax/accounting, and public-registration abuse
-  operations remain blockers to an unrestricted commercial launch.
+- Qualify public invoice-first `$1` buyer onboarding on the existing
+  `tonicatering` Firebase project only after the exact candidate is reviewed and
+  the guarded main/tag/UAT/trusted-deployer path is operational. Compile the
+  public `/start` route and marketing CTA only with a syntactically valid,
+  non-placeholder public Turnstile site key. Provider configuration and human
+  review remain separate release evidence. Keep the independent server gate off
+  until exact Turnstile host/action verification, durable rate limits,
+  deterministic idempotency, approved hostnames, and all three buyer provider
+  secrets are configured through the trusted runtime and Firebase Secret
+  Manager channels.
+- Before enabling that public server gate, enforce an edge or Firebase App Check
+  throttle for `getBuyerAccessInvoiceStatus` before its Firestore order read;
+  cover invalid-order, invalid-token, stolen-token, and valid polling limits.
+  Replace deterministic email/IP rate-record hashes with secret-keyed identities
+  and add a Firestore Timestamp TTL or an approved deletion policy.
+- Configure `buyerAccessStripeWebhook` in Stripe test mode for only
+  `invoice.paid`, `invoice.payment_failed`, `invoice.voided`, and
+  `invoice.marked_uncollectible`, with both the dedicated buyer API client and
+  endpoint pinned to Stripe API version `2024-06-20` while the quote client and
+  version remain unchanged. Capture provider-bound evidence that
+  `createBuyerAccessInvoice` produces one true fixed $1 USD Hosted Invoice Page
+  before payment, retries recover the same open invoice, and signed invoice
+  state prepares the organization, neutral settings, Starter workspace plan
+  entitlements, provisioning record, and pending invitation. Prove it creates
+  no user membership, admin role, custom claims, or application access; require
+  durably recorded onboarding-email provider acceptance before
+  `activation_sent`, then separately prove Firebase verification-email delivery,
+  the authorized continue URL, and exact-email invitation consumption before
+  user access. Exercise replay, failed/void/expired, rate-limit, provider-error,
+  cross-account, and mismatched-email denial.
+- Prove public buyer onboarding leaves the existing live quote-payment
+  `STRIPE_MODE`, credentials, `stripeWebhook`, deposit, and final-balance rails
+  unchanged. Retain controlled test-mode markers and reporting exclusion from
+  live revenue and paid-customer counts, then disable the server gate after the
+  bounded acceptance window. Hosted Turnstile, Stripe invoice/webhook,
+  onboarding-email provider acceptance, Firebase verification-email delivery,
+  authorized continue URL, refund, dispute, cancellation,
+  access-revocation, support, tax/accounting, and separately approved live-mode
+  launch remain explicit commercial blockers.
 - Release the Stripe deposit and final-balance lifecycles only as one
   exact-revision frontend, Functions, and Firestore-rules rollout. In isolated
   hosted acceptance set explicit `STRIPE_MODE=test` with a matching test key and
