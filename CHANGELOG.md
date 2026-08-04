@@ -16,6 +16,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Credential-free production payload staging with deterministic manifests,
   fixed provider identities, path and secret-material rejection, and atomic
   manifest creation for separately authorized deployment.
+- Firebase email/password account recovery on the staff sign-in screen, with
+  normalized reset requests, the same on-screen confirmation for unknown or
+  disabled account errors, a validated HTTPS `/app` return URL, action-specific
+  loading state, accessible live status, focused helper coverage, and an
+  Auth-emulator browser assertion that completes the password change and signs
+  in with the replacement password. Full account-enumeration resistance still
+  depends on provider configuration and registration hardening.
 
 ### Changed
 
@@ -29,40 +36,6 @@ This changelog is backfilled from git history and will be maintained going forwa
   separately authorized deployer.
 - The quick lane now runs a pinned, checksum-verified GitHub workflow lint gate
   across every tracked workflow before dependency installation.
-
-## [0.2.3] - 2026-08-05
-
-### Added
-
-- Owner-onboarding starter catalog packs for Wedding & events, Corporate
-  drop-off, BBQ / Southern, and Church & community. Packs populate the existing
-  Catalog Admin setup gate with versioned menu, package, add-on, rental, and
-  staffing drafts while leaving pricing unconfirmed until owner review.
-- Blank catalog setup now presents only clearly described industry choices,
-  populates immediately from the selected pack without a second save step, and
-  opens the resulting menu for review; manual build-from-scratch remains one
-  explicit secondary path instead of a row of empty configuration tabs.
-- Server-authoritative starter-pack apply, safe staged replacement, and pricing
-  confirmation transactions with catalog revision preconditions, generated vs
-  modified record hashing, actor/timestamp/revision confirmation evidence,
-  historical manifest lookup, complete catalog validation, and integer
-  minor-unit money storage.
-- Dry-run-first `seed:menu:firestore -- --pack <pack-id>` support for applying
-  the same versioned starter manifests through the existing tenant seed tool.
-
-### Fixed
-
-- Firebase Functions production packaging now declares the Firebase App and
-  App Compat peers required by Firebase Admin's database compatibility layer,
-  preventing Node.js 22 cold-start failures after a clean cloud install.
-- Customer portal visits now record the first valid `sent` to `viewed`
-  transition atomically, preserving the original view timestamp on reload so
-  lifecycle timelines and reporting can reflect actual portal views.
-- Stripe checkout success returns now trigger bounded portal snapshot refreshes
-  and show a secure confirmation state until the signature-verified webhook's
-  paid status is visible; the browser return itself never marks a deposit paid.
-
-### Added
 - Tenant-scoped Workflow Attention queue for active quotes, with a post-idle
   header count, due/overdue follow-ups, pending approvals, new and acknowledged
   customer change requests, request-ID-bound current handling records, and
@@ -179,6 +152,36 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- The versioned release UAT checklist now requires hosted password-recovery
+  completion plus target-applicable deposit, final-balance,
+  webhook/reconciliation, cross-rail isolation, customer-projection privacy,
+  and staff/customer payment-surface observations. Release-evidence tests pin
+  those critical item IDs and deployment profiles in a dedicated semantic map,
+  so changing only the generic expected target lists cannot silently weaken
+  them.
+- Product hardening and exact-SHA release controls are converged into one
+  sell-readiness candidate so approval, delivery, portal, onboarding, CI, UAT,
+  artifact, and rollback boundaries can be qualified on one immutable head.
+- The release UAT checklist now uses a fail-closed v2 applicability contract:
+  each item names the exact Firebase Hosting, Firebase backend/all, or Vercel
+  preparation profiles it covers, and attestation accepts all and only the ids
+  for the selected target. Server-side bulk-purge denial and invalid-issuance
+  handling are separate from their staff-UI and link-surface checks. Portal
+  projection backfill remains a separately reviewed source/data-operation
+  acceptance path and is not represented as evidence for a prepared payload;
+  production apply still requires its own explicit scope-bound authorization.
+- Release-critical workflows now use officially published immutable Node 24
+  Action pins: checkout v7.0.1, setup-node v7.0.0, and upload-artifact v7.0.1.
+- The required quick lane now runs a reproducible GitHub workflow lint gate:
+  it downloads only the exact actionlint v1.7.12 platform archive, verifies a
+  repository-pinned official SHA-256, disables host-tool version drift, and
+  checks every tracked workflow before dependency installation.
+- The legacy organization-wide deleted-quote purge is retired and fails closed.
+  Its browser client and operator control are removed; permanent deletion is
+  available within a retained organization only one quote at a time through the
+  existing exact approved `delete_quote` execution and organization-scoped
+  audit path. Separately governed platform-admin teardown of an archived
+  organization remains outside that per-quote claim.
 - The final quote action now says `Save draft`, opens Quote History on the exact
   saved quote, and states that customer delivery has not occurred. The targeted
   handoff offers a provider-send action only to Firebase admins with a complete,

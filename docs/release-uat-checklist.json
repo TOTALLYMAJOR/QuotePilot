@@ -1,47 +1,127 @@
 {
-  "schema": "com.mbmapps.quotepilot.release-uat-checklist/v1",
-  "version": "2026-08-03",
+  "schema": "com.mbmapps.quotepilot.release-uat-checklist/v2",
+  "version": "2026-08-04.1",
   "maximumAttestationAgeHours": 24,
   "items": [
     {
       "id": "staging.immutable-release",
-      "label": "The immutable staging deployment identifies the exact release candidate."
+      "label": "The immutable staging deployment identifies the exact release candidate.",
+      "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
+    },
+    {
+      "id": "auth.password-recovery",
+      "label": "Email/password recovery shows the same on-screen confirmation for a designated account and an unknown address, the designated reset action changes the password and returns to the canonical app URL, and provider evidence confirms email-enumeration protection plus the authorized continue domain.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
     },
     {
       "id": "quote.save",
-      "label": "A quote saves successfully."
+      "label": "A quote saves successfully.",
+      "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
     },
     {
       "id": "quote.authoritative-create",
-      "label": "Trusted pricing creates the draft quote, portal projection, and initial version."
+      "label": "Trusted pricing creates the draft quote, portal projection, and initial version.",
+      "targets": ["firebase-backend", "firebase-all"]
     },
     {
       "id": "quote.authoritative-edit",
-      "label": "An eligible edit is server-repriced and atomically updates quote, portal, and version state."
+      "label": "An eligible edit is server-repriced and atomically updates quote, portal, and version state.",
+      "targets": ["firebase-backend", "firebase-all"]
     },
     {
       "id": "quote.terminal-guards",
-      "label": "Terminal evidence blocks edit and reopen, sales cannot cross the allowed status boundary, and direct quote or portal deletion is denied."
+      "label": "Terminal evidence blocks edit and reopen, sales cannot cross the allowed status boundary, and direct quote or portal deletion is denied.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "quote.legacy-bulk-purge-denied",
+      "label": "The retired legacy bulk quote purge callable fails closed without mutation; permanent deletion within a retained organization remains one quote at a time through an exact approved delete_quote request.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "quote.legacy-bulk-purge-ui-absent",
+      "label": "The staff UI exposes no legacy bulk quote purge control.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
     },
     {
       "id": "history.open",
-      "label": "The saved quote appears in Quote History and opens successfully."
+      "label": "The saved quote appears in Quote History and opens successfully.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
     },
     {
       "id": "portal.decision",
-      "label": "Customer accept or decline updates the portal and organization quote consistently."
+      "label": "Customer accept or decline updates the portal and organization quote consistently.",
+      "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
+    },
+    {
+      "id": "delivery.current-issuance",
+      "label": "Provider acceptance for the exact current valid portal issuance records sent with a provider message id and activates only that issuance.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "delivery.invalid-issuance",
+      "label": "Provider acceptance for an invalid or expired portal issuance is retained as requires_rotation while that portal remains inactive until guarded rotation and a separate accepted send.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "delivery.link-surface-gating",
+      "label": "Copy Portal and the PDF portal link expose only an exact current valid issuance with matching provider acceptance; draft, invalid, expired, and newly rotated issuances remain withheld until separately accepted.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
+    },
+    {
+      "id": "approval.execution-audit-replay",
+      "label": "An exact approved request executes only its matching sensitive action, writes the server-owned organization-scoped outcome audit, and a completed replay returns the stored result without executing again.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "contract.approved-conversion",
+      "label": "An accepted quote converts through the exact approved server action to one booked contract with a server-owned contract number and availability result; an unapproved or mismatched conversion fails closed.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.deposit-scoped-dispatch",
+      "label": "An exact approved deposit request binds the current quote, portal, customer, amount, and currency; Checkout stays private until durable provider-email acceptance publishes one link, ambiguous retry reuses the same provider identities, and definite failure neutralizes the unsent Session before replacement.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.final-balance-scoped-dispatch",
+      "label": "A booked contract with a provider-paid deposit collects only the server-derived remaining balance through its own exact approval, checkout generation, ledger entry, and final-balance projection; stale scope or missing prerequisites fail closed.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.webhook-reconciliation",
+      "label": "Signed and replay-deduplicated completed, async-success, async-failure, and expired Checkout events plus admin reconciliation apply only provider-observed truth, accept valid late settlement, and never downgrade paid or refunded state.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.cross-rail-isolation",
+      "label": "Deposit and final-balance metadata, Session scope, ledger entries, reconciliation, and webhook handling remain isolated so an event or browser request cannot mutate the other payment rail.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.customer-projection-privacy",
+      "label": "The customer portal projection publishes only customer-safe deposit and final-balance state and an accepted eligible link, without Stripe Session, operation, known-Session, or private-dispatch identifiers.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "payment.customer-surface",
+      "label": "Staff surfaces expose only eligible deposit and final-balance send, resume, and reconcile actions, while the customer portal renders each rail independently and never exposes an unpublished link or private provider identifier.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
     },
     {
       "id": "proposal.pdf",
-      "label": "The proposal PDF exports successfully with customer-safe content."
+      "label": "The proposal PDF exports successfully with customer-safe content.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
     },
     {
       "id": "integrations.status",
-      "label": "Integrations Ops loads and reports provider configuration truthfully."
+      "label": "Integrations Ops loads and reports provider configuration truthfully.",
+      "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
     },
     {
       "id": "sms.disabled-nonblocking",
-      "label": "With SMS disabled, the SMS test reports disabled or not configured without blocking the core quote flow."
+      "label": "With SMS disabled, the SMS test reports disabled or not configured without blocking the core quote flow.",
+      "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
     }
   ]
 }
