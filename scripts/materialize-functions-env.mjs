@@ -116,6 +116,19 @@ if (
   );
 }
 
+const stripeMode = required("STRIPE_MODE").toLowerCase();
+if (stripeMode !== "live") {
+  throw new Error("Production Firebase Functions deployment requires STRIPE_MODE=live.");
+}
+const stripeSecretKey = required("STRIPE_SECRET_KEY");
+if (!stripeSecretKey.startsWith("sk_live_") && !stripeSecretKey.startsWith("rk_live_")) {
+  throw new Error("STRIPE_SECRET_KEY must be a live-mode secret or restricted key.");
+}
+const stripeWebhookSecret = required("STRIPE_WEBHOOK_SECRET");
+if (!stripeWebhookSecret.startsWith("whsec_")) {
+  throw new Error("STRIPE_WEBHOOK_SECRET must be a Stripe endpoint signing secret.");
+}
+
 const values = {
   APP_BASE_URL: appBaseUrl,
   APP_BASE_DOMAIN: appBaseDomain,
@@ -134,8 +147,9 @@ const values = {
     TWILIO_FROM_NUMBER: twilioFromNumber,
     NOTIFICATIONS_OWNER_PHONE: ownerPhone
   } : {}),
-  STRIPE_SECRET_KEY: required("STRIPE_SECRET_KEY"),
-  STRIPE_WEBHOOK_SECRET: required("STRIPE_WEBHOOK_SECRET")
+  STRIPE_MODE: stripeMode,
+  STRIPE_SECRET_KEY: stripeSecretKey,
+  STRIPE_WEBHOOK_SECRET: stripeWebhookSecret
 };
 
 const lines = [

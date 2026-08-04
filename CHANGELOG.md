@@ -80,6 +80,21 @@ This changelog is backfilled from git history and will be maintained going forwa
   conversion, portal-link rotation, and permanent quote deletion, including
   server-owned execution outcomes, durable org-scoped audit records, and
   idempotent replay behavior for completed operations.
+- Server-authoritative Stripe deposit handling for the approved payment-request
+  action. The approval is bound to the exact organization, quote revision,
+  portal issuance, customer email, currency, and deposit amount. The governed
+  operation durably registers a `prepared` Session without exposing its URL,
+  keeps QuotePilot's URL copy in a server-only dispatch record, and publishes
+  the payment link to the quote and portal only after email-provider acceptance
+  is durably recorded. Ambiguous checkout creation or email outcomes keep the
+  exact execution and actor resumable with the same Stripe/provider identities;
+  recorded provider acceptance resumes publication without sending again,
+  while a definite failure requires a new approval only after any unsent
+  checkout is safely neutralized. Direct standalone checkout creation fails
+  closed. Stripe runtime mode is explicit and must match the key plus provider
+  objects, all four supported Checkout Session lifecycle events are verified
+  and deduplicated, settled payment truth is monotonic, and admins have an
+  audited provider reconciliation path for the server-recorded Session.
 - Server-authoritative contract conversion planning and callable execution,
   including conflict/capacity evidence and server-generated contract identity.
 - Focused approval workflow coverage across pure server planning, Firebase

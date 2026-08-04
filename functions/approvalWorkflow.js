@@ -77,7 +77,9 @@ function buildApprovalRequest({
   note = "",
   actorEmail = "",
   nowISO = "",
-  requestId = ""
+  requestId = "",
+  actionScope = null,
+  actionScopeDigest = ""
 } = {}) {
   const normalizedAction = text(action);
   const normalizedActorEmail = email(actorEmail);
@@ -90,6 +92,28 @@ function buildApprovalRequest({
     throw new ApprovalWorkflowError(
       "failed-precondition",
       "Approval audit identity and server timestamp are required."
+    );
+  }
+  const normalizedScopeDigest = text(actionScopeDigest).toLowerCase();
+  const hasActionScope = actionScope
+    && typeof actionScope === "object"
+    && !Array.isArray(actionScope);
+  if (
+    normalizedAction === "send_payment_request"
+    && (!hasActionScope || !/^[a-f0-9]{64}$/.test(normalizedScopeDigest))
+  ) {
+    throw new ApprovalWorkflowError(
+      "failed-precondition",
+      "Payment requests require an exact server-owned commercial scope."
+    );
+  }
+  if (
+    normalizedAction !== "send_payment_request"
+    && (hasActionScope || normalizedScopeDigest)
+  ) {
+    throw new ApprovalWorkflowError(
+      "invalid-argument",
+      "This approval action does not accept a payment scope."
     );
   }
 
@@ -126,6 +150,12 @@ function buildApprovalRequest({
     resolvedAtISO: "",
     resolvedByEmail: "",
     resolutionNote: "",
+    ...(normalizedAction === "send_payment_request"
+      ? {
+        actionScope: { ...actionScope },
+        actionScopeDigest: normalizedScopeDigest
+      }
+      : {}),
     ...executionFields()
   };
   return {

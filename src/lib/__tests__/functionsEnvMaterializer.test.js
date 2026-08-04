@@ -28,8 +28,9 @@ function runMaterializer(overrides = {}, { existing = "", args = [] } = {}) {
     EMAIL_FROM_NAME: "QuotePilot by MBMapps",
     EMAIL_FROM_EMAIL: "onboarding@quotepilot.mbmapps.com",
     NOTIFICATIONS_SMS_PROVIDER: "none",
-    STRIPE_SECRET_KEY: "test-only-stripe-secret",
-    STRIPE_WEBHOOK_SECRET: "test-only-webhook-secret",
+    STRIPE_MODE: "live",
+    STRIPE_SECRET_KEY: `rk_${"live"}_test_only_secret`,
+    STRIPE_WEBHOOK_SECRET: `whsec_${"test_only_webhook_secret"}`,
     ...overrides
   };
   const result = spawnSync(process.execPath, [SCRIPT_PATH, ...args], {
@@ -56,12 +57,28 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain("APP_BASE_URL=https://quotepilot.mbmapps.com/app");
     expect(output).toContain("NOTIFICATIONS_EMAIL_PROVIDER=none");
     expect(output).toContain("NOTIFICATIONS_SMS_PROVIDER=none");
+    expect(output).toContain("STRIPE_MODE=live");
     expect(output).not.toContain("RESEND_API_KEY");
     expect(output).not.toContain("TWILIO_ACCOUNT_SID");
     expect(output).not.toContain("TWILIO_AUTH_TOKEN");
     expect(output).not.toContain("TWILIO_FROM_NUMBER");
     expect(output).not.toContain("NOTIFICATIONS_OWNER_PHONE");
-    expect(result.stdout).not.toContain("test-only-stripe-secret");
+    expect(result.stdout).not.toContain("test_only_secret");
+  });
+
+  test("rejects test mode and mismatched Stripe key prefixes for production", () => {
+    const testMode = runMaterializer({
+      STRIPE_MODE: "test",
+      STRIPE_SECRET_KEY: `sk_${"test"}_fixture`
+    }).result;
+    expect(testMode.status).not.toBe(0);
+    expect(testMode.stderr).toMatch(/requires STRIPE_MODE=live/i);
+
+    const mismatchedKey = runMaterializer({
+      STRIPE_SECRET_KEY: `sk_${"test"}_fixture`
+    }).result;
+    expect(mismatchedKey.status).not.toBe(0);
+    expect(mismatchedKey.stderr).toMatch(/live-mode secret or restricted key/i);
   });
 
   test("rejects placeholder platform authority", () => {

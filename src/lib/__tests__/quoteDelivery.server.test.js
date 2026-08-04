@@ -280,8 +280,8 @@ describe("server-authoritative quote delivery", () => {
 
   test("payment email claims require current portal activation evidence", () => {
     const source = callableSource("sendPaymentRequestEmail", "getIntegrationSetupStatus");
-    expect(source).toContain("assertQuoteDeliveryPortalActivation");
-    expect(source.indexOf("assertQuoteDeliveryPortalActivation"))
+    expect(source).toContain("derivePaymentRequestApprovalScope");
+    expect(source.indexOf("derivePaymentRequestApprovalScope"))
       .toBeLessThan(source.indexOf("sendCustomerEmail"));
   });
 

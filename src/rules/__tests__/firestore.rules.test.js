@@ -889,7 +889,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         reason: "forged_without_immutable_version"
       }
     }));
-    await assertSucceeds(updateDoc(adminQuoteRef, {
+    await assertFails(updateDoc(adminQuoteRef, {
       payment: {
         depositLink: "",
         depositStatus: "paid",
@@ -1154,12 +1154,74 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(deleteDoc(adminRef));
   });
 
-  test("Stripe payment references and provider audit fields remain server-owned", async () => {
+  test("private payment dispatch evidence is denied to every browser context", async () => {
+    const dispatchId = "payment-dispatch-approval-0001";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "organizations", "org-a", "privatePaymentDispatches", dispatchId),
+        {
+          organizationId: "org-a",
+          quoteId: "q1",
+          approvalRequestId: dispatchId,
+          privateDepositLink: "https://checkout.stripe.com/c/pay/private-dispatch-fixture",
+          exposureState: "prepared"
+        }
+      );
+    });
+
+    const browserContexts = [
+      ["public", testEnv.unauthenticatedContext()],
+      ["admin", testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })],
+      ["sales", testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })],
+      ["customer", testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })]
+    ];
+
+    for (const [label, context] of browserContexts) {
+      const db = context.firestore();
+      const existingRef = doc(
+        db,
+        "organizations",
+        "org-a",
+        "privatePaymentDispatches",
+        dispatchId
+      );
+      const newRef = doc(
+        db,
+        "organizations",
+        "org-a",
+        "privatePaymentDispatches",
+        `browser-created-${label}`
+      );
+      await assertFails(getDoc(existingRef));
+      await assertFails(setDoc(newRef, {
+        organizationId: "org-a",
+        quoteId: "q1",
+        privateDepositLink: "https://checkout.stripe.com/c/pay/browser-forgery"
+      }));
+      await assertFails(updateDoc(existingRef, { exposureState: "published" }));
+      await assertFails(deleteDoc(existingRef));
+    }
+  });
+
+  test("Stripe payment state, references, and provider audit fields remain server-owned", async () => {
     const depositLink = "https://checkout.stripe.com/c/pay/cs_test_server";
     const stripeSessionId = "cs_test_server";
     const protectedPaymentFields = {
       depositLink,
       stripeSessionId,
+      stripeCheckoutState: "open",
       lastCheckoutCreatedAtISO: "2026-03-22T01:50:00.000Z",
       lastHost: "quotepilot.mbmapps.com",
       lastEventType: "checkout.session.created",
@@ -1199,10 +1261,91 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
           updatedAtISO: "2026-03-22T02:05:00.000Z"
         }));
       }
-      await assertSucceeds(updateDoc(ref, {
-        "payment.depositStatus": "sent",
+      for (const depositStatus of ["sent", "paid", "refunded"]) {
+        await assertFails(updateDoc(ref, {
+          "payment.depositStatus": depositStatus,
+          updatedAtISO: "2026-03-22T02:10:00.000Z"
+        }));
+      }
+      await assertFails(updateDoc(ref, {
+        "payment.depositConfirmedAtISO": "2026-03-22T02:10:00.000Z",
         updatedAtISO: "2026-03-22T02:10:00.000Z"
       }));
+    }
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const confirmedPayment = {
+        ...protectedPaymentFields,
+        depositStatus: "paid",
+        depositConfirmedAtISO: "2026-03-22T02:20:00.000Z"
+      };
+      await updateDoc(doc(db, "organizations", "org-a", "quotes", "q1"), {
+        payment: confirmedPayment
+      });
+      await updateDoc(doc(db, "customerPortalQuotes", VALID_PORTAL_KEY), {
+        payment: confirmedPayment
+      });
+    });
+
+    for (const ref of [quoteRef, portalRef]) {
+      await assertFails(updateDoc(ref, {
+        "payment.depositStatus": "unpaid",
+        "payment.depositConfirmedAtISO": "",
+        updatedAtISO: "2026-03-22T02:30:00.000Z"
+      }));
+    }
+  });
+
+  test("public and authenticated customer portal paths cannot forge Stripe payment evidence", async () => {
+    const forgedAtISO = "2026-03-22T03:00:00.000Z";
+    const forgedPayment = {
+      depositLink: "https://checkout.stripe.com/c/pay/cs_test_browser_forged",
+      depositStatus: "paid",
+      depositConfirmedAtISO: forgedAtISO,
+      stripeSessionId: "cs_test_browser_forged",
+      stripeCheckoutState: "paid",
+      checkoutGeneration: 99,
+      lastCheckoutCreatedAtISO: forgedAtISO,
+      lastHost: "attacker.example",
+      lastEventType: "checkout.session.completed",
+      lastOrganizationId: "org-a"
+    };
+    const browserContexts = [
+      testEnv.unauthenticatedContext(),
+      testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })
+    ];
+
+    for (const context of browserContexts) {
+      const db = context.firestore();
+      const quoteRef = doc(db, "organizations", "org-a", "quotes", "q1");
+      const portalRef = doc(db, "customerPortalQuotes", VALID_PORTAL_KEY);
+
+      await assertFails(updateDoc(quoteRef, {
+        payment: forgedPayment,
+        updatedAtISO: forgedAtISO
+      }));
+      await assertFails(updateDoc(portalRef, {
+        payment: forgedPayment,
+        updatedAtISO: forgedAtISO
+      }));
+
+      const pair = writeBatch(db);
+      const otherwiseValidViewedPatch = {
+        status: "viewed",
+        lifecycle: {
+          viewedAtISO: forgedAtISO
+        },
+        payment: forgedPayment,
+        updatedAtISO: forgedAtISO
+      };
+      pair.update(quoteRef, otherwiseValidViewedPatch);
+      pair.update(portalRef, otherwiseValidViewedPatch);
+      await assertFails(pair.commit());
     }
   });
 

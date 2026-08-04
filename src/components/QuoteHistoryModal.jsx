@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  createDepositCheckout,
   getIntegrationSetupStatus,
+  reconcileDepositCheckout,
   resolveQuoteDeliveryOutcome,
   resolveQuoteDeliveryRevisionId,
   sendPaymentRequestToCustomerEmail,
@@ -18,11 +18,9 @@ import {
   duplicateQuote,
   getAllowedStatusTransitions,
   getQuoteHistory,
-  PAYMENT_STATUSES,
   reopenQuote,
   rotateQuotePortalKey,
   updateQuoteBookingConfirmation,
-  updateQuotePaymentStatus,
   updateQuoteStatus
 } from "../lib/quoteStore";
 
@@ -45,9 +43,11 @@ export function getExecutableApprovalRequest(quote, action) {
     : [];
   return requests.find((request) => {
     const executionState = String(request?.executionState || "").trim().toLowerCase();
+    const canResumePaymentRequest = action === "send_payment_request"
+      && executionState === "in_progress";
     return request?.action === action
       && request?.state === "approved"
-      && (!executionState || executionState === "awaiting_execution");
+      && (!executionState || executionState === "awaiting_execution" || canResumePaymentRequest);
   }) || null;
 }
 
@@ -184,9 +184,8 @@ export function getQuoteHistoryActionPermissions(role) {
     canCopyArtifacts: isStaff,
     canCopyPaymentLink: isAdmin,
     canSendPaymentRequest: isAdmin,
-    canCreateCheckoutLink: isAdmin,
+    canReconcilePayment: isAdmin,
     canManageQuoteStatus: isAdmin,
-    canManagePaymentStatus: isAdmin,
     canConvertToContract: isAdmin,
     canManageConfirmation: isAdmin,
     canReopenQuote: isAdmin,
@@ -234,14 +233,13 @@ export default function QuoteHistoryModal({
   const [eventTypes, setEventTypes] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingId, setUpdatingId] = useState("");
-  const [updatingPaymentId, setUpdatingPaymentId] = useState("");
   const [convertingId, setConvertingId] = useState("");
   const [updatingConfirmationId, setUpdatingConfirmationId] = useState("");
-  const [creatingCheckoutId, setCreatingCheckoutId] = useState("");
   const [duplicatingId, setDuplicatingId] = useState("");
   const [exportingPdfId, setExportingPdfId] = useState("");
   const [sendingQuoteEmailId, setSendingQuoteEmailId] = useState("");
   const [sendingPaymentEmailId, setSendingPaymentEmailId] = useState("");
+  const [reconcilingPaymentId, setReconcilingPaymentId] = useState("");
   const [reopeningQuoteId, setReopeningQuoteId] = useState("");
   const [rotatingPortalId, setRotatingPortalId] = useState("");
   const [pendingDeleteQuote, setPendingDeleteQuote] = useState(null);
@@ -579,30 +577,6 @@ export default function QuoteHistoryModal({
     applyQuoteLocally(quoteId, (quote) => ({ ...quote, status: nextStatus }));
   };
 
-  const applyPaymentLocally = (quoteId, nextPaymentStatus) => {
-    applyQuoteLocally(quoteId, (quote) => ({
-      ...quote,
-      payment: {
-        ...(quote.payment || {}),
-        depositStatus: nextPaymentStatus,
-        depositConfirmedAtISO:
-          nextPaymentStatus === "paid" ? new Date().toISOString() : quote.payment?.depositConfirmedAtISO || ""
-      }
-    }));
-  };
-
-  const applyPaymentLinkLocally = (quoteId, paymentLink) => {
-    applyQuoteLocally(quoteId, (quote) => ({
-      ...quote,
-      payment: {
-        ...(quote.payment || {}),
-        depositLink: paymentLink,
-        depositStatus: "sent",
-        depositConfirmedAtISO: quote.payment?.depositConfirmedAtISO || ""
-      }
-    }));
-  };
-
   const applyApprovalExecutionLocally = (quoteId, approvalRequest) => {
     if (!approvalRequest?.id) return;
     applyQuoteLocally(quoteId, (quote) => ({
@@ -642,27 +616,6 @@ export default function QuoteHistoryModal({
       }));
     } finally {
       setUpdatingId("");
-    }
-  };
-
-  const handlePaymentUpdate = async (quoteId, nextPaymentStatus) => {
-    if (!permissions.canManagePaymentStatus) {
-      setState((prev) => ({ ...prev, error: "Admin role required to change payment status." }));
-      return;
-    }
-    setUpdatingPaymentId(quoteId);
-    try {
-      await updateQuotePaymentStatus(quoteId, nextPaymentStatus);
-      applyPaymentLocally(quoteId, nextPaymentStatus);
-      setState((prev) => ({ ...prev, feedback: `Payment marked ${nextPaymentStatus}.` }));
-      pushToast(`Payment marked ${nextPaymentStatus}.`, "success");
-    } catch (err) {
-      setState((prev) => ({
-        ...prev,
-        error: err?.message || "Failed to update payment status."
-      }));
-    } finally {
-      setUpdatingPaymentId("");
     }
   };
 
@@ -964,43 +917,6 @@ export default function QuoteHistoryModal({
     }
   };
 
-  const createCheckoutLink = async (quote) => {
-    if (!permissions.canCreateCheckoutLink) {
-      throw new Error("Admin role required to create Stripe checkout links.");
-    }
-    if (state.source !== "firebase") {
-      throw new Error("Stripe checkout requires Firebase-backed quote storage.");
-    }
-    if (isPortalExpired(quote)) {
-      throw new Error("Portal link expired. Rotate the portal link before sending payment requests.");
-    }
-
-    const result = await createDepositCheckout({
-      quoteId: quote.id
-    });
-    const paymentLink = sanitizeStripePaymentLink(result?.url);
-    if (!paymentLink) {
-      throw new Error("An approved Stripe checkout URL was not returned.");
-    }
-    applyPaymentLinkLocally(quote.id, paymentLink);
-    return paymentLink;
-  };
-
-  const handleCreateCheckout = async (quote) => {
-    setCreatingCheckoutId(quote.id);
-    setState((prev) => ({ ...prev, error: "", feedback: "" }));
-    try {
-      const paymentLink = await createCheckoutLink(quote);
-      setState((prev) => ({ ...prev, feedback: `Stripe checkout created for ${quote.quoteNumber}.` }));
-      pushToast(`Stripe checkout created for ${quote.quoteNumber}.`, "success");
-      window.open(paymentLink, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      setState((prev) => ({ ...prev, error: err?.message || "Failed to create Stripe checkout." }));
-    } finally {
-      setCreatingCheckoutId("");
-    }
-  };
-
   const handleSendQuoteEmail = async (quote) => {
     setSendingQuoteEmailId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
@@ -1126,21 +1042,12 @@ export default function QuoteHistoryModal({
         throw new Error("Portal link expired. Rotate the portal link before sending payment requests.");
       }
 
-      let paymentLink = sanitizeStripePaymentLink(quote.payment?.depositLink);
-      if (!paymentLink) {
-        paymentLink = await createCheckoutLink(quote);
-      }
-
       const sendResult = await sendPaymentRequestToCustomerEmail({
         quoteId: quote.id,
         approvalRequestId: approvalRequest.id
       });
       applyApprovalExecutionLocally(quote.id, sendResult.approvalRequest);
-
-      if (String(quote.payment?.depositStatus || "unpaid").toLowerCase() === "unpaid") {
-        await updateQuotePaymentStatus(quote.id, "sent");
-        applyPaymentLocally(quote.id, "sent");
-      }
+      await load();
 
       setState((prev) => ({ ...prev, feedback: `Payment request sent to ${quote.customer?.email || "customer"}.` }));
       pushToast(`Payment request sent for ${quote.quoteNumber}.`, "success");
@@ -1148,6 +1055,28 @@ export default function QuoteHistoryModal({
       setState((prev) => ({ ...prev, error: err?.message || "Failed to send payment request." }));
     } finally {
       setSendingPaymentEmailId("");
+    }
+  };
+
+  const handleReconcilePayment = async (quote) => {
+    if (!permissions.canReconcilePayment) return;
+    setReconcilingPaymentId(quote.id);
+    setState((prev) => ({ ...prev, error: "", feedback: "" }));
+    try {
+      const result = await reconcileDepositCheckout({ quoteId: quote.id });
+      await load();
+      const feedback = result.reviewRequired
+        ? `Stripe reconciliation for ${quote.quoteNumber} requires provider review.`
+        : `Stripe reconciliation recorded ${result.providerState} for ${quote.quoteNumber}.`;
+      setState((prev) => ({ ...prev, feedback }));
+      pushToast(feedback, result.reviewRequired ? "warning" : "success");
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        error: err?.message || "Failed to reconcile Stripe payment."
+      }));
+    } finally {
+      setReconcilingPaymentId("");
     }
   };
 
@@ -1384,6 +1313,9 @@ export default function QuoteHistoryModal({
                 const approvalRequired = state.source === "firebase";
                 const contractApproval = getExecutableApprovalRequest(quote, "convert_to_contract");
                 const paymentRequestApproval = getExecutableApprovalRequest(quote, "send_payment_request");
+                const paymentRequestInProgress = String(
+                  paymentRequestApproval?.executionState || ""
+                ).trim().toLowerCase() === "in_progress";
                 const portalRotationApproval = getExecutableApprovalRequest(quote, "rotate_portal_link");
                 const deleteApproval = getExecutableApprovalRequest(quote, "delete_quote");
                 const quoteEventTypeId = String(quote.eventTypeId || quote.selection?.eventTypeId || "");
@@ -1411,6 +1343,15 @@ export default function QuoteHistoryModal({
                 const portalShareable = isCustomerPortalShareable(quote, {
                   requireDeliveryEvidence: state.source === "firebase"
                 });
+                const publishedPaymentLink = (
+                  String(quote.payment?.depositStatus || "").trim().toLowerCase() === "sent"
+                  && sanitizeStripePaymentLink(quote.payment?.depositLink)
+                );
+                const canReconcilePayment = permissions.canReconcilePayment
+                  && Boolean(String(quote.payment?.stripeSessionId || "").trim())
+                  && !["paid", "refunded"].includes(
+                    String(quote.payment?.depositStatus || "").trim().toLowerCase()
+                  );
                 return (
                   <tr
                     key={quote.id}
@@ -1451,21 +1392,7 @@ export default function QuoteHistoryModal({
                         ) : null}
                       </div>
                     </td>
-                    <td>
-                      {permissions.canManagePaymentStatus ? (
-                        <select
-                          value={quote.payment?.depositStatus || "unpaid"}
-                          onChange={(e) => handlePaymentUpdate(quote.id, e.target.value)}
-                          disabled={updatingPaymentId === quote.id || deliveryUnresolved}
-                        >
-                          {PAYMENT_STATUSES.map((paymentStatus) => (
-                            <option key={paymentStatus} value={paymentStatus}>{paymentStatus}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span>{quote.payment?.depositStatus || "unpaid"}</span>
-                      )}
-                    </td>
+                    <td><span>{quote.payment?.depositStatus || "unpaid"}</span></td>
                     <td>
                       <div className="history-meta-stack">
                         <strong>{contractNumber || "-"}</strong>
@@ -1623,9 +1550,13 @@ export default function QuoteHistoryModal({
                               ? "Approve the payment request in Sales Workflow first."
                               : !portalShareable
                                 ? "Payment email requires an active customer portal for the current provider-accepted issuance."
-                                : ""}
+                                : paymentRequestInProgress
+                                  ? "Resume the interrupted payment request using its existing approval."
+                                  : ""}
                           >
-                            {sendingPaymentEmailId === quote.id ? "Sending..." : "Send Pay Request"}
+                            {sendingPaymentEmailId === quote.id
+                              ? paymentRequestInProgress ? "Resuming..." : "Sending..."
+                              : paymentRequestInProgress ? "Resume Pay Request" : "Send Pay Request"}
                           </button>
                         )}
                         {permissions.canRotatePortalLink && canRotatePortalForStatus && (
@@ -1655,20 +1586,10 @@ export default function QuoteHistoryModal({
                             >
                               Copy Portal
                             </button>
-                            {permissions.canCopyPaymentLink && (
+                            {permissions.canCopyPaymentLink && publishedPaymentLink && (
                               <button type="button" className="ghost compact" onClick={() => handleCopyPaymentLink(quote)}>Copy Pay Link</button>
                             )}
                           </>
-                        )}
-                        {permissions.canCreateCheckoutLink && (
-                          <button
-                            type="button"
-                            className="cta compact"
-                            onClick={() => handleCreateCheckout(quote)}
-                            disabled={creatingCheckoutId === quote.id || deliveryUnresolved}
-                          >
-                            {creatingCheckoutId === quote.id ? "Creating..." : "Create Stripe Link"}
-                          </button>
                         )}
                         {permissions.canDeleteQuote && canDeleteQuotes ? (
                           <button
@@ -1679,6 +1600,16 @@ export default function QuoteHistoryModal({
                             title={approvalRequired && !deleteApproval ? "Approve quote deletion in Sales Workflow first." : ""}
                           >
                             {updatingId === quote.id ? "Deleting..." : "Delete"}
+                          </button>
+                        ) : null}
+                        {canReconcilePayment ? (
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleReconcilePayment(quote)}
+                            disabled={reconcilingPaymentId === quote.id || deliveryUnresolved}
+                          >
+                            {reconcilingPaymentId === quote.id ? "Reconciling..." : "Reconcile Payment"}
                           </button>
                         ) : null}
                       </div>
