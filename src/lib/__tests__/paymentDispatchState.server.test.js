@@ -7,6 +7,7 @@ const {
   PaymentDispatchStateError,
   beginPaymentDispatchAttempt,
   classifyPaymentDispatchError,
+  planExpiredPortalPaymentDispatchRecovery,
   planPaymentDispatchFailure,
   planPaymentDispatchResume,
   recordPaymentDispatchProviderAcceptance
@@ -25,6 +26,12 @@ const FUNCTIONS_INDEX_SOURCE = fs.readFileSync(
 function callableSource(name, nextName) {
   const start = FUNCTIONS_INDEX_SOURCE.indexOf(`exports.${name} =`);
   const end = FUNCTIONS_INDEX_SOURCE.indexOf(`exports.${nextName} =`, start + 1);
+  return FUNCTIONS_INDEX_SOURCE.slice(start, end);
+}
+
+function approvedPaymentRequestSource() {
+  const start = FUNCTIONS_INDEX_SOURCE.indexOf("async function sendApprovedPaymentRequestEmail");
+  const end = FUNCTIONS_INDEX_SOURCE.indexOf("exports.sendPaymentRequestEmail =", start + 1);
   return FUNCTIONS_INDEX_SOURCE.slice(start, end);
 }
 
@@ -115,6 +122,122 @@ describe("payment dispatch state", () => {
         state: "definite_failure",
         completedAtISO: LATER
       }
+    });
+  });
+
+  test("idempotently preserves a definite failure during crash recovery", () => {
+    const recorded = planPaymentDispatchFailure({
+      dispatch: start(),
+      error: providerError("recipient rejected", {
+        providerHttpStatus: 422,
+        paymentDispatchReason: "invalid_recipient"
+      }),
+      nowISO: LATER
+    });
+    const recovered = planPaymentDispatchFailure({
+      dispatch: recorded.dispatch,
+      error: providerError("retry interrupted", {
+        paymentDispatchOutcome: "ambiguous",
+        paymentDispatchReason: "provider_network_error"
+      }),
+      nowISO: "2026-08-04T15:02:00.000Z"
+    });
+
+    expect(recovered).toEqual(recorded);
+    expect(recovered).toMatchObject({
+      outcome: "definite_failure",
+      executionState: "failed",
+      resumable: false,
+      shouldNeutralizeCheckout: true,
+      shouldAdvanceCheckoutGeneration: true,
+      requiresNewApproval: true,
+      dispatch: {
+        state: "definite_failure",
+        outcomeReason: "invalid_recipient",
+        completedAtISO: LATER
+      }
+    });
+    expect(planPaymentDispatchResume({
+      executionState: "in_progress",
+      dispatch: recovered.dispatch,
+      ...identity
+    })).toEqual({
+      action: "new_approval_required",
+      resumable: false,
+      idempotencyKey: identity.idempotencyKey
+    });
+  });
+
+  test("waits for an active send before claiming expired-portal provider-unknown recovery", () => {
+    const waiting = planExpiredPortalPaymentDispatchRecovery({
+      dispatch: start(),
+      nowISO: "2026-08-04T15:14:59.999Z",
+      staleAfterMs: 15 * 60 * 1000
+    });
+    expect(waiting).toMatchObject({
+      action: "wait_for_active_provider_attempt",
+      changed: false,
+      retryAfterISO: "2026-08-04T15:15:00.000Z",
+      dispatch: { state: "sending" }
+    });
+
+    const stale = planExpiredPortalPaymentDispatchRecovery({
+      dispatch: start(),
+      nowISO: "2026-08-04T15:15:00.000Z",
+      staleAfterMs: 15 * 60 * 1000
+    });
+    expect(stale).toMatchObject({
+      action: "recover_provider_unknown",
+      changed: true,
+      retryAfterISO: "",
+      dispatch: {
+        state: "recovery_claimed",
+        lastOutcome: "ambiguous",
+        outcomeReason: "portal_expired_stale_sending",
+        completedAtISO: ""
+      }
+    });
+
+    const alreadyAmbiguous = planExpiredPortalPaymentDispatchRecovery({
+      dispatch: planPaymentDispatchFailure({
+        dispatch: start(),
+        error: providerError("network outcome unknown"),
+        nowISO: LATER
+      }).dispatch,
+      nowISO: LATER,
+      staleAfterMs: 15 * 60 * 1000
+    });
+    expect(alreadyAmbiguous).toMatchObject({
+      action: "recover_provider_unknown",
+      changed: true,
+      dispatch: {
+        state: "recovery_claimed",
+        outcomeReason: "portal_expired_recovery_claimed"
+      }
+    });
+    expect(planPaymentDispatchResume({
+      executionState: "in_progress",
+      dispatch: alreadyAmbiguous.dispatch,
+      ...identity
+    })).toEqual({
+      action: "expired_portal_recovery_in_progress",
+      resumable: false,
+      idempotencyKey: identity.idempotencyKey
+    });
+    expect(() => beginPaymentDispatchAttempt({
+      dispatch: alreadyAmbiguous.dispatch,
+      ...identity,
+      nowISO: "2026-08-04T15:16:00.000Z"
+    })).toThrowError(/recovery is already in progress/i);
+    expect(planPaymentDispatchFailure({
+      dispatch: alreadyAmbiguous.dispatch,
+      error: providerError("competing retry"),
+      nowISO: "2026-08-04T15:16:00.000Z"
+    })).toMatchObject({
+      executionState: "in_progress",
+      nextAction: "complete_expired_portal_recovery",
+      resumable: false,
+      dispatch: { state: "recovery_claimed" }
     });
   });
 
@@ -236,7 +359,7 @@ describe("payment dispatch state", () => {
   });
 
   test("wires publication-only recovery ahead of any second provider email", () => {
-    const source = callableSource("sendPaymentRequestEmail", "getIntegrationSetupStatus");
+    const source = approvedPaymentRequestSource();
     const recoveryBranch = source.indexOf(
       'if (dispatchAttempt.action === "complete_publication")'
     );
@@ -253,6 +376,115 @@ describe("payment dispatch state", () => {
     const recoveryPath = source.slice(recoveryBranch, providerSend);
     expect(recoveryPath).toContain("providerAccepted = true");
     expect(recoveryPath).not.toContain("await sendCustomerEmail");
+  });
+
+  test("closes provider-accepted expired checkout recovery before the generic resumable branch", () => {
+    const callable = approvedPaymentRequestSource();
+    const finalizerStart = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "async function finalizeProviderAcceptedExpiredCheckout"
+    );
+    const finalizerEnd = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "exports.resolveTenantByHost =",
+      finalizerStart
+    );
+    const finalizer = FUNCTIONS_INDEX_SOURCE.slice(finalizerStart, finalizerEnd);
+    const expiredFlag = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "expiredError.paymentCheckoutExpired = true"
+    );
+    const recoveryBranch = callable.indexOf(
+      "const providerAcceptedCheckoutExpired = Boolean("
+    );
+    const recoveryCall = callable.indexOf(
+      "await finalizeProviderAcceptedExpiredCheckout",
+      recoveryBranch
+    );
+    const resumableBranch = callable.indexOf(
+      "let keepExecutionResumable = providerAccepted",
+      recoveryBranch
+    );
+
+    expect(finalizerStart).toBeGreaterThan(-1);
+    expect(expiredFlag).toBeGreaterThan(-1);
+    expect(recoveryBranch).toBeGreaterThan(-1);
+    expect(recoveryCall).toBeGreaterThan(recoveryBranch);
+    expect(resumableBranch).toBeGreaterThan(recoveryCall);
+    expect(finalizer).toContain("const [quoteSnap, executionSnap, privateDispatchSnap]");
+    expect(finalizer).toContain("const portalSnap = portalRef ? await tx.get(portalRef) : null");
+    expect(finalizer.indexOf("const portalSnap")).toBeLessThan(
+      finalizer.indexOf("tx.update(quoteRef")
+    );
+    expect(finalizer).toContain('state: "failed"');
+    expect(finalizer).toContain('nextState: "expired"');
+    expect(finalizer).toContain('exposureState: "expired_after_provider_acceptance"');
+    expect(finalizer).toContain('privateDepositLink: ""');
+    expect(callable.slice(recoveryBranch, resumableBranch)).toContain(
+      "The operation is closed; request and approve a fresh payment request."
+    );
+  });
+
+  test("closes stale work only before any checkout preparation or email dispatch is recorded", () => {
+    const callable = approvedPaymentRequestSource();
+    const helperStart = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "async function finalizeUnpreparedPaymentExecutionFailure"
+    );
+    const helperEnd = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "exports.resolveTenantByHost =",
+      helperStart
+    );
+    const helper = FUNCTIONS_INDEX_SOURCE.slice(helperStart, helperEnd);
+    const recoveryCall = callable.indexOf(
+      "await finalizeUnpreparedPaymentExecutionFailure"
+    );
+    const executionRecheck = callable.indexOf(
+      "let executionStateUncertain = false"
+    );
+
+    expect(helperStart).toBeGreaterThan(-1);
+    expect(helper).toContain(
+      'normalizeText(execution.state).toLowerCase() !== "in_progress"'
+    );
+    expect(helper).toContain(
+      "normalizeText(execution.executedBy?.uid) !== normalizeText(staff?.uid)"
+    );
+    expect(helper).toContain("execution.checkoutPreparation");
+    expect(helper).toContain("execution.paymentDispatch");
+    expect(helper).toContain("privateDispatchSnap.exists");
+    expect(helper).toContain("buildApprovalExecutionStart({");
+    expect(helper).toContain("tx.create(executionRef, buildApprovalExecutionAudit({");
+    expect(helper).toContain(
+      'normalizeText(approvalRequest?.state).toLowerCase() !== "approved"'
+    );
+    expect(helper).toContain('"awaiting_execution"');
+    expect(helper).toContain('state: "failed"');
+    expect(helper).toContain("checkoutPreparationRecorded: false");
+    expect(helper).toContain('stripeCheckoutOutcome: "unverified"');
+    expect(helper).toContain("emailProviderContacted: false");
+    expect(recoveryCall).toBeGreaterThan(-1);
+    expect(executionRecheck).toBeGreaterThan(recoveryCall);
+    expect(callable.slice(recoveryCall, executionRecheck)).toContain(
+      "The operation is closed; request and approve a fresh payment request."
+    );
+
+    const classifierStart = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "function isDefinitePaymentExecutionClaimError"
+    );
+    const classifierEnd = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "async function advanceCheckoutGenerationIfUnchanged",
+      classifierStart
+    );
+    const classifier = FUNCTIONS_INDEX_SOURCE.slice(classifierStart, classifierEnd);
+    const abortedGuard = classifier.indexOf(
+      'if (code === "aborted" || !definiteCodes.has(code)) return false;'
+    );
+    const quoteDeliveryClass = classifier.indexOf(
+      "error instanceof QuoteDeliveryError"
+    );
+    expect(abortedGuard).toBeGreaterThan(-1);
+    expect(quoteDeliveryClass).toBeGreaterThan(abortedGuard);
+    expect(classifier).toContain('"failed-precondition"');
+    expect(callable).toContain(
+      "if (!claimedQuote && isDefinitePaymentExecutionClaimError(err))"
+    );
   });
 
   test("redacts every nested checkout URL before writing the readable execution audit", () => {
@@ -294,12 +526,12 @@ describe("payment dispatch state", () => {
   });
 
   test("keeps post-create and preparation-persistence uncertainty resumable", () => {
-    const callable = callableSource("sendPaymentRequestEmail", "getIntegrationSetupStatus");
+    const callable = approvedPaymentRequestSource();
     const preparationStart = FUNCTIONS_INDEX_SOURCE.indexOf(
-      "async function prepareDepositCheckoutForApprovedSend"
+      "async function prepareCheckoutForApprovedSend"
     );
     const preparationEnd = FUNCTIONS_INDEX_SOURCE.indexOf(
-      "exports.reconcileDepositCheckout =",
+      "async function reconcileCheckout",
       preparationStart
     );
     const preparationSource = FUNCTIONS_INDEX_SOURCE.slice(
@@ -357,7 +589,7 @@ describe("payment dispatch state", () => {
   });
 
   test("replays a concurrent successful execution before any failure cleanup", () => {
-    const callable = callableSource("sendPaymentRequestEmail", "getIntegrationSetupStatus");
+    const callable = approvedPaymentRequestSource();
     const executionRecheck = callable.indexOf(
       "const latestExecutionSnap = await executionRef.get()"
     );

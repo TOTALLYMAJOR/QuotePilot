@@ -191,7 +191,17 @@ describe("trusted server quote creation documents", () => {
       updatedAtISO: "2026-07-27T12:00:00.000Z",
       payment: {
         depositLink: "https://attacker.example.test/pay",
-        depositStatus: "sent"
+        depositStatus: "sent",
+        finalBalance: {
+          amountCents: 37500,
+          currency: "usd",
+          status: "sent",
+          paymentLink: "https://checkout.stripe.com/c/pay/cs_test_final",
+          confirmedAtISO: "",
+          stripeSessionId: "cs_test_private_final",
+          operationId: "approval-private-final",
+          knownStripeSessionIds: ["cs_test_private_final"]
+        }
       }
     });
 
@@ -199,6 +209,16 @@ describe("trusted server quote creation documents", () => {
       depositLink: "",
       depositStatus: "sent"
     });
+    expect(portal.payment.finalBalance).toEqual({
+      amountCents: 37500,
+      currency: "usd",
+      status: "sent",
+      paymentLink: "https://checkout.stripe.com/c/pay/cs_test_final",
+      confirmedAtISO: "",
+      stripeCheckoutState: ""
+    });
+    expect(portal.payment.finalBalance).not.toHaveProperty("stripeSessionId");
+    expect(portal.payment.finalBalance).not.toHaveProperty("operationId");
     expect(portal.deliveryEvidence).toEqual({
       revisionId: "",
       state: "",
@@ -500,7 +520,7 @@ describe("trusted server quote creation documents", () => {
     });
   });
 
-  test("rejects non-admin, terminal, and expired portal rotations", () => {
+  test("rejects non-admin, terminal, and expired pre-booking portal rotations", () => {
     const quote = {
       organizationId: "org-a",
       portalKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -519,7 +539,7 @@ describe("trusted server quote creation documents", () => {
       },
       nowISO: "2026-07-28T12:00:00.000Z"
     })).toThrow(/admin role required/i);
-    for (const status of ["accepted", "declined", "booked", "expired", "deleted"]) {
+    for (const status of ["accepted", "declined", "expired", "deleted"]) {
       expect(() => buildPortalRotationDocuments({
         quoteId: "quote-a",
         quote: {
@@ -533,7 +553,7 @@ describe("trusted server quote creation documents", () => {
           role: "admin"
         },
         nowISO: "2026-07-28T12:00:00.000Z"
-      })).toThrow(/terminal commercial state/i);
+      })).toThrow(/unavailable for this commercial state/i);
     }
     expect(() => buildPortalRotationDocuments({
       quoteId: "quote-a",
@@ -549,6 +569,57 @@ describe("trusted server quote creation documents", () => {
       },
       nowISO: "2026-07-28T12:00:00.000Z"
     })).toThrow(/expiry must be extended/i);
+  });
+
+  test("renews an expired booked portal without changing contract or payment truth", () => {
+    const quote = {
+      ...buildForm(),
+      organizationId: "org-a",
+      portalKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      portalIssuedAtISO: "2026-06-01T00:00:00.000Z",
+      portalExpiresAtISO: "2026-07-01T00:00:00.000Z",
+      expiresAtISO: "2026-07-01T00:00:00.000Z",
+      status: "booked",
+      latestVersionNumber: 3,
+      booking: {
+        contractNumber: "C-260701-12345",
+        contractConvertedAtISO: "2026-07-01T12:00:00.000Z"
+      },
+      payment: {
+        depositStatus: "paid",
+        stripeSessionId: "cs_test_paid_deposit",
+        depositConfirmedAtISO: "2026-07-01T13:00:00.000Z"
+      }
+    };
+    const rotation = buildPortalRotationDocuments({
+      quoteId: "quote-booked",
+      quote,
+      newPortalKey: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      staff: {
+        uid: "admin-a",
+        email: "admin@example.com",
+        role: "admin"
+      },
+      nowISO: "2026-08-04T12:00:00.000Z"
+    });
+
+    expect(rotation.quotePatch).toMatchObject({
+      portalKey: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      portalIssuedAtISO: "2026-08-04T12:00:00.000Z",
+      portalExpiresAtISO: "2026-09-03T12:00:00.000Z"
+    });
+    expect(rotation.portal).toMatchObject({
+      status: "booked",
+      booking: { contractNumber: "C-260701-12345" },
+      payment: {
+        depositStatus: "paid"
+      }
+    });
+    expect(rotation.portal.payment).not.toHaveProperty("stripeSessionId");
+    expect(rotation.version.snapshot).toMatchObject({
+      booking: quote.booking,
+      payment: quote.payment
+    });
   });
 
   test("builds an atomic admin reopen with fresh expiry and immutable terminal audit", () => {

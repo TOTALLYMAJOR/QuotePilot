@@ -102,16 +102,25 @@ function buildStripeCheckoutIdempotencyKey({
   organizationId: expectedOrganizationId,
   portalKey,
   amountTotal,
-  checkoutGeneration
+  checkoutGeneration,
+  paymentKind = "deposit"
 } = {}) {
   const generation = Number(checkoutGeneration);
-  const scope = [
+  const normalizedPaymentKind = text(paymentKind).toLowerCase();
+  if (!new Set(["deposit", "final_balance"]).has(normalizedPaymentKind)) {
+    throw new PaymentSafetyError("Stripe checkout payment kind is invalid.");
+  }
+  const legacyDepositScope = [
     organizationId(expectedOrganizationId),
     text(quoteId),
     text(portalKey),
     String(Number(amountTotal)),
     String(generation)
-  ].join("|");
+  ];
+  const scope = (normalizedPaymentKind === "deposit"
+    ? legacyDepositScope
+    : [normalizedPaymentKind, ...legacyDepositScope]
+  ).join("|");
   if (
     !organizationId(expectedOrganizationId)
     || !text(quoteId)
@@ -126,7 +135,10 @@ function buildStripeCheckoutIdempotencyKey({
     );
   }
   const digest = createHash("sha256").update(scope).digest("hex");
-  return `quotepilot-deposit-v1-${digest}`;
+  const prefix = normalizedPaymentKind === "deposit"
+    ? "quotepilot-deposit-v1"
+    : "quotepilot-final-balance-v1";
+  return `${prefix}-${digest}`;
 }
 
 function text(value) {

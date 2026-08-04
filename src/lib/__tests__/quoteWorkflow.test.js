@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  APPROVAL_ACTIONS,
   buildProductionChecklist,
   buildProposalReadiness,
   buildQuoteLifecycleTimeline,
@@ -29,6 +30,30 @@ function completeForm() {
 }
 
 describe("quote workflow helpers", () => {
+  test("registers final-balance approval without changing the legacy default payment action", () => {
+    expect(APPROVAL_ACTIONS[0]).toEqual({
+      id: "send_payment_request",
+      label: "Send payment request"
+    });
+    expect(APPROVAL_ACTIONS).toContainEqual({
+      id: "send_final_balance_request",
+      label: "Send final balance request"
+    });
+
+    const timeline = buildQuoteLifecycleTimeline({
+      workflow: {
+        approvalRequests: [{
+          id: "final-balance-approval",
+          action: "send_final_balance_request",
+          state: "pending",
+          requestedAtISO: "2026-08-04T15:00:00.000Z"
+        }]
+      }
+    });
+    expect(timeline.find((item) => item.id === "approval-requested-final-balance-approval"))
+      .toMatchObject({ detail: "Send final balance request" });
+  });
+
   test("scores proposal readiness and identifies actionable gaps", () => {
     const ready = buildProposalReadiness(completeForm(), { total: 9200 });
     expect(ready.score).toBe(100);

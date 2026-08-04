@@ -77,6 +77,92 @@ describe("server approval workflow planning", () => {
     })).toThrowError(expect.objectContaining({ code: "failed-precondition" }));
   });
 
+  test("requires and preserves exact server-owned scope for final balance requests", () => {
+    const actionScope = {
+      version: 1,
+      kind: "stripe_checkout_final_balance_request",
+      organizationId: "org-a",
+      quoteId: "quote-a",
+      quoteRevisionId: "v0002@2026-08-04T15:00:00.000Z",
+      portalKey: "portal-key-abcdefghijklmnopqrstuvwxyz",
+      portalIssuedAtISO: "2026-08-04T15:00:00.000Z",
+      customerEmail: "customer@example.com",
+      paymentKind: "final_balance",
+      currency: "usd",
+      amountCents: 37500,
+      depositPaymentId: "pi_deposit_123",
+      depositStatus: "paid",
+      contractNumber: "C-260804-12345",
+      generation: 1
+    };
+    const actionScopeDigest = "b".repeat(64);
+    const result = buildApprovalRequest({
+      workflow: {},
+      action: "send_final_balance_request",
+      actorEmail: "admin@example.com",
+      nowISO: "2026-08-04T16:00:00.000Z",
+      requestId: "final-balance-request",
+      actionScope,
+      actionScopeDigest
+    });
+
+    expect(result.request.action).toBe("send_final_balance_request");
+    expect(result.request.actionScope).toEqual(actionScope);
+    expect(result.request.actionScope).not.toBe(actionScope);
+    expect(result.request.actionScopeDigest).toBe(actionScopeDigest);
+    expect(() => buildApprovalRequest({
+      workflow: {},
+      action: "send_final_balance_request",
+      actorEmail: "admin@example.com",
+      nowISO: "2026-08-04T16:00:00.000Z",
+      requestId: "unscoped-final-balance-request"
+    })).toThrowError(expect.objectContaining({ code: "failed-precondition" }));
+  });
+
+  test("permits a fresh final-balance approval after the prior execution is failed", () => {
+    const previous = {
+      id: "expired-final-balance-request",
+      action: "send_final_balance_request",
+      state: "approved",
+      executionState: "failed"
+    };
+    const actionScope = {
+      version: 1,
+      kind: "stripe_checkout_final_balance_request",
+      organizationId: "org-a",
+      quoteId: "quote-a",
+      quoteRevisionId: "v0002@2026-08-04T15:00:00.000Z",
+      portalKey: "portal-key-abcdefghijklmnopqrstuvwxyz",
+      portalIssuedAtISO: "2026-08-04T15:00:00.000Z",
+      customerEmail: "customer@example.com",
+      paymentKind: "final_balance",
+      currency: "usd",
+      amountCents: 37500,
+      depositPaymentId: "pi_deposit_123",
+      depositStatus: "paid",
+      contractNumber: "C-260804-12345",
+      generation: 2
+    };
+    const result = buildApprovalRequest({
+      workflow: { approvalRequests: [previous] },
+      action: "send_final_balance_request",
+      actorEmail: "admin@example.com",
+      nowISO: "2026-08-04T17:00:00.000Z",
+      requestId: "replacement-final-balance-request",
+      actionScope,
+      actionScopeDigest: "c".repeat(64)
+    });
+
+    expect(result.approvalRequests).toHaveLength(2);
+    expect(result.approvalRequests[0]).toBe(previous);
+    expect(result.request).toMatchObject({
+      id: "replacement-final-balance-request",
+      action: "send_final_balance_request",
+      state: "pending",
+      executionState: ""
+    });
+  });
+
   test("rejects duplicate pending action requests without rewriting history", () => {
     expect(() => buildApprovalRequest({
       workflow: {

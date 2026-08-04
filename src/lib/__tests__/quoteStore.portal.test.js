@@ -166,6 +166,54 @@ describe("quoteStore portal token policy", () => {
     expect(repeatedView.lifecycle.viewedAtISO).toBe(firstView.lifecycle.viewedAtISO);
   });
 
+  test("projects an explicit final balance and derives a link-free legacy default", async () => {
+    seedQuotes([makeQuote({
+      status: "booked",
+      payment: {
+        depositStatus: "paid",
+        stripeSessionId: "cs_test_deposit_123",
+        depositConfirmedAtISO: "2026-03-18T12:00:00.000Z",
+        finalBalance: {
+          amountCents: 504000,
+          currency: "usd",
+          status: "sent",
+          paymentLink: "https://checkout.stripe.com/c/pay/final-balance",
+          confirmedAtISO: "",
+          stripeSessionId: "cs_test_final_balance_123",
+          stripeCheckoutState: "open",
+          checkoutGeneration: 1,
+          knownStripeSessionIds: ["cs_test_final_balance_123"]
+        }
+      },
+      booking: {
+        contractNumber: "C-260318-12345",
+        contractConvertedAtISO: "2026-03-18T13:00:00.000Z"
+      }
+    })]);
+
+    const explicit = await getPortalQuote("portal-key-12345678901234567890");
+    expect(explicit.payment.finalBalance).toMatchObject({
+      amountCents: 504000,
+      status: "sent",
+      paymentLink: "https://checkout.stripe.com/c/pay/final-balance",
+      stripeSessionId: "cs_test_final_balance_123"
+    });
+
+    seedQuotes([makeQuote()]);
+    const legacy = await getPortalQuote("portal-key-12345678901234567890");
+    expect(legacy.payment.finalBalance).toEqual({
+      amountCents: 504000,
+      currency: "usd",
+      status: "unpaid",
+      paymentLink: "",
+      confirmedAtISO: "",
+      stripeSessionId: "",
+      stripeCheckoutState: "",
+      checkoutGeneration: 0,
+      knownStripeSessionIds: []
+    });
+  });
+
   test("stores a customer change request without accepting or booking the quote", async () => {
     seedQuotes([makeQuote()]);
 

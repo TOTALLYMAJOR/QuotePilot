@@ -1,6 +1,6 @@
 const { createHash } = require("node:crypto");
 
-const QUOTE_DELIVERY_STATUSES = new Set(["draft", "sent", "viewed"]);
+const QUOTE_DELIVERY_STATUSES = new Set(["draft", "sent", "viewed", "booked"]);
 const QUOTE_DELIVERY_TERMINAL_DECISIONS = new Set(["accepted", "declined"]);
 const QUOTE_DELIVERY_UNRESOLVED_STATES = new Set([
   "sending",
@@ -139,7 +139,8 @@ function assertQuoteDeliveryPortalSnapshot({
   quoteId,
   organizationId,
   portalSnapshot,
-  nowISO
+  nowISO,
+  allowExpired = false
 } = {}) {
   const portalKey = text(quote?.portalKey, 128);
   if (portalKey.length < 20) {
@@ -160,7 +161,7 @@ function assertQuoteDeliveryPortalSnapshot({
       "Quote portal issuance or expiry is invalid. Rotate the portal link before sending quote email."
     );
   }
-  if (portalExpiresAtMs <= nowMs) {
+  if (!allowExpired && portalExpiresAtMs <= nowMs) {
     throw new QuoteDeliveryError(
       "failed-precondition",
       "Portal link expired. Rotate the portal link before sending quote email."
@@ -194,14 +195,16 @@ function assertQuoteDeliveryPortalActivation({
   quoteId,
   organizationId,
   portalSnapshot,
-  nowISO
+  nowISO,
+  allowExpired = false
 } = {}) {
   const portal = assertQuoteDeliveryPortalSnapshot({
     quote,
     quoteId,
     organizationId,
     portalSnapshot,
-    nowISO
+    nowISO,
+    allowExpired
   });
   const revisionId = resolveQuoteDeliveryRevisionId(quote, quoteId);
   const portalIssuedAtISO = normalizeISO(quote?.portalIssuedAtISO);
@@ -350,8 +353,27 @@ function claimQuoteDelivery({
   if (!QUOTE_DELIVERY_STATUSES.has(status)) {
     throw new QuoteDeliveryError(
       "failed-precondition",
-      "Only draft, sent, or viewed quotes can be delivered by quote email."
+      "Only draft, sent, viewed, or booked quotes can be delivered by quote email."
     );
+  }
+  if (status === "booked") {
+    const contractNumber = text(quote?.booking?.contractNumber, 120);
+    const contractConvertedAtISO = normalizeISO(quote?.booking?.contractConvertedAtISO);
+    const depositStatus = text(quote?.payment?.depositStatus, 32).toLowerCase();
+    const depositSessionId = text(quote?.payment?.stripeSessionId, 200);
+    const depositConfirmedAtISO = normalizeISO(quote?.payment?.depositConfirmedAtISO);
+    if (
+      !contractNumber
+      || !contractConvertedAtISO
+      || depositStatus !== "paid"
+      || !/^cs_[A-Za-z0-9_]+$/.test(depositSessionId)
+      || !depositConfirmedAtISO
+    ) {
+      throw new QuoteDeliveryError(
+        "failed-precondition",
+        "Booked portal delivery requires an authoritative contract and provider-paid deposit."
+      );
+    }
   }
 
   const startedAtISO = normalizedNowISO;
@@ -985,7 +1007,8 @@ function assertNoConflictingQuoteExecution(quote) {
       "convert_to_contract",
       "delete_quote",
       "rotate_portal_link",
-      "send_payment_request"
+      "send_payment_request",
+      "send_final_balance_request"
     ].includes(text(request?.action, 80))
   ));
   if (conflict) {
