@@ -3,9 +3,9 @@
 Last updated: August 3, 2026
 
 ## Operational Health
-- Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment `dpl_AsPnyL3M8o5rF8GUSMgJ8HvZWmRh`, which reached `READY` on July 27, 2026. Hosted HTTP checks returned the QuotePilot application shell with status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`).
+- Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment `dpl_9K7pqmZjqAMBbegKq3uyUf6rGVXv` from `main` commit `dc460e3dca79c0b0eea512bb1902ba20a4b7c67c`, which is `READY` and promoted. Hosted HTTP checks returned the QuotePilot application shell with status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the release candidate passes 223 unit tests (33
+- Build and local validation: the release candidate passes 381 unit tests (33
   intentionally skipped), 33 focused Firestore rules tests, and the default
   Playwright suite (27 passed, 2 intentionally gated provisioning-role cases
   skipped). The Firebase Auth/catalog browser lane, authoritative
@@ -34,8 +34,10 @@ Last updated: August 3, 2026
 - Controlled Functions CI deploys now materialize an ignored project
   environment only after validating the canonical `/app` URL, platform-admin
   allowlist, approved QuotePilot sender identity, Stripe secrets, and
-  credentials for any explicitly enabled provider. The workflow remains gated
-  by `ENABLE_FUNCTIONS_DEPLOY=false` by default.
+  credentials for any explicitly enabled provider. Firebase scope is now an
+  explicit workflow input (`hosting`, `backend`, or `all`) bound to the UAT
+  and live deploy evidence rather than a mutable repository toggle. The
+  `backend` surface is Firestore rules plus Functions.
 - Current branch tenant identity fix: explicit blank tenant logo/contact/address/crew values no longer fall back to the legacy customer profile, and Catalog Admin branding edits retain their draft through parent rerenders with persistent save/discard affordances.
 - Current branch tenant authorization hardening: Firestore denies unverified
   email authority and conflicting claim/role organization scopes, permits
@@ -76,13 +78,18 @@ Last updated: August 3, 2026
   the `app` target to the `tonicatering` site before deploying `hosting:app`.
 - Functions emulator compatibility: `functions.config()` v7 removal path now degrades safely to environment values instead of throwing at runtime.
 - Deploy gate: production deployment is manual-only and requires a clean
-  `main` commit that matches local upstream and `origin/main`, has a semantic
-  release tag published to `origin`, and has completed the required CI/UAT
-  evidence.
+  tagged `main` commit matching `origin/main`. The current source candidate
+  adds fail-closed verification of the exact main-push CI run and eight required
+  jobs, a fresh allowlisted-human UAT receipt bound to the tracked checklist
+  digest and human-entered staging label, a target-specific rollback ancestor,
+  and protected `production-uat`/`production` environment policy before any
+  provider command. This is source-level enforcement only until the external
+  settings are configured and a release is exercised.
 - Delivery controls: canonical doc ownership and governance checks are now enforced in CI.
 - Commerce resilience: Twilio SMS failures are non-blocking for quote save and Stripe checkout.
 - Buyer onboarding: admin-only Integrations Ops includes an in-app setup assistant for optional Twilio configuration.
-- Production guardrail: `ENABLE_FUNCTIONS_DEPLOY=false` (default locked state).
+- Production guardrail: Firebase workflow scope defaults to `hosting`; a
+  `backend` or `all` promotion requires a matching evidence profile.
 - Production fail-safe integration mode:
   `NOTIFICATIONS_SMS_PROVIDER=none` in the ignored project-scoped Functions
   environment.
@@ -90,9 +97,42 @@ Last updated: August 3, 2026
 - Last known good Firebase Hosting deploy:
   - commit: `a4a2568f06eaedcf9805c503bb161d2847d12710`
   - CI run: `CI Quality` #23203096351 (March 17, 2026 UTC)
-  - workflow run: `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
+  - workflow run (historical name): `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
 
 ## Active Risks
+- The exact-SHA release gate is a source candidate, not an operationally proven
+  production control. As audited on August 3, `main` has strict required checks,
+  admin enforcement, linear history, and force-push/deletion denial, but it
+  requires zero PR approvals and has no code-owner, stale-review, or last-push
+  approval rule. The sole collaborator is the repository administrator.
+  `production-uat` does not exist; `Production` has no required reviewer,
+  deployment branch policy, variables, or environment secrets and permits
+  administrator bypass. Independent review is therefore not enforceable in
+  the present collaborator/environment setup. Confirm private-repository plan
+  eligibility or move to an eligible organization/external gate, then rehearse
+  the complete sequence outside production. Vercel Git integration must also
+  be prevented from bypassing the controlled workflow.
+- The tracked UAT receipt binds only a human-entered staging identifier. It does
+  not query a provider to prove project, environment, READY status, source SHA,
+  artifact/configuration digest, or timestamp. The verifier also checks current
+  GitHub environment policy rather than the historical approval attached to
+  the UAT run. Bind provider-derived staging evidence and the actual deployment
+  review before treating the receipt as release proof. A separately owned
+  GitHub App/check would provide stronger tamper independence than code stored
+  in the candidate repository itself.
+- Production wrappers still resolve the Firebase and Vercel CLIs through
+  `npx`. An exact-version root-lock attempt was rejected because the current
+  provider CLI dependency trees introduced 34 development advisories (including
+  one critical) while the application production tree remained clean. Replace
+  this with a separately locked, audited, checksum-verified tool image or API
+  client. Split preparation/build/evidence verification from the final mutation
+  so candidate code never receives provider credentials; the current wrappers
+  expose those credentials to repository build/verifier execution. Do not run
+  these workflows with production credentials until that boundary exists.
+- Rollback input currently proves Git ancestry only, not that the selected SHA
+  is a provider-specific last-known-good deployment. Record signed target
+  deployment manifests with provider deployment id, source SHA, artifact and
+  configuration digests, success status, and component-specific rollback data.
 - The Node.js 22/Firebase Admin 14 Functions candidate is locally validated but
   has not been deployed or observed on the production Functions runtime.
 - The live Vercel SPA rewrite was deployed from an isolated hotfix based on
@@ -127,7 +167,9 @@ Last updated: August 3, 2026
 4. Deploy the updated `firestore.rules` and run hosted portal decision smoke checks, including active, expired, deleted, and change-request paths.
 5. Refresh/backfill existing customer portal snapshots with the new customer-safe event and pricing fields.
 6. Add server-authoritative enforcement and audit linkage for approval-request-to-admin-action execution.
-7. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
+7. Review and merge the exact-SHA release gate, configure protected GitHub
+   environments and independent reviewers, disable provider-side bypasses, and
+   complete a non-production release rehearsal before using it for promotion.
 8. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)

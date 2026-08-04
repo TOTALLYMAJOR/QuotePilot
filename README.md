@@ -316,20 +316,47 @@ Do not use the CLI to create or update an organization. Use the explicit in-app
 platform-admin workflow.
 
 ## Deploy Entry Points
-- Firebase hosting/rules/functions: `npm run deploy:firebase -- --confirm "DEPLOY tonicatering hosting:app,firestore,functions"`
-- Firebase rules/functions only: `npm run deploy:firebase:functions -- --confirm "DEPLOY tonicatering firestore,functions"`
-- Firebase primary hosting site (`app` target): `npm run deploy:firebase:hosting -- --confirm "DEPLOY tonicatering hosting:app"`
-- Firebase customer hosting site (`customer` target): `npm run deploy:firebase:hosting:customer -- --site <siteId> --project tonicatering --confirm "DEPLOY tonicatering hosting:<siteId>"`
-- Vercel production: `npm run deploy:vercel -- --confirm "DEPLOY quotepilot.mbmapps.com via vercel"`
 
-The primary Firebase scripts require a clean pushed `main` revision that
-matches `origin/main`, a semantic release tag on the same commit that is
-published to `origin`, and an exact scope-bound confirmation. The same
-published-revision gate applies to Vercel production. Functions scopes also
-validate the ignored
-`functions/.env.tonicatering` file before deployment. The scripts bind Hosting
-target `app` to site `tonicatering`; do not replace this with an unscoped
-default Hosting deploy.
+Primary production promotion is workflow-only:
+
+- `Release UAT Attestation` records an allowlisted human's exact-main UAT
+  statement while running in the configured `production-uat` environment.
+- `Deploy Firebase Hosting / Backend` verifies the receipt and
+  promotes the tagged SHA to Firebase.
+- `Deploy Vercel Production` verifies the same evidence contract and promotes
+  the tagged SHA to Vercel.
+- Firebase customer hosting sites remain a separate explicitly scoped command:
+  `npm run deploy:firebase:hosting:customer -- --site <siteId> --project
+  tonicatering --confirm "DEPLOY tonicatering hosting:<siteId>"`.
+
+Each primary production workflow requires four inputs: the full release SHA,
+the successful exact-SHA `CI Quality` run id, the successful `Release UAT
+Attestation` run id, and a full target-specific rollback SHA. The deploy
+profile is also explicit and evidence-bound: `firebase-hosting`,
+`firebase-backend`, `firebase-all`, or `vercel`; a repository variable cannot
+silently widen the Firebase scope after UAT. The deploy
+scripts reject local invocation and fail before build or provider execution
+unless the checkout is the exact tagged `main` SHA, all eight CI jobs passed,
+the tracked UAT checklist digest matches, the attestation is fresh and came
+from an allowlisted human, the current run is the canonical in-progress target
+deployment dispatched by a human, and the current `production-uat` and
+`production` environment policies match the source contract. The verifier does
+not yet prove the historical environment approval or provider identity behind
+the human-entered staging id. Run `npm run
+release:uat:digest` on the release SHA to obtain the checklist digest.
+
+The `backend` and `all` scopes deploy Firestore rules plus Functions and
+additionally validate the ignored
+`functions/.env.tonicatering` file. Firebase promotion binds Hosting target
+`app` to site `tonicatering`; do not replace it with an unscoped default
+Hosting deploy. Provider/environment setup and the full operator sequence live
+in [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md).
+
+These entrypoints are a source candidate, not an operational production gate.
+Do not run them with provider credentials until protected environments and an
+independent reviewer exist, provider staging/rollback evidence is machine-bound,
+Vercel bypass paths are closed, and provider mutation uses a separately audited
+immutable tool that receives credentials only after build and verification.
 
 ### Multi-Site Hosting (Per Customer)
 Use one Firebase project with multiple Hosting sites, then map each customer domain to its site.

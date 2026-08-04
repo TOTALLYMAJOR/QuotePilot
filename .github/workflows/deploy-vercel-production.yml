@@ -1,5 +1,5 @@
-name: Deploy Firebase Hosting / Backend
-run-name: deploy/v1/firebase-${{ inputs.firebase_scope }}/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
+name: Deploy Vercel Production
+run-name: deploy/v1/vercel/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
 
 on:
   workflow_dispatch:
@@ -17,26 +17,17 @@ on:
         required: true
         type: string
       rollback_sha:
-        description: Full target-specific rollback commit SHA
+        description: Full Vercel rollback commit SHA
         required: true
         type: string
-      firebase_scope:
-        description: Exact Firebase production surface covered by UAT
-        required: true
-        default: hosting
-        type: choice
-        options:
-          - hosting
-          - backend
-          - all
 
 concurrency:
-  group: deploy-firebase-production
+  group: deploy-vercel-production
   cancel-in-progress: false
 
 jobs:
-  deploy_hosting:
-    name: Build + Deploy Firebase
+  deploy_vercel:
+    name: Build + Deploy Vercel
     if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -53,15 +44,6 @@ jobs:
       VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID || secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
       VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID || secrets.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_FUNCTIONS_REGION: ${{ vars.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1' }}
-      FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID || secrets.VITE_FIREBASE_PROJECT_ID }}
-      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
-      APP_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
-      NOTIFICATIONS_EMAIL_PROVIDER: ${{ vars.NOTIFICATIONS_EMAIL_PROVIDER || 'none' }}
-      EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
-      EMAIL_FROM_EMAIL: ${{ vars.EMAIL_FROM_EMAIL }}
-      NOTIFICATIONS_SMS_PROVIDER: ${{ vars.NOTIFICATIONS_SMS_PROVIDER || 'none' }}
-      TWILIO_FROM_NUMBER: ${{ vars.TWILIO_FROM_NUMBER }}
-      NOTIFICATIONS_OWNER_PHONE: ${{ vars.NOTIFICATIONS_OWNER_PHONE }}
     steps:
       - name: Checkout exact release SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -82,7 +64,6 @@ jobs:
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           UAT_RUN_ID: ${{ inputs.uat_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
-          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
         run: |
           set -euo pipefail
           node ./scripts/production-release-evidence.mjs \
@@ -90,49 +71,28 @@ jobs:
             --ci-run-id "${CI_RUN_ID}" \
             --uat-run-id "${UAT_RUN_ID}" \
             --rollback-sha "${ROLLBACK_SHA}" \
-            --target "${RELEASE_TARGET}"
+            --target vercel
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Functions dependencies (backend/all)
-        if: inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'
-        run: npm ci --prefix functions
+      - name: Materialize the approved Vercel project link
+        run: |
+          mkdir -p .vercel
+          node --input-type=module -e 'import fs from "node:fs"; fs.writeFileSync(".vercel/project.json", JSON.stringify({ projectId: "prj_epLi14LmBItwYkv25XZoAkWZf4Jk", orgId: "team_AW2QNNgYt5vESEO3eOTJXHp1", projectName: "quoteflow" }));'
 
-      - name: Run unit tests
-        run: npm run test:unit
-
-      - name: Validate and materialize Functions runtime env
-        if: inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'
-        env:
-          AUTH_PLATFORM_ADMIN_EMAILS: ${{ secrets.AUTH_PLATFORM_ADMIN_EMAILS }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-        run: node ./scripts/materialize-functions-env.mjs
-
-      - name: Deploy selected Firebase production surface
+      - name: Verify evidence and deploy to Vercel
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           UAT_RUN_ID: ${{ inputs.uat_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
-          FIREBASE_SCOPE: ${{ inputs.firebase_scope }}
           GITHUB_TOKEN: ${{ github.token }}
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          case "${FIREBASE_SCOPE}" in
-            hosting) CONFIRMATION="DEPLOY tonicatering hosting:app" ;;
-            backend) CONFIRMATION="DEPLOY tonicatering firestore,functions" ;;
-            all) CONFIRMATION="DEPLOY tonicatering hosting:app,firestore,functions" ;;
-            *) echo "Unsupported Firebase scope: ${FIREBASE_SCOPE}" >&2; exit 2 ;;
-          esac
-          node ./scripts/deploy-firebase-production.mjs \
-            --scope "${FIREBASE_SCOPE}" \
-            --confirm "${CONFIRMATION}" \
+          node ./scripts/deploy-vercel-production.mjs \
+            --confirm "DEPLOY quotepilot.mbmapps.com via vercel" \
             --release-sha "${RELEASE_SHA}" \
             --ci-run-id "${CI_RUN_ID}" \
             --uat-run-id "${UAT_RUN_ID}" \

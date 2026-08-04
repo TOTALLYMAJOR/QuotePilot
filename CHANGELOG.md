@@ -8,6 +8,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Exact-SHA production release evidence verifier for Firebase and Vercel. It
+  validates the canonical repository/workflow identities, successful main-push
+  CI and all eight required jobs, a fresh allowlisted-human UAT attestation,
+  the tracked checklist digest, rollback ancestry, and protected GitHub
+  environment policy. It also verifies the current human-dispatched,
+  first-attempt target workflow run before provider execution.
+- Versioned release UAT checklist, protected `Release UAT Attestation`
+  workflow, receipt artifact, and controlled Vercel production workflow.
 - Hospitality-first QuotePilot landing page at `/`, adapted from the approved Magic Patterns direction with original catered-event imagery, real QuotePilot interfaces, proof-safe quote-to-event language, responsive and dark layouts, restrained reveal motion, and reduced-motion support.
 - Durable landing-page design brief at `marketing/LandingPage.md`, including customer, copy, route, asset, preservation, and acceptance criteria.
 - Saved dark QuotePilot product overview at `/system`, including its six-capability feature drawer, animated workflow map, real app screenshots, keyboard focus containment, and full-screen mobile layout.
@@ -65,6 +73,29 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Primary Firebase and Vercel production deploy scripts now reject local or
+  moving-branch invocation and require evidence-bound manual dispatch on the
+  exact tagged `main` SHA. The Firebase workflow checks out the immutable
+  dispatch SHA instead of a later moving `main` head, and both targets use the
+  protected `production` environment. Repository and live evidence invariants
+  are rechecked after build/config work immediately before provider mutation.
+- Firebase `hosting`, `backend`, and `all` scopes are explicit dispatch
+  choices bound into the UAT and live deployment run evidence. The `backend`
+  profile accurately identifies its Firestore rules plus Functions surface;
+  the attestation job also rejects actors who were not allowlisted when the
+  receipt was made.
+- GitHub environment identity checks normalize the API's case-insensitive
+  environment names, allowing the existing `Production` object to satisfy the
+  requested `production` workflow reference without weakening policy checks.
+- GitHub evidence requests now fail closed on redirects and after a bounded
+  timeout. Release documentation distinguishes current policy checks and
+  human-entered staging/rollback claims from provider-derived or historical
+  approval proof.
+- Release-critical CI, attestation, deploy, checklist, and lane-runner files
+  now classify as high risk so feature-branch Firebase and CWV lanes are hard
+  gates rather than advisory checks.
+- Official checkout, Node setup, and artifact upload Actions used by CI,
+  mainline recovery, UAT, and deployment are pinned to immutable commit SHAs.
 - The repository, CI, Docker image, and Firebase Functions now target Node.js
   22. Functions use Firebase Admin 14 modular app, Auth, and Firestore APIs
   across runtime, emulator seed, provisioning, tenant migration, and catalog
@@ -104,7 +135,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   fail-closed wrapper that requires a clean remotely published and semantically
   tagged `main` commit, an exact scope confirmation, the canonical Firebase
   project, a fresh frontend build, and validated ignored Functions
-  configuration. Functions deploys include the matching Firestore rules.
+  configuration. The `backend` scope deploys matching Firestore rules and
+  Functions together.
 - Vercel production deploys now require the same clean, published,
   semantically tagged `main` revision and run the production environment check
   before building, preventing E2E bypass, emulator, or local-fallback flags
@@ -241,8 +273,8 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Primary Firebase deploy scripts and the production workflow now explicitly
   bind the `app` Hosting target to site `tonicatering` before deploying
   `hosting:app`, preventing an ambiguous default-site deployment.
-- Standardized production safety controls: `ENABLE_FUNCTIONS_DEPLOY=false`
-  default and fail-safe project-scoped SMS runtime environment
+- Standardized production safety controls: explicit evidence-bound Firebase
+  deploy scope and fail-safe project-scoped SMS runtime environment
   (`NOTIFICATIONS_SMS_PROVIDER=none`).
 - Added explicit release gate policy requiring green CI + 10-minute UAT + rollback SHA confirmation for production-triggering merges.
 - Updated `@vitejs/plugin-react` to a Vite 7 compatible major version so `npm ci` succeeds for CI and container builds.

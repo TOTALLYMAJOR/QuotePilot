@@ -1,0 +1,187 @@
+#!/usr/bin/env node
+
+import fs from "node:fs";
+import crypto from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  getReleaseUatChecklist,
+  parseAttesterIds,
+  RELEASE_EVIDENCE_POLICY
+} from "./production-release-evidence.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function attestationError(message) {
+  return new Error(`Release UAT attestation rejected: ${message}`);
+}
+
+function requireFullSha(value, field) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(normalized)) {
+    throw attestationError(`${field} must be a full 40-character commit SHA.`);
+  }
+  return normalized;
+}
+
+export function parseReleaseUatArgs(argv) {
+  if (argv.length === 1 && argv[0] === "--print-digest") {
+    return { printDigest: true };
+  }
+  const allowed = new Set([
+    "--release-sha",
+    "--target",
+    "--rollback-sha",
+    "--staging-id",
+    "--checklist-digest",
+    "--checked-item-ids",
+    "--confirmation",
+    "--output"
+  ]);
+  const values = new Map();
+  for (let index = 0; index < argv.length; index += 2) {
+    const name = argv[index];
+    const value = argv[index + 1];
+    if (!allowed.has(name)) throw attestationError(`unknown argument ${name || "<blank>"}.`);
+    if (values.has(name)) throw attestationError(`duplicate argument ${name}.`);
+    if (!value || String(value).startsWith("--")) {
+      throw attestationError(`${name} requires a value.`);
+    }
+    values.set(name, String(value).trim());
+  }
+  for (const name of allowed) {
+    if (!values.has(name)) throw attestationError(`${name} is required.`);
+  }
+  return Object.fromEntries([...values].map(([name, value]) => [name.slice(2), value]));
+}
+
+export function buildReleaseUatReceipt(
+  args,
+  { env = process.env, root = ROOT, now = new Date() } = {}
+) {
+  const checklist = getReleaseUatChecklist(root);
+  const releaseSha = requireFullSha(args["release-sha"], "--release-sha");
+  const rollbackSha = requireFullSha(args["rollback-sha"], "--rollback-sha");
+  if (releaseSha === rollbackSha) {
+    throw attestationError("the rollback SHA must differ from the release SHA.");
+  }
+  const target = String(args.target || "");
+  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.deployWorkflows, target)) {
+    throw attestationError(
+      "--target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
+    );
+  }
+  const stagingId = String(args["staging-id"] || "");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{2,79}$/.test(stagingId)) {
+    throw attestationError("--staging-id is invalid.");
+  }
+  if (String(args["checklist-digest"] || "") !== checklist.digest) {
+    throw attestationError("--checklist-digest does not match the tracked checklist.");
+  }
+  if (String(args.confirmation || "") !== `ATTEST UAT ${releaseSha}`) {
+    throw attestationError(`--confirmation must equal "ATTEST UAT ${releaseSha}".`);
+  }
+
+  const checkedItemIds = String(args["checked-item-ids"] || "")
+    .split(",")
+    .map((itemId) => itemId.trim())
+    .filter(Boolean);
+  if (
+    checkedItemIds.length !== checklist.itemIds.length
+    || new Set(checkedItemIds).size !== checkedItemIds.length
+    || checklist.itemIds.some((itemId) => !checkedItemIds.includes(itemId))
+  ) {
+    throw attestationError("--checked-item-ids must contain every checklist item exactly once.");
+  }
+
+  if (
+    env.GITHUB_ACTIONS !== "true"
+    || env.GITHUB_EVENT_NAME !== "workflow_dispatch"
+    || env.GITHUB_REF !== "refs/heads/main"
+    || String(env.GITHUB_SHA || "").toLowerCase() !== releaseSha
+  ) {
+    throw attestationError("attestation must run by manual dispatch on the exact main SHA.");
+  }
+  const actorId = Number(env.GITHUB_ACTOR_ID);
+  const runId = Number(env.GITHUB_RUN_ID);
+  const runAttempt = Number(env.GITHUB_RUN_ATTEMPT);
+  if (
+    !env.GITHUB_ACTOR
+    || !Number.isSafeInteger(actorId)
+    || actorId <= 0
+    || !Number.isSafeInteger(runId)
+    || runId <= 0
+    || runAttempt !== 1
+  ) {
+    throw attestationError("GitHub actor or run identity is invalid.");
+  }
+  let attesterIds;
+  try {
+    attesterIds = parseAttesterIds(env.RELEASE_UAT_ATTESTER_IDS);
+  } catch (error) {
+    throw attestationError(String(error?.message || "the attester allowlist is invalid."));
+  }
+  if (!attesterIds.has(actorId)) {
+    throw attestationError("the GitHub actor is not allowlisted to attest release UAT.");
+  }
+  const attesterAllowlistDigest = crypto
+    .createHash("sha256")
+    .update([...attesterIds].sort((left, right) => left - right).join(","))
+    .digest("hex");
+
+  const recordedAt = now instanceof Date ? now : new Date(now);
+  if (!Number.isFinite(recordedAt.getTime())) {
+    throw attestationError("the attestation timestamp is invalid.");
+  }
+
+  return Object.freeze({
+    schema: "com.mbmapps.quotepilot.release-uat-attestation/v1",
+    releaseSha,
+    target,
+    rollbackSha,
+    stagingId,
+    checklist: {
+      schema: checklist.checklist.schema,
+      version: checklist.checklist.version,
+      digest: checklist.digest,
+      checkedItemIds: checklist.itemIds
+    },
+    github: {
+      repository: env.GITHUB_REPOSITORY,
+      ref: env.GITHUB_REF,
+      actor: env.GITHUB_ACTOR,
+      actorId,
+      runId,
+      runAttempt,
+      attesterAllowlistDigest
+    },
+    recordedAt: recordedAt.toISOString()
+  });
+}
+
+function writeReceipt(receipt, outputValue, root = ROOT) {
+  const releaseDir = path.join(root, "artifacts", "release");
+  const output = path.resolve(root, String(outputValue || ""));
+  if (output !== releaseDir && !output.startsWith(`${releaseDir}${path.sep}`)) {
+    throw attestationError("--output must be inside artifacts/release.");
+  }
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  fs.writeFileSync(output, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 });
+}
+
+function main() {
+  const args = parseReleaseUatArgs(process.argv.slice(2));
+  if (args.printDigest) {
+    process.stdout.write(`${getReleaseUatChecklist(ROOT).digest}\n`);
+    return;
+  }
+  const receipt = buildReleaseUatReceipt(args, { root: ROOT });
+  writeReceipt(receipt, args.output, ROOT);
+  process.stdout.write(
+    `Release UAT receipt recorded for ${receipt.target} at ${receipt.releaseSha}.\n`
+  );
+}
+
+const isDirectExecution = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isDirectExecution) main();
