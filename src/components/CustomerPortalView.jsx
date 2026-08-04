@@ -177,7 +177,8 @@ function finalBalanceStatusLabel(status) {
 }
 
 export function getCustomerFinalBalanceUi(quote = {}) {
-  const payment = quote.payment || {};
+  const safeQuote = quote && typeof quote === "object" ? quote : {};
+  const payment = safeQuote.payment || {};
   const finalBalance = payment.finalBalance || {};
   const amountCents = Number(finalBalance.amountCents);
   const status = String(finalBalance.status || "unpaid").trim().toLowerCase();
@@ -189,8 +190,8 @@ export function getCustomerFinalBalanceUi(quote = {}) {
     : ["prepared", "processing", "failed", "expired"].includes(checkoutState)
       ? checkoutState
       : status;
-  const bookedContract = String(quote.status || "").trim().toLowerCase() === "booked"
-    && Boolean(String(quote.booking?.contractNumber || "").trim());
+  const bookedContract = String(safeQuote.status || "").trim().toLowerCase() === "booked"
+    && Boolean(String(safeQuote.booking?.contractNumber || "").trim());
   const visible = bookedContract && Number.isSafeInteger(amountCents) && amountCents > 0;
   const canPay = visible
     && String(payment.depositStatus || "").trim().toLowerCase() === "paid"
