@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   refreshCurrentUserVerification,
-  registerWithEmail,
   resendCurrentUserVerification,
   signInWithEmail,
   signOutCurrentUser
@@ -162,33 +161,15 @@ function BuyerBrand() {
   );
 }
 
-function BuyerAuthForm({ busy, mode, onModeChange, onSubmit, email, password, onEmailChange, onPasswordChange }) {
+function BuyerAuthForm({ busy, onSubmit, email, password, onEmailChange, onPasswordChange }) {
   return (
     <section className="buyer-card buyer-auth-card" aria-labelledby="buyer-auth-title">
       <p className="buyer-kicker">Step 1 of 3</p>
-      <h2 id="buyer-auth-title">Create or sign in to your account</h2>
-      <p>Your payment and workspace stay bound to this verified email account.</p>
-
-      <div className="buyer-mode-switch" aria-label="Account action">
-        <button
-          type="button"
-          className={mode === "register" ? "is-selected" : ""}
-          aria-pressed={mode === "register"}
-          onClick={() => onModeChange("register")}
-          disabled={busy}
-        >
-          Create account
-        </button>
-        <button
-          type="button"
-          className={mode === "signin" ? "is-selected" : ""}
-          aria-pressed={mode === "signin"}
-          onClick={() => onModeChange("signin")}
-          disabled={busy}
-        >
-          Sign in
-        </button>
-      </div>
+      <h2 id="buyer-auth-title">Sign in with your approved account</h2>
+      <p>
+        This controlled pilot does not create public accounts. Use the designated
+        verified email account provided by the QuotePilot operator.
+      </p>
 
       <form className="buyer-form" onSubmit={onSubmit}>
         <fieldset disabled={busy}>
@@ -209,16 +190,15 @@ function BuyerAuthForm({ busy, mode, onModeChange, onSubmit, email, password, on
             <input
               type="password"
               name="password"
-              autoComplete={mode === "register" ? "new-password" : "current-password"}
-              minLength={mode === "register" ? 8 : undefined}
+              autoComplete="current-password"
               required
               value={password}
               onChange={(event) => onPasswordChange(event.target.value)}
-              placeholder={mode === "register" ? "At least 8 characters" : "Your password"}
+              placeholder="Your password"
             />
           </label>
           <button className="buyer-primary" type="submit">
-            {busy ? "Working..." : mode === "register" ? "Create account" : "Sign in"}
+            {busy ? "Signing in..." : "Sign in"}
           </button>
         </fieldset>
       </form>
@@ -349,7 +329,6 @@ export default function BuyerAccessPage() {
     () => readBuyerAccessReturn(typeof window === "undefined" ? "" : window.location.search),
     []
   );
-  const [mode, setMode] = useState("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [organizationName, setOrganizationName] = useState("");
@@ -435,12 +414,7 @@ export default function BuyerAccessPage() {
     clearFeedback();
     setBusyAction("auth");
     try {
-      if (mode === "register") {
-        await registerWithEmail({ email, password });
-        setNotice("Account created. Check your inbox, verify your email, then return here and confirm verification.");
-      } else {
-        await signInWithEmail({ email, password });
-      }
+      await signInWithEmail({ email, password });
     } catch (authError) {
       setError(friendlyBuyerAccessError(authError));
     } finally {
@@ -488,7 +462,6 @@ export default function BuyerAccessPage() {
     try {
       await signOutCurrentUser();
       setPassword("");
-      setMode("signin");
     } catch (signOutError) {
       setError(friendlyBuyerAccessError(signOutError));
     } finally {
@@ -529,8 +502,9 @@ export default function BuyerAccessPage() {
           <p className="buyer-kicker">QuotePilot test access</p>
           <h1 id="buyer-page-title">Try a starter workspace for one dollar.</h1>
           <p className="buyer-lead">
-            Create a verified owner account, complete a Stripe-hosted $1 test purchase,
-            and wait while the signed payment event securely provisions your workspace.
+            Sign in to a pre-approved verified owner account, complete a Stripe-hosted
+            $1 test purchase, and wait while the signed payment event securely
+            provisions your workspace.
           </p>
           <ul className="buyer-promise-list">
             <li>Email verification before Checkout</li>
@@ -594,11 +568,6 @@ export default function BuyerAccessPage() {
           {BUYER_ACCESS_ENABLED && !authSession.loading && !authSession.error && !user && (
             <BuyerAuthForm
               busy={busyAction === "auth"}
-              mode={mode}
-              onModeChange={(nextMode) => {
-                clearFeedback();
-                setMode(nextMode);
-              }}
               onSubmit={submitAuth}
               email={email}
               password={password}

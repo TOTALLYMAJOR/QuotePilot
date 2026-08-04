@@ -52,39 +52,39 @@ Last updated: August 4, 2026
   email-enumeration protection is enabled. Public registration may still
   return an existing-email error, so this feature is not claimed as full
   account-enumeration resistance.
-- Current branch release UAT contract: checklist version `2026-08-04.1` now
+- Current branch release UAT contract: checklist version `2026-08-04.4` now
   makes hosted password recovery and target-applicable deposit, final-balance,
   webhook/reconciliation, cross-rail isolation, projection privacy, and payment
-  surface observations mandatory. The regression suite fixes those critical
-  IDs to their intended target profiles so a mechanical checklist edit cannot
-  silently remove them.
-- Current branch $1 buyer onboarding: `feature/paid-buyer-onboarding` adds a
-  test-only `/start` flow behind `VITE_BUYER_ACCESS_ENABLED=true`. A new buyer
-  creates or signs in to a Firebase email/password account, verifies the email,
-  supplies business and owner names, and is redirected only to an exact
-  `https://checkout.stripe.com` URL returned by the authenticated callable.
-  The server fixes the order to Starter, $1 USD, and Stripe test mode with
-  post-purchase invoice generation. A `purchase=success` query never grants
-  access: the browser polls the owner/session-bound status callable until a
-  signed, deduplicated webhook has atomically created the active organization,
-  neutral blank-catalog settings, admin role, Starter entitlements,
-  provisioning audit, and active buyer order. Failed, expired, processing,
-  cancelled, malformed-return, already-scoped, and conflicting owner/session
-  states fail closed. Focused source/unit/rules/browser coverage and a
-  production build pass locally, but this branch has not been merged, deployed,
+  surface observations mandatory. It also binds the controlled buyer pilot to
+  target-specific sign-in-only private entry with no public account creation or
+  marketing CTA, dedicated test-Checkout/invoice, signed webhook,
+  production-project data readback, replay/cross-account denial, and
+  quote-Stripe isolation observations. The regression suite fixes those
+  critical IDs to their intended target profiles so a mechanical checklist edit
+  cannot silently remove them.
+- Current branch controlled buyer pilot: `feature/paid-buyer-onboarding` adds a
+  `/start` flow for the existing `tonicatering` Firebase project behind
+  independent browser and Functions gates. The Firebase and Vercel production
+  preparation workflows compile the private route into the reviewed artifact
+  and fix the public marketing CTA off; the server runtime and exact tester
+  allowlist remain the authorization boundary. `/start` cannot register a new
+  Firebase account; the designated verified account must be created through the
+  approved operator path before the pilot. Firebase email verification is
+  necessary but not sufficient: the server also requires the authenticated
+  address in `BUYER_ACCESS_ALLOWED_EMAILS`. The server fixes the order to
+  Starter, $1 USD, and a dedicated Stripe test-mode client whose key and
+  `buyerAccessStripeWebhook` signing secret are held in Firebase Secret
+  Manager. The existing quote-payment `STRIPE_MODE`, credentials,
+  `stripeWebhook`, deposit, and final-balance rails remain separate and
+  unchanged. A browser success query never grants access; only the exact signed
+  and deduplicated buyer webhook may atomically create real `tonicatering`
+  organization, neutral settings, admin-role, entitlement, provisioning, and
+  buyer-order records. Server-owned controlled test-mode markers make operator
+  exclusion from live revenue and live paid-customer classification explicit;
+  hosted acceptance must verify that exclusion. Focused source, unit, rules,
+  browser, and emulator evidence is local only. The branch has not been merged,
+  tagged, deployed,
   hosted-accepted, or Stripe-provider-accepted.
-- Current branch isolated Firebase staging lane: the source adds
-  `staging:firebase:env`, `staging:firebase:validate`,
-  `staging:firebase:prepare`, and `staging:firebase:deploy` commands plus
-  `firebase.staging.json`. The lane accepts only a clean, pushed
-  `quotepilot-staging-*` branch target, exact Firebase Web SDK configuration,
-  an ignored mode-0600 project Functions environment, Stripe test credentials,
-  disabled email/SMS, and coordinated Hosting/Functions/Firestore scope
-  (rules and indexes);
-  it explicitly rejects `tonicatering`, live credentials, bypass flags, and
-  ambient provider credentials. Its focused contract tests and syntax checks
-  pass. No staging Firebase project or Web app was created and no provider
-  deployment occurred, so the lane is not hosted evidence.
 - Current branch Stripe payment lifecycle: an exact approved deposit scope now
   binds the quote revision, current portal issuance, customer email, currency,
   and amount before one resumable server operation prepares/restores the
@@ -421,27 +421,31 @@ Last updated: August 4, 2026
   insufficient. The final-balance automation is currently source-only on a
   feature branch based on the sell-readiness candidate, not `main`. Refund
   initiation/status and dispute handling remain manual or unimplemented.
-- Paid buyer onboarding is not a production sales channel. The current branch
-  is restricted to an isolated Firebase project and Stripe test mode, the
-  production CTA/runtime gates default off, and no hosted $1 Checkout, invoice,
-  signed webhook, tenant activation, or cross-account denial has been observed.
-  Before any live commercial rollout, define and implement authorized refund,
-  dispute, cancellation, account/access revocation, support, tax, and accounting
-  procedures; qualify registration abuse controls; and record provider-bound
-  test acceptance followed by separately authorized live acceptance. A test
-  payment and generated invoice do not prove these operating controls.
+- The `$1` buyer path is a bounded production-project pilot, not a public sales
+  channel. Its dedicated Stripe credentials and webhook are test-mode only,
+  but successful acceptance creates real Firebase Auth, organization, settings,
+  admin-role, entitlement, and audit data in `tonicatering`. The server
+  allowlist, controlled test-mode classification that excludes live revenue and
+  live paid-customer reporting, separate buyer Secret Manager bindings,
+  independent webhook,
+  disabled-by-default gates, and hosted negative-path evidence are therefore
+  release requirements, not optional staging conveniences. No hosted purchase,
+  invoice, webhook activation, production-data readback, or proof that the live
+  quote Stripe rail stayed unchanged exists yet. Refund, dispute, cancellation,
+  account/access revocation, support, tax/accounting, and unrestricted
+  registration-abuse operations remain outside the pilot.
 - CRM outbound synchronization is intentionally disabled until a
   server-authorized connector with provider acceptance evidence is implemented.
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
 
 ## Current Focus (Near-Term)
-1. Commit and publish the paid-buyer-onboarding branch, create an isolated
-   `quotepilot-staging-*` Firebase project with exactly one Web app, configure
-   Email/Password Auth and an exact Stripe test webhook, then run the guarded
-   environment/validate/prepare/deploy sequence. Capture hosted evidence for
-   verified signup, exact $1 USD test Checkout, generated invoice, pending
-   return, signed-webhook Starter provisioning, `/app` access, replay safety,
-   failed/expired Checkout, and cross-account denial. Keep production gates off.
+1. Finish and review the single-project buyer-pilot candidate, keeping the
+   public marketing CTA absent and the server gate disabled until the tester
+   allowlist and dedicated test Stripe Secret Manager bindings are approved.
+   Route the four buyer Checkout
+   events only to `buyerAccessStripeWebhook`, leave the existing quote Stripe
+   configuration and `stripeWebhook` unchanged, and add the exact target-scoped
+   buyer items to release UAT.
 2. Keep draft PR #23 source-green on its exact head and intentionally scope the
    six non-secret Vercel Preview Firebase variables to its release branch, then
    complete hosted release-candidate acceptance on that exact deployment.
@@ -453,20 +457,27 @@ Last updated: August 4, 2026
    rules/Functions/frontend artifacts and run the hosted owner/quote/portal
    tenant acceptance checklist, including current/invalid issuance, active,
    expired, deleted, approval execution, contract, and change-request paths.
-5. As part of that coordinated rollout, configure the matching Stripe mode/key
+5. Run the bounded buyer pilot through the same reviewed main, semantic tag,
+   exact-main CI, target-specific UAT, prepare-artifact, and trusted-deployer
+   path. Verify one allowlisted buyer, non-allowlisted and cross-account denial,
+   exact $1 invoice, pending return, signed-webhook activation, real
+   `tonicatering` data, replay/failure behavior, and quote-Stripe isolation;
+   then disable the server gate and retain the absent public CTA unless a
+   separately reviewed pilot window remains active.
+6. As part of the coordinated quote-payment rollout, configure the matching Stripe mode/key
    and all four Checkout Session webhook events, then capture separate hosted
    test-mode approval/send/webhook/reconciliation evidence for deposit and
    final-balance collection before separately authorized live-mode acceptance.
    Prove that payment-kind metadata and stored Session scope prevent cross-rail
    updates. Do not infer any provider result from local emulator coverage.
-6. Verify the intended Resend sender domain in the Resend dashboard and
+7. Verify the intended Resend sender domain in the Resend dashboard and
    authoritative DNS; only then configure
    `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and
    recipient proof from one controlled test.
-7. Run and review the scoped production portal-projection dry run, resolve any
+8. Run and review the scoped production portal-projection dry run, resolve any
    conflicts, then explicitly authorize guarded apply and retain count-only
    evidence.
-8. Improve large-chunk performance while staying inside bundle/CWV guardrails.
+9. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)
 - Focus completed: migration execution after fallback retirement and denial-matrix verification.

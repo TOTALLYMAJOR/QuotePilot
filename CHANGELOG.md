@@ -8,30 +8,35 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
-- Test-only paid buyer onboarding source for a public `/start` route. The
-  browser creates or signs in to a Firebase email/password account, requires a
-  verified email, collects only business and owner names, and requests one
-  server-fixed Stripe Checkout Session for $1 USD Starter access. Stripe-hosted
-  Checkout generates a post-purchase invoice; the return query is only a poll
-  trigger, and access appears only after the owner-scoped status callable
-  reports that a signed, deduplicated test-mode webhook atomically provisioned
-  the organization, neutral blank-catalog settings, admin role, entitlements,
-  and audit records. Checkout amount, plan, owner identity, return URLs, and
-  provisioning state remain server-owned. The public CTA and route fail closed
-  unless `VITE_BUYER_ACCESS_ENABLED=true`, while the Functions runtime
-  separately requires `BUYER_ACCESS_ENABLED=true` and `STRIPE_MODE=test`.
-- An isolated Firebase staging lane for that buyer flow, including a dedicated
-  `firebase.staging.json`, a create-only ignored Functions environment
-  materializer, read-only validation, exact staging build preparation, and an
-  explicit confirmed deploy command that promotes Hosting, Functions, and
-  Firestore rules/indexes together. It accepts only a clean pushed
-  `quotepilot-staging-*` target and test Stripe credentials, rejects the
-  production `tonicatering` project, live credentials, browser secrets,
-  emulator/bypass flags, ambient provider credentials, and enabled email/SMS
-  providers. This is branch/source evidence only: no staging project was
-  created, no provider was mutated, and no hosted Stripe or tenant acceptance
-  has occurred. Production buyer access remains disabled; refund, dispute,
-  access-revocation, and live commercial rollout workflows remain open.
+- Controlled paid-buyer pilot source for `/start` on the existing
+  `tonicatering` Firebase project. A verified Firebase email/password user must
+  also match the server-owned `BUYER_ACCESS_ALLOWED_EMAILS` allowlist before
+  QuotePilot will create one server-fixed $1 USD Starter Checkout. The buyer
+  rail uses its own Stripe test-mode client, Secret Manager credentials, and
+  `buyerAccessStripeWebhook`; it does not change the existing quote-payment
+  Stripe mode, credentials, webhook, deposit, or final-balance behavior.
+  Checkout return parameters remain non-authoritative, while the dedicated
+  signed and deduplicated webhook atomically creates real production-project
+  organization, neutral settings, admin-role, entitlement, and audit records.
+  The `/start` surface is sign-in-only and cannot create arbitrary Firebase
+  accounts; the approved tester account must exist before the pilot.
+  Buyer-created commercial/customer records carry a server-owned controlled
+  test-mode marker for mandatory operator exclusion from live revenue and live
+  paid-customer classification.
+  Generic builds and the server gate default off. The production preparation
+  workflows compile the private `/start` route into the reviewed artifact while
+  fixing the public marketing CTA off; the server allowlist remains the access
+  authority. This remains source-only until the reviewed
+  main/tag/UAT/trusted-deployer sequence plus hosted provider acceptance
+  completes.
+- Target-scoped release UAT coverage for the controlled buyer pilot, including
+  allowlisted entry and non-allowlisted denial, dedicated test-Checkout and
+  invoice binding, pending-until-webhook behavior, exact production-project
+  tenant/role readback, replay and cross-account denial, and proof that the
+  existing quote Stripe rail remains unchanged. Browser-target acceptance also
+  requires public account creation and the public marketing CTA to remain
+  absent. The checklist records observed acceptance only; it does not turn the
+  pilot into a public sales channel.
 - Firebase email/password account recovery on the staff sign-in screen, with
   normalized reset requests, the same on-screen confirmation for unknown or
   disabled account errors, a validated HTTPS `/app` return URL, action-specific

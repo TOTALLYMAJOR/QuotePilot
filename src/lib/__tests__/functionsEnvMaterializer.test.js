@@ -58,6 +58,14 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain("NOTIFICATIONS_EMAIL_PROVIDER=none");
     expect(output).toContain("NOTIFICATIONS_SMS_PROVIDER=none");
     expect(output).toContain("STRIPE_MODE=live");
+    expect(output).toContain("BUYER_ACCESS_ENABLED=false");
+    expect(output).toContain("BUYER_ACCESS_STRIPE_MODE=test");
+    expect(output).toContain(
+      "BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app"
+    );
+    expect(output).not.toContain("BUYER_ACCESS_ALLOWED_EMAILS");
+    expect(output).not.toContain("BUYER_ACCESS_STRIPE_SECRET_KEY");
+    expect(output).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET");
     expect(output).not.toContain("RESEND_API_KEY");
     expect(output).not.toContain("TWILIO_ACCOUNT_SID");
     expect(output).not.toContain("TWILIO_AUTH_TOKEN");
@@ -87,6 +95,52 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toMatch(/placeholder email/i);
+  });
+
+  test("materializes only non-secret configuration for an allowlisted buyer pilot", () => {
+    const { cwd, result } = runMaterializer({
+      BUYER_ACCESS_ENABLED: "true",
+      BUYER_ACCESS_ALLOWED_EMAILS: "buyer@mbmapps.com"
+    });
+    expect(result.status).toBe(0);
+
+    const output = fs.readFileSync(
+      path.join(cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    );
+    expect(output).toContain("BUYER_ACCESS_ENABLED=true");
+    expect(output).toContain("BUYER_ACCESS_STRIPE_MODE=test");
+    expect(output).toContain("BUYER_ACCESS_ALLOWED_EMAILS=buyer@mbmapps.com");
+    expect(output).not.toContain("BUYER_ACCESS_STRIPE_SECRET_KEY");
+    expect(output).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET");
+  });
+
+  test("fails closed for a missing tester allowlist or non-test buyer mode", () => {
+    const missingAllowlist = runMaterializer({
+      BUYER_ACCESS_ENABLED: "true"
+    }).result;
+    expect(missingAllowlist.status).not.toBe(0);
+    expect(missingAllowlist.stderr).toMatch(/BUYER_ACCESS_ALLOWED_EMAILS is required/i);
+
+    const wrongMode = runMaterializer({
+      BUYER_ACCESS_STRIPE_MODE: "live"
+    }).result;
+    expect(wrongMode.status).not.toBe(0);
+    expect(wrongMode.stderr).toMatch(/must remain test/i);
+  });
+
+  test("rejects buyer Stripe values in dotenv because Secret Manager owns them", () => {
+    const secretKey = runMaterializer({
+      BUYER_ACCESS_STRIPE_SECRET_KEY: `rk_${"test"}_fixture`
+    }).result;
+    expect(secretKey.status).not.toBe(0);
+    expect(secretKey.stderr).toMatch(/Firebase Secret Manager/i);
+
+    const webhookSecret = runMaterializer({
+      BUYER_ACCESS_STRIPE_WEBHOOK_SECRET: `whsec_${"fixture"}`
+    }).result;
+    expect(webhookSecret.status).not.toBe(0);
+    expect(webhookSecret.stderr).toMatch(/Firebase Secret Manager/i);
   });
 
   test("requires a provider key before Resend can be enabled", () => {

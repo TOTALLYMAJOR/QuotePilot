@@ -40,23 +40,35 @@ Last updated: August 4, 2026
   email/password self-registration with an invitation-bound flow or add
   equivalent App Check/reCAPTCHA abuse controls; generic reset copy does not
   prevent the registration endpoint from returning an existing-email result.
-- Publish the `$1` buyer-access candidate to its tracked branch, then qualify it
-  only in an isolated `quotepilot-staging-*` Firebase project with one Web app,
-  Email/Password Auth, independent browser/Functions gates, Stripe test
-  credentials, and all four Checkout Session webhook events. Use the guarded
-  `staging:firebase:validate`, `staging:firebase:prepare`, and exact-confirmation
-  `staging:firebase:deploy` commands from a clean local SHA that matches the
-  remote branch. Capture hosted evidence for email verification, fixed $1
-  Checkout, invoice generation, pending-until-webhook behavior, atomic Starter
-  access, replay safety, failed/expired state, and cross-account denial. Local
-  tests and configuration presence are not provider acceptance.
-- Keep buyer access disabled in production until refund, dispute,
-  cancellation, account/access revocation, support, tax/accounting, and
-  registration-abuse operations are implemented and accepted. A separately
-  authorized live-mode rollout must prove the exact merged SHA, coordinated
-  Hosting/Functions/rules deployment, matching Stripe live credentials and
-  webhook objects, invoice behavior, tenant activation, failure recovery, and
-  revocation before this becomes a public sales channel.
+- Qualify the controlled `$1` buyer pilot on the existing `tonicatering`
+  Firebase project only after the exact candidate is reviewed and the guarded
+  main/tag/UAT/trusted-deployer path is operational. Compile the private route
+  only through the reviewed production preparation workflows, keep the public
+  marketing CTA off, and keep the server gate off until
+  `BUYER_ACCESS_ALLOWED_EMAILS` contains only designated testers and the
+  dedicated Stripe test credentials are stored in Firebase Secret Manager.
+  Pre-create the designated verified tester account through the approved
+  operator path; `/start` must remain sign-in-only and cannot create accounts.
+  Never put either buyer Stripe secret in dotenv, GitHub preparation jobs,
+  browser variables, logs, or release evidence.
+- Configure the Stripe test endpoint for
+  `buyerAccessStripeWebhook` with all four supported Checkout Session events,
+  then capture provider-bound evidence for the fixed $1 USD Checkout,
+  post-purchase invoice, pending return, signed-webhook activation, real
+  `tonicatering` Auth/organization/admin-role/entitlement records, replay and
+  cross-account denial, failed/expired handling, non-allowlisted denial, and
+  server-owned controlled test-mode markers plus operator evidence that every
+  buyer-created record is excluded from live revenue and live paid-customer
+  reporting.
+  Use unique controlled identities because the pilot writes real production
+  project data; do not infer cleanup or revocation authority from UAT.
+- Prove that enabling the buyer pilot leaves the existing quote-payment
+  `STRIPE_MODE`, Secret Manager/runtime credentials, `stripeWebhook`, deposit,
+  and final-balance rails unchanged. Keep the public marketing CTA absent and
+  disable the server gate again after the bounded pilot unless a separately
+  reviewed window remains active. Refund, dispute, cancellation,
+  access-revocation, support, tax/accounting, and public-registration abuse
+  operations remain blockers to an unrestricted commercial launch.
 - Release the Stripe deposit and final-balance lifecycles only as one
   exact-revision frontend, Functions, and Firestore-rules rollout. In isolated
   hosted acceptance set explicit `STRIPE_MODE=test` with a matching test key and

@@ -18,7 +18,8 @@ const productionUnsafeFlags = [
   "VITE_E2E_BYPASS_AUTH",
   "VITE_USE_FIREBASE_EMULATORS",
   "VITE_ALLOW_LOCAL_CATALOG_FALLBACK",
-  "VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING"
+  "VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING",
+  "VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED"
 ];
 
 function serialize(values) {
@@ -67,6 +68,15 @@ describe("Firebase browser environment safety", { timeout: 30_000 }, () => {
 
   test("accepts the canonical production project", () => {
     expect(runCheck().status).toBe(0);
+  });
+
+  test("allows only the private buyer route flag for a controlled pilot", () => {
+    expect(runCheck({
+      envProductionLocal: {
+        VITE_BUYER_ACCESS_ENABLED: "true",
+        VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false"
+      }
+    }).status).toBe(0);
   });
 
   test("rejects a conflicting .env.local project override", () => {

@@ -17,18 +17,18 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - `/`: hospitality-first public QuotePilot marketing page.
 - `/system`: saved dark product and operating-system overview.
 - `/app`: authenticated staff quote workspace.
-- `/start`: $1 Stripe test buyer onboarding when
-  `VITE_BUYER_ACCESS_ENABLED=true`; production builds keep the route closed and
-  hide its marketing CTA by default.
+- `/start`: controlled $1 Stripe test buyer pilot when
+  `VITE_BUYER_ACCESS_ENABLED=true`; the server still admits only verified,
+  explicitly allowlisted tester emails.
 - `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal; existing token links remain compatible.
 
 ## Product Scope
 The app supports a 5-step quote wizard, dynamic event-type menus, pricing
 configuration, proposal export, customer portal updates, tenant-locked
 customer/catalog CSV imports, server-authoritative deposit and final-balance
-collection in the current source candidate, test-only paid Starter onboarding
-in the paid-buyer branch, and operations workflows (history, scheduling,
-reporting, diagnostics).
+collection in the current source candidate, a controlled paid-buyer pilot on
+the existing `tonicatering` Firebase project, and operations workflows
+(history, scheduling, reporting, diagnostics).
 
 Tenant safety mode:
 - Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
@@ -99,8 +99,11 @@ Optional:
 - `VITE_APP_HOST`
 - `VITE_APP_URL` (canonical HTTPS `/app` return URL for Firebase email actions;
   its domain must be authorized in Firebase Authentication)
-- `VITE_BUYER_ACCESS_ENABLED` (defaults off; use `true` only for the isolated
-  $1 buyer-access test staging lane)
+- `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
+  preparation workflows source-bind it to `true` so the reviewed private route
+  exists before deployment)
+- `VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED` (defaults off and is fixed to `false`
+  in production preparation workflows; the pilot is not publicly advertised)
 
 To create `.env.local` from the authenticated Firebase project config without
 touching `.env`, run:
@@ -126,10 +129,15 @@ webhook secret. Event and Checkout Session `livemode` must also match. The
 tracked Functions template is inventory only; use the credential-isolated
 runtime channel described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and
 never place real Stripe values in a browser environment or committed file.
-The paid buyer test additionally requires server-only
-`BUYER_ACCESS_ENABLED=true`; it rejects any mode other than
-`STRIPE_MODE=test`. Browser and Functions gates are independent and both
-default off outside the explicit staging lane.
+
+The buyer pilot uses a separate server-only Stripe test rail. Its non-secret
+runtime inventory is `BUYER_ACCESS_ENABLED`, `BUYER_ACCESS_STRIPE_MODE=test`,
+`BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app`, and
+`BUYER_ACCESS_ALLOWED_EMAILS`. Store `BUYER_ACCESS_STRIPE_SECRET_KEY` and
+`BUYER_ACCESS_STRIPE_WEBHOOK_SECRET` only in Firebase Secret Manager; neither
+value belongs in a Functions dotenv file, GitHub preparation job, browser
+variable, log, or release receipt. The existing quote-payment `STRIPE_MODE`,
+credentials, and `stripeWebhook` remain independent and unchanged.
 
 The policy-enforcing repository preparation workflow packages Functions source without loading or
 materializing runtime secrets. Every `.env` file is excluded from the artifact.
@@ -355,73 +363,55 @@ See the
 [launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--twilio--resend-providers)
 for configuration and proof requirements.
 
-## $1 Buyer Access (Test/Staging Source Candidate)
+## Controlled $1 Buyer Pilot (`tonicatering`)
 
-The `feature/paid-buyer-onboarding` branch adds a separate test-only acquisition
-flow at `/start`. A buyer creates or signs in to a Firebase email/password
-account, verifies the address, enters a business name and owner name, and then
-continues to Stripe-hosted Checkout. The server—not the browser—fixes the order
-to Starter access, $1 USD, Stripe test mode, and post-purchase invoice
-generation. Existing scoped users are sent to `/app` without a new purchase.
+The `feature/paid-buyer-onboarding` branch adds a bounded acquisition pilot at
+`/start` without creating a second Firebase environment. The Firebase project
+is the existing production project, `tonicatering`. An operator first creates
+the designated verified Firebase email/password account through the approved
+administrative path. The tester signs in at `/start`, enters the business and
+owner names, and continues to Stripe-hosted Checkout. `/start` has no account
+creation action. The server requires the exact authenticated email in
+`BUYER_ACCESS_ALLOWED_EMAILS`; email verification, the browser feature flag, or
+knowledge of the route alone never authorizes a purchase.
 
-The success return is not fulfillment evidence. QuotePilot polls the exact
-owner/session-bound order and keeps access locked while Checkout is pending or
-processing. Only a signed, deduplicated Stripe event with matching test-mode
-Session, owner, order, $1 amount, USD currency, Starter plan, and invoice
-configuration may atomically provision the active organization, neutral blank
-catalog/settings, admin role, entitlements, and audit records. Failed, expired,
-cancelled, malformed, mismatched, and replayed states fail closed.
+The Firebase Hosting and Vercel production preparation workflows compile the
+private `/start` route into the exact reviewed artifact and source-bind the
+public marketing CTA off. Runtime access still fails closed until the dedicated
+Functions are deployed and `BUYER_ACCESS_ENABLED=true` with the exact tester
+allowlist; the browser flag is not authorization.
 
-This is source-only behavior. It is not on `main`, is not enabled on the
-production marketing page or Functions runtime, and has no hosted Firebase or
-Stripe acceptance. Refund, dispute, cancellation, account/access revocation,
-support, tax, and live commercial operating paths are not automated by this
-flow and remain blockers to a production sales rollout.
+The server fixes the pilot order to Starter access, $1 USD, Stripe test mode,
+and post-purchase invoice generation. Buyer Checkout uses its own Stripe client
+and Secret Manager values and posts only to
+`buyerAccessStripeWebhook`. It does not reuse or change the existing
+quote-payment `STRIPE_MODE`, key, webhook secret, `stripeWebhook`, deposit, or
+final-balance rail.
 
-### Isolated Firebase staging entrypoints
+The Checkout return is not fulfillment evidence. QuotePilot polls the exact
+owner/session-bound buyer order and keeps `/app` access locked while payment is
+pending or processing. Only the dedicated signed and deduplicated test webhook,
+with matching owner, order, generation, $1 amount, USD currency, Starter plan,
+invoice configuration, and test-mode objects, may atomically create the active
+organization, neutral blank-catalog settings, admin role, entitlements, and
+audit records. The server marks buyer-created commercial/customer records as
+controlled test-mode data for operator exclusion from live revenue and live
+paid-customer classification. Mismatched, non-allowlisted, cancelled, failed,
+expired, cross-account, already-scoped, and replayed attempts fail closed.
 
-The staging lane requires an existing Firebase project named
-`quotepilot-staging-<name>`, exactly one Firebase Web app, Email/Password Auth,
-a clean committed branch whose `HEAD` exactly matches its `origin` branch, an
-authenticated local Firebase CLI session, and a Stripe test webhook subscribed
-to all four supported Checkout Session events. The production project
-`tonicatering` is rejected.
+This pilot writes real Firebase Auth and tenant records to `tonicatering` even
+though Stripe is in test mode. Use unique designated tester identities, do not
+use existing customer accounts, and do not assume that deleting a test payment
+revokes or cleans up app access. The pilot is source-only until it is reviewed,
+merged, semantically tagged, attested with the target-specific release UAT
+items, promoted through the trusted deployer, and accepted against the hosted
+providers. It is not an unrestricted sales channel; refund, dispute,
+cancellation, access-revocation, support, tax/accounting, and public abuse
+operations remain separate launch gates.
 
-From a credential-injected shell, provide the staging app URL/domain, a real
-operator allowlist, `BUYER_ACCESS_ENABLED=true`, `STRIPE_MODE=test`, a
-least-privilege `rk_test_` key when possible (or a test secret key), the test
-endpoint signing secret, and disabled email/SMS providers. Then create the
-ignored mode-0600 project environment without printing or committing values:
-
-```bash
-npm run staging:firebase:env -- --project quotepilot-staging-<name>
-```
-
-Leave only the non-secret browser gate in the validation shell, then validate
-and prepare the exact coordinated payload:
-
-```bash
-export VITE_BUYER_ACCESS_ENABLED=true
-npm run staging:firebase:validate -- --project quotepilot-staging-<name>
-npm run staging:firebase:prepare -- --project quotepilot-staging-<name>
-```
-
-`validate` performs read-only Firebase SDK-config and safety checks. `prepare`
-repeats validation and builds with sanitized exact staging browser values; it
-does not mutate a provider. After reviewing its exact project, branch, SHA,
-scope, and confirmation token, the separately authorized staging operator may
-deploy Hosting, Functions, and Firestore rules/indexes together:
-
-```bash
-npm run staging:firebase:deploy -- \
-  --project quotepilot-staging-<name> \
-  --confirm "<exact token printed by prepare>"
-```
-
-That final command mutates only the explicit staging Firebase project. It is
-not a production deploy, live-mode authorization, or provider acceptance
-claim. See the [launch runbook](docs/LAUNCH_RUNBOOK.md#isolated-1-buyer-access-staging-rehearsal)
-for webhook setup, acceptance evidence, and stop conditions.
+See the
+[launch runbook](docs/LAUNCH_RUNBOOK.md#controlled-1-buyer-pilot-on-tonicatering)
+for Secret Manager, webhook, release, acceptance, and stop requirements.
 
 ## Customer Provisioning (No Stripe)
 Provision a customer organization, enforce order-based feature entitlements
@@ -561,6 +551,14 @@ the exact coordinated hosted candidate as their target applicability requires.
 Local tests and emulator events are source evidence only, while a successful
 UAT attestation records the observed application contract; neither alone is
 Stripe test-mode or live-mode provider acceptance.
+
+For a release containing the controlled buyer pilot, every applicable
+`buyer.pilot-*` item is likewise mandatory. Hosting/Vercel items cover the
+allowlisted entry and pending/active browser handoff; backend items cover the
+dedicated test Checkout/invoice, signed buyer webhook, real `tonicatering`
+tenant/role readback, negative paths, and isolation from the quote Stripe rail.
+No single target receipt proves an unbound frontend or backend dependency, so
+retain a coordinated provider record for the exact deployed surfaces.
 
 The `backend` and `all` scopes package Firestore rules plus Functions without
 runtime `.env` files. The manifest binds the Firebase project, Hosting target,

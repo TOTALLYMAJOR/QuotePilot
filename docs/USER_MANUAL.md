@@ -301,49 +301,54 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - `Undo this import` removes only unchanged documents whose `importBatchId` matches that receipt. Records edited after import are protected from rollback, and pre-existing records are never deleted by the batch.
 - Active quotes, payments, contracts, bookings, and staff accounts are outside the first Import Studio release and must not be represented as imported operational history.
 
-## $1 Buyer Access (Test Staging Only)
+## Controlled $1 Buyer Pilot
 
-This flow is a source candidate for an isolated hosted test. It is not on
-`main` or production-accepted. The production marketing page must keep the
-buyer CTA hidden, and `/start` must remain closed unless both the browser and
-Functions buyer-access gates are deliberately enabled in an approved staging
-environment.
+This is a bounded Stripe test-payment pilot on the existing `tonicatering`
+Firebase project. It is source-only until the reviewed code is merged, tagged,
+deployed through the guarded release path, and accepted against Firebase and
+Stripe. It is not a public sales channel.
 
-In that staging environment, a controlled buyer can:
+Only a designated tester whose exact verified Firebase email is present in the
+server allowlist may use the pilot. The browser flag and knowledge of `/start`
+do not grant authority. A non-allowlisted, unverified, already-scoped, or
+cross-account identity must not receive Checkout or workspace access.
 
-1. Open `/start`, create a Firebase email/password account or sign in, and
-   verify the email address.
-2. Enter the organization name and owner name. The buyer cannot choose the
-   plan, price, currency, or return URL.
-3. Continue to Stripe-hosted Checkout and complete the fixed $1 USD test
-   purchase. Stripe is configured to generate a post-purchase invoice for the
-   Checkout Session.
-4. Return to QuotePilot. A success query or Session id does not unlock the app;
-   the page displays pending or payment-processing state until QuotePilot
-   verifies the exact signed Stripe event and completes provisioning.
-5. Select the app link only after the order reports active access. The new
-   workspace has Starter entitlements, the buyer as an admin, neutral settings,
-   and a blank catalog. Complete the normal catalog and pricing setup before
-   creating customer quotes.
+During an approved pilot window, an allowlisted tester can:
 
-If Checkout is cancelled, return to the form and try again. A failed or expired
-order remains locked and may start a fresh eligible Checkout. A malformed
-return, a Session owned by another account, or an unverified email grants no
-access. A user who already belongs to an organization should open `/app` and
-cannot purchase another workspace through this flow.
+1. Have the approved operator create and verify the designated Firebase
+   email/password account before the pilot. Open `/start` and sign in with that
+   exact account. The controlled buyer surface cannot create accounts.
+2. Enter the organization and owner names. The tester cannot choose the plan,
+   price, currency, Stripe mode, or return URL.
+3. Continue to the dedicated Stripe test Checkout for the fixed $1 USD Starter
+   order. Stripe is configured to generate a post-purchase invoice. The pilot
+   never uses or changes the quote deposit/final-balance Stripe rail.
+4. Return to QuotePilot and wait. The success query, Session id, Checkout page,
+   or invoice does not unlock the app; the page stays pending or processing
+   until `buyerAccessStripeWebhook` verifies the exact signed event.
+5. Open `/app` only after the buyer order reports active and the readback shows
+   the expected Starter organization and admin role.
 
-Do not treat the browser success screen, Stripe redirect, or invoice alone as
-provisioning proof. Access requires the owner/session-bound order to reach
-`active` through the signed webhook path. Report any state that stays pending
-or processing to the staging operator with the approximate time and redacted
-order/Session identifiers; never send a payment method, token, secret, or
-webhook signature.
+The pilot creates real Firebase Auth, organization, neutral settings,
+admin-role, entitlement, provisioning, and audit records in `tonicatering`.
+The server marks buyer-created commercial/customer classification records as
+controlled test-mode data. Operators must exclude them from live revenue and
+live paid-customer reporting, even when the invoice exists and the app is
+accessible. Use unique test identities and never use an existing customer or
+staff account.
 
-This lane is test-only. Automated refunds, disputes, cancellation, account or
-access revocation, support, tax/accounting, registration-abuse controls, and a
-live commercial rollout are not complete. See the
-[launch runbook](LAUNCH_RUNBOOK.md#isolated-1-buyer-access-staging-rehearsal)
-for the operator acceptance sequence and stop conditions.
+If Checkout is cancelled, failed, or expired, follow the displayed retry state;
+do not create additional accounts to bypass it. Report a pending or processing
+state with the approximate time and only redacted order/Session references.
+Never send a payment method, token, provider secret, webhook signature, or
+customer personal data. Deleting or refunding a Stripe test object does not
+prove that Firebase access was revoked or that records were cleaned up.
+
+Refund, dispute, cancellation, account/access revocation, support,
+tax/accounting, unrestricted registration-abuse controls, and public live-mode
+selling remain outside this pilot. See the
+[launch runbook](LAUNCH_RUNBOOK.md#controlled-1-buyer-pilot-on-tonicatering)
+for the operator release and acceptance contract.
 
 ## Customer Onboarding (No Stripe Flow)
 Use the admin provisioning workflow to create a customer organization, apply
