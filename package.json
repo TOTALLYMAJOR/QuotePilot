@@ -33,12 +33,13 @@
     "check:perf:cwv": "bash ./scripts/run-lighthouse-cwv.sh",
     "release:uat:digest": "node ./scripts/release-uat-attestation.mjs --print-digest",
     "release:evidence:verify": "node ./scripts/production-release-evidence.mjs",
+    "release:artifact:stage": "node ./scripts/stage-production-payload.mjs",
+    "release:artifact:prepare": "node ./scripts/prepare-production-artifact.mjs",
     "deploy:firebase:backend": "node ./scripts/deploy-firebase-production.mjs --scope backend",
     "deploy:firebase:hosting": "node ./scripts/deploy-firebase-production.mjs --scope hosting",
     "deploy:firebase:hosting:customer": "node ./scripts/deploy-hosting-customer.mjs",
     "deploy:firebase": "node ./scripts/deploy-firebase-production.mjs --scope all",
-    "deploy:vercel": "node ./scripts/deploy-vercel-production.mjs",
-    "deploy:vercel:build": "node ./scripts/deploy-vercel-production.mjs"
+    "deploy:vercel": "node ./scripts/deploy-vercel-production.mjs"
   },
   "dependencies": {
     "firebase": "^11.0.0",

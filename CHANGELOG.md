@@ -11,18 +11,32 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Exact-SHA production release evidence verifier for Firebase and Vercel. It
   validates the canonical repository/workflow identities, successful main-push
   CI and all eight required jobs, a fresh allowlisted-human UAT attestation,
-  the tracked checklist digest, rollback ancestry, and protected GitHub
-  environment policy. It also verifies the current human-dispatched,
-  first-attempt target workflow run before provider execution.
-- Versioned release UAT checklist, protected `Release UAT Attestation`
-  workflow, receipt artifact, and controlled Vercel production workflow.
+  the tracked checklist digest, current remote `main`, an exact published
+  semantic tag, rollback ancestry, and required no-bypass GitHub environment
+  policy. It also verifies one historical `APPROVED` GitHub
+  deployment review on the exact UAT workflow run, requires a current directly
+  assigned reviewer other than the attester, rejects administrator bypass, and
+  verifies one `production` approval on the current human-dispatched
+  first-attempt preparation run by a reviewer other than its dispatcher and the
+  UAT attester.
+- Versioned release UAT checklist, environment-gated `Release UAT Attestation`
+  workflow, receipt artifact, and controlled Firebase/Vercel prepare workflows.
+- Provider-mutation-credential-free production payload staging and deterministic manifest tools.
+  They bind exact release evidence and fixed provider identifiers to sorted
+  SHA-256/size/mode records for an explicit target payload, reject symlinks,
+  secret-like paths, private-key material, runtime `.env` files, path traversal,
+  and provider mutation credentials, and write the manifest atomically.
 - Hospitality-first QuotePilot landing page at `/`, adapted from the approved Magic Patterns direction with original catered-event imagery, real QuotePilot interfaces, proof-safe quote-to-event language, responsive and dark layouts, restrained reveal motion, and reduced-motion support.
 - Durable landing-page design brief at `marketing/LandingPage.md`, including customer, copy, route, asset, preservation, and acceptance criteria.
 - Saved dark QuotePilot product overview at `/system`, including its six-capability feature drawer, animated workflow map, real app screenshots, keyboard focus containment, and full-screen mobile layout.
 - Admin-only Import Studio for tenant-locked customer and catalog CSV intake, automatic record/field recognition, row validation, duplicate-safe create behavior, persistent import receipts, and batch-scoped rollback.
 - Admin-only customer-provisioning preflight, explicit new-organization confirmation, and a separate existing-organization entitlement-only update mode with auditable order records and operator acceptance guidance.
 - Placeholder-only Firebase Functions environment template (`functions/.env.example`) for app, auth, Resend, Twilio, and Stripe runtime settings; real provider values remain excluded from tracked files.
-- Fail-closed Firebase Functions environment materializer for controlled CI deploys; it validates the canonical `/app` URL, platform-admin allowlist, approved QuotePilot sender identity, and provider-specific requirements before writing an ignored project environment file.
+- Fail-closed Firebase Functions environment materializer for local or
+  credential-isolated runtime validation; it validates the canonical `/app`
+  URL, platform-admin allowlist, approved QuotePilot sender identity, and
+  provider-specific requirements before writing an ignored project environment
+  file. Prepare workflows do not invoke it or receive those secrets.
 - Emulator-only owner-onboarding and quote-acceptance matrix covering platform authority, verified-email invite activation, neutral tenant setup, reviewed pricing, quote readback, public acceptance, entitlement preservation, inactive/archive denial, cleanup, and tombstone enforcement.
 
 - Proposal readiness scoring in the review step and Sales Workflow, with weighted completion criteria and actionable readiness gaps.
@@ -73,20 +87,27 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
-- Primary Firebase and Vercel production deploy scripts now reject local or
-  moving-branch invocation and require evidence-bound manual dispatch on the
-  exact tagged `main` SHA. The Firebase workflow checks out the immutable
-  dispatch SHA instead of a later moving `main` head, and both targets use the
-  protected `production` environment. Repository and live evidence invariants
-  are rechecked after build/config work immediately before provider mutation.
+- Primary Firebase and Vercel workflows are now prepare-only. They check out
+  the immutable exact tagged `main` SHA, declare the `production` environment
+  and fail unless its live policy is protected, recheck repository and live
+  evidence after tests/build, upload
+  a target-scoped payload with a deterministic manifest, and never receive
+  provider mutation credentials or Functions runtime secrets. Legacy primary
+  deploy commands fail closed; final provider
+  mutation requires a separately owned trusted deployer.
 - Firebase `hosting`, `backend`, and `all` scopes are explicit dispatch
-  choices bound into the UAT and live deployment run evidence. The `backend`
+  choices bound into the UAT and preparation-run evidence. The `backend`
   profile accurately identifies its Firestore rules plus Functions surface;
   the attestation job also rejects actors who were not allowlisted when the
   receipt was made.
 - GitHub environment identity checks normalize the API's case-insensitive
   environment names, allowing the existing `Production` object to satisfy the
   requested `production` workflow reference without weakening policy checks.
+  Release environments must use directly assigned user reviewers, protected
+  branches, prevention of self-review, and disabled administrator bypass.
+- The legacy customer-site Hosting helper now fails closed without invoking a
+  provider client. Customer-site provider mutation remains blocked until it is
+  moved behind the separately owned credential-isolated deployer.
 - GitHub evidence requests now fail closed on redirects and after a bounded
   timeout. Release documentation distinguishes current policy checks and
   human-entered staging/rollback claims from provider-derived or historical
@@ -95,7 +116,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   now classify as high risk so feature-branch Firebase and CWV lanes are hard
   gates rather than advisory checks.
 - Official checkout, Node setup, and artifact upload Actions used by CI,
-  mainline recovery, UAT, and deployment are pinned to immutable commit SHAs.
+  mainline recovery, UAT, and artifact preparation are pinned to immutable
+  commit SHAs.
 - The repository, CI, Docker image, and Firebase Functions now target Node.js
   22. Functions use Firebase Admin 14 modular app, Auth, and Firestore APIs
   across runtime, emulator seed, provisioning, tenant migration, and catalog
@@ -131,16 +153,15 @@ This changelog is backfilled from git history and will be maintained going forwa
   confirmation before apply. Apply validates an existing non-retired tenant,
   uses collision-safe creates, and limits existing-menu patches to missing
   schema fields instead of replacing records.
-- Production Firebase deploys are now manual-only and route through one
-  fail-closed wrapper that requires a clean remotely published and semantically
-  tagged `main` commit, an exact scope confirmation, the canonical Firebase
-  project, a fresh frontend build, and validated ignored Functions
-  configuration. The `backend` scope deploys matching Firestore rules and
-  Functions together.
-- Vercel production deploys now require the same clean, published,
-  semantically tagged `main` revision and run the production environment check
-  before building, preventing E2E bypass, emulator, or local-fallback flags
-  from being promoted.
+- Firebase preparation requires an unchanged tracked checkout of a remotely
+  published and semantically tagged `main` commit and stages `hosting:app`,
+  `firestore,functions`, or their
+  explicit union without widening the attested surface. Runtime Functions
+  secrets are not materialized in the repository job.
+- Vercel preparation requires the same unchanged, published, semantically
+  tagged `main` revision and runs the production environment check before building,
+  preventing E2E bypass, emulator, or local-fallback flags from entering the
+  prepared artifact.
 - The production environment check now uses only Node built-ins so the
   dependency-free CI preflight can validate canonical Firebase settings and
   unsafe flag overrides before package installation.
@@ -244,7 +265,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Quote History now uses the authenticated staff role to hide payment, booking, portal rotation, contract conversion, reopen, and delete controls from sales users while preserving proposal preparation. Sales can make only an exact draft-to-sent status transition and non-evidentiary schedule updates (staff lead, assignment time, kitchen checkpoints, and production checklist).
 - `CI Quality` workflow now uses classifier-driven lane orchestration, branch concurrency cancellation, hard-vs-advisory heavy lane behavior, and artifact retention windows for failure triage.
 - CI lane classifier now treats fallback-retirement-sensitive org/fallback modules (`src/lib/menuService.js`, `src/hooks/useCatalogData.js`, `src/lib/organizationService.js`, `src/context/OrganizationContext.jsx`) as high-risk, making Firebase heavy lanes required (non-advisory) on feature branches.
-- Production deploy automation now requires controlled manual dispatch after
+- Production artifact preparation now requires controlled manual dispatch after
   the main-branch quality gates and published release tag are complete.
 - Maintainer and release-manager check scripts now support orchestration lane semantics and high-risk execution profiles.
 - Contributor/release/governance docs were updated to align with lane contracts and orchestration policy (`README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md`, `docs/AGENT_GOVERNANCE.md`).
@@ -268,15 +289,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Expanded Admin Catalog "Menu Management" editability so event types and categories can be renamed directly (item name/type/price editing remains supported).
 - Event schedule cards now surface contract number and confirmation state for accepted/booked events.
 - Fixed header crew chip spacing so staff image/name badges no longer overlap the brand text on narrower desktop widths.
-- Production deploy workflow is manual-only after successful `CI Quality`,
-  UAT evidence, and publication of the exact release tag.
-- Primary Firebase deploy scripts and the production workflow now explicitly
-  bind the `app` Hosting target to site `tonicatering` before deploying
-  `hosting:app`, preventing an ambiguous default-site deployment.
+- Production preparation is manual-only after successful `CI Quality`, UAT
+  evidence, and publication of the exact release tag.
+- The Firebase artifact manifest explicitly binds Hosting target `app` to site
+  `tonicatering`, preventing an ambiguous default-site promotion.
 - Standardized production safety controls: explicit evidence-bound Firebase
-  deploy scope and fail-safe project-scoped SMS runtime environment
-  (`NOTIFICATIONS_SMS_PROVIDER=none`).
-- Added explicit release gate policy requiring green CI + 10-minute UAT + rollback SHA confirmation for production-triggering merges.
+  preparation scope and credential-isolated runtime configuration.
+- Added explicit release gate policy requiring green CI, tracked UAT checklist evidence with bounded freshness, and rollback SHA confirmation for production-triggering merges.
 - Updated `@vitejs/plugin-react` to a Vite 7 compatible major version so `npm ci` succeeds for CI and container builds.
 - Added invite-aware organization bootstrap in Cloud Functions (`organizationInvites`) so pre-authorized customer emails are granted org role/access automatically on first sign-in.
 - Provisioning audit writes are owned by the server callable; the local preview
@@ -295,7 +314,7 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Ignored local `.lighthouseci/` artifacts to prevent accidental commit noise.
 - Adjusted doc secret scanning to allow placeholder credential examples while still failing real token-like values.
 - Added callable integration setup status + SMS test endpoints for admin-only buyer onboarding checks.
-- Added in-app `Buyer Setup Assistant (Optional Twilio)` guidance in Integrations Ops with copy-ready config/deploy commands.
+- Added in-app `Buyer Setup Assistant (Optional Twilio)` guidance in Integrations Ops with copy-ready local-validation and artifact-preparation guidance.
 - Hardened Twilio delivery so SMS provider errors no longer block core quote save or Stripe checkout workflows.
 - Updated Playwright `webServer` configuration to use cross-platform env injection so Windows test runs start correctly.
 - Fixed CI Lighthouse Chromium path step quoting so `Governance + Perf Gates` runs cleanly in GitHub Actions.

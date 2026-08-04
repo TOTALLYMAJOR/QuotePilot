@@ -22,6 +22,8 @@ const HIGH_RISK_EXACT = new Set([
   "scripts/deploy-firebase-production.mjs",
   "scripts/deploy-vercel-production.mjs",
   "scripts/production-release-evidence.mjs",
+  "scripts/prepare-production-artifact.mjs",
+  "scripts/stage-production-payload.mjs",
   "scripts/release-uat-attestation.mjs",
   "docs/release-uat-checklist.json",
   ".github/workflows/ci-quality.yml",

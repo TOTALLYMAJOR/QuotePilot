@@ -66,7 +66,7 @@ export function buildReleaseUatReceipt(
     throw attestationError("the rollback SHA must differ from the release SHA.");
   }
   const target = String(args.target || "");
-  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.deployWorkflows, target)) {
+  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
     throw attestationError(
       "--target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
     );
@@ -159,14 +159,48 @@ export function buildReleaseUatReceipt(
   });
 }
 
-function writeReceipt(receipt, outputValue, root = ROOT) {
-  const releaseDir = path.join(root, "artifacts", "release");
-  const output = path.resolve(root, String(outputValue || ""));
-  if (output !== releaseDir && !output.startsWith(`${releaseDir}${path.sep}`)) {
-    throw attestationError("--output must be inside artifacts/release.");
+function ensureReceiptDirectory(root, directory) {
+  const rootStat = fs.lstatSync(root);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw attestationError("the repository root must be a real directory.");
   }
-  fs.mkdirSync(path.dirname(output), { recursive: true });
-  fs.writeFileSync(output, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 });
+  const relative = path.relative(root, directory);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw attestationError("the receipt directory must remain inside the repository root.");
+  }
+  let cursor = root;
+  for (const segment of relative.split(path.sep)) {
+    cursor = path.join(cursor, segment);
+    if (!fs.existsSync(cursor)) fs.mkdirSync(cursor, { mode: 0o700 });
+    const stat = fs.lstatSync(cursor);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || fs.realpathSync(cursor) !== cursor) {
+      throw attestationError("receipt output ancestors must be real repository directories.");
+    }
+  }
+}
+
+export function writeReleaseUatReceipt(receipt, outputValue, root = ROOT) {
+  const resolvedRoot = path.resolve(root);
+  const releaseDir = path.join(resolvedRoot, "artifacts", "release");
+  const output = path.resolve(resolvedRoot, String(outputValue || ""));
+  if (output === releaseDir || !output.startsWith(`${releaseDir}${path.sep}`)) {
+    throw attestationError("--output must be a file inside artifacts/release.");
+  }
+  if (path.extname(output).toLowerCase() !== ".json") {
+    throw attestationError("--output must use a .json extension.");
+  }
+  ensureReceiptDirectory(resolvedRoot, path.dirname(output));
+  const temporary = `${output}.${process.pid}.${crypto.randomBytes(12).toString("hex")}.tmp`;
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(receipt, null, 2)}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+      flag: "wx"
+    });
+    fs.linkSync(temporary, output);
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
 }
 
 function main() {
@@ -176,7 +210,7 @@ function main() {
     return;
   }
   const receipt = buildReleaseUatReceipt(args, { root: ROOT });
-  writeReceipt(receipt, args.output, ROOT);
+  writeReleaseUatReceipt(receipt, args.output, ROOT);
   process.stdout.write(
     `Release UAT receipt recorded for ${receipt.target} at ${receipt.releaseSha}.\n`
   );

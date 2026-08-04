@@ -3,7 +3,8 @@
 Last updated: August 3, 2026
 
 ## Goal
-Deploy QuotePilot safely with environment validation, reproducible build checks, and clear post-launch verification.
+Prepare, promote, and verify QuotePilot safely with isolated credentials,
+target-scoped payloads, deterministic manifests, and clear post-launch evidence.
 
 ## 1) Prepare Firebase
 1. Create/select Firebase project.
@@ -26,41 +27,50 @@ npm run check:env
 npm run build
 ```
 
-## 3) Promote a Verified Release
+## 3) Prepare a Verified Release Artifact
 
 Do not run a primary production deploy from a workstation. After completing
-the exact-main evidence sequence in section 6, dispatch one of these protected
-workflows from `main`:
+the exact-main evidence sequence in section 6, dispatch one of these
+policy-enforcing, prepare-only workflows from `main`:
 
-- `Deploy Firebase Hosting / Backend`
-- `Deploy Vercel Production`
+- `Prepare Firebase Production Artifact`
+- `Prepare Vercel Production Artifact`
 
-Both workflows accept the full release SHA, exact-SHA CI run id, protected UAT
+Both workflows accept the full release SHA, exact-SHA CI run id, environment-gated UAT
 run id, and target-specific rollback SHA. They check out the immutable dispatch
-SHA and the deploy wrapper rejects the run before build or provider access if
-the evidence is incomplete, mismatched, stale, or the current environment
-policy is unprotected. Current-policy validation does not prove which reviewer
-approved the historical UAT run or whether that run was bypassed; close that
-evidence gap before live use.
+SHA and reject the run before dependency execution when evidence is incomplete,
+mismatched, stale, or the current environment policy is unprotected. The
+verifier also queries the exact UAT workflow run's historical GitHub deployment
+review log and requires exactly one `APPROVED` review for `production-uat` by a
+current directly assigned user reviewer other than the attester. It also queries
+the exact preparation run and requires one `production` approval by a current
+direct reviewer other than both the dispatcher and UAT attester.
 
-The Firebase entrypoint validates the ignored production Functions
-environment, binds Firebase Hosting target `app` to the primary `tonicatering`
-site, and deploys `hosting:app` and/or an intentionally enabled `backend`
-surface (`firestore,functions`) from the same revision. Do not substitute an
-unscoped default Hosting deploy.
+Preparation runs tests and production configuration checks, builds only the
+selected target surface, stages an explicit payload, hashes every payload file,
+and uploads a deterministic manifest bound to the release evidence and fixed
+provider identifiers. Provider mutation credentials and Functions runtime
+secrets are deliberately absent. These workflows do not call Firebase or
+Vercel and do not change production.
 
-For the optional Vercel target, preserve the SPA rewrite in `vercel.json`. Because
-`cleanUrls` is enabled, the catch-all destination must be `/` rather than
-`/index.html`. Promote only through `Deploy Vercel Production` from the same
-published tagged revision.
+Production promotion remains blocked until a separately owned trusted deployer
+can download the artifact, independently revalidate the GitHub run and artifact
+identity/digest, repository, SHA, both review records, UAT, every payload file
+against the manifest, allowed paths, provider project, and rollback record, and
+perform only the final provider mutation with a locked audited client. The
+trusted deployer must then record provider acceptance/READY state and the new
+target-specific last-known-good receipt.
 
-The Vercel production build runs `check:env` with the production environment
-before Vite, so emulator, E2E-auth-bypass, or local-catalog-fallback flags fail
-the deployment. After promotion, verify that `/`, `/app`, and `/system` each
-return the application shell with HTTP 200.
+For Vercel, preserve the reviewed SPA contract in `vercel.json`. Preparation
+validates that source contract and generates `.vercel/output/config.json` with
+filesystem-first routing, the security headers, and an `/index.html` SPA
+fallback so the exact payload can be promoted with `vercel deploy --prebuilt` by
+the trusted deployer. After
+an independently controlled promotion, verify that `/`, `/app`, and `/system`
+each return the application shell with HTTP 200.
 
 ## 4) Configure CI Variables
-Set repository variables/secrets used by deploy workflow:
+Set repository or environment variables used by the prepare workflows:
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
 - `VITE_FIREBASE_PROJECT_ID`
@@ -70,8 +80,10 @@ Set repository variables/secrets used by deploy workflow:
 - optional: `VITE_FIREBASE_FUNCTIONS_REGION`
 - `RELEASE_UAT_ATTESTER_IDS`: comma-separated numeric GitHub user ids for the
   approved human UAT attesters; service/bot identities are not accepted
-- `FIREBASE_TOKEN` repository or `production` environment secret
-- `VERCEL_TOKEN` repository or `production` environment secret
+
+Do not expose `FIREBASE_TOKEN`, `VERCEL_TOKEN`, Stripe, Twilio, Resend, or
+platform-admin secrets to either prepare workflow. Provider credentials belong
+only in the independently owned trusted deployer.
 
 Configure the external release controls before the first promotion:
 
@@ -87,27 +99,26 @@ Configure the external release controls before the first promotion:
    repository or install a separately owned deployment protection gate; do not
    weaken the verifier.
 5. Disable Vercel automatic production promotion from Git pushes (or apply an
-   equivalent provider rule) so the protected workflow is the only production
-   path. Confirm no alternate Firebase automation bypasses the wrapper.
-6. Rehearse the workflow with intentionally invalid evidence and confirm it
-   fails before any provider command. Do not treat repository source as proof
-   that these external settings are active.
-7. Supply provider CLIs from a separately locked, audited, checksum-verified
-   release toolchain before live use. The current wrappers still use `npx` as a
-   compatibility path; do not expose production credentials to an on-demand
-   mutable install. The provider CLIs were intentionally not added to the
-   application lockfile because their current dependency trees failed the
-   repository audit gate. Split prepare/build/evidence verification from the
-   final provider mutation. The fixed final tool must receive the minimum
-   provider credential in an isolated environment and must not invoke repository
-   code; the current wrapper structure does not provide that isolation.
+   equivalent provider rule) so the separately owned trusted deployer is the
+   only production mutation path. Confirm no alternate Firebase automation or
+   customer-site helper bypasses that boundary.
+6. Rehearse the prepare workflow with intentionally invalid evidence and
+   confirm it fails before dependency execution or artifact upload. Do not
+   treat repository source as proof that these external settings are active.
+7. Implement the separately owned trusted deployer before live use. It must use
+   a locked, audited, checksum-verified provider client, receive only the
+   minimum provider credential in an isolated environment, and never invoke
+   repository code while that credential is present. The repository's legacy
+   primary deploy commands now fail closed instead of calling `npx`.
 8. Replace the human-entered staging label and rollback ancestry with
    provider-derived deployment manifests: project/environment, READY status,
    source SHA, artifact and non-secret configuration digests, successful
    deployment id, timestamp, and component-specific last-known-good record.
 
-For intentional Firebase backend deploy windows only:
-- Set repository variables:
+For intentional Firebase backend promotion windows only, configure these
+values in the trusted deployer's approved runtime-configuration and secret
+channels, not in the prepare job:
+- Set trusted runtime configuration:
   - `APP_BASE_URL=https://quotepilot.mbmapps.com/app`
   - `APP_BASE_DOMAIN=mbmapps.com`
   - `NOTIFICATIONS_EMAIL_PROVIDER=none` until Resend is verified
@@ -115,7 +126,7 @@ For intentional Firebase backend deploy windows only:
   - `EMAIL_FROM_EMAIL=onboarding@quotepilot.mbmapps.com`
   - `NOTIFICATIONS_SMS_PROVIDER=none` until Twilio is approved
   - provider sender/owner values only when the matching provider is enabled
-- Set repository secrets:
+- Set trusted runtime secrets:
   - `AUTH_PLATFORM_ADMIN_EMAILS`
   - `STRIPE_SECRET_KEY`
   - `STRIPE_WEBHOOK_SECRET`
@@ -123,34 +134,35 @@ For intentional Firebase backend deploy windows only:
   - Twilio account/auth secrets only when Twilio is enabled
 - Select `firebase_scope=backend` or `firebase_scope=all` only after the
   matching evidence profile is attested (requires Blaze plan). The `backend`
-  scope always deploys Firestore rules and Functions together.
-- Confirm `scripts/materialize-functions-env.mjs` validates these values and
-  creates the ignored `functions/.env.<firebase-project-id>` file. The
-  materializer fails rather than deploying with a missing allowlist, a
-  noncanonical owner URL, a different sender identity, missing Stripe secrets,
-  or incomplete credentials for an enabled provider; it does not print secret
-  values.
-- Run the controlled workflow with the exact release evidence inputs.
+  artifact and any eventual promotion always include Firestore rules and
+  Functions together.
+- The prepare artifact intentionally excludes every `.env` file and all
+  provider secrets. The trusted deployer must validate and materialize runtime
+  configuration only inside its credential-isolated boundary.
+- Run the prepare workflow with the exact release evidence inputs, then provide
+  its immutable artifact to the trusted deployer.
 
-## 5) Optional Functions (Stripe + Twilio + Resend)
+## 5) Functions Runtime Configuration (Optional Stripe + Twilio + Resend Providers)
 These values are server-only Firebase Functions configuration. The repository
 root `.env.example` is a browser-safe `VITE_*` template and must not contain
 Stripe, Twilio, or Resend credentials.
 
 Use [`functions/.env.example`](../functions/.env.example) as the Functions
-placeholder inventory:
+placeholder inventory for local/emulator validation only:
 
 ```bash
 cp functions/.env.example functions/.env.<firebase-project-id>
 git check-ignore -v functions/.env.<firebase-project-id>
 ```
 
-The second command must report an ignore rule before any credential is added;
-if it does not, stop and establish the approved ignore rule first. Credential
-fields are intentionally blank. Do not enable a provider until every required
-value for that provider has been supplied through an approved secret channel.
+The second command must report an ignore rule before any non-production value
+is added; if it does not, stop and establish the approved ignore rule first.
+Credential fields are intentionally blank. Never put production credentials in
+this local file. Do not enable a provider until every required production value
+has been supplied through the trusted runtime's approved secret channel.
 
-Keep the production fail-safe state during custom-domain setup:
+Keep this fail-safe state in the trusted production runtime during
+custom-domain setup (the same values may be used locally for validation):
 
 ```dotenv
 NOTIFICATIONS_SMS_PROVIDER=none
@@ -178,7 +190,7 @@ represent that sender as operational until the `quotepilot.mbmapps.com` sender
 domain is verified in the Resend dashboard and the required DNS records are
 confirmed at the authoritative DNS provider.
 
-Only after verification, set the ignored Functions environment file to:
+Only after verification, set the trusted runtime configuration to:
 
 ```dotenv
 NOTIFICATIONS_EMAIL_PROVIDER=resend
@@ -194,10 +206,12 @@ and send the copy-ready onboarding message manually. The recorded
 dashboard sandbox test; it is not an allowed QuotePilot Functions sender
 configuration, customer-ready sender-domain proof, or recipient-inbox proof.
 
-Deploy the Firebase backend only by dispatching `Deploy Firebase Hosting /
-Backend` with `firebase_scope=backend` and a successful `firebase-backend` UAT
-attestation. This scope deploys `firestore,functions`. Use
-`firebase_scope=all` only with a `firebase-all` attestation.
+Prepare the Firebase backend only by dispatching `Prepare Firebase Production
+Artifact` with `firebase_scope=backend` and a successful `firebase-backend` UAT
+attestation. This scope packages `firestore,functions`; it does not deploy them
+or alter runtime configuration. Use `firebase_scope=all` only with a
+`firebase-all` attestation, then submit the exact artifact and approved runtime
+configuration to the separately owned trusted deployer.
 
 After a controlled Resend deployment, send exactly one onboarding test to a
 controlled recipient and capture all three proof layers:
@@ -214,11 +228,12 @@ Buyer setup assistance is also available in-app:
 - `Integrations Ops` -> `Buyer Setup Assistant (Optional Twilio)` to check status and send SMS test.
 
 Stripe and Twilio use the corresponding blank fields in
-`functions/.env.example`. Stripe has no provider flag in this runtime: its
-secret and webhook secret are required before any production backend deploy
-because checkout and webhook handlers ship in the same bundle. Keep the Twilio
-provider flag at `none` until buyer-owned credentials, sender registration, and
-provider acceptance checks are complete.
+`functions/.env.example` only as a configuration inventory. Stripe has no
+provider flag in this runtime: its secret and webhook secret must be present in
+the trusted runtime before an authorized production backend promotion because
+checkout and webhook handlers ship in the same bundle. Keep the Twilio provider
+flag at `none` until buyer-owned credentials, sender registration, and provider
+acceptance checks are complete.
 
 Stripe webhook endpoint:
 - `https://us-central1-tonicatering.cloudfunctions.net/stripeWebhook`
@@ -235,6 +250,7 @@ item ids and labels in `docs/release-uat-checklist.json`; changes to that file
 change its SHA-256 digest and invalidate older attestations.
 
 1. CI is fully green:
+   - `Classify Changes + Lane Plan`
    - `lane:quick (Preflight + Secrets)`
    - `lane:core (Unit + Build + Governance + Bundle)`
    - `Docker Build Smoke`
@@ -258,8 +274,10 @@ change its SHA-256 digest and invalidate older attestations.
    - SMS test path returns disabled/not configured when
      `NOTIFICATIONS_SMS_PROVIDER=none` without blocking core flow.
 3. Confirm rollback target:
-   - previous known-good commit SHA is documented,
-   - current known-good SHA in `PROJECT_STATUS.md` is ready to update after successful deploy.
+   - the provider-specific last-known-good deployment receipt and commit SHA
+     are documented,
+   - that receipt remains unchanged until the replacement deployment is
+     provider-accepted and post-launch verification succeeds.
 
 For a tenant-provisioning release, also complete the disposable owner acceptance
 checklist in `docs/USER_MANUAL.md`. At minimum, prove verified platform-admin
@@ -296,16 +314,31 @@ After the reviewed PR merges:
    successful workflow run id. Reruns, bot actors, stale receipts, and a UAT run
    started before exact-SHA CI completion are rejected.
 6. Create and publish the semantic version tag on that same SHA.
-7. Dispatch the target deploy workflow with `release_sha`, `ci_run_id`,
+7. Dispatch the target prepare workflow with `release_sha`, `ci_run_id`,
    `uat_run_id`, and `rollback_sha`; Firebase also requires `firebase_scope`
-   matching the attested profile. A protected `production` reviewer must
-   approve the deployment. If targets have different rollback SHAs, use
-   separate target-specific attestations.
+   matching the attested profile. A protected `production` reviewer other than
+   both the dispatcher and UAT attester must approve preparation. Download and
+   record the resulting uploaded payload,
+   release-evidence receipt, and deterministic manifest. If targets have
+   different rollback SHAs, use separate target-specific attestations.
+8. Only after the separately owned trusted deployer is implemented and
+   qualified, submit that exact artifact for final provider mutation. Record
+   the provider deployment id, accepted/READY state, and artifact and
+   configuration digests, but retain the existing target-specific
+   last-known-good receipt.
+9. Complete the post-launch verification in section 7. Only after every check
+   succeeds, sign the new target-specific last-known-good receipt. On failure,
+   keep the prior receipt authoritative and begin the rollback sequence.
 
-The verifier reads GitHub evidence live at deployment time. A protected
+The verifier reads GitHub evidence live at preparation time. A protected
 environment configuration error, changed checklist digest, missing job, failed
 or skipped job, wrong workflow/repository/SHA, non-ancestor rollback, stale
-attestation, or disallowed actor stops promotion before the provider CLI runs.
+attestation, missing exact-run UAT or production approval,
+administrator-bypass setting, or
+disallowed actor stops preparation. GitHub's deployment-review object does not
+include an approval timestamp or historical environment-policy snapshot, so a
+separately owned audit/webhook record is still required for stronger historical
+proof.
 
 ## 7) Post-Launch Verification
 1. Create a quote end-to-end.
@@ -318,31 +351,32 @@ attestation, or disallowed actor stops promotion before the provider CLI runs.
 5. Validate mobile layout and key interaction flows.
 
 ## 8) Rollback
-Use the prior known-good commit SHA tracked in `PROJECT_STATUS.md`.
 
-The commands below are a break-glass incident path, not a normal promotion
-path. Obtain explicit incident authorization, record the operator, target,
-reason, and provider result, and restore the controlled workflow afterward.
-The release evidence wrapper intentionally does not delay an authorized
-rollback to a known-good revision.
+Rollback is artifact-first and target-specific. A Git ancestor alone is not a
+rollback artifact. Before any promotion, preserve a signed last-known-good
+receipt containing the provider project and deployment id, source SHA, artifact
+and non-secret configuration digests, target surface, and observed healthy
+state.
 
-Hosting rollback:
-```bash
-git checkout <known_good_sha>
-npm ci
-npm run check:env
-npm run build
-npx firebase-tools target:apply hosting app tonicatering --project tonicatering
-npx firebase-tools deploy --only hosting:app --project tonicatering --non-interactive
-```
+For an incident:
 
-If a controlled `firebase-backend` or `firebase-all` deploy caused regression:
-```bash
-git checkout <known_good_sha>
-npm ci
-npm ci --prefix functions
-npm run check:env
-npm run build
-npx firebase-tools target:apply hosting app tonicatering --project tonicatering
-npx firebase-tools deploy --only hosting:app,firestore,functions --project tonicatering --non-interactive
-```
+1. Obtain explicit incident authorization and record the operator, target,
+   reason, and start time.
+2. Select the target's recorded last-known-good provider deployment or exact
+   immutable artifact. Do not rebuild it from a Git checkout during the
+   incident.
+3. Have the separately owned trusted deployer revalidate that receipt and use
+   its locked provider client to restore only the affected target. Repository
+   scripts and workflows must not receive the provider credential.
+4. Prefer provider-native restoration of the previously accepted Hosting or
+   Vercel deployment. For Functions or Firestore rules, perform a compatibility
+   review before restoring the prior target-specific artifact; do not widen a
+   backend incident into an unreviewed `hosting,firestore,functions` mutation.
+5. Repeat the post-launch checks, record provider acceptance/READY state and
+   health evidence, then close the incident. Keep the prior receipt until the
+   restored target is verified.
+
+The separately owned trusted deployer and signed provider-specific
+last-known-good receipts are not implemented yet. Until they are, production
+promotion and reliable rollback remain release blockers; the legacy local
+`npx` commands are not an approved break-glass substitute.
