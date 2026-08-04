@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: August 3, 2026
+Last updated: August 4, 2026
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -97,10 +97,13 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
     provider-acceptance evidence for its exact current valid issuance; draft,
     rotated-but-unsent, and legacy portals without that evidence fail closed.
   - Admin only: submit customer email to the configured provider, copy a
-    verified Stripe payment link, send the approved Stripe deposit request, and
-    rotate a customer portal token for a draft, sent, or viewed quote when its
-    issuance should be replaced. Use `Reopen` when the quote itself is expired;
-    accepted, declined, and booked records cannot rotate their portal identity.
+    verified Stripe payment link, send an approved Stripe deposit request,
+    send or reconcile an approved final-balance request for an eligible booked
+    contract, and rotate a customer portal token for a draft, sent, or viewed
+    quote when its issuance should be replaced. Use `Reopen` when the quote
+    itself is expired. Accepted and declined records cannot rotate their portal
+    identity; an approved booked contract may renew an expired portal when its
+    provider-paid deposit is verified and no final-balance checkout is active.
     Quote email submission is bound to the exact saved version and portal
     issuance, remains disabled in local fallback mode, and fails closed while
     provider configuration readiness is unknown. This configuration check does
@@ -119,31 +122,69 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   QuotePilot publishes the link to the quote and portal only after
   email-provider acceptance is durably recorded. If any bound value changes,
   request and approve a new action before sending.
+- On the final-balance source branch, `Send Balance Request` is a separate exact
+  approved action available only for a booked contract with a verified
+  provider-paid deposit. QuotePilot derives the final balance from the
+  authoritative quote total minus deposit; the browser cannot supply the
+  amount, payment kind, Stripe Session, generation, or link. The approval also
+  binds the contract and paid-deposit evidence. Final-balance checkout and
+  payment state are recorded separately from the deposit, and the link follows
+  the same private-before-provider-acceptance publication boundary. A customer
+  sees `Pay Final Balance` only after the accepted request publishes the
+  customer-safe link.
 - If the action reports an uncertain Stripe-creation or email-provider outcome,
   do not create a second request or manually share a link. Reload Quote History
-  and have the admin who began the action use `Resume Pay Request`; another
-  admin cannot take over the in-progress provider identity. QuotePilot keeps the
-  exact approval in progress and reuses the same Stripe-creation and provider
-  identities; a known prepared Session is reused. The hidden link does not prove
-  the customer received nothing—an ambiguous provider call may still have been
-  accepted. If acceptance was already recorded but payment publication was
-  interrupted, resume completes publication without another email send.
+  and have the admin who began the action use `Resume Pay Request` or `Resume
+  Balance Request`, as applicable; another admin cannot take over the
+  in-progress provider identity. QuotePilot keeps the exact approval in
+  progress and reuses the same Stripe-creation and provider identities; a known
+  prepared Session is reused. The hidden link does not prove the customer
+  received nothing—an ambiguous provider call may still have been accepted. If
+  acceptance was already recorded but payment publication was interrupted,
+  resume completes publication without another email send.
 - A definite provider failure requires a new approval only after QuotePilot
   safely expires any prepared unsent checkout and clears its private URL. If
   cleanup cannot be confirmed, the exact operation remains resumable; retry it
   or use `Reconcile Payment` rather than starting a replacement.
+- If the email provider accepted the request but its Checkout Session expires
+  before interrupted publication can resume, QuotePilot closes that operation
+  as failed, records the checkout as expired, and requires a fresh exact
+  approval. It does not send the accepted email again or reuse the expired
+  payment link.
+- If the portal expires while a dispatch is still recorded as `sending` or its
+  provider outcome is ambiguous, QuotePilot does not relabel the email as
+  unsent and does not send it again. An active `sending` attempt waits through a
+  15-minute recovery boundary before an atomic claim marks it provider-unknown,
+  preventing Stripe expiry while the original email call may still be in
+  flight. Recovery then attempts to resolve or expire the exact Session,
+  preserves paid or refunded truth, records the email outcome as unknown, and
+  closes the stale approval. A missing or changed expired portal cannot block
+  authoritative quote/ledger closure; it is flagged for review and its portal
+  projection is skipped. Use the matching reconciliation control before
+  another request whenever Stripe remains open, processing, or unknown.
+- If an operation stops before either a private Checkout preparation or an
+  email dispatch is durably recorded, retry closes that unpublished operation
+  and requires a fresh approval. Its audit records Stripe creation as
+  unverified rather than claiming the provider was never contacted; no payment
+  link or email was exposed by the closed operation. Once either durable record
+  exists, the resumable or provider-review path remains authoritative instead.
 - Payment state is provider-owned. Signed Stripe events can record processing,
   paid, failed, or expired state; a failed or expired Session clears the
-  published payment link so a new exact approval/send can create a replacement.
-  Paid or refunded truth cannot be downgraded through the staff UI.
+  corresponding published payment link so a new exact approval/send can create
+  a replacement. Stripe payment-kind metadata and stored Session scope keep
+  deposit and final-balance transitions on separate rails. Paid or refunded
+  truth cannot be downgraded through the staff UI.
 - Admins may select `Reconcile Payment` when the stored Stripe Session needs
   provider review, such as after delayed webhook delivery. Reconciliation reads
   the server-recorded Session and applies or reports provider truth; it is not a
-  manual paid button. A review-required result must be investigated in Stripe.
+  manual paid button. Use `Reconcile Final Balance` for the final-balance rail.
+  A review-required result must be investigated in Stripe.
 - This workflow is not production behavior until its matching frontend,
   Functions, and Firestore rules are deployed together and hosted Stripe
-  test/live acceptance is recorded. It covers deposits only; refunds, disputes,
-  and final-balance requests remain separate manual processes.
+  test/live acceptance is recorded separately for deposit and final-balance
+  collection. This source branch is not `main`, and no hosted or Stripe-provider
+  acceptance has been recorded for final-balance collection. Refunds and
+  disputes remain separate manual processes.
 - While quote delivery is `sending`, or its provider outcome needs manual
   review, QuotePilot locks quote status/payment, edit, checkout, payment email,
   contract, portal rotation, and deletion controls. PDF download, email-template
@@ -383,7 +424,7 @@ Complete every item before calling the new tenant operational:
   copy-ready onboarding message manually.
 
 ## Customer Portal
-- Customers can open portal links and review event details, selected package/menu/add-ons/rentals, itemized pricing, total, deposit, and payment state.
+- Customers can open portal links and review event details, selected package/menu/add-ons/rentals, itemized pricing, total, deposit, and payment state. An eligible booked contract also shows its separate final-balance amount and provider-owned status.
 - Portal decisions support `Accept`, `Request Changes`, and `Decline`; change requests require a customer note.
 - Proposal acceptance is recorded separately from payment and booking confirmation.
 - Portal updates are reflected in staff quote history.

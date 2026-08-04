@@ -278,6 +278,73 @@ describe("quoteStore workflow persistence", () => {
     expect((await readQuote()).status).toBe("sent");
   });
 
+  test("hydrates final-balance defaults and preserves the exact governed scope", async () => {
+    const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY));
+    existing[0].status = "booked";
+    existing[0].totals = { total: 1604.772, deposit: 481.4316 };
+    existing[0].payment = {
+      depositStatus: "paid",
+      stripeSessionId: "cs_test_deposit_123",
+      depositConfirmedAtISO: "2026-05-02T10:00:00.000Z"
+    };
+    existing[0].booking = {
+      contractNumber: "C-260502-12345",
+      contractConvertedAtISO: "2026-05-02T11:00:00.000Z"
+    };
+    const actionScope = {
+      version: 1,
+      kind: "stripe_checkout_final_balance_request",
+      organizationId: "org-local",
+      quoteId: "workflow-quote",
+      quoteRevisionId: "v0001@2026-05-01T10:00:00.000Z",
+      portalKey: "portal-key-12345678901234567890",
+      portalIssuedAtISO: "2026-05-01T10:00:00.000Z",
+      portalExpiresAtISO: "2026-12-01T10:00:00.000Z",
+      customerEmail: "avery@example.com",
+      paymentKind: "final_balance",
+      currency: "usd",
+      amountCents: 112334,
+      depositStatus: "paid",
+      depositAmountCents: 48143,
+      depositStripeSessionId: "cs_test_deposit_123",
+      depositConfirmedAtISO: "2026-05-02T10:00:00.000Z",
+      contractNumber: "C-260502-12345",
+      contractConvertedAtISO: "2026-05-02T11:00:00.000Z",
+      checkoutGeneration: 1
+    };
+    existing[0].workflow = {
+      approvalRequests: [{
+        id: "final-balance-approval",
+        action: "send_final_balance_request",
+        state: "approved",
+        requestedAtISO: "2026-05-02T11:30:00.000Z",
+        resolvedAtISO: "2026-05-02T11:45:00.000Z",
+        actionScope,
+        actionScopeDigest: "a".repeat(64),
+        executionState: "awaiting_execution"
+      }]
+    };
+    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+
+    const quote = await readQuote();
+    expect(quote.payment.finalBalance).toEqual({
+      amountCents: 112334,
+      currency: "usd",
+      status: "unpaid",
+      paymentLink: "",
+      confirmedAtISO: "",
+      stripeSessionId: "",
+      stripeCheckoutState: "",
+      checkoutGeneration: 0,
+      knownStripeSessionIds: []
+    });
+    expect(quote.workflow.approvalRequests[0]).toMatchObject({
+      action: "send_final_balance_request",
+      actionScope,
+      actionScopeDigest: "a".repeat(64)
+    });
+  });
+
   test("persists only recognized production checklist items", async () => {
     const result = await updateQuoteProductionChecklist({
       quoteId: "workflow-quote",

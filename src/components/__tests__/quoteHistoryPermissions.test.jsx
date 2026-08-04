@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
   canRotateQuotePortal,
+  getFinalBalanceDisplayStatus,
   getExecutableApprovalRequest,
   isCustomerPortalShareable,
+  isFinalBalanceRequestEligible,
   getQuoteDeliveryUiState,
   getQuoteHistoryActionPermissions
 } from "../QuoteHistoryModal";
@@ -18,8 +20,11 @@ describe("quote history action permissions", () => {
       canSendQuoteEmail: true,
       canCopyArtifacts: true,
       canCopyPaymentLink: true,
+      canCopyFinalBalanceLink: true,
       canSendPaymentRequest: true,
+      canSendFinalBalanceRequest: true,
       canReconcilePayment: true,
+      canReconcileFinalBalance: true,
       canManageQuoteStatus: true,
       canConvertToContract: true,
       canManageConfirmation: true,
@@ -39,8 +44,11 @@ describe("quote history action permissions", () => {
       canSendQuoteEmail: false,
       canCopyArtifacts: true,
       canCopyPaymentLink: false,
+      canCopyFinalBalanceLink: false,
       canSendPaymentRequest: false,
+      canSendFinalBalanceRequest: false,
       canReconcilePayment: false,
+      canReconcileFinalBalance: false,
       canManageQuoteStatus: false,
       canConvertToContract: false,
       canManageConfirmation: false,
@@ -60,8 +68,11 @@ describe("quote history action permissions", () => {
       canSendQuoteEmail: false,
       canCopyArtifacts: false,
       canCopyPaymentLink: false,
+      canCopyFinalBalanceLink: false,
       canSendPaymentRequest: false,
+      canSendFinalBalanceRequest: false,
       canReconcilePayment: false,
+      canReconcileFinalBalance: false,
       canManageQuoteStatus: false,
       canConvertToContract: false,
       canManageConfirmation: false,
@@ -78,13 +89,29 @@ describe("quote history action permissions", () => {
     }
   });
 
-  test("portal rotation stops before terminal commercial states", () => {
+  test("portal rotation includes booked renewal but excludes other terminal states", () => {
     expect(canRotateQuotePortal("draft")).toBe(true);
     expect(canRotateQuotePortal("sent")).toBe(true);
     expect(canRotateQuotePortal("viewed")).toBe(true);
-    for (const status of ["accepted", "declined", "booked", "expired", "deleted"]) {
+    expect(canRotateQuotePortal("booked")).toBe(true);
+    for (const status of ["accepted", "declined", "expired", "deleted"]) {
       expect(canRotateQuotePortal(status)).toBe(false);
     }
+  });
+
+  test("renders provider substates without widening the stored balance status", () => {
+    expect(getFinalBalanceDisplayStatus({
+      status: "sent",
+      stripeCheckoutState: "processing"
+    })).toBe("processing");
+    expect(getFinalBalanceDisplayStatus({
+      status: "unpaid",
+      stripeCheckoutState: "failed"
+    })).toBe("failed");
+    expect(getFinalBalanceDisplayStatus({
+      status: "unpaid",
+      stripeCheckoutState: "expired"
+    })).toBe("expired");
   });
 
   test("only returns an approved action that is still awaiting execution", () => {
@@ -111,7 +138,9 @@ describe("quote history action permissions", () => {
             id: "payment-in-progress",
             action: "send_payment_request",
             state: "approved",
-            executionState: "in_progress"
+            executionState: "in_progress",
+            actionScope: { paymentKind: "deposit", amountCents: 12500 },
+            actionScopeDigest: "a".repeat(64)
           }
         ]
       }
@@ -119,6 +148,78 @@ describe("quote history action permissions", () => {
 
     expect(getExecutableApprovalRequest(quote, "send_payment_request")?.id)
       .toBe("payment-in-progress");
+  });
+
+  test("allows an approved final-balance request to resume after an interrupted execution", () => {
+    const quote = {
+      workflow: {
+        approvalRequests: [
+          {
+            id: "final-balance-in-progress",
+            action: "send_final_balance_request",
+            state: "approved",
+            executionState: "in_progress",
+            actionScope: { paymentKind: "final_balance", amountCents: 37500 },
+            actionScopeDigest: "b".repeat(64)
+          }
+        ]
+      }
+    };
+
+    expect(getExecutableApprovalRequest(quote, "send_final_balance_request")?.id)
+      .toBe("final-balance-in-progress");
+  });
+
+  test("does not execute payment approvals after their exact server scope is lost", () => {
+    const quote = {
+      workflow: {
+        approvalRequests: [{
+          id: "unscoped-final-balance",
+          action: "send_final_balance_request",
+          state: "approved",
+          executionState: "awaiting_execution"
+        }]
+      }
+    };
+
+    expect(getExecutableApprovalRequest(quote, "send_final_balance_request")).toBeNull();
+  });
+
+  test("requires booked contract and provider-paid deposit evidence for final-balance controls", () => {
+    const eligible = {
+      status: "booked",
+      booking: {
+        contractNumber: "C-260804-12345",
+        contractConvertedAtISO: "2026-08-04T14:30:00.000Z"
+      },
+      payment: {
+        depositStatus: "paid",
+        stripeSessionId: "cs_test_deposit_123",
+        depositConfirmedAtISO: "2026-08-04T14:00:00.000Z",
+        finalBalance: {
+          amountCents: 37500,
+          status: "unpaid"
+        }
+      }
+    };
+
+    expect(isFinalBalanceRequestEligible(eligible)).toBe(true);
+    expect(isFinalBalanceRequestEligible({ ...eligible, status: "accepted" })).toBe(false);
+    expect(isFinalBalanceRequestEligible({
+      ...eligible,
+      booking: { ...eligible.booking, contractNumber: "" }
+    })).toBe(false);
+    expect(isFinalBalanceRequestEligible({
+      ...eligible,
+      payment: { ...eligible.payment, depositStatus: "sent" }
+    })).toBe(false);
+    expect(isFinalBalanceRequestEligible({
+      ...eligible,
+      payment: {
+        ...eligible.payment,
+        finalBalance: { ...eligible.payment.finalBalance, status: "paid" }
+      }
+    })).toBe(false);
   });
 
   test("does not resume in-progress execution for non-payment approval actions", () => {

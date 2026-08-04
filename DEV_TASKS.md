@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 3, 2026
+Last updated: August 4, 2026
 
 ## P0 - Tenant Provisioning Release
 - Deploy the reviewed role-authoritative Firestore rules and
@@ -35,17 +35,19 @@ Last updated: August 3, 2026
 - Configure all six non-secret Preview-scope `VITE_FIREBASE_*` variables, then
   reverify the exact candidate SHA and complete hosted owner/quote/portal
   acceptance. Source CI alone is not hosted proof.
-- Release the Stripe deposit lifecycle only as one exact-revision frontend,
-  Functions, and Firestore-rules rollout. In isolated hosted acceptance set
-  explicit `STRIPE_MODE=test` with a matching test key and subscribe all four
-  Checkout Session events; after that evidence, separately authorize live mode,
-  configure a matching live key, and capture real webhook plus admin
-  reconciliation evidence. Prove that prepared URLs remain absent from
-  browser-readable quote/portal records, ambiguous checkout/email outcomes
-  resume under the same executing admin with the same keys, durable provider
-  acceptance resumes publication without another send, and definite failure
-  does not publish an unsent checkout. Local tests and emulator events are not
-  provider acceptance.
+- Release the Stripe deposit and final-balance lifecycles only as one
+  exact-revision frontend, Functions, and Firestore-rules rollout. In isolated
+  hosted acceptance set explicit `STRIPE_MODE=test` with a matching test key and
+  subscribe all four Checkout Session events; after that evidence, separately
+  authorize live mode, configure a matching live key, and capture real webhook
+  plus admin reconciliation evidence. Prove separately for each payment rail
+  that prepared URLs remain absent from browser-readable quote/portal records,
+  ambiguous checkout/email outcomes resume under the same executing admin with
+  the same keys, durable provider acceptance resumes publication without
+  another send, and definite failure does not publish an unsent checkout. Also
+  prove that a final-balance request requires the booked contract and verified
+  paid deposit, uses the server-derived remainder, and cannot rewrite deposit
+  evidence. Local tests and emulator events are not provider acceptance.
 - Strengthen the existing `main` protection from zero required approvals to an
   independently enforceable review policy with code-owner, stale-review, and
   last-push controls. Add a non-admin collaborator or separately owned gate;
@@ -93,9 +95,9 @@ Last updated: August 3, 2026
   tool and emulator acceptance are complete; production execution is not.
 - Add basic analytics events for funnel drop-off and add-on selection trends.
 - Extend operations audit controls (retry dashboards, sync health trends, role-based action logs).
-- Add server-authoritative refund, dispute, and final-balance workflows. The
-  current Stripe candidate intentionally covers deposit checkout only; these
-  later money movements must not be inferred from deposit status.
+- Add server-authoritative refund and dispute workflows. The current source
+  branch covers deposit and final-balance collection as separate payment rails,
+  but neither rail proves or authorizes a refund or dispute outcome.
 
 ## P2 - Integrations
 - Add CRM adapters (HubSpot/Salesforce or webhook bridge).

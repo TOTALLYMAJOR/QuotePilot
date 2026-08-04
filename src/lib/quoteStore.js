@@ -55,9 +55,27 @@ const UPDATE_QUOTE_DRAFT_CALLABLE = "updateQuoteDraft";
 const REQUEST_QUOTE_APPROVAL_CALLABLE = "requestQuoteApproval";
 const RESOLVE_QUOTE_APPROVAL_CALLABLE = "resolveQuoteApprovalRequest";
 const CONVERT_QUOTE_TO_CONTRACT_CALLABLE = "convertQuoteToContract";
+const SERVER_SCOPED_PAYMENT_APPROVAL_ACTIONS = new Set([
+  "send_payment_request",
+  "send_final_balance_request"
+]);
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
+const FINAL_BALANCE_STATUSES = new Set([
+  "unpaid",
+  "sent",
+  "paid"
+]);
+const FINAL_BALANCE_CHECKOUT_STATES = new Set([
+  "",
+  "prepared",
+  "open",
+  "processing",
+  "paid",
+  "failed",
+  "expired"
+]);
 const BOOKING_CONFIRMATION_STATUSES = ["pending", "sent", "confirmed", "cancelled"];
 const INTEGRATION_PROVIDER_SET = new Set(["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"]);
 const INTEGRATION_STATE_SET = new Set(["queued", "success", "error", "retrying", "skipped"]);
@@ -407,9 +425,11 @@ function normalizePaymentApprovalScope(input) {
     currency: String(source.currency || "").trim().toLowerCase(),
     amountCents: Number.isSafeInteger(amountCents) ? amountCents : 0
   };
+  const isDepositScope = scope.kind === "stripe_checkout_deposit_request";
+  const isFinalBalanceScope = scope.kind === "stripe_checkout_final_balance_request";
   if (
     scope.version !== 1
-    || scope.kind !== "stripe_checkout_deposit_request"
+    || (!isDepositScope && !isFinalBalanceScope)
     || !scope.organizationId
     || !scope.quoteId
     || !scope.quoteRevisionId
@@ -417,13 +437,39 @@ function normalizePaymentApprovalScope(input) {
     || !scope.portalIssuedAtISO
     || !scope.portalExpiresAtISO
     || !scope.customerEmail
-    || scope.paymentKind !== "deposit"
     || !/^[a-z]{3}$/.test(scope.currency)
     || scope.amountCents <= 0
   ) {
     return null;
   }
-  return scope;
+  if (isDepositScope) {
+    return scope.paymentKind === "deposit" ? scope : null;
+  }
+  const depositAmountCents = Number(source.depositAmountCents);
+  const checkoutGeneration = Number(source.checkoutGeneration);
+  const finalBalanceScope = {
+    ...scope,
+    depositStatus: String(source.depositStatus || "").trim().toLowerCase(),
+    depositAmountCents: Number.isSafeInteger(depositAmountCents) ? depositAmountCents : 0,
+    depositStripeSessionId: String(source.depositStripeSessionId || "").trim(),
+    depositConfirmedAtISO: String(source.depositConfirmedAtISO || "").trim(),
+    contractNumber: String(source.contractNumber || "").trim(),
+    contractConvertedAtISO: String(source.contractConvertedAtISO || "").trim(),
+    checkoutGeneration: Number.isSafeInteger(checkoutGeneration) ? checkoutGeneration : 0
+  };
+  if (
+    finalBalanceScope.paymentKind !== "final_balance"
+    || finalBalanceScope.depositStatus !== "paid"
+    || finalBalanceScope.depositAmountCents <= 0
+    || !/^cs_[A-Za-z0-9_]+$/.test(finalBalanceScope.depositStripeSessionId)
+    || !finalBalanceScope.depositConfirmedAtISO
+    || !finalBalanceScope.contractNumber
+    || !finalBalanceScope.contractConvertedAtISO
+    || finalBalanceScope.checkoutGeneration <= 0
+  ) {
+    return null;
+  }
+  return finalBalanceScope;
 }
 
 function normalizeApprovalRequests(input) {
@@ -438,7 +484,7 @@ function normalizeApprovalRequests(input) {
         return null;
       }
       seen.add(id);
-      const actionScope = action === "send_payment_request"
+      const actionScope = SERVER_SCOPED_PAYMENT_APPROVAL_ACTIONS.has(action)
         ? normalizePaymentApprovalScope(item?.actionScope)
         : null;
       const actionScopeDigest = String(item?.actionScopeDigest || "").trim().toLowerCase();
@@ -716,7 +762,7 @@ function buildPortalSnapshot(quoteId, quote) {
     },
     status: normalizeStatus(quote.status),
     expiresAtISO: quote.expiresAtISO || addDaysISO(createdAtISO, DEFAULT_VALIDITY_DAYS),
-    payment: hydratePayment(quote.payment),
+    payment: hydratePayment(quote.payment, quote.totals),
     booking: {
       bookedAtISO: portalBooking.bookedAtISO,
       contractNumber: portalBooking.contractNumber,
@@ -869,7 +915,55 @@ function normalizeBookingConfirmationStatus(status) {
   return BOOKING_CONFIRMATION_STATUSES.includes(status) ? status : "pending";
 }
 
-function hydratePayment(payment) {
+function moneyToRoundedCents(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return 0;
+  const cents = Math.round(amount * 100);
+  return Number.isSafeInteger(cents) ? cents : 0;
+}
+
+function hydrateFinalBalance(finalBalance, totals = {}) {
+  const source = finalBalance && typeof finalBalance === "object" && !Array.isArray(finalBalance)
+    ? finalBalance
+    : {};
+  const explicitAmountCents = Number(source.amountCents);
+  const derivedAmountCents = Math.max(
+    0,
+    moneyToRoundedCents(totals?.total) - moneyToRoundedCents(totals?.deposit)
+  );
+  const amountCents = Number.isSafeInteger(explicitAmountCents) && explicitAmountCents >= 0
+    ? explicitAmountCents
+    : derivedAmountCents;
+  const paymentLink = String(source.paymentLink || "").trim();
+  const rawStatus = String(source.status || "").trim().toLowerCase();
+  const status = FINAL_BALANCE_STATUSES.has(rawStatus)
+    ? rawStatus
+    : paymentLink ? "sent" : "unpaid";
+  const rawCheckoutState = String(source.stripeCheckoutState || "").trim().toLowerCase();
+  const checkoutGeneration = Number(source.checkoutGeneration);
+  const currency = String(source.currency || "usd").trim().toLowerCase();
+  return {
+    amountCents,
+    currency: /^[a-z]{3}$/.test(currency) ? currency : "usd",
+    status,
+    paymentLink,
+    confirmedAtISO: String(source.confirmedAtISO || "").trim(),
+    stripeSessionId: String(source.stripeSessionId || "").trim(),
+    stripeCheckoutState: FINAL_BALANCE_CHECKOUT_STATES.has(rawCheckoutState)
+      ? rawCheckoutState
+      : "",
+    checkoutGeneration: Number.isSafeInteger(checkoutGeneration) && checkoutGeneration >= 0
+      ? checkoutGeneration
+      : 0,
+    knownStripeSessionIds: Array.from(new Set(
+      (Array.isArray(source.knownStripeSessionIds) ? source.knownStripeSessionIds : [])
+        .map((value) => String(value || "").trim())
+        .filter((value) => /^cs_[A-Za-z0-9_]+$/.test(value))
+    )).slice(-20)
+  };
+}
+
+function hydratePayment(payment, totals = {}) {
   const payload = payment || {};
   const depositLink = (payload.depositLink || "").trim();
   const defaultStatus = depositLink ? "sent" : "unpaid";
@@ -877,7 +971,8 @@ function hydratePayment(payment) {
     ...payload,
     depositLink,
     depositStatus: normalizePaymentStatus(payload.depositStatus || defaultStatus),
-    depositConfirmedAtISO: payload.depositConfirmedAtISO || ""
+    depositConfirmedAtISO: payload.depositConfirmedAtISO || "",
+    finalBalance: hydrateFinalBalance(payload.finalBalance, totals)
   };
 }
 
@@ -941,7 +1036,7 @@ function hydrateQuote(item, nowISO = isoNow()) {
     expiresAtISO,
     portalIssuedAtISO,
     portalExpiresAtISO,
-    payment: hydratePayment(item.payment),
+    payment: hydratePayment(item.payment, item.totals),
     booking: hydrateBooking(item.booking),
     workflow: {
       ...(item.workflow || {}),
@@ -2259,6 +2354,10 @@ export async function requestQuoteApproval({
         || !request
         || request.action !== normalizedAction
         || request.state !== "pending"
+        || (
+          SERVER_SCOPED_PAYMENT_APPROVAL_ACTIONS.has(normalizedAction)
+          && (!request.actionScope || !request.actionScopeDigest)
+        )
       ) {
         throw new Error("Trusted approval request returned an invalid response.");
       }
@@ -2268,7 +2367,7 @@ export async function requestQuoteApproval({
       // release. Only a confirmed missing endpoint may use the existing
       // rule-authorized write path during that short rollout window.
       if (!isMissingCallableError(err)) throw err;
-      if (normalizedAction === "send_payment_request") {
+      if (SERVER_SCOPED_PAYMENT_APPROVAL_ACTIONS.has(normalizedAction)) {
         throw new Error(
           "Payment approvals require the coordinated backend release. Retry after Functions are updated."
         );
@@ -2381,6 +2480,10 @@ export async function resolveQuoteApprovalRequest({
         || !request
         || request.id !== approvalRequestId
         || request.state !== nextState
+        || (
+          SERVER_SCOPED_PAYMENT_APPROVAL_ACTIONS.has(request.action)
+          && (!request.actionScope || !request.actionScopeDigest)
+        )
       ) {
         throw new Error("Trusted approval resolution returned an invalid response.");
       }
@@ -2391,7 +2494,7 @@ export async function resolveQuoteApprovalRequest({
         const quote = await readQuoteById(id);
         const target = normalizeApprovalRequests(quote.workflow?.approvalRequests)
           .find((item) => item.id === approvalRequestId);
-        if (target?.action === "send_payment_request") {
+        if (SERVER_SCOPED_PAYMENT_APPROVAL_ACTIONS.has(target?.action)) {
           throw new Error(
             "Payment approval requires the coordinated backend release. Retry after Functions are updated."
           );
@@ -2919,7 +3022,7 @@ export async function updateQuote({
     });
   }
 
-  const existingPayment = hydratePayment(existing.payment);
+  const existingPayment = hydratePayment(existing.payment, existing.totals);
   const nextDepositLink = String(form.depositLink || "").trim();
   let nextDepositStatus = normalizePaymentStatus(existingPayment.depositStatus || "unpaid");
   if (nextDepositLink && nextDepositStatus === "unpaid") {
@@ -3228,14 +3331,16 @@ export async function rotateQuotePortalKey({
   const nowISO = isoNow();
   const nextPortalKey = buildPortalKey();
   const portalIssuedAtISO = nowISO;
-  const portalExpiresAtISO = resolvePortalExpiresAtISO(
-    {
-      expiresAtISO: quote.expiresAtISO || addDaysISO(nowISO, DEFAULT_VALIDITY_DAYS),
-      portalIssuedAtISO
-    },
-    portalIssuedAtISO,
-    nowISO
-  );
+  const portalExpiresAtISO = normalizeStatus(quote.status) === "booked"
+    ? addDaysISO(portalIssuedAtISO, PORTAL_TOKEN_VALIDITY_DAYS)
+    : resolvePortalExpiresAtISO(
+      {
+        expiresAtISO: quote.expiresAtISO || addDaysISO(nowISO, DEFAULT_VALIDITY_DAYS),
+        portalIssuedAtISO
+      },
+      portalIssuedAtISO,
+      nowISO
+    );
   const normalizedActorEmail = normalizeEmail(actorEmail);
 
   await saveQuoteVersion(id, {
@@ -3928,6 +4033,10 @@ export async function getPortalQuote(portalKey) {
     return {
       portalKey: key,
       ...portalData,
+      payment: hydratePayment(portalData.payment, portalData.totals || {
+        total: portalData.total,
+        deposit: portalData.deposit
+      }),
       ...portalValidity
     };
   }

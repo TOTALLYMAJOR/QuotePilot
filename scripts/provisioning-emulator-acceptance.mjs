@@ -1429,6 +1429,495 @@ for (const [providerState, eventType] of [
   assert.equal(terminalPortal.data()?.payment?.stripeCheckoutState, providerState);
 }
 
+const expectedQuoteTotalCents = Math.round(
+  Number(paymentQuoteBefore.data()?.totals?.total || 0) * 100
+);
+const expectedFinalBalanceCents = expectedQuoteTotalCents - expectedDepositCents;
+assert.ok(expectedFinalBalanceCents > 0);
+
+async function seedFinalBalanceApprovalFixture({ suffix, quoteId, portalKey }) {
+  const sourceQuote = paymentQuoteBefore.data() || {};
+  const sourcePortal = paymentPortalBefore.data() || {};
+  const paidDepositSessionId = `cs_test_quotepilot_final_approval_deposit_${suffix}`;
+  const paidDepositAtISO = new Date(Date.now() - 60_000).toISOString();
+  const providerAcceptedAtISO = new Date(Date.now() - 30_000).toISOString();
+  const portalIssuedAtISO = String(sourceQuote.portalIssuedAtISO || "");
+  const portalExpiresAtISO = String(sourceQuote.portalExpiresAtISO || "");
+  const revisionId = String(sourceQuote.workflow?.quoteDelivery?.revisionId || "");
+  assert.ok(portalIssuedAtISO);
+  assert.ok(portalExpiresAtISO);
+  assert.ok(revisionId);
+
+  const quoteDelivery = {
+    ...(sourceQuote.workflow?.quoteDelivery || {}),
+    state: "provider_accepted",
+    portalActivationState: "active",
+    portalKey,
+    portalIssuedAtISO,
+    providerAcceptedAtISO,
+    providerMessageId: `provisioning-emulator-final-approval-${suffix}`,
+    revisionId
+  };
+  const deliveryEvidence = {
+    revisionId,
+    state: "provider_accepted",
+    portalActivationState: "active",
+    portalKey,
+    portalIssuedAtISO,
+    providerAcceptedAtISO
+  };
+  const depositLedgerEntry = {
+    operationId: `legacy-deposit:${paidDepositSessionId}`,
+    paymentKind: "deposit",
+    amountCents: expectedDepositCents,
+    state: "paid",
+    providerReference: paidDepositSessionId,
+    providerSettledAtISO: paidDepositAtISO
+  };
+  const quotePayment = {
+    depositStatus: "paid",
+    depositLink: "",
+    depositConfirmedAtISO: paidDepositAtISO,
+    stripeSessionId: paidDepositSessionId,
+    stripeCheckoutState: "paid",
+    checkoutGeneration: 1,
+    knownStripeSessionIds: [paidDepositSessionId],
+    ledger: {
+      version: 1,
+      entries: [depositLedgerEntry]
+    }
+  };
+  const quoteRef = orgRef.collection("quotes").doc(quoteId);
+  const portalRef = db.collection("customerPortalQuotes").doc(portalKey);
+  await Promise.all([
+    quoteRef.set({
+      ...sourceQuote,
+      quoteId,
+      portalKey,
+      status: "booked",
+      workflow: {
+        ...(sourceQuote.workflow || {}),
+        approvalRequests: [],
+        quoteDelivery
+      },
+      payment: quotePayment
+    }, { merge: false }),
+    portalRef.set({
+      ...sourcePortal,
+      quoteId,
+      portalKey,
+      organizationId,
+      status: "booked",
+      portalIssuedAtISO,
+      portalExpiresAtISO,
+      deliveryEvidence,
+      payment: {
+        depositStatus: "paid",
+        depositLink: "",
+        depositConfirmedAtISO: paidDepositAtISO,
+        stripeCheckoutState: "paid"
+      }
+    }, { merge: false })
+  ]);
+
+  return {
+    paidDepositSessionId,
+    portalRef,
+    quoteRef
+  };
+}
+
+const staleFinalApprovalQuoteId = "final-balance-stale-approval-quote";
+const staleFinalApprovalPortalKey = "final-balance-stale-approval-portal-abcdefghijklmnop";
+const staleFinalApprovalFixture = await seedFinalBalanceApprovalFixture({
+  suffix: "stale_scope",
+  quoteId: staleFinalApprovalQuoteId,
+  portalKey: staleFinalApprovalPortalKey
+});
+const staleFinalApproval = await requestAndApproveQuoteAction(
+  staleFinalApprovalQuoteId,
+  "send_final_balance_request",
+  "Collect the booked contract final balance."
+);
+assert.equal(staleFinalApproval.actionScope?.customerEmail, customerEmail);
+const changedFinalBalanceEmail = "changed-final-balance@example.test";
+await staleFinalApprovalFixture.quoteRef.update({
+  "customer.email": changedFinalBalanceEmail
+});
+await expectCallableError(
+  () => callFunction("sendFinalBalanceRequestEmail", bootstrapToken, {
+    organizationId,
+    quoteId: staleFinalApprovalQuoteId,
+    approvalRequestId: staleFinalApproval.id
+  }),
+  "FAILED_PRECONDITION"
+);
+const [staleFinalApprovalQuote, staleFinalApprovalExecution, staleFinalPrivateDispatch] = await Promise.all([
+  staleFinalApprovalFixture.quoteRef.get(),
+  orgRef.collection("quoteApprovalExecutions").doc(staleFinalApproval.id).get(),
+  orgRef.collection("privatePaymentDispatches").doc(staleFinalApproval.id).get()
+]);
+const closedStaleFinalApproval = staleFinalApprovalQuote.data()?.workflow?.approvalRequests
+  ?.find((request) => request.id === staleFinalApproval.id);
+assert.equal(closedStaleFinalApproval?.executionState, "failed");
+assert.equal(staleFinalApprovalExecution.data()?.state, "failed");
+assert.equal(staleFinalApprovalExecution.data()?.action, "send_final_balance_request");
+assert.equal(staleFinalApprovalExecution.data()?.result?.paymentKind, "final_balance");
+assert.equal(staleFinalApprovalExecution.data()?.result?.checkoutPreparationRecorded, false);
+assert.equal(staleFinalApprovalExecution.data()?.result?.stripeCheckoutOutcome, "unverified");
+assert.equal(staleFinalApprovalExecution.data()?.result?.emailProviderContacted, false);
+assert.equal(staleFinalApprovalExecution.data()?.checkoutPreparation, undefined);
+assert.equal(staleFinalApprovalExecution.data()?.paymentDispatch, undefined);
+assert.equal(staleFinalPrivateDispatch.exists, false);
+assert.equal(staleFinalApprovalQuote.data()?.payment?.finalBalance, undefined);
+assert.equal(staleFinalApprovalQuote.data()?.payment?.stripeSessionId, staleFinalApprovalFixture.paidDepositSessionId);
+assert.equal(staleFinalApprovalQuote.data()?.payment?.ledger?.entries?.length, 1);
+const freshFinalApprovalRequest = await callFunction(
+  "requestQuoteApproval",
+  tenantMember.idToken,
+  {
+    organizationId,
+    quoteId: staleFinalApprovalQuoteId,
+    action: "send_final_balance_request",
+    note: "Request a new final-balance approval for the changed customer scope."
+  }
+);
+assert.equal(freshFinalApprovalRequest.ok, true);
+assert.equal(freshFinalApprovalRequest.request?.state, "pending");
+assert.equal(freshFinalApprovalRequest.request?.action, "send_final_balance_request");
+assert.equal(freshFinalApprovalRequest.request?.actionScope?.customerEmail, changedFinalBalanceEmail);
+assert.notEqual(freshFinalApprovalRequest.request?.id, staleFinalApproval.id);
+
+async function seedFinalBalanceWebhookFixture({
+  suffix,
+  quoteId,
+  portalKey,
+  stripeSessionId,
+  operationId
+}) {
+  const sourceQuote = paymentQuoteBefore.data() || {};
+  const sourcePortal = paymentPortalBefore.data() || {};
+  const paidDepositSessionId = `cs_test_quotepilot_final_deposit_${suffix}`;
+  const paidDepositAtISO = new Date(Date.now() - 60_000).toISOString();
+  const providerAcceptedAtISO = new Date(Date.now() - 30_000).toISOString();
+  const paymentLink = `https://checkout.stripe.com/c/pay/quotepilot-final-${suffix}`;
+  const portalIssuedAtISO = String(sourceQuote.portalIssuedAtISO || "");
+  const portalExpiresAtISO = String(sourceQuote.portalExpiresAtISO || "");
+  const revisionId = String(sourceQuote.workflow?.quoteDelivery?.revisionId || "");
+  assert.ok(portalIssuedAtISO);
+  assert.ok(portalExpiresAtISO);
+  assert.ok(revisionId);
+
+  const quoteDelivery = {
+    ...(sourceQuote.workflow?.quoteDelivery || {}),
+    state: "provider_accepted",
+    portalActivationState: "active",
+    portalKey,
+    portalIssuedAtISO,
+    providerAcceptedAtISO,
+    providerMessageId: `provisioning-emulator-final-${suffix}`,
+    revisionId
+  };
+  const deliveryEvidence = {
+    revisionId,
+    state: "provider_accepted",
+    portalActivationState: "active",
+    portalKey,
+    portalIssuedAtISO,
+    providerAcceptedAtISO
+  };
+  const finalBalance = {
+    amountCents: expectedFinalBalanceCents,
+    currency: "usd",
+    status: "sent",
+    paymentLink,
+    confirmedAtISO: "",
+    stripeSessionId,
+    stripeCheckoutState: "open",
+    checkoutGeneration: 1,
+    knownStripeSessionIds: [stripeSessionId]
+  };
+  const paymentLedger = {
+    version: 1,
+    entries: [
+      {
+        operationId: `legacy-deposit:${paidDepositSessionId}`,
+        paymentKind: "deposit",
+        amountCents: expectedDepositCents,
+        state: "paid",
+        providerReference: paidDepositSessionId,
+        providerSettledAtISO: paidDepositAtISO
+      },
+      {
+        operationId,
+        paymentKind: "final_balance",
+        amountCents: expectedFinalBalanceCents,
+        state: "sent",
+        providerReference: stripeSessionId,
+        providerSettledAtISO: ""
+      }
+    ]
+  };
+  const quotePayment = {
+    depositStatus: "paid",
+    depositLink: "",
+    depositConfirmedAtISO: paidDepositAtISO,
+    stripeSessionId: paidDepositSessionId,
+    stripeCheckoutState: "paid",
+    checkoutGeneration: 1,
+    knownStripeSessionIds: [paidDepositSessionId],
+    finalBalance,
+    ledger: paymentLedger
+  };
+  const portalPayment = {
+    depositStatus: "paid",
+    depositLink: "",
+    depositConfirmedAtISO: paidDepositAtISO,
+    stripeCheckoutState: "paid",
+    finalBalance: {
+      amountCents: finalBalance.amountCents,
+      currency: finalBalance.currency,
+      status: finalBalance.status,
+      paymentLink: finalBalance.paymentLink,
+      confirmedAtISO: finalBalance.confirmedAtISO,
+      stripeCheckoutState: finalBalance.stripeCheckoutState,
+      checkoutGeneration: finalBalance.checkoutGeneration
+    }
+  };
+  const quoteRef = orgRef.collection("quotes").doc(quoteId);
+  const portalRef = db.collection("customerPortalQuotes").doc(portalKey);
+  await Promise.all([
+    quoteRef.set({
+      ...sourceQuote,
+      quoteId,
+      portalKey,
+      status: "booked",
+      workflow: {
+        ...(sourceQuote.workflow || {}),
+        approvalRequests: [],
+        quoteDelivery
+      },
+      payment: quotePayment
+    }, { merge: false }),
+    portalRef.set({
+      ...sourcePortal,
+      quoteId,
+      portalKey,
+      organizationId,
+      status: "booked",
+      portalIssuedAtISO,
+      portalExpiresAtISO,
+      deliveryEvidence,
+      payment: portalPayment
+    }, { merge: false })
+  ]);
+
+  const [seededQuote, seededPortal] = await Promise.all([
+    quoteRef.get(),
+    portalRef.get()
+  ]);
+  assert.equal(seededQuote.data()?.status, "booked");
+  assert.ok(seededQuote.data()?.booking?.contractNumber);
+  assert.ok(seededQuote.data()?.booking?.contractConvertedAtISO);
+  assert.equal(seededQuote.data()?.workflow?.quoteDelivery?.state, "provider_accepted");
+  assert.equal(seededQuote.data()?.workflow?.quoteDelivery?.portalActivationState, "active");
+  assert.equal(seededPortal.data()?.deliveryEvidence?.state, "provider_accepted");
+  assert.equal(seededPortal.data()?.deliveryEvidence?.portalActivationState, "active");
+  assert.equal(seededQuote.data()?.payment?.finalBalance?.status, "sent");
+  assert.equal(
+    seededQuote.data()?.payment?.ledger?.entries
+      ?.find((entry) => entry.operationId === operationId)
+      ?.state,
+    "sent"
+  );
+
+  return {
+    operationId,
+    paidDepositSessionId,
+    portalRef,
+    quoteRef,
+    stripeSessionId
+  };
+}
+
+function buildFinalBalanceWebhookEvent({
+  eventId,
+  quoteId,
+  portalKey,
+  stripeSessionId,
+  operationId,
+  eventType = "checkout.session.completed",
+  sessionStatus = "complete",
+  paymentStatus = "paid"
+}) {
+  return {
+    id: eventId,
+    object: "event",
+    type: eventType,
+    livemode: false,
+    data: {
+      object: {
+        id: stripeSessionId,
+        object: "checkout.session",
+        livemode: false,
+        mode: "payment",
+        status: sessionStatus,
+        payment_status: paymentStatus,
+        currency: "usd",
+        amount_total: expectedFinalBalanceCents,
+        metadata: {
+          quoteId,
+          organizationId,
+          portalKey,
+          approvalRequestId: operationId,
+          paymentKind: "final_balance",
+          currency: "usd",
+          checkoutGeneration: "1"
+        }
+      }
+    }
+  };
+}
+
+const finalBalanceQuoteId = "stripe-final-balance-paid-quote";
+const finalBalancePortalKey = "stripe-final-balance-paid-portal-key-abcdefghijklmnop";
+const finalBalanceSessionId = "cs_test_quotepilot_final_balance_paid";
+const finalBalanceOperationId = "final_balance_webhook_acceptance";
+const finalBalanceFixture = await seedFinalBalanceWebhookFixture({
+  suffix: "paid",
+  quoteId: finalBalanceQuoteId,
+  portalKey: finalBalancePortalKey,
+  stripeSessionId: finalBalanceSessionId,
+  operationId: finalBalanceOperationId
+});
+const finalBalanceEvent = buildFinalBalanceWebhookEvent({
+  eventId: "evt_quotepilot_final_balance_paid",
+  quoteId: finalBalanceQuoteId,
+  portalKey: finalBalancePortalKey,
+  stripeSessionId: finalBalanceSessionId,
+  operationId: finalBalanceOperationId
+});
+const finalBalancePaidAttempt = await callStripeWebhook(finalBalanceEvent);
+assert.equal(finalBalancePaidAttempt.status, 200, finalBalancePaidAttempt.responseText);
+assert.equal(finalBalancePaidAttempt.payload?.received, true);
+const [finalBalancePaidQuote, finalBalancePaidPortal, finalBalancePaidAudit] = await Promise.all([
+  finalBalanceFixture.quoteRef.get(),
+  finalBalanceFixture.portalRef.get(),
+  db.collection("webhookEvents").doc(`stripe-${finalBalanceEvent.id}`).get()
+]);
+const finalBalancePaidQuoteData = finalBalancePaidQuote.data() || {};
+const finalBalancePaidPortalPayment = finalBalancePaidPortal.data()?.payment || {};
+const finalBalancePaidPortalProjection = finalBalancePaidPortalPayment.finalBalance || {};
+const finalBalancePaidLedgerEntry = finalBalancePaidQuoteData.payment?.ledger?.entries
+  ?.find((entry) => entry.operationId === finalBalanceOperationId);
+assert.equal(finalBalancePaidQuoteData.payment?.depositStatus, "paid");
+assert.equal(
+  finalBalancePaidQuoteData.payment?.stripeSessionId,
+  finalBalanceFixture.paidDepositSessionId
+);
+assert.equal(finalBalancePaidQuoteData.payment?.finalBalance?.status, "paid");
+assert.equal(finalBalancePaidQuoteData.payment?.finalBalance?.paymentLink, "");
+assert.equal(finalBalancePaidQuoteData.payment?.finalBalance?.stripeSessionId, finalBalanceSessionId);
+assert.equal(finalBalancePaidQuoteData.payment?.finalBalance?.stripeCheckoutState, "paid");
+assert.ok(finalBalancePaidQuoteData.payment?.finalBalance?.confirmedAtISO);
+assert.equal(finalBalancePaidLedgerEntry?.paymentKind, "final_balance");
+assert.equal(finalBalancePaidLedgerEntry?.amountCents, expectedFinalBalanceCents);
+assert.equal(finalBalancePaidLedgerEntry?.state, "paid");
+assert.equal(finalBalancePaidLedgerEntry?.providerReference, finalBalanceSessionId);
+assert.ok(finalBalancePaidLedgerEntry?.providerSettledAtISO);
+assert.equal(finalBalancePaidPortalProjection.status, "paid");
+assert.equal(finalBalancePaidPortalProjection.amountCents, expectedFinalBalanceCents);
+assert.equal(finalBalancePaidPortalProjection.paymentLink, "");
+assert.ok(finalBalancePaidPortalProjection.confirmedAtISO);
+assert.equal(
+  Object.prototype.hasOwnProperty.call(finalBalancePaidPortalProjection, "stripeSessionId"),
+  false
+);
+assert.equal(
+  Object.prototype.hasOwnProperty.call(finalBalancePaidPortalProjection, "knownStripeSessionIds"),
+  false
+);
+assert.doesNotMatch(JSON.stringify(finalBalancePaidPortalPayment), /cs_[A-Za-z0-9_]+/);
+assert.equal(finalBalancePaidAudit.data()?.status, "processed");
+assert.equal(finalBalancePaidAudit.data()?.providerState, "paid");
+assert.equal(finalBalancePaidAudit.data()?.paymentKind, "final_balance");
+const duplicateFinalBalancePaidAttempt = await callStripeWebhook(finalBalanceEvent);
+assert.equal(duplicateFinalBalancePaidAttempt.status, 200, duplicateFinalBalancePaidAttempt.responseText);
+assert.equal(duplicateFinalBalancePaidAttempt.payload?.duplicate, true);
+
+const lateSettlementQuoteId = "stripe-final-balance-late-paid-quote";
+const lateSettlementPortalKey = "stripe-final-balance-late-paid-portal-abcdefghijklmnop";
+const lateSettlementSessionId = "cs_test_quotepilot_final_balance_late";
+const lateSettlementOperationId = "final_balance_late_settlement";
+const lateSettlementFixture = await seedFinalBalanceWebhookFixture({
+  suffix: "late",
+  quoteId: lateSettlementQuoteId,
+  portalKey: lateSettlementPortalKey,
+  stripeSessionId: lateSettlementSessionId,
+  operationId: lateSettlementOperationId
+});
+const failedFinalBalanceEvent = buildFinalBalanceWebhookEvent({
+  eventId: "evt_quotepilot_final_balance_failed",
+  quoteId: lateSettlementQuoteId,
+  portalKey: lateSettlementPortalKey,
+  stripeSessionId: lateSettlementSessionId,
+  operationId: lateSettlementOperationId,
+  eventType: "checkout.session.async_payment_failed",
+  paymentStatus: "unpaid"
+});
+const failedFinalBalanceAttempt = await callStripeWebhook(failedFinalBalanceEvent);
+assert.equal(failedFinalBalanceAttempt.status, 200, failedFinalBalanceAttempt.responseText);
+const [failedFinalBalanceQuote, failedFinalBalanceAudit] = await Promise.all([
+  lateSettlementFixture.quoteRef.get(),
+  db.collection("webhookEvents").doc(`stripe-${failedFinalBalanceEvent.id}`).get()
+]);
+const failedFinalBalanceLedgerEntry = failedFinalBalanceQuote.data()?.payment?.ledger?.entries
+  ?.find((entry) => entry.operationId === lateSettlementOperationId);
+assert.equal(failedFinalBalanceQuote.data()?.payment?.depositStatus, "paid");
+assert.equal(failedFinalBalanceQuote.data()?.payment?.finalBalance?.status, "unpaid");
+assert.equal(failedFinalBalanceQuote.data()?.payment?.finalBalance?.stripeCheckoutState, "failed");
+assert.equal(failedFinalBalanceLedgerEntry?.state, "failed");
+assert.equal(failedFinalBalanceAudit.data()?.paymentKind, "final_balance");
+assert.equal(failedFinalBalanceAudit.data()?.providerState, "failed");
+
+const latePaidFinalBalanceEvent = buildFinalBalanceWebhookEvent({
+  eventId: "evt_quotepilot_final_balance_late_paid",
+  quoteId: lateSettlementQuoteId,
+  portalKey: lateSettlementPortalKey,
+  stripeSessionId: lateSettlementSessionId,
+  operationId: lateSettlementOperationId,
+  eventType: "checkout.session.async_payment_succeeded"
+});
+const latePaidFinalBalanceAttempt = await callStripeWebhook(latePaidFinalBalanceEvent);
+assert.equal(latePaidFinalBalanceAttempt.status, 200, latePaidFinalBalanceAttempt.responseText);
+assert.equal(latePaidFinalBalanceAttempt.payload?.received, true);
+const [latePaidFinalBalanceQuote, latePaidFinalBalancePortal, latePaidFinalBalanceAudit] = await Promise.all([
+  lateSettlementFixture.quoteRef.get(),
+  lateSettlementFixture.portalRef.get(),
+  db.collection("webhookEvents").doc(`stripe-${latePaidFinalBalanceEvent.id}`).get()
+]);
+const latePaidFinalBalanceLedgerEntry = latePaidFinalBalanceQuote.data()?.payment?.ledger?.entries
+  ?.find((entry) => entry.operationId === lateSettlementOperationId);
+const latePaidFinalBalancePortalPayment = latePaidFinalBalancePortal.data()?.payment || {};
+assert.equal(latePaidFinalBalanceQuote.data()?.payment?.depositStatus, "paid");
+assert.equal(latePaidFinalBalanceQuote.data()?.payment?.finalBalance?.status, "paid");
+assert.equal(latePaidFinalBalanceQuote.data()?.payment?.finalBalance?.stripeCheckoutState, "paid");
+assert.equal(latePaidFinalBalanceLedgerEntry?.state, "paid");
+assert.equal(latePaidFinalBalanceLedgerEntry?.providerReference, lateSettlementSessionId);
+assert.ok(latePaidFinalBalanceLedgerEntry?.providerSettledAtISO);
+assert.equal(latePaidFinalBalancePortalPayment.finalBalance?.status, "paid");
+assert.equal(
+  Object.prototype.hasOwnProperty.call(
+    latePaidFinalBalancePortalPayment.finalBalance || {},
+    "stripeSessionId"
+  ),
+  false
+);
+assert.doesNotMatch(JSON.stringify(latePaidFinalBalancePortalPayment), /cs_[A-Za-z0-9_]+/);
+assert.equal(latePaidFinalBalanceAudit.data()?.status, "processed");
+assert.equal(latePaidFinalBalanceAudit.data()?.providerState, "paid");
+assert.equal(latePaidFinalBalanceAudit.data()?.paymentKind, "final_balance");
+
 const retiredBulkPurgeQuoteId = "retired-bulk-purge-quote";
 const retiredBulkPurgePortalKey = "retired-bulk-purge-portal-key";
 await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).create({
@@ -1738,4 +2227,6 @@ console.log("- archived tenant resume/update was blocked");
 console.log("- quote cleanup preserved cross-tenant, unscoped, and mismatched portal rows");
 console.log("- provider/payment operations denied sales and rejected caller-supplied links");
 console.log("- Stripe webhook rejected corrupt portals and underpayment, atomically accepted the exact paid session, and acknowledged a signed stale paid session with durable review evidence");
+console.log("- stale final-balance approval scope closed before provider preparation and permitted a fresh exact-scope request");
+console.log("- final-balance Stripe webhook atomically settled the quote ledger and customer-safe portal, deduped replay, and accepted late settlement after provider failure");
 console.log("- hard delete retired roles/invites/portal snapshots and tombstone blocked tenant resurrection");

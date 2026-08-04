@@ -1,8 +1,13 @@
 const APPROVAL_ACTIONS = new Set([
   "send_payment_request",
+  "send_final_balance_request",
   "convert_to_contract",
   "rotate_portal_link",
   "delete_quote"
+]);
+const SCOPED_APPROVAL_ACTIONS = new Set([
+  "send_payment_request",
+  "send_final_balance_request"
 ]);
 const APPROVAL_RESOLUTION_STATES = new Set(["approved", "rejected"]);
 const APPROVAL_EXECUTION_STATES = new Set([
@@ -99,7 +104,7 @@ function buildApprovalRequest({
     && typeof actionScope === "object"
     && !Array.isArray(actionScope);
   if (
-    normalizedAction === "send_payment_request"
+    SCOPED_APPROVAL_ACTIONS.has(normalizedAction)
     && (!hasActionScope || !/^[a-f0-9]{64}$/.test(normalizedScopeDigest))
   ) {
     throw new ApprovalWorkflowError(
@@ -108,7 +113,7 @@ function buildApprovalRequest({
     );
   }
   if (
-    normalizedAction !== "send_payment_request"
+    !SCOPED_APPROVAL_ACTIONS.has(normalizedAction)
     && (hasActionScope || normalizedScopeDigest)
   ) {
     throw new ApprovalWorkflowError(
@@ -150,7 +155,7 @@ function buildApprovalRequest({
     resolvedAtISO: "",
     resolvedByEmail: "",
     resolutionNote: "",
-    ...(normalizedAction === "send_payment_request"
+    ...(SCOPED_APPROVAL_ACTIONS.has(normalizedAction)
       ? {
         actionScope: { ...actionScope },
         actionScopeDigest: normalizedScopeDigest

@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: August 3, 2026
+Last updated: August 4, 2026
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -32,6 +32,13 @@ The GitHub job named `lane:firebase-auth-rules` must invoke the package lane of
 the same name. That lane owns both Firestore rule tests and the Firebase-backed
 browser smoke, so CI cannot silently omit either half of the authorization
 contract.
+
+The disposable matrix in `scripts/provisioning-emulator-acceptance.mjs` owns
+local signed-webhook acceptance for both Stripe payment rails. It must keep
+deposit and final-balance evidence separate, verify replay deduplication and
+customer-safe portal projection, and exercise a late provider settlement after
+a failed or expired observation. These emulator results are local evidence and
+must not be described as hosted or Stripe-provider acceptance.
 
 ## Proof-Sensitive Delivery Language
 Documentation about customer quote delivery must keep these states separate:

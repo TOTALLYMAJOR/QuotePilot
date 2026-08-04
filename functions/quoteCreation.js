@@ -420,6 +420,9 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
   const selection = isRecord(quote?.selection) ? quote.selection : {};
   const quoteMeta = isRecord(quote?.quoteMeta) ? quote.quoteMeta : {};
   const payment = isRecord(quote?.payment) ? quote.payment : {};
+  const finalBalance = isRecord(payment.finalBalance) ? payment.finalBalance : {};
+  const finalBalanceAmountCents = Number(finalBalance.amountCents);
+  const finalBalanceStatus = text(finalBalance.status, 32).toLowerCase();
   const booking = isRecord(quote?.booking) ? quote.booking : {};
   const portalDecision = isRecord(quote?.portalDecision) ? quote.portalDecision : {};
   const lifecycle = isRecord(quote?.lifecycle) ? quote.lifecycle : {};
@@ -509,7 +512,21 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
     payment: {
       depositLink: sanitizeStoredStripePaymentLink(payment.depositLink),
       depositStatus: text(payment.depositStatus, 32).toLowerCase() || "unpaid",
-      depositConfirmedAtISO: normalizeISO(payment.depositConfirmedAtISO, "")
+      depositConfirmedAtISO: normalizeISO(payment.depositConfirmedAtISO, ""),
+      ...(Number.isSafeInteger(finalBalanceAmountCents) && finalBalanceAmountCents > 0
+        ? {
+          finalBalance: {
+            amountCents: finalBalanceAmountCents,
+            currency: text(finalBalance.currency, 3).toLowerCase() || "usd",
+            status: new Set(["unpaid", "sent", "paid"]).has(finalBalanceStatus)
+              ? finalBalanceStatus
+              : "unpaid",
+            paymentLink: sanitizeStoredStripePaymentLink(finalBalance.paymentLink),
+            confirmedAtISO: normalizeISO(finalBalance.confirmedAtISO, ""),
+            stripeCheckoutState: text(finalBalance.stripeCheckoutState, 32).toLowerCase()
+          }
+        }
+        : {})
     },
     booking: {
       bookedAtISO: normalizeISO(booking.bookedAtISO, ""),
@@ -818,6 +835,7 @@ function buildPortalRotationDocuments({
   const actorRole = text(staff?.role, 32).toLowerCase();
   const rotatedAtISO = normalizeISO(nowISO, "");
   const status = text(source.status, 32).toLowerCase() || "draft";
+  const bookedPortalRenewal = status === "booked";
 
   if (
     !id
@@ -838,18 +856,45 @@ function buildPortalRotationDocuments({
       "Admin role required to rotate portal links."
     );
   }
-  if (!["draft", "sent", "viewed"].includes(status)) {
+  if (!["draft", "sent", "viewed", "booked"].includes(status)) {
     throw new QuoteCreationError(
       "failed-precondition",
-      "Portal rotation is available only before a quote reaches a terminal commercial state."
+      "Portal rotation is unavailable for this commercial state."
     );
+  }
+  if (bookedPortalRenewal) {
+    const contractNumber = text(source?.booking?.contractNumber, 120);
+    const contractConvertedAtISO = normalizeISO(
+      source?.booking?.contractConvertedAtISO,
+      ""
+    );
+    const depositStatus = text(source?.payment?.depositStatus, 32).toLowerCase();
+    const depositSessionId = text(source?.payment?.stripeSessionId, 200);
+    const depositConfirmedAtISO = normalizeISO(
+      source?.payment?.depositConfirmedAtISO,
+      ""
+    );
+    if (
+      !contractNumber
+      || !contractConvertedAtISO
+      || depositStatus !== "paid"
+      || !/^cs_[A-Za-z0-9_]+$/.test(depositSessionId)
+      || !depositConfirmedAtISO
+    ) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "Booked portal renewal requires an authoritative contract and provider-paid deposit."
+      );
+    }
   }
 
   const hardPortalExpiryISO = addDaysISO(rotatedAtISO, PORTAL_VALIDITY_DAYS_MAX);
   const quoteExpiryISO = normalizeISO(source.expiresAtISO, hardPortalExpiryISO);
-  const portalExpiresAtISO = new Date(quoteExpiryISO).getTime() <= new Date(hardPortalExpiryISO).getTime()
-    ? quoteExpiryISO
-    : hardPortalExpiryISO;
+  const portalExpiresAtISO = bookedPortalRenewal
+    ? hardPortalExpiryISO
+    : new Date(quoteExpiryISO).getTime() <= new Date(hardPortalExpiryISO).getTime()
+      ? quoteExpiryISO
+      : hardPortalExpiryISO;
   if (new Date(portalExpiresAtISO).getTime() <= new Date(rotatedAtISO).getTime()) {
     throw new QuoteCreationError(
       "failed-precondition",

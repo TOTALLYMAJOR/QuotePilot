@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 3, 2026
+Last updated: August 4, 2026
 
 ## Operational Health
 - Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is
@@ -15,9 +15,9 @@ Last updated: August 3, 2026
   branding; the legacy Firebase project ID and hosting origin remain unchanged
   infrastructure identifiers.
 - Candidate validation: draft PR #23 publishes the combined sell-readiness
-  candidate. Prior exact head `7d053b0c44dd2bb2f4e77726e6c95e7b9f6f3db1`
-  passed all eight source CI jobs in run `30879068700`; Vercel Preview
-  `dpl_7B4kCqeR2iTvwDpdvigVSX5opJTc` failed
+  candidate. Exact head `d97258870b4e5a44070cbea0be781f2133b0a7cb`
+  passed all eight source CI jobs in run `30884396855`; Vercel Preview
+  `dpl_A53KRxvmA6WUNeakQuDLZuAsbmZk` failed
   before build because all six required `VITE_FIREBASE_*` values are scoped
   only to the older `fix/quote-history-role-permissions` branch. The local
   quick/core gates pass: 721 unit tests pass with 41 intentional skips, the
@@ -32,10 +32,13 @@ Last updated: August 3, 2026
   results are not hosted tenant or provider acceptance.
   All local/emulator results remain distinct from hosted tenant and provider
   acceptance.
+  The final-balance source work is on
+  `feature/server-authoritative-final-balance`, based on that candidate; neither
+  branch is merged to `main`.
 - Functions runtime readiness: Functions now target Node.js 22 and use Firebase
   Admin 14 modular app, Auth, and Firestore APIs. The local authoritative and
   provisioning matrices pass with that runtime candidate.
-- Current branch Stripe deposit lifecycle: an exact approved payment scope now
+- Current branch Stripe payment lifecycle: an exact approved deposit scope now
   binds the quote revision, current portal issuance, customer email, currency,
   and amount before one resumable server operation prepares/restores the
   Checkout Session and sends the payment-request email. A newly prepared
@@ -55,8 +58,29 @@ Last updated: August 3, 2026
   `checkout.session.async_payment_failed`, and `checkout.session.expired`
   events own monotonic payment transitions. Same-tenant admins can reconcile
   the server-recorded Session when webhook delivery needs review, while client
-  payment-evidence writes fail closed. This is source/local evidence only and
-  is not deployed or provider-accepted behavior.
+  payment-evidence writes fail closed.
+  The final-balance branch adds a separate exact approval and payment rail for
+  booked contracts after a verified provider-paid deposit. QuotePilot derives
+  the remaining amount from the authoritative total and deposit, binds that
+  amount plus the contract and deposit evidence into the approval, and records
+  final-balance operations in a versioned ledger and a distinct
+  `payment.finalBalance` projection. The same private-before-email-acceptance,
+  resumable dispatch, signed-webhook, monotonic transition, and admin provider
+  reconciliation boundaries apply without allowing a final-balance event to
+  rewrite deposit truth. The customer portal receives only customer-safe final
+  balance status, amount, confirmation, and an accepted published link; Stripe
+  Session identifiers remain private. Late provider settlement may promote a
+  failed or expired balance to paid, while an accepted email whose Checkout
+  expires during interrupted publication closes its approval and permits a
+  fresh request instead of remaining in progress. If the portal expires while
+  email dispatch is still `sending` or ambiguous, recovery keeps the provider
+  outcome unknown, waits through a 15-minute stale-attempt boundary before
+  touching Stripe, resolves the exact Checkout without downgrading paid or
+  refunded truth, and closes the stale approval for reconciliation rather than
+  resending. Missing or mismatched expired portal projection is flagged and
+  skipped instead of blocking quote/ledger closure. This is source/local
+  evidence only and is not deployed, hosted-accepted, or
+  Stripe-provider-accepted behavior.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best
   scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action
@@ -345,10 +369,11 @@ Last updated: August 3, 2026
   live-mode acceptance are recorded. Acceptance must include browser-inaccessible
   prepared state, same-key recovery from ambiguous creation/email outcomes,
   publication-only recovery after durable provider acceptance, and safe
-  definite-failure cleanup; a happy-path email alone is insufficient. The
-  current candidate automates deposit checkout only. Refund initiation/status,
-  dispute handling, and final-balance collection/reconciliation remain manual
-  or unimplemented.
+  definite-failure cleanup for both deposit and final-balance rails, plus proof
+  that events cannot cross those rails; a happy-path email alone is
+  insufficient. The final-balance automation is currently source-only on a
+  feature branch based on the sell-readiness candidate, not `main`. Refund
+  initiation/status and dispute handling remain manual or unimplemented.
 - CRM outbound synchronization is intentionally disabled until a
   server-authorized connector with provider acceptance evidence is implemented.
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
@@ -366,9 +391,11 @@ Last updated: August 3, 2026
    tenant acceptance checklist, including current/invalid issuance, active,
    expired, deleted, approval execution, contract, and change-request paths.
 4. As part of that coordinated rollout, configure the matching Stripe mode/key
-   and all four Checkout Session webhook events, then capture hosted test-mode
-   approval/send/webhook/reconciliation evidence before separately authorized
-   live-mode acceptance. Do not infer either from local emulator coverage.
+   and all four Checkout Session webhook events, then capture separate hosted
+   test-mode approval/send/webhook/reconciliation evidence for deposit and
+   final-balance collection before separately authorized live-mode acceptance.
+   Prove that payment-kind metadata and stored Session scope prevent cross-rail
+   updates. Do not infer any provider result from local emulator coverage.
 5. Verify the intended Resend sender domain in the Resend dashboard and
    authoritative DNS; only then configure
    `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and

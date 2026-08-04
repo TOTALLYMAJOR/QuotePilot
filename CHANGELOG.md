@@ -40,6 +40,28 @@ This changelog is backfilled from git history and will be maintained going forwa
   objects, all four supported Checkout Session lifecycle events are verified
   and deduplicated, settled payment truth is monotonic, and admins have an
   audited provider reconciliation path for the server-recorded Session.
+- Server-authoritative Stripe final-balance collection for booked contracts
+  with a verified provider-paid deposit. The exact approval binds the contract,
+  paid-deposit evidence, quote revision, current portal issuance, customer,
+  server-derived balance, currency, and checkout generation. A separate payment
+  ledger and `payment.finalBalance` projection keep deposit and balance truth
+  distinct while the guarded checkout, provider-email, signed-webhook, and
+  admin-reconciliation paths reuse the deposit rail's private-before-acceptance
+  publication boundary. Browser-supplied amounts, payment kinds, Sessions, and
+  links fail closed, customer portal data omits provider identifiers, late
+  provider settlement can recover a failed or expired observation, and an
+  accepted email whose Checkout expires during interrupted publication closes
+  cleanly for a fresh approval. Expired-portal recovery also preserves a
+  `sending` or ambiguous dispatch as provider-unknown, waits through a
+  conservative stale-attempt boundary before touching Stripe, resolves or
+  expires the exact Checkout without downgrading paid or refunded truth, and
+  closes the stale approval for reconciliation instead of resending or claiming
+  the email failed. A missing or mismatched expired portal is flagged and
+  skipped without blocking authoritative quote/ledger closure.
+  Eligible booked contracts can renew an expired
+  portal before final-balance collection. This remains an unmerged source
+  candidate without hosted or Stripe-provider proof; refund and dispute
+  workflows remain separate.
 - Server-authoritative contract conversion planning and callable execution,
   including conflict/capacity evidence and server-generated contract identity.
 - Focused approval workflow coverage across pure server planning, Firebase
