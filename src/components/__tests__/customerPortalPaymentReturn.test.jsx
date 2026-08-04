@@ -103,6 +103,15 @@ describe("customer portal payment return messaging", () => {
       .toBe("deposit");
   });
 
+  test("keeps the portal renderable while its quote is still loading", () => {
+    expect(getCustomerFinalBalanceUi(null)).toMatchObject({
+      visible: false,
+      amountCents: 0,
+      status: "unpaid",
+      paymentLink: ""
+    });
+  });
+
   test("shows a customer-safe final balance and only exposes a published eligible Stripe link", () => {
     const quote = {
       status: "booked",
