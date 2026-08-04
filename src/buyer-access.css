@@ -191,34 +191,6 @@
   line-height: 1.65;
 }
 
-.buyer-mode-switch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
-  margin-top: 1.25rem;
-  padding: 0.28rem;
-  border-radius: 12px;
-  background: #eae5da;
-}
-
-.buyer-mode-switch button {
-  min-height: 42px;
-  border: 0;
-  border-radius: 9px;
-  color: #5e675f;
-  background: transparent;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.buyer-mode-switch button.is-selected {
-  color: var(--buyer-forest-dark);
-  box-shadow: 0 4px 13px rgba(35, 55, 45, 0.11);
-  background: #fffdf7;
-}
-
 .buyer-form {
   margin-top: 1.25rem;
 }
@@ -352,7 +324,7 @@
   text-transform: uppercase;
 }
 
-.buyer-test-note {
+.buyer-invoice-note {
   display: grid;
   gap: 0.3rem;
   padding: 0.85rem;
@@ -361,18 +333,41 @@
   background: #fff8e8;
 }
 
-.buyer-test-note strong {
+.buyer-invoice-note strong {
   color: #725011;
   font-size: 0.78rem;
 }
 
-.buyer-test-note span {
+.buyer-invoice-note span {
   color: #6c6049;
   font-size: 0.76rem;
   line-height: 1.55;
 }
 
-.buyer-checkout-button {
+.buyer-turnstile {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.buyer-turnstile-test {
+  padding: 0.75rem 0.85rem;
+  border: 1px dashed rgba(30, 79, 63, 0.35);
+  border-radius: 10px;
+  color: #53655c;
+  background: #f3f8f5;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.buyer-turnstile-state {
+  margin: -0.45rem 0 0;
+  color: var(--buyer-muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.buyer-invoice-button {
   width: 100%;
 }
 
@@ -428,6 +423,18 @@
 .buyer-status-card .buyer-secondary,
 .buyer-link-button {
   margin-top: 1.2rem;
+}
+
+.buyer-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.2rem;
+}
+
+.buyer-status-actions .buyer-secondary,
+.buyer-status-actions .buyer-link-button {
+  margin-top: 0;
 }
 
 .buyer-link-button {
@@ -508,6 +515,8 @@
   .buyer-actions .buyer-primary,
   .buyer-actions .buyer-secondary,
   .buyer-actions .buyer-text-button,
+  .buyer-status-actions,
+  .buyer-status-actions .buyer-secondary,
   .buyer-link-button {
     width: 100%;
   }

@@ -1,152 +1,240 @@
-import { useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  refreshCurrentUserVerification,
-  resendCurrentUserVerification,
-  signInWithEmail,
-  signOutCurrentUser
-} from "../lib/authClient";
-import {
-  createBuyerAccessCheckout,
-  getBuyerAccessCheckoutStatus,
-  isBuyerAccessSessionId,
-  redirectToBuyerAccessCheckout
+  BUYER_ACCESS_E2E_TURNSTILE_TOKEN,
+  clearBuyerAccessRequestContext,
+  createBuyerAccessInvoice,
+  createBuyerAccessRequestId,
+  getBuyerAccessInvoiceStatus,
+  readBuyerAccessRequestContext,
+  readBuyerAccessStatusContext,
+  redirectToBuyerAccessInvoice,
+  storeBuyerAccessRequestContext
 } from "../lib/buyerAccess";
-import { isBuyerAccessEnabled, isBuyerE2eAuthBypassEnabled } from "../lib/buyerAccessConfig";
-import { auth, firebaseReady } from "../lib/firebase";
+import {
+  getBuyerAccessTurnstileSiteKey,
+  isBuyerAccessEnabled,
+  isBuyerAccessTurnstileConfigured,
+  isBuyerE2eAuthBypassEnabled
+} from "../lib/buyerAccessConfig";
 import "../buyer-access.css";
 
-const E2E_AUTH_BYPASS = isBuyerE2eAuthBypassEnabled(import.meta.env);
+const E2E_FUNCTION_BYPASS = isBuyerE2eAuthBypassEnabled(import.meta.env);
 const BUYER_ACCESS_ENABLED = isBuyerAccessEnabled(import.meta.env);
+const TURNSTILE_SITE_KEY = getBuyerAccessTurnstileSiteKey(import.meta.env);
 const STATUS_POLL_INTERVAL_MS = 2_500;
 const STATUS_POLL_LIMIT = 48;
+const TURNSTILE_SCRIPT_ID = "quotepilot-turnstile-api";
+const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+
+let turnstileScriptPromise = null;
+
+export function isBuyerAccessVerificationConfigured({ siteKey = "", e2eBypass = false } = {}) {
+  return isBuyerAccessTurnstileConfigured({
+    VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: siteKey
+  }) || e2eBypass === true;
+}
 
 export function readBuyerAccessReturn(search = "") {
   const params = new URLSearchParams(String(search || ""));
-  const purchaseValue = String(params.get("purchase") || "").trim().toLowerCase();
-  const purchase = ["success", "cancelled"].includes(purchaseValue) ? purchaseValue : "";
-  const sessionId = String(params.get("session_id") || "").trim();
   return {
-    purchase,
-    sessionId: isBuyerAccessSessionId(sessionId) ? sessionId : "",
-    hasInvalidSessionId: Boolean(sessionId) && !isBuyerAccessSessionId(sessionId)
+    hasIgnoredStatusQuery: ["order", "statusToken", "session_id", "purchase"]
+      .some((key) => params.has(key))
   };
-}
-
-export function isAlreadyScopedBuyerError(error) {
-  const code = String(error?.code || "").trim().toLowerCase();
-  const message = String(error?.message || "").trim().toLowerCase();
-  return code === "functions/failed-precondition"
-    && message.includes("already has quotepilot organization access");
 }
 
 export function friendlyBuyerAccessError(error) {
   const code = String(error?.code || "").trim().toLowerCase();
   const message = String(error?.message || "").trim();
-  if (isAlreadyScopedBuyerError(error)) {
-    return "This account already has QuotePilot workspace access.";
+  if (code === "functions/resource-exhausted") {
+    return "Too many invoice attempts. Wait a moment before trying again.";
   }
-  if (code === "auth/invalid-credential") return "The email or password is incorrect.";
-  if (code === "auth/email-already-in-use") return "An account already exists for this email. Sign in instead.";
-  if (code === "auth/invalid-email") return "Enter a valid email address.";
-  if (code === "auth/too-many-requests") return "Too many attempts. Wait a moment and try again.";
-  if (code === "auth/network-request-failed") return "The network request failed. Check your connection and try again.";
-  if (code === "functions/unauthenticated") return "Sign in again before checking buyer access.";
-  if (code === "functions/permission-denied") return "This account cannot verify that buyer order.";
-  if (code === "functions/not-found") return "No buyer order was found for this account and Checkout Session.";
-  if (code.startsWith("functions/")) return "QuotePilot could not complete the buyer access request. Try again or contact support.";
+  if (code === "functions/permission-denied") {
+    return "This invoice request could not be authorized.";
+  }
+  if (code === "functions/unavailable") {
+    return "Invoice creation is temporarily unavailable. Try the same request again.";
+  }
+  if (code.startsWith("functions/")) {
+    return "QuotePilot could not complete the invoice request. Try again or contact support.";
+  }
   const safeClientMessages = new Set([
     "Enter your business name.",
     "Enter the owner name.",
-    "Sign in before starting the $1 access purchase.",
-    "Verify your email before starting the $1 access purchase.",
-    "Buyer checkout is unavailable in this environment."
+    "Enter a valid email address.",
+    "Complete the security verification before creating your invoice.",
+    "Buyer invoice creation is unavailable in this environment.",
+    "QuotePilot could not create a secure invoice request identity.",
+    "Secure invoice request recovery is unavailable in this browser.",
+    "Secure invoice status recovery is unavailable in this browser.",
+    "Security verification could not load. Refresh this page and try again."
   ]);
   return safeClientMessages.has(message)
     ? message
     : "QuotePilot could not complete the request. Try again or contact support.";
 }
 
-export function getBuyerAccessStatusMessage(status = "") {
-  switch (String(status || "").trim().toLowerCase()) {
-    case "checkout_pending":
+export function getBuyerAccessStatusMessage(status = "", evidence = {}) {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  switch (normalizedStatus) {
+    case "invoice_open":
       return {
-        title: "Waiting for Stripe confirmation",
-        text: "Your return from Stripe is only a signal to check. QuotePilot has not granted access yet."
+        title: "Your $1 invoice is ready",
+        text: "Stripe is waiting for payment. This page cannot mark the invoice paid or grant access on its own."
       };
     case "payment_processing":
       return {
         title: "Payment is processing",
-        text: "Stripe has reported processing, but access remains locked until the signed payment event provisions your workspace."
+        text: "Stripe is still processing the invoice payment. Access remains locked until the signed payment event is verified."
+      };
+    case "provisioning":
+      return evidence?.workspaceReady === true
+        ? {
+            title: "Payment confirmed — your workspace is prepared",
+            text: "QuotePilot verified the paid invoice and prepared the workspace. Account activation is still pending, so do not create or pay another invoice."
+          }
+        : {
+            title: "Preparing your invoice",
+            text: "QuotePilot is preparing the Stripe invoice. No payment has been claimed and access remains locked."
+          };
+    case "activation_sent":
+      return {
+        title: "Check your email to activate QuotePilot",
+        text: "Your workspace is provisioned, but access stays locked until you follow the verified-email activation instructions sent to the owner."
       };
     case "active":
       return {
         title: "Your workspace is ready",
-        text: "QuotePilot verified the paid Checkout Session and completed workspace provisioning."
+        text: "QuotePilot observed completed owner activation. You can now sign in to your workspace."
       };
     case "payment_failed":
       return {
-        title: "Payment was not completed",
-        text: "Stripe reported a failed payment. No workspace access was granted."
+        title: "The invoice still needs payment",
+        text: "Stripe did not confirm payment, so no activation was issued. Reopen the same invoice to try again."
+      };
+    case "void":
+      return {
+        title: "This invoice is closed",
+        text: "The server reports that this invoice was voided. It cannot activate a QuotePilot workspace."
       };
     case "expired":
       return {
-        title: "Checkout expired",
-        text: "This Checkout Session expired before access was activated. You can start a new $1 test purchase."
+        title: "This invoice has expired",
+        text: "The server reports that this invoice is no longer payable. It cannot activate a QuotePilot workspace."
       };
     default:
       return {
-        title: "Verifying your purchase",
-        text: "QuotePilot is asking the server for the owner-scoped Checkout status. The return URL alone cannot grant access."
+        title: "Checking your invoice",
+        text: "QuotePilot is asking the server for the token-bound invoice status. Browser history alone cannot grant access."
       };
   }
 }
 
-function useBuyerAuthSession() {
-  const [session, setSession] = useState({
-    loading: true,
-    user: null,
-    error: ""
+function loadTurnstileScript() {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return Promise.reject(new Error("Security verification could not load. Refresh this page and try again."));
+  }
+  if (window.turnstile?.render) return Promise.resolve(window.turnstile);
+  if (turnstileScriptPromise) return turnstileScriptPromise;
+
+  turnstileScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById(TURNSTILE_SCRIPT_ID);
+    const script = existing || document.createElement("script");
+    const onLoad = () => {
+      if (window.turnstile?.render) resolve(window.turnstile);
+      else reject(new Error("Security verification could not load. Refresh this page and try again."));
+    };
+    const onError = () => reject(
+      new Error("Security verification could not load. Refresh this page and try again.")
+    );
+    script.addEventListener("load", onLoad, { once: true });
+    script.addEventListener("error", onError, { once: true });
+    if (!existing) {
+      script.id = TURNSTILE_SCRIPT_ID;
+      script.src = TURNSTILE_SCRIPT_URL;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+  }).catch((error) => {
+    turnstileScriptPromise = null;
+    throw error;
   });
 
+  return turnstileScriptPromise;
+}
+
+function BuyerTurnstile({ siteKey, onTokenChange, onError, resetNonce }) {
+  const containerRef = useRef(null);
+  const widgetIdRef = useRef(null);
+
   useEffect(() => {
-    if (!BUYER_ACCESS_ENABLED) {
-      setSession({ loading: false, user: null, error: "" });
-      return undefined;
-    }
-    if (E2E_AUTH_BYPASS) {
-      setSession({
-        loading: false,
-        user: {
-          uid: String(import.meta.env.VITE_E2E_UID || "e2e-buyer"),
-          email: String(import.meta.env.VITE_E2E_EMAIL || "buyer@local.test"),
-          emailVerified: true
-        },
-        error: ""
-      });
-      return undefined;
-    }
-    if (!firebaseReady || !auth) {
-      setSession({
-        loading: false,
-        user: null,
-        error: "Firebase Auth is unavailable in this environment."
-      });
-      return undefined;
-    }
+    if (!E2E_FUNCTION_BYPASS) return undefined;
+    onTokenChange(BUYER_ACCESS_E2E_TURNSTILE_TOKEN);
+    return () => onTokenChange("");
+  }, [onTokenChange]);
 
-    return onAuthStateChanged(
-      auth,
-      (user) => setSession({ loading: false, user, error: "" }),
-      () => setSession({
-        loading: false,
-        user: null,
-        error: "QuotePilot could not read the current sign-in session."
+  useEffect(() => {
+    if (E2E_FUNCTION_BYPASS || !siteKey || !containerRef.current) return undefined;
+    let active = true;
+    loadTurnstileScript()
+      .then((turnstile) => {
+        if (!active || !containerRef.current) return;
+        const compact = window.matchMedia?.("(max-width: 360px)")?.matches === true;
+        widgetIdRef.current = turnstile.render(containerRef.current, {
+          sitekey: siteKey,
+          action: "buyer_access_invoice",
+          appearance: "always",
+          size: compact ? "compact" : "flexible",
+          theme: "light",
+          callback: (token) => onTokenChange(String(token || "").trim()),
+          "expired-callback": () => onTokenChange(""),
+          "timeout-callback": () => onTokenChange(""),
+          "error-callback": () => {
+            onTokenChange("");
+            onError(new Error("Security verification could not load. Refresh this page and try again."));
+          }
+        });
       })
-    );
-  }, []);
+      .catch(onError);
 
-  return session;
+    return () => {
+      active = false;
+      if (widgetIdRef.current != null && window.turnstile?.remove) {
+        window.turnstile.remove(widgetIdRef.current);
+      }
+      widgetIdRef.current = null;
+    };
+  }, [onError, onTokenChange, siteKey]);
+
+  useEffect(() => {
+    if (resetNonce <= 0) return;
+    onTokenChange("");
+    if (E2E_FUNCTION_BYPASS) {
+      globalThis.__quotePilotE2eTurnstileResetCount = Number(
+        globalThis.__quotePilotE2eTurnstileResetCount || 0
+      ) + 1;
+      queueMicrotask(() => onTokenChange(BUYER_ACCESS_E2E_TURNSTILE_TOKEN));
+      return;
+    }
+    if (widgetIdRef.current != null && window.turnstile?.reset) {
+      window.turnstile.reset(widgetIdRef.current);
+    }
+  }, [onTokenChange, resetNonce]);
+
+  if (E2E_FUNCTION_BYPASS) {
+    return (
+      <div className="buyer-turnstile buyer-turnstile-test" role="status">
+        Automated security verification is active for this browser test.
+      </div>
+    );
+  }
+  return (
+    <div
+      className="buyer-turnstile"
+      ref={containerRef}
+      aria-label="Security verification"
+    />
+  );
 }
 
 function BuyerBrand() {
@@ -161,83 +249,27 @@ function BuyerBrand() {
   );
 }
 
-function BuyerAuthForm({ busy, onSubmit, email, password, onEmailChange, onPasswordChange }) {
-  return (
-    <section className="buyer-card buyer-auth-card" aria-labelledby="buyer-auth-title">
-      <p className="buyer-kicker">Step 1 of 3</p>
-      <h2 id="buyer-auth-title">Sign in with your approved account</h2>
-      <p>
-        This controlled pilot does not create public accounts. Use the designated
-        verified email account provided by the QuotePilot operator.
-      </p>
-
-      <form className="buyer-form" onSubmit={onSubmit}>
-        <fieldset disabled={busy}>
-          <label>
-            <span>Email address</span>
-            <input
-              type="email"
-              name="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(event) => onEmailChange(event.target.value)}
-              placeholder="owner@business.com"
-            />
-          </label>
-          <label>
-            <span>Password</span>
-            <input
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => onPasswordChange(event.target.value)}
-              placeholder="Your password"
-            />
-          </label>
-          <button className="buyer-primary" type="submit">
-            {busy ? "Signing in..." : "Sign in"}
-          </button>
-        </fieldset>
-      </form>
-    </section>
-  );
-}
-
-function VerificationCard({ email, busy, onRefresh, onResend, onSignOut }) {
-  return (
-    <section className="buyer-card buyer-verification" aria-labelledby="buyer-verify-title">
-      <p className="buyer-kicker">Step 2 of 3</p>
-      <h2 id="buyer-verify-title">Verify your email before checkout</h2>
-      <p>
-        We sent a Firebase verification message to <strong>{email || "your email"}</strong>.
-        Checkout stays locked until Firebase confirms verification.
-      </p>
-      <div className="buyer-actions">
-        <button className="buyer-primary" type="button" onClick={onRefresh} disabled={busy}>
-          {busy ? "Checking..." : "I verified my email"}
-        </button>
-        <button className="buyer-secondary" type="button" onClick={onResend} disabled={busy}>
-          Resend verification
-        </button>
-        <button className="buyer-text-button" type="button" onClick={onSignOut} disabled={busy}>
-          Use another account
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function PurchaseCard({ email, busy, organizationName, ownerName, onOrganizationNameChange, onOwnerNameChange, onSubmit }) {
+function InvoiceRequestCard({
+  busy,
+  organizationName,
+  ownerName,
+  ownerEmail,
+  verificationComplete,
+  turnstileResetNonce,
+  onOrganizationNameChange,
+  onOwnerNameChange,
+  onOwnerEmailChange,
+  onTurnstileTokenChange,
+  onTurnstileError,
+  onSubmit
+}) {
   return (
     <section className="buyer-card buyer-purchase-card" aria-labelledby="buyer-purchase-title">
-      <p className="buyer-kicker">Step 3 of 3</p>
+      <p className="buyer-kicker">One secure step</p>
       <div className="buyer-purchase-heading">
         <div>
-          <h2 id="buyer-purchase-title">Set up your starter workspace</h2>
-          <p>Signed in as {email}</p>
+          <h2 id="buyer-purchase-title">Create your $1 invoice</h2>
+          <p>No QuotePilot sign-in is required before payment.</p>
         </div>
         <div className="buyer-price" aria-label="One dollar one-time purchase">
           <strong>$1</strong>
@@ -275,15 +307,44 @@ function PurchaseCard({ email, busy, organizationName, ownerName, onOrganization
               placeholder="Avery Owner"
             />
           </label>
-          <div className="buyer-test-note">
-            <strong>Test purchase only</strong>
+          <label>
+            <span>Owner email</span>
+            <input
+              type="email"
+              name="ownerEmail"
+              autoComplete="email"
+              maxLength="254"
+              required
+              value={ownerEmail}
+              onChange={(event) => onOwnerEmailChange(event.target.value)}
+              placeholder="owner@business.com"
+            />
+          </label>
+          <div className="buyer-invoice-note">
+            <strong>Pay securely on Stripe</strong>
             <span>
-              You will continue to Stripe-hosted Checkout. Confirm Stripe shows test mode before entering test card details.
-              Stripe generates a post-purchase invoice after successful payment.
+              QuotePilot fixes this invoice at $1 USD. Stripe collects payment details.
+              After a signed payment event, QuotePilot provisions the workspace and emails
+              the owner instructions for the verified-email activation path.
             </span>
           </div>
-          <button className="buyer-primary buyer-checkout-button" type="submit">
-            {busy ? "Opening Stripe..." : "Continue to Stripe · $1 test"}
+          <BuyerTurnstile
+            siteKey={TURNSTILE_SITE_KEY}
+            resetNonce={turnstileResetNonce}
+            onTokenChange={onTurnstileTokenChange}
+            onError={onTurnstileError}
+          />
+          <p className="buyer-turnstile-state" role="status">
+            {verificationComplete
+              ? "Security verification complete."
+              : "Complete the security verification to create the invoice."}
+          </p>
+          <button
+            className="buyer-primary buyer-invoice-button"
+            type="submit"
+            disabled={!verificationComplete || busy}
+          >
+            {busy ? "Creating your invoice..." : "Create my $1 invoice"}
           </button>
         </fieldset>
       </form>
@@ -292,79 +353,77 @@ function PurchaseCard({ email, busy, organizationName, ownerName, onOrganization
 }
 
 function PurchaseStatusCard({ status, checking, error, exhausted, onRetry }) {
-  const copy = getBuyerAccessStatusMessage(status?.status);
-  const accessReady = status?.status === "active" && status.accessGranted === true;
-  const tone = accessReady
-    ? "is-ready"
-    : ["payment_failed", "expired"].includes(status?.status)
-      ? "is-stopped"
-      : "is-pending";
+  const copy = getBuyerAccessStatusMessage(status?.status, status);
+  const accessReady = status?.status === "active"
+    && status.workspaceReady === true
+    && status.appUrl === "/app";
+  const stopped = ["payment_failed", "void", "expired"].includes(status?.status);
+  const tone = accessReady ? "is-ready" : stopped ? "is-stopped" : "is-pending";
 
   return (
     <section className={`buyer-card buyer-status-card ${tone}`} aria-labelledby="buyer-status-title">
-      <p className="buyer-kicker">Authoritative access check</p>
+      <p className="buyer-kicker">Server-verified invoice status</p>
       <h2 id="buyer-status-title">{copy.title}</h2>
       <p>{copy.text}</p>
-      {checking && <p className="buyer-live-status" role="status">Checking the owner-scoped server record...</p>}
+      {checking && <p className="buyer-live-status" role="status">Checking the token-bound server record...</p>}
       {error && <p className="buyer-error" role="alert">{error}</p>}
       {exhausted && (
         <p className="buyer-live-status" role="status">
-          Provisioning is taking longer than expected. Your return URL still has not granted access.
+          This is taking longer than expected. No browser return has granted access.
         </p>
       )}
       {accessReady ? (
-        <a className="buyer-primary buyer-link-button" href="/app">Open your QuotePilot workspace</a>
+        <a className="buyer-primary buyer-link-button" href="/app">Sign in to your QuotePilot workspace</a>
       ) : (
-        <button className="buyer-secondary" type="button" onClick={onRetry} disabled={checking}>
-          {checking ? "Checking..." : "Check again"}
-        </button>
+        <div className="buyer-status-actions">
+          {status?.hostedInvoiceUrl && (
+            <a className="buyer-secondary buyer-link-button" href={status.hostedInvoiceUrl} rel="noreferrer">
+              Open my Stripe invoice
+            </a>
+          )}
+          <button className="buyer-secondary" type="button" onClick={onRetry} disabled={checking}>
+            {checking ? "Checking..." : "Check again"}
+          </button>
+        </div>
       )}
     </section>
   );
 }
 
 export default function BuyerAccessPage() {
-  const authSession = useBuyerAuthSession();
   const returnHint = useMemo(
     () => readBuyerAccessReturn(typeof window === "undefined" ? "" : window.location.search),
     []
   );
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [organizationName, setOrganizationName] = useState("");
-  const [ownerName, setOwnerName] = useState("");
-  const [busyAction, setBusyAction] = useState("");
-  const [notice, setNotice] = useState("");
+  const statusContext = useMemo(() => readBuyerAccessStatusContext(), []);
+  const savedRequestContext = useMemo(() => readBuyerAccessRequestContext(), []);
+  const verificationConfigured = isBuyerAccessVerificationConfigured({
+    siteKey: TURNSTILE_SITE_KEY,
+    e2eBypass: E2E_FUNCTION_BYPASS
+  });
+  const [organizationName, setOrganizationName] = useState(
+    savedRequestContext?.organizationName || ""
+  );
+  const [ownerName, setOwnerName] = useState(savedRequestContext?.ownerName || "");
+  const [ownerEmail, setOwnerEmail] = useState(savedRequestContext?.ownerEmail || "");
+  const [requestId, setRequestId] = useState(savedRequestContext?.requestId || "");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetNonce, setTurnstileResetNonce] = useState(0);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [verifiedAfterRefresh, setVerifiedAfterRefresh] = useState(false);
-  const [alreadyScoped, setAlreadyScoped] = useState(false);
-  const [checkoutStatus, setCheckoutStatus] = useState(null);
+  const [invoiceStatus, setInvoiceStatus] = useState(null);
   const [statusChecking, setStatusChecking] = useState(false);
   const [statusError, setStatusError] = useState("");
   const [pollExhausted, setPollExhausted] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
 
-  const user = authSession.user;
-  const emailVerified = user?.emailVerified === true || verifiedAfterRefresh;
-  const hasSuccessfulReturn = returnHint.purchase === "success";
-  const hasValidSuccessfulReturn = hasSuccessfulReturn && Boolean(returnHint.sessionId);
-  const ownerScopedCheckoutStatus = checkoutStatus?.verifiedForUid === user?.uid
-    ? checkoutStatus
-    : null;
-  const terminalFailedStatus = ["payment_failed", "expired"].includes(ownerScopedCheckoutStatus?.status);
+  const handleTurnstileError = useCallback((turnstileError) => {
+    setTurnstileToken("");
+    setError(friendlyBuyerAccessError(turnstileError));
+  }, []);
 
   useEffect(() => {
-    setVerifiedAfterRefresh(false);
-    setAlreadyScoped(false);
-    setCheckoutStatus(null);
-    setStatusError("");
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (!BUYER_ACCESS_ENABLED || !user || !emailVerified || !hasValidSuccessfulReturn) {
-      return undefined;
-    }
-
+    if (!BUYER_ACCESS_ENABLED || !verificationConfigured || !statusContext) return undefined;
     let active = true;
     let timer = null;
     let attempts = 0;
@@ -375,11 +434,11 @@ export default function BuyerAccessPage() {
       attempts += 1;
       setStatusChecking(true);
       try {
-        const result = await getBuyerAccessCheckoutStatus({ sessionId: returnHint.sessionId });
+        const result = await getBuyerAccessInvoiceStatus(statusContext);
         if (!active) return;
-        setCheckoutStatus({ ...result, verifiedForUid: user.uid });
+        setInvoiceStatus(result);
         setStatusError("");
-        if (["active", "payment_failed", "expired"].includes(result.status)) {
+        if (["activation_sent", "active", "payment_failed", "void", "expired"].includes(result.status)) {
           setStatusChecking(false);
           return;
         }
@@ -402,93 +461,51 @@ export default function BuyerAccessPage() {
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [emailVerified, hasValidSuccessfulReturn, retryNonce, returnHint.sessionId, user]);
+  }, [retryNonce, statusContext, verificationConfigured]);
 
-  const clearFeedback = () => {
-    setNotice("");
+  const updateIdentity = (setter) => (value) => {
+    setter(value);
+    setRequestId("");
+    clearBuyerAccessRequestContext();
     setError("");
   };
 
-  const submitAuth = async (event) => {
+  const submitInvoice = async (event) => {
     event.preventDefault();
-    clearFeedback();
-    setBusyAction("auth");
+    setError("");
+    setBusy(true);
     try {
-      await signInWithEmail({ email, password });
-    } catch (authError) {
-      setError(friendlyBuyerAccessError(authError));
-    } finally {
-      setBusyAction("");
-    }
-  };
-
-  const refreshVerification = async () => {
-    clearFeedback();
-    setBusyAction("verification");
-    try {
-      const result = await refreshCurrentUserVerification();
-      if (result.emailVerified) {
-        setVerifiedAfterRefresh(true);
-        setNotice("Email verified. You can continue to the $1 test checkout.");
-      } else {
-        setNotice("Firebase has not confirmed verification yet. Open the verification link, then check again.");
+      const stableRequestId = requestId || createBuyerAccessRequestId();
+      if (!requestId) setRequestId(stableRequestId);
+      const requestStored = storeBuyerAccessRequestContext({
+        organizationName,
+        ownerName,
+        ownerEmail,
+        requestId: stableRequestId
+      });
+      if (!requestStored) {
+        throw new Error("Secure invoice request recovery is unavailable in this browser.");
       }
-    } catch (verificationError) {
-      setError(friendlyBuyerAccessError(verificationError));
+      const invoice = await createBuyerAccessInvoice({
+        organizationName,
+        ownerName,
+        ownerEmail,
+        requestId: stableRequestId,
+        turnstileToken
+      });
+      redirectToBuyerAccessInvoice(invoice);
+    } catch (invoiceError) {
+      setError(friendlyBuyerAccessError(invoiceError));
+      setTurnstileToken("");
+      setTurnstileResetNonce((value) => value + 1);
     } finally {
-      setBusyAction("");
+      setBusy(false);
     }
   };
 
-  const resendVerification = async () => {
-    clearFeedback();
-    setBusyAction("verification");
-    try {
-      const result = await resendCurrentUserVerification();
-      setNotice(result.alreadyVerified
-        ? "Firebase already reports this email as verified."
-        : "A new verification email was requested. Check your inbox.");
-      if (result.alreadyVerified) setVerifiedAfterRefresh(true);
-    } catch (verificationError) {
-      setError(friendlyBuyerAccessError(verificationError));
-    } finally {
-      setBusyAction("");
-    }
-  };
-
-  const signOutBuyer = async () => {
-    clearFeedback();
-    setBusyAction("signout");
-    try {
-      await signOutCurrentUser();
-      setPassword("");
-    } catch (signOutError) {
-      setError(friendlyBuyerAccessError(signOutError));
-    } finally {
-      setBusyAction("");
-    }
-  };
-
-  const submitPurchase = async (event) => {
-    event.preventDefault();
-    clearFeedback();
-    setAlreadyScoped(false);
-    setBusyAction("checkout");
-    try {
-      const checkout = await createBuyerAccessCheckout({ organizationName, ownerName });
-      redirectToBuyerAccessCheckout(checkout.checkoutUrl);
-    } catch (checkoutError) {
-      if (isAlreadyScopedBuyerError(checkoutError)) setAlreadyScoped(true);
-      setError(friendlyBuyerAccessError(checkoutError));
-    } finally {
-      setBusyAction("");
-    }
-  };
-
-  const showPurchaseForm = user
-    && emailVerified
-    && !alreadyScoped
-    && (!hasValidSuccessfulReturn || terminalFailedStatus || returnHint.purchase === "cancelled");
+  const showInvoiceForm = BUYER_ACCESS_ENABLED
+    && verificationConfigured
+    && !statusContext;
 
   return (
     <main className="buyer-access-shell">
@@ -499,20 +516,20 @@ export default function BuyerAccessPage() {
 
       <div className="buyer-layout">
         <section className="buyer-intro" aria-labelledby="buyer-page-title">
-          <p className="buyer-kicker">QuotePilot test access</p>
-          <h1 id="buyer-page-title">Try a starter workspace for one dollar.</h1>
+          <p className="buyer-kicker">QuotePilot starter access</p>
+          <h1 id="buyer-page-title">Start with a one-dollar invoice.</h1>
           <p className="buyer-lead">
-            Sign in to a pre-approved verified owner account, complete a Stripe-hosted
-            $1 test purchase, and wait while the signed payment event securely
-            provisions your workspace.
+            Enter the owner details, create a fixed $1 invoice, and pay on Stripe.
+            QuotePilot emails activation instructions only after the signed payment event
+            provisions the workspace.
           </p>
           <ul className="buyer-promise-list">
-            <li>Email verification before Checkout</li>
-            <li>Stripe-hosted payment with a generated post-purchase invoice</li>
-            <li>Access only after server-confirmed provisioning</li>
+            <li>No QuotePilot login required before payment</li>
+            <li>Stripe-hosted invoice and payment page</li>
+            <li>Verified-email account activation after server-confirmed payment</li>
           </ul>
           <p className="buyer-proof-note">
-            A <code>?purchase=success</code> URL never grants access by itself.
+            Returning to this page never marks an invoice paid or grants access.
           </p>
         </section>
 
@@ -521,80 +538,33 @@ export default function BuyerAccessPage() {
             <section className="buyer-card buyer-status-card is-stopped">
               <p className="buyer-kicker">Unavailable</p>
               <h2>Buyer access is closed in this environment</h2>
-              <p>This route opens only on an explicitly approved test deployment.</p>
+              <p>This route opens only on an explicitly approved deployment.</p>
             </section>
           )}
 
-          {BUYER_ACCESS_ENABLED && authSession.loading && (
-            <section className="buyer-card" role="status">
-              <p className="buyer-kicker">Secure account check</p>
-              <h2>Loading your sign-in session...</h2>
-            </section>
-          )}
-
-          {BUYER_ACCESS_ENABLED && authSession.error && (
+          {BUYER_ACCESS_ENABLED && !verificationConfigured && (
             <section className="buyer-card buyer-status-card is-stopped">
-              <h2>Buyer access is not configured</h2>
-              <p className="buyer-error" role="alert">{authSession.error}</p>
+              <p className="buyer-kicker">Configuration required</p>
+              <h2>Secure invoice verification is unavailable</h2>
+              <p>
+                QuotePilot will not create a public invoice until the approved Turnstile
+                site key is configured for this build.
+              </p>
             </section>
           )}
 
-          {BUYER_ACCESS_ENABLED && returnHint.purchase === "cancelled" && (
-            <section className="buyer-return-note" role="status">
-              <strong>Checkout returned as cancelled.</strong>
-              <span>No access decision is inferred from that return. You can start a new Checkout below.</span>
-            </section>
-          )}
-
-          {BUYER_ACCESS_ENABLED && hasSuccessfulReturn && (!returnHint.sessionId || returnHint.hasInvalidSessionId) && (
+          {BUYER_ACCESS_ENABLED && returnHint.hasIgnoredStatusQuery && (
             <section className="buyer-return-note is-error" role="alert">
-              <strong>This payment return cannot be verified.</strong>
-              <span>Sign in and restart Checkout so QuotePilot can receive a valid owner-scoped Session reference.</span>
+              <strong>Invoice status details in the URL were ignored.</strong>
+              <span>QuotePilot reads the token only from this tab’s session storage. No payment or access decision was inferred.</span>
             </section>
           )}
 
-          {BUYER_ACCESS_ENABLED && notice && <p className="buyer-feedback" role="status">{notice}</p>}
           {BUYER_ACCESS_ENABLED && error && <p className="buyer-feedback is-error" role="alert">{error}</p>}
 
-          {BUYER_ACCESS_ENABLED && alreadyScoped && (
-            <section className="buyer-card buyer-status-card is-ready">
-              <p className="buyer-kicker">Existing access</p>
-              <h2>Your account already has a workspace</h2>
-              <p>No new Checkout is needed for this account.</p>
-              <a className="buyer-primary buyer-link-button" href="/app">Open QuotePilot</a>
-            </section>
-          )}
-
-          {BUYER_ACCESS_ENABLED && !authSession.loading && !authSession.error && !user && (
-            <BuyerAuthForm
-              busy={busyAction === "auth"}
-              onSubmit={submitAuth}
-              email={email}
-              password={password}
-              onEmailChange={(value) => {
-                clearFeedback();
-                setEmail(value);
-              }}
-              onPasswordChange={(value) => {
-                clearFeedback();
-                setPassword(value);
-              }}
-            />
-          )}
-
-          {BUYER_ACCESS_ENABLED && user && !emailVerified && (
-            <VerificationCard
-              email={user.email}
-              busy={busyAction === "verification" || busyAction === "signout"}
-              onRefresh={refreshVerification}
-              onResend={resendVerification}
-              onSignOut={signOutBuyer}
-            />
-          )}
-
-          {BUYER_ACCESS_ENABLED && user && emailVerified && hasValidSuccessfulReturn && (
+          {BUYER_ACCESS_ENABLED && verificationConfigured && statusContext && (
             <PurchaseStatusCard
-              status={ownerScopedCheckoutStatus}
+              status={invoiceStatus}
               checking={statusChecking}
               error={statusError}
               exhausted={pollExhausted}
@@ -602,21 +572,20 @@ export default function BuyerAccessPage() {
             />
           )}
 
-          {BUYER_ACCESS_ENABLED && showPurchaseForm && (
-            <PurchaseCard
-              email={user.email}
-              busy={busyAction === "checkout"}
+          {showInvoiceForm && (
+            <InvoiceRequestCard
+              busy={busy}
               organizationName={organizationName}
               ownerName={ownerName}
-              onOrganizationNameChange={(value) => {
-                clearFeedback();
-                setOrganizationName(value);
-              }}
-              onOwnerNameChange={(value) => {
-                clearFeedback();
-                setOwnerName(value);
-              }}
-              onSubmit={submitPurchase}
+              ownerEmail={ownerEmail}
+              verificationComplete={Boolean(turnstileToken)}
+              turnstileResetNonce={turnstileResetNonce}
+              onOrganizationNameChange={updateIdentity(setOrganizationName)}
+              onOwnerNameChange={updateIdentity(setOwnerName)}
+              onOwnerEmailChange={updateIdentity(setOwnerEmail)}
+              onTurnstileTokenChange={setTurnstileToken}
+              onTurnstileError={handleTurnstileError}
+              onSubmit={submitInvoice}
             />
           )}
         </div>
@@ -624,7 +593,7 @@ export default function BuyerAccessPage() {
 
       <footer className="buyer-footer">
         <span>QuotePilot by MBMapps</span>
-        <span>Payment details stay on Stripe-hosted Checkout.</span>
+        <span>Payment details stay on Stripe’s Hosted Invoice Page.</span>
       </footer>
     </main>
   );

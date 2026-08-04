@@ -64,8 +64,10 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
       "BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app"
     );
     expect(output).not.toContain("BUYER_ACCESS_ALLOWED_EMAILS");
+    expect(output).not.toContain("BUYER_ACCESS_TURNSTILE_HOSTNAMES");
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_SECRET_KEY");
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET");
+    expect(output).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET");
     expect(output).not.toContain("RESEND_API_KEY");
     expect(output).not.toContain("TWILIO_ACCOUNT_SID");
     expect(output).not.toContain("TWILIO_AUTH_TOKEN");
@@ -97,10 +99,11 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(result.stderr).toMatch(/placeholder email/i);
   });
 
-  test("materializes only non-secret configuration for an allowlisted buyer pilot", () => {
+  test("materializes only approved non-secret configuration for public buyer access", () => {
     const { cwd, result } = runMaterializer({
       BUYER_ACCESS_ENABLED: "true",
-      BUYER_ACCESS_ALLOWED_EMAILS: "buyer@mbmapps.com"
+      BUYER_ACCESS_TURNSTILE_HOSTNAMES:
+        "quotepilot.mbmapps.com, tonicatering.web.app"
     });
     expect(result.status).toBe(0);
 
@@ -110,17 +113,21 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     );
     expect(output).toContain("BUYER_ACCESS_ENABLED=true");
     expect(output).toContain("BUYER_ACCESS_STRIPE_MODE=test");
-    expect(output).toContain("BUYER_ACCESS_ALLOWED_EMAILS=buyer@mbmapps.com");
+    expect(output).toContain(
+      "BUYER_ACCESS_TURNSTILE_HOSTNAMES=quotepilot.mbmapps.com,tonicatering.web.app"
+    );
+    expect(output).not.toContain("BUYER_ACCESS_ALLOWED_EMAILS");
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_SECRET_KEY");
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET");
+    expect(output).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET");
   });
 
-  test("fails closed for a missing tester allowlist or non-test buyer mode", () => {
-    const missingAllowlist = runMaterializer({
+  test("fails closed for missing Turnstile hosts or a non-test buyer mode", () => {
+    const missingHostnames = runMaterializer({
       BUYER_ACCESS_ENABLED: "true"
     }).result;
-    expect(missingAllowlist.status).not.toBe(0);
-    expect(missingAllowlist.stderr).toMatch(/BUYER_ACCESS_ALLOWED_EMAILS is required/i);
+    expect(missingHostnames.status).not.toBe(0);
+    expect(missingHostnames.stderr).toMatch(/BUYER_ACCESS_TURNSTILE_HOSTNAMES is required/i);
 
     const wrongMode = runMaterializer({
       BUYER_ACCESS_STRIPE_MODE: "live"
@@ -129,7 +136,28 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(wrongMode.stderr).toMatch(/must remain test/i);
   });
 
-  test("rejects buyer Stripe values in dotenv because Secret Manager owns them", () => {
+  test("rejects legacy allowlists and unapproved Turnstile hostnames", () => {
+    const legacyAllowlist = runMaterializer({
+      BUYER_ACCESS_ALLOWED_EMAILS: "buyer@mbmapps.com"
+    }).result;
+    expect(legacyAllowlist.status).not.toBe(0);
+    expect(legacyAllowlist.stderr).toMatch(/obsolete/i);
+
+    for (const hostnames of [
+      "quotepilot.mbmapps.com",
+      "quotepilot.mbmapps.com,evil.example",
+      "https://quotepilot.mbmapps.com,tonicatering.web.app"
+    ]) {
+      const result = runMaterializer({
+        BUYER_ACCESS_ENABLED: "true",
+        BUYER_ACCESS_TURNSTILE_HOSTNAMES: hostnames
+      }).result;
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/exact approved QuotePilot production hosts/i);
+    }
+  });
+
+  test("rejects buyer provider secrets in dotenv because Secret Manager owns them", () => {
     const secretKey = runMaterializer({
       BUYER_ACCESS_STRIPE_SECRET_KEY: `rk_${"test"}_fixture`
     }).result;
@@ -141,6 +169,12 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     }).result;
     expect(webhookSecret.status).not.toBe(0);
     expect(webhookSecret.stderr).toMatch(/Firebase Secret Manager/i);
+
+    const turnstileSecret = runMaterializer({
+      BUYER_ACCESS_TURNSTILE_SECRET: "turnstile-secret-fixture"
+    }).result;
+    expect(turnstileSecret.status).not.toBe(0);
+    expect(turnstileSecret.stderr).toMatch(/Firebase Secret Manager/i);
   });
 
   test("requires a provider key before Resend can be enabled", () => {

@@ -1,17 +1,23 @@
 "use strict";
 
-const { createHash } = require("node:crypto");
+const { createHash, timingSafeEqual } = require("node:crypto");
 
 const BUYER_ACCESS_FLOW = "buyer_access";
 const BUYER_ACCESS_PLAN = "starter";
 const BUYER_ACCESS_MODE = "controlled_test";
 const BUYER_ACCESS_AMOUNT_CENTS = 100;
 const BUYER_ACCESS_CURRENCY = "usd";
-const BUYER_ACCESS_STATUSES = Object.freeze([
-  "checkout_pending",
+const BUYER_ACCESS_STRIPE_API_VERSION = "2024-06-20";
+const BUYER_ACCESS_TURNSTILE_ACTION = "buyer_access_invoice";
+const BUYER_ACCESS_INTERNAL_STATUSES = Object.freeze([
+  "invoice_preparing",
+  "invoice_open",
   "payment_processing",
+  "activation_pending",
+  "activation_sent",
   "active",
   "payment_failed",
+  "void",
   "expired"
 ]);
 
@@ -31,34 +37,19 @@ function normalizedEmail(value) {
   return text(value).toLowerCase();
 }
 
-function normalizeBuyerAccessAllowedEmails(value) {
-  const emails = text(value)
-    .split(",")
-    .map(normalizedEmail)
-    .filter(Boolean);
-  if (
-    !emails.length
-    || emails.some((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-  ) {
-    throw new BuyerAccessError(
-      "Buyer access requires a nonempty valid tester email allowlist."
-    );
+function hashBuyerAccessSecret(value) {
+  const normalized = text(value);
+  if (!normalized) {
+    throw new BuyerAccessError("Buyer access request identity is required.", "invalid-argument");
   }
-  return [...new Set(emails)];
+  return createHash("sha256").update(normalized, "utf8").digest("hex");
 }
 
-function assertBuyerAccessAllowedEmail({ allowedEmails, ownerEmail } = {}) {
-  const email = normalizedEmail(ownerEmail);
-  const normalizedAllowedEmails = Array.isArray(allowedEmails)
-    ? normalizeBuyerAccessAllowedEmails(allowedEmails.join(","))
-    : normalizeBuyerAccessAllowedEmails(allowedEmails);
-  if (!email || !normalizedAllowedEmails.includes(email)) {
-    throw new BuyerAccessError(
-      "This account is not authorized for buyer access testing.",
-      "permission-denied"
-    );
-  }
-  return email;
+function buyerAccessStatusTokenMatches({ expectedHash, statusToken } = {}) {
+  const stored = text(expectedHash).toLowerCase();
+  const observed = hashBuyerAccessSecret(statusToken);
+  if (!/^[a-f0-9]{64}$/.test(stored)) return false;
+  return timingSafeEqual(Buffer.from(stored, "hex"), Buffer.from(observed, "hex"));
 }
 
 function normalizeStripeMode(value) {
@@ -67,17 +58,21 @@ function normalizeStripeMode(value) {
 
 function assertBuyerAccessRuntime({ enabled, stripeMode } = {}) {
   if (text(enabled).toLowerCase() !== "true") {
-    throw new BuyerAccessError("Buyer access checkout is not enabled.");
+    throw new BuyerAccessError("Buyer access invoicing is not enabled.");
   }
   if (normalizeStripeMode(stripeMode) !== "test") {
-    throw new BuyerAccessError("Buyer access checkout is restricted to Stripe test mode.");
+    throw new BuyerAccessError("Buyer access invoicing is restricted to Stripe test mode.");
   }
   return { enabled: true, stripeMode: "test" };
 }
 
 function normalizeHumanName(value, fieldName, { min = 2, max = 120 } = {}) {
   const normalized = text(value).replace(/\s+/g, " ");
-  if (normalized.length < min || normalized.length > max || /[\u0000-\u001f\u007f]/.test(normalized)) {
+  if (
+    normalized.length < min
+    || normalized.length > max
+    || /[\u0000-\u001f\u007f]/.test(normalized)
+  ) {
     throw new BuyerAccessError(
       `${fieldName} must be between ${min} and ${max} characters.`,
       "invalid-argument"
@@ -86,33 +81,86 @@ function normalizeHumanName(value, fieldName, { min = 2, max = 120 } = {}) {
   return normalized;
 }
 
+function normalizeBuyerAccessEmail(value) {
+  const email = normalizedEmail(value);
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new BuyerAccessError("ownerEmail must be a valid email address.", "invalid-argument");
+  }
+  return email;
+}
+
+function normalizeBuyerAccessRequestId(value) {
+  const requestId = text(value).toLowerCase();
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(requestId)) {
+    throw new BuyerAccessError("A valid buyer requestId is required.", "invalid-argument");
+  }
+  return requestId;
+}
+
+function normalizeBuyerAccessTurnstileToken(value) {
+  const token = text(value);
+  if (token.length < 20 || token.length > 2_048 || /[\u0000-\u001f\u007f]/.test(token)) {
+    throw new BuyerAccessError("Complete the buyer access verification challenge.", "invalid-argument");
+  }
+  return token;
+}
+
 function normalizeBuyerAccessRequest(data = {}) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new BuyerAccessError("Buyer access request is invalid.", "invalid-argument");
   }
-  const allowedKeys = new Set(["organizationName", "ownerName"]);
+  const allowedKeys = new Set([
+    "organizationName",
+    "ownerName",
+    "ownerEmail",
+    "requestId",
+    "turnstileToken"
+  ]);
   const unknownKeys = Object.keys(data).filter((key) => !allowedKeys.has(key));
   if (unknownKeys.length) {
     throw new BuyerAccessError(
-      "Buyer access amount, plan, identity, and return URLs are server-owned.",
+      "Buyer access amount, plan, and provider identities are server-owned.",
       "invalid-argument"
     );
   }
   return {
     organizationName: normalizeHumanName(data.organizationName, "organizationName"),
-    ownerName: normalizeHumanName(data.ownerName, "ownerName")
+    ownerName: normalizeHumanName(data.ownerName, "ownerName"),
+    ownerEmail: normalizeBuyerAccessEmail(data.ownerEmail),
+    requestId: normalizeBuyerAccessRequestId(data.requestId),
+    turnstileToken: normalizeBuyerAccessTurnstileToken(data.turnstileToken)
+  };
+}
+
+function normalizeBuyerAccessStatusRequest(data = {}) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new BuyerAccessError("Buyer access status request is invalid.", "invalid-argument");
+  }
+  const allowedKeys = new Set(["orderId", "statusToken"]);
+  if (Object.keys(data).some((key) => !allowedKeys.has(key))) {
+    throw new BuyerAccessError("Buyer access status request is invalid.", "invalid-argument");
+  }
+  const orderId = text(data.orderId).toLowerCase();
+  if (!/^ba-[a-f0-9]{40}$/.test(orderId)) {
+    throw new BuyerAccessError("A valid buyer access orderId is required.", "invalid-argument");
+  }
+  return {
+    orderId,
+    statusToken: normalizeBuyerAccessRequestId(data.statusToken)
   };
 }
 
 function slug(value, fallback = "workspace") {
   const normalized = text(value)
     .toLowerCase()
+    .replace(/^[^a-z0-9]+/g, "")
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/-{2,}/g, "-")
-    .replace(/^-|-$/g, "")
+    .replace(/[^a-z0-9]+$/g, "")
     .slice(0, 42)
-    .replace(/-$/g, "");
-  return normalized || fallback;
+    .replace(/[^a-z0-9]+$/g, "");
+  const normalizedFallback = text(fallback).toLowerCase();
+  return normalized || (/^[a-z0-9]/.test(normalizedFallback) ? normalizedFallback : "workspace");
 }
 
 function compactUuid(value) {
@@ -123,232 +171,288 @@ function compactUuid(value) {
   return normalized;
 }
 
-function buyerAccessOrderIdForUid(uid) {
-  const normalizedUid = text(uid);
-  if (!normalizedUid) {
-    throw new BuyerAccessError("Authenticated owner identity is required.", "unauthenticated");
-  }
+function buyerAccessOrderIdForEmail(ownerEmail) {
+  const email = normalizeBuyerAccessEmail(ownerEmail);
   const digest = createHash("sha256")
-    .update(`quotepilot:buyer-access:${normalizedUid}`, "utf8")
+    .update(`quotepilot:buyer-access-email:${email}`, "utf8")
     .digest("hex");
   return `ba-${digest.slice(0, 40)}`;
 }
 
-function buildBuyerAccessIdentifiers({ uid, organizationName, randomUUID } = {}) {
+function buildBuyerAccessIdentifiers({ ownerEmail, organizationName, randomUUID } = {}) {
   if (typeof randomUUID !== "function") {
     throw new BuyerAccessError("Server identity generator is unavailable.", "internal");
   }
   const suffix = compactUuid(randomUUID());
   return {
-    orderId: buyerAccessOrderIdForUid(uid),
+    orderId: buyerAccessOrderIdForEmail(ownerEmail),
     organizationId: `${slug(organizationName)}-${suffix}`
-  };
-}
-
-function buildBuyerAccessReturnUrls(appBaseUrl) {
-  let parsed;
-  try {
-    parsed = new URL(text(appBaseUrl));
-  } catch (error) {
-    throw new BuyerAccessError("The server application URL is invalid.", "failed-precondition");
-  }
-  const localHttp = parsed.protocol === "http:"
-    && ["localhost", "127.0.0.1"].includes(parsed.hostname);
-  if (
-    (parsed.protocol !== "https:" && !localHttp)
-    || parsed.username
-    || parsed.password
-  ) {
-    throw new BuyerAccessError("Buyer access checkout requires an HTTPS application URL.");
-  }
-  const startUrl = new URL("/start", parsed.origin);
-  startUrl.searchParams.set("purchase", "success");
-  startUrl.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
-  const cancelUrl = new URL("/start", parsed.origin);
-  cancelUrl.searchParams.set("purchase", "cancelled");
-  return {
-    successUrl: startUrl.toString().replace("%7BCHECKOUT_SESSION_ID%7D", "{CHECKOUT_SESSION_ID}"),
-    cancelUrl: cancelUrl.toString()
   };
 }
 
 function normalizeGeneration(value) {
   const generation = Number(value);
   if (!Number.isSafeInteger(generation) || generation < 1) {
-    throw new BuyerAccessError("Buyer access checkout generation is invalid.");
+    throw new BuyerAccessError("Buyer access invoice generation is invalid.");
   }
   return generation;
 }
 
-function buildBuyerAccessCheckout({
-  appBaseUrl,
-  generation,
-  orderId,
-  organizationName,
-  ownerEmail,
-  ownerUid
-} = {}) {
-  const normalizedOrderId = text(orderId);
-  const normalizedOwnerUid = text(ownerUid);
-  const normalizedOwnerEmail = normalizedEmail(ownerEmail);
-  const normalizedOrganizationName = normalizeHumanName(
-    organizationName,
-    "organizationName"
-  );
-  const normalizedGeneration = normalizeGeneration(generation);
+function buildBuyerAccessMetadata({ generation, orderId } = {}) {
+  const normalizedOrderId = text(orderId).toLowerCase();
   if (!/^ba-[a-f0-9]{40}$/.test(normalizedOrderId)) {
     throw new BuyerAccessError("Buyer access order identity is invalid.");
   }
-  if (!normalizedOwnerUid || !normalizedOwnerEmail) {
-    throw new BuyerAccessError("Verified owner identity is required.", "unauthenticated");
-  }
-  const { successUrl, cancelUrl } = buildBuyerAccessReturnUrls(appBaseUrl);
-  const metadata = {
+  return {
     flow: BUYER_ACCESS_FLOW,
     buyerAccessOrderId: normalizedOrderId,
-    ownerUid: normalizedOwnerUid,
-    checkoutGeneration: String(normalizedGeneration),
+    invoiceGeneration: String(normalizeGeneration(generation)),
     plan: BUYER_ACCESS_PLAN
   };
+}
+
+function buyerAccessStripeIdempotencyKey({ generation, orderId, step } = {}) {
+  const metadata = buildBuyerAccessMetadata({ generation, orderId });
+  const normalizedStep = text(step).toLowerCase();
+  if (!/^[a-z_]{3,32}$/.test(normalizedStep)) {
+    throw new BuyerAccessError("Buyer access provider step is invalid.", "internal");
+  }
+  return `buyer-access-${metadata.buyerAccessOrderId}-g${metadata.invoiceGeneration}-${normalizedStep}`;
+}
+
+function buildBuyerAccessStripePlan({ generation, orderId, organizationName, ownerEmail, ownerName } = {}) {
+  const email = normalizeBuyerAccessEmail(ownerEmail);
+  const normalizedOwnerName = normalizeHumanName(ownerName, "ownerName");
+  const normalizedOrganizationName = normalizeHumanName(organizationName, "organizationName");
+  const metadata = buildBuyerAccessMetadata({ generation, orderId });
+  const idempotencyKey = (step) => buyerAccessStripeIdempotencyKey({
+    generation,
+    orderId,
+    step
+  });
   return {
-    idempotencyKey: `buyer-access-${normalizedOrderId}-g${normalizedGeneration}`,
-    params: {
-      mode: "payment",
-      client_reference_id: normalizedOrderId,
-      customer_email: normalizedOwnerEmail,
-      invoice_creation: { enabled: true },
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: BUYER_ACCESS_CURRENCY,
-            unit_amount: BUYER_ACCESS_AMOUNT_CENTS,
-            product_data: {
-              name: "QuotePilot Starter Access",
-              description: `Starter workspace access for ${normalizedOrganizationName}`
-            }
-          }
-        }
-      ],
-      metadata,
-      payment_intent_data: { metadata },
-      success_url: successUrl,
-      cancel_url: cancelUrl
+    customer: {
+      idempotencyKey: idempotencyKey("customer"),
+      params: {
+        email,
+        name: normalizedOwnerName,
+        description: `QuotePilot Starter access for ${normalizedOrganizationName}`,
+        metadata
+      }
+    },
+    invoice: {
+      idempotencyKey: idempotencyKey("invoice"),
+      params: {
+        auto_advance: false,
+        collection_method: "send_invoice",
+        currency: BUYER_ACCESS_CURRENCY,
+        days_until_due: 1,
+        description: `QuotePilot Starter access for ${normalizedOrganizationName}`,
+        discounts: [],
+        metadata
+      }
+    },
+    invoiceItem: {
+      idempotencyKey: idempotencyKey("invoice_item"),
+      params: {
+        amount: BUYER_ACCESS_AMOUNT_CENTS,
+        currency: BUYER_ACCESS_CURRENCY,
+        description: "QuotePilot Starter Access",
+        discountable: false,
+        metadata
+      }
+    },
+    finalize: {
+      idempotencyKey: idempotencyKey("finalize"),
+      params: { auto_advance: false }
+    },
+    send: {
+      idempotencyKey: idempotencyKey("send"),
+      params: {}
     }
   };
 }
 
-function isBuyerAccessSession(session = {}) {
-  return text(session?.metadata?.flow).toLowerCase() === BUYER_ACCESS_FLOW;
+function normalizeStripeId(value, prefix, fieldName) {
+  const id = text(typeof value === "string" ? value : value?.id);
+  const pattern = new RegExp(`^${prefix}_[A-Za-z0-9]+$`);
+  if (!pattern.test(id)) {
+    throw new BuyerAccessError(`Stripe ${fieldName} identity is invalid.`);
+  }
+  return id;
 }
 
-function normalizeBuyerAccessInvoiceId(value, { required = false } = {}) {
-  const invoiceId = text(typeof value === "string" ? value : value?.id);
-  if (!invoiceId) {
-    if (required) {
-      throw new BuyerAccessError("Paid buyer access requires a valid Stripe invoice identity.");
-    }
-    return "";
+function normalizeBuyerAccessHostedInvoiceUrl(value, { required = true } = {}) {
+  const raw = text(value);
+  if (!raw && !required) return "";
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new BuyerAccessError("Stripe Hosted Invoice Page URL is invalid.");
   }
-  if (!/^in_[A-Za-z0-9]+$/.test(invoiceId)) {
-    throw new BuyerAccessError("Stripe invoice identity is invalid.");
+  if (
+    parsed.protocol !== "https:"
+    || parsed.hostname !== "invoice.stripe.com"
+    || parsed.port
+    || parsed.username
+    || parsed.password
+    || parsed.hash
+    || !parsed.pathname.startsWith("/i/")
+    || parsed.pathname.length <= 3
+  ) {
+    throw new BuyerAccessError("Stripe Hosted Invoice Page URL is invalid.");
   }
-  return invoiceId;
+  return parsed.toString();
 }
 
-function assertBuyerAccessSessionBinding({
-  eventLivemode,
-  order,
-  requireInvoice = false,
-  session,
-  stripeMode
-} = {}) {
+function isBuyerAccessInvoice(invoice = {}) {
+  return text(invoice?.object).toLowerCase() === "invoice"
+    && text(invoice?.metadata?.flow).toLowerCase() === BUYER_ACCESS_FLOW;
+}
+
+function buyerAccessProviderStateForEvent(eventType) {
+  const states = {
+    "invoice.paid": "paid",
+    "invoice.payment_failed": "failed",
+    "invoice.voided": "void",
+    "invoice.marked_uncollectible": "expired"
+  };
+  return states[text(eventType).toLowerCase()] || "";
+}
+
+function assertBuyerAccessInvoiceBinding({ eventLivemode, invoice, order, providerState, stripeMode } = {}) {
   assertBuyerAccessRuntime({ enabled: "true", stripeMode });
-  const expectedSessionId = text(order?.stripeSessionId);
-  const observedSessionId = text(session?.id);
-  const orderId = text(order?.orderId);
-  const ownerUid = text(order?.ownerUid);
-  const ownerEmail = normalizedEmail(order?.ownerEmail);
-  const generation = normalizeGeneration(order?.checkoutGeneration);
-  if (text(order?.flow).toLowerCase() !== BUYER_ACCESS_FLOW) {
-    throw new BuyerAccessError("Stored order is not a buyer access purchase.");
+  const expectedInvoiceId = normalizeStripeId(order?.stripeInvoiceId, "in", "invoice");
+  const expectedCustomerId = normalizeStripeId(order?.stripeCustomerId, "cus", "customer");
+  const observedInvoiceId = normalizeStripeId(invoice?.id, "in", "invoice");
+  const observedCustomerId = normalizeStripeId(invoice?.customer, "cus", "customer");
+  const orderId = text(order?.orderId).toLowerCase();
+  const ownerEmail = normalizeBuyerAccessEmail(order?.ownerEmail);
+  const generation = normalizeGeneration(order?.invoiceGeneration);
+  const observedState = text(providerState).toLowerCase();
+  if (!isBuyerAccessInvoice(invoice)) {
+    throw new BuyerAccessError("Stripe Invoice is not a buyer access invoice.");
   }
-  if (!expectedSessionId || observedSessionId !== expectedSessionId) {
-    throw new BuyerAccessError("Stripe Checkout Session does not match the buyer order.");
+  if (invoice?.livemode !== false || (eventLivemode !== undefined && eventLivemode !== false)) {
+    throw new BuyerAccessError("Buyer access Invoice must be in Stripe test mode.");
   }
-  if (
-    session?.livemode !== false
-    || (eventLivemode !== undefined && eventLivemode !== false)
-  ) {
-    throw new BuyerAccessError("Buyer access Checkout Session must be in Stripe test mode.");
-  }
-  if (!isBuyerAccessSession(session)) {
-    throw new BuyerAccessError("Stripe Checkout Session is not a buyer access purchase.");
+  if (observedInvoiceId !== expectedInvoiceId || observedCustomerId !== expectedCustomerId) {
+    throw new BuyerAccessError("Stripe customer or Invoice does not match the buyer order.");
   }
   if (
-    text(session?.metadata?.buyerAccessOrderId) !== orderId
-    || text(session?.client_reference_id) !== orderId
+    text(invoice?.metadata?.buyerAccessOrderId).toLowerCase() !== orderId
+    || text(invoice?.metadata?.invoiceGeneration) !== String(generation)
+    || text(invoice?.metadata?.plan).toLowerCase() !== BUYER_ACCESS_PLAN
   ) {
-    throw new BuyerAccessError("Stripe Checkout Session order binding is invalid.");
+    throw new BuyerAccessError("Stripe Invoice order, generation, or plan binding is invalid.");
   }
   if (
-    text(session?.metadata?.ownerUid) !== ownerUid
-    || text(session?.metadata?.checkoutGeneration) !== String(generation)
-    || text(session?.metadata?.plan).toLowerCase() !== BUYER_ACCESS_PLAN
+    text(order?.flow).toLowerCase() !== BUYER_ACCESS_FLOW
+    || text(order?.plan).toLowerCase() !== BUYER_ACCESS_PLAN
+    || Number(order?.amountCents) !== BUYER_ACCESS_AMOUNT_CENTS
+    || text(order?.currency).toLowerCase() !== BUYER_ACCESS_CURRENCY
   ) {
-    throw new BuyerAccessError("Stripe Checkout Session owner or plan binding is invalid.");
+    throw new BuyerAccessError("Stored buyer access order scope is invalid.");
   }
   if (
-    text(session?.mode).toLowerCase() !== "payment"
-    || Number(session?.amount_total) !== BUYER_ACCESS_AMOUNT_CENTS
-    || text(session?.currency).toLowerCase() !== BUYER_ACCESS_CURRENCY
-    || session?.invoice_creation?.enabled !== true
+    text(invoice?.collection_method).toLowerCase() !== "send_invoice"
+    || text(invoice?.currency).toLowerCase() !== BUYER_ACCESS_CURRENCY
+    || text(invoice?.customer_email).toLowerCase() !== ownerEmail
+    || invoice?.subscription
   ) {
-    throw new BuyerAccessError("Stripe Checkout Session amount, currency, or invoice configuration is invalid.");
+    throw new BuyerAccessError("Stripe Invoice currency, customer, or collection method is invalid.");
   }
-  const sessionEmails = [session?.customer_email, session?.customer_details?.email]
-    .map(normalizedEmail)
-    .filter(Boolean);
-  if (!ownerEmail || sessionEmails.length === 0 || sessionEmails.some((email) => email !== ownerEmail)) {
-    throw new BuyerAccessError("Stripe Checkout Session owner email is invalid.");
+  if (
+    ["open", "paid", "failed"].includes(observedState)
+    && (
+      Number(invoice?.amount_due) !== BUYER_ACCESS_AMOUNT_CENTS
+      || Number(invoice?.total) !== BUYER_ACCESS_AMOUNT_CENTS
+    )
+  ) {
+    throw new BuyerAccessError("Stripe Invoice amount or total is invalid.");
   }
-  const invoiceId = normalizeBuyerAccessInvoiceId(session?.invoice, {
-    required: requireInvoice
-  });
-  const storedInvoiceId = normalizeBuyerAccessInvoiceId(order?.stripeInvoiceId);
-  if (storedInvoiceId && invoiceId !== storedInvoiceId) {
-    throw new BuyerAccessError("Stripe invoice does not match the buyer order.");
+  if (observedState === "open") {
+    if (text(invoice?.status).toLowerCase() !== "open") {
+      throw new BuyerAccessError("Stripe Invoice is not open for payment.");
+    }
+    return {
+      customerId: observedCustomerId,
+      generation,
+      hostedInvoiceUrl: normalizeBuyerAccessHostedInvoiceUrl(invoice?.hosted_invoice_url),
+      invoiceId: observedInvoiceId,
+      orderId,
+      ownerEmail,
+      providerState: observedState
+    };
+  }
+  const expectedStatus = {
+    paid: "paid",
+    failed: "open",
+    void: "void",
+    expired: "uncollectible"
+  }[observedState];
+  if (!expectedStatus || text(invoice?.status).toLowerCase() !== expectedStatus) {
+    throw new BuyerAccessError("Stripe buyer access Invoice state is invalid.");
+  }
+  if (observedState === "paid") {
+    const paymentIntentId = normalizeStripeId(invoice?.payment_intent, "pi", "payment intent");
+    if (
+      Number(invoice?.amount_paid) !== BUYER_ACCESS_AMOUNT_CENTS
+      || Number(invoice?.amount_remaining) !== 0
+      || invoice?.paid_out_of_band !== false
+    ) {
+      throw new BuyerAccessError("Paid buyer access Invoice settlement is invalid.");
+    }
+    return {
+      customerId: observedCustomerId,
+      generation,
+      hostedInvoiceUrl: normalizeBuyerAccessHostedInvoiceUrl(invoice?.hosted_invoice_url, { required: false }),
+      invoiceId: observedInvoiceId,
+      orderId,
+      ownerEmail,
+      paymentIntentId,
+      providerState: observedState
+    };
   }
   return {
-    amountCents: BUYER_ACCESS_AMOUNT_CENTS,
-    currency: BUYER_ACCESS_CURRENCY,
+    customerId: observedCustomerId,
     generation,
-    invoiceId,
+    hostedInvoiceUrl: normalizeBuyerAccessHostedInvoiceUrl(invoice?.hosted_invoice_url, {
+      required: observedState === "failed"
+    }),
+    invoiceId: observedInvoiceId,
     orderId,
     ownerEmail,
-    ownerUid,
-    sessionId: observedSessionId
+    providerState: observedState
   };
 }
 
 function planBuyerAccessTransition({ currentStatus, providerState } = {}) {
-  const current = text(currentStatus).toLowerCase() || "checkout_pending";
+  const current = text(currentStatus).toLowerCase() || "invoice_preparing";
   const observed = text(providerState).toLowerCase();
-  if (current === "active") {
-    return { apply: false, status: "active", accessGranted: true, reason: "already_active" };
+  if (!BUYER_ACCESS_INTERNAL_STATUSES.includes(current)) {
+    throw new BuyerAccessError("Buyer access order status is invalid.");
+  }
+  if (["active", "activation_sent", "activation_pending"].includes(current)) {
+    return {
+      apply: false,
+      status: current,
+      accessGranted: current === "active",
+      reason: current === "active" ? "already_active" : "already_provisioned"
+    };
   }
   const statusByProviderState = {
-    open: "checkout_pending",
+    open: "invoice_open",
     processing: "payment_processing",
-    paid: "active",
+    paid: "activation_pending",
     failed: "payment_failed",
+    void: "void",
     expired: "expired"
   };
   const status = statusByProviderState[observed];
-  if (!status) {
-    throw new BuyerAccessError("Stripe buyer access state is invalid.");
-  }
-  if (["payment_failed", "expired"].includes(current) && observed !== "paid") {
+  if (!status) throw new BuyerAccessError("Stripe buyer access state is invalid.");
+  if (["void", "expired"].includes(current) && observed !== "paid") {
     return { apply: false, status: current, accessGranted: false, reason: "terminal_unpaid_state" };
   }
   return {
@@ -359,65 +463,153 @@ function planBuyerAccessTransition({ currentStatus, providerState } = {}) {
   };
 }
 
-function buyerAccessStatusResponse(order = {}) {
-  const status = text(order.status).toLowerCase();
-  if (!BUYER_ACCESS_STATUSES.includes(status)) {
-    throw new BuyerAccessError("Buyer access order status is invalid.", "internal");
+function resolveBuyerAccessBootstrapRecovery({
+  authenticatedClaims = {},
+  buyerAccessOrder = {},
+  email,
+  roleRecord = {},
+  uid
+} = {}) {
+  const ownerEmail = normalizeBuyerAccessEmail(email);
+  const ownerUid = text(uid);
+  const orderId = text(roleRecord.buyerAccessOrderId).toLowerCase();
+  const organizationId = text(roleRecord.organizationId).toLowerCase();
+  const role = text(roleRecord.role).toLowerCase();
+  const roleEmail = normalizeBuyerAccessEmail(roleRecord.email);
+  const claimsRole = text(authenticatedClaims.role).toLowerCase();
+  const claimsOrganizationId = text(authenticatedClaims.organizationId).toLowerCase();
+  if (
+    !ownerUid
+    || !/^ba-[a-f0-9]{40}$/.test(orderId)
+    || !/^[a-z0-9][a-z0-9_-]*-[a-f0-9]{32}$/.test(organizationId)
+    || role !== "admin"
+    || roleEmail !== ownerEmail
+    || text(roleRecord.buyerAccessMode) !== BUYER_ACCESS_MODE
+    || text(roleRecord.source) !== BUYER_ACCESS_FLOW
+  ) {
+    throw new BuyerAccessError("Buyer access role recovery scope is invalid.");
   }
-  const active = status === "active" && order.accessGranted === true;
-  return {
-    orderId: text(order.orderId),
-    sessionId: text(order.stripeSessionId),
-    status,
-    accessGranted: active,
-    organizationId: active ? text(order.organizationId) : null,
-    appUrl: active ? "/app" : null
-  };
+  if (
+    !["", "customer", "admin"].includes(claimsRole)
+    || (claimsOrganizationId && claimsOrganizationId !== organizationId)
+    || (claimsRole === "admin" && claimsOrganizationId !== organizationId)
+    || (claimsRole === "customer" && claimsOrganizationId)
+  ) {
+    throw new BuyerAccessError("Buyer access claims cannot be reassigned during recovery.");
+  }
+  if (
+    text(buyerAccessOrder.orderId).toLowerCase() !== orderId
+    || text(buyerAccessOrder.flow) !== BUYER_ACCESS_FLOW
+    || text(buyerAccessOrder.buyerAccessMode) !== BUYER_ACCESS_MODE
+    || normalizeBuyerAccessEmail(buyerAccessOrder.ownerEmail) !== ownerEmail
+    || text(buyerAccessOrder.ownerUid) !== ownerUid
+    || text(buyerAccessOrder.organizationId).toLowerCase() !== organizationId
+    || text(buyerAccessOrder.plan).toLowerCase() !== BUYER_ACCESS_PLAN
+    || Number(buyerAccessOrder.amountCents) !== BUYER_ACCESS_AMOUNT_CENTS
+    || text(buyerAccessOrder.currency).toLowerCase() !== BUYER_ACCESS_CURRENCY
+    || text(buyerAccessOrder.status).toLowerCase() !== "active"
+    || buyerAccessOrder.accessGranted !== true
+    || buyerAccessOrder.workspaceReady !== true
+    || !["pending", "failed", "succeeded"].includes(
+      text(buyerAccessOrder.claimsSyncStatus).toLowerCase()
+    )
+  ) {
+    throw new BuyerAccessError("Buyer access order recovery scope is invalid.");
+  }
+  return { buyerAccessOrderId: orderId, organizationId };
 }
 
-async function neutralizeBuyerAccessCheckoutSession({ expireSession, session } = {}) {
-  const sessionId = text(session?.id);
-  if (!sessionId || typeof expireSession !== "function") {
-    return {
-      outcome: "review_required",
-      reason: "expiration_unavailable",
-      sessionId
-    };
+function buyerAccessStatusResponse(order = {}) {
+  const internalStatus = text(order.status).toLowerCase();
+  if (!BUYER_ACCESS_INTERNAL_STATUSES.includes(internalStatus)) {
+    throw new BuyerAccessError("Buyer access order status is invalid.", "internal");
   }
-  let observed = session;
-  const status = text(observed?.status).toLowerCase();
-  const paymentStatus = text(observed?.payment_status).toLowerCase();
-  if (status === "open" && paymentStatus === "unpaid") {
-    try {
-      observed = await expireSession(sessionId);
-    } catch (error) {
-      return {
-        outcome: "review_required",
-        reason: "expiration_unconfirmed",
-        sessionId
-      };
-    }
-  }
-  const observedSessionId = text(observed?.id);
-  const observedStatus = text(observed?.status).toLowerCase();
-  const observedPaymentStatus = text(observed?.payment_status).toLowerCase();
+  const status = {
+    invoice_preparing: "provisioning",
+    activation_pending: "provisioning"
+  }[internalStatus] || internalStatus;
+  const isPreActivation = [
+    "invoice_preparing",
+    "invoice_open",
+    "payment_processing",
+    "payment_failed",
+    "void",
+    "expired"
+  ].includes(internalStatus);
+  const active = internalStatus === "active";
+  const activationSent = internalStatus === "activation_sent";
+  const activationPending = internalStatus === "activation_pending";
   if (
-    observedSessionId === sessionId
-    && observedStatus === "expired"
-    && observedPaymentStatus === "unpaid"
+    (isPreActivation && (
+      order.accessGranted === true
+      || order.workspaceReady === true
+      || order.activationEmailSent === true
+    ))
+    || (activationPending && (
+      order.accessGranted === true
+      || order.workspaceReady !== true
+      || order.activationEmailSent === true
+    ))
+    || (activationSent && (
+      order.accessGranted === true
+      || order.workspaceReady !== true
+      || order.activationEmailSent !== true
+    ))
+    || (active && (
+      order.accessGranted !== true
+      || order.workspaceReady !== true
+      || typeof order.activationEmailSent !== "boolean"
+    ))
   ) {
-    return {
-      outcome: "neutralized",
-      reason: "expiration_confirmed",
-      sessionId
-    };
+    throw new BuyerAccessError("Buyer access fulfillment state is inconsistent.", "internal");
+  }
+  const workspaceReady = activationPending || activationSent || active;
+  const response = {
+    orderId: text(order.orderId),
+    status,
+    activationEmailSent: activationSent || (active && order.activationEmailSent === true),
+    workspaceReady,
+    appUrl: active ? "/app" : null
+  };
+  if (["invoice_open", "payment_failed"].includes(status)) {
+    response.hostedInvoiceUrl = normalizeBuyerAccessHostedInvoiceUrl(order.hostedInvoiceUrl);
+  }
+  return response;
+}
+
+function normalizeBuyerAccessTurnstileHostnames(value) {
+  const hostnames = text(value)
+    .split(",")
+    .map((hostname) => hostname.trim().toLowerCase().replace(/\.+$/, ""))
+    .filter(Boolean);
+  if (
+    !hostnames.length
+    || hostnames.some((hostname) => !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(hostname))
+  ) {
+    throw new BuyerAccessError("Buyer access Turnstile hostname allowlist is invalid.");
+  }
+  return [...new Set(hostnames)];
+}
+
+function assertBuyerAccessTurnstileResult({ allowedHostnames, result } = {}) {
+  const hostnames = Array.isArray(allowedHostnames)
+    ? normalizeBuyerAccessTurnstileHostnames(allowedHostnames.join(","))
+    : normalizeBuyerAccessTurnstileHostnames(allowedHostnames);
+  const hostname = text(result?.hostname).toLowerCase().replace(/\.+$/, "");
+  if (
+    result?.success !== true
+    || text(result?.action) !== BUYER_ACCESS_TURNSTILE_ACTION
+    || !hostnames.includes(hostname)
+  ) {
+    throw new BuyerAccessError(
+      "Buyer access verification failed. Refresh and try again.",
+      "permission-denied"
+    );
   }
   return {
-    outcome: "review_required",
-    reason: observedPaymentStatus === "paid"
-      ? "provider_reports_paid"
-      : "expiration_unconfirmed",
-    sessionId
+    action: BUYER_ACCESS_TURNSTILE_ACTION,
+    hostname,
+    challengeTimestamp: text(result?.challenge_ts)
   };
 }
 
@@ -425,22 +617,29 @@ module.exports = {
   BUYER_ACCESS_AMOUNT_CENTS,
   BUYER_ACCESS_CURRENCY,
   BUYER_ACCESS_FLOW,
+  BUYER_ACCESS_INTERNAL_STATUSES,
   BUYER_ACCESS_MODE,
   BUYER_ACCESS_PLAN,
-  BUYER_ACCESS_STATUSES,
+  BUYER_ACCESS_STRIPE_API_VERSION,
+  BUYER_ACCESS_TURNSTILE_ACTION,
   BuyerAccessError,
-  assertBuyerAccessAllowedEmail,
+  assertBuyerAccessInvoiceBinding,
   assertBuyerAccessRuntime,
-  assertBuyerAccessSessionBinding,
-  buildBuyerAccessCheckout,
+  assertBuyerAccessTurnstileResult,
   buildBuyerAccessIdentifiers,
-  buildBuyerAccessReturnUrls,
-  buyerAccessOrderIdForUid,
+  buildBuyerAccessMetadata,
+  buildBuyerAccessStripePlan,
+  buyerAccessOrderIdForEmail,
+  buyerAccessProviderStateForEvent,
   buyerAccessStatusResponse,
-  isBuyerAccessSession,
-  neutralizeBuyerAccessCheckoutSession,
-  normalizeBuyerAccessInvoiceId,
-  normalizeBuyerAccessAllowedEmails,
+  buyerAccessStatusTokenMatches,
+  hashBuyerAccessSecret,
+  isBuyerAccessInvoice,
+  normalizeBuyerAccessHostedInvoiceUrl,
   normalizeBuyerAccessRequest,
-  planBuyerAccessTransition
+  normalizeBuyerAccessRequestId,
+  normalizeBuyerAccessStatusRequest,
+  normalizeBuyerAccessTurnstileHostnames,
+  planBuyerAccessTransition,
+  resolveBuyerAccessBootstrapRecovery
 };

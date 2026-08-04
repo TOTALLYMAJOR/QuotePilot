@@ -52,6 +52,32 @@ const assertEmailList = (name, value) => {
   }
   return [...new Set(emails)].join(",");
 };
+const BUYER_ACCESS_APPROVED_TURNSTILE_HOSTNAMES = [
+  "quotepilot.mbmapps.com",
+  "tonicatering.web.app"
+];
+const assertBuyerAccessTurnstileHostnames = (value) => {
+  const hostnames = value
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  const approved = new Set(BUYER_ACCESS_APPROVED_TURNSTILE_HOSTNAMES);
+
+  if (
+    !hostnames.length
+    || hostnames.some((hostname) => !/^[a-z0-9.-]+$/.test(hostname))
+    || hostnames.some((hostname) => !approved.has(hostname))
+    || BUYER_ACCESS_APPROVED_TURNSTILE_HOSTNAMES.some(
+      (hostname) => !hostnames.includes(hostname)
+    )
+  ) {
+    throw new Error(
+      "BUYER_ACCESS_TURNSTILE_HOSTNAMES must contain only the exact approved QuotePilot production hosts: quotepilot.mbmapps.com,tonicatering.web.app."
+    );
+  }
+
+  return [...new Set(hostnames)].join(",");
+};
 
 const appBaseUrl = required("APP_BASE_URL");
 if (appBaseUrl !== "https://quotepilot.mbmapps.com/app") {
@@ -135,7 +161,7 @@ if (!["true", "false"].includes(buyerAccessEnabled)) {
 }
 const buyerAccessStripeMode = optional("BUYER_ACCESS_STRIPE_MODE", "test").toLowerCase();
 if (buyerAccessStripeMode !== "test") {
-  throw new Error("BUYER_ACCESS_STRIPE_MODE must remain test for the controlled buyer pilot.");
+  throw new Error("BUYER_ACCESS_STRIPE_MODE must remain test for the buyer invoice rail.");
 }
 const buyerAccessAppBaseUrl = optional(
   "BUYER_ACCESS_APP_BASE_URL",
@@ -144,18 +170,24 @@ const buyerAccessAppBaseUrl = optional(
 if (buyerAccessAppBaseUrl !== "https://quotepilot.mbmapps.com/app") {
   throw new Error("BUYER_ACCESS_APP_BASE_URL must be the canonical QuotePilot application URL.");
 }
-const buyerAccessAllowedEmails = optional("BUYER_ACCESS_ALLOWED_EMAILS");
-if (buyerAccessEnabled === "true" && !buyerAccessAllowedEmails) {
+if (optional("BUYER_ACCESS_ALLOWED_EMAILS")) {
   throw new Error(
-    "BUYER_ACCESS_ALLOWED_EMAILS is required while the controlled buyer pilot is enabled."
+    "BUYER_ACCESS_ALLOWED_EMAILS is obsolete; public buyer access must be protected by Turnstile, rate limits, Stripe invoice state, and verified activation."
   );
 }
-const normalizedBuyerAccessAllowedEmails = buyerAccessAllowedEmails
-  ? assertEmailList("BUYER_ACCESS_ALLOWED_EMAILS", buyerAccessAllowedEmails)
+const buyerAccessTurnstileHostnames = optional("BUYER_ACCESS_TURNSTILE_HOSTNAMES");
+if (buyerAccessEnabled === "true" && !buyerAccessTurnstileHostnames) {
+  throw new Error(
+    "BUYER_ACCESS_TURNSTILE_HOSTNAMES is required while public buyer access is enabled."
+  );
+}
+const normalizedBuyerAccessTurnstileHostnames = buyerAccessTurnstileHostnames
+  ? assertBuyerAccessTurnstileHostnames(buyerAccessTurnstileHostnames)
   : "";
 for (const secretName of [
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
-  "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET"
+  "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
+  "BUYER_ACCESS_TURNSTILE_SECRET"
 ]) {
   if (optional(secretName)) {
     throw new Error(
@@ -188,8 +220,8 @@ const values = {
   BUYER_ACCESS_ENABLED: buyerAccessEnabled,
   BUYER_ACCESS_STRIPE_MODE: buyerAccessStripeMode,
   BUYER_ACCESS_APP_BASE_URL: buyerAccessAppBaseUrl,
-  ...(normalizedBuyerAccessAllowedEmails
-    ? { BUYER_ACCESS_ALLOWED_EMAILS: normalizedBuyerAccessAllowedEmails }
+  ...(normalizedBuyerAccessTurnstileHostnames
+    ? { BUYER_ACCESS_TURNSTILE_HOSTNAMES: normalizedBuyerAccessTurnstileHostnames }
     : {})
 };
 
