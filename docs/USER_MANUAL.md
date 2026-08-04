@@ -97,7 +97,7 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
     provider-acceptance evidence for its exact current valid issuance; draft,
     rotated-but-unsent, and legacy portals without that evidence fail closed.
   - Admin only: submit customer email to the configured provider, copy a
-    verified Stripe payment link, create/send a Stripe deposit request, and
+    verified Stripe payment link, send the approved Stripe deposit request, and
     rotate a customer portal token for a draft, sent, or viewed quote when its
     issuance should be replaced. Use `Reopen` when the quote itself is expired;
     accepted, declined, and booked records cannot rotate their portal identity.
@@ -108,6 +108,42 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
     or bounce handling. Rotation invalidates prior portal activation evidence,
     so both Copy Portal and the portal link inside a PDF remain unavailable
     until a separate provider send accepts the new issuance.
+- In the current source candidate, `Send Pay Request` is available only for an
+  accepted or booked quote with an exact approved action. That approval is
+  bound to the organization, quote revision, current portal issuance, customer
+  email, currency, and deposit amount. QuotePilot privately prepares or safely
+  restores the Stripe Checkout Session, then submits the payment-request email;
+  there is no separate browser checkout-creation step. While prepared, the
+  quote records the Session without exposing its payment link, and the URL is
+  kept out of browser-readable app records in a server-only dispatch record.
+  QuotePilot publishes the link to the quote and portal only after
+  email-provider acceptance is durably recorded. If any bound value changes,
+  request and approve a new action before sending.
+- If the action reports an uncertain Stripe-creation or email-provider outcome,
+  do not create a second request or manually share a link. Reload Quote History
+  and have the admin who began the action use `Resume Pay Request`; another
+  admin cannot take over the in-progress provider identity. QuotePilot keeps the
+  exact approval in progress and reuses the same Stripe-creation and provider
+  identities; a known prepared Session is reused. The hidden link does not prove
+  the customer received nothing—an ambiguous provider call may still have been
+  accepted. If acceptance was already recorded but payment publication was
+  interrupted, resume completes publication without another email send.
+- A definite provider failure requires a new approval only after QuotePilot
+  safely expires any prepared unsent checkout and clears its private URL. If
+  cleanup cannot be confirmed, the exact operation remains resumable; retry it
+  or use `Reconcile Payment` rather than starting a replacement.
+- Payment state is provider-owned. Signed Stripe events can record processing,
+  paid, failed, or expired state; a failed or expired Session clears the
+  published payment link so a new exact approval/send can create a replacement.
+  Paid or refunded truth cannot be downgraded through the staff UI.
+- Admins may select `Reconcile Payment` when the stored Stripe Session needs
+  provider review, such as after delayed webhook delivery. Reconciliation reads
+  the server-recorded Session and applies or reports provider truth; it is not a
+  manual paid button. A review-required result must be investigated in Stripe.
+- This workflow is not production behavior until its matching frontend,
+  Functions, and Firestore rules are deployed together and hosted Stripe
+  test/live acceptance is recorded. It covers deposits only; refunds, disputes,
+  and final-balance requests remain separate manual processes.
 - While quote delivery is `sending`, or its provider outcome needs manual
   review, QuotePilot locks quote status/payment, edit, checkout, payment email,
   contract, portal rotation, and deletion controls. PDF download, email-template
@@ -351,6 +387,9 @@ Complete every item before calling the new tenant operational:
 - Portal decisions support `Accept`, `Request Changes`, and `Decline`; change requests require a customer note.
 - Proposal acceptance is recorded separately from payment and booking confirmation.
 - Portal updates are reflected in staff quote history.
+- After returning from Stripe, the portal may refresh its payment display while
+  the signed webhook is processed. The return URL itself never proves payment;
+  only server-observed provider state or admin reconciliation may update it.
 - Portal decisions persist atomically to the public snapshot and organization
   quote; a terminal accepted or declined decision is immutable from the public
   portal.
@@ -384,7 +423,10 @@ Complete every item before calling the new tenant operational:
   - event name
   - venue
   - guest count > 0
-- If payment links fail, verify Firebase Functions/Stripe configuration in Integrations settings.
+- If payment links fail, verify the coordinated frontend/Functions/rules
+  revision, all four Stripe webhook subscriptions, and explicit
+  `STRIPE_MODE=test|live` with a matching key in the trusted runtime. Do not
+  paste provider secrets into the browser or a tracked environment file.
 
 ## Related Docs
 - Product setup and commands: `README.md`

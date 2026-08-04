@@ -182,12 +182,12 @@ async function expectCallableError(action, expectedStatus) {
   assert.equal(caught.status, expectedStatus);
 }
 
-async function callStripeWebhook(event) {
+async function callStripeWebhook(event, { signingSecret = "" } = {}) {
   const webhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || "").trim();
   assert.ok(webhookSecret, "STRIPE_WEBHOOK_SECRET is required for webhook acceptance.");
   const body = JSON.stringify(event);
   const timestamp = Math.floor(Date.now() / 1000);
-  const signature = createHmac("sha256", webhookSecret)
+  const signature = createHmac("sha256", signingSecret || webhookSecret)
     .update(`${timestamp}.${body}`)
     .digest("hex");
   const response = await fetch(
@@ -1158,10 +1158,19 @@ const paymentStateSent = {
   depositLink: paymentLink,
   depositStatus: "sent",
   depositConfirmedAtISO: "",
-  stripeSessionId: paymentSessionId
+  stripeSessionId: paymentSessionId,
+  stripeCheckoutState: "open",
+  checkoutGeneration: 1,
+  knownStripeSessionIds: [paymentSessionId]
+};
+const orphanedPreparedPayment = {
+  ...paymentStateSent,
+  depositLink: "",
+  depositStatus: "unpaid",
+  stripeCheckoutState: "prepared"
 };
 await acceptanceQuoteRef.set({
-  payment: paymentStateSent
+  payment: orphanedPreparedPayment
 }, { merge: true });
 await expectCallableError(
   () => callFunction("sendPaymentRequestEmail", bootstrapToken, {
@@ -1178,6 +1187,9 @@ assert.equal(
     ?.executionState,
   "failed"
 );
+await acceptanceQuoteRef.set({
+  payment: paymentStateSent
+}, { merge: true });
 const rotateApproval = await requestAndApproveQuoteAction(
   acceptanceQuoteId,
   "rotate_portal_link",
@@ -1203,11 +1215,14 @@ const paymentEvent = {
   id: paymentEventId,
   object: "event",
   type: "checkout.session.completed",
+  livemode: false,
   data: {
     object: {
       id: paymentSessionId,
       object: "checkout.session",
+      livemode: false,
       mode: "payment",
+      status: "complete",
       payment_status: "paid",
       currency: "usd",
       amount_total: expectedDepositCents,
@@ -1219,6 +1234,18 @@ const paymentEvent = {
     }
   }
 };
+const invalidSignatureEvent = {
+  ...paymentEvent,
+  id: "evt_quotepilot_invalid_signature"
+};
+const invalidSignatureAttempt = await callStripeWebhook(invalidSignatureEvent, {
+  signingSecret: "whsec_intentionally_invalid_fixture"
+});
+assert.equal(invalidSignatureAttempt.status, 400, invalidSignatureAttempt.responseText);
+assert.equal(
+  (await db.collection("webhookEvents").doc(`stripe-${invalidSignatureEvent.id}`).get()).exists,
+  false
+);
 const corruptPortalPaymentAttempt = await callStripeWebhook(paymentEvent);
 assert.equal(
   corruptPortalPaymentAttempt.status,
@@ -1273,6 +1300,134 @@ await expectCallableError(
 const duplicatePaidAttempt = await callStripeWebhook(paymentEvent);
 assert.equal(duplicatePaidAttempt.status, 200);
 assert.equal(duplicatePaidAttempt.payload?.duplicate, true);
+
+const stalePaidSessionId = "cs_test_quotepilot_stale_paid";
+await Promise.all([
+  acceptanceQuoteRef.update({
+    "payment.knownStripeSessionIds": [stalePaidSessionId, paymentSessionId]
+  }),
+  acceptancePortalRef.update({
+    "payment.knownStripeSessionIds": [stalePaidSessionId, paymentSessionId]
+  })
+]);
+const stalePaidEvent = {
+  ...paymentEvent,
+  id: "evt_quotepilot_stale_paid",
+  data: {
+    object: {
+      ...paymentEvent.data.object,
+      id: stalePaidSessionId,
+      amount_total: expectedDepositCents + 123,
+      metadata: {
+        ...paymentEvent.data.object.metadata,
+        portalKey: "retired-portal-key"
+      }
+    }
+  }
+};
+const stalePaidAttempt = await callStripeWebhook(stalePaidEvent);
+assert.equal(stalePaidAttempt.status, 200, stalePaidAttempt.responseText);
+assert.equal(stalePaidAttempt.payload?.ignored, "stale_paid_requires_review");
+const [quoteAfterStalePaid, portalAfterStalePaid, stalePaidAudit] = await Promise.all([
+  acceptanceQuoteRef.get(),
+  acceptancePortalRef.get(),
+  db.collection("webhookEvents").doc(`stripe-${stalePaidEvent.id}`).get()
+]);
+assert.equal(quoteAfterStalePaid.data()?.payment?.depositStatus, "paid");
+assert.equal(quoteAfterStalePaid.data()?.payment?.stripeSessionId, paymentSessionId);
+assert.equal(portalAfterStalePaid.data()?.payment?.depositStatus, "paid");
+assert.equal(portalAfterStalePaid.data()?.payment?.stripeSessionId, paymentSessionId);
+assert.equal(stalePaidAudit.data()?.status, "review_required");
+assert.equal(
+  stalePaidAudit.data()?.result,
+  "stale_known_session_scope_mismatch_paid_review"
+);
+assert.equal(stalePaidAudit.data()?.knownSession, true);
+assert.equal(stalePaidAudit.data()?.commercialScopeValid, false);
+assert.match(
+  stalePaidAudit.data()?.commercialScopeError || "",
+  /amount does not match the quote deposit/i
+);
+const duplicateStalePaidAttempt = await callStripeWebhook(stalePaidEvent);
+assert.equal(duplicateStalePaidAttempt.status, 200, duplicateStalePaidAttempt.responseText);
+assert.equal(duplicateStalePaidAttempt.payload?.duplicate, true);
+
+const paidDowngradeEvent = {
+  ...paymentEvent,
+  id: "evt_quotepilot_paid_downgrade",
+  type: "checkout.session.expired",
+  data: {
+    object: {
+      ...paymentEvent.data.object,
+      status: "expired",
+      payment_status: "unpaid"
+    }
+  }
+};
+const paidDowngradeAttempt = await callStripeWebhook(paidDowngradeEvent);
+assert.equal(paidDowngradeAttempt.status, 200, paidDowngradeAttempt.responseText);
+assert.equal(paidDowngradeAttempt.payload?.ignored, "settlement_is_monotonic");
+assert.equal((await acceptanceQuoteRef.get()).data()?.payment?.depositStatus, "paid");
+
+for (const [providerState, eventType] of [
+  ["failed", "checkout.session.async_payment_failed"],
+  ["expired", "checkout.session.expired"]
+]) {
+  const terminalQuoteId = `stripe-${providerState}-quote`;
+  const terminalPortalKey = `stripe-${providerState}-portal-key-abcdefghijklmnopqrstuvwxyz`;
+  const terminalSessionId = `cs_test_quotepilot_${providerState}`;
+  const terminalLink = `https://checkout.stripe.com/c/pay/quotepilot-${providerState}`;
+  const terminalPayment = {
+    ...(paymentQuoteBefore.data()?.payment || {}),
+    depositLink: terminalLink,
+    depositStatus: "sent",
+    depositConfirmedAtISO: "",
+    stripeSessionId: terminalSessionId,
+    stripeCheckoutState: "open",
+    checkoutGeneration: 1
+  };
+  await orgRef.collection("quotes").doc(terminalQuoteId).set({
+    ...paymentQuoteBefore.data(),
+    quoteId: terminalQuoteId,
+    portalKey: terminalPortalKey,
+    payment: terminalPayment
+  }, { merge: false });
+  await db.collection("customerPortalQuotes").doc(terminalPortalKey).set({
+    ...paymentPortalBefore.data(),
+    quoteId: terminalQuoteId,
+    portalKey: terminalPortalKey,
+    organizationId,
+    payment: terminalPayment
+  }, { merge: false });
+  const terminalEvent = {
+    ...paymentEvent,
+    id: `evt_quotepilot_${providerState}`,
+    type: eventType,
+    data: {
+      object: {
+        ...paymentEvent.data.object,
+        id: terminalSessionId,
+        status: providerState === "expired" ? "expired" : "complete",
+        payment_status: "unpaid",
+        metadata: {
+          quoteId: terminalQuoteId,
+          organizationId,
+          portalKey: terminalPortalKey
+        }
+      }
+    }
+  };
+  const terminalAttempt = await callStripeWebhook(terminalEvent);
+  assert.equal(terminalAttempt.status, 200, terminalAttempt.responseText);
+  const [terminalQuote, terminalPortal] = await Promise.all([
+    orgRef.collection("quotes").doc(terminalQuoteId).get(),
+    db.collection("customerPortalQuotes").doc(terminalPortalKey).get()
+  ]);
+  assert.equal(terminalQuote.data()?.payment?.depositStatus, "unpaid");
+  assert.equal(terminalQuote.data()?.payment?.depositLink, "");
+  assert.equal(terminalQuote.data()?.payment?.stripeCheckoutState, providerState);
+  assert.equal(terminalPortal.data()?.payment?.stripeCheckoutState, providerState);
+}
 
 const retiredBulkPurgeQuoteId = "retired-bulk-purge-quote";
 const retiredBulkPurgePortalKey = "retired-bulk-purge-portal-key";
@@ -1582,5 +1737,5 @@ console.log("- legacy bulk quote purge was denied without mutation and exact app
 console.log("- archived tenant resume/update was blocked");
 console.log("- quote cleanup preserved cross-tenant, unscoped, and mismatched portal rows");
 console.log("- provider/payment operations denied sales and rejected caller-supplied links");
-console.log("- Stripe webhook rejected corrupt portals and underpayment, then atomically accepted and deduplicated the exact paid session");
+console.log("- Stripe webhook rejected corrupt portals and underpayment, atomically accepted the exact paid session, and acknowledged a signed stale paid session with durable review evidence");
 console.log("- hard delete retired roles/invites/portal snapshots and tombstone blocked tenant resurrection");

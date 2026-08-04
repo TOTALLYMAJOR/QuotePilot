@@ -15,15 +15,16 @@ Last updated: August 3, 2026
   branding; the legacy Firebase project ID and hosting origin remain unchanged
   infrastructure identifiers.
 - Candidate validation: draft PR #23 publishes the combined sell-readiness
-  candidate. Its initial exact head passed all eight source CI jobs in run
-  `30877272489`; Vercel Preview `dpl_DGyMkDEpA2i4GkfXTRxoqCVWszbf` failed
+  candidate. Prior exact head `7d053b0c44dd2bb2f4e77726e6c95e7b9f6f3db1`
+  passed all eight source CI jobs in run `30879068700`; Vercel Preview
+  `dpl_7B4kCqeR2iTvwDpdvigVSX5opJTc` failed
   before build because all six required `VITE_FIREBASE_*` values are scoped
   only to the older `fix/quote-history-role-permissions` branch. The local
-  quick/core gates pass: 631 unit tests pass with 39 intentional skips, the
+  quick/core gates pass: 721 unit tests pass with 41 intentional skips, the
   production build, documentation governance, bundle budget, secret scan,
   environment check, and checksum-pinned workflow lint pass, along with 327
   focused release/deletion regressions and all four target-specific UAT item
-  sets. Product/runtime changes also passed isolated Firestore rules (38/38),
+  sets. Product/runtime changes also passed isolated Firestore rules (40/40),
   default Playwright (31 pass, 2 intentional skips), Firebase Auth and
   authoritative-pricing browser lanes, the provisioning acceptance matrix,
   Docker production-image build, Lighthouse, and both production dependency
@@ -34,6 +35,28 @@ Last updated: August 3, 2026
 - Functions runtime readiness: Functions now target Node.js 22 and use Firebase
   Admin 14 modular app, Auth, and Firestore APIs. The local authoritative and
   provisioning matrices pass with that runtime candidate.
+- Current branch Stripe deposit lifecycle: an exact approved payment scope now
+  binds the quote revision, current portal issuance, customer email, currency,
+  and amount before one resumable server operation prepares/restores the
+  Checkout Session and sends the payment-request email. A newly prepared
+  Session is registered on the quote without a link; its URL remains in a
+  server-only application record and is not published to the quote or portal
+  until email-provider acceptance is durably recorded, after which publication
+  completes atomically.
+  Ambiguous checkout or email outcomes retain the exact in-progress approval
+  and executing-admin identity and reuse its Stripe/provider keys. Durable
+  acceptance makes a later retry publication-only; a definite failure advances
+  to a new approval only after any unsent checkout is neutralized, while
+  unresolved cleanup remains resumable. Direct standalone checkout creation is
+  disabled. Runtime
+  `STRIPE_MODE` is required as `test` or `live` and must match the secret-key
+  prefix plus Stripe event/Session `livemode`; signed
+  `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+  `checkout.session.async_payment_failed`, and `checkout.session.expired`
+  events own monotonic payment transitions. Same-tenant admins can reconcile
+  the server-recorded Session when webhook delivery needs review, while client
+  payment-evidence writes fail closed. This is source/local evidence only and
+  is not deployed or provider-accepted behavior.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best
   scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action
@@ -315,6 +338,17 @@ Last updated: August 3, 2026
   initial `/app` startup; local request-level browser coverage verifies the
   boundary, while hosted transfer/CWV evidence remains pending publication.
 - Functions integrations (Stripe, Twilio, and Resend) remain optional and require secure runtime configuration plus provider-level acceptance/delivery proof; committed placeholder templates are not provider configuration.
+- Stripe production readiness remains open until the exact reviewed frontend,
+  Functions, and Firestore rules are promoted together; the trusted runtime is
+  configured with an explicit matching mode/key pair and all four webhook
+  subscriptions; and isolated hosted test-mode plus separately authorized
+  live-mode acceptance are recorded. Acceptance must include browser-inaccessible
+  prepared state, same-key recovery from ambiguous creation/email outcomes,
+  publication-only recovery after durable provider acceptance, and safe
+  definite-failure cleanup; a happy-path email alone is insufficient. The
+  current candidate automates deposit checkout only. Refund initiation/status,
+  dispute handling, and final-balance collection/reconciliation remain manual
+  or unimplemented.
 - CRM outbound synchronization is intentionally disabled until a
   server-authorized connector with provider acceptance evidence is implemented.
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
@@ -331,14 +365,18 @@ Last updated: August 3, 2026
    rules/Functions/frontend artifacts and run the hosted owner/quote/portal
    tenant acceptance checklist, including current/invalid issuance, active,
    expired, deleted, approval execution, contract, and change-request paths.
-4. Verify the intended Resend sender domain in the Resend dashboard and
+4. As part of that coordinated rollout, configure the matching Stripe mode/key
+   and all four Checkout Session webhook events, then capture hosted test-mode
+   approval/send/webhook/reconciliation evidence before separately authorized
+   live-mode acceptance. Do not infer either from local emulator coverage.
+5. Verify the intended Resend sender domain in the Resend dashboard and
    authoritative DNS; only then configure
    `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and
    recipient proof from one controlled test.
-5. Run and review the scoped production portal-projection dry run, resolve any
+6. Run and review the scoped production portal-projection dry run, resolve any
    conflicts, then explicitly authorize guarded apply and retain count-only
    evidence.
-6. Improve large-chunk performance while staying inside bundle/CWV guardrails.
+7. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)
 - Focus completed: migration execution after fallback retirement and denial-matrix verification.

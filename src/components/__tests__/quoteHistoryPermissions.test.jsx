@@ -8,7 +8,7 @@ import {
 } from "../QuoteHistoryModal";
 
 describe("quote history action permissions", () => {
-  test("admin can manage quote, payment, booking, portal, and contract state", () => {
+  test("admin can manage quote, payment requests, booking, portal, and contract state", () => {
     expect(getQuoteHistoryActionPermissions("admin")).toMatchObject({
       role: "admin",
       isStaff: true,
@@ -19,9 +19,8 @@ describe("quote history action permissions", () => {
       canCopyArtifacts: true,
       canCopyPaymentLink: true,
       canSendPaymentRequest: true,
-      canCreateCheckoutLink: true,
+      canReconcilePayment: true,
       canManageQuoteStatus: true,
-      canManagePaymentStatus: true,
       canConvertToContract: true,
       canManageConfirmation: true,
       canReopenQuote: true,
@@ -41,9 +40,8 @@ describe("quote history action permissions", () => {
       canCopyArtifacts: true,
       canCopyPaymentLink: false,
       canSendPaymentRequest: false,
-      canCreateCheckoutLink: false,
+      canReconcilePayment: false,
       canManageQuoteStatus: false,
-      canManagePaymentStatus: false,
       canConvertToContract: false,
       canManageConfirmation: false,
       canReopenQuote: false,
@@ -63,15 +61,21 @@ describe("quote history action permissions", () => {
       canCopyArtifacts: false,
       canCopyPaymentLink: false,
       canSendPaymentRequest: false,
-      canCreateCheckoutLink: false,
+      canReconcilePayment: false,
       canManageQuoteStatus: false,
-      canManagePaymentStatus: false,
       canConvertToContract: false,
       canManageConfirmation: false,
       canReopenQuote: false,
       canRotatePortalLink: false,
       canDeleteQuote: false
     });
+  });
+
+  test("no browser role receives authority to mutate provider payment evidence", () => {
+    for (const role of ["admin", "sales", "customer", "unknown"]) {
+      expect(getQuoteHistoryActionPermissions(role)).not.toHaveProperty("canManagePaymentStatus");
+      expect(getQuoteHistoryActionPermissions(role)).not.toHaveProperty("canCreateCheckoutLink");
+    }
   });
 
   test("portal rotation stops before terminal commercial states", () => {
@@ -97,6 +101,41 @@ describe("quote history action permissions", () => {
 
     expect(getExecutableApprovalRequest(quote, "delete_quote")?.id).toBe("executable");
     expect(getExecutableApprovalRequest(quote, "send_payment_request")).toBeNull();
+  });
+
+  test("allows an approved payment request to resume after an interrupted execution", () => {
+    const quote = {
+      workflow: {
+        approvalRequests: [
+          {
+            id: "payment-in-progress",
+            action: "send_payment_request",
+            state: "approved",
+            executionState: "in_progress"
+          }
+        ]
+      }
+    };
+
+    expect(getExecutableApprovalRequest(quote, "send_payment_request")?.id)
+      .toBe("payment-in-progress");
+  });
+
+  test("does not resume in-progress execution for non-payment approval actions", () => {
+    const quote = {
+      workflow: {
+        approvalRequests: [
+          {
+            id: "contract-in-progress",
+            action: "convert_to_contract",
+            state: "approved",
+            executionState: "in_progress"
+          }
+        ]
+      }
+    };
+
+    expect(getExecutableApprovalRequest(quote, "convert_to_contract")).toBeNull();
   });
 });
 

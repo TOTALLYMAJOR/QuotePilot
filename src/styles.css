@@ -4477,3 +4477,21 @@ hr {
     scroll-behavior: auto !important;
   }
 }
+.portal-payment-return {
+  margin: 0 0 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent, #7c5cff) 42%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--accent, #7c5cff) 10%, transparent);
+}
+
+.portal-payment-return.return-confirmed {
+  border-color: color-mix(in srgb, #2f9e68 55%, transparent);
+  background: color-mix(in srgb, #2f9e68 12%, transparent);
+}
+
+.portal-payment-return.return-failed,
+.portal-payment-return.return-cancelled {
+  border-color: color-mix(in srgb, #d97757 50%, transparent);
+  background: color-mix(in srgb, #d97757 10%, transparent);
+}

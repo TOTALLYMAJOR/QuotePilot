@@ -106,7 +106,7 @@ const STATUS_FLOW = {
 };
 
 export const QUOTE_STATUSES = Object.keys(STATUS_FLOW);
-export { PAYMENT_STATUSES, BOOKING_CONFIRMATION_STATUSES };
+export { BOOKING_CONFIRMATION_STATUSES };
 
 let scopedOrganizationId = "";
 
@@ -387,6 +387,45 @@ function normalizeFollowUp(input) {
   };
 }
 
+function normalizePaymentApprovalScope(input) {
+  const source = input && typeof input === "object" && !Array.isArray(input)
+    ? input
+    : null;
+  if (!source) return null;
+  const amountCents = Number(source.amountCents);
+  const scope = {
+    version: Number(source.version),
+    kind: String(source.kind || "").trim(),
+    organizationId: normalizeOrganizationId(source.organizationId),
+    quoteId: String(source.quoteId || "").trim(),
+    quoteRevisionId: String(source.quoteRevisionId || "").trim(),
+    portalKey: String(source.portalKey || "").trim(),
+    portalIssuedAtISO: String(source.portalIssuedAtISO || "").trim(),
+    portalExpiresAtISO: String(source.portalExpiresAtISO || "").trim(),
+    customerEmail: normalizeEmail(source.customerEmail),
+    paymentKind: String(source.paymentKind || "").trim().toLowerCase(),
+    currency: String(source.currency || "").trim().toLowerCase(),
+    amountCents: Number.isSafeInteger(amountCents) ? amountCents : 0
+  };
+  if (
+    scope.version !== 1
+    || scope.kind !== "stripe_checkout_deposit_request"
+    || !scope.organizationId
+    || !scope.quoteId
+    || !scope.quoteRevisionId
+    || scope.portalKey.length < 20
+    || !scope.portalIssuedAtISO
+    || !scope.portalExpiresAtISO
+    || !scope.customerEmail
+    || scope.paymentKind !== "deposit"
+    || !/^[a-z]{3}$/.test(scope.currency)
+    || scope.amountCents <= 0
+  ) {
+    return null;
+  }
+  return scope;
+}
+
 function normalizeApprovalRequests(input) {
   if (!Array.isArray(input)) return [];
   const seen = new Set();
@@ -399,6 +438,10 @@ function normalizeApprovalRequests(input) {
         return null;
       }
       seen.add(id);
+      const actionScope = action === "send_payment_request"
+        ? normalizePaymentApprovalScope(item?.actionScope)
+        : null;
+      const actionScopeDigest = String(item?.actionScopeDigest || "").trim().toLowerCase();
       return {
         id,
         action,
@@ -411,6 +454,9 @@ function normalizeApprovalRequests(input) {
         resolutionNote: state === "pending"
           ? ""
           : String(item?.resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH),
+        ...(actionScope && /^[a-f0-9]{64}$/.test(actionScopeDigest)
+          ? { actionScope, actionScopeDigest }
+          : {}),
         executionState: ["awaiting_execution", "in_progress", "succeeded", "failed"].includes(
           String(item?.executionState || "").trim().toLowerCase()
         )
@@ -687,22 +733,8 @@ function buildPortalSnapshot(quoteId, quote) {
   };
 }
 
-export function buildClientWritablePortalPayment(payment) {
-  const clientWritablePayment = {
-    ...hydratePayment(payment)
-  };
-  for (const field of [
-    "depositLink",
-    "stripeSessionId",
-    "lastCheckoutCreatedAtISO",
-    "lastHost",
-    "lastEventType",
-    "lastOrganizationId",
-    "checkoutGeneration"
-  ]) {
-    delete clientWritablePayment[field];
-  }
-  return clientWritablePayment;
+export function buildClientWritablePortalPayment() {
+  return {};
 }
 
 async function ensureQuoteWriteTarget(
@@ -780,7 +812,7 @@ async function syncPortalSnapshotFromQuoteDoc(quoteId, organizationId = "") {
     organizationId: writeOrganizationId,
     createdAtISO: timestampToISO(data.createdAtISO || data.createdAt)
   });
-  portalSnapshot.payment = buildClientWritablePortalPayment(data.payment);
+  delete portalSnapshot.payment;
   await setDoc(
     portalDocRef(portalKey),
     portalSnapshot,
@@ -2236,6 +2268,11 @@ export async function requestQuoteApproval({
       // release. Only a confirmed missing endpoint may use the existing
       // rule-authorized write path during that short rollout window.
       if (!isMissingCallableError(err)) throw err;
+      if (normalizedAction === "send_payment_request") {
+        throw new Error(
+          "Payment approvals require the coordinated backend release. Retry after Functions are updated."
+        );
+      }
     }
   }
 
@@ -2350,6 +2387,16 @@ export async function resolveQuoteApprovalRequest({
       return { ok: true, storage: "firebase", request };
     } catch (err) {
       if (!isMissingCallableError(err)) throw err;
+      if (nextState === "approved") {
+        const quote = await readQuoteById(id);
+        const target = normalizeApprovalRequests(quote.workflow?.approvalRequests)
+          .find((item) => item.id === approvalRequestId);
+        if (target?.action === "send_payment_request") {
+          throw new Error(
+            "Payment approval requires the coordinated backend release. Retry after Functions are updated."
+          );
+        }
+      }
     }
   }
 
@@ -3643,58 +3690,6 @@ export async function updateQuoteStatus(quoteId, status) {
       reason: "Direct browser CRM sends are disabled."
     }
   };
-}
-
-export async function updateQuotePaymentStatus(quoteId, paymentStatus) {
-  if (!quoteId) {
-    throw new Error("Quote id is required.");
-  }
-
-  const nowISO = isoNow();
-  const nextPaymentStatus = normalizePaymentStatus(paymentStatus);
-  const paymentPatch = {
-    "payment.depositStatus": nextPaymentStatus,
-    updatedAtISO: nowISO
-  };
-
-  if (nextPaymentStatus === "paid") {
-    paymentPatch["payment.depositConfirmedAtISO"] = nowISO;
-  }
-  if (nextPaymentStatus === "unpaid" || nextPaymentStatus === "sent") {
-    paymentPatch["payment.depositConfirmedAtISO"] = "";
-  }
-
-  await saveQuoteVersion(quoteId);
-
-  if (firebaseReady) {
-    const quote = await readQuoteById(quoteId);
-    await updateDoc(quoteWriteDocRef(quoteId, quote.organizationId, "updateQuotePaymentStatus"), paymentPatch);
-    await syncPortalSnapshotFromQuoteDoc(quoteId, quote.organizationId);
-    return { ok: true, storage: "firebase" };
-  }
-
-  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
-  const next = existing.map((quote) => {
-    if (quote.id !== quoteId) return quote;
-    const payment = hydratePayment(quote.payment);
-    return {
-      ...quote,
-      updatedAtISO: nowISO,
-      payment: {
-        ...payment,
-        depositStatus: nextPaymentStatus,
-        depositConfirmedAtISO:
-          nextPaymentStatus === "paid"
-            ? nowISO
-            : nextPaymentStatus === "unpaid" || nextPaymentStatus === "sent"
-              ? ""
-              : payment.depositConfirmedAtISO || ""
-      }
-    };
-  });
-
-  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
-  return { ok: true, storage: "local" };
 }
 
 export async function reopenQuote(id) {

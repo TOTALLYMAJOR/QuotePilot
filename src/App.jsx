@@ -94,6 +94,14 @@ function readPortalKeyFromUrl() {
   return String(params.get("portal") || "").trim();
 }
 
+function readPaymentReturnFromUrl() {
+  if (typeof window === "undefined") return "";
+  const value = String(new URLSearchParams(window.location.search).get("payment") || "")
+    .trim()
+    .toLowerCase();
+  return ["success", "cancelled"].includes(value) ? value : "";
+}
+
 function toNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -340,6 +348,7 @@ export default function App() {
   const authSession = useAuthSession({ tenantContext });
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
+  const [paymentReturn] = useState(() => readPaymentReturnFromUrl());
   const isUnscopedPlatformOperator = (
     tenantContext.ready
     && (tenantContext.hostType === "app" || tenantContext.hostType === "local")
@@ -1619,7 +1628,11 @@ export default function App() {
   if (portalMode && customerPortalEnabled) {
     return (
       <div className="app-shell" style={appThemeVars}>
-        <CustomerPortalView initialPortalKey={portalKey} onBackToStaff={closePortalMode} />
+        <CustomerPortalView
+          initialPortalKey={portalKey}
+          initialPaymentReturn={paymentReturn}
+          onBackToStaff={closePortalMode}
+        />
       </div>
     );
   }

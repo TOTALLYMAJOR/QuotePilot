@@ -109,6 +109,13 @@ real provider credentials. Confirm the target is ignored with
 `git check-ignore -v functions/.env.<firebase-project-id>` before adding any
 non-production value.
 
+Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
+`test` or `live`, a secret/restricted key with the matching mode prefix, and a
+webhook secret. Event and Checkout Session `livemode` must also match. The
+tracked Functions template is inventory only; use the credential-isolated
+runtime channel described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and
+never place real Stripe values in a browser environment or committed file.
+
 The policy-enforcing repository preparation workflow packages Functions source without loading or
 materializing runtime secrets. Every `.env` file is excluded from the artifact.
 A separately owned trusted deployer must validate and materialize the approved
@@ -281,6 +288,41 @@ skips foreign-tenant, deleted, expired, identity-mismatched, and conflicting
 commercial records. The create-only private (`0600`) evidence destination is
 reserved before any database work and completed atomically with aggregate
 counts rather than portal tokens or customer data.
+
+## Stripe Deposit Workflow (Source Candidate)
+
+The current source candidate makes an approved deposit request one
+server-authoritative, resumable operation. Its immutable approval scope includes
+the organization, quote revision, current portal issuance, customer email,
+currency, and deposit amount. A new Checkout Session is first registered as
+`prepared` with no browser-readable payment link; QuotePilot retains its URL
+only in a server-only dispatch record. The server submits the payment-request
+email and publishes the link to the quote and customer portal only after
+provider acceptance is durably recorded. The browser cannot create a standalone
+checkout or mark payment evidence manually.
+
+If Stripe creation or email delivery has an ambiguous outcome, the approval
+execution remains in progress. The same admin uses `Resume Pay Request`, which
+reuses the Stripe-creation and email-provider identities; when a prepared
+Session is known, it is reused. If provider acceptance was recorded but
+database publication was interrupted, resume finishes publication without
+sending again. A definite email failure clears the private URL and requires a
+new approval only after the unsent Session is safely neutralized; unresolved
+cleanup stays resumable for retry or provider reconciliation.
+
+Payment state is driven by signed, deduplicated
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+`checkout.session.async_payment_failed`, and `checkout.session.expired` events.
+An admin reconciliation action re-reads the exact server-recorded Session when
+provider delivery needs review, without overriding settled payment truth.
+
+This behavior is not deployed by the repository preparation workflow. Release
+requires one coordinated exact-revision frontend, Functions, and Firestore
+rules promotion plus hosted Stripe test-mode and separately authorized
+live-mode acceptance. Refunds, disputes, and final-balance automation are not
+part of this deposit workflow. See the
+[launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--twilio--resend-providers)
+for configuration and proof requirements.
 
 ## Customer Provisioning (No Stripe)
 Provision a customer organization, enforce order-based feature entitlements
