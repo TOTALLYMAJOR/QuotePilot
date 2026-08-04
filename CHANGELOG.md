@@ -13,6 +13,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   protected-environment policy, and the exact human-dispatched workflow run.
 - A versioned release UAT checklist, protected attestation workflow and receipt
   artifact, plus a controlled Vercel production workflow.
+- Credential-free production payload staging with deterministic manifests,
+  fixed provider identities, path and secret-material rejection, and atomic
+  manifest creation for separately authorized deployment.
 
 ### Changed
 
@@ -21,6 +24,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   provider mutation.
 - Release-critical workflows and actions are pinned and classified as high
   risk so Firebase and browser-performance lanes remain hard gates.
+- Primary Firebase and Vercel workflows now prepare exact-SHA artifacts without
+  provider mutation credentials; production mutation remains isolated behind a
+  separately authorized deployer.
 
 ## [0.2.3] - 2026-08-05
 

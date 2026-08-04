@@ -8,8 +8,46 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GITHUB_API = "https://api.github.com";
+const GITHUB_GRAPHQL_API = `${GITHUB_API}/graphql`;
 const GITHUB_API_VERSION = "2026-03-10";
 const GITHUB_REQUEST_TIMEOUT_MS = 15_000;
+const DEPLOYMENT_REVIEWS_QUERY = `
+  query WorkflowRunDeploymentReviews($runId: ID!, $after: String) {
+    node(id: $runId) {
+      __typename
+      ... on WorkflowRun {
+        id
+        databaseId
+        deploymentReviews(first: 100, after: $after) {
+          totalCount
+          nodes {
+            id
+            state
+            user {
+              databaseId
+              login
+            }
+            environments(first: 100) {
+              totalCount
+              nodes {
+                databaseId
+                name
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    }
+  }
+`;
 
 export const RELEASE_EVIDENCE_POLICY = Object.freeze({
   repository: Object.freeze({
@@ -26,21 +64,21 @@ export const RELEASE_EVIDENCE_POLICY = Object.freeze({
     path: ".github/workflows/release-uat-attestation.yml",
     jobName: "release-uat-attestation"
   }),
-  deployWorkflows: Object.freeze({
+  preparationWorkflows: Object.freeze({
     "firebase-hosting": Object.freeze({
-      name: "Deploy Firebase Hosting / Backend",
+      name: "Prepare Firebase Production Artifact",
       path: ".github/workflows/deploy-firebase-hosting.yml"
     }),
     "firebase-backend": Object.freeze({
-      name: "Deploy Firebase Hosting / Backend",
+      name: "Prepare Firebase Production Artifact",
       path: ".github/workflows/deploy-firebase-hosting.yml"
     }),
     "firebase-all": Object.freeze({
-      name: "Deploy Firebase Hosting / Backend",
+      name: "Prepare Firebase Production Artifact",
       path: ".github/workflows/deploy-firebase-hosting.yml"
     }),
     vercel: Object.freeze({
-      name: "Deploy Vercel Production",
+      name: "Prepare Vercel Production Artifact",
       path: ".github/workflows/deploy-vercel-production.yml"
     })
   }),
@@ -157,7 +195,7 @@ export function parseReleaseUatRunTitle(value) {
   const [, , releaseShaValue, target, rollbackShaValue, stagingId, checklistDigest] = parts;
   const releaseSha = requireFullSha(releaseShaValue, "UAT release SHA");
   const rollbackSha = requireFullSha(rollbackShaValue, "UAT rollback SHA");
-  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.deployWorkflows, target)) {
+  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
     throw evidenceError(
       "the UAT target is not firebase-hosting, firebase-backend, firebase-all, or vercel."
     );
@@ -241,10 +279,13 @@ export function validateProtectedEnvironment(environment, { name, attesterId = n
     throw evidenceError(`${name} must require reviewers and prevent self-review.`);
   }
   const reviewers = Array.isArray(reviewerRule.reviewers) ? reviewerRule.reviewers : [];
+  if (reviewers.some((entry) => entry?.type !== "User" || entry?.reviewer?.type !== "User")) {
+    throw evidenceError(`${name} must use directly assigned user reviewers.`);
+  }
   const reviewerIds = reviewers
     .map((entry) => Number(entry?.reviewer?.id))
     .filter((id) => Number.isSafeInteger(id) && id > 0);
-  if (reviewerIds.length === 0) {
+  if (reviewerIds.length === 0 || new Set(reviewerIds).size !== reviewerIds.length) {
     throw evidenceError(`${name} has no valid required reviewer.`);
   }
   if (attesterId && !reviewerIds.some((id) => id !== attesterId)) {
@@ -256,6 +297,145 @@ export function validateProtectedEnvironment(environment, { name, attesterId = n
   ) {
     throw evidenceError(`${name} must be limited to protected branches.`);
   }
+  if (environment?.can_admins_bypass !== false) {
+    throw evidenceError(`${name} must prevent administrators from bypassing protection rules.`);
+  }
+
+  const environmentId = Number(environment?.id);
+  if (!Number.isSafeInteger(environmentId) || environmentId <= 0) {
+    throw evidenceError(`${name} has no valid GitHub environment id.`);
+  }
+
+  return Object.freeze({ environmentId, reviewerIds: new Set(reviewerIds) });
+}
+
+function requireOpaqueNodeId(value, field) {
+  const normalized = String(value || "").trim();
+  if (!normalized || normalized.length > 512 || /\s/.test(normalized)) {
+    throw evidenceError(`${field} is missing or invalid.`);
+  }
+  return normalized;
+}
+
+function validateDeploymentReviews(
+  workflowRun,
+  {
+    runId,
+    runNodeId,
+    environmentName,
+    environmentId,
+    excludedActorIds,
+    requiredReviewerIds,
+    label
+  }
+) {
+  const expectedNodeId = requireOpaqueNodeId(runNodeId, `the ${label} workflow node id`);
+  if (
+    workflowRun?.__typename !== "WorkflowRun"
+    || requireOpaqueNodeId(workflowRun?.id, "the reviewed workflow node id") !== expectedNodeId
+    || Number(workflowRun?.databaseId) !== runId
+  ) {
+    throw evidenceError(`deployment reviews belong to a different ${label} workflow run.`);
+  }
+  if (!(requiredReviewerIds instanceof Set) || requiredReviewerIds.size === 0) {
+    throw evidenceError(`the ${label} reviewer allowlist is missing.`);
+  }
+
+  const connection = workflowRun?.deploymentReviews;
+  const reviews = Array.isArray(connection?.nodes) ? connection.nodes : null;
+  const totalCount = Number(connection?.totalCount);
+  if (
+    !reviews
+    || !Number.isSafeInteger(totalCount)
+    || totalCount < 0
+    || totalCount !== reviews.length
+    || connection?.pageInfo?.hasNextPage !== false
+  ) {
+    throw evidenceError(`the ${label} deployment review log is incomplete or invalid.`);
+  }
+  if (reviews.length !== 1) {
+    throw evidenceError(`the exact ${label} run must have one recorded ${environmentName} review.`);
+  }
+
+  const seenReviewIds = new Set();
+  const matchingReviews = [];
+  for (const review of reviews) {
+    const reviewId = requireOpaqueNodeId(review?.id, `a ${label} deployment review id`);
+    if (seenReviewIds.has(reviewId)) {
+      throw evidenceError(`the ${label} deployment review log contains duplicate reviews.`);
+    }
+    seenReviewIds.add(reviewId);
+
+    const environments = review?.environments;
+    const environmentNodes = Array.isArray(environments?.nodes) ? environments.nodes : null;
+    const environmentCount = Number(environments?.totalCount);
+    if (
+      !environmentNodes
+      || !Number.isSafeInteger(environmentCount)
+      || environmentCount < 0
+      || environmentCount !== environmentNodes.length
+      || environmentNodes.length !== 1
+      || environments?.pageInfo?.hasNextPage !== false
+    ) {
+      throw evidenceError(`a ${label} deployment review has incomplete environment evidence.`);
+    }
+
+    const namedEnvironments = environmentNodes.filter(
+      (entry) => String(entry?.name || "").toLowerCase() === environmentName.toLowerCase()
+    );
+    if (namedEnvironments.some((entry) => Number(entry?.databaseId) !== environmentId)) {
+      throw evidenceError(`a ${label} deployment review references the wrong environment id.`);
+    }
+    if (namedEnvironments.some((entry) => Number(entry?.databaseId) === environmentId)) {
+      matchingReviews.push({ review, reviewId });
+    }
+  }
+
+  if (matchingReviews.length !== 1) {
+    throw evidenceError(`the exact ${label} run must have one recorded ${environmentName} review.`);
+  }
+  const [{ review, reviewId }] = matchingReviews;
+  if (review?.state !== "APPROVED") {
+    throw evidenceError(`the exact ${label} run was not approved through the ${environmentName} gate.`);
+  }
+  const reviewerId = Number(review?.user?.databaseId);
+  if (
+    !Number.isSafeInteger(reviewerId)
+    || reviewerId <= 0
+    || !(excludedActorIds instanceof Set)
+    || excludedActorIds.has(reviewerId)
+    || !requiredReviewerIds.has(reviewerId)
+  ) {
+    throw evidenceError(
+      `the ${label} deployment review was not made by an independent required reviewer.`
+    );
+  }
+
+  return Object.freeze({ reviewId, reviewerId });
+}
+
+export function validateUatDeploymentReviews(workflowRun, options) {
+  return validateDeploymentReviews(workflowRun, {
+    runId: options.uatRunId,
+    runNodeId: options.uatNodeId,
+    environmentName: options.environmentName,
+    environmentId: options.environmentId,
+    excludedActorIds: new Set([options.attesterId]),
+    requiredReviewerIds: options.requiredReviewerIds,
+    label: "UAT"
+  });
+}
+
+export function validatePreparationDeploymentReviews(workflowRun, options) {
+  return validateDeploymentReviews(workflowRun, {
+    runId: options.preparationRunId,
+    runNodeId: options.preparationNodeId,
+    environmentName: options.environmentName,
+    environmentId: options.environmentId,
+    excludedActorIds: new Set([options.operatorId, options.attesterId]),
+    requiredReviewerIds: options.requiredReviewerIds,
+    label: "preparation"
+  });
 }
 
 export function validateUatRun(
@@ -354,30 +534,30 @@ export function validateUatJobs(jobs) {
   }
 }
 
-export function validateDeploymentRun(
+export function validatePreparationRun(
   run,
-  { releaseSha, rollbackSha, target, deploymentRunId, ciRunId, uatRunId }
+  { releaseSha, rollbackSha, target, preparationRunId, ciRunId, uatRunId }
 ) {
-  validateCanonicalRepository(run, "the deployment run");
-  if (Number(run?.id) !== deploymentRunId) {
-    throw evidenceError("the deployment response id does not match the current run.");
+  validateCanonicalRepository(run, "the preparation run");
+  if (Number(run?.id) !== preparationRunId) {
+    throw evidenceError("the preparation response id does not match the current run.");
   }
-  const expectedWorkflow = RELEASE_EVIDENCE_POLICY.deployWorkflows[target];
+  const expectedWorkflow = RELEASE_EVIDENCE_POLICY.preparationWorkflows[target];
   if (
     !expectedWorkflow
     || String(run?.name || "") !== expectedWorkflow.name
     || normalizeWorkflowPath(run?.path) !== expectedWorkflow.path
   ) {
-    throw evidenceError("the current run is not the canonical target deployment workflow.");
+    throw evidenceError("the current run is not the canonical target preparation workflow.");
   }
   if (run?.event !== "workflow_dispatch" || run?.head_branch !== "main") {
-    throw evidenceError("the current deployment is not a main-branch manual dispatch.");
+    throw evidenceError("the current preparation is not a main-branch manual dispatch.");
   }
   if (String(run?.head_sha || "").toLowerCase() !== releaseSha) {
-    throw evidenceError("the current deployment is not bound to the exact release SHA.");
+    throw evidenceError("the current preparation is not bound to the exact release SHA.");
   }
   const expectedTitle = [
-    "deploy",
+    "prepare",
     "v1",
     target,
     releaseSha,
@@ -386,13 +566,13 @@ export function validateDeploymentRun(
     rollbackSha
   ].join("/");
   if (String(run?.display_title || "") !== expectedTitle) {
-    throw evidenceError("the current deployment title is not bound to the supplied evidence.");
+    throw evidenceError("the current preparation title is not bound to the supplied evidence.");
   }
   if (run?.status !== "in_progress" || run?.conclusion !== null) {
-    throw evidenceError("the current deployment run is not actively in progress.");
+    throw evidenceError("the current preparation run is not actively in progress.");
   }
   if (Number(run?.run_attempt) !== 1) {
-    throw evidenceError("deployment workflow reruns are not accepted; dispatch a fresh run.");
+    throw evidenceError("preparation workflow reruns are not accepted; dispatch a fresh run.");
   }
   const actorId = Number(run?.actor?.id);
   if (
@@ -401,7 +581,7 @@ export function validateDeploymentRun(
     || actorId <= 0
     || Number(run?.triggering_actor?.id) !== actorId
   ) {
-    throw evidenceError("the deployment workflow was not dispatched by one human operator.");
+    throw evidenceError("the preparation workflow was not dispatched by one human operator.");
   }
   return { operatorId: actorId };
 }
@@ -432,6 +612,10 @@ export function validateGitEvidence(
   if (rollbackSha === releaseSha) {
     throw evidenceError("the rollback SHA must differ from the release SHA.");
   }
+  requireGitSuccess(
+    git(["diff", "--quiet", "HEAD", "--"], root),
+    "tracked checkout files changed after the release SHA was checked out."
+  );
   const originUrl = requireGitSuccess(
     git(["remote", "get-url", "origin"], root),
     "the origin remote cannot be resolved."
@@ -442,6 +626,17 @@ export function validateGitEvidence(
   ) {
     throw evidenceError("origin is not the canonical TOTALLYMAJOR/quoteflow repository.");
   }
+  const releaseTags = requireGitSuccess(
+    git(["tag", "--points-at", releaseSha, "--list", "v[0-9]*.[0-9]*.[0-9]*"], root),
+    "semantic release tags cannot be resolved from the checkout."
+  )
+    .split(/\r?\n/)
+    .map((tag) => tag.trim())
+    .filter((tag) => /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(tag))
+    .sort((left, right) => left.localeCompare(right));
+  if (releaseTags.length === 0) {
+    throw evidenceError("the release SHA has no exact semantic vX.Y.Z tag in the checkout.");
+  }
   requireGitSuccess(
     git(["cat-file", "-e", `${rollbackSha}^{commit}`], root),
     "the rollback SHA is not an available commit."
@@ -450,24 +645,34 @@ export function validateGitEvidence(
     git(["merge-base", "--is-ancestor", rollbackSha, releaseSha], root),
     "the rollback SHA is not an ancestor of the release SHA."
   );
+  return Object.freeze({ releaseTags: Object.freeze(releaseTags) });
 }
 
-async function fetchGitHubJson(url, { token, fetchImpl }) {
+async function fetchGitHubJson(
+  url,
+  { token, fetchImpl },
+  { method = "GET", body = undefined, allowNotFound = false } = {}
+) {
   let response;
   try {
+    const headers = {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": GITHUB_API_VERSION,
+      "User-Agent": "quotepilot-release-evidence"
+    };
+    if (body !== undefined) headers["Content-Type"] = "application/json";
     response = await fetchImpl(url, {
       redirect: "error",
       signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": GITHUB_API_VERSION,
-        "User-Agent": "quotepilot-release-evidence"
-      }
+      method,
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
   } catch {
     throw evidenceError("GitHub evidence could not be reached.");
   }
+  if (!response?.ok && allowNotFound && response?.status === 404) return null;
   if (!response?.ok) {
     throw evidenceError(`GitHub evidence request failed with HTTP ${response?.status || "unknown"}.`);
   }
@@ -476,6 +681,125 @@ async function fetchGitHubJson(url, { token, fetchImpl }) {
   } catch {
     throw evidenceError("GitHub evidence returned invalid JSON.");
   }
+}
+
+async function validatePublishedReleaseRevision(
+  { releaseSha, releaseTags },
+  requestOptions
+) {
+  const mainReference = await fetchGitHubJson(
+    `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/git/ref/heads/main`,
+    requestOptions
+  );
+  if (
+    mainReference?.ref !== "refs/heads/main"
+    || mainReference?.object?.type !== "commit"
+    || String(mainReference?.object?.sha || "").toLowerCase() !== releaseSha
+  ) {
+    throw evidenceError("the release SHA is not the current remotely published origin/main.");
+  }
+
+  for (const tag of releaseTags) {
+    const tagReference = await fetchGitHubJson(
+      `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/git/ref/tags/${encodeURIComponent(tag)}`,
+      requestOptions,
+      { allowNotFound: true }
+    );
+    if (tagReference?.ref !== `refs/tags/${tag}`) continue;
+    let object = tagReference.object;
+    const seenTagObjects = new Set();
+    for (let depth = 0; object?.type === "tag" && depth < 5; depth += 1) {
+      const tagObjectSha = requireOpaqueNodeId(object?.sha, "an annotated tag object SHA");
+      if (!/^[0-9a-f]{40}$/i.test(tagObjectSha) || seenTagObjects.has(tagObjectSha.toLowerCase())) {
+        throw evidenceError(`the annotated semantic release tag ${tag} has an invalid tag chain.`);
+      }
+      seenTagObjects.add(tagObjectSha.toLowerCase());
+      const tagObject = await fetchGitHubJson(
+        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/git/tags/${tagObjectSha}`,
+        requestOptions
+      );
+      if (depth === 0 && String(tagObject?.tag || "") !== tag) {
+        throw evidenceError(`the annotated semantic release tag ${tag} has mismatched metadata.`);
+      }
+      object = tagObject?.object;
+    }
+    if (object?.type === "tag") {
+      throw evidenceError(`the annotated semantic release tag ${tag} exceeds the tag-chain limit.`);
+    }
+    if (
+      object?.type === "commit"
+      && String(object?.sha || "").toLowerCase() === releaseSha
+    ) {
+      return Object.freeze({ releaseTag: tag });
+    }
+  }
+  throw evidenceError("the release SHA has no exact semantic vX.Y.Z tag published to origin.");
+}
+
+async function fetchDeploymentReviews(run, label, options) {
+  const runNodeId = requireOpaqueNodeId(run?.node_id, `the ${label} workflow node id`);
+  const reviews = [];
+  const seenCursors = new Set();
+  let after = null;
+  let expectedTotalCount = null;
+  let workflowRun = null;
+
+  while (true) {
+    const result = await fetchGitHubJson(
+      GITHUB_GRAPHQL_API,
+      options,
+      {
+        method: "POST",
+        body: {
+          query: DEPLOYMENT_REVIEWS_QUERY,
+          variables: { runId: runNodeId, after }
+        }
+      }
+    );
+    if (Object.hasOwn(result || {}, "errors")) {
+      throw evidenceError(`GitHub GraphQL rejected the ${label} deployment review query.`);
+    }
+    const pageRun = result?.data?.node;
+    const connection = pageRun?.deploymentReviews;
+    const pageNodes = Array.isArray(connection?.nodes) ? connection.nodes : null;
+    const totalCount = Number(connection?.totalCount);
+    if (
+      !pageRun
+      || pageRun.__typename !== "WorkflowRun"
+      || pageRun.id !== runNodeId
+      || Number(pageRun.databaseId) !== Number(run?.id)
+      || !pageNodes
+      || !Number.isSafeInteger(totalCount)
+      || totalCount < 0
+      || (expectedTotalCount !== null && totalCount !== expectedTotalCount)
+      || typeof connection?.pageInfo?.hasNextPage !== "boolean"
+    ) {
+      throw evidenceError(`GitHub returned invalid ${label} deployment review evidence.`);
+    }
+    expectedTotalCount = totalCount;
+    workflowRun = pageRun;
+    reviews.push(...pageNodes);
+
+    if (connection?.pageInfo?.hasNextPage !== true) break;
+    const endCursor = String(connection?.pageInfo?.endCursor || "").trim();
+    if (!endCursor || seenCursors.has(endCursor) || pageNodes.length === 0) {
+      throw evidenceError(`GitHub ${label} deployment review pagination ended early.`);
+    }
+    seenCursors.add(endCursor);
+    after = endCursor;
+  }
+
+  if (reviews.length !== expectedTotalCount) {
+    throw evidenceError(`GitHub ${label} deployment review pagination returned the wrong count.`);
+  }
+  return {
+    ...workflowRun,
+    deploymentReviews: {
+      totalCount: expectedTotalCount,
+      nodes: reviews,
+      pageInfo: { hasNextPage: false, endCursor: null }
+    }
+  };
 }
 
 async function fetchRunJobs(runId, options) {
@@ -509,7 +833,7 @@ export async function verifyProductionReleaseEvidence(
     rollbackSha: rollbackShaValue,
     target,
     headSha,
-    deploymentRunId: deploymentRunIdValue,
+    preparationRunId: preparationRunIdValue,
     token,
     attesterIds: attesterIdsValue,
     root = ROOT
@@ -520,8 +844,8 @@ export async function verifyProductionReleaseEvidence(
   const rollbackSha = requireFullSha(rollbackShaValue, "--rollback-sha");
   const ciRunId = requireRunId(ciRunIdValue, "--ci-run-id");
   const uatRunId = requireRunId(uatRunIdValue, "--uat-run-id");
-  const deploymentRunId = requireRunId(deploymentRunIdValue, "GITHUB_RUN_ID");
-  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.deployWorkflows, target)) {
+  const preparationRunId = requireRunId(preparationRunIdValue, "GITHUB_RUN_ID");
+  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
     throw evidenceError(
       "the deployment target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
     );
@@ -538,13 +862,18 @@ export async function verifyProductionReleaseEvidence(
     : parseAttesterIds(attesterIdsValue);
   const checklist = readChecklist(root);
 
-  validateGitEvidence({ releaseSha, rollbackSha, headSha }, { git, root });
+  const gitEvidence = validateGitEvidence(
+    { releaseSha, rollbackSha, headSha },
+    { git, root }
+  );
 
   const requestOptions = { token: normalizedToken, fetchImpl };
-  const [deploymentRun, ciRun, ciJobs, uatRun, uatJobs, uatEnvironment, deployEnvironment] =
+  const [publishedRevision, preparationRun, ciRun, ciJobs, uatRun, uatJobs, uatEnvironment,
+    deployEnvironment] =
     await Promise.all([
+      validatePublishedReleaseRevision({ releaseSha, ...gitEvidence }, requestOptions),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${deploymentRunId}`,
+        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${preparationRunId}`,
         requestOptions
       ),
       fetchGitHubJson(
@@ -567,11 +896,11 @@ export async function verifyProductionReleaseEvidence(
       )
     ]);
 
-  const deployment = validateDeploymentRun(deploymentRun, {
+  const preparation = validatePreparationRun(preparationRun, {
     releaseSha,
     rollbackSha,
     target,
-    deploymentRunId,
+    preparationRunId,
     ciRunId,
     uatRunId
   });
@@ -589,38 +918,65 @@ export async function verifyProductionReleaseEvidence(
     maximumAttestationAgeHours: checklist.maximumAttestationAgeHours
   });
   validateUatJobs(uatJobs);
-  validateProtectedEnvironment(uatEnvironment, {
+  const uatEnvironmentPolicy = validateProtectedEnvironment(uatEnvironment, {
     name: RELEASE_EVIDENCE_POLICY.environments.uat,
     attesterId: uat.actorId
   });
-  validateProtectedEnvironment(deployEnvironment, {
+  const deployEnvironmentPolicy = validateProtectedEnvironment(deployEnvironment, {
     name: RELEASE_EVIDENCE_POLICY.environments.deploy
+  });
+  const [uatReviewLog, preparationReviewLog] = await Promise.all([
+    fetchDeploymentReviews(uatRun, "UAT", requestOptions),
+    fetchDeploymentReviews(preparationRun, "preparation", requestOptions)
+  ]);
+  const uatReview = validateUatDeploymentReviews(uatReviewLog, {
+    uatRunId,
+    uatNodeId: uatRun.node_id,
+    environmentName: RELEASE_EVIDENCE_POLICY.environments.uat,
+    environmentId: uatEnvironmentPolicy.environmentId,
+    attesterId: uat.actorId,
+    requiredReviewerIds: uatEnvironmentPolicy.reviewerIds
+  });
+  const preparationReview = validatePreparationDeploymentReviews(preparationReviewLog, {
+    preparationRunId,
+    preparationNodeId: preparationRun.node_id,
+    environmentName: RELEASE_EVIDENCE_POLICY.environments.deploy,
+    environmentId: deployEnvironmentPolicy.environmentId,
+    operatorId: preparation.operatorId,
+    attesterId: uat.actorId,
+    requiredReviewerIds: deployEnvironmentPolicy.reviewerIds
   });
 
   return Object.freeze({
-    schema: "com.mbmapps.quotepilot.production-release-evidence/v1",
+    schema: "com.mbmapps.quotepilot.production-release-evidence/v4",
     releaseSha,
+    releaseTag: publishedRevision.releaseTag,
     rollbackSha,
     target,
     ciRunId,
     uatRunId,
-    deploymentRunId,
+    preparationRunId,
     stagingId: uat.stagingId,
     attesterId: uat.actorId,
-    operatorId: deployment.operatorId,
+    uatReviewerId: uatReview.reviewerId,
+    uatReviewId: uatReview.reviewId,
+    operatorId: preparation.operatorId,
+    productionReviewerId: preparationReview.reviewerId,
+    productionReviewId: preparationReview.reviewId,
     checklistDigest: checklist.digest,
     verifiedAt: (now instanceof Date ? now : new Date(Number(now))).toISOString()
   });
 }
 
 export function parseReleaseEvidenceCliArgs(argv) {
-  const allowed = new Set([
+  const required = new Set([
     "--release-sha",
     "--ci-run-id",
     "--uat-run-id",
     "--rollback-sha",
     "--target"
   ]);
+  const allowed = new Set([...required, "--output"]);
   const values = new Map();
   for (let index = 0; index < argv.length; index += 2) {
     const name = argv[index];
@@ -632,10 +988,60 @@ export function parseReleaseEvidenceCliArgs(argv) {
     }
     values.set(name, String(value).trim());
   }
-  for (const name of allowed) {
+  for (const name of required) {
     if (!values.has(name)) throw evidenceError(`${name} is required.`);
   }
   return Object.fromEntries([...values].map(([name, value]) => [name.slice(2), value]));
+}
+
+function ensureReceiptDirectory(root, directory) {
+  const resolvedRoot = path.resolve(root);
+  let rootStat;
+  try {
+    rootStat = fs.lstatSync(resolvedRoot);
+  } catch {
+    throw evidenceError("the repository root is unavailable for receipt output.");
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw evidenceError("the repository root must be a real directory for receipt output.");
+  }
+  const relative = path.relative(resolvedRoot, directory);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw evidenceError("the receipt directory must remain inside the repository root.");
+  }
+  let cursor = resolvedRoot;
+  for (const segment of relative.split(path.sep)) {
+    cursor = path.join(cursor, segment);
+    if (!fs.existsSync(cursor)) fs.mkdirSync(cursor, { mode: 0o700 });
+    const stat = fs.lstatSync(cursor);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || fs.realpathSync(cursor) !== cursor) {
+      throw evidenceError("receipt output ancestors must be real repository directories.");
+    }
+  }
+}
+
+export function writeProductionReleaseEvidenceReceipt(receipt, outputValue, root = ROOT) {
+  const resolvedRoot = path.resolve(root);
+  const releaseDir = path.join(resolvedRoot, "artifacts", "release");
+  const output = path.resolve(resolvedRoot, String(outputValue || ""));
+  if (output === releaseDir || !output.startsWith(`${releaseDir}${path.sep}`)) {
+    throw evidenceError("--output must be a JSON file inside artifacts/release.");
+  }
+  if (path.extname(output).toLowerCase() !== ".json") {
+    throw evidenceError("--output must use a .json extension.");
+  }
+  ensureReceiptDirectory(resolvedRoot, path.dirname(output));
+  const temporary = `${output}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(receipt, null, 2)}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+      flag: "wx"
+    });
+    fs.linkSync(temporary, output);
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
 }
 
 async function main() {
@@ -651,11 +1057,12 @@ async function main() {
     rollbackSha: args["rollback-sha"],
     target: args.target,
     headSha: head,
-    deploymentRunId: process.env.GITHUB_RUN_ID,
+    preparationRunId: process.env.GITHUB_RUN_ID,
     token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
     attesterIds: process.env.RELEASE_UAT_ATTESTER_IDS,
     root: ROOT
   });
+  if (args.output) writeProductionReleaseEvidenceReceipt(result, args.output, ROOT);
   process.stdout.write(
     `Release evidence verified for ${result.target} at ${result.releaseSha} (CI ${result.ciRunId}, UAT ${result.uatRunId}).\n`
   );

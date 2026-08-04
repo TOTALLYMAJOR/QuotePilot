@@ -11,26 +11,38 @@ import {
   parseReleaseUatRunTitle,
   validateCiJobs,
   validateCiRun,
-  validateDeploymentRun,
+  validatePreparationDeploymentReviews,
+  validatePreparationRun,
   validateGitEvidence,
   validateProtectedEnvironment,
+  validateUatDeploymentReviews,
   validateUatJobs,
   validateUatRun,
-  verifyProductionReleaseEvidence
+  verifyProductionReleaseEvidence,
+  writeProductionReleaseEvidenceReceipt
 } from "../../../scripts/production-release-evidence.mjs";
 import {
   buildReleaseUatReceipt,
-  parseReleaseUatArgs
+  parseReleaseUatArgs,
+  writeReleaseUatReceipt
 } from "../../../scripts/release-uat-attestation.mjs";
 
 const RELEASE_SHA = "a".repeat(40);
+const RELEASE_TAG = "v1.2.3";
 const ROLLBACK_SHA = "b".repeat(40);
 const OTHER_SHA = "c".repeat(40);
 const CI_RUN_ID = 101;
 const UAT_RUN_ID = 202;
+const UAT_RUN_NODE_ID = "WFR_quotepilot-uat-202";
+const PREPARATION_RUN_NODE_ID = "WFR_quotepilot-preparation-505";
 const ATTESTER_ID = 303;
 const REVIEWER_ID = 404;
-const DEPLOYMENT_RUN_ID = 505;
+const OTHER_REVIEWER_ID = 405;
+const UAT_ENVIRONMENT_ID = 707;
+const PRODUCTION_ENVIRONMENT_ID = 808;
+const UAT_REVIEW_NODE_ID = "DR_quotepilot-uat-review-1";
+const PRODUCTION_REVIEW_NODE_ID = "DR_quotepilot-production-review-1";
+const PREPARATION_RUN_ID = 505;
 const OPERATOR_ID = 606;
 const DEPLOYMENT_PROFILES = [
   "firebase-hosting",
@@ -78,7 +90,7 @@ function makeCiJobs() {
   }));
 }
 
-function makeDeploymentTitle({
+function makePreparationTitle({
   profile = "vercel",
   releaseSha = RELEASE_SHA,
   ciRunId = CI_RUN_ID,
@@ -86,7 +98,7 @@ function makeDeploymentTitle({
   rollbackSha = ROLLBACK_SHA
 } = {}) {
   return [
-    "deploy",
+    "prepare",
     "v1",
     profile,
     releaseSha,
@@ -96,10 +108,11 @@ function makeDeploymentTitle({
   ].join("/");
 }
 
-function makeDeploymentRun(profile = "vercel", overrides = {}) {
-  const workflow = RELEASE_EVIDENCE_POLICY.deployWorkflows[profile];
+function makePreparationRun(profile = "vercel", overrides = {}) {
+  const workflow = RELEASE_EVIDENCE_POLICY.preparationWorkflows[profile];
   return {
-    id: DEPLOYMENT_RUN_ID,
+    id: PREPARATION_RUN_ID,
+    node_id: PREPARATION_RUN_NODE_ID,
     repository: {
       id: RELEASE_EVIDENCE_POLICY.repository.id,
       full_name: RELEASE_EVIDENCE_POLICY.repository.fullName
@@ -112,19 +125,19 @@ function makeDeploymentRun(profile = "vercel", overrides = {}) {
     status: "in_progress",
     conclusion: null,
     run_attempt: 1,
-    display_title: makeDeploymentTitle({ profile }),
+    display_title: makePreparationTitle({ profile }),
     actor: { id: OPERATOR_ID, type: "User", login: "release-operator" },
     triggering_actor: { id: OPERATOR_ID, type: "User", login: "release-operator" },
     ...overrides
   };
 }
 
-function makeDeploymentOptions(target = "vercel", overrides = {}) {
+function makePreparationOptions(target = "vercel", overrides = {}) {
   return {
     releaseSha: RELEASE_SHA,
     rollbackSha: ROLLBACK_SHA,
     target,
-    deploymentRunId: DEPLOYMENT_RUN_ID,
+    preparationRunId: PREPARATION_RUN_ID,
     ciRunId: CI_RUN_ID,
     uatRunId: UAT_RUN_ID,
     ...overrides
@@ -152,6 +165,7 @@ function makeUatTitle({
 function makeUatRun(overrides = {}) {
   return {
     id: UAT_RUN_ID,
+    node_id: UAT_RUN_NODE_ID,
     repository: {
       id: RELEASE_EVIDENCE_POLICY.repository.id,
       full_name: RELEASE_EVIDENCE_POLICY.repository.fullName
@@ -198,23 +212,91 @@ function makeUatJobs() {
 }
 
 function makeEnvironment(name, { reviewerIds = [REVIEWER_ID], ...overrides } = {}) {
+  const environmentId = name.toLowerCase() === "production-uat"
+    ? UAT_ENVIRONMENT_ID
+    : PRODUCTION_ENVIRONMENT_ID;
   return {
+    id: environmentId,
     name,
     protection_rules: [{
       type: "required_reviewers",
       prevent_self_review: true,
-      reviewers: reviewerIds.map((id) => ({ reviewer: { id } }))
+      reviewers: reviewerIds.map((id) => ({
+        type: "User",
+        reviewer: { id, type: "User" }
+      }))
     }],
     deployment_branch_policy: {
       protected_branches: true,
       custom_branch_policies: false
     },
+    can_admins_bypass: false,
     ...overrides
   };
 }
 
+function makeUatReview({
+  id = UAT_REVIEW_NODE_ID,
+  state = "APPROVED",
+  reviewerId = REVIEWER_ID,
+  environmentId = UAT_ENVIRONMENT_ID,
+  environmentName = "production-uat",
+  environmentNodes = null,
+  environmentPageInfo = { hasNextPage: false, endCursor: null }
+} = {}) {
+  const reviewedEnvironments = environmentNodes || [{
+    databaseId: environmentId,
+    name: environmentName
+  }];
+  return {
+    id,
+    state,
+    user: { databaseId: reviewerId, login: "release-reviewer" },
+    environments: {
+      totalCount: reviewedEnvironments.length,
+      nodes: reviewedEnvironments,
+      pageInfo: environmentPageInfo
+    }
+  };
+}
+
+function makeUatReviewLog({
+  nodeId = UAT_RUN_NODE_ID,
+  runId = UAT_RUN_ID,
+  reviews = [makeUatReview()],
+  totalCount = reviews.length,
+  pageInfo = { hasNextPage: false, endCursor: null }
+} = {}) {
+  return {
+    __typename: "WorkflowRun",
+    id: nodeId,
+    databaseId: runId,
+    deploymentReviews: { totalCount, nodes: reviews, pageInfo }
+  };
+}
+
+function makePreparationReview(overrides = {}) {
+  return makeUatReview({
+    id: PRODUCTION_REVIEW_NODE_ID,
+    environmentId: PRODUCTION_ENVIRONMENT_ID,
+    environmentName: "production",
+    ...overrides
+  });
+}
+
+function makePreparationReviewLog({
+  nodeId = PREPARATION_RUN_NODE_ID,
+  runId = PREPARATION_RUN_ID,
+  reviews = [makePreparationReview()],
+  totalCount = reviews.length,
+  pageInfo = { hasNextPage: false, endCursor: null }
+} = {}) {
+  return makeUatReviewLog({ nodeId, runId, reviews, totalCount, pageInfo });
+}
+
 function makeGit({
   origin = "https://github.com/TOTALLYMAJOR/quoteflow.git",
+  tags = RELEASE_TAG,
   fail = ""
 } = {}) {
   const calls = [];
@@ -222,8 +304,14 @@ function makeGit({
     const command = args.join(" ");
     calls.push({ args, root });
     if (command === fail) return { status: 1, stdout: "", stderr: "rejected" };
+    if (command === "diff --quiet HEAD --") {
+      return { status: 0, stdout: "", stderr: "" };
+    }
     if (command === "remote get-url origin") {
       return { status: 0, stdout: `${origin}\n`, stderr: "" };
+    }
+    if (command === `tag --points-at ${RELEASE_SHA} --list v[0-9]*.[0-9]*.[0-9]*`) {
+      return { status: 0, stdout: `${tags}\n`, stderr: "" };
     }
     if (command === `cat-file -e ${ROLLBACK_SHA}^{commit}`) {
       return { status: 0, stdout: "", stderr: "" };
@@ -302,6 +390,20 @@ describe("production release evidence CLI parsing", () => {
     });
   });
 
+  test("accepts an optional release-artifact receipt path", () => {
+    expect(parseReleaseEvidenceCliArgs([
+      ...validArgs,
+      "--output", "artifacts/release/evidence.json"
+    ])).toEqual({
+      "release-sha": RELEASE_SHA,
+      "ci-run-id": String(CI_RUN_ID),
+      "uat-run-id": String(UAT_RUN_ID),
+      "rollback-sha": ROLLBACK_SHA,
+      target: "vercel",
+      output: "artifacts/release/evidence.json"
+    });
+  });
+
   test.each([
     [[...validArgs, "--unknown", "value"], /unknown argument --unknown/i],
     [[...validArgs, "--target", "firebase"], /duplicate argument --target/i],
@@ -309,6 +411,53 @@ describe("production release evidence CLI parsing", () => {
     [validArgs.slice(0, -2), /--target is required/i]
   ])("rejects malformed evidence argv %#", (argv, expected) => {
     expect(() => parseReleaseEvidenceCliArgs(argv)).toThrow(expected);
+  });
+});
+
+describe("production release evidence receipt writer", () => {
+  test("atomically writes JSON only inside artifacts/release", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-release-receipt-"));
+    tempDirs.push(root);
+    const receipt = { schema: "fixture/v1", releaseSha: RELEASE_SHA };
+
+    writeProductionReleaseEvidenceReceipt(
+      receipt,
+      "artifacts/release/evidence.json",
+      root
+    );
+
+    expect(JSON.parse(fs.readFileSync(
+      path.join(root, "artifacts", "release", "evidence.json"),
+      "utf8"
+    ))).toEqual(receipt);
+    expect(fs.readdirSync(path.join(root, "artifacts", "release"))).toEqual([
+      "evidence.json"
+    ]);
+  });
+
+  test.each([
+    ["../outside.json", /inside artifacts\/release/i],
+    ["artifacts/release", /JSON file inside artifacts\/release/i],
+    ["artifacts/release/evidence.txt", /use a \.json extension/i]
+  ])("rejects unsafe receipt path %s", (output, expected) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-release-receipt-"));
+    tempDirs.push(root);
+    expect(() => writeProductionReleaseEvidenceReceipt({}, output, root)).toThrow(expected);
+  });
+
+  test("rejects a symlinked receipt directory without writing outside the repository", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-release-receipt-"));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-release-outside-"));
+    tempDirs.push(root, outside);
+    fs.mkdirSync(path.join(root, "artifacts"));
+    fs.symlinkSync(outside, path.join(root, "artifacts", "release"));
+
+    expect(() => writeProductionReleaseEvidenceReceipt(
+      { schema: "fixture/v1" },
+      "artifacts/release/evidence.json",
+      root
+    )).toThrow(/receipt output ancestors must be real/i);
+    expect(fs.readdirSync(outside)).toEqual([]);
   });
 });
 
@@ -412,13 +561,13 @@ describe("CI evidence validators", () => {
   });
 });
 
-describe("current deployment workflow validator", () => {
+describe("current preparation workflow validator", () => {
   test.each(DEPLOYMENT_PROFILES)(
     "accepts the active first-attempt human %s workflow dispatch",
     (profile) => {
-      expect(validateDeploymentRun(
-        makeDeploymentRun(profile),
-        makeDeploymentOptions(profile)
+      expect(validatePreparationRun(
+        makePreparationRun(profile),
+        makePreparationOptions(profile)
       )).toEqual({ operatorId: OPERATOR_ID });
     }
   );
@@ -426,8 +575,8 @@ describe("current deployment workflow validator", () => {
   test.each([
     [{ repository: { id: 1, full_name: "other/repo" } }, /different repository/i],
     [{ id: 999 }, /response id does not match the current run/i],
-    [{ name: "Deploy Something Else" }, /not the canonical target deployment workflow/i],
-    [{ path: ".github/workflows/other.yml" }, /not the canonical target deployment workflow/i],
+    [{ name: "Prepare Something Else" }, /not the canonical target preparation workflow/i],
+    [{ path: ".github/workflows/other.yml" }, /not the canonical target preparation workflow/i],
     [{ event: "push" }, /not a main-branch manual dispatch/i],
     [{ head_branch: "feature" }, /not a main-branch manual dispatch/i],
     [{ head_sha: OTHER_SHA }, /not bound to the exact release SHA/i],
@@ -438,48 +587,51 @@ describe("current deployment workflow validator", () => {
     [{ actor: { id: OPERATOR_ID, type: "Bot" } }, /not dispatched by one human operator/i],
     [{ actor: { id: 0, type: "User" }, triggering_actor: { id: 0 } }, /not dispatched by one human operator/i],
     [{ triggering_actor: { id: REVIEWER_ID, type: "User" } }, /not dispatched by one human operator/i]
-  ])("rejects spoofable deployment-run evidence %#", (overrides, expected) => {
-    expect(() => validateDeploymentRun(
-      makeDeploymentRun("vercel", overrides),
-      makeDeploymentOptions("vercel")
+  ])("rejects spoofable preparation-run evidence %#", (overrides, expected) => {
+    expect(() => validatePreparationRun(
+      makePreparationRun("vercel", overrides),
+      makePreparationOptions("vercel")
     )).toThrow(expected);
   });
 
-  test("rejects an unsupported deployment profile", () => {
-    expect(() => validateDeploymentRun(
-      makeDeploymentRun("vercel"),
-      makeDeploymentOptions("all")
-    )).toThrow(/not the canonical target deployment workflow/i);
+  test("rejects an unsupported preparation profile", () => {
+    expect(() => validatePreparationRun(
+      makePreparationRun("vercel"),
+      makePreparationOptions("all")
+    )).toThrow(/not the canonical target preparation workflow/i);
   });
 
-  test("rejects a deployment title bound to a different profile", () => {
-    expect(() => validateDeploymentRun(
-      makeDeploymentRun("firebase-hosting"),
-      makeDeploymentOptions("firebase-backend")
+  test("rejects a preparation title bound to a different profile", () => {
+    expect(() => validatePreparationRun(
+      makePreparationRun("firebase-hosting"),
+      makePreparationOptions("firebase-backend")
     )).toThrow(/title is not bound to the supplied evidence/i);
   });
 
   test.each([
-    ["profile", makeDeploymentTitle({ profile: "firebase-hosting" })],
-    ["release SHA", makeDeploymentTitle({ releaseSha: OTHER_SHA })],
-    ["CI run", makeDeploymentTitle({ ciRunId: 999 })],
-    ["UAT run", makeDeploymentTitle({ uatRunId: 999 })],
-    ["rollback SHA", makeDeploymentTitle({ rollbackSha: OTHER_SHA })],
-    ["format", "deploy/v1/tampered"]
-  ])("rejects a deployment title with tampered %s", (_field, displayTitle) => {
-    expect(() => validateDeploymentRun(
-      makeDeploymentRun("vercel", { display_title: displayTitle }),
-      makeDeploymentOptions("vercel")
+    ["profile", makePreparationTitle({ profile: "firebase-hosting" })],
+    ["release SHA", makePreparationTitle({ releaseSha: OTHER_SHA })],
+    ["CI run", makePreparationTitle({ ciRunId: 999 })],
+    ["UAT run", makePreparationTitle({ uatRunId: 999 })],
+    ["rollback SHA", makePreparationTitle({ rollbackSha: OTHER_SHA })],
+    ["format", "prepare/v1/tampered"]
+  ])("rejects a preparation title with tampered %s", (_field, displayTitle) => {
+    expect(() => validatePreparationRun(
+      makePreparationRun("vercel", { display_title: displayTitle }),
+      makePreparationOptions("vercel")
     )).toThrow(/title is not bound to the supplied evidence/i);
   });
 });
 
 describe("protected GitHub environment validator", () => {
   test("accepts a protected environment with an independent reviewer", () => {
-    expect(() => validateProtectedEnvironment(
+    expect(validateProtectedEnvironment(
       makeEnvironment("production-uat"),
       { name: "production-uat", attesterId: ATTESTER_ID }
-    )).not.toThrow();
+    )).toEqual({
+      environmentId: UAT_ENVIRONMENT_ID,
+      reviewerIds: new Set([REVIEWER_ID])
+    });
   });
 
   test("accepts GitHub's case-insensitive canonical environment name", () => {
@@ -495,11 +647,98 @@ describe("protected GitHub environment validator", () => {
     [makeEnvironment("production-uat", { protection_rules: [{ type: "required_reviewers", prevent_self_review: false, reviewers: [{ reviewer: { id: REVIEWER_ID } }] }] }), /must require reviewers and prevent self-review/i],
     [makeEnvironment("production-uat", { reviewerIds: [] }), /has no valid required reviewer/i],
     [makeEnvironment("production-uat", { reviewerIds: [ATTESTER_ID] }), /needs a reviewer other than the UAT attester/i],
-    [makeEnvironment("production-uat", { deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } }), /limited to protected branches/i]
+    [makeEnvironment("production-uat", { deployment_branch_policy: { protected_branches: false, custom_branch_policies: true } }), /limited to protected branches/i],
+    [makeEnvironment("production-uat", { can_admins_bypass: true }), /prevent administrators from bypassing/i],
+    [makeEnvironment("production-uat", { id: 0 }), /no valid GitHub environment id/i],
+    [makeEnvironment("production-uat", { protection_rules: [{
+      type: "required_reviewers",
+      prevent_self_review: true,
+      reviewers: [{ type: "Team", reviewer: { id: REVIEWER_ID, type: "Team" } }]
+    }] }), /must use directly assigned user reviewers/i]
   ])("rejects an unsafe environment policy %#", (environment, expected) => {
     expect(() => validateProtectedEnvironment(environment, {
       name: "production-uat",
       attesterId: ATTESTER_ID
+    })).toThrow(expected);
+  });
+});
+
+describe("historical UAT deployment review validator", () => {
+  const reviewOptions = {
+    uatRunId: UAT_RUN_ID,
+    uatNodeId: UAT_RUN_NODE_ID,
+    environmentName: "production-uat",
+    environmentId: UAT_ENVIRONMENT_ID,
+    attesterId: ATTESTER_ID,
+    requiredReviewerIds: new Set([REVIEWER_ID])
+  };
+
+  test("accepts one approved review for the exact run and current required reviewer", () => {
+    expect(validateUatDeploymentReviews(makeUatReviewLog(), reviewOptions)).toEqual({
+      reviewId: UAT_REVIEW_NODE_ID,
+      reviewerId: REVIEWER_ID
+    });
+  });
+
+  test.each([
+    [makeUatReviewLog({ nodeId: "WFR_other" }), {}, /different UAT workflow run/i],
+    [makeUatReviewLog({ runId: 999 }), {}, /different UAT workflow run/i],
+    [makeUatReviewLog({ reviews: [] }), {}, /must have one recorded production-uat review/i],
+    [makeUatReviewLog({ reviews: [makeUatReview({ state: "REJECTED" })] }), {}, /was not approved through the production-uat gate/i],
+    [makeUatReviewLog({ reviews: [makeUatReview({ reviewerId: ATTESTER_ID })] }), {}, /not made by an independent required reviewer/i],
+    [makeUatReviewLog({ reviews: [makeUatReview({ reviewerId: OTHER_REVIEWER_ID })] }), {}, /not made by an independent required reviewer/i],
+    [makeUatReviewLog({ reviews: [makeUatReview({ environmentId: PRODUCTION_ENVIRONMENT_ID })] }), {}, /wrong environment id/i],
+    [makeUatReviewLog({ reviews: [makeUatReview({ environmentName: "production" })] }), {}, /must have one recorded production-uat review/i],
+    [makeUatReviewLog({ reviews: [makeUatReview(), makeUatReview({ id: "DR_second" })] }), {}, /must have one recorded production-uat review/i],
+    [makeUatReviewLog({ totalCount: 2 }), {}, /review log is incomplete or invalid/i],
+    [makeUatReviewLog({ pageInfo: { hasNextPage: true, endCursor: "cursor" } }), {}, /review log is incomplete or invalid/i],
+    [makeUatReviewLog({ reviews: [makeUatReview({ environmentPageInfo: { hasNextPage: true, endCursor: "cursor" } })] }), {}, /incomplete environment evidence/i],
+    [makeUatReviewLog({ reviews: [makeUatReview({ environmentNodes: [
+      { databaseId: UAT_ENVIRONMENT_ID, name: "production-uat" },
+      { databaseId: PRODUCTION_ENVIRONMENT_ID, name: "production" }
+    ] })] }), {}, /incomplete environment evidence/i],
+    [makeUatReviewLog({ reviews: [makeUatReview(), makeUatReview()] }), {}, /must have one recorded production-uat review/i],
+    [{ ...makeUatReviewLog(), __typename: "Issue" }, {}, /different UAT workflow run/i],
+    [makeUatReviewLog(), { requiredReviewerIds: new Set() }, /reviewer allowlist is missing/i]
+  ])("rejects incomplete or spoofable deployment-review evidence %#", (run, overrides, expected) => {
+    expect(() => validateUatDeploymentReviews(run, {
+      ...reviewOptions,
+      ...overrides
+    })).toThrow(expected);
+  });
+});
+
+describe("current preparation deployment review validator", () => {
+  const reviewOptions = {
+    preparationRunId: PREPARATION_RUN_ID,
+    preparationNodeId: PREPARATION_RUN_NODE_ID,
+    environmentName: "production",
+    environmentId: PRODUCTION_ENVIRONMENT_ID,
+    operatorId: OPERATOR_ID,
+    attesterId: ATTESTER_ID,
+    requiredReviewerIds: new Set([REVIEWER_ID])
+  };
+
+  test("accepts one approved production review by a current independent reviewer", () => {
+    expect(validatePreparationDeploymentReviews(
+      makePreparationReviewLog(),
+      reviewOptions
+    )).toEqual({
+      reviewId: PRODUCTION_REVIEW_NODE_ID,
+      reviewerId: REVIEWER_ID
+    });
+  });
+
+  test.each([
+    [makePreparationReviewLog({ nodeId: "WFR_other" }), {}, /different preparation workflow run/i],
+    [makePreparationReviewLog({ reviews: [] }), {}, /one recorded production review/i],
+    [makePreparationReviewLog({ reviews: [makePreparationReview({ reviewerId: OPERATOR_ID })] }), {}, /independent required reviewer/i],
+    [makePreparationReviewLog({ reviews: [makePreparationReview({ reviewerId: ATTESTER_ID })] }), { requiredReviewerIds: new Set([ATTESTER_ID]) }, /independent required reviewer/i],
+    [makePreparationReviewLog({ reviews: [makePreparationReview({ state: "REJECTED" })] }), {}, /not approved through the production gate/i]
+  ])("rejects unsafe preparation approval evidence %#", (run, overrides, expected) => {
+    expect(() => validatePreparationDeploymentReviews(run, {
+      ...reviewOptions,
+      ...overrides
     })).toThrow(expected);
   });
 });
@@ -569,13 +808,15 @@ describe("Git release and rollback evidence", () => {
     "git@github.com:TOTALLYMAJOR/quoteflow.git"
   ])("accepts canonical origin %s with an ancestor rollback", (origin) => {
     const { git, calls } = makeGit({ origin });
-    expect(() => validateGitEvidence({
+    expect(validateGitEvidence({
       releaseSha: RELEASE_SHA,
       rollbackSha: ROLLBACK_SHA,
       headSha: RELEASE_SHA.toUpperCase()
-    }, { git, root: "/fixture" })).not.toThrow();
+    }, { git, root: "/fixture" })).toEqual({ releaseTags: [RELEASE_TAG] });
     expect(calls.map(({ args }) => args)).toEqual([
+      ["diff", "--quiet", "HEAD", "--"],
       ["remote", "get-url", "origin"],
+      ["tag", "--points-at", RELEASE_SHA, "--list", "v[0-9]*.[0-9]*.[0-9]*"],
       ["cat-file", "-e", `${ROLLBACK_SHA}^{commit}`],
       ["merge-base", "--is-ancestor", ROLLBACK_SHA, RELEASE_SHA]
     ]);
@@ -601,7 +842,10 @@ describe("Git release and rollback evidence", () => {
 
   test.each([
     [{ origin: "https://github.com/other/repo.git" }, /origin is not the canonical/i],
+    [{ fail: "diff --quiet HEAD --" }, /tracked checkout files changed/i],
     [{ fail: "remote get-url origin" }, /origin remote cannot be resolved/i],
+    [{ tags: "" }, /no exact semantic vX.Y.Z tag in the checkout/i],
+    [{ tags: "v01.2.3" }, /no exact semantic vX.Y.Z tag in the checkout/i],
     [{ fail: `cat-file -e ${ROLLBACK_SHA}^{commit}` }, /rollback SHA is not an available commit/i],
     [{ fail: `merge-base --is-ancestor ${ROLLBACK_SHA} ${RELEASE_SHA}` }, /rollback SHA is not an ancestor/i]
   ])("fails closed for invalid Git evidence %#", (gitOptions, expected) => {
@@ -614,16 +858,39 @@ describe("Git release and rollback evidence", () => {
 });
 
 describe("full production release verifier", () => {
-  function makeFetch({ failStatus = 0 } = {}) {
+  function makeFetch({
+    failStatus = 0,
+    graphQlPayloads = null,
+    preparationGraphQlPayloads = null,
+    annotatedTag = false,
+    mainSha = RELEASE_SHA,
+    tagSha = RELEASE_SHA
+  } = {}) {
     const calls = [];
+    let graphQlPage = 0;
+    let preparationGraphQlPage = 0;
     const fetchImpl = async (url, options) => {
       calls.push({ url, options });
       if (failStatus) {
         return { ok: false, status: failStatus, json: async () => ({}) };
       }
       let payload;
-      if (url.endsWith(`/actions/runs/${DEPLOYMENT_RUN_ID}`)) {
-        payload = makeDeploymentRun("vercel");
+      if (url.endsWith("/git/ref/heads/main")) {
+        payload = { ref: "refs/heads/main", object: { type: "commit", sha: mainSha } };
+      } else if (url.endsWith(`/git/ref/tags/${RELEASE_TAG}`)) {
+        payload = {
+          ref: `refs/tags/${RELEASE_TAG}`,
+          object: annotatedTag
+            ? { type: "tag", sha: OTHER_SHA }
+            : { type: "commit", sha: tagSha }
+        };
+      } else if (url.endsWith(`/git/tags/${OTHER_SHA}`)) {
+        payload = {
+          tag: RELEASE_TAG,
+          object: { type: "commit", sha: tagSha }
+        };
+      } else if (url.endsWith(`/actions/runs/${PREPARATION_RUN_ID}`)) {
+        payload = makePreparationRun("vercel");
       } else if (url.endsWith(`/actions/runs/${CI_RUN_ID}`)) payload = makeCiRun();
       else if (url.includes(`/actions/runs/${CI_RUN_ID}/jobs?`)) {
         payload = { total_count: makeCiJobs().length, jobs: makeCiJobs() };
@@ -634,6 +901,30 @@ describe("full production release verifier", () => {
         payload = makeEnvironment("production-uat");
       } else if (url.endsWith("/environments/production")) {
         payload = makeEnvironment("production");
+      } else if (url.endsWith("/graphql")) {
+        const variables = JSON.parse(options.body).variables;
+        if (variables.runId === UAT_RUN_NODE_ID) {
+          if (graphQlPayloads && graphQlPage >= graphQlPayloads.length) {
+            return { ok: false, status: 404, json: async () => ({}) };
+          }
+          payload = graphQlPayloads
+            ? graphQlPayloads[graphQlPage]
+            : { data: { node: makeUatReviewLog() } };
+          graphQlPage += 1;
+        } else if (variables.runId === PREPARATION_RUN_NODE_ID) {
+          if (
+            preparationGraphQlPayloads
+            && preparationGraphQlPage >= preparationGraphQlPayloads.length
+          ) {
+            return { ok: false, status: 404, json: async () => ({}) };
+          }
+          payload = preparationGraphQlPayloads
+            ? preparationGraphQlPayloads[preparationGraphQlPage]
+            : { data: { node: makePreparationReviewLog() } };
+          preparationGraphQlPage += 1;
+        } else {
+          return { ok: false, status: 404, json: async () => ({}) };
+        }
       } else {
         return { ok: false, status: 404, json: async () => ({}) };
       }
@@ -650,7 +941,7 @@ describe("full production release verifier", () => {
       rollbackSha: ROLLBACK_SHA,
       target: "vercel",
       headSha: RELEASE_SHA,
-      deploymentRunId: String(DEPLOYMENT_RUN_ID),
+      preparationRunId: String(PREPARATION_RUN_ID),
       token: "test-token",
       attesterIds: new Set([ATTESTER_ID]),
       root: process.cwd(),
@@ -668,24 +959,29 @@ describe("full production release verifier", () => {
     );
 
     expect(result).toEqual({
-      schema: "com.mbmapps.quotepilot.production-release-evidence/v1",
+      schema: "com.mbmapps.quotepilot.production-release-evidence/v4",
       releaseSha: RELEASE_SHA,
+      releaseTag: RELEASE_TAG,
       rollbackSha: ROLLBACK_SHA,
       target: "vercel",
       ciRunId: CI_RUN_ID,
       uatRunId: UAT_RUN_ID,
-      deploymentRunId: DEPLOYMENT_RUN_ID,
+      preparationRunId: PREPARATION_RUN_ID,
       stagingId: "dpl_immutable-123",
       attesterId: ATTESTER_ID,
+      uatReviewerId: REVIEWER_ID,
+      uatReviewId: UAT_REVIEW_NODE_ID,
       operatorId: OPERATOR_ID,
+      productionReviewerId: REVIEWER_ID,
+      productionReviewId: PRODUCTION_REVIEW_NODE_ID,
       checklistDigest: checklist.digest,
       verifiedAt: NOW.toISOString()
     });
     expect(Object.isFrozen(result)).toBe(true);
-    expect(gitCalls).toHaveLength(3);
-    expect(fetchCalls).toHaveLength(7);
+    expect(gitCalls).toHaveLength(5);
+    expect(fetchCalls).toHaveLength(11);
     expect(fetchCalls.some(({ url }) =>
-      url.endsWith(`/actions/runs/${DEPLOYMENT_RUN_ID}`)
+      url.endsWith(`/actions/runs/${PREPARATION_RUN_ID}`)
     )).toBe(true);
     expect(fetchCalls.every(({ options }) =>
       options.headers.Authorization === "Bearer test-token"
@@ -693,6 +989,36 @@ describe("full production release verifier", () => {
       && options.redirect === "error"
       && options.signal instanceof AbortSignal
     )).toBe(true);
+    const graphQlCall = fetchCalls.find(({ url, options }) => (
+      url.endsWith("/graphql")
+      && JSON.parse(options.body).variables.runId === UAT_RUN_NODE_ID
+    ));
+    expect(graphQlCall?.options.method).toBe("POST");
+    expect(graphQlCall?.options.headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(graphQlCall?.options.body)).toMatchObject({
+      variables: { runId: UAT_RUN_NODE_ID, after: null }
+    });
+    expect(JSON.parse(graphQlCall?.options.body).query).toContain(
+      "deploymentReviews(first: 100, after: $after)"
+    );
+  });
+
+  test("accepts an annotated semantic release tag resolved to the exact commit", async () => {
+    const result = await verifyProductionReleaseEvidence(
+      verifierInput(),
+      { fetchImpl: makeFetch({ annotatedTag: true }).fetchImpl, git: makeGit().git, now: NOW }
+    );
+    expect(result.releaseTag).toBe(RELEASE_TAG);
+  });
+
+  test.each([
+    [{ mainSha: OTHER_SHA }, /not the current remotely published origin\/main/i],
+    [{ tagSha: OTHER_SHA }, /no exact semantic vX.Y.Z tag published to origin/i]
+  ])("rejects mismatched published release refs %#", async (fetchOptions, expected) => {
+    await expect(verifyProductionReleaseEvidence(
+      verifierInput(),
+      { fetchImpl: makeFetch(fetchOptions).fetchImpl, git: makeGit().git, now: NOW }
+    )).rejects.toThrow(expected);
   });
 
   test("fails closed when GitHub evidence is unavailable", async () => {
@@ -704,12 +1030,130 @@ describe("full production release verifier", () => {
   });
 
   test.each([
+    [OPERATOR_ID, new Set([OPERATOR_ID]), /independent required reviewer/i],
+    [ATTESTER_ID, new Set([ATTESTER_ID]), /independent required reviewer/i]
+  ])("rejects a production approval by excluded actor %s", async (reviewerId, reviewerIds, expected) => {
+    const { fetchImpl } = makeFetch({
+      preparationGraphQlPayloads: [{
+        data: { node: makePreparationReviewLog({
+          reviews: [makePreparationReview({ reviewerId })]
+        }) }
+      }]
+    });
+    const originalMakeEnvironment = makeEnvironment;
+    const wrappedFetch = async (url, options) => {
+      if (url.endsWith("/environments/production")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => originalMakeEnvironment("production", {
+            reviewerIds: [...reviewerIds]
+          })
+        };
+      }
+      return fetchImpl(url, options);
+    };
+    await expect(verifyProductionReleaseEvidence(
+      verifierInput(),
+      { fetchImpl: wrappedFetch, git: makeGit().git, now: NOW }
+    )).rejects.toThrow(expected);
+  });
+
+  test("collects every review page before rejecting a non-canonical review log", async () => {
+    const firstReview = makeUatReview();
+    const unrelatedReview = makeUatReview({
+      id: "DR_unrelated-production-review",
+      environmentId: PRODUCTION_ENVIRONMENT_ID,
+      environmentName: "production"
+    });
+    const { fetchImpl, calls } = makeFetch({
+      graphQlPayloads: [
+        { data: { node: makeUatReviewLog({
+          reviews: [firstReview],
+          totalCount: 2,
+          pageInfo: { hasNextPage: true, endCursor: "page-2" }
+        }) } },
+        { data: { node: makeUatReviewLog({
+          reviews: [unrelatedReview],
+          totalCount: 2,
+          pageInfo: { hasNextPage: false, endCursor: null }
+        }) } }
+      ]
+    });
+
+    await expect(verifyProductionReleaseEvidence(
+      verifierInput(),
+      { fetchImpl, git: makeGit().git, now: NOW }
+    )).rejects.toThrow(/must have one recorded production-uat review/i);
+
+    const graphQlCalls = calls.filter(({ url, options }) => (
+      url.endsWith("/graphql")
+      && JSON.parse(options.body).variables.runId === UAT_RUN_NODE_ID
+    ));
+    expect(graphQlCalls).toHaveLength(2);
+    expect(JSON.parse(graphQlCalls[1].options.body).variables.after).toBe("page-2");
+  });
+
+  test.each([
+    [[{ errors: [{ message: "forbidden" }] }], /GraphQL rejected the UAT deployment review query/i],
+    [[{ errors: [], data: { node: makeUatReviewLog() } }], /GraphQL rejected the UAT deployment review query/i],
+    [[{ data: { node: null } }], /invalid UAT deployment review evidence/i],
+    [[{ data: { node: makeUatReviewLog({ nodeId: "WFR_other" }) } }], /invalid UAT deployment review evidence/i],
+    [[{ data: { node: { ...makeUatReviewLog(), __typename: "Issue" } } }], /invalid UAT deployment review evidence/i],
+    [[{ data: { node: makeUatReviewLog({
+      reviews: [],
+      totalCount: 1,
+      pageInfo: { hasNextPage: true, endCursor: "page-2" }
+    }) } }], /pagination ended early/i],
+    [[
+      { data: { node: makeUatReviewLog({
+        reviews: [makeUatReview()],
+        totalCount: 2,
+        pageInfo: { hasNextPage: true, endCursor: "page-2" }
+      }) } },
+      { data: { node: makeUatReviewLog({
+        reviews: [makeUatReview({
+          id: "DR_second",
+          environmentId: PRODUCTION_ENVIRONMENT_ID,
+          environmentName: "production"
+        })],
+        totalCount: 2,
+        pageInfo: { hasNextPage: true, endCursor: "page-2" }
+      }) } }
+    ], /pagination ended early/i],
+    [[
+      { data: { node: makeUatReviewLog({
+        reviews: [makeUatReview()],
+        totalCount: 2,
+        pageInfo: { hasNextPage: true, endCursor: "page-2" }
+      }) } },
+      { data: { node: makeUatReviewLog({
+        reviews: [makeUatReview({ id: "DR_second" })],
+        totalCount: 3
+      }) } }
+    ], /invalid UAT deployment review evidence/i],
+    [[{ data: { node: makeUatReviewLog({
+      reviews: [makeUatReview()],
+      totalCount: 2
+    }) } }], /pagination returned the wrong count/i]
+  ])("fails closed for malformed GraphQL review evidence %#", async (graphQlPayloads, expected) => {
+    await expect(verifyProductionReleaseEvidence(
+      verifierInput(),
+      {
+        fetchImpl: makeFetch({ graphQlPayloads }).fetchImpl,
+        git: makeGit().git,
+        now: NOW
+      }
+    )).rejects.toThrow(expected);
+  });
+
+  test.each([
     [{ token: "" }, /GITHUB_TOKEN or GH_TOKEN is required/i],
     [{ target: "all" }, /deployment target must be firebase-hosting, firebase-backend, firebase-all, or vercel/i],
     [{ target: "firebase-functions" }, /deployment target must be firebase-hosting, firebase-backend, firebase-all, or vercel/i],
     [{ ciRunId: "0" }, /positive GitHub Actions run id/i],
     [{ uatRunId: "999999999999999999999" }, /outside the supported integer range/i],
-    [{ deploymentRunId: "" }, /GITHUB_RUN_ID must be a positive GitHub Actions run id/i]
+    [{ preparationRunId: "" }, /GITHUB_RUN_ID must be a positive GitHub Actions run id/i]
   ])("rejects malformed full-verifier input %#", async (overrides, expected) => {
     await expect(verifyProductionReleaseEvidence(
       verifierInput(overrides),
@@ -777,6 +1221,34 @@ describe("release UAT attestation validator", () => {
       recordedAt: NOW.toISOString()
     });
     expect(Object.isFrozen(receipt)).toBe(true);
+  });
+
+  test("writes a create-only receipt and rejects symlinked output ancestors", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-uat-receipt-"));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-uat-outside-"));
+    tempDirs.push(root, outside);
+    const receipt = { schema: "fixture/v1" };
+    writeReleaseUatReceipt(receipt, "artifacts/release/uat.json", root);
+    expect(JSON.parse(fs.readFileSync(
+      path.join(root, "artifacts", "release", "uat.json"),
+      "utf8"
+    ))).toEqual(receipt);
+    expect(() => writeReleaseUatReceipt(
+      receipt,
+      "artifacts/release/uat.json",
+      root
+    )).toThrow();
+
+    const symlinkRoot = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-uat-symlink-"));
+    tempDirs.push(symlinkRoot);
+    fs.mkdirSync(path.join(symlinkRoot, "artifacts"));
+    fs.symlinkSync(outside, path.join(symlinkRoot, "artifacts", "release"));
+    expect(() => writeReleaseUatReceipt(
+      receipt,
+      "artifacts/release/uat.json",
+      symlinkRoot
+    )).toThrow(/output ancestors must be real/i);
+    expect(fs.readdirSync(outside)).toEqual([]);
   });
 
   test.each(DEPLOYMENT_PROFILES)(

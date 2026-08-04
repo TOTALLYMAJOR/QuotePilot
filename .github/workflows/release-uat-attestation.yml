@@ -52,6 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production-uat
+    permissions:
+      contents: read
     env:
       RELEASE_UAT_ATTESTER_IDS: ${{ vars.RELEASE_UAT_ATTESTER_IDS }}
     steps:
@@ -60,6 +62,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
