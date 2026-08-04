@@ -41,7 +41,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 23 | Sales workflow (attention queue/count, readiness, follow-ups, request-ID-bound current change handling, lifecycle, approval queue and exact action execution) | Implemented (branch; approval callables and workflow rules deploy pending) | `src/App.jsx`, `src/lib/quoteWorkflow.js`, `src/components/SalesWorkflowModal.jsx`, `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js`, `functions/approvalWorkflow.js`, `functions/contractWorkflow.js`, `functions/index.js` (approval and governed-action callables), `firestore.rules` |
 | 24 | Tenant Import Studio (customer/catalog CSV recognition, validation, receipts, rollback) | Implemented (branch) | `src/components/ImportStudioModal.jsx`, `src/lib/importStudio.js`, `src/lib/importBatchService.js`, `firestore.rules` (`importBatches`) |
 | 25 | Platform tenant provisioning (verified owner, neutral defaults, atomic create, explicit entitlements, repair, cleanup) | Implemented (branch; production acceptance pending) | `functions/index.js` (`preflightCustomerOrder`, `provisionCustomerOrder`, `repairCustomerProvisioningOrder`, cleanup callables), `src/components/IntegrationOpsModal.jsx`, `scripts/provisioning-emulator-acceptance.mjs` |
-| 26 | Public $1 invoice-first buyer onboarding on `tonicatering` (Turnstile and durable abuse controls, Stripe API `2024-06-20` Hosted Invoice Page and signed invoice lifecycle, paid workspace preparation, pending invite, provider-accepted activation instructions, exact verified-email user activation, quote-rail isolation) | Implemented (branch/source candidate; merged/deployed/provider/hosted acceptance and live launch pending) | `src/components/BuyerAccessPage.jsx`, `src/lib/buyerAccess.js`, `functions/buyerAccess.js`, `functions/index.js` (`createBuyerAccessInvoice`, `getBuyerAccessInvoiceStatus`, `buyerAccessStripeWebhook`), Firebase Secret Manager bindings, `firestore.rules` (`buyerAccessOrders`), `e2e/buyer-access.spec.js`, `scripts/provisioning-emulator-acceptance.mjs` |
+| 26 | Public $1 invoice-first buyer onboarding on `tonicatering` (Turnstile, pre-identity HMAC-keyed create reservation and status abuse controls, request-scoped exact retry plus signed-void-only replacement, Stripe API `2024-06-20` Hosted Invoice Page and signed invoice lifecycle, paid workspace preparation, pending invite, optional provider-accepted activation instructions, exact verified-email user activation, quote-rail isolation) | Implemented (branch/source candidate; merged/deployed/provider/hosted acceptance and live launch pending) | `src/components/BuyerAccessPage.jsx`, `src/lib/buyerAccess.js`, `functions/buyerAccess.js`, `functions/index.js` (`createBuyerAccessInvoice`, `getBuyerAccessInvoiceStatus`, `buyerAccessStripeWebhook`), Firebase Secret Manager bindings, `firestore.rules` (`buyerAccessOrders`), `e2e/buyer-access.spec.js`, `scripts/provisioning-emulator-acceptance.mjs` |
 
 ## Guided Flow (Where It Lives)
 - Wizard flow entry and steps: `src/App.jsx`
@@ -95,13 +95,24 @@ This matrix maps the master feature checklist to current implementation and sour
   same-tenant admins can reconcile the exact server-recorded Session for each
   rail. This source branch has no hosted Stripe test/live acceptance. Refund
   initiation/status and dispute handling remain manual or unimplemented.
+- Generic Resend and quote Stripe API/webhook credentials are strict Firebase
+  Secret Manager bindings on only their consuming Functions; the generic
+  webhook does not receive the API key. The Functions dotenv materializer
+  rejects all three values. Fresh provider rotation, ordered webhook overlap,
+  exact hosted UAT, and revocation of the known exposed/cached values remain a
+  hard release blocker.
 - The public `/start` path uses the existing `tonicatering` Firebase project but
   remains an independently disabled Stripe test rail. Browser route and CTA
   flags require a syntactically valid non-placeholder public Turnstile site key;
   Cloudflare setup and human review remain separate evidence. The server
-  separately verifies exact hosts/actions, applies durable rate limits and
-  idempotency, and holds its Turnstile and buyer Stripe secrets in Firebase
-  Secret Manager.
+  separately verifies exact hosts/actions, reserves a request-scoped HMAC-keyed
+  create lease before identity/order reads, consumes the public status network
+  lease once per request before its first buyer-order read, and holds its
+  Turnstile, buyer Stripe, and rate-limit secrets in Firebase Secret Manager.
+  Exact create retries recharge
+  network capacity without a duplicate email charge during the 24-hour
+  reservation; only a prior signed-void order may be superseded after that
+  email window.
   `createBuyerAccessInvoice` creates a true fixed $1 Hosted Invoice Page, and
   the dedicated buyer API client and webhook endpoint are pinned to Stripe API
   version `2024-06-20`; the generic quote Stripe client remains unchanged. Only
@@ -109,9 +120,12 @@ This matrix maps the master feature checklist to current implementation and sour
   state. `invoice.paid` prepares the organization, neutral settings, Starter
   workspace plan entitlements, provisioning record, and pending invitation, but
   no user membership, admin role, claims, or access. `activation_sent` requires
-  durably recorded onboarding-email provider acceptance; only an exact matching
-  Firebase email with separate verification may consume the invite and receive
-  user access.
+  durably recorded onboarding-email provider acceptance. Independently,
+  token-bound `provisioning` with `workspaceReady=true` offers a manual `/app`
+  exact-email Firebase verification path and stops automatic polling without
+  claiming Resend acceptance, membership, claims, or access. Only an exact
+  matching verified Firebase email may consume the invite, and only `active`
+  is access-ready.
   Controlled test-mode markers require exclusion from live revenue and paid-
   customer reporting. The quote-payment mode, credentials, `stripeWebhook`,
   deposit, and final-balance rails remain isolated. This is branch/source

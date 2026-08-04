@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BUYER_ACCESS_E2E_TURNSTILE_TOKEN,
   clearBuyerAccessRequestContext,
+  clearBuyerAccessStatusContext,
   createBuyerAccessInvoice,
   createBuyerAccessRequestId,
   getBuyerAccessInvoiceStatus,
@@ -25,6 +26,13 @@ const STATUS_POLL_INTERVAL_MS = 2_500;
 const STATUS_POLL_LIMIT = 48;
 const TURNSTILE_SCRIPT_ID = "quotepilot-turnstile-api";
 const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+const NON_POLLING_BUYER_STATUSES = new Set([
+  "activation_sent",
+  "active",
+  "payment_failed",
+  "void",
+  "expired"
+]);
 
 let turnstileScriptPromise = null;
 
@@ -73,6 +81,13 @@ export function friendlyBuyerAccessError(error) {
     : "QuotePilot could not complete the request. Try again or contact support.";
 }
 
+export function shouldContinueBuyerAccessPolling(status = {}) {
+  if (status?.workspaceReady === true) return false;
+  return !NON_POLLING_BUYER_STATUSES.has(
+    String(status?.status || "").trim().toLowerCase()
+  );
+}
+
 export function getBuyerAccessStatusMessage(status = "", evidence = {}) {
   const normalizedStatus = String(status || "").trim().toLowerCase();
   switch (normalizedStatus) {
@@ -89,8 +104,8 @@ export function getBuyerAccessStatusMessage(status = "", evidence = {}) {
     case "provisioning":
       return evidence?.workspaceReady === true
         ? {
-            title: "Payment confirmed — your workspace is prepared",
-            text: "QuotePilot verified the paid invoice and prepared the workspace. Account activation is still pending, so do not create or pay another invoice."
+            title: "Payment confirmed — continue account setup",
+            text: "QuotePilot verified the paid invoice and prepared the workspace. Register or sign in with the exact email on the Stripe invoice, then complete Firebase email verification. This status does not grant access or claim that an activation email was sent."
           }
         : {
             title: "Preparing your invoice",
@@ -98,8 +113,8 @@ export function getBuyerAccessStatusMessage(status = "", evidence = {}) {
           };
     case "activation_sent":
       return {
-        title: "Check your email to activate QuotePilot",
-        text: "Your workspace is provisioned, but access stays locked until you follow the verified-email activation instructions sent to the owner."
+        title: "Continue your verified-email setup",
+        text: "Your workspace is prepared and the email provider accepted the activation instructions. Inbox delivery is not proven. Register or sign in with the exact email on the Stripe invoice, then complete Firebase email verification; this status does not grant access."
       };
     case "active":
       return {
@@ -114,7 +129,7 @@ export function getBuyerAccessStatusMessage(status = "", evidence = {}) {
     case "void":
       return {
         title: "This invoice is closed",
-        text: "The server reports that this invoice was voided. It cannot activate a QuotePilot workspace."
+        text: "The server reports that this invoice was voided. It cannot activate a QuotePilot workspace. You may start a fresh test request, but the server still enforces the 24-hour email window."
       };
     case "expired":
       return {
@@ -265,15 +280,15 @@ function InvoiceRequestCard({
 }) {
   return (
     <section className="buyer-card buyer-purchase-card" aria-labelledby="buyer-purchase-title">
-      <p className="buyer-kicker">One secure step</p>
+      <p className="buyer-kicker">Controlled Stripe test</p>
       <div className="buyer-purchase-heading">
         <div>
-          <h2 id="buyer-purchase-title">Create your $1 invoice</h2>
-          <p>No QuotePilot sign-in is required before payment.</p>
+          <h2 id="buyer-purchase-title">Create a $1 Stripe test invoice</h2>
+          <p>No QuotePilot sign-in is required before this test payment.</p>
         </div>
-        <div className="buyer-price" aria-label="One dollar one-time purchase">
+        <div className="buyer-price" aria-label="One dollar Stripe test-mode invoice">
           <strong>$1</strong>
-          <span>USD · one time</span>
+          <span>USD · test mode</span>
         </div>
       </div>
 
@@ -321,11 +336,13 @@ function InvoiceRequestCard({
             />
           </label>
           <div className="buyer-invoice-note">
-            <strong>Pay securely on Stripe</strong>
+            <strong>Stripe test mode — no live charge</strong>
             <span>
-              QuotePilot fixes this invoice at $1 USD. Stripe collects payment details.
-              After a signed payment event, QuotePilot provisions the workspace and emails
-              the owner instructions for the verified-email activation path.
+              This controlled test fixes the invoice at $1 USD. On Stripe, use test card
+              4242 4242 4242 4242 with any future expiration date and any three-digit CVC;
+              never enter a real card. After the signed test payment event, QuotePilot
+              prepares the workspace. Continue with the exact invoice email to register or
+              sign in and complete Firebase email verification.
             </span>
           </div>
           <BuyerTurnstile
@@ -344,7 +361,7 @@ function InvoiceRequestCard({
             type="submit"
             disabled={!verificationComplete || busy}
           >
-            {busy ? "Creating your invoice..." : "Create my $1 invoice"}
+            {busy ? "Creating your test invoice..." : "Create my $1 test invoice"}
           </button>
         </fieldset>
       </form>
@@ -352,13 +369,26 @@ function InvoiceRequestCard({
   );
 }
 
-function PurchaseStatusCard({ status, checking, error, exhausted, onRetry }) {
+function PurchaseStatusCard({
+  status,
+  checking,
+  error,
+  exhausted,
+  onRetry,
+  onStartNewRequest
+}) {
   const copy = getBuyerAccessStatusMessage(status?.status, status);
   const accessReady = status?.status === "active"
     && status.workspaceReady === true
     && status.appUrl === "/app";
+  const accountSetupReady = status?.workspaceReady === true
+    && ["provisioning", "activation_sent"].includes(status?.status);
   const stopped = ["payment_failed", "void", "expired"].includes(status?.status);
-  const tone = accessReady ? "is-ready" : stopped ? "is-stopped" : "is-pending";
+  const tone = accessReady
+    ? "is-ready"
+    : stopped
+      ? "is-stopped"
+      : "is-pending";
 
   return (
     <section className={`buyer-card buyer-status-card ${tone}`} aria-labelledby="buyer-status-title">
@@ -376,6 +406,11 @@ function PurchaseStatusCard({ status, checking, error, exhausted, onRetry }) {
         <a className="buyer-primary buyer-link-button" href="/app">Sign in to your QuotePilot workspace</a>
       ) : (
         <div className="buyer-status-actions">
+          {accountSetupReady && (
+            <a className="buyer-primary buyer-link-button" href="/app">
+              Register or sign in with my invoice email
+            </a>
+          )}
           {status?.hostedInvoiceUrl && (
             <a className="buyer-secondary buyer-link-button" href={status.hostedInvoiceUrl} rel="noreferrer">
               Open my Stripe invoice
@@ -384,6 +419,16 @@ function PurchaseStatusCard({ status, checking, error, exhausted, onRetry }) {
           <button className="buyer-secondary" type="button" onClick={onRetry} disabled={checking}>
             {checking ? "Checking..." : "Check again"}
           </button>
+          {status?.status === "void" && (
+            <button
+              className="buyer-secondary"
+              type="button"
+              onClick={onStartNewRequest}
+              disabled={checking}
+            >
+              Start a new test request
+            </button>
+          )}
         </div>
       )}
     </section>
@@ -395,7 +440,7 @@ export default function BuyerAccessPage() {
     () => readBuyerAccessReturn(typeof window === "undefined" ? "" : window.location.search),
     []
   );
-  const statusContext = useMemo(() => readBuyerAccessStatusContext(), []);
+  const [statusContext, setStatusContext] = useState(() => readBuyerAccessStatusContext());
   const savedRequestContext = useMemo(() => readBuyerAccessRequestContext(), []);
   const verificationConfigured = isBuyerAccessVerificationConfigured({
     siteKey: TURNSTILE_SITE_KEY,
@@ -438,7 +483,7 @@ export default function BuyerAccessPage() {
         if (!active) return;
         setInvoiceStatus(result);
         setStatusError("");
-        if (["activation_sent", "active", "payment_failed", "void", "expired"].includes(result.status)) {
+        if (!shouldContinueBuyerAccessPolling(result)) {
           setStatusChecking(false);
           return;
         }
@@ -503,6 +548,22 @@ export default function BuyerAccessPage() {
     }
   };
 
+  const startNewVoidedRequest = () => {
+    if (invoiceStatus?.status !== "void") return;
+    clearBuyerAccessStatusContext();
+    clearBuyerAccessRequestContext();
+    setStatusContext(null);
+    setInvoiceStatus(null);
+    setStatusChecking(false);
+    setStatusError("");
+    setPollExhausted(false);
+    setRetryNonce(0);
+    setRequestId("");
+    setTurnstileToken("");
+    setTurnstileResetNonce(0);
+    setError("");
+  };
+
   const showInvoiceForm = BUYER_ACCESS_ENABLED
     && verificationConfigured
     && !statusContext;
@@ -516,16 +577,17 @@ export default function BuyerAccessPage() {
 
       <div className="buyer-layout">
         <section className="buyer-intro" aria-labelledby="buyer-page-title">
-          <p className="buyer-kicker">QuotePilot starter access</p>
-          <h1 id="buyer-page-title">Start with a one-dollar invoice.</h1>
+          <p className="buyer-kicker">QuotePilot controlled test</p>
+          <h1 id="buyer-page-title">Test the one-dollar invoice flow.</h1>
           <p className="buyer-lead">
-            Enter the owner details, create a fixed $1 invoice, and pay on Stripe.
-            QuotePilot emails activation instructions only after the signed payment event
-            provisions the workspace.
+            This is a Stripe test-mode flow, not a live sale, and it creates no live charge.
+            Enter the owner details, create the fixed $1 test invoice, and pay with Stripe
+            test details. After the signed test payment event prepares the workspace,
+            continue with the exact invoice email and complete Firebase verification.
           </p>
           <ul className="buyer-promise-list">
-            <li>No QuotePilot login required before payment</li>
-            <li>Stripe-hosted invoice and payment page</li>
+            <li>Stripe test mode only — never enter a real card</li>
+            <li>Stripe-hosted test invoice and payment page</li>
             <li>Verified-email account activation after server-confirmed payment</li>
           </ul>
           <p className="buyer-proof-note">
@@ -569,6 +631,7 @@ export default function BuyerAccessPage() {
               error={statusError}
               exhausted={pollExhausted}
               onRetry={() => setRetryNonce((value) => value + 1)}
+              onStartNewRequest={startNewVoidedRequest}
             />
           )}
 

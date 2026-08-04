@@ -148,14 +148,18 @@ channels, not in the prepare job:
 - Set trusted runtime secrets:
   - `AUTH_PLATFORM_ADMIN_EMAILS`
   - `STRIPE_SECRET_KEY` (secret or restricted key prefix must match
-    `STRIPE_MODE`)
-  - `STRIPE_WEBHOOK_SECRET`
+    `STRIPE_MODE`) in Firebase Secret Manager
+  - `STRIPE_WEBHOOK_SECRET` in Firebase Secret Manager
   - `BUYER_ACCESS_STRIPE_SECRET_KEY`,
     `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`, and
-    `BUYER_ACCESS_TURNSTILE_SECRET` in Firebase Secret Manager only when buyer
+    `BUYER_ACCESS_TURNSTILE_SECRET`, plus an independently generated
+    `BUYER_ACCESS_RATE_LIMIT_SECRET` of at least 32 characters, in Firebase
+    Secret Manager only when buyer
     onboarding acceptance is approved; these never enter dotenv or the prepare
     workflow
-  - `RESEND_API_KEY` only when Resend is enabled
+  - `RESEND_API_KEY` in Firebase Secret Manager before any Resend-bound
+    Function is deployed; provider enablement remains controlled separately by
+    `NOTIFICATIONS_EMAIL_PROVIDER`
   - Twilio account/auth secrets only when Twilio is enabled
 - Select `firebase_scope=backend` or `firebase_scope=all` only after the
   matching evidence profile is attested (requires Blaze plan). The `backend`
@@ -225,9 +229,13 @@ Only after verification, set the trusted runtime configuration to:
 NOTIFICATIONS_EMAIL_PROVIDER=resend
 EMAIL_FROM_NAME=QuotePilot by MBMapps
 EMAIL_FROM_EMAIL=onboarding@quotepilot.mbmapps.com
-RESEND_API_KEY=<buyer-owned-resend-api-key>
 APP_BASE_URL=https://quotepilot.mbmapps.com/app
 ```
+
+Create `RESEND_API_KEY` as a Firebase Secret Manager value and deploy only the
+explicitly bound email/provisioning Functions. Never materialize it in the
+Functions dotenv file. For a local Functions emulator only, an expendable
+fixture may be supplied through the ignored `functions/.secret.local` file.
 
 If verification is incomplete, keep the production custom-domain sender gated
 and send the copy-ready onboarding message manually. The recorded
@@ -258,13 +266,12 @@ Buyer setup assistance is also available in-app:
 
 ### Stripe activation gate
 
-Stripe and Twilio use the corresponding blank fields in
-`functions/.env.example` only as configuration inventory. The quote-payment
-Stripe rail has no enabled/disabled provider flag: it requires explicit
-`STRIPE_MODE=test|live`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`. The
-secret or restricted key prefix must match the configured mode, and webhook
-Event plus Checkout Session `livemode` must match it. Missing or mixed-mode
-configuration fails closed.
+The quote-payment Stripe rail has no enabled/disabled provider flag: it requires
+explicit non-secret `STRIPE_MODE=test|live` plus Secret Manager bindings for
+`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. The Functions dotenv
+materializer rejects both secret values. The secret or restricted key prefix
+must match the configured mode, and webhook Event plus Checkout Session
+`livemode` must match it. Missing or mixed-mode configuration fails closed.
 Keep the Twilio provider flag at `none` until buyer-owned credentials, sender
 registration, and provider acceptance checks are complete.
 
@@ -284,8 +291,9 @@ Stripe webhook endpoint:
 
 The public buyer invoice rail is not a mode change for that quote-payment rail.
 It has an independent disabled-by-default `BUYER_ACCESS_ENABLED` gate,
-`BUYER_ACCESS_STRIPE_MODE=test`, exact Turnstile hostnames, three separate
-Secret Manager bindings, a dedicated Stripe client pinned to API version
+`BUYER_ACCESS_STRIPE_MODE=test`, exact Turnstile hostnames, four separate
+Secret Manager bindings including the HMAC rate-limit key, a
+dedicated Stripe client pinned to API version
 `2024-06-20`, and a separate endpoint pinned to that same event API version:
 
 - `https://us-central1-tonicatering.cloudfunctions.net/buyerAccessStripeWebhook`
@@ -301,6 +309,47 @@ Never route buyer invoice events to `stripeWebhook`, share signing secrets
 between endpoints, subscribe `buyerAccessStripeWebhook` to the quote Checkout
 Session event set, or change the generic quote Stripe client's version while
 configuring the buyer rail.
+
+### Compromised provider-secret rotation and ordered cutover
+
+The currently exposed or locally cached generic Resend and Stripe credentials
+must be treated as compromised. Rotation and exact hosted/provider acceptance
+are hard release blockers; copying the same values into Secret Manager is not a
+rotation. Use this order:
+
+1. Set `BUYER_ACCESS_ENABLED=false`, disable the public acceptance window, and
+   stop backend/frontend promotions. Record the exact last-known-good and
+   candidate revisions without recording any credential value.
+2. Create fresh Resend and Stripe API credentials as new Firebase Secret
+   Manager versions. Keep the old credentials temporarily active, deploy the
+   exact reviewed least-privilege Function bindings, and prove quote delivery,
+   payment send/reconciliation, integration status, and any enabled activation
+   email path against that exact backend.
+3. For each Stripe webhook secret being rotated, use the provider's overlap
+   window: obtain the fresh provider secret while the old secret is still
+   accepted, set the one Secret Manager value temporarily to `new,old` (at most
+   two `whsec_` values), deploy the exact backend, and prove signed delivery and
+   replay handling. Then set the binding to `new` only and redeploy the same
+   accepted source. Do not revoke the old provider secret yet.
+4. Rotate the Turnstile widget site key and
+   `BUYER_ACCESS_TURNSTILE_SECRET` only while the buyer gate is off. Coordinate
+   the new public site key in the exact frontend artifact with the new backend
+   secret/hostname/action checks, deploy both accepted targets, and prove both
+   canonical hosts plus wrong-host/action denial before reopening the gate.
+5. If `BUYER_ACCESS_RATE_LIMIT_SECRET` is rotated, treat every HMAC-derived
+   network, email, status, and request-reservation document identity as a fresh
+   rate window. Leave old documents for the configured
+   `buyerAccessRateLimits.expiresAt` TTL rather than deleting them. Close or
+   obtain signed `invoice.voided` state for every in-flight buyer invoice before
+   the change; exact retries may consume a new email window after rotation.
+6. Run the exact target-scoped UAT checklist against the immutable candidate,
+   including webhook overlap/new-only delivery, checkout reconciliation,
+   optional Resend acceptance if enabled or claimed, Turnstile coordination,
+   buyer retry/rate/TTL behavior, rollback proof, and provider readback. Only
+   after every exact check passes may the old Resend key, Stripe API key,
+   webhook signing secret, Turnstile key/secret, or HMAC key be revoked. If any
+   check fails, keep the buyer gate off and roll back without revoking the
+   last-known-good credential.
 
 ### Public $1 invoice-first buyer access on `tonicatering`
 
@@ -342,7 +391,10 @@ For an approved hosted test-mode acceptance window:
    revision are verified.
 4. Bind a dedicated Stripe test key as `BUYER_ACCESS_STRIPE_SECRET_KEY` and the
    dedicated endpoint signing secret as `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET` in
-   Firebase Secret Manager. Confirm dedicated buyer API requests use
+   Firebase Secret Manager. Generate a separate high-entropy value of at least
+   32 characters for `BUYER_ACCESS_RATE_LIMIT_SECRET`; do not reuse a Stripe or
+   Turnstile secret. Enable Firestore TTL for the Timestamp field
+   `buyerAccessRateLimits.expiresAt`. Confirm dedicated buyer API requests use
    `2024-06-20`, and configure `buyerAccessStripeWebhook` for only the four
    invoice events above with endpoint API version `2024-06-20`. Leave the quote
    Stripe client and endpoint version unchanged. Provider console configuration
@@ -356,17 +408,40 @@ For an approved hosted test-mode acceptance window:
    collecting a password or card data. A fresh Turnstile challenge must be
    required. Missing, replayed, wrong-action, wrong-host, malformed, and
    provider-error tokens must fail closed with no invoice.
-7. Enable `BUYER_ACCESS_ENABLED` only for the bounded window. Exercise durable
-   per-network and normalized-email-hash rate limits and deterministic request
-   idempotency. A safe retry must recover the same still-open invoice; burst,
-   cross-key, or expired requests must not create uncontrolled duplicates or
-   disclose whether an account or invoice already exists.
+7. Enable `BUYER_ACCESS_ENABLED` only for the bounded window. Exercise
+   secret-keyed durable per-network and normalized-email rate limits plus
+   request-scoped order idempotency. Confirm creation atomically reserves and
+   charges network plus email before any Auth, invite, or order read; an exact
+   retry charges the network budget again without double-charging email during
+   the 24-hour Timestamp-backed reservation, and the fourth in-hour network
+   attempt blocks before identity lookup. Confirm status polling permits the
+   frontend's 48-attempt session, atomically blocks after 60 requests in five
+   minutes from one network, charges well-formed unknown-order and wrong-token
+   attempts before the order read, and performs no order read when the rate
+   secret or Firestore transaction is unavailable. Verify raw network/email
+   identity is absent from rate-document ids and the configured TTL removes an
+   expired record. A safe retry must recover the same still-open invoice. A
+   fresh request after the 24-hour email window may create a replacement only
+   after the prior invoice has a signed `invoice.voided` state; the prior order
+   is then superseded and stale events are ignored with durable dedupe evidence.
+   Open and payment-failed orders may return the same invoice only to the exact
+   original creation request. Uncollectible/expired, paid, and activation
+   orders must reject automatic replacement and continue through the existing
+   status/account path or a documented operator stop. No buyer-specific repair
+   callable exists; treat this as a live-sale blocker until audited recovery is
+   implemented. Burst, cross-key, or expired requests must not create
+   uncontrolled duplicates or disclose whether an account or invoice exists.
 8. Use `createBuyerAccessInvoice` to create one fixed Starter $1 USD test
    invoice. Confirm Stripe finalizes the invoice before payment and QuotePilot
    returns only its true Stripe Hosted Invoice Page. Pay on Stripe, not in
    QuotePilot. The return and `getBuyerAccessInvoiceStatus` may report
    `invoice_open`, `payment_processing`, `provisioning`, or `activation_sent`,
-   but must expose no `/app` access before verified activation.
+   but must expose no `/app` access before verified activation. Token-bound
+   `provisioning` with `workspaceReady=true` may stop automatic polling and
+   offer `/app` only as a manual exact-invoice-email registration/sign-in and
+   Firebase verification path; retain `Check again` for manual refresh. That
+   handoff is not onboarding-email acceptance, membership, claims, or access,
+   and only `active` is access-ready.
 9. Confirm only a matching, signed, deduplicated invoice event establishes
    provider payment state. `invoice.paid` must prepare the organization, neutral
    settings, Starter workspace plan entitlements, provisioning record, pending
@@ -374,11 +449,15 @@ For an approved hosted test-mode acceptance window:
    claims, or application access. `activation_sent` may appear only after the
    onboarding email provider accepts the exact activation-instructions message
    and that acceptance is durably recorded; do not call provider acceptance
-   delivery. Separately prove Firebase verification-email delivery and the
-   authorized continue URL. Only an exact matching verified Firebase account
+   delivery. The onboarding message is optional for initiating the manual
+   verified-email path. Separately prove Firebase verification-email delivery
+   and the authorized continue URL. Only an exact matching verified Firebase account
    consuming the unexpired invitation may create user access and move the order
    to `active`.
-10. Exercise `payment_failed`, `void`, and `expired` public states, webhook
+10. Exercise `payment_failed`, `void`, and `expired` public states, exact-request
+    open/payment-failed recovery, terminal-state replacement denial, the
+    same-tab `Start a new test request` action, post-window signed-void
+    replacement, stale superseded events, webhook
     replay, unsupported or mixed-mode events, amount/currency/plan/invoice
     mismatch, expired invitation, unverified email, different email,
     cross-account claim, and repeated activation. None may create or restore a
@@ -400,7 +479,8 @@ times, target-specific UAT receipt, redacted Turnstile outcome, redacted Stripe
 test invoice/Event references, final buyer-order state, pending-invite evidence,
 and exact tenant/role readback. Provider proof is still separately required for
 the Turnstile widget, buyer Stripe API and endpoint version `2024-06-20`, Hosted
-Invoice Page and event delivery, onboarding-email acceptance, and Firebase
+Invoice Page and event delivery, onboarding-email acceptance only if enabled or
+claimed, and Firebase
 verification-email delivery plus the authorized continue URL. Never include
 personal data, tokens, secrets, signatures, hosted invoice URLs, or full private
 provider identifiers in evidence. After the exercise, disable the server gate. Refunds, disputes,
@@ -514,13 +594,16 @@ record tying the coordinated frontend, Functions, and rules revision together.
 For any release containing public buyer onboarding, every applicable `buyer.*`
 item is also mandatory. Browser-target items cover public Turnstile entry,
 truthful Stripe test-invoice labeling, locked pending state, activation
-instructions, and `/app` denial before server-confirmed access; they do not
+instructions, proof-safe manual `/app` account setup after
+`workspaceReady=true`, automatic-poll stop with manual refresh, and `/app`
+denial before server-confirmed access; they do not
 prove email-provider acceptance or backend fulfillment. Backend-target items
 cover exact Turnstile verification, durable rate limits, retry idempotency, a
 true Hosted Invoice Page, buyer API and webhook version `2024-06-20`, signed
 invoice lifecycle, paid workspace preparation, pending invitation without user
-access, durable onboarding-email provider acceptance before `activation_sent`,
-separate Firebase verification-email delivery and continue URL, exact-email
+access, any claimed onboarding-email provider acceptance before
+`activation_sent`, separate Firebase verification-email delivery and continue
+URL, exact-email
 claim, real `tonicatering` tenant/role readback, controlled-test markers,
 negative paths, and quote-Stripe isolation. A Hosting or Vercel receipt cannot
 prove an unbound backend or provider, and a backend receipt cannot prove the
@@ -624,8 +707,10 @@ registration remains a separate abuse-control boundary.
      events use `2024-06-20` while the quote Stripe version stays unchanged;
      `invoice.paid` prepares the organization, neutral settings, Starter
      workspace plan entitlements, provisioning record, and pending invite but
-     no user membership, admin role, claims, or access; `activation_sent`
-     requires durable onboarding-email provider acceptance, Firebase
+     no user membership, admin role, claims, or access; `workspaceReady=true`
+     offers only a manual exact-email Firebase activation path and stops
+     automatic polling, while `activation_sent` requires durable provider
+     acceptance of the optional onboarding email. Firebase
      verification-email delivery and continue URL are separately evidenced, and
      only exact-email verified invitation consumption creates user access; every
      buyer record carries the controlled test-mode marker, reporting excludes it
@@ -745,8 +830,9 @@ or customer data into release evidence.
 
 For a release containing public buyer onboarding, retain the provider-bound
 acceptance records from the invoice-first section and repeat the paid-invoice,
-workspace preparation, pending invite, onboarding-email provider acceptance,
-separate Firebase verification-email delivery, verified-email claim,
+workspace preparation, pending invite, proof-safe manual account-setup handoff,
+any claimed onboarding-email provider acceptance, separate Firebase
+verification-email delivery, verified-email claim,
 active-order, and `/app` handoff after promotion. Confirm the workspace plan
 entitlements exist after paid preparation while no user membership, role,
 claims, or access exists before verified invitation consumption. Confirm

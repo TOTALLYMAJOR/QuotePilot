@@ -52,19 +52,31 @@ Last updated: August 4, 2026
   email-enumeration protection is enabled. Public registration may still
   return an existing-email error, so this feature is not claimed as full
   account-enumeration resistance.
-- Current branch release UAT contract: checklist version `2026-08-04.6` now
+- Current branch release UAT contract: checklist version `2026-08-04.9` now
   makes hosted password recovery and target-applicable deposit, final-balance,
   webhook/reconciliation, cross-rail isolation, projection privacy, and payment
   surface observations mandatory. It also binds public buyer onboarding to
   target-specific Turnstile entry, durable rate/idempotency controls, true
   Hosted Invoice Page creation, pinned buyer API/webhook version `2024-06-20`,
-  signed invoice lifecycle, paid workspace preparation, pending invite, durable onboarding-email provider acceptance,
+  signed invoice lifecycle, paid workspace preparation, pending invite,
+  secret-keyed pre-read status throttling, proof-safe manual account setup at
+  `workspaceReady=true`, optional onboarding-email provider acceptance,
   separate Firebase verification-email delivery and continue URL, no user role
   or access before verified claim, replay/cross-account denial, and quote-Stripe
   isolation observations. Browser targets own locked UI/instructions only;
   backend targets own provider and fulfillment evidence. The
   regression suite fixes those critical IDs to their intended target profiles
   so a mechanical checklist edit cannot silently remove them.
+- Current branch provider-secret hardening: generic `RESEND_API_KEY`,
+  `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET` reads are now strict Firebase
+  Secret Manager bindings on only the complete consuming Function call graph;
+  the generic webhook statically verifies signatures and does not receive the
+  Stripe API key. The Functions dotenv materializer rejects and does not emit
+  those three values, while the ignored `functions/.secret.local` is reserved
+  for expendable emulator fixtures. This is source evidence only. The known
+  exposed or locally cached generic Resend/Stripe credentials remain a hard
+  release blocker until fresh provider credentials complete the documented
+  overlap/cutover, exact hosted UAT, old-key revocation, and provider readback.
 - Current branch public invoice-first buyer candidate:
   `feature/paid-buyer-onboarding` adds `/start` on the existing `tonicatering`
   Firebase project behind independent browser and Functions gates. Preparation
@@ -84,13 +96,36 @@ Last updated: August 4, 2026
   entitlements, provisioning record, and pending invite, but creates no user
   membership, admin role, custom claims, or application access. The public
   status can advance to `activation_sent` only after durable onboarding-email
-  provider acceptance. An exact matching Firebase account must separately
-  verify the invoice email and consume the invite before user access exists.
-  `getBuyerAccessInvoiceStatus` remains a public token-bound callable, so the
-  Functions gate must stay off until enforced edge or App Check throttling is
-  proven before its Firestore order read. The current deterministic rate-record
-  identifiers and ISO-only expiry fields are controlled-test evidence, not a
-  secret-keyed production limiter or Firestore TTL cleanup policy.
+  provider acceptance. Independently, token-bound `provisioning` with
+  `workspaceReady=true` now stops automatic `/start` polling and offers `/app`
+  as a manual exact-invoice-email registration/sign-in and Firebase verification
+  path. That handoff does not claim Resend acceptance or delivery, membership,
+  claims, or access; the optional onboarding message is not required to start
+  verified-email activation. An exact matching Firebase account must separately
+  verify the invoice email and consume the invite, and only `active` is
+  access-ready.
+  `getBuyerAccessInvoiceStatus` remains a public capability-token callable, but
+  each public request now consumes an atomic secret-keyed per-network lease
+  before its first buyer-order read; later fulfillment reads remain within that
+  bounded request. The 60-request-per-five-minute status budget also charges
+  well-formed unknown-order and wrong-token requests and fails closed when the
+  dedicated rate secret or Firestore limiter is unavailable. Creation
+  now atomically reserves a request-scoped `(email, requestId)` order before any
+  Auth, invite, or order read. Exact retry consumes IP capacity again without a
+  duplicate email charge during the 24-hour reservation; reservation and rate
+  records carry a Firestore Timestamp `expiresAt`. After the one-email-per-
+  24-hour window, a fresh request can replace only a prior signed-void order,
+  which is durably marked superseded so stale events cannot fulfill it. Open
+  and payment-failed orders return the same invoice only to the exact original
+  creation request. Uncollectible/expired, paid, and activation orders cannot
+  be replaced automatically. They require the existing status/account path or
+  a documented operator stop; no buyer-specific repair callable exists, and
+  that recovery gap remains a blocker for live sale. Creation and status record
+  identifiers are HMAC-derived without raw network or email identity.
+  The Functions gate must still stay off until the fourth Secret Manager binding,
+  the `buyerAccessRateLimits.expiresAt` TTL policy, coordinated deployment, and
+  hosted valid/invalid polling acceptance are provider-proven; optional edge or
+  App Check controls remain defense in depth rather than source evidence.
   The existing live quote-payment mode, credentials, `stripeWebhook`,
   deposit, and final-balance rails remain separate. Controlled test-mode
   markers require exclusion from live revenue and paid-customer reporting.
@@ -437,11 +472,13 @@ Last updated: August 4, 2026
   candidate, not a live sales launch. Its public initiation surface raises
   abuse, duplicate-invoice, provider-delivery, and identity-claim risk, so the
   independently disabled server gate, exact Turnstile host/action checks,
-  durable rate limits, deterministic idempotency, separate buyer Secret Manager
-  bindings, signed invoice events, pending-invite boundary, durable onboarding-
-  email provider acceptance, verified-email claim, and hosted negative-path
+  secret-keyed durable rate limits before status order reads, deterministic
+  idempotency, four separate buyer Secret Manager bindings, Firestore rate TTL,
+  signed invoice events, pending-invite boundary, proof-safe manual verified-
+  email handoff when the workspace is ready, exact-email claim, and hosted
+  negative-path
   evidence are release requirements. No hosted invoice, payment, webhook,
-  workspace preparation, onboarding-email acceptance, Firebase verification-
+  workspace preparation, optional onboarding-email acceptance, Firebase verification-
   email delivery, verified claim, role readback, or proof that the live quote
   Stripe rail stayed unchanged exists yet. Refund,
   dispute, cancellation, account/access revocation, support, tax/accounting,
@@ -453,7 +490,8 @@ Last updated: August 4, 2026
 ## Current Focus (Near-Term)
 1. Finish and review the single-project invoice-first buyer candidate, keeping
    the server gate disabled until Turnstile, durable rate/idempotency controls,
-   dedicated test Stripe secrets, and target-scoped UAT are approved. Route the
+   all four dedicated buyer secrets, the rate-record TTL policy, and
+   target-scoped UAT are approved. Route the
    four supported buyer invoice events only to `buyerAccessStripeWebhook`, keep
    the existing live quote Stripe configuration and `stripeWebhook` unchanged,
    and treat the compiled public CTA as artifact configuration rather than
@@ -473,9 +511,10 @@ Last updated: August 4, 2026
    tag, exact-main CI, target-specific UAT, prepare-artifact, and trusted-deployer
    path. Verify fresh Turnstile and abuse-control paths, one idempotent true $1
    Hosted Invoice Page, signed invoice transitions, paid workspace preparation,
-   pending invite with no user role/access, durable onboarding-email provider
-   acceptance before `activation_sent`, separate Firebase verification-email
-   delivery and continue URL, successful exact-email verified claim, cross-
+   pending invite with no user role/access, proof-safe manual `/app` handoff at
+   `workspaceReady=true`, optional onboarding-email provider acceptance before
+   `activation_sent`, separate Firebase verification-email delivery and
+   continue URL, successful exact-email verified claim, cross-
    account/replay/failure denial, controlled test-data classification, and
    quote-Stripe isolation. Disable the server gate after the bounded acceptance window; a
    live-mode launch requires separate approval.

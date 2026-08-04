@@ -2,7 +2,7 @@ const functions = require("firebase-functions/v1");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { createHash, randomInt, randomUUID } = require("node:crypto");
-const { FieldValue, getFirestore } = require("firebase-admin/firestore");
+const { FieldValue, Timestamp, getFirestore } = require("firebase-admin/firestore");
 const Stripe = require("stripe");
 const twilio = require("twilio");
 const {
@@ -72,6 +72,10 @@ const {
   planStripeCheckoutTransition
 } = require("./stripeProviderState");
 const {
+  constructStripeWebhookEvent,
+  normalizeStripeWebhookSecrets
+} = require("./stripeWebhookSecrets");
+const {
   PaymentDispatchStateError,
   beginPaymentDispatchAttempt,
   normalizePaymentDispatch,
@@ -115,15 +119,19 @@ const {
   BUYER_ACCESS_FLOW,
   BUYER_ACCESS_MODE,
   BUYER_ACCESS_PLAN,
+  BUYER_ACCESS_STATUS_RATE_LIMIT,
+  BUYER_ACCESS_STATUS_RATE_WINDOW_MS,
   BUYER_ACCESS_STRIPE_API_VERSION,
   BuyerAccessError,
   assertBuyerAccessInvoiceBinding,
   assertBuyerAccessRuntime,
   assertBuyerAccessTurnstileResult,
+  authorizeBuyerAccessStatusRequest,
   buildBuyerAccessIdentifiers,
   buildBuyerAccessStripePlan,
-  buyerAccessOrderIdForEmail,
+  buyerAccessOrderIdForRequest,
   buyerAccessProviderStateForEvent,
+  buyerAccessRateLimitDocumentId,
   buyerAccessStatusResponse,
   buyerAccessStatusTokenMatches,
   hashBuyerAccessSecret,
@@ -131,6 +139,8 @@ const {
   normalizeBuyerAccessRequest,
   normalizeBuyerAccessStatusRequest,
   normalizeBuyerAccessTurnstileHostnames,
+  planBuyerAccessCreationReservation,
+  planBuyerAccessRateLimit,
   planBuyerAccessTransition,
   resolveBuyerAccessBootstrapRecovery
 } = require("./buyerAccess");
@@ -159,9 +169,13 @@ const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
 const BUYER_ACCESS_ORDERS_COLLECTION = "buyerAccessOrders";
 const BUYER_ACCESS_RATE_LIMITS_COLLECTION = "buyerAccessRateLimits";
+const STRIPE_SECRET_NAME = "STRIPE_SECRET_KEY";
+const STRIPE_WEBHOOK_SECRET_NAME = "STRIPE_WEBHOOK_SECRET";
+const RESEND_API_KEY_SECRET_NAME = "RESEND_API_KEY";
 const BUYER_ACCESS_STRIPE_SECRET_NAME = "BUYER_ACCESS_STRIPE_SECRET_KEY";
 const BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME = "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET";
 const BUYER_ACCESS_TURNSTILE_SECRET_NAME = "BUYER_ACCESS_TURNSTILE_SECRET";
+const BUYER_ACCESS_RATE_LIMIT_SECRET_NAME = "BUYER_ACCESS_RATE_LIMIT_SECRET";
 const PAYMENT_REQUEST_FLOWS = Object.freeze({
   deposit: Object.freeze({
     paymentKind: "deposit",
@@ -239,6 +253,15 @@ function readConfig(path, fallback = "") {
     return String(value).trim();
   }
   return fallback;
+}
+
+function readBoundSecret(name) {
+  const normalizedName = normalizeText(name).toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]{2,127}$/.test(normalizedName)) {
+    throw new Error("Secret Manager binding name is invalid.");
+  }
+  const envValue = readEnvConfig(normalizedName);
+  return envValue.present ? normalizeText(envValue.value) : "";
 }
 
 function readEmailSet(path) {
@@ -885,15 +908,15 @@ function getTwilioConfig() {
 function getStripeConfig() {
   return {
     mode: readConfig("stripe.mode"),
-    secretKey: readConfig("stripe.secret_key"),
-    webhookSecret: readConfig("stripe.webhook_secret")
+    secretKey: readBoundSecret(STRIPE_SECRET_NAME),
+    webhookSecret: readBoundSecret(STRIPE_WEBHOOK_SECRET_NAME)
   };
 }
 
 function getBuyerAccessStripeConfig() {
   return {
     mode: readConfig("buyer_access_stripe_mode"),
-    secretKey: readConfig("buyer_access_stripe_secret_key")
+    secretKey: readBoundSecret(BUYER_ACCESS_STRIPE_SECRET_NAME)
   };
 }
 
@@ -912,7 +935,7 @@ function getEmailConfig() {
     provider: getEmailProvider(),
     fromEmail,
     fromName,
-    resendApiKey: normalizeText(readConfig("resend.api_key")),
+    resendApiKey: readBoundSecret(RESEND_API_KEY_SECRET_NAME),
     senderApproved:
       fromName === APPROVED_EMAIL_FROM_NAME
       && fromEmail === APPROVED_EMAIL_FROM_EMAIL
@@ -953,6 +976,7 @@ function buildIntegrationSetupStatus() {
   if (stripeMissingFields.length === 0) {
     try {
       assertStripeSecretKeyMode(stripeConfig.secretKey, stripeConfig.mode);
+      normalizeStripeWebhookSecrets(stripeConfig.webhookSecret);
     } catch (err) {
       stripeConfigurationError = normalizeText(err?.message);
     }
@@ -1260,7 +1284,7 @@ async function retireOrganizationRoleAssignments(organizationId) {
 }
 
 function getStripeClient() {
-  const secretKey = readConfig("stripe.secret_key");
+  const secretKey = readBoundSecret(STRIPE_SECRET_NAME);
   if (!secretKey) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -4882,7 +4906,10 @@ exports.preflightCustomerOrder = functions.region(REGION).https.onCall(async (da
   };
 });
 
-exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (data, context) => {
+exports.provisionCustomerOrder = functions
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
   const {
     staff,
     actorEmail,
@@ -5315,9 +5342,12 @@ exports.provisionCustomerOrder = functions.region(REGION).https.onCall(async (da
       emailText: emailPayload.text
     }
   };
-});
+  });
 
-exports.repairCustomerProvisioningOrder = functions.region(REGION).https.onCall(async (data, context) => {
+exports.repairCustomerProvisioningOrder = functions
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
   const staff = await assertStaff(context);
   if (staff.role !== "admin" || !staff.platformAdmin) {
     throw new functions.https.HttpsError(
@@ -5422,7 +5452,7 @@ exports.repairCustomerProvisioningOrder = functions.region(REGION).https.onCall(
       emailText: finalized.emailPayload.text
     }
   };
-});
+  });
 
 exports.archiveOrganizationWorkspace = functions.region(REGION).https.onCall(async (data, context) => {
   const organizationId = normalizeOrganizationId(data?.organizationId);
@@ -6994,7 +7024,10 @@ exports.notifyOwnerNewQuote = functions.region(REGION).https.onCall(async (data,
   };
 });
 
-exports.sendQuoteToCustomer = functions.region(REGION).https.onCall(async (data, context) => {
+exports.sendQuoteToCustomer = functions
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
   const staff = assertAdminStaff(await assertStaff(context));
   if (normalizeText(data?.portalLink)) {
     throw new functions.https.HttpsError(
@@ -7372,7 +7405,7 @@ exports.sendQuoteToCustomer = functions.region(REGION).https.onCall(async (data,
     }
     throw err;
   }
-});
+  });
 
 exports.resolveQuoteDeliveryOutcome = functions.region(REGION).https.onCall(async (data, context) => {
   const staff = assertAdminStaff(await assertStaff(context));
@@ -8514,37 +8547,61 @@ async function sendApprovedPaymentRequestEmail(data, context, paymentKind = "dep
   }
 }
 
-exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall((data, context) => (
-  sendApprovedPaymentRequestEmail(data, context, "deposit")
-));
+exports.sendPaymentRequestEmail = functions
+  .runWith({ secrets: [STRIPE_SECRET_NAME, RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall((data, context) => (
+    sendApprovedPaymentRequestEmail(data, context, "deposit")
+  ));
 
-exports.sendFinalBalanceRequestEmail = functions.region(REGION).https.onCall((data, context) => (
-  sendApprovedPaymentRequestEmail(data, context, "final_balance")
-));
+exports.sendFinalBalanceRequestEmail = functions
+  .runWith({ secrets: [STRIPE_SECRET_NAME, RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall((data, context) => (
+    sendApprovedPaymentRequestEmail(data, context, "final_balance")
+  ));
 
-exports.getIntegrationSetupStatus = functions.region(REGION).https.onCall(async (_data, context) => {
-  assertAdminStaff(await assertStaff(context));
-  return {
-    ok: true,
-    status: buildIntegrationSetupStatus()
-  };
-});
+exports.getIntegrationSetupStatus = functions
+  .runWith({
+    secrets: [
+      STRIPE_SECRET_NAME,
+      STRIPE_WEBHOOK_SECRET_NAME,
+      RESEND_API_KEY_SECRET_NAME
+    ]
+  })
+  .region(REGION)
+  .https.onCall(async (_data, context) => {
+    assertAdminStaff(await assertStaff(context));
+    return {
+      ok: true,
+      status: buildIntegrationSetupStatus()
+    };
+  });
 
-exports.sendIntegrationTestSms = functions.region(REGION).https.onCall(async (data, context) => {
-  const staff = assertAdminStaff(await assertStaff(context));
-  const actorEmail = normalizeEmail(context?.auth?.token?.email || staff.uid);
-  const customMessage = normalizeText(data?.message);
-  const message =
-    customMessage ||
-    `Integration SMS test from QuotePilot (${new Date().toISOString()}) sent by ${actorEmail}.`;
-  const sms = await sendOwnerSms(message);
+exports.sendIntegrationTestSms = functions
+  .runWith({
+    secrets: [
+      STRIPE_SECRET_NAME,
+      STRIPE_WEBHOOK_SECRET_NAME,
+      RESEND_API_KEY_SECRET_NAME
+    ]
+  })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    const staff = assertAdminStaff(await assertStaff(context));
+    const actorEmail = normalizeEmail(context?.auth?.token?.email || staff.uid);
+    const customMessage = normalizeText(data?.message);
+    const message =
+      customMessage ||
+      `Integration SMS test from QuotePilot (${new Date().toISOString()}) sent by ${actorEmail}.`;
+    const sms = await sendOwnerSms(message);
 
-  return {
-    ok: true,
-    sms,
-    status: buildIntegrationSetupStatus()
-  };
-});
+    return {
+      ok: true,
+      sms,
+      status: buildIntegrationSetupStatus()
+    };
+  });
 
 function normalizeApprovedCheckoutPreparation(input = {}) {
   const source = input && typeof input === "object" ? input : {};
@@ -9378,13 +9435,19 @@ async function reconcileCheckout(data, context, paymentKind = "deposit") {
   }
 }
 
-exports.reconcileDepositCheckout = functions.region(REGION).https.onCall((data, context) => (
-  reconcileCheckout(data, context, "deposit")
-));
+exports.reconcileDepositCheckout = functions
+  .runWith({ secrets: [STRIPE_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall((data, context) => (
+    reconcileCheckout(data, context, "deposit")
+  ));
 
-exports.reconcileFinalBalanceCheckout = functions.region(REGION).https.onCall((data, context) => (
-  reconcileCheckout(data, context, "final_balance")
-));
+exports.reconcileFinalBalanceCheckout = functions
+  .runWith({ secrets: [STRIPE_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall((data, context) => (
+    reconcileCheckout(data, context, "final_balance")
+  ));
 
 function throwBuyerAccessHttpsError(err) {
   if (err instanceof functions.https.HttpsError) throw err;
@@ -9402,17 +9465,193 @@ function getTrustedBuyerAccessRequestIp(context) {
   ).slice(0, 128);
 }
 
-function buyerAccessRateLimitDocumentIds({ ownerEmail, requestIp } = {}) {
-  const ipHash = hashBuyerAccessSecret(`buyer-access-ip:${normalizeText(requestIp)}`);
-  const emailHash = hashBuyerAccessSecret(`buyer-access-email:${normalizeEmail(ownerEmail)}`);
-  return {
-    ip: `ip-${ipHash.slice(0, 40)}`,
-    email: `email-${emailHash.slice(0, 40)}`
+function getBuyerAccessRateLimitSecret() {
+  const secretEnv = readEnvConfig("buyer_access_rate_limit_secret");
+  const rateLimitSecret = secretEnv.present ? normalizeText(secretEnv.value) : "";
+  try {
+    buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "config_probe",
+      value: "configured"
+    });
+  } catch (err) {
+    throwBuyerAccessHttpsError(err);
+  }
+  return rateLimitSecret;
+}
+
+function buyerAccessRateLimitDocumentIds({
+  orderId,
+  ownerEmail,
+  requestIp,
+  rateLimitSecret
+} = {}) {
+  const ids = {
+    ip: buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "invoice_ip",
+      value: normalizeText(requestIp)
+    }),
+    statusIp: buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "status_ip",
+      value: normalizeText(requestIp)
+    })
   };
+  if (normalizeEmail(ownerEmail)) {
+    ids.email = buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "invoice_email",
+      value: normalizeEmail(ownerEmail)
+    });
+  }
+  if (normalizeText(orderId)) {
+    ids.reservation = buyerAccessRateLimitDocumentId({
+      rateLimitSecret,
+      scope: "invoice_reservation",
+      value: normalizeText(orderId)
+    });
+  }
+  return ids;
+}
+
+async function reservePublicBuyerAccessCreation({
+  input,
+  rateLimitSecret,
+  requestIp
+} = {}) {
+  const identifiers = buildBuyerAccessIdentifiers({
+    ownerEmail: input.ownerEmail,
+    organizationName: input.organizationName,
+    randomUUID,
+    requestId: input.requestId
+  });
+  const rateIds = buyerAccessRateLimitDocumentIds({
+    orderId: identifiers.orderId,
+    ownerEmail: input.ownerEmail,
+    requestIp,
+    rateLimitSecret
+  });
+  const rates = db.collection(BUYER_ACCESS_RATE_LIMITS_COLLECTION);
+  const reservationRef = rates.doc(rateIds.reservation);
+  const ipRateRef = rates.doc(rateIds.ip);
+  const emailRateRef = rates.doc(rateIds.email);
+  const nowMs = Date.now();
+  try {
+    return await db.runTransaction(async (tx) => {
+      const reservationSnap = await tx.get(reservationRef);
+      const [ipRateSnap, emailRateSnap] = await Promise.all([
+        tx.get(ipRateRef),
+        tx.get(emailRateRef)
+      ]);
+      const reservation = planBuyerAccessCreationReservation({
+        currentEmailRate: emailRateSnap.exists ? emailRateSnap.data() : null,
+        currentIpRate: ipRateSnap.exists ? ipRateSnap.data() : null,
+        currentReservation: reservationSnap.exists ? reservationSnap.data() : null,
+        nowMs,
+        orderId: identifiers.orderId
+      });
+      if (reservation.blocked) {
+        throw new functions.https.HttpsError(
+          "resource-exhausted",
+          "Buyer access invoice creation is temporarily limited."
+        );
+      }
+      tx.set(ipRateRef, {
+        scope: "ip_hour",
+        ...reservation.ipRate.patch,
+        expiresAt: Timestamp.fromMillis(reservation.ipRate.expiresAtMs),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      if (reservation.reused) {
+        return { identifiers, reused: true };
+      }
+      tx.set(emailRateRef, {
+        scope: "email_day",
+        ...reservation.emailRate.patch,
+        expiresAt: Timestamp.fromMillis(reservation.emailRate.expiresAtMs),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.set(reservationRef, {
+        ...reservation.reservationPatch,
+        expiresAt: Timestamp.fromDate(
+          new Date(reservation.reservationPatch.expiresAtISO)
+        ),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { identifiers, reused: false };
+    });
+  } catch (err) {
+    if (
+      err instanceof functions.https.HttpsError
+      && err.code === "resource-exhausted"
+    ) {
+      throw err;
+    }
+    functions.logger.warn("Buyer access creation reservation was unavailable", {
+      errorCode: normalizeText(err?.code || "rate_limit_unavailable").slice(0, 80)
+    });
+    throw new functions.https.HttpsError(
+      "unavailable",
+      "Buyer access request is temporarily unavailable."
+    );
+  }
+}
+
+async function consumeBuyerAccessStatusRateLimit(context) {
+  const requestIp = getTrustedBuyerAccessRequestIp(context);
+  if (!requestIp) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Buyer access status is unavailable."
+    );
+  }
+  const rateLimitSecret = getBuyerAccessRateLimitSecret();
+  let rateRef;
+  try {
+    const rateIds = buyerAccessRateLimitDocumentIds({ requestIp, rateLimitSecret });
+    rateRef = db.collection(BUYER_ACCESS_RATE_LIMITS_COLLECTION).doc(rateIds.statusIp);
+  } catch (err) {
+    throwBuyerAccessHttpsError(err);
+  }
+
+  const nowMs = Date.now();
+  try {
+    await db.runTransaction(async (tx) => {
+      const rateSnap = await tx.get(rateRef);
+      const rate = planBuyerAccessRateLimit({
+        current: rateSnap.exists ? rateSnap.data() : null,
+        limit: BUYER_ACCESS_STATUS_RATE_LIMIT,
+        nowMs,
+        windowMs: BUYER_ACCESS_STATUS_RATE_WINDOW_MS
+      });
+      if (rate.blocked) {
+        throw new functions.https.HttpsError(
+          "resource-exhausted",
+          "Buyer access status checks are temporarily limited."
+        );
+      }
+      tx.set(rateRef, {
+        scope: "status_ip_5m",
+        ...rate.patch,
+        expiresAt: Timestamp.fromMillis(rate.expiresAtMs),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    functions.logger.warn("Buyer access status rate limiting was unavailable", {
+      errorCode: normalizeText(err?.code || "rate_limit_unavailable").slice(0, 80)
+    });
+    throw new functions.https.HttpsError(
+      "unavailable",
+      "Buyer access status is temporarily unavailable."
+    );
+  }
 }
 
 async function verifyBuyerAccessTurnstile({ requestIp, token } = {}) {
-  const secret = normalizeText(readConfig("buyer_access_turnstile_secret"));
+  const secret = readBoundSecret(BUYER_ACCESS_TURNSTILE_SECRET_NAME);
   if (!secret) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -9467,7 +9706,10 @@ async function verifyBuyerAccessTurnstile({ requestIp, token } = {}) {
 
 function assertBuyerAccessOrderRequest(order = {}, input = {}) {
   if (
-    normalizeText(order.orderId) !== buyerAccessOrderIdForEmail(input.ownerEmail)
+    normalizeText(order.orderId) !== buyerAccessOrderIdForRequest({
+      ownerEmail: input.ownerEmail,
+      requestId: input.requestId
+    })
     || normalizeEmail(order.ownerEmail) !== normalizeEmail(input.ownerEmail)
     || normalizeText(order.organizationName) !== normalizeText(input.organizationName)
     || normalizeText(order.ownerName) !== normalizeText(input.ownerName)
@@ -9520,74 +9762,65 @@ async function assertPublicBuyerIdentityAvailable(ownerEmail) {
   return { existingUser, inviteRef };
 }
 
-async function preparePublicBuyerAccessOrder({ input, requestIp, turnstileAudit } = {}) {
-  const identifiers = buildBuyerAccessIdentifiers({
-    ownerEmail: input.ownerEmail,
-    organizationName: input.organizationName,
-    randomUUID
-  });
+function hasSignedBuyerAccessVoidEvidence(order = {}) {
+  return normalizeText(order.status).toLowerCase() === "void"
+    && order.signedVoidObserved === true
+    && normalizeText(order.lastProviderState).toLowerCase() === "void"
+    && normalizeText(order.lastStripeEventType) === "invoice.voided"
+    && /^[a-zA-Z0-9_:-]+$/.test(normalizeText(order.lastStripeEventId));
+}
+
+async function preparePublicBuyerAccessOrder({
+  identifiers,
+  input,
+  turnstileAudit
+} = {}) {
+  if (
+    !identifiers
+    || normalizeText(identifiers.orderId) !== buyerAccessOrderIdForRequest({
+      ownerEmail: input.ownerEmail,
+      requestId: input.requestId
+    })
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Buyer access request cannot be completed."
+    );
+  }
   const orderRef = db.collection(BUYER_ACCESS_ORDERS_COLLECTION).doc(identifiers.orderId);
   const statusTokenHash = hashBuyerAccessSecret(input.requestId);
-  const rateIds = buyerAccessRateLimitDocumentIds({
-    ownerEmail: input.ownerEmail,
-    requestIp
-  });
-  const ipRateRef = db.collection(BUYER_ACCESS_RATE_LIMITS_COLLECTION).doc(rateIds.ip);
-  const emailRateRef = db.collection(BUYER_ACCESS_RATE_LIMITS_COLLECTION).doc(rateIds.email);
   const nowMs = Date.now();
   const nowISO = new Date(nowMs).toISOString();
-  const nextRateState = (snapshot, { limit, windowMs }) => {
-    const current = snapshot.data() || {};
-    const windowStartedAtMs = Date.parse(normalizeText(current.windowStartedAtISO));
-    const inWindow = Number.isFinite(windowStartedAtMs)
-      && windowStartedAtMs <= nowMs
-      && nowMs - windowStartedAtMs < windowMs;
-    const count = inWindow ? Math.max(0, Number(current.count || 0) || 0) : 0;
-    return {
-      blocked: count >= limit,
-      patch: {
-        count: count + 1,
-        windowStartedAtISO: inWindow ? current.windowStartedAtISO : nowISO,
-        windowExpiresAtISO: new Date(
-          (inWindow ? windowStartedAtMs : nowMs) + windowMs
-        ).toISOString(),
-        updatedAt: FieldValue.serverTimestamp()
-      }
-    };
-  };
   return db.runTransaction(async (tx) => {
-    const [orderSnap, ipRateSnap, emailRateSnap] = await Promise.all([
-      tx.get(orderRef),
-      tx.get(ipRateRef),
-      tx.get(emailRateRef)
-    ]);
+    const orderSnap = await tx.get(orderRef);
     if (orderSnap.exists) {
       const existing = orderSnap.data() || {};
       assertBuyerAccessOrderRequest(existing, input);
       return { ...existing, orderRef };
     }
-    const ipRate = nextRateState(ipRateSnap, {
-      limit: 3,
-      windowMs: 60 * 60 * 1000
-    });
-    const emailRate = nextRateState(emailRateSnap, {
-      limit: 1,
-      windowMs: 24 * 60 * 60 * 1000
-    });
-    if (ipRate.blocked || emailRate.blocked) {
+    const priorOrdersSnap = await tx.get(
+      db.collection(BUYER_ACCESS_ORDERS_COLLECTION)
+        .where("ownerEmail", "==", normalizeEmail(input.ownerEmail))
+    );
+    const priorOrders = priorOrdersSnap.docs.filter(
+      (docSnap) => docSnap.id !== identifiers.orderId
+    );
+    if (priorOrders.some(
+      (docSnap) => !hasSignedBuyerAccessVoidEvidence(docSnap.data() || {})
+    )) {
       throw new functions.https.HttpsError(
-        "resource-exhausted",
-        "Buyer access invoice creation is temporarily limited."
+        "permission-denied",
+        "Buyer access request cannot be completed."
       );
     }
-    tx.set(ipRateRef, {
-      scope: "ip_hour",
-      ...ipRate.patch
-    }, { merge: true });
-    tx.set(emailRateRef, {
-      scope: "email_day",
-      ...emailRate.patch
-    }, { merge: true });
+    for (const priorOrderSnap of priorOrders) {
+      tx.set(priorOrderSnap.ref, {
+        supersededByOrderId: identifiers.orderId,
+        supersededAtISO: nowISO,
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
     const order = {
       orderId: identifiers.orderId,
       flow: BUYER_ACCESS_FLOW,
@@ -9611,6 +9844,7 @@ async function preparePublicBuyerAccessOrder({ input, requestIp, turnstileAudit 
       accessGranted: false,
       workspaceReady: false,
       activationEmailSent: false,
+      signedVoidObserved: false,
       turnstile: {
         success: true,
         action: turnstileAudit.action,
@@ -9839,7 +10073,11 @@ async function createOrResumeBuyerAccessInvoice({ input, order } = {}) {
 
 exports.createBuyerAccessInvoice = functions
   .runWith({
-    secrets: [BUYER_ACCESS_STRIPE_SECRET_NAME, BUYER_ACCESS_TURNSTILE_SECRET_NAME]
+    secrets: [
+      BUYER_ACCESS_STRIPE_SECRET_NAME,
+      BUYER_ACCESS_TURNSTILE_SECRET_NAME,
+      BUYER_ACCESS_RATE_LIMIT_SECRET_NAME
+    ]
   })
   .region(REGION)
   .https.onCall(async (data, context) => {
@@ -9857,14 +10095,20 @@ exports.createBuyerAccessInvoice = functions
         "Buyer access request cannot be completed."
       );
     }
+    const rateLimitSecret = getBuyerAccessRateLimitSecret();
     const turnstileAudit = await verifyBuyerAccessTurnstile({
       requestIp,
       token: input.turnstileToken
     });
+    const reservation = await reservePublicBuyerAccessCreation({
+      input,
+      rateLimitSecret,
+      requestIp
+    });
     await assertPublicBuyerIdentityAvailable(input.ownerEmail);
     let order = await preparePublicBuyerAccessOrder({
+      identifiers: reservation.identifiers,
       input,
-      requestIp,
       turnstileAudit
     });
 
@@ -9892,52 +10136,58 @@ exports.createBuyerAccessInvoice = functions
     };
   });
 
-exports.getBuyerAccessInvoiceStatus = functions.region(REGION).https.onCall(async (data) => {
-  assertBuyerAccessRuntimeEnabled();
-  let input;
-  try {
-    input = normalizeBuyerAccessStatusRequest(data);
-  } catch (err) {
-    throwBuyerAccessHttpsError(err);
-  }
-  const orderSnap = await db.collection(BUYER_ACCESS_ORDERS_COLLECTION).doc(input.orderId).get();
-  if (!orderSnap.exists) {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Buyer access status is unavailable."
-    );
-  }
-  let order = orderSnap.data() || {};
-  if (!buyerAccessStatusTokenMatches({
-    expectedHash: order.statusTokenHash,
-    statusToken: input.statusToken
-  })) {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Buyer access status is unavailable."
-    );
-  }
-  if (
-    normalizeText(order.status).toLowerCase() === "activation_pending"
-    && order.workspaceReady === true
-  ) {
+exports.getBuyerAccessInvoiceStatus = functions
+  .runWith({
+    secrets: [
+      BUYER_ACCESS_RATE_LIMIT_SECRET_NAME,
+      RESEND_API_KEY_SECRET_NAME
+    ]
+  })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    assertBuyerAccessRuntimeEnabled();
+    let input;
     try {
-      await finalizeBuyerAccessActivation({ orderId: input.orderId });
-      const refreshedOrderSnap = await db.collection(BUYER_ACCESS_ORDERS_COLLECTION)
-        .doc(input.orderId)
-        .get();
-      if (refreshedOrderSnap.exists) {
-        order = refreshedOrderSnap.data() || order;
-      }
+      input = normalizeBuyerAccessStatusRequest(data);
     } catch (err) {
-      functions.logger.warn("Buyer access activation retry remains pending", {
-        orderId: input.orderId,
-        errorCode: normalizeText(err?.code || "activation_pending").slice(0, 80)
-      });
+      throwBuyerAccessHttpsError(err);
     }
-  }
-  return buyerAccessStatusResponse(order);
-});
+    let order;
+    try {
+      order = await authorizeBuyerAccessStatusRequest({
+        input,
+        consumeRateLimit: () => consumeBuyerAccessStatusRateLimit(context),
+        readOrder: async (orderId) => {
+          const orderSnap = await db.collection(BUYER_ACCESS_ORDERS_COLLECTION)
+            .doc(orderId)
+            .get();
+          return orderSnap.exists ? (orderSnap.data() || {}) : null;
+        }
+      });
+    } catch (err) {
+      throwBuyerAccessHttpsError(err);
+    }
+    if (
+      normalizeText(order.status).toLowerCase() === "activation_pending"
+      && order.workspaceReady === true
+    ) {
+      try {
+        await finalizeBuyerAccessActivation({ orderId: input.orderId });
+        const refreshedOrderSnap = await db.collection(BUYER_ACCESS_ORDERS_COLLECTION)
+          .doc(input.orderId)
+          .get();
+        if (refreshedOrderSnap.exists) {
+          order = refreshedOrderSnap.data() || order;
+        }
+      } catch (err) {
+        functions.logger.warn("Buyer access activation retry remains pending", {
+          orderId: input.orderId,
+          errorCode: normalizeText(err?.code || "activation_pending").slice(0, 80)
+        });
+      }
+    }
+    return buyerAccessStatusResponse(order);
+  });
 
 exports.createDepositCheckout = functions.region(REGION).https.onCall(async (data, context) => {
   assertAdminStaff(await assertStaff(context));
@@ -10278,6 +10528,19 @@ async function processBuyerAccessInvoiceWebhook({
     });
   }
 
+  if (normalizeText(initialOrder.supersededByOrderId)) {
+    return recordIgnoredBuyerAccessWebhook({
+      dedupeRef,
+      event,
+      eventId,
+      invoice,
+      order: initialOrder,
+      providerState,
+      requestHost,
+      result: "superseded_order"
+    });
+  }
+
   const currentStatus = normalizeText(initialOrder.status).toLowerCase();
   const alreadyProvisioned = ["activation_pending", "activation_sent", "active"]
     .includes(currentStatus);
@@ -10349,6 +10612,27 @@ async function processBuyerAccessInvoiceWebhook({
       providerState,
       stripeMode: "test"
     });
+    if (normalizeText(order.supersededByOrderId)) {
+      const supersededAudit = buyerAccessWebhookAudit({
+        binding,
+        event,
+        eventId,
+        invoice,
+        order,
+        providerState,
+        requestHost,
+        result: "superseded_order",
+        status: "ignored"
+      });
+      tx.create(dedupeRef, supersededAudit);
+      return {
+        duplicate: false,
+        ignored: "superseded_order",
+        orderId,
+        shouldFinalizeActivation: false,
+        status: normalizeText(order.status).toLowerCase()
+      };
+    }
     const transition = planBuyerAccessTransition({
       currentStatus: order.status,
       providerState
@@ -10384,6 +10668,7 @@ async function processBuyerAccessInvoiceWebhook({
         accessGranted: false,
         workspaceReady: false,
         activationEmailSent: false,
+        signedVoidObserved: providerState === "void",
         hostedInvoiceUrl: providerState === "failed"
           ? binding.hostedInvoiceUrl
           : "",
@@ -10586,7 +10871,12 @@ async function processBuyerAccessInvoiceWebhook({
 }
 
 exports.buyerAccessStripeWebhook = functions
-  .runWith({ secrets: [BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME] })
+  .runWith({
+    secrets: [
+      BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME,
+      RESEND_API_KEY_SECRET_NAME
+    ]
+  })
   .region(REGION)
   .https.onRequest(async (req, res) => {
     if (req.method !== "POST") {
@@ -10594,8 +10884,8 @@ exports.buyerAccessStripeWebhook = functions
       return;
     }
     const requestHost = getRequestHostnameFromHttp(req);
-    const webhookSecret = readConfig("buyer_access_stripe_webhook_secret");
-    if (!webhookSecret || !webhookSecret.startsWith("whsec_")) {
+    const webhookSecret = readBoundSecret(BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME);
+    if (!webhookSecret) {
       res.status(500).send("Buyer access Stripe webhook secret not configured.");
       return;
     }
@@ -10607,7 +10897,12 @@ exports.buyerAccessStripeWebhook = functions
 
     let event;
     try {
-      event = Stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
+      event = constructStripeWebhookEvent({
+        rawBody: req.rawBody,
+        signature,
+        webhookSecret,
+        webhooks: Stripe.webhooks
+      });
     } catch (err) {
       functions.logger.warn("Buyer access Stripe webhook signature verification failed", {
         errorCode: normalizeText(
@@ -10694,7 +10989,10 @@ exports.buyerAccessStripeWebhook = functions
     }
   });
 
-exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res) => {
+exports.stripeWebhook = functions
+  .runWith({ secrets: [STRIPE_WEBHOOK_SECRET_NAME] })
+  .region(REGION)
+  .https.onRequest(async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).send("Method Not Allowed");
     return;
@@ -10702,7 +11000,7 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
   const requestHost = getRequestHostnameFromHttp(req);
   const requestIp = getRequestIpFromHttp(req);
 
-  const webhookSecret = readConfig("stripe.webhook_secret");
+  const webhookSecret = readBoundSecret(STRIPE_WEBHOOK_SECRET_NAME);
   if (!webhookSecret) {
     res.status(500).send("Stripe webhook secret not configured.");
     return;
@@ -10714,18 +11012,21 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
     return;
   }
 
-  let stripe;
-  try {
-    stripe = getStripeClient();
-  } catch (err) {
-    res.status(500).send(`Stripe configuration failed: ${err.message}`);
-    return;
-  }
   let event;
   try {
-    event = stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
+    event = constructStripeWebhookEvent({
+      rawBody: req.rawBody,
+      signature,
+      webhookSecret,
+      webhooks: Stripe.webhooks
+    });
   } catch (err) {
-    res.status(400).send(`Webhook verification failed: ${err.message}`);
+    functions.logger.warn("Stripe webhook signature verification failed", {
+      errorCode: normalizeText(
+        err?.code || err?.type || "signature_verification_failed"
+      ).slice(0, 80)
+    });
+    res.status(400).send("Webhook verification failed.");
     return;
   }
 

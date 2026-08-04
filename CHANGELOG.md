@@ -8,12 +8,36 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Generic Resend and quote-payment Stripe credentials now use strict Firebase
+  Secret Manager reads with least-privilege bindings across their complete
+  Function call graph. The generic Stripe webhook verifies signatures without
+  receiving the Stripe API key, both Stripe webhook rails accept a bounded
+  `new,old` signing-secret overlap for safe rotation, and the Functions dotenv
+  materializer rejects and omits `RESEND_API_KEY`, `STRIPE_SECRET_KEY`, and
+  `STRIPE_WEBHOOK_SECRET`. Operator guidance separates non-secret dotenv values,
+  ignored emulator-only `.secret.local` fixtures, and production Secret Manager
+  ownership. No credential rotation, provider mutation, deployment, or hosted
+  acceptance is claimed by this source change.
 - Public invoice-first buyer onboarding source for `/start` on the existing
   `tonicatering` Firebase project. The public organization/owner/email form and
   marketing CTA require a syntactically valid non-placeholder public Turnstile
   site key; provider setup and human review remain separate evidence. The
   independently disabled Functions gate, exact hostname/action verification,
-  durable rate limits, and deterministic idempotency remain server-owned. The
+  durable rate limits, and deterministic idempotency remain server-owned. A
+  dedicated Secret Manager key now HMACs network/email rate-document identities,
+  all rate records carry Firestore Timestamp expiry, and creation atomically
+  reserves a request-scoped order before any identity/order lookup. Exact retry
+  still consumes network capacity while avoiding duplicate email charge during
+  the 24-hour reservation; a fresh post-window request can replace only a
+  signed-void prior order, which is marked superseded against stale events.
+  Open and payment-failed exact retries return the same Hosted Invoice Page;
+  a server-reported void can start a fresh same-tab test request while the
+  24-hour window remains server-enforced. Uncollectible/expired recovery has no
+  automated buyer repair path and remains an explicit live-sale blocker. Public
+  status polling atomically consumes one 60-request-per-five-minute network
+  lease per request before its first buyer-order read. Well-formed unknown-order
+  and wrong-token checks consume the same budget, while missing rate
+  configuration or an unavailable rate store fails closed. The
   dedicated `createBuyerAccessInvoice` callable fixes Starter to $1 USD in
   Stripe test mode, creates and finalizes a true invoice before payment, and
   returns only its Stripe Hosted Invoice Page. The dedicated buyer API client
@@ -24,9 +48,14 @@ This changelog is backfilled from git history and will be maintained going forwa
   rail. A paid invoice prepares the organization, neutral settings, Starter
   workspace plan entitlements, provisioning record, and pending invitation, but
   creates no user membership, admin role, custom claims, or application access.
-  `activation_sent` requires durable provider acceptance of the exact onboarding
-  message. Only a matching Firebase account with separately verified invoice
-  email may consume the invitation and receive user access. Controlled
+  Once the token-bound status reports `provisioning` with `workspaceReady=true`,
+  `/start` stops automatic polling and offers `/app` as a manual registration or
+  sign-in path for the exact invoice email; this neither claims onboarding-email
+  acceptance nor grants access. `activation_sent` still requires durable
+  provider acceptance of the exact onboarding message, but that optional
+  message is not required to initiate the Firebase verification path. Only a
+  matching Firebase account with separately verified invoice email may consume
+  the invitation, and only `active` is access-ready. Controlled
   test-mode markers remain mandatory for exclusion from live revenue and
   paid-customer reporting. Generic builds
   and the server gate default off, and no hosted/provider or live-sale result is
@@ -34,9 +63,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Target-scoped release UAT coverage for public buyer onboarding, including
   Turnstile host/action verification, rate limiting, retry idempotency, a true
   Hosted Invoice Page, signed invoice lifecycle, paid workspace preparation,
-  pending invitation, onboarding-email provider acceptance, separate Firebase
-  verification-email delivery and continue URL, no user role or access before
-  verified claim, cross-account/replay/failure denial, and proof that the
+  pending invitation, proof-safe manual account setup at `workspaceReady=true`,
+  optional onboarding-email provider acceptance, separate Firebase verification-
+  email delivery and continue URL, no user role or access before verified claim,
+  cross-account/replay/failure denial, and proof that the
   existing quote Stripe rail remains unchanged. Browser targets prove only
   locked UI and instructions; backend targets own provider and fulfillment
   evidence. The checklist records observations against an exact target only; it

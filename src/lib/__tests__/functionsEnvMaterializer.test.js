@@ -5,6 +5,10 @@ import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, test } from "vitest";
 
 const SCRIPT_PATH = path.resolve(process.cwd(), "scripts/materialize-functions-env.mjs");
+const INTEGRATION_OPS_SOURCE = fs.readFileSync(
+  path.resolve(process.cwd(), "src/components/IntegrationOpsModal.jsx"),
+  "utf8"
+);
 const tempDirs = [];
 
 function runMaterializer(overrides = {}, { existing = "", args = [] } = {}) {
@@ -29,8 +33,6 @@ function runMaterializer(overrides = {}, { existing = "", args = [] } = {}) {
     EMAIL_FROM_EMAIL: "onboarding@quotepilot.mbmapps.com",
     NOTIFICATIONS_SMS_PROVIDER: "none",
     STRIPE_MODE: "live",
-    STRIPE_SECRET_KEY: `rk_${"live"}_test_only_secret`,
-    STRIPE_WEBHOOK_SECRET: `whsec_${"test_only_webhook_secret"}`,
     ...overrides
   };
   const result = spawnSync(process.execPath, [SCRIPT_PATH, ...args], {
@@ -48,6 +50,24 @@ afterEach(() => {
 });
 
 describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
+  test("keeps operator guidance aligned with dotenv and Secret Manager ownership", () => {
+    expect(INTEGRATION_OPS_SOURCE).toContain(
+      "local validation of the production deploy configuration only"
+    );
+    expect(INTEGRATION_OPS_SOURCE).toContain(
+      "disposable emulator configuration must use STRIPE_MODE=test"
+    );
+    expect(INTEGRATION_OPS_SOURCE).toContain(
+      "fixtures only in the separately ignored functions/.secret.local"
+    );
+    expect(INTEGRATION_OPS_SOURCE).toContain(
+      "production provider credentials belong only in Firebase Secret Manager bindings"
+    );
+    expect(INTEGRATION_OPS_SOURCE).not.toContain(
+      "Use placeholders or non-production provider values only; never commit or paste secrets here"
+    );
+  });
+
   test("writes a project-scoped env file while providers remain disabled", () => {
     const { cwd, result } = runMaterializer();
     expect(result.status).toBe(0);
@@ -68,7 +88,10 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_SECRET_KEY");
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET");
     expect(output).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET");
+    expect(output).not.toContain("BUYER_ACCESS_RATE_LIMIT_SECRET");
     expect(output).not.toContain("RESEND_API_KEY");
+    expect(output).not.toContain("STRIPE_SECRET_KEY");
+    expect(output).not.toContain("STRIPE_WEBHOOK_SECRET");
     expect(output).not.toContain("TWILIO_ACCOUNT_SID");
     expect(output).not.toContain("TWILIO_AUTH_TOKEN");
     expect(output).not.toContain("TWILIO_FROM_NUMBER");
@@ -76,19 +99,12 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(result.stdout).not.toContain("test_only_secret");
   });
 
-  test("rejects test mode and mismatched Stripe key prefixes for production", () => {
+  test("rejects test Stripe mode for production", () => {
     const testMode = runMaterializer({
-      STRIPE_MODE: "test",
-      STRIPE_SECRET_KEY: `sk_${"test"}_fixture`
+      STRIPE_MODE: "test"
     }).result;
     expect(testMode.status).not.toBe(0);
     expect(testMode.stderr).toMatch(/requires STRIPE_MODE=live/i);
-
-    const mismatchedKey = runMaterializer({
-      STRIPE_SECRET_KEY: `sk_${"test"}_fixture`
-    }).result;
-    expect(mismatchedKey.status).not.toBe(0);
-    expect(mismatchedKey.stderr).toMatch(/live-mode secret or restricted key/i);
   });
 
   test("rejects placeholder platform authority", () => {
@@ -120,6 +136,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_SECRET_KEY");
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET");
     expect(output).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET");
+    expect(output).not.toContain("BUYER_ACCESS_RATE_LIMIT_SECRET");
   });
 
   test("fails closed for missing Turnstile hosts or a non-test buyer mode", () => {
@@ -157,6 +174,19 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     }
   });
 
+  test("rejects generic provider secrets in dotenv because Secret Manager owns them", () => {
+    for (const [name, value] of [
+      ["RESEND_API_KEY", "re_secret_fixture"],
+      ["STRIPE_SECRET_KEY", "rk_live_secret_fixture"],
+      ["STRIPE_WEBHOOK_SECRET", "whsec_secret_fixture"]
+    ]) {
+      const { result } = runMaterializer({ [name]: value });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/Firebase Secret Manager/i);
+      expect(result.stderr).toContain(name);
+    }
+  });
+
   test("rejects buyer provider secrets in dotenv because Secret Manager owns them", () => {
     const secretKey = runMaterializer({
       BUYER_ACCESS_STRIPE_SECRET_KEY: `rk_${"test"}_fixture`
@@ -175,23 +205,25 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     }).result;
     expect(turnstileSecret.status).not.toBe(0);
     expect(turnstileSecret.stderr).toMatch(/Firebase Secret Manager/i);
+
+    const rateLimitSecret = runMaterializer({
+      BUYER_ACCESS_RATE_LIMIT_SECRET: "rate-limit-secret-fixture"
+    }).result;
+    expect(rateLimitSecret.status).not.toBe(0);
+    expect(rateLimitSecret.stderr).toMatch(/Firebase Secret Manager/i);
   });
 
-  test("requires a provider key before Resend can be enabled", () => {
-    const { result } = runMaterializer({
-      NOTIFICATIONS_EMAIL_PROVIDER: "resend",
-      RESEND_API_KEY: ""
+  test("enables Resend without materializing its Secret Manager credential", () => {
+    const { cwd, result } = runMaterializer({
+      NOTIFICATIONS_EMAIL_PROVIDER: "resend"
     });
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/RESEND_API_KEY is required/i);
-  });
-
-  test("rejects retained Resend credentials while email delivery is disabled", () => {
-    const { result } = runMaterializer({
-      RESEND_API_KEY: "test-only-disabled-provider-secret"
-    });
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/must be unset/i);
+    expect(result.status).toBe(0);
+    const output = fs.readFileSync(
+      path.join(cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    );
+    expect(output).toContain("NOTIFICATIONS_EMAIL_PROVIDER=resend");
+    expect(output).not.toContain("RESEND_API_KEY");
   });
 
   test("rejects retained Twilio credentials while SMS delivery is disabled", () => {

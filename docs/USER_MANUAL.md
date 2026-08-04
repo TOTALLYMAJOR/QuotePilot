@@ -323,20 +323,30 @@ During an explicitly approved hosted test window:
    `invoice.paid` event has prepared the organization, neutral settings, Starter
    workspace plan entitlements, provisioning record, and pending invite. It
    still means there is no user membership, admin role, custom claims, or
-   `/app` access.
-4. When the page reports `activation_sent`, the onboarding email provider has
-   accepted the exact activation-instructions message and QuotePilot has
-   durably recorded that acceptance. Acceptance does not prove delivery. Follow
-   those instructions using the exact invoice email, create or sign in to the
-   Firebase account, separately receive and complete Firebase email verification
-   through the authorized continue URL, then claim activation. A different or
+   `/app` access. When this status also says the workspace is ready, automatic
+   polling stops and the page offers `/app` only for manual account setup. Use
+   the exact invoice email to register or sign in, complete Firebase email
+   verification through the authorized continue URL, and claim the invitation.
+   Use `Check again` for a manual status refresh.
+4. If the page reports `activation_sent`, the optional onboarding email provider
+   accepted the exact activation-instructions message and QuotePilot durably
+   recorded that acceptance. Acceptance does not prove delivery and is not
+   required to start the manual verified-email path above. A different or
    unverified email receives no user role or access.
 5. Open `/app` only after the order reports `active` and the server-confirmed
    Starter organization and admin role exist.
 
-A safe retry should return the same open invoice rather than create another.
-Do not bypass a rate limit or failed/void/expired state with additional emails
-or accounts. Report only the approximate time and redacted order/invoice
+A safe retry with the same browser request should return the same Hosted Invoice
+Page only while the invoice is open or payment-failed, and consumes another
+network-rate attempt without charging the email window again. Do not start a
+replacement while an invoice is open, payment-failed,
+uncollectible/expired, paid, or activating. After 24 hours, only an operator-
+confirmed signed `invoice.voided` state permits a fresh request to supersede the
+old order. When the page reports `void`, use `Start a new test request`; the
+server will still reject it until the 24-hour email window has elapsed. An
+uncollectible/expired order has no automated buyer repair path and must stop for
+operator support. Do not bypass a rate limit with additional emails or accounts.
+Report only the approximate time and redacted order/invoice
 references. Never send a payment method, hosted invoice URL, token, provider
 secret, webhook signature, Turnstile response, or customer personal data.
 
