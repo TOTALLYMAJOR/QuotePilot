@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   getIntegrationSetupStatus,
   reconcileDepositCheckout,
+  reconcileFinalBalanceCheckout,
   resolveQuoteDeliveryOutcome,
   resolveQuoteDeliveryRevisionId,
+  sendFinalBalanceRequestToCustomerEmail,
   sendPaymentRequestToCustomerEmail,
   sendQuoteToCustomerEmail
 } from "../lib/commerceOps";
@@ -24,6 +26,11 @@ import {
   updateQuoteStatus
 } from "../lib/quoteStore";
 
+const RESUMABLE_PAYMENT_APPROVAL_ACTIONS = new Set([
+  "send_payment_request",
+  "send_final_balance_request"
+]);
+
 function fmtDate(iso) {
   if (!iso) return "-";
   const dt = new Date(iso);
@@ -37,16 +44,53 @@ function canConvertToContract(quote) {
   return status === "accepted" || (status === "booked" && !hasContract);
 }
 
+export function isFinalBalanceRequestEligible(quote) {
+  const finalBalance = quote?.payment?.finalBalance || {};
+  const amountCents = Number(finalBalance.amountCents);
+  return String(quote?.status || "").trim().toLowerCase() === "booked"
+    && Boolean(String(quote?.booking?.contractNumber || "").trim())
+    && Boolean(String(quote?.booking?.contractConvertedAtISO || "").trim())
+    && String(quote?.payment?.depositStatus || "").trim().toLowerCase() === "paid"
+    && /^cs_[A-Za-z0-9_]+$/.test(String(quote?.payment?.stripeSessionId || "").trim())
+    && Boolean(String(quote?.payment?.depositConfirmedAtISO || "").trim())
+    && Number.isSafeInteger(amountCents)
+    && amountCents > 0
+    && String(finalBalance.status || "unpaid").trim().toLowerCase() !== "paid";
+}
+
+export function getFinalBalanceDisplayStatus(finalBalance = {}) {
+  const status = String(finalBalance.status || "unpaid").trim().toLowerCase();
+  const checkoutState = String(finalBalance.stripeCheckoutState || "")
+    .trim()
+    .toLowerCase();
+  if (status === "paid") return "paid";
+  if (["prepared", "processing", "failed", "expired"].includes(checkoutState)) {
+    return checkoutState;
+  }
+  return ["unpaid", "sent"].includes(status) ? status : "unpaid";
+}
+
 export function getExecutableApprovalRequest(quote, action) {
   const requests = Array.isArray(quote?.workflow?.approvalRequests)
     ? quote.workflow.approvalRequests
     : [];
   return requests.find((request) => {
     const executionState = String(request?.executionState || "").trim().toLowerCase();
-    const canResumePaymentRequest = action === "send_payment_request"
+    const canResumePaymentRequest = RESUMABLE_PAYMENT_APPROVAL_ACTIONS.has(action)
       && executionState === "in_progress";
+    const expectedPaymentKind = action === "send_final_balance_request"
+      ? "final_balance"
+      : "deposit";
+    const hasPaymentScope = !RESUMABLE_PAYMENT_APPROVAL_ACTIONS.has(action) || (
+      String(request?.actionScope?.paymentKind || "").trim().toLowerCase()
+        === expectedPaymentKind
+      && Number.isSafeInteger(Number(request?.actionScope?.amountCents))
+      && Number(request.actionScope.amountCents) > 0
+      && /^[a-f0-9]{64}$/.test(String(request?.actionScopeDigest || "").trim().toLowerCase())
+    );
     return request?.action === action
       && request?.state === "approved"
+      && hasPaymentScope
       && (!executionState || executionState === "awaiting_execution" || canResumePaymentRequest);
   }) || null;
 }
@@ -183,8 +227,11 @@ export function getQuoteHistoryActionPermissions(role) {
     canSendQuoteEmail: isAdmin,
     canCopyArtifacts: isStaff,
     canCopyPaymentLink: isAdmin,
+    canCopyFinalBalanceLink: isAdmin,
     canSendPaymentRequest: isAdmin,
+    canSendFinalBalanceRequest: isAdmin,
     canReconcilePayment: isAdmin,
+    canReconcileFinalBalance: isAdmin,
     canManageQuoteStatus: isAdmin,
     canConvertToContract: isAdmin,
     canManageConfirmation: isAdmin,
@@ -195,7 +242,7 @@ export function getQuoteHistoryActionPermissions(role) {
 }
 
 export function canRotateQuotePortal(status) {
-  return ["draft", "sent", "viewed"].includes(
+  return ["draft", "sent", "viewed", "booked"].includes(
     String(status || "draft").trim().toLowerCase()
   );
 }
@@ -239,7 +286,9 @@ export default function QuoteHistoryModal({
   const [exportingPdfId, setExportingPdfId] = useState("");
   const [sendingQuoteEmailId, setSendingQuoteEmailId] = useState("");
   const [sendingPaymentEmailId, setSendingPaymentEmailId] = useState("");
+  const [sendingFinalBalanceEmailId, setSendingFinalBalanceEmailId] = useState("");
   const [reconcilingPaymentId, setReconcilingPaymentId] = useState("");
+  const [reconcilingFinalBalanceId, setReconcilingFinalBalanceId] = useState("");
   const [reopeningQuoteId, setReopeningQuoteId] = useState("");
   const [rotatingPortalId, setRotatingPortalId] = useState("");
   const [pendingDeleteQuote, setPendingDeleteQuote] = useState(null);
@@ -856,6 +905,26 @@ export default function QuoteHistoryModal({
     }
   };
 
+  const handleCopyFinalBalanceLink = async (quote) => {
+    try {
+      if (!navigator.clipboard) {
+        throw new Error("Clipboard unavailable in this browser.");
+      }
+      if (!isFinalBalanceRequestEligible(quote)) {
+        throw new Error("Final-balance collection requires a booked contract and a verified paid deposit.");
+      }
+      const paymentLink = sanitizeStripePaymentLink(quote.payment?.finalBalance?.paymentLink);
+      if (!paymentLink) {
+        throw new Error("No approved Stripe final-balance link is saved for this quote.");
+      }
+      await navigator.clipboard.writeText(paymentLink);
+      setState((prev) => ({ ...prev, feedback: `Final-balance link copied for ${quote.quoteNumber}.` }));
+      pushToast(`Final-balance link copied for ${quote.quoteNumber}.`, "success");
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: err?.message || "Failed to copy final-balance link." }));
+    }
+  };
+
   const handleCopyPortalLink = async (quote) => {
     try {
       if (!navigator.clipboard) {
@@ -1058,6 +1127,49 @@ export default function QuoteHistoryModal({
     }
   };
 
+  const handleSendFinalBalanceRequestEmail = async (quote) => {
+    if (!permissions.canSendFinalBalanceRequest) return;
+    setSendingFinalBalanceEmailId(quote.id);
+    setState((prev) => ({ ...prev, error: "", feedback: "" }));
+    try {
+      const approvalRequest = getExecutableApprovalRequest(
+        quote,
+        "send_final_balance_request"
+      );
+      if (!approvalRequest) {
+        throw new Error("Approve a final-balance request in Sales Workflow first.");
+      }
+      if (!isFinalBalanceRequestEligible(quote)) {
+        throw new Error(
+          "Final-balance collection requires a booked contract and a verified paid deposit."
+        );
+      }
+      if (isPortalExpired(quote)) {
+        throw new Error("Portal link expired. Restore customer portal access before sending the final balance.");
+      }
+
+      const sendResult = await sendFinalBalanceRequestToCustomerEmail({
+        quoteId: quote.id,
+        approvalRequestId: approvalRequest.id
+      });
+      applyApprovalExecutionLocally(quote.id, sendResult.approvalRequest);
+      await load();
+
+      setState((prev) => ({
+        ...prev,
+        feedback: `Final-balance request sent to ${quote.customer?.email || "customer"}.`
+      }));
+      pushToast(`Final-balance request sent for ${quote.quoteNumber}.`, "success");
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        error: err?.message || "Failed to send final-balance request."
+      }));
+    } finally {
+      setSendingFinalBalanceEmailId("");
+    }
+  };
+
   const handleReconcilePayment = async (quote) => {
     if (!permissions.canReconcilePayment) return;
     setReconcilingPaymentId(quote.id);
@@ -1077,6 +1189,28 @@ export default function QuoteHistoryModal({
       }));
     } finally {
       setReconcilingPaymentId("");
+    }
+  };
+
+  const handleReconcileFinalBalance = async (quote) => {
+    if (!permissions.canReconcileFinalBalance || !isFinalBalanceRequestEligible(quote)) return;
+    setReconcilingFinalBalanceId(quote.id);
+    setState((prev) => ({ ...prev, error: "", feedback: "" }));
+    try {
+      const result = await reconcileFinalBalanceCheckout({ quoteId: quote.id });
+      await load();
+      const feedback = result.reviewRequired
+        ? `Final-balance reconciliation for ${quote.quoteNumber} requires provider review.`
+        : `Final-balance reconciliation recorded ${result.providerState} for ${quote.quoteNumber}.`;
+      setState((prev) => ({ ...prev, feedback }));
+      pushToast(feedback, result.reviewRequired ? "warning" : "success");
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        error: err?.message || "Failed to reconcile the Stripe final balance."
+      }));
+    } finally {
+      setReconcilingFinalBalanceId("");
     }
   };
 
@@ -1316,6 +1450,13 @@ export default function QuoteHistoryModal({
                 const paymentRequestInProgress = String(
                   paymentRequestApproval?.executionState || ""
                 ).trim().toLowerCase() === "in_progress";
+                const finalBalanceApproval = getExecutableApprovalRequest(
+                  quote,
+                  "send_final_balance_request"
+                );
+                const finalBalanceRequestInProgress = String(
+                  finalBalanceApproval?.executionState || ""
+                ).trim().toLowerCase() === "in_progress";
                 const portalRotationApproval = getExecutableApprovalRequest(quote, "rotate_portal_link");
                 const deleteApproval = getExecutableApprovalRequest(quote, "delete_quote");
                 const quoteEventTypeId = String(quote.eventTypeId || quote.selection?.eventTypeId || "");
@@ -1335,7 +1476,7 @@ export default function QuoteHistoryModal({
                 const deliveryRecorded = deliveryUi.recorded;
                 const deliveryUnresolved = deliveryUi.mutationLocked;
                 const canDeliverCurrentQuote = state.source === "firebase"
-                  && ["draft", "sent", "viewed"].includes(normalizedQuoteStatus)
+                  && ["draft", "sent", "viewed", "booked"].includes(normalizedQuoteStatus)
                   && Boolean(quoteRevisionId)
                   && deliveryUi.canAttempt
                   && emailSetup.checked
@@ -1347,11 +1488,32 @@ export default function QuoteHistoryModal({
                   String(quote.payment?.depositStatus || "").trim().toLowerCase() === "sent"
                   && sanitizeStripePaymentLink(quote.payment?.depositLink)
                 );
+                const finalBalance = quote.payment?.finalBalance || {};
+                const finalBalanceStatus = String(finalBalance.status || "unpaid")
+                  .trim()
+                  .toLowerCase();
+                const finalBalanceCheckoutState = String(
+                  finalBalance.stripeCheckoutState || ""
+                ).trim().toLowerCase();
+                const finalBalanceDisplayStatus = getFinalBalanceDisplayStatus(finalBalance);
+                const finalBalanceAmountCents = Number(finalBalance.amountCents);
+                const showFinalBalance = normalizedQuoteStatus === "booked"
+                  && Boolean(contractNumber)
+                  && Number.isSafeInteger(finalBalanceAmountCents)
+                  && finalBalanceAmountCents > 0;
+                const finalBalanceRequestEligible = isFinalBalanceRequestEligible(quote);
+                const publishedFinalBalanceLink = finalBalanceRequestEligible
+                  && finalBalanceStatus === "sent"
+                  && ["", "open"].includes(finalBalanceCheckoutState)
+                  && sanitizeStripePaymentLink(finalBalance.paymentLink);
                 const canReconcilePayment = permissions.canReconcilePayment
                   && Boolean(String(quote.payment?.stripeSessionId || "").trim())
                   && !["paid", "refunded"].includes(
                     String(quote.payment?.depositStatus || "").trim().toLowerCase()
                   );
+                const canReconcileFinalBalance = permissions.canReconcileFinalBalance
+                  && finalBalanceRequestEligible
+                  && Boolean(String(finalBalance.stripeSessionId || "").trim());
                 return (
                   <tr
                     key={quote.id}
@@ -1392,7 +1554,16 @@ export default function QuoteHistoryModal({
                         ) : null}
                       </div>
                     </td>
-                    <td><span>{quote.payment?.depositStatus || "unpaid"}</span></td>
+                    <td>
+                      <div className="history-meta-stack">
+                        <span>Deposit: {quote.payment?.depositStatus || "unpaid"}</span>
+                        {showFinalBalance && (
+                          <small>
+                            Balance: {finalBalanceDisplayStatus.replaceAll("_", " ")} · {currency(finalBalanceAmountCents / 100)}
+                          </small>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <div className="history-meta-stack">
                         <strong>{contractNumber || "-"}</strong>
@@ -1513,8 +1684,8 @@ export default function QuoteHistoryModal({
                                     ? "Configure a supported email provider in Integration Ops first."
                                 : !quoteRevisionId
                                   ? "Save this quote as a versioned draft before sending."
-                                  : !["draft", "sent", "viewed"].includes(normalizedQuoteStatus)
-                                    ? "Only draft, sent, or viewed quotes can be delivered by quote email."
+                                  : !["draft", "sent", "viewed", "booked"].includes(normalizedQuoteStatus)
+                                    ? "Only draft, sent, viewed, or booked quotes can be delivered by quote email."
                                     : ""}
                           >
                             {sendingQuoteEmailId === quote.id
@@ -1559,6 +1730,32 @@ export default function QuoteHistoryModal({
                               : paymentRequestInProgress ? "Resume Pay Request" : "Send Pay Request"}
                           </button>
                         )}
+                        {permissions.canSendFinalBalanceRequest && finalBalanceRequestEligible && (
+                          <button
+                            type="button"
+                            className="cta compact"
+                            onClick={() => handleSendFinalBalanceRequestEmail(quote)}
+                            disabled={
+                              deliveryUnresolved
+                              || sendingFinalBalanceEmailId === quote.id
+                              || !finalBalanceApproval
+                              || !portalShareable
+                            }
+                            title={!finalBalanceApproval
+                              ? "Approve the final-balance request in Sales Workflow first."
+                              : !portalShareable
+                                ? "Final-balance email requires an active customer portal for the current provider-accepted issuance."
+                                : finalBalanceRequestInProgress
+                                  ? "Resume the interrupted final-balance request using its existing approval."
+                                  : ""}
+                          >
+                            {sendingFinalBalanceEmailId === quote.id
+                              ? finalBalanceRequestInProgress ? "Resuming..." : "Sending..."
+                              : finalBalanceRequestInProgress
+                                ? "Resume Balance Request"
+                                : "Send Balance Request"}
+                          </button>
+                        )}
                         {permissions.canRotatePortalLink && canRotatePortalForStatus && (
                           <button
                             type="button"
@@ -1589,6 +1786,15 @@ export default function QuoteHistoryModal({
                             {permissions.canCopyPaymentLink && publishedPaymentLink && (
                               <button type="button" className="ghost compact" onClick={() => handleCopyPaymentLink(quote)}>Copy Pay Link</button>
                             )}
+                            {permissions.canCopyFinalBalanceLink && publishedFinalBalanceLink && (
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                onClick={() => handleCopyFinalBalanceLink(quote)}
+                              >
+                                Copy Balance Link
+                              </button>
+                            )}
                           </>
                         )}
                         {permissions.canDeleteQuote && canDeleteQuotes ? (
@@ -1610,6 +1816,18 @@ export default function QuoteHistoryModal({
                             disabled={reconcilingPaymentId === quote.id || deliveryUnresolved}
                           >
                             {reconcilingPaymentId === quote.id ? "Reconciling..." : "Reconcile Payment"}
+                          </button>
+                        ) : null}
+                        {canReconcileFinalBalance ? (
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleReconcileFinalBalance(quote)}
+                            disabled={reconcilingFinalBalanceId === quote.id || deliveryUnresolved}
+                          >
+                            {reconcilingFinalBalanceId === quote.id
+                              ? "Reconciling..."
+                              : "Reconcile Final Balance"}
                           </button>
                         ) : null}
                       </div>

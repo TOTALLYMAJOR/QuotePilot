@@ -82,6 +82,34 @@ export async function reconcileDepositCheckout({ quoteId } = {}) {
   return response;
 }
 
+export async function reconcileFinalBalanceCheckout({ quoteId } = {}) {
+  ensureFunctionsReady();
+  const normalizedQuoteId = String(quoteId || "").trim();
+  if (!normalizedQuoteId) {
+    throw new Error("Quote id is required for final-balance reconciliation.");
+  }
+  const call = httpsCallable(cloudFunctions, "reconcileFinalBalanceCheckout");
+  const result = await call({ quoteId: normalizedQuoteId });
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== normalizedQuoteId
+    || String(response.paymentKind || "").trim().toLowerCase() !== "final_balance"
+    || !Number.isSafeInteger(response.amountCents)
+    || response.amountCents <= 0
+    || !/^cs_[A-Za-z0-9_]+$/.test(String(response.stripeSessionId || "").trim())
+    || !["open", "processing", "paid", "failed", "expired", "unknown"].includes(
+      String(response.providerState || "").trim().toLowerCase()
+    )
+    || !String(response.auditEventId || "").trim()
+    || Object.prototype.hasOwnProperty.call(response, "paymentLink")
+    || Object.prototype.hasOwnProperty.call(response, "url")
+  ) {
+    throw new Error("Final-balance reconciliation returned an invalid authoritative response.");
+  }
+  return response;
+}
+
 export async function sendIntegrationTestSms({ message = "" } = {}) {
   ensureFunctionsReady();
   const call = httpsCallable(cloudFunctions, "sendIntegrationTestSms");
@@ -241,6 +269,39 @@ export async function sendPaymentRequestToCustomerEmail({
     || Object.prototype.hasOwnProperty.call(response, "url")
   ) {
     throw new Error("Payment request returned an invalid authoritative response.");
+  }
+  return response;
+}
+
+export async function sendFinalBalanceRequestToCustomerEmail({
+  quoteId,
+  approvalRequestId
+} = {}) {
+  ensureFunctionsReady();
+  const call = httpsCallable(cloudFunctions, "sendFinalBalanceRequestEmail");
+  const result = await call({
+    quoteId,
+    approvalRequestId
+  });
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== String(quoteId || "").trim()
+    || String(response.paymentKind || "").trim().toLowerCase() !== "final_balance"
+    || !Number.isSafeInteger(response.amountCents)
+    || response.amountCents <= 0
+    || String(response.approvalRequest?.id || "").trim() !== String(approvalRequestId || "").trim()
+    || String(response.approvalRequest?.executionState || "").trim().toLowerCase() !== "succeeded"
+    || response.email?.sent !== true
+    || !String(response.email?.provider || "").trim()
+    || !String(response.email?.messageId || "").trim()
+    || !/^cs_[A-Za-z0-9_]+$/.test(String(response.stripeSessionId || "").trim())
+    || !Number.isSafeInteger(Number(response.checkoutGeneration))
+    || typeof response.published !== "boolean"
+    || Object.prototype.hasOwnProperty.call(response, "paymentLink")
+    || Object.prototype.hasOwnProperty.call(response, "url")
+  ) {
+    throw new Error("Final-balance request returned an invalid authoritative response.");
   }
   return response;
 }

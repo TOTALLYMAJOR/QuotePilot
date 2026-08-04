@@ -857,6 +857,73 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.updateDoc).toHaveBeenCalledTimes(2);
   });
 
+  test("rejects a trusted final-balance approval response when its server scope is missing", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+    mockState.httpsCallable.mockImplementationOnce(() => vi.fn().mockResolvedValue({
+      data: {
+        ok: true,
+        organizationId: "org-one",
+        quoteId: "quote-1",
+        request: {
+          id: "final-balance-request-000001",
+          action: "send_final_balance_request",
+          state: "pending",
+          requestedAtISO: "2026-08-04T16:00:00.000Z",
+          requestedByEmail: "current.admin@example.com"
+        }
+      }
+    }));
+
+    await expect(requestQuoteApproval({
+      quoteId: "quote-1",
+      action: "send_final_balance_request",
+      actorEmail: "forged@example.com",
+      actorRole: "admin"
+    })).rejects.toThrow(/invalid response/i);
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+  });
+
+  test("never falls back to browser writes for final-balance approval or resolution", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+    const pendingRequest = {
+      id: "final-balance-request-000001",
+      action: "send_final_balance_request",
+      state: "pending",
+      requestedAtISO: "2026-08-04T16:00:00.000Z",
+      requestedByEmail: "sales@example.com"
+    };
+    mockState.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        id: "quote-1",
+        quoteNumber: "Q-1",
+        organizationId: "org-one",
+        workflow: { approvalRequests: [pendingRequest] }
+      })
+    });
+    mockState.httpsCallable
+      .mockImplementationOnce(() => vi.fn().mockRejectedValue({ code: "functions/not-found" }))
+      .mockImplementationOnce(() => vi.fn().mockRejectedValue({ code: "functions/not-found" }));
+
+    await expect(requestQuoteApproval({
+      quoteId: "quote-1",
+      action: "send_final_balance_request",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    })).rejects.toThrow(/coordinated backend release/i);
+    await expect(resolveQuoteApprovalRequest({
+      quoteId: "quote-1",
+      requestId: pendingRequest.id,
+      state: "approved",
+      actorEmail: "admin@example.com",
+      actorRole: "admin"
+    })).rejects.toThrow(/coordinated backend release/i);
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.setDoc).not.toHaveBeenCalled();
+    expect(mockState.runTransaction).not.toHaveBeenCalled();
+  });
+
   test("saveQuoteVersion does not auto-migrate legacy global quote into scoped org path", async () => {
     mockState.getActiveOrganizationId.mockReturnValue("Org One");
     mockState.getDoc.mockResolvedValueOnce({ exists: () => false, data: () => ({}) });

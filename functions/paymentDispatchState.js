@@ -3,6 +3,7 @@
 const PAYMENT_DISPATCH_STATES = Object.freeze({
   SENDING: "sending",
   OUTCOME_AMBIGUOUS: "outcome_ambiguous",
+  RECOVERY_CLAIMED: "recovery_claimed",
   PROVIDER_ACCEPTED: "provider_accepted",
   DEFINITE_FAILURE: "definite_failure"
 });
@@ -135,6 +136,19 @@ function normalizePaymentDispatch(input = {}) {
     throw new PaymentDispatchStateError(
       "failed-precondition",
       "Definite payment dispatch failure evidence is incomplete."
+    );
+  }
+  if (
+    state === PAYMENT_DISPATCH_STATES.RECOVERY_CLAIMED
+    && (
+      normalized.lastOutcome !== "ambiguous"
+      || !normalized.outcomeReason
+      || normalized.completedAtISO
+    )
+  ) {
+    throw new PaymentDispatchStateError(
+      "failed-precondition",
+      "Expired-portal payment recovery evidence is incomplete."
     );
   }
   return normalized;
@@ -274,6 +288,12 @@ function beginPaymentDispatchAttempt({
       "A definite payment dispatch failure requires a new approval."
     );
   }
+  if (current.state === PAYMENT_DISPATCH_STATES.RECOVERY_CLAIMED) {
+    throw new PaymentDispatchStateError(
+      "aborted",
+      "Expired-portal payment recovery is already in progress."
+    );
+  }
   return {
     ...current,
     state: PAYMENT_DISPATCH_STATES.SENDING,
@@ -288,6 +308,30 @@ function beginPaymentDispatchAttempt({
 
 function planPaymentDispatchFailure({ dispatch, error, nowISO } = {}) {
   const current = normalizePaymentDispatch(dispatch);
+  if (current.state === PAYMENT_DISPATCH_STATES.DEFINITE_FAILURE) {
+    return {
+      outcome: "definite_failure",
+      executionState: "failed",
+      dispatch: current,
+      resumable: false,
+      nextAction: "new_approval_required",
+      shouldNeutralizeCheckout: true,
+      shouldAdvanceCheckoutGeneration: true,
+      requiresNewApproval: true
+    };
+  }
+  if (current.state === PAYMENT_DISPATCH_STATES.RECOVERY_CLAIMED) {
+    return {
+      outcome: "ambiguous",
+      executionState: "in_progress",
+      dispatch: current,
+      resumable: false,
+      nextAction: "complete_expired_portal_recovery",
+      shouldNeutralizeCheckout: false,
+      shouldAdvanceCheckoutGeneration: false,
+      requiresNewApproval: false
+    };
+  }
   if (current.state !== PAYMENT_DISPATCH_STATES.SENDING) {
     throw new PaymentDispatchStateError(
       "failed-precondition",
@@ -414,6 +458,13 @@ function planPaymentDispatchResume({
       providerMessageId: current.providerMessageId
     };
   }
+  if (current.state === PAYMENT_DISPATCH_STATES.RECOVERY_CLAIMED) {
+    return {
+      action: "expired_portal_recovery_in_progress",
+      resumable: false,
+      idempotencyKey: current.idempotencyKey
+    };
+  }
   if (
     current.state === PAYMENT_DISPATCH_STATES.SENDING
     || current.state === PAYMENT_DISPATCH_STATES.OUTCOME_AMBIGUOUS
@@ -430,6 +481,80 @@ function planPaymentDispatchResume({
   );
 }
 
+function planExpiredPortalPaymentDispatchRecovery({
+  dispatch,
+  nowISO,
+  staleAfterMs
+} = {}) {
+  const current = normalizePaymentDispatch(dispatch);
+  if (current.state === PAYMENT_DISPATCH_STATES.RECOVERY_CLAIMED) {
+    return {
+      action: "recover_provider_unknown",
+      dispatch: current,
+      changed: false,
+      retryAfterISO: ""
+    };
+  }
+  if (current.state === PAYMENT_DISPATCH_STATES.OUTCOME_AMBIGUOUS) {
+    return {
+      action: "recover_provider_unknown",
+      dispatch: {
+        ...current,
+        state: PAYMENT_DISPATCH_STATES.RECOVERY_CLAIMED,
+        lastOutcome: "ambiguous",
+        outcomeReason: "portal_expired_recovery_claimed",
+        lastError: "Portal expired while the provider outcome was unknown; checkout recovery was claimed.",
+        completedAtISO: ""
+      },
+      changed: true,
+      retryAfterISO: ""
+    };
+  }
+  if (current.state !== PAYMENT_DISPATCH_STATES.SENDING) {
+    return {
+      action: "state_changed",
+      dispatch: current,
+      changed: false,
+      retryAfterISO: ""
+    };
+  }
+
+  const observedAtISO = normalizeISO(nowISO);
+  const staleWindowMs = Number(staleAfterMs);
+  if (
+    !observedAtISO
+    || !Number.isSafeInteger(staleWindowMs)
+    || staleWindowMs <= 0
+  ) {
+    throw new PaymentDispatchStateError(
+      "failed-precondition",
+      "Expired-portal payment recovery requires a valid stale-attempt boundary."
+    );
+  }
+  const retryAfterMs = Date.parse(current.lastAttemptAtISO) + staleWindowMs;
+  if (Date.parse(observedAtISO) < retryAfterMs) {
+    return {
+      action: "wait_for_active_provider_attempt",
+      dispatch: current,
+      changed: false,
+      retryAfterISO: new Date(retryAfterMs).toISOString()
+    };
+  }
+  return {
+    action: "recover_provider_unknown",
+    dispatch: {
+      ...current,
+      state: PAYMENT_DISPATCH_STATES.RECOVERY_CLAIMED,
+      lastOutcome: "ambiguous",
+      outcomeReason: "portal_expired_stale_sending",
+      lastError: "Portal expired after the provider attempt exceeded the recovery boundary.",
+      completedAtISO: ""
+    },
+    changed: true,
+    retryAfterISO: ""
+  };
+}
+
 module.exports = {
   PAYMENT_DISPATCH_STATES,
   PaymentDispatchStateError,
@@ -438,5 +563,6 @@ module.exports = {
   normalizePaymentDispatch,
   planPaymentDispatchFailure,
   planPaymentDispatchResume,
+  planExpiredPortalPaymentDispatchRecovery,
   recordPaymentDispatchProviderAcceptance
 };

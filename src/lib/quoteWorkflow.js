@@ -9,6 +9,7 @@ const FOLLOW_UP_STAGE_DEFINITIONS = [
 
 const APPROVAL_ACTION_DEFINITIONS = [
   { id: "send_payment_request", label: "Send payment request" },
+  { id: "send_final_balance_request", label: "Send final balance request" },
   { id: "convert_to_contract", label: "Convert to contract" },
   { id: "rotate_portal_link", label: "Rotate portal link" },
   { id: "delete_quote", label: "Delete quote" }
