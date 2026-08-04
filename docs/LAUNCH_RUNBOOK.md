@@ -125,10 +125,13 @@ channels, not in the prepare job:
   - `EMAIL_FROM_NAME=QuotePilot by MBMapps`
   - `EMAIL_FROM_EMAIL=onboarding@quotepilot.mbmapps.com`
   - `NOTIFICATIONS_SMS_PROVIDER=none` until Twilio is approved
+  - `STRIPE_MODE=live` for an authorized production runtime; use `test` only in
+    an isolated hosted acceptance environment
   - provider sender/owner values only when the matching provider is enabled
 - Set trusted runtime secrets:
   - `AUTH_PLATFORM_ADMIN_EMAILS`
-  - `STRIPE_SECRET_KEY`
+  - `STRIPE_SECRET_KEY` (secret or restricted key prefix must match
+    `STRIPE_MODE`)
   - `STRIPE_WEBHOOK_SECRET`
   - `RESEND_API_KEY` only when Resend is enabled
   - Twilio account/auth secrets only when Twilio is enabled
@@ -167,6 +170,7 @@ custom-domain setup (the same values may be used locally for validation):
 ```dotenv
 NOTIFICATIONS_SMS_PROVIDER=none
 NOTIFICATIONS_EMAIL_PROVIDER=none
+STRIPE_MODE=live
 APP_BASE_URL=https://quotepilot.mbmapps.com/app
 EMAIL_FROM_NAME=QuotePilot by MBMapps
 AUTH_PLATFORM_ADMIN_EMAILS=<approved-platform-operator-email>
@@ -227,19 +231,89 @@ proof. Keep production customer email disabled if any layer fails.
 Buyer setup assistance is also available in-app:
 - `Integrations Ops` -> `Buyer Setup Assistant (Optional Twilio)` to check status and send SMS test.
 
+### Stripe activation gate
+
 Stripe and Twilio use the corresponding blank fields in
-`functions/.env.example` only as a configuration inventory. Stripe has no
-provider flag in this runtime: its secret and webhook secret must be present in
-the trusted runtime before an authorized production backend promotion because
-checkout and webhook handlers ship in the same bundle. Keep the Twilio provider
-flag at `none` until buyer-owned credentials, sender registration, and provider
-acceptance checks are complete.
+`functions/.env.example` only as configuration inventory. Stripe has no
+enabled/disabled provider flag: it requires explicit `STRIPE_MODE=test|live`,
+`STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`. The secret or restricted key
+prefix must match the configured mode, and webhook Event plus Checkout Session
+`livemode` must match it. Missing or mixed-mode configuration fails closed.
+Keep the Twilio provider flag at `none` until buyer-owned credentials, sender
+registration, and provider acceptance checks are complete.
+
+Use `STRIPE_MODE=test` only with test credentials in an isolated hosted
+acceptance environment. An authorized production runtime must explicitly use
+`STRIPE_MODE=live` with a matching live key. Passing source tests, setting
+configuration, or receiving an emulator event does not establish either hosted
+test-mode or live-mode provider acceptance.
 
 Stripe webhook endpoint:
 - `https://us-central1-tonicatering.cloudfunctions.net/stripeWebhook`
 - events:
   - `checkout.session.completed`
   - `checkout.session.async_payment_succeeded`
+  - `checkout.session.async_payment_failed`
+  - `checkout.session.expired`
+
+The current source candidate handles deposits only. An exact approved payment
+scope binds organization, quote revision, portal issuance, customer email,
+currency, and deposit amount. The server runs one governed, resumable operation:
+it registers a new Session as `prepared` with no browser-readable link, stores
+QuotePilot's URL copy in the server-only `privatePaymentDispatches` record, and
+submits the payment-request email using an approval-bound provider idempotency
+key. Only after email-provider acceptance is durably recorded does one
+transaction publish the payment link to the quote and portal and complete the
+approval. Direct standalone checkout creation fails closed. Signed events own
+payment state, and the admin-only `Reconcile Payment` action re-reads the exact
+server-recorded Session without downgrading paid/refunded truth.
+
+Checkout creation and provider email are external calls, so “combined send” is
+not an atomic provider/database claim. An ambiguous creation or email outcome
+keeps the execution in progress and does not publish a link to the quote or
+portal; any known prepared URL remains outside browser-readable app records.
+Because an ambiguous email call may still have been accepted externally, retry
+the exact approval as the same executing admin so QuotePilot reuses the same
+Stripe-creation and email-provider keys. Durable provider acceptance converts
+recovery to publication-only and must never send again. A definite email
+failure may require a new approval only after the unsent checkout is
+neutralized and the private URL cleared. If cleanup cannot be confirmed, keep
+the exact execution resumable for retry or provider reconciliation.
+
+Promote this slice only as one exact-revision frontend, Functions, and Firestore
+rules rollout. The frontend exposes the combined send and reconciliation
+controls, Functions own approval scope/provider calls/webhook transitions, and
+rules deny browser payment-evidence writes. A frontend-only or backend-only
+promotion is not acceptance of this workflow. The prepare job still does not
+deploy or materialize provider secrets; the credential-isolated trusted
+deployer must configure the runtime and promote the coordinated artifact.
+
+Provider acceptance must cover, first in hosted test mode and then under a
+separate live-mode authorization:
+
+1. An accepted/booked quote with an exact approval creates or safely reuses one
+   scoped deposit Session and registers `prepared` state without writing its
+   URL to any browser-readable QuotePilot record before provider dispatch.
+2. A changed quote revision, portal issuance, recipient, amount, or currency
+   invalidates the prior approval.
+3. An ambiguous Stripe-creation or email outcome leaves the exact approval
+   resumable only for the same executing admin and uses the same Stripe/provider
+   identities; a changed actor fails closed. It does not publish the URL to the
+   quote/portal or create an independent replacement checkout. Treat external
+   email acceptance as unknown until reconciled by the same-key retry.
+4. Durable email-provider acceptance precedes quote/portal publication. An
+   induced publication interruption resumes without another provider send.
+5. A definite provider failure safely neutralizes the unsent Session and clears
+   its private URL before requiring a new approval; unresolved cleanup remains
+   resumable instead of guessing.
+6. The four configured webhook events produce paid, processing, failed, or
+   expired results without allowing a late event to downgrade settled truth.
+7. `Reconcile Payment` reads the stored Session and either applies provider
+   truth or records a review-required result; it is not a manual paid toggle.
+
+Refund initiation/status, dispute handling, and final-balance collection or
+reconciliation remain outside this deposit slice. Keep those processes manual
+and separately audited until server-authoritative automation is implemented.
 
 ## 6) Candidate UAT and Exact-Main Release Attestation
 
@@ -284,6 +358,37 @@ change its SHA-256 digest and invalidate older attestations.
    - a legacy portal projection without `deliveryEvidence` stays inactive and
      is recoverable only through an approved resend or truthful provider
      reconciliation,
+   - each sensitive action consumes only its exact approved request, writes a
+     server-owned organization-scoped outcome audit, and a completed replay
+     returns the stored result without executing again,
+   - the payment-request approval is invalidated by any change to its quote
+     revision, portal issuance, customer email, currency, or deposit amount;
+     the valid action privately registers prepared state, durably records
+     provider dispatch/acceptance, and only then publishes the payment link,
+     while direct checkout creation fails closed,
+   - an ambiguous checkout/email outcome resumes the exact approval with the
+     same executing admin and provider keys and no quote/portal link; external
+     email acceptance remains unknown until same-key retry. Durable provider
+     acceptance resumes publication without resending; a definite failure
+     neutralizes and clears the unsent checkout before a new approval becomes
+     eligible,
+   - explicit Stripe mode, key prefix, Event `livemode`, and Session `livemode`
+     agree; all four configured Checkout Session events transition provider
+     state without downgrading paid/refunded truth, and the same-tenant admin
+     reconciliation reads only the server-recorded Session,
+   - an accepted quote converts only through the exact approved server action
+     to one booked contract with a server-owned contract number and availability
+     result; unapproved or mismatched conversion fails closed,
+   - as separate source/data-operation acceptance, the tenant-scoped portal
+     projection backfill is read-only in dry-run, transactionally rechecks
+     apply, leaves foreign, inactive, identity, and commercial-evidence
+     conflicts unchanged, and never creates `deliveryEvidence`; this check is
+     not evidence for a Hosting, Functions/rules, or Vercel payload,
+   - the retired legacy bulk quote purge callable fails closed without mutation
+     and its staff control is absent; within a retained organization, permanent
+     quote deletion succeeds only one quote at a time through an exact approved
+     `delete_quote` request. Separately governed platform-admin teardown of an
+     archived organization is outside this per-quote claim,
    - customer portal view and accept/decline paths update their owned state,
    - PDF export succeeds and omits any portal link without current issuance
      evidence,
@@ -380,6 +485,18 @@ Apply requires Firebase Admin ADC, a new evidence file, and the exact
 scope-bound confirmation shown in the README. Do not infer permission to apply
 from deployment or merge approval, and never copy portal tokens or customer
 data into release evidence.
+
+For a release containing the Stripe deposit slice, retain a separate provider
+acceptance record. Exercise the exact coordinated frontend/Functions/rules
+revision first against an isolated hosted `STRIPE_MODE=test` runtime with all
+four webhook subscriptions. Exercise private prepared state, ambiguous
+same-key recovery, publication-only recovery after durable acceptance, and
+definite-failure cleanup in that environment. After explicit production
+authorization, verify the matching `STRIPE_MODE=live` runtime and capture one
+controlled live payment request, provider event, customer payment-state
+refresh, and admin reconciliation observation. Redact keys, signatures, portal
+tokens, and customer data from evidence. Test-mode success is not live-mode
+acceptance, and neither proves refund, dispute, or final-balance automation.
 
 1. Create a quote end-to-end.
 2. Confirm quote appears in history.

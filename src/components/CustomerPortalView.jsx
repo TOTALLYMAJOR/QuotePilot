@@ -89,6 +89,46 @@ function decisionReceipt(quote) {
   };
 }
 
+export function getPaymentReturnMessage(paymentReturn, payment = {}) {
+  const returnState = String(paymentReturn || "").trim().toLowerCase();
+  const depositStatus = String(payment.depositStatus || "").trim().toLowerCase();
+  const checkoutState = String(payment.stripeCheckoutState || "").trim().toLowerCase();
+  if (!new Set(["success", "cancelled"]).has(returnState)) return null;
+  if (depositStatus === "paid") {
+    return {
+      tone: "confirmed",
+      text: "Deposit confirmed. This status comes from Stripe's verified server notification."
+    };
+  }
+  if (depositStatus === "refunded") {
+    return {
+      tone: "refunded",
+      text: "The deposit is recorded as refunded in the verified payment record."
+    };
+  }
+  if (checkoutState === "processing") {
+    return {
+      tone: "processing",
+      text: "Stripe reports that this payment is processing. Deposit confirmation is not final yet; this page will refresh briefly."
+    };
+  }
+  if (["failed", "expired"].includes(checkoutState)) {
+    return {
+      tone: "failed",
+      text: "Stripe did not confirm this payment. Contact the quote owner for a fresh payment request."
+    };
+  }
+  if (returnState === "cancelled") {
+    return {
+      tone: "cancelled",
+      text: "You returned without a verified payment confirmation. Your current payment status appears below; you can return when you are ready."
+    };
+  }
+  return {
+    tone: "processing",
+    text: "You returned from checkout, but no verified payment confirmation has been received. This page will refresh briefly."
+  };
+}
 export default function CustomerPortalView({
   initialPortalKey = "",
   initialPaymentReturn = "",
@@ -211,7 +251,7 @@ export default function CustomerPortalView({
   }, [portalTitle]);
 
   useEffect(() => {
-    if (initialPaymentReturn !== "success" || typeof window === "undefined") return;
+    if (!initialPaymentReturn || typeof window === "undefined") return;
     const url = new URL(window.location.href);
     url.searchParams.delete("payment");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
@@ -219,6 +259,7 @@ export default function CustomerPortalView({
 
   useEffect(() => {
     const paymentStatus = String(quote?.payment?.depositStatus || "").trim().toLowerCase();
+    const checkoutState = String(quote?.payment?.stripeCheckoutState || "").trim().toLowerCase();
     const shouldConfirm = initialPaymentReturn === "success"
       && quote?.portalKey === initialPortalKey;
     if (!shouldConfirm) return undefined;
@@ -229,6 +270,11 @@ export default function CustomerPortalView({
           ? previous
           : { ...previous, state: "confirmed" }
       ));
+      return undefined;
+    }
+
+    if (["failed", "expired"].includes(checkoutState)) {
+      setPaymentConfirmation((previous) => ({ ...previous, state: "failed" }));
       return undefined;
     }
 
@@ -271,6 +317,7 @@ export default function CustomerPortalView({
     initialPortalKey,
     paymentConfirmation.attempt,
     quote?.payment?.depositStatus,
+    quote?.payment?.stripeCheckoutState,
     quote?.portalKey
   ]);
 
@@ -281,7 +328,10 @@ export default function CustomerPortalView({
     paymentConfirmationMessage = "Payment confirmed. Your deposit is recorded as paid.";
   } else if (paymentConfirmation.state === "pending") {
     paymentConfirmationMessage = "Payment confirmation is still processing. Refresh this page in a moment to see the recorded status.";
+  } else if (paymentConfirmation.state === "failed") {
+    paymentConfirmationMessage = "Stripe did not confirm this payment. Contact the quote owner for a fresh payment request.";
   }
+  const paymentReturnMessage = getPaymentReturnMessage(initialPaymentReturn, payment);
 
   const pricingRows = [
     ["Package", totals.base],
@@ -342,6 +392,11 @@ export default function CustomerPortalView({
           </p>
         )}
         {state.status && <p className="source-note">{state.status}</p>}
+        {quote && paymentReturnMessage && (
+          <p className={`portal-payment-return return-${paymentReturnMessage.tone}`} role="status">
+            {paymentReturnMessage.text}
+          </p>
+        )}
 
         {quote && (
           <div className="portal-decision-layout">

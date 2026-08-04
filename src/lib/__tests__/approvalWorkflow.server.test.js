@@ -42,6 +42,41 @@ describe("server approval workflow planning", () => {
     expect(result.approvalRequests).toEqual([result.request]);
   });
 
+  test("requires and preserves exact server-owned scope for payment requests", () => {
+    const actionScope = {
+      version: 1,
+      kind: "stripe_checkout_deposit_request",
+      organizationId: "org-a",
+      quoteId: "quote-a",
+      quoteRevisionId: "v0001@2026-08-03T18:00:00.000Z",
+      portalKey: "portal-key-abcdefghijklmnopqrstuvwxyz",
+      portalIssuedAtISO: "2026-08-03T18:00:00.000Z",
+      portalExpiresAtISO: "2026-09-03T18:00:00.000Z",
+      customerEmail: "customer@example.com",
+      paymentKind: "deposit",
+      currency: "usd",
+      amountCents: 12500
+    };
+    const actionScopeDigest = "a".repeat(64);
+    const result = buildApprovalRequest({
+      workflow: {},
+      action: "send_payment_request",
+      actorEmail: "admin@example.com",
+      nowISO: "2026-08-03T18:00:00.000Z",
+      requestId: "payment-request",
+      actionScope,
+      actionScopeDigest
+    });
+    expect(result.request).toMatchObject({ actionScope, actionScopeDigest });
+    expect(() => buildApprovalRequest({
+      workflow: {},
+      action: "send_payment_request",
+      actorEmail: "admin@example.com",
+      nowISO: "2026-08-03T18:00:00.000Z",
+      requestId: "legacy-payment-request"
+    })).toThrowError(expect.objectContaining({ code: "failed-precondition" }));
+  });
+
   test("rejects duplicate pending action requests without rewriting history", () => {
     expect(() => buildApprovalRequest({
       workflow: {

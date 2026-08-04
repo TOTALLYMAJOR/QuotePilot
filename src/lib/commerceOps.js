@@ -50,18 +50,36 @@ export async function notifyOwnerNewQuote({ quoteId }) {
   return result.data || {};
 }
 
-export async function createDepositCheckout({ quoteId }) {
-  ensureFunctionsReady();
-  const call = httpsCallable(cloudFunctions, "createDepositCheckout");
-  const result = await call({ quoteId });
-  return result.data || {};
-}
-
 export async function getIntegrationSetupStatus() {
   ensureFunctionsReady();
   const call = httpsCallable(cloudFunctions, "getIntegrationSetupStatus");
   const result = await call({});
   return result.data || {};
+}
+
+export async function reconcileDepositCheckout({ quoteId } = {}) {
+  ensureFunctionsReady();
+  const normalizedQuoteId = String(quoteId || "").trim();
+  if (!normalizedQuoteId) {
+    throw new Error("Quote id is required for payment reconciliation.");
+  }
+  const call = httpsCallable(cloudFunctions, "reconcileDepositCheckout");
+  const result = await call({ quoteId: normalizedQuoteId });
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== normalizedQuoteId
+    || !/^cs_[A-Za-z0-9_]+$/.test(String(response.stripeSessionId || "").trim())
+    || !["open", "processing", "paid", "failed", "expired", "unknown"].includes(
+      String(response.providerState || "").trim().toLowerCase()
+    )
+    || !String(response.auditEventId || "").trim()
+    || Object.prototype.hasOwnProperty.call(response, "paymentLink")
+    || Object.prototype.hasOwnProperty.call(response, "url")
+  ) {
+    throw new Error("Payment reconciliation returned an invalid authoritative response.");
+  }
+  return response;
 }
 
 export async function sendIntegrationTestSms({ message = "" } = {}) {
@@ -207,5 +225,22 @@ export async function sendPaymentRequestToCustomerEmail({
     quoteId,
     approvalRequestId
   });
-  return result.data || {};
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== String(quoteId || "").trim()
+    || String(response.approvalRequest?.id || "").trim() !== String(approvalRequestId || "").trim()
+    || String(response.approvalRequest?.executionState || "").trim().toLowerCase() !== "succeeded"
+    || response.email?.sent !== true
+    || !String(response.email?.provider || "").trim()
+    || !String(response.email?.messageId || "").trim()
+    || !/^cs_[A-Za-z0-9_]+$/.test(String(response.stripeSessionId || "").trim())
+    || !Number.isSafeInteger(Number(response.checkoutGeneration))
+    || typeof response.published !== "boolean"
+    || Object.prototype.hasOwnProperty.call(response, "paymentLink")
+    || Object.prototype.hasOwnProperty.call(response, "url")
+  ) {
+    throw new Error("Payment request returned an invalid authoritative response.");
+  }
+  return response;
 }

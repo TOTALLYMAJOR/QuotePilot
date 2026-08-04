@@ -38,7 +38,12 @@ const {
   PaymentSafetyError,
   assertCheckoutPaymentTransition,
   assertPaymentPortalIdentity,
+  assertPreparedCheckoutPublicationTransition,
+  assertPreparedCheckoutRegistrationTransition,
+  buildPreparedCheckoutState,
+  buildPublishedCheckoutState,
   buildStripeCheckoutIdempotencyKey,
+  isKnownStripeSessionId,
   normalizeCheckoutTransitionState,
   planDepositCheckout,
   validateStripeCheckoutScope,
@@ -51,6 +56,28 @@ const {
   buildApprovalRequest,
   buildApprovalResolution
 } = require("./approvalWorkflow");
+const {
+  PaymentApprovalScopeError,
+  assertPaymentApprovalRequestScope,
+  buildPaymentApprovalScope
+} = require("./paymentApprovalScope");
+const {
+  StripeProviderStateError,
+  assertStripeObjectMode,
+  assertStripeSecretKeyMode,
+  mapStripeCheckoutObservation,
+  mapStripeCheckoutReconciliation,
+  normalizeStripeMode,
+  planStripeCheckoutTransition
+} = require("./stripeProviderState");
+const {
+  PaymentDispatchStateError,
+  beginPaymentDispatchAttempt,
+  normalizePaymentDispatch,
+  planPaymentDispatchFailure,
+  planPaymentDispatchResume,
+  recordPaymentDispatchProviderAcceptance
+} = require("./paymentDispatchState");
 const {
   ContractWorkflowError,
   planContractConversion
@@ -72,7 +99,8 @@ const {
   claimQuoteDelivery,
   normalizeProviderMessageId,
   planQuoteDeliveryAttemptFailure,
-  planQuoteDeliveryOutcomeResolution
+  planQuoteDeliveryOutcomeResolution,
+  resolveQuoteDeliveryRevisionId
 } = require("./quoteDelivery");
 
 initializeApp();
@@ -93,6 +121,7 @@ const APPROVED_EMAIL_FROM_NAME = "QuotePilot by MBMapps";
 const APPROVED_EMAIL_FROM_EMAIL = "onboarding@quotepilot.mbmapps.com";
 const QUOTES_COLLECTION = "quotes";
 const QUOTE_APPROVAL_EXECUTIONS_COLLECTION = "quoteApprovalExecutions";
+const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
@@ -666,6 +695,7 @@ function getTwilioConfig() {
 
 function getStripeConfig() {
   return {
+    mode: readConfig("stripe.mode"),
     secretKey: readConfig("stripe.secret_key"),
     webhookSecret: readConfig("stripe.webhook_secret")
   };
@@ -711,6 +741,7 @@ function buildIntegrationSetupStatus() {
     { name: "NOTIFICATIONS_OWNER_PHONE", value: twilioConfig.toNumber }
   ]);
   const stripeMissingFields = listMissingFields([
+    { name: "STRIPE_MODE", value: stripeConfig.mode },
     { name: "STRIPE_SECRET_KEY", value: stripeConfig.secretKey },
     { name: "STRIPE_WEBHOOK_SECRET", value: stripeConfig.webhookSecret }
   ]);
@@ -722,7 +753,15 @@ function buildIntegrationSetupStatus() {
     ] : [])
   ]);
   const twilioConfigured = twilioMissingFields.length === 0;
-  const stripeConfigured = stripeMissingFields.length === 0;
+  let stripeConfigurationError = "";
+  if (stripeMissingFields.length === 0) {
+    try {
+      assertStripeSecretKeyMode(stripeConfig.secretKey, stripeConfig.mode);
+    } catch (err) {
+      stripeConfigurationError = normalizeText(err?.message);
+    }
+  }
+  const stripeConfigured = stripeMissingFields.length === 0 && !stripeConfigurationError;
   const emailConfigured = emailConfig.provider !== "none" && emailMissingFields.length === 0;
 
   return {
@@ -740,7 +779,9 @@ function buildIntegrationSetupStatus() {
     },
     stripe: {
       configured: stripeConfigured,
-      missingFields: stripeMissingFields
+      mode: normalizeText(stripeConfig.mode).toLowerCase(),
+      missingFields: stripeMissingFields,
+      configurationError: stripeConfigurationError
     },
     email: {
       provider: emailConfig.provider,
@@ -1030,7 +1071,26 @@ function getStripeClient() {
       "Stripe is not configured in the project-scoped Functions environment."
     );
   }
+  try {
+    assertStripeSecretKeyMode(secretKey, readConfig("stripe.mode"));
+  } catch (err) {
+    if (err instanceof StripeProviderStateError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
   return new Stripe(secretKey);
+}
+
+function getStripeMode() {
+  try {
+    return normalizeStripeMode(readConfig("stripe.mode"));
+  } catch (err) {
+    if (err instanceof StripeProviderStateError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
 }
 
 async function ensureOrganizationBootstrapInternal({
@@ -1417,6 +1477,89 @@ function getQuoteApprovalExecutionDocRef(organizationId, approvalRequestId) {
     .doc(executionId);
 }
 
+function getPrivatePaymentDispatchDocRef(organizationId, approvalRequestId) {
+  const orgId = normalizeOrganizationId(organizationId);
+  const executionId = normalizeApprovalExecutionId(approvalRequestId);
+  if (!orgId || !executionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId and a valid approvalRequestId are required."
+    );
+  }
+  return db
+    .collection(ORGANIZATIONS_COLLECTION)
+    .doc(orgId)
+    .collection(PRIVATE_PAYMENT_DISPATCHES_COLLECTION)
+    .doc(executionId);
+}
+
+function redactCheckoutPreparation(preparation = {}) {
+  const source = preparation && typeof preparation === "object" ? preparation : {};
+  const {
+    privateDepositLink: _privateDepositLink,
+    url: _url,
+    ...safePreparation
+  } = source;
+  const redactPaymentLink = (payment) => (
+    payment && typeof payment === "object" && !Array.isArray(payment)
+      ? { ...payment, depositLink: "" }
+      : payment
+  );
+  return {
+    ...safePreparation,
+    expectedPayment: redactPaymentLink(safePreparation.expectedPayment),
+    preparedPayment: redactPaymentLink(safePreparation.preparedPayment),
+    publishedPayment: redactPaymentLink(safePreparation.publishedPayment)
+  };
+}
+
+function restorePrivateCheckoutPreparation(auditPreparation, privateDispatch, {
+  organizationId = "",
+  quoteId = "",
+  approvalRequestId = ""
+} = {}) {
+  const audit = auditPreparation && typeof auditPreparation === "object"
+    ? auditPreparation
+    : null;
+  const privateRecord = privateDispatch && typeof privateDispatch === "object"
+    ? privateDispatch
+    : null;
+  if (!audit) return null;
+  const privateDepositLink = normalizeText(privateRecord?.privateDepositLink);
+  if (!privateDepositLink) {
+    throw new PaymentSafetyError(
+      "The private checkout preparation is missing. Request provider review before retrying."
+    );
+  }
+  if (
+    normalizeOrganizationId(privateRecord.organizationId) !== normalizeOrganizationId(organizationId)
+    || normalizeText(privateRecord.quoteId) !== normalizeText(quoteId)
+    || normalizeApprovalExecutionId(privateRecord.approvalRequestId)
+      !== normalizeApprovalExecutionId(approvalRequestId)
+    || normalizeText(privateRecord.stripeSessionId) !== normalizeText(audit.stripeSessionId)
+    || normalizeText(privateRecord.actionScopeDigest).toLowerCase()
+      !== normalizeText(audit.actionScopeDigest).toLowerCase()
+  ) {
+    throw new PaymentSafetyError("Private checkout preparation scope is invalid.");
+  }
+  const paymentAlreadyPublished = audit.paymentAlreadyPublished === true;
+  const restorePaymentLink = (payment, { published = false } = {}) => (
+    payment && typeof payment === "object" && !Array.isArray(payment)
+      ? {
+        ...payment,
+        depositLink: published || paymentAlreadyPublished ? privateDepositLink : ""
+      }
+      : payment
+  );
+  return {
+    ...audit,
+    expectedPayment: restorePaymentLink(audit.expectedPayment),
+    preparedPayment: restorePaymentLink(audit.preparedPayment),
+    publishedPayment: restorePaymentLink(audit.publishedPayment, { published: true }),
+    privateDepositLink
+  };
+}
+
 function buildApprovalExecutionAudit({
   organizationId,
   quoteId,
@@ -1428,11 +1571,23 @@ function buildApprovalExecutionAudit({
   result = {},
   error = ""
 } = {}) {
+  const actionScope = approvalRequest?.actionScope
+    && typeof approvalRequest.actionScope === "object"
+    && !Array.isArray(approvalRequest.actionScope)
+    ? approvalRequest.actionScope
+    : null;
+  const actionScopeDigest = normalizeText(approvalRequest?.actionScopeDigest).toLowerCase();
   return {
     organizationId: normalizeOrganizationId(organizationId),
     quoteId: normalizeText(quoteId),
     approvalRequestId: normalizeApprovalExecutionId(approvalRequest?.id),
     action: normalizeText(approvalRequest?.action),
+    ...(actionScope && actionScopeDigest
+      ? {
+        actionScope: { ...actionScope },
+        actionScopeDigest
+      }
+      : {}),
     approvalResolvedAtISO: normalizeText(approvalRequest?.resolvedAtISO),
     approvalResolvedByEmail: normalizeEmail(approvalRequest?.resolvedByEmail),
     state: normalizeText(state).toLowerCase(),
@@ -1448,6 +1603,89 @@ function buildApprovalExecutionAudit({
     updatedAtISO: normalizeText(completedAtISO || startedAtISO),
     updatedAt: FieldValue.serverTimestamp()
   };
+}
+
+function findQuoteApprovalRequest(workflow, approvalRequestId) {
+  const requestId = normalizeApprovalExecutionId(approvalRequestId);
+  const requests = Array.isArray(workflow?.approvalRequests)
+    ? workflow.approvalRequests
+    : [];
+  return requests.find((request) => (
+    normalizeApprovalExecutionId(request?.id) === requestId
+  )) || null;
+}
+
+function assertNoInProgressPaymentDispatch(quote, operationLabel = "this action") {
+  const approvalRequests = Array.isArray(quote?.workflow?.approvalRequests)
+    ? quote.workflow.approvalRequests
+    : [];
+  const paymentDispatch = approvalRequests.find((request) => (
+    normalizeText(request?.action) === "send_payment_request"
+    && normalizeText(request?.executionState).toLowerCase() === "in_progress"
+  ));
+  if (paymentDispatch) {
+    throw new functions.https.HttpsError(
+      "aborted",
+      `Finish or reconcile the in-progress payment request before ${operationLabel}.`
+    );
+  }
+}
+
+function derivePaymentRequestApprovalScope({
+  quote,
+  quoteId,
+  organizationId,
+  portalSnapshot,
+  nowISO,
+  allowSettled = false
+} = {}) {
+  const status = normalizeText(quote?.status).toLowerCase();
+  if (!["accepted", "booked"].includes(status)) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Payment requests can be approved only after quote acceptance."
+    );
+  }
+  if (!normalizeEmail(quote?.customer?.email)) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Quote customer email is missing."
+    );
+  }
+  const paymentStatus = normalizeText(quote?.payment?.depositStatus).toLowerCase() || "unpaid";
+  const providerTruthSettled = (
+    ["paid", "refunded"].includes(paymentStatus)
+    || normalizeText(quote?.payment?.depositConfirmedAtISO)
+  );
+  if (providerTruthSettled && !allowSettled) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Paid or refunded deposit evidence cannot receive another payment request."
+    );
+  }
+  if (!providerTruthSettled) {
+    planDepositCheckout(quote?.payment);
+  }
+  if (normalizeText(quote?.payment?.depositLink)) {
+    parseStoredPaymentLinkOrThrow(quote.payment.depositLink);
+  }
+  const portal = assertQuoteDeliveryPortalActivation({
+    quote,
+    quoteId,
+    organizationId,
+    portalSnapshot,
+    nowISO
+  });
+  return buildPaymentApprovalScope({
+    quote,
+    quoteId,
+    organizationId,
+    quoteRevisionId: portal.revisionId || resolveQuoteDeliveryRevisionId(quote, quoteId),
+    portalKey: portal.portalKey,
+    portalIssuedAtISO: portal.portalIssuedAtISO,
+    portalExpiresAtISO: portal.portalExpiresAtISO,
+    currency: "usd"
+  });
 }
 
 function assertMatchingApprovalExecutionRecord(record, {
@@ -1467,6 +1705,209 @@ function assertMatchingApprovalExecutionRecord(record, {
       "Approval execution audit identity does not match this action."
     );
   }
+}
+
+function sanitizePaymentRequestExecutionResult(result = {}) {
+  const source = result && typeof result === "object" ? result : {};
+  const emailResult = source.email && typeof source.email === "object"
+    ? source.email
+    : {};
+  const approvalRequest = source.approvalRequest && typeof source.approvalRequest === "object"
+    ? source.approvalRequest
+    : null;
+  return {
+    quoteNumber: normalizeText(source.quoteNumber),
+    email: {
+      sent: emailResult.sent === true,
+      provider: normalizeText(emailResult.provider),
+      messageId: normalizeText(emailResult.messageId)
+    },
+    ...(approvalRequest ? { approvalRequest } : {}),
+    stripeSessionId: normalizeText(source.stripeSessionId),
+    checkoutGeneration: Number(source.checkoutGeneration || 0),
+    published: source.published === true
+  };
+}
+
+function paymentRequestEmailIdempotencyKey({ organizationId, quoteId, approvalRequestId }) {
+  return `quote-approval/${normalizeOrganizationId(organizationId)}/${normalizeText(quoteId)}/${normalizeApprovalExecutionId(approvalRequestId)}`;
+}
+
+async function claimPaymentDispatchAttempt({
+  executionRef,
+  organizationId,
+  quoteId,
+  approvalRequestId,
+  staff,
+  actionScopeDigest,
+  idempotencyKey
+}) {
+  const attemptedAtISO = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const executionSnap = await tx.get(executionRef);
+    if (!executionSnap.exists) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Payment-request execution disappeared before email dispatch."
+      );
+    }
+    const execution = executionSnap.data() || {};
+    assertMatchingApprovalExecutionRecord(execution, {
+      organizationId,
+      quoteId,
+      approvalRequestId,
+      action: "send_payment_request"
+    });
+    if (normalizeText(execution.state).toLowerCase() !== "in_progress") {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Payment-request execution is no longer in progress."
+      );
+    }
+    const identity = {
+      operationId: approvalRequestId,
+      actorUid: staff.uid,
+      actionScopeDigest,
+      idempotencyKey
+    };
+    const existingDispatch = execution.paymentDispatch || null;
+    if (existingDispatch) {
+      const resume = planPaymentDispatchResume({
+        executionState: execution.state,
+        dispatch: existingDispatch,
+        ...identity
+      });
+      if (resume.action === "complete_publication") {
+        return {
+          action: resume.action,
+          dispatch: normalizePaymentDispatch(existingDispatch)
+        };
+      }
+      if (resume.action !== "retry_provider_with_same_key") {
+        throw new PaymentDispatchStateError(
+          "failed-precondition",
+          "This payment email dispatch requires a new approval."
+        );
+      }
+    }
+    const dispatch = beginPaymentDispatchAttempt({
+      dispatch: existingDispatch,
+      ...identity,
+      nowISO: attemptedAtISO
+    });
+    tx.set(executionRef, {
+      paymentDispatch: dispatch,
+      lastAttemptedBy: {
+        uid: staff.uid,
+        email: staff.email
+      },
+      updatedAtISO: attemptedAtISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { action: "send_provider", dispatch };
+  });
+}
+
+async function recordPaymentDispatchAcceptance({
+  executionRef,
+  organizationId,
+  quoteId,
+  approvalRequestId,
+  staff,
+  provider,
+  providerMessageId
+}) {
+  const acceptedAtISO = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const executionSnap = await tx.get(executionRef);
+    if (!executionSnap.exists) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Payment-request execution disappeared after provider acceptance."
+      );
+    }
+    const execution = executionSnap.data() || {};
+    assertMatchingApprovalExecutionRecord(execution, {
+      organizationId,
+      quoteId,
+      approvalRequestId,
+      action: "send_payment_request"
+    });
+    const currentDispatch = normalizePaymentDispatch(execution.paymentDispatch);
+    if (currentDispatch.state === "provider_accepted") {
+      if (
+        currentDispatch.provider !== normalizeText(provider).toLowerCase()
+        || currentDispatch.providerMessageId !== normalizeProviderMessageId(providerMessageId)
+      ) {
+        throw new PaymentDispatchStateError(
+          "aborted",
+          "Payment provider acceptance evidence changed during retry."
+        );
+      }
+      return currentDispatch;
+    }
+    const accepted = recordPaymentDispatchProviderAcceptance({
+      dispatch: currentDispatch,
+      provider,
+      providerMessageId,
+      nowISO: acceptedAtISO
+    });
+    tx.set(executionRef, {
+      paymentDispatch: accepted.dispatch,
+      providerAcceptedByAttempt: {
+        uid: staff.uid,
+        email: staff.email
+      },
+      updatedAtISO: acceptedAtISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return accepted.dispatch;
+  });
+}
+
+async function recordPaymentDispatchFailure({
+  executionRef,
+  organizationId,
+  quoteId,
+  approvalRequestId,
+  error
+}) {
+  const observedAtISO = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const executionSnap = await tx.get(executionRef);
+    if (!executionSnap.exists) return null;
+    const execution = executionSnap.data() || {};
+    assertMatchingApprovalExecutionRecord(execution, {
+      organizationId,
+      quoteId,
+      approvalRequestId,
+      action: "send_payment_request"
+    });
+    if (normalizeText(execution.state).toLowerCase() !== "in_progress") return null;
+    const dispatch = normalizePaymentDispatch(execution.paymentDispatch);
+    if (dispatch.state === "provider_accepted") {
+      return {
+        outcome: "provider_accepted",
+        executionState: "in_progress",
+        dispatch,
+        shouldNeutralizeCheckout: false
+      };
+    }
+    const plan = planPaymentDispatchFailure({
+      dispatch,
+      error,
+      nowISO: observedAtISO
+    });
+    tx.set(executionRef, {
+      paymentDispatch: plan.dispatch,
+      error: plan.outcome === "ambiguous"
+        ? "Payment email outcome is uncertain; retry the same approved request."
+        : "Payment request email could not be sent.",
+      updatedAtISO: observedAtISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return plan;
+  });
 }
 
 async function readQuoteOrThrow(quoteId, { organizationId = "" } = {}) {
@@ -2172,7 +2613,8 @@ async function patchPaymentState({
   auditContext = {},
   stripeSession = null,
   webhookEvent = null,
-  checkoutTransition = null
+  checkoutTransition = null,
+  providerObservation = null
 }) {
   const normalizedQuoteId = normalizeText(quoteId);
   const normalizedOrganizationId = normalizeOrganizationId(organizationId);
@@ -2192,19 +2634,6 @@ async function patchPaymentState({
     ? db.collection(WEBHOOK_EVENTS_COLLECTION).doc(`stripe-${webhookEventId}`)
     : null;
   const nowISO = new Date().toISOString();
-  const quoteUpdate = { updatedAtISO: nowISO };
-  for (const [key, value] of Object.entries(paymentPatch)) {
-    quoteUpdate[`payment.${key}`] = value;
-  }
-  if (normalizeHostname(auditContext.host)) {
-    quoteUpdate["payment.lastHost"] = normalizeHostname(auditContext.host);
-  }
-  if (normalizeText(auditContext.eventType)) {
-    quoteUpdate["payment.lastEventType"] = normalizeText(auditContext.eventType).toLowerCase();
-  }
-  if (normalizeOrganizationId(auditContext.organizationId)) {
-    quoteUpdate["payment.lastOrganizationId"] = normalizeOrganizationId(auditContext.organizationId);
-  }
 
   try {
     return await db.runTransaction(async (transaction) => {
@@ -2260,7 +2689,25 @@ async function patchPaymentState({
           portal: portalSnap.data() || {}
         });
       }
-      if (stripeSession) {
+      let effectivePaymentPatch = { ...paymentPatch };
+      let providerTransition = null;
+      if (stripeSession && providerObservation) {
+        validateStripeCheckoutScope({
+          session: stripeSession,
+          quote: currentQuote,
+          quoteId: normalizedQuoteId,
+          organizationId: normalizedOrganizationId
+        });
+        providerTransition = planStripeCheckoutTransition({
+          currentPayment: currentQuote.payment,
+          sessionId: normalizeText(stripeSession.id),
+          providerState: providerObservation.providerState,
+          confirmedAtISO: nowISO
+        });
+        effectivePaymentPatch = providerTransition.apply
+          ? providerTransition.paymentPatch
+          : {};
+      } else if (stripeSession) {
         validateStripeCheckoutCompletion({
           session: stripeSession,
           quote: currentQuote,
@@ -2283,13 +2730,29 @@ async function patchPaymentState({
         }
       }
 
-      transaction.update(quoteRef, quoteUpdate);
+      const shouldUpdatePayment = Object.keys(effectivePaymentPatch).length > 0;
+      if (shouldUpdatePayment) {
+        const quoteUpdate = { updatedAtISO: nowISO };
+        for (const [key, value] of Object.entries(effectivePaymentPatch)) {
+          quoteUpdate[`payment.${key}`] = value;
+        }
+        if (normalizeHostname(auditContext.host)) {
+          quoteUpdate["payment.lastHost"] = normalizeHostname(auditContext.host);
+        }
+        if (normalizeText(auditContext.eventType)) {
+          quoteUpdate["payment.lastEventType"] = normalizeText(auditContext.eventType).toLowerCase();
+        }
+        if (normalizeOrganizationId(auditContext.organizationId)) {
+          quoteUpdate["payment.lastOrganizationId"] = normalizeOrganizationId(auditContext.organizationId);
+        }
+        transaction.update(quoteRef, quoteUpdate);
+      }
 
-      if (portalRef) {
+      if (portalRef && shouldUpdatePayment) {
         const portalUpdate = {
           updatedAtISO: nowISO,
           payment: {
-            ...paymentPatch
+            ...effectivePaymentPatch
           }
         };
         if (normalizeHostname(auditContext.host)) {
@@ -2309,7 +2772,17 @@ async function patchPaymentState({
           eventType: normalizeText(webhookEvent?.eventType),
           requestHost: normalizeHostname(webhookEvent?.requestHost),
           requestIp: normalizeText(webhookEvent?.requestIp),
-          status: "processed",
+          source: normalizeText(auditContext.source).toLowerCase() || "stripe_webhook",
+          organizationId: normalizedOrganizationId,
+          quoteId: normalizedQuoteId,
+          actorUid: normalizeText(auditContext.actorUid),
+          actorEmail: normalizeEmail(auditContext.actorEmail),
+          providerEventCreatedAtISO: normalizeText(webhookEvent?.providerEventCreatedAtISO),
+          stripeSessionId: normalizeText(stripeSession?.id),
+          livemode: stripeSession?.livemode === true,
+          providerState: normalizeText(providerObservation?.providerState),
+          status: shouldUpdatePayment ? "processed" : "ignored",
+          result: providerTransition?.reason || "applied",
           processedAtISO: nowISO,
           createdAt: FieldValue.serverTimestamp()
         });
@@ -2318,11 +2791,13 @@ async function patchPaymentState({
       return {
         duplicate: false,
         alreadyApplied: false,
+        applied: shouldUpdatePayment,
+        ignored: shouldUpdatePayment ? "" : providerTransition?.reason || "",
         eventId: webhookEventId
       };
     });
   } catch (err) {
-    if (err instanceof PaymentSafetyError) {
+    if (err instanceof PaymentSafetyError || err instanceof StripeProviderStateError) {
       throw new functions.https.HttpsError("failed-precondition", err.message);
     }
     throw err;
@@ -2341,6 +2816,54 @@ async function neutralizeRejectedStripeCheckout(stripe, sessionId) {
     return true;
   }
   return false;
+}
+
+function annotatePaymentCheckoutOutcome(error, {
+  outcome = "ambiguous",
+  reason = "provider_outcome_ambiguous"
+} = {}) {
+  const annotated = error instanceof Error
+    ? error
+    : new Error(normalizeText(error) || "Stripe checkout outcome is uncertain.");
+  annotated.paymentCheckoutOutcome = normalizeText(outcome).toLowerCase() || "ambiguous";
+  annotated.paymentCheckoutReason = normalizeText(reason).toLowerCase()
+    || "provider_outcome_ambiguous";
+  return annotated;
+}
+
+function isAmbiguousStripeProviderError(error) {
+  const stripeType = normalizeText(error?.type || error?.rawType).toLowerCase();
+  const status = Number(error?.statusCode || error?.status || 0);
+  return (
+    [
+      "stripeconnectionerror",
+      "stripeapierror",
+      "stripeidempotencyerror",
+      "striperatelimiterror"
+    ].includes(stripeType)
+    || [408, 409, 425, 429].includes(status)
+    || status >= 500
+  );
+}
+
+function isDefiniteCheckoutPreparationPersistenceError(error) {
+  return (
+    error instanceof ApprovalWorkflowError
+    || error instanceof PaymentApprovalScopeError
+    || error instanceof PaymentSafetyError
+    || error instanceof StripeProviderStateError
+    || (
+      error instanceof functions.https.HttpsError
+      && [
+        "already-exists",
+        "failed-precondition",
+        "invalid-argument",
+        "not-found",
+        "permission-denied",
+        "unauthenticated"
+      ].includes(normalizeText(error.code).toLowerCase())
+    )
+  );
 }
 
 async function advanceCheckoutGenerationIfUnchanged({
@@ -2369,10 +2892,68 @@ async function advanceCheckoutGenerationIfUnchanged({
     }
     transaction.update(quoteRef, {
       "payment.checkoutGeneration": targetGeneration,
-      updatedAtISO: new Date().toISOString()
+      updatedAtISO: new Date().toISOString(),
+      updatedAt: FieldValue.serverTimestamp()
     });
     return true;
   });
+}
+
+async function markPreparedCheckoutExpiredIfUnchanged({
+  quoteId,
+  organizationId,
+  preparedPayment
+}) {
+  const quoteRef = getQuoteDocRef(quoteId, organizationId);
+  const expectedPrepared = normalizeCheckoutTransitionState(preparedPayment);
+  return db.runTransaction(async (transaction) => {
+    const quoteSnap = await transaction.get(quoteRef);
+    if (!quoteSnap.exists) return false;
+    const currentPayment = normalizeCheckoutTransitionState(quoteSnap.data()?.payment);
+    if (JSON.stringify(currentPayment) !== JSON.stringify(expectedPrepared)) return false;
+    transaction.update(quoteRef, {
+      "payment.depositStatus": "unpaid",
+      "payment.depositLink": "",
+      "payment.depositConfirmedAtISO": "",
+      "payment.stripeSessionId": expectedPrepared.stripeSessionId,
+      "payment.stripeCheckoutState": "expired",
+      "payment.checkoutGeneration": expectedPrepared.checkoutGeneration,
+      "payment.knownStripeSessionIds": expectedPrepared.knownStripeSessionIds,
+      updatedAtISO: new Date().toISOString(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    return true;
+  });
+}
+
+async function isCheckoutCleanupStateResolved({
+  quoteId,
+  organizationId,
+  preparedPayment
+}) {
+  const quoteSnap = await getQuoteDocRef(quoteId, organizationId).get();
+  if (!quoteSnap.exists) return true;
+  const expectedPrepared = normalizeCheckoutTransitionState(preparedPayment);
+  const current = normalizeCheckoutTransitionState(quoteSnap.data()?.payment);
+  if (
+    ["paid", "refunded"].includes(current.depositStatus)
+    || Boolean(current.depositConfirmedAtISO)
+  ) {
+    return true;
+  }
+  if (
+    current.stripeSessionId === expectedPrepared.stripeSessionId
+    && current.checkoutGeneration === expectedPrepared.checkoutGeneration
+  ) {
+    return (
+      !current.depositLink
+      && ["failed", "expired"].includes(current.stripeCheckoutState)
+    );
+  }
+  return (
+    current.checkoutGeneration >= expectedPrepared.checkoutGeneration
+    && current.stripeSessionId !== expectedPrepared.stripeSessionId
+  );
 }
 
 exports.resolveTenantByHost = functions.region(REGION).https.onCall(async (data, context) => {
@@ -3728,6 +4309,7 @@ exports.hardDeleteQuote = functions.region(REGION).https.onCall(async (data, con
           { ...currentQuote, id: quoteId },
           operationStartedAtISO
         );
+        assertNoInProgressPaymentDispatch(currentQuote, "deleting the quote");
       }
       if (executionSnap.exists) {
         const existingExecution = executionSnap.data() || {};
@@ -3741,7 +4323,7 @@ exports.hardDeleteQuote = functions.region(REGION).https.onCall(async (data, con
         if (executionState === "succeeded") {
           return {
             completed: true,
-            result: existingExecution.result || {}
+            result: sanitizePaymentRequestExecutionResult(existingExecution.result)
           };
         }
         if (executionState !== "in_progress") {
@@ -4156,6 +4738,7 @@ async function updateTrustedQuoteDraftInternal({
       );
     }
     assertQuoteEditNotDispatching({ ...quote, id: quoteId }, nowISO);
+    assertNoInProgressPaymentDispatch(quote, "editing the quote");
 
     const documents = buildTrustedQuoteEditDocuments({
       quoteId,
@@ -4227,6 +4810,9 @@ function quoteCreationFailure(err, {
   organizationId,
   failureMessage = "Failed to create quote."
 }) {
+  if (err instanceof functions.https.HttpsError) {
+    throw err;
+  }
   if (
     err instanceof QuoteCreationError
     || err instanceof PricingEngineError
@@ -4399,13 +4985,30 @@ exports.requestQuoteApproval = functions.region(REGION).https.onCall(async (data
         );
       }
 
+      const approvalAction = normalizeText(data?.action);
+      let paymentApprovalScope = {};
+      if (approvalAction === "send_payment_request") {
+        const portalKey = normalizeText(quote.portalKey);
+        const portalSnap = portalKey
+          ? await tx.get(db.collection(PORTAL_COLLECTION).doc(portalKey))
+          : null;
+        paymentApprovalScope = derivePaymentRequestApprovalScope({
+          quote,
+          quoteId,
+          organizationId,
+          portalSnapshot: portalSnap?.exists ? portalSnap.data() : null,
+          nowISO: requestedAtISO
+        });
+      }
+
       const planned = buildApprovalRequest({
         workflow: quote.workflow,
-        action: data?.action,
+        action: approvalAction,
         note: data?.note,
         actorEmail: staff.email,
         nowISO: requestedAtISO,
-        requestId: randomUUID().replace(/-/g, "")
+        requestId: randomUUID().replace(/-/g, ""),
+        ...paymentApprovalScope
       });
       tx.update(quoteRef, {
         "workflow.approvalRequests": planned.approvalRequests,
@@ -4423,7 +5026,12 @@ exports.requestQuoteApproval = functions.region(REGION).https.onCall(async (data
     };
   } catch (err) {
     if (err instanceof functions.https.HttpsError) throw err;
-    if (err instanceof ApprovalWorkflowError) {
+    if (
+      err instanceof ApprovalWorkflowError
+      || err instanceof PaymentApprovalScopeError
+      || err instanceof PaymentSafetyError
+      || err instanceof QuoteDeliveryError
+    ) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
     functions.logger.error("Approval request failed", {
@@ -4482,10 +5090,36 @@ exports.resolveQuoteApprovalRequest = functions.region(REGION).https.onCall(asyn
         );
       }
 
+      const targetRequest = findQuoteApprovalRequest(quote.workflow, requestId);
+      if (!targetRequest) {
+        throw new ApprovalWorkflowError("not-found", "Approval request not found.");
+      }
+      const resolutionState = normalizeText(data?.state).toLowerCase();
+      if (
+        resolutionState === "approved"
+        && normalizeText(targetRequest.action) === "send_payment_request"
+      ) {
+        const portalKey = normalizeText(quote.portalKey);
+        const portalSnap = portalKey
+          ? await tx.get(db.collection(PORTAL_COLLECTION).doc(portalKey))
+          : null;
+        const expectedScope = derivePaymentRequestApprovalScope({
+          quote,
+          quoteId,
+          organizationId,
+          portalSnapshot: portalSnap?.exists ? portalSnap.data() : null,
+          nowISO: resolvedAtISO
+        });
+        assertPaymentApprovalRequestScope({
+          approvalRequest: targetRequest,
+          expected: expectedScope
+        });
+      }
+
       const planned = buildApprovalResolution({
         workflow: quote.workflow,
         requestId,
-        state: data?.state,
+        state: resolutionState,
         resolutionNote: data?.resolutionNote,
         actorEmail: staff.email,
         nowISO: resolvedAtISO
@@ -4506,7 +5140,12 @@ exports.resolveQuoteApprovalRequest = functions.region(REGION).https.onCall(asyn
     };
   } catch (err) {
     if (err instanceof functions.https.HttpsError) throw err;
-    if (err instanceof ApprovalWorkflowError) {
+    if (
+      err instanceof ApprovalWorkflowError
+      || err instanceof PaymentApprovalScopeError
+      || err instanceof PaymentSafetyError
+      || err instanceof QuoteDeliveryError
+    ) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
     functions.logger.error("Approval resolution failed", {
@@ -4780,6 +5419,7 @@ exports.reopenQuote = functions.region(REGION).https.onCall(async (data, context
         );
       }
       assertQuoteEditNotDispatching({ ...quote, id: quoteId }, reopenedAtISO);
+      assertNoInProgressPaymentDispatch(quote, "reopening the quote");
 
       const activeVersionId = normalizeText(quote.activeVersionId);
       let activeSnapshot = null;
@@ -4958,6 +5598,7 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
         );
       }
       assertQuoteEditNotDispatching({ ...quote, id: quoteId }, rotatedAtISO);
+      assertNoInProgressPaymentDispatch(quote, "rotating the portal link");
       try {
         const paymentPlan = planDepositCheckout(quote.payment);
         if (paymentPlan.action !== "create") {
@@ -5662,14 +6303,21 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
     organizationId,
     approvalRequestId
   );
+  const privateDispatchRef = getPrivatePaymentDispatchDocRef(
+    organizationId,
+    approvalRequestId
+  );
   const startedAtISO = new Date().toISOString();
   let claimedQuote = null;
   let providerAccepted = false;
+  let checkoutPreparation = null;
+  let paymentDispatch = null;
   try {
     const claim = await db.runTransaction(async (tx) => {
-      const [quoteSnap, executionSnap] = await Promise.all([
+      const [quoteSnap, executionSnap, privateDispatchSnap] = await Promise.all([
         tx.get(quoteRef),
-        tx.get(executionRef)
+        tx.get(executionRef),
+        tx.get(privateDispatchRef)
       ]);
       if (executionSnap.exists) {
         const existingExecution = executionSnap.data() || {};
@@ -5683,7 +6331,7 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
         if (executionState === "succeeded") {
           return {
             completed: true,
-            result: existingExecution.result || {}
+            result: sanitizePaymentRequestExecutionResult(existingExecution.result)
           };
         }
         if (executionState !== "in_progress") {
@@ -5717,23 +6365,35 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
           "Payment requests can be sent only after quote acceptance."
         );
       }
-      if (!normalizeEmail(quote.customer?.email)) {
-        throw new functions.https.HttpsError(
-          "failed-precondition",
-          "Quote customer email is missing."
-        );
-      }
-      parseStoredPaymentLinkOrThrow(quote?.payment?.depositLink);
       const portalKey = normalizeText(quote.portalKey);
       const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
       const portalSnap = await tx.get(portalRef);
-      assertQuoteDeliveryPortalActivation({
+      const expectedApprovalScope = derivePaymentRequestApprovalScope({
         quote,
         quoteId,
         organizationId,
         portalSnapshot: portalSnap.exists ? portalSnap.data() : null,
-        nowISO: startedAtISO
+        nowISO: startedAtISO,
+        allowSettled: executionSnap.exists
       });
+      const approvalRequest = findQuoteApprovalRequest(
+        quote.workflow,
+        approvalRequestId
+      );
+      const verifiedApprovalScope = assertPaymentApprovalRequestScope({
+        approvalRequest,
+        expected: expectedApprovalScope
+      });
+      if (
+        executionSnap.exists
+        && normalizeText(executionSnap.data()?.actionScopeDigest).toLowerCase()
+          !== verifiedApprovalScope.actionScopeDigest
+      ) {
+        throw new ApprovalWorkflowError(
+          "failed-precondition",
+          "Payment execution scope does not match the approved request."
+        );
+      }
 
       if (!executionSnap.exists) {
         const started = buildApprovalExecutionStart({
@@ -5760,7 +6420,18 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
       }
       return {
         completed: false,
-        quote
+        quote,
+        actionScopeDigest: verifiedApprovalScope.actionScopeDigest,
+        checkoutPreparation: executionSnap.exists
+          ? restorePrivateCheckoutPreparation(
+            executionSnap.data()?.checkoutPreparation,
+            privateDispatchSnap.exists ? privateDispatchSnap.data() : null,
+            { organizationId, quoteId, approvalRequestId }
+          )
+          : null,
+        paymentDispatch: executionSnap.exists
+          ? executionSnap.data()?.paymentDispatch || null
+          : null
       };
     });
 
@@ -5775,14 +6446,100 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
     }
 
     claimedQuote = claim.quote;
+    paymentDispatch = claim.paymentDispatch;
+    if (claim.checkoutPreparation) {
+      checkoutPreparation = await restoreApprovedCheckoutPreparation({
+        preparation: claim.checkoutPreparation,
+        quote: claimedQuote,
+        quoteId,
+        organizationId,
+        approvalRequestId,
+        actionScopeDigest: claim.actionScopeDigest
+      });
+    } else {
+      const prepared = await prepareDepositCheckoutForApprovedSend({
+        quoteId,
+        quote: claimedQuote,
+        quoteNumber: normalizeText(claimedQuote.quoteNumber) || quoteId,
+        organizationId,
+        approvalRequestId,
+        actionScopeDigest: claim.actionScopeDigest
+      });
+      checkoutPreparation = normalizeApprovedCheckoutPreparation({
+        ...prepared,
+        privateDepositLink: prepared.url,
+        stripeSessionId: prepared.sessionId,
+        actionScopeDigest: claim.actionScopeDigest,
+        exposureState: "prepared",
+        preparedAtISO: new Date().toISOString()
+      });
+      let storedPreparation;
+      try {
+        storedPreparation = await persistApprovedCheckoutPreparation({
+          quoteRef,
+          executionRef,
+          quoteId,
+          organizationId,
+          approvalRequestId,
+          staff,
+          expectedApprovalScopeDigest: claim.actionScopeDigest,
+          prepared
+        });
+      } catch (persistError) {
+        let recoveredPreparation = null;
+        let recoveryError = null;
+        try {
+          recoveredPreparation = await recoverPersistedApprovedCheckoutPreparation({
+            executionRef,
+            privateDispatchRef,
+            organizationId,
+            quoteId,
+            approvalRequestId,
+            staff,
+            expectedApprovalScopeDigest: claim.actionScopeDigest
+          });
+        } catch (error) {
+          recoveryError = error;
+        }
+        if (recoveredPreparation) {
+          storedPreparation = recoveredPreparation;
+        } else if (recoveryError || !isDefiniteCheckoutPreparationPersistenceError(persistError)) {
+          functions.logger.warn("Stripe checkout preparation persistence is unresolved", {
+            organizationId,
+            quoteId,
+            approvalRequestId,
+            persistError: normalizeText(persistError?.message),
+            recoveryError: normalizeText(recoveryError?.message)
+          });
+          throw annotatePaymentCheckoutOutcome(persistError, {
+            reason: "checkout_preparation_persistence_ambiguous"
+          });
+        } else {
+          throw persistError;
+        }
+      }
+      checkoutPreparation = await restoreApprovedCheckoutPreparation({
+        preparation: storedPreparation,
+        quote: claimedQuote,
+        quoteId,
+        organizationId,
+        approvalRequestId,
+        actionScopeDigest: claim.actionScopeDigest
+      });
+    }
     const quoteNumber = normalizeText(claimedQuote.quoteNumber) || quoteId;
     const customerEmail = normalizeEmail(claimedQuote.customer?.email);
-    const paymentLink = parseStoredPaymentLinkOrThrow(claimedQuote?.payment?.depositLink);
+    const paymentLink = checkoutPreparation.privateDepositLink;
     const portalLink = resolvePortalLink(claimedQuote);
     const customerName = normalizeText(claimedQuote.customer?.name) || "there";
     const eventName = normalizeText(claimedQuote.event?.name) || "your event";
     const deposit = currencyLabel(claimedQuote.totals?.deposit);
     const brandName = normalizeText(claimedQuote?.quoteMeta?.brandName) || "QuotePilot";
+    const emailIdempotencyKey = paymentRequestEmailIdempotencyKey({
+      organizationId,
+      quoteId,
+      approvalRequestId
+    });
     const lines = [
       `Hi ${customerName},`,
       "",
@@ -5792,31 +6549,70 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
       "",
       "Thank you."
     ].filter(Boolean);
-    const email = await sendCustomerEmail({
-      toEmail: customerEmail,
-      subject: `${brandName} Deposit Request - ${quoteNumber}`,
-      text: lines.join("\n"),
-      html: `
-        <p>Hi ${escapeHtml(customerName)},</p>
-        <p>Your quote <strong>${escapeHtml(quoteNumber)}</strong> for <strong>${escapeHtml(eventName)}</strong> has been accepted.</p>
-        <p>Please submit your deposit payment of <strong>${escapeHtml(deposit)}</strong>.</p>
-        <p><a href="${escapeHtml(paymentLink)}">Pay deposit now</a></p>
-        ${portalLink ? `<p><a href="${escapeHtml(portalLink)}">Open customer portal</a></p>` : ""}
-        <p>Thank you.</p>
-      `,
-      idempotencyKey: `quote-approval/${organizationId}/${quoteId}/${approvalRequestId}`
+    const dispatchAttempt = await claimPaymentDispatchAttempt({
+      executionRef,
+      organizationId,
+      quoteId,
+      approvalRequestId,
+      staff,
+      actionScopeDigest: claim.actionScopeDigest,
+      idempotencyKey: emailIdempotencyKey
     });
-    providerAccepted = true;
+    paymentDispatch = dispatchAttempt.dispatch;
+    let email;
+    if (dispatchAttempt.action === "complete_publication") {
+      email = {
+        sent: true,
+        provider: paymentDispatch.provider,
+        messageId: paymentDispatch.providerMessageId
+      };
+      providerAccepted = true;
+    } else {
+      email = await sendCustomerEmail({
+        toEmail: customerEmail,
+        subject: `${brandName} Deposit Request - ${quoteNumber}`,
+        text: lines.join("\n"),
+        html: `
+          <p>Hi ${escapeHtml(customerName)},</p>
+          <p>Your quote <strong>${escapeHtml(quoteNumber)}</strong> for <strong>${escapeHtml(eventName)}</strong> has been accepted.</p>
+          <p>Please submit your deposit payment of <strong>${escapeHtml(deposit)}</strong>.</p>
+          <p><a href="${escapeHtml(paymentLink)}">Pay deposit now</a></p>
+          ${portalLink ? `<p><a href="${escapeHtml(portalLink)}">Open customer portal</a></p>` : ""}
+          <p>Thank you.</p>
+        `,
+        idempotencyKey: emailIdempotencyKey
+      });
+      providerAccepted = true;
+      paymentDispatch = await recordPaymentDispatchAcceptance({
+        executionRef,
+        organizationId,
+        quoteId,
+        approvalRequestId,
+        staff,
+        provider: email.provider,
+        providerMessageId: email.messageId
+      });
+    }
     const completedAtISO = new Date().toISOString();
+    const paymentPortalRef = db.collection(PORTAL_COLLECTION).doc(
+      normalizeText(claimedQuote.portalKey)
+    );
     const completed = await db.runTransaction(async (tx) => {
-      const [quoteSnap, executionSnap] = await Promise.all([
+      const [quoteSnap, executionSnap, portalSnap, privateDispatchSnap] = await Promise.all([
         tx.get(quoteRef),
-        tx.get(executionRef)
+        tx.get(executionRef),
+        tx.get(paymentPortalRef),
+        tx.get(privateDispatchRef)
       ]);
-      if (!quoteSnap.exists || !executionSnap.exists) {
+      if (
+        !quoteSnap.exists
+        || !executionSnap.exists
+        || !portalSnap.exists
+        || !privateDispatchSnap.exists
+      ) {
         throw new ApprovalWorkflowError(
           "failed-precondition",
-          "Payment-request execution audit disappeared before completion."
+          "Payment-request quote, portal, or execution audit disappeared before completion."
         );
       }
       const currentQuote = quoteSnap.data() || {};
@@ -5828,8 +6624,85 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
         action: "send_payment_request"
       });
       if (normalizeText(execution.state).toLowerCase() === "succeeded") {
-        return execution.result || {};
+        return sanitizePaymentRequestExecutionResult(execution.result);
       }
+      if (normalizeText(execution.state).toLowerCase() !== "in_progress") {
+        throw new ApprovalWorkflowError(
+          "failed-precondition",
+          "Payment-request execution is no longer in progress."
+        );
+      }
+      const acceptedDispatch = normalizePaymentDispatch(execution.paymentDispatch);
+      if (
+        acceptedDispatch.state !== "provider_accepted"
+        || acceptedDispatch.provider !== normalizeText(email.provider).toLowerCase()
+        || acceptedDispatch.providerMessageId !== normalizeProviderMessageId(email.messageId)
+      ) {
+        throw new PaymentDispatchStateError(
+          "failed-precondition",
+          "Payment email provider acceptance was not durably recorded before publication."
+        );
+      }
+      const currentApprovalScope = derivePaymentRequestApprovalScope({
+        quote: currentQuote,
+        quoteId,
+        organizationId,
+        portalSnapshot: portalSnap.data() || {},
+        nowISO: completedAtISO,
+        allowSettled: true
+      });
+      const currentApprovalRequest = findQuoteApprovalRequest(
+        currentQuote.workflow,
+        approvalRequestId
+      );
+      const verifiedScope = assertPaymentApprovalRequestScope({
+        approvalRequest: currentApprovalRequest,
+        expected: currentApprovalScope
+      });
+      if (
+        verifiedScope.actionScopeDigest !== checkoutPreparation.actionScopeDigest
+        || normalizeText(execution.actionScopeDigest).toLowerCase()
+          !== checkoutPreparation.actionScopeDigest
+      ) {
+        throw new ApprovalWorkflowError(
+          "failed-precondition",
+          "Payment-request scope changed before publication."
+        );
+      }
+
+      const currentPayment = normalizeCheckoutTransitionState(currentQuote.payment);
+      const providerTruthAlreadySettled = (
+        ["paid", "refunded"].includes(currentPayment.depositStatus)
+        || Boolean(currentPayment.depositConfirmedAtISO)
+      );
+      const samePreparedSession = currentPayment.stripeSessionId === checkoutPreparation.stripeSessionId;
+      const providerTruthAlreadyObserved = samePreparedSession && (
+        providerTruthAlreadySettled
+        || ["processing", "failed", "expired"].includes(currentPayment.stripeCheckoutState)
+      );
+      let publishPayment = false;
+      if (providerTruthAlreadyObserved) {
+        if (!samePreparedSession) {
+          throw new PaymentSafetyError(
+            "Payment evidence changed to a different Stripe session before request publication."
+          );
+        }
+      } else if (!checkoutPreparation.paymentAlreadyPublished) {
+        const transition = assertPreparedCheckoutPublicationTransition({
+          currentPayment,
+          expectedPreparedPayment: checkoutPreparation.preparedPayment,
+          publishedPayment: checkoutPreparation.publishedPayment
+        });
+        publishPayment = !transition.alreadyApplied;
+      } else if (
+        !samePreparedSession
+        || currentPayment.depositLink !== checkoutPreparation.privateDepositLink
+      ) {
+        throw new PaymentSafetyError(
+          "The approved published checkout no longer matches the quote payment state."
+        );
+      }
+
       const outcome = buildApprovalExecutionOutcome({
         workflow: currentQuote.workflow,
         requestId: approvalRequestId,
@@ -5842,24 +6715,67 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
       });
       const response = {
         quoteNumber,
-        paymentLink,
         email,
-        approvalRequest: outcome.request
+        approvalRequest: outcome.request,
+        stripeSessionId: checkoutPreparation.stripeSessionId,
+        checkoutGeneration: checkoutPreparation.checkoutGeneration,
+        published: publishPayment || checkoutPreparation.paymentAlreadyPublished
       };
-      tx.update(quoteRef, {
+      const quoteUpdate = {
         "workflow.approvalRequests": outcome.approvalRequests,
         updatedAtISO: completedAtISO,
         updatedAt: FieldValue.serverTimestamp()
-      });
+      };
+      if (publishPayment) {
+        for (const [key, value] of Object.entries(checkoutPreparation.publishedPayment)) {
+          quoteUpdate[`payment.${key}`] = value;
+        }
+        quoteUpdate["payment.lastCheckoutCreatedAtISO"] = completedAtISO;
+        quoteUpdate["payment.lastHost"] = normalizeHostname(staff.host);
+        quoteUpdate["payment.lastEventType"] = "checkout.session.published";
+        quoteUpdate["payment.lastOrganizationId"] = organizationId;
+      }
+      tx.update(quoteRef, quoteUpdate);
+      if (publishPayment) {
+        tx.set(paymentPortalRef, {
+          organizationId,
+          updatedAtISO: completedAtISO,
+          payment: {
+            depositLink: checkoutPreparation.publishedPayment.depositLink,
+            depositStatus: checkoutPreparation.publishedPayment.depositStatus,
+            depositConfirmedAtISO: checkoutPreparation.publishedPayment.depositConfirmedAtISO,
+            stripeSessionId: checkoutPreparation.publishedPayment.stripeSessionId,
+            stripeCheckoutState: checkoutPreparation.publishedPayment.stripeCheckoutState,
+            checkoutGeneration: checkoutPreparation.publishedPayment.checkoutGeneration,
+            lastCheckoutCreatedAtISO: completedAtISO,
+            lastHost: normalizeHostname(staff.host),
+            lastEventType: "checkout.session.published",
+            lastOrganizationId: organizationId
+          }
+        }, { merge: true });
+      }
       tx.set(executionRef, {
         state: "succeeded",
-        result: response,
+        result: sanitizePaymentRequestExecutionResult(response),
+        checkoutPreparation: {
+          ...execution.checkoutPreparation,
+          privateDepositLink: "",
+          exposureState: response.published ? "published" : "provider_accepted",
+          publishedAtISO: completedAtISO
+        },
         error: "",
         completedAtISO,
         updatedAtISO: completedAtISO,
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
-      return response;
+      tx.set(privateDispatchRef, {
+        privateDepositLink: "",
+        exposureState: response.published ? "published" : "provider_accepted",
+        completedAtISO,
+        updatedAtISO: completedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return sanitizePaymentRequestExecutionResult(response);
     });
 
     return {
@@ -5869,13 +6785,163 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
       ...completed
     };
   } catch (err) {
-    if (claimedQuote && !providerAccepted) {
-      const failedAtISO = new Date().toISOString();
+    let executionStateUncertain = false;
+    let executionAlreadyFinalized = false;
+    if (claimedQuote) {
+      try {
+        const latestExecutionSnap = await executionRef.get();
+        if (latestExecutionSnap.exists) {
+          const latestExecution = latestExecutionSnap.data() || {};
+          const latestState = normalizeText(latestExecution.state).toLowerCase();
+          if (latestState === "succeeded") {
+            return {
+              ok: true,
+              organizationId,
+              quoteId,
+              idempotent: true,
+              ...sanitizePaymentRequestExecutionResult(latestExecution.result)
+            };
+          }
+          executionAlreadyFinalized = Boolean(latestState && latestState !== "in_progress");
+        }
+      } catch (executionReadError) {
+        executionStateUncertain = true;
+        functions.logger.error("Payment-request execution state could not be rechecked after failure", {
+          organizationId,
+          quoteId,
+          approvalRequestId,
+          error: normalizeText(executionReadError?.message)
+        });
+      }
+    }
+    let dispatchFailurePlan = null;
+    if (claimedQuote && !providerAccepted && paymentDispatch) {
+      try {
+        dispatchFailurePlan = await recordPaymentDispatchFailure({
+          executionRef,
+          organizationId,
+          quoteId,
+          approvalRequestId,
+          error: err
+        });
+      } catch (dispatchAuditError) {
+        functions.logger.error("Payment email outcome audit could not be recorded", {
+          organizationId,
+          quoteId,
+          approvalRequestId,
+          error: normalizeText(dispatchAuditError?.message)
+        });
+        dispatchFailurePlan = {
+          outcome: "ambiguous",
+          executionState: "in_progress",
+          shouldNeutralizeCheckout: false
+        };
+      }
+    }
+    const checkoutPreparationAmbiguous = normalizeText(err?.paymentCheckoutOutcome).toLowerCase()
+      === "ambiguous";
+    if (claimedQuote && checkoutPreparationAmbiguous) {
       try {
         await db.runTransaction(async (tx) => {
-          const [quoteSnap, executionSnap] = await Promise.all([
+          const executionSnap = await tx.get(executionRef);
+          if (
+            !executionSnap.exists
+            || normalizeText(executionSnap.data()?.state).toLowerCase() !== "in_progress"
+          ) {
+            return;
+          }
+          tx.set(executionRef, {
+            checkoutPreparationOutcome: "outcome_ambiguous",
+            checkoutPreparationReason: normalizeText(err?.paymentCheckoutReason).slice(0, 160),
+            error: "Stripe checkout preparation outcome is uncertain; retry this exact approval.",
+            updatedAtISO: new Date().toISOString(),
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+      } catch (checkoutAuditError) {
+        functions.logger.error("Ambiguous Stripe checkout preparation could not be audited", {
+          organizationId,
+          quoteId,
+          approvalRequestId,
+          error: normalizeText(checkoutAuditError?.message)
+        });
+      }
+    }
+    let checkoutCleanupIncomplete = false;
+    let keepExecutionResumable = providerAccepted
+      || checkoutPreparationAmbiguous
+      || executionStateUncertain
+      || dispatchFailurePlan?.executionState === "in_progress";
+    if (
+      claimedQuote
+      && !providerAccepted
+      && !keepExecutionResumable
+      && !executionAlreadyFinalized
+    ) {
+      const failedAtISO = new Date().toISOString();
+      if (checkoutPreparation && !checkoutPreparation.paymentAlreadyPublished) {
+        let cleanupResolved = false;
+        try {
+          const stripe = getStripeClient();
+          const providerNeutralized = await neutralizeRejectedStripeCheckout(
+            stripe,
+            checkoutPreparation.stripeSessionId
+          );
+          if (providerNeutralized) {
+            cleanupResolved = await markPreparedCheckoutExpiredIfUnchanged({
+              quoteId,
+              organizationId,
+              preparedPayment: checkoutPreparation.preparedPayment
+            });
+            if (!cleanupResolved) {
+              cleanupResolved = await advanceCheckoutGenerationIfUnchanged({
+                quoteId,
+                organizationId,
+                expectedPayment: checkoutPreparation.expectedPayment,
+                checkoutGeneration: checkoutPreparation.checkoutGeneration
+              });
+            }
+            if (!cleanupResolved) {
+              cleanupResolved = await isCheckoutCleanupStateResolved({
+                quoteId,
+                organizationId,
+                preparedPayment: checkoutPreparation.preparedPayment
+              });
+            }
+          }
+        } catch (neutralizeError) {
+          functions.logger.error("Failed to neutralize an unsent approved checkout", {
+            organizationId,
+            quoteId,
+            approvalRequestId,
+            stripeSessionId: checkoutPreparation.stripeSessionId,
+            error: normalizeText(neutralizeError?.message)
+          });
+        }
+        checkoutCleanupIncomplete = !cleanupResolved;
+      }
+      if (checkoutCleanupIncomplete) {
+        keepExecutionResumable = true;
+        try {
+          await executionRef.set({
+            error: "Stripe checkout cleanup is unresolved; retry this exact approval or reconcile provider state.",
+            updatedAtISO: failedAtISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        } catch (cleanupAuditError) {
+          functions.logger.error("Unresolved Stripe checkout cleanup could not be audited", {
+            organizationId,
+            quoteId,
+            approvalRequestId,
+            error: normalizeText(cleanupAuditError?.message)
+          });
+        }
+      } else try {
+        await db.runTransaction(async (tx) => {
+          const [quoteSnap, executionSnap, privateDispatchSnap] = await Promise.all([
             tx.get(quoteRef),
-            tx.get(executionRef)
+            tx.get(executionRef),
+            tx.get(privateDispatchRef)
           ]);
           if (!quoteSnap.exists || !executionSnap.exists) return;
           const currentQuote = quoteSnap.data() || {};
@@ -5899,11 +6965,30 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
           tx.set(executionRef, {
             state: "failed",
             result: {},
+            ...(execution.checkoutPreparation
+              ? {
+                checkoutPreparation: {
+                  ...execution.checkoutPreparation,
+                  privateDepositLink: "",
+                  exposureState: "failed",
+                  failedAtISO
+                }
+              }
+              : {}),
             error: "Payment request email could not be sent.",
             completedAtISO: failedAtISO,
             updatedAtISO: failedAtISO,
             updatedAt: FieldValue.serverTimestamp()
           }, { merge: true });
+          if (privateDispatchSnap.exists) {
+            tx.set(privateDispatchRef, {
+              privateDepositLink: "",
+              exposureState: "failed",
+              failedAtISO,
+              updatedAtISO: failedAtISO,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+          }
         });
       } catch (auditErr) {
         functions.logger.error("Payment-request failure audit could not be finalized", {
@@ -5914,11 +6999,26 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
         });
       }
     }
+    if (keepExecutionResumable && !providerAccepted) {
+      throw new functions.https.HttpsError(
+        "aborted",
+        checkoutPreparationAmbiguous
+          ? "Stripe checkout preparation is uncertain. Retry the same approved payment request; QuotePilot will reuse the same Stripe idempotency key and recover any durable preparation."
+          : checkoutCleanupIncomplete
+            ? "Stripe checkout cleanup is unresolved. Retry the same approved payment request or reconcile the recorded Stripe session."
+          : "Payment email outcome is uncertain. Retry the same approved payment request; QuotePilot will reuse the same provider key and checkout."
+      );
+    }
     if (err instanceof functions.https.HttpsError) throw err;
     if (err instanceof QuoteDeliveryError) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
-    if (err instanceof ApprovalWorkflowError) {
+    if (
+      err instanceof ApprovalWorkflowError
+      || err instanceof PaymentApprovalScopeError
+      || err instanceof PaymentSafetyError
+      || err instanceof PaymentDispatchStateError
+    ) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
     functions.logger.error("Approved payment request failed", {
@@ -5959,17 +7059,354 @@ exports.sendIntegrationTestSms = functions.region(REGION).https.onCall(async (da
   };
 });
 
-exports.createDepositCheckout = functions.region(REGION).https.onCall(async (data, context) => {
-  const staff = assertAdminStaff(await assertStaff(context));
-  if (normalizeText(data?.successUrl) || normalizeText(data?.cancelUrl)) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Checkout return URLs are server-derived and must not be supplied."
+function normalizeApprovedCheckoutPreparation(input = {}) {
+  const source = input && typeof input === "object" ? input : {};
+  const privateDepositLink = parseStoredPaymentLinkOrThrow(
+    source.privateDepositLink || source.url
+  );
+  const stripeSessionId = normalizeText(source.stripeSessionId || source.sessionId);
+  const checkoutGeneration = Number(source.checkoutGeneration);
+  const actionScopeDigest = normalizeText(source.actionScopeDigest).toLowerCase();
+  const expectedPayment = normalizeCheckoutTransitionState(source.expectedPayment);
+  const preparedPayment = normalizeCheckoutTransitionState(
+    source.preparedPayment || source.expectedPayment
+  );
+  const publishedPayment = normalizeCheckoutTransitionState(
+    source.publishedPayment || source.nextPayment
+  );
+  const paymentAlreadyPublished = source.paymentAlreadyPublished === true;
+  if (
+    !/^cs_[A-Za-z0-9_]+$/.test(stripeSessionId)
+    || !Number.isSafeInteger(checkoutGeneration)
+    || checkoutGeneration < 0
+    || !/^[a-f0-9]{64}$/.test(actionScopeDigest)
+    || publishedPayment.stripeSessionId !== stripeSessionId
+    || publishedPayment.checkoutGeneration !== checkoutGeneration
+  ) {
+    throw new PaymentSafetyError("Prepared Stripe checkout evidence is invalid.");
+  }
+  if (paymentAlreadyPublished) {
+    if (
+      publishedPayment.depositStatus !== "sent"
+      || publishedPayment.depositLink !== privateDepositLink
+      || publishedPayment.stripeCheckoutState !== "open"
+    ) {
+      throw new PaymentSafetyError("Published Stripe checkout evidence is invalid.");
+    }
+  } else {
+    assertPreparedCheckoutRegistrationTransition({
+      currentPayment: expectedPayment,
+      expectedPayment,
+      preparedPayment
+    });
+    assertPreparedCheckoutPublicationTransition({
+      currentPayment: preparedPayment,
+      expectedPreparedPayment: preparedPayment,
+      publishedPayment
+    });
+    if (publishedPayment.depositLink !== privateDepositLink) {
+      throw new PaymentSafetyError("Prepared checkout URL does not match publication evidence.");
+    }
+  }
+  return {
+    stripeSessionId,
+    checkoutGeneration,
+    privateDepositLink,
+    expectedPayment,
+    preparedPayment,
+    publishedPayment,
+    paymentAlreadyPublished,
+    actionScopeDigest,
+    exposureState: normalizeText(source.exposureState).toLowerCase() || "prepared",
+    preparedAtISO: normalizeText(source.preparedAtISO)
+  };
+}
+
+async function restoreApprovedCheckoutPreparation({
+  preparation,
+  quote,
+  quoteId,
+  organizationId,
+  approvalRequestId,
+  actionScopeDigest
+} = {}) {
+  const normalized = normalizeApprovedCheckoutPreparation(preparation);
+  const expectedScopeDigest = normalizeText(actionScopeDigest).toLowerCase();
+  if (normalized.actionScopeDigest !== expectedScopeDigest) {
+    throw new PaymentSafetyError(
+      "Prepared checkout does not match the approved payment scope."
     );
   }
-  const { quoteId, quote, quoteNumber, organizationId } = await readQuoteOrThrow(data?.quoteId, {
-    organizationId: staff.organizationId
+  const stripe = getStripeClient();
+  const session = await stripe.checkout.sessions.retrieve(normalized.stripeSessionId);
+  assertStripeObjectMode({
+    expectedMode: getStripeMode(),
+    eventLivemode: session?.livemode,
+    sessionLivemode: session?.livemode
   });
+  validateStripeCheckoutScope({
+    session,
+    quote: {
+      ...quote,
+      payment: {
+        ...(quote?.payment || {}),
+        stripeSessionId: normalized.stripeSessionId
+      }
+    },
+    quoteId,
+    organizationId
+  });
+  const sessionStatus = normalizeText(session.status).toLowerCase();
+  const paymentStatus = normalizeText(session.payment_status).toLowerCase();
+  const expiresAtMs = Number(session.expires_at || 0) * 1000;
+  if (sessionStatus === "expired") {
+    throw new PaymentSafetyError(
+      "The approved Stripe checkout expired before the payment request completed. Request a new approval."
+    );
+  }
+  if (
+    sessionStatus === "open"
+    && (
+      paymentStatus !== "unpaid"
+      || !Number.isFinite(expiresAtMs)
+      || expiresAtMs <= Date.now()
+    )
+  ) {
+    throw new PaymentSafetyError("The prepared Stripe checkout is not safely payable.");
+  }
+  if (!["open", "complete"].includes(sessionStatus) && paymentStatus !== "paid") {
+    throw new PaymentSafetyError("The prepared Stripe checkout is not safely reusable.");
+  }
+  const providerUrl = normalizeText(session.url)
+    ? parseStoredPaymentLinkOrThrow(session.url)
+    : normalized.privateDepositLink;
+  if (providerUrl !== normalized.privateDepositLink) {
+    throw new PaymentSafetyError(
+      "The prepared checkout URL does not match the Stripe session."
+    );
+  }
+  const metadataApprovalId = normalizeApprovalExecutionId(session?.metadata?.approvalRequestId);
+  const metadataScopeDigest = normalizeText(session?.metadata?.actionScopeDigest).toLowerCase();
+  if (
+    !normalized.paymentAlreadyPublished
+    && (
+      metadataApprovalId !== normalizeApprovalExecutionId(approvalRequestId)
+      || metadataScopeDigest !== normalized.actionScopeDigest
+      || normalizeText(session?.metadata?.paymentKind).toLowerCase() !== "deposit"
+      || normalizeText(session?.metadata?.currency).toLowerCase() !== "usd"
+      || Number(session?.metadata?.checkoutGeneration) !== normalized.checkoutGeneration
+    )
+  ) {
+    throw new PaymentSafetyError(
+      "Stripe checkout metadata does not match the approved payment request."
+    );
+  }
+  if (
+    normalized.paymentAlreadyPublished
+    && metadataScopeDigest
+    && metadataScopeDigest !== normalized.actionScopeDigest
+  ) {
+    throw new PaymentSafetyError(
+      "The published Stripe checkout belongs to a different approval scope."
+    );
+  }
+  return normalized;
+}
+
+async function recoverPersistedApprovedCheckoutPreparation({
+  executionRef,
+  privateDispatchRef,
+  organizationId,
+  quoteId,
+  approvalRequestId,
+  staff,
+  expectedApprovalScopeDigest
+} = {}) {
+  const [executionSnap, privateDispatchSnap] = await Promise.all([
+    executionRef.get(),
+    privateDispatchRef.get()
+  ]);
+  if (!executionSnap.exists) return null;
+  const execution = executionSnap.data() || {};
+  assertMatchingApprovalExecutionRecord(execution, {
+    organizationId,
+    quoteId,
+    approvalRequestId,
+    action: "send_payment_request"
+  });
+  const hasAuditPreparation = Boolean(execution.checkoutPreparation);
+  if (!hasAuditPreparation && !privateDispatchSnap.exists) return null;
+  if (
+    !hasAuditPreparation
+    || !privateDispatchSnap.exists
+    || normalizeText(execution.state).toLowerCase() !== "in_progress"
+    || normalizeText(execution.executedBy?.uid) !== normalizeText(staff?.uid)
+    || normalizeText(execution.actionScopeDigest).toLowerCase()
+      !== normalizeText(expectedApprovalScopeDigest).toLowerCase()
+  ) {
+    throw new PaymentSafetyError(
+      "Stripe checkout preparation persistence is incomplete and requires recovery."
+    );
+  }
+  return normalizeApprovedCheckoutPreparation(
+    restorePrivateCheckoutPreparation(
+      execution.checkoutPreparation,
+      privateDispatchSnap.data(),
+      { organizationId, quoteId, approvalRequestId }
+    )
+  );
+}
+
+async function persistApprovedCheckoutPreparation({
+  quoteRef,
+  executionRef,
+  quoteId,
+  organizationId,
+  approvalRequestId,
+  staff,
+  expectedApprovalScopeDigest,
+  prepared
+} = {}) {
+  const preparedAtISO = new Date().toISOString();
+  const preparation = normalizeApprovedCheckoutPreparation({
+    ...prepared,
+    privateDepositLink: prepared?.url,
+    stripeSessionId: prepared?.sessionId,
+    actionScopeDigest: expectedApprovalScopeDigest,
+    exposureState: "prepared",
+    preparedAtISO
+  });
+  const privateDispatchRef = getPrivatePaymentDispatchDocRef(
+    organizationId,
+    approvalRequestId
+  );
+  return db.runTransaction(async (tx) => {
+    const [quoteSnap, executionSnap, privateDispatchSnap] = await Promise.all([
+      tx.get(quoteRef),
+      tx.get(executionRef),
+      tx.get(privateDispatchRef)
+    ]);
+    if (!quoteSnap.exists || !executionSnap.exists) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Payment-request execution disappeared before checkout preparation."
+      );
+    }
+    const currentQuote = quoteSnap.data() || {};
+    const execution = executionSnap.data() || {};
+    assertMatchingApprovalExecutionRecord(execution, {
+      organizationId,
+      quoteId,
+      approvalRequestId,
+      action: "send_payment_request"
+    });
+    if (
+      normalizeText(execution.state).toLowerCase() !== "in_progress"
+      || normalizeText(execution.executedBy?.uid) !== normalizeText(staff?.uid)
+      || normalizeText(execution.actionScopeDigest).toLowerCase()
+        !== preparation.actionScopeDigest
+    ) {
+      throw new ApprovalWorkflowError(
+        "aborted",
+        "Payment-request execution ownership or scope changed during checkout preparation."
+      );
+    }
+    if (execution.checkoutPreparation) {
+      return normalizeApprovedCheckoutPreparation(
+        restorePrivateCheckoutPreparation(
+          execution.checkoutPreparation,
+          privateDispatchSnap.exists ? privateDispatchSnap.data() : null,
+          { organizationId, quoteId, approvalRequestId }
+        )
+      );
+    }
+    const portalKey = normalizeText(currentQuote.portalKey);
+    const portalSnap = await tx.get(db.collection(PORTAL_COLLECTION).doc(portalKey));
+    const currentScope = derivePaymentRequestApprovalScope({
+      quote: currentQuote,
+      quoteId,
+      organizationId,
+      portalSnapshot: portalSnap.exists ? portalSnap.data() : null,
+      nowISO: preparedAtISO
+    });
+    const approvalRequest = findQuoteApprovalRequest(
+      currentQuote.workflow,
+      approvalRequestId
+    );
+    const verifiedScope = assertPaymentApprovalRequestScope({
+      approvalRequest,
+      expected: currentScope
+    });
+    if (verifiedScope.actionScopeDigest !== preparation.actionScopeDigest) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Payment approval scope changed while Stripe checkout was prepared."
+      );
+    }
+    const currentPayment = normalizeCheckoutTransitionState(currentQuote.payment);
+    if (
+      JSON.stringify(currentPayment) !== JSON.stringify(preparation.expectedPayment)
+      && JSON.stringify(currentPayment) !== JSON.stringify(preparation.preparedPayment)
+      && JSON.stringify(currentPayment) !== JSON.stringify(preparation.publishedPayment)
+    ) {
+      throw new PaymentSafetyError(
+        "Quote payment state changed while Stripe checkout was prepared."
+      );
+    }
+    if (!preparation.paymentAlreadyPublished) {
+      const registration = assertPreparedCheckoutRegistrationTransition({
+        currentPayment,
+        expectedPayment: preparation.expectedPayment,
+        preparedPayment: preparation.preparedPayment
+      });
+      if (!registration.alreadyApplied) {
+        const quotePaymentUpdate = {
+          updatedAtISO: preparedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        for (const [key, value] of Object.entries(preparation.preparedPayment)) {
+          quotePaymentUpdate[`payment.${key}`] = value;
+        }
+        tx.update(quoteRef, quotePaymentUpdate);
+      }
+    }
+    tx.set(executionRef, {
+      checkoutPreparation: redactCheckoutPreparation(preparation),
+      updatedAtISO: preparedAtISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    tx.set(privateDispatchRef, {
+      organizationId,
+      quoteId,
+      approvalRequestId,
+      stripeSessionId: preparation.stripeSessionId,
+      actionScopeDigest: preparation.actionScopeDigest,
+      privateDepositLink: preparation.privateDepositLink,
+      exposureState: "prepared",
+      createdAtISO: preparedAtISO,
+      updatedAtISO: preparedAtISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: false });
+    return preparation;
+  });
+}
+
+async function prepareDepositCheckoutForApprovedSend({
+  quoteId,
+  quote,
+  quoteNumber,
+  organizationId,
+  approvalRequestId,
+  actionScopeDigest
+} = {}) {
+  const normalizedApprovalRequestId = normalizeApprovalExecutionId(approvalRequestId);
+  const normalizedScopeDigest = normalizeText(actionScopeDigest).toLowerCase();
+  if (!normalizedApprovalRequestId || !/^[a-f0-9]{64}$/.test(normalizedScopeDigest)) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "An exact approved payment scope is required before preparing Stripe checkout."
+    );
+  }
   try {
     assertQuoteEditNotDispatching(
       { ...quote, id: quoteId },
@@ -6010,11 +7447,22 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
     throw err;
   }
   const stripe = getStripeClient();
+  if (checkoutPlan.action === "inspect_prepared") {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "A prepared Stripe checkout is awaiting its private dispatch record. Resume the existing approved payment request or request provider review."
+    );
+  }
   if (checkoutPlan.action === "inspect_existing") {
     const existingUrl = parseStoredPaymentLinkOrThrow(checkoutPlan.depositLink);
     const existingSession = await stripe.checkout.sessions.retrieve(
       checkoutPlan.stripeSessionId
     );
+    assertStripeObjectMode({
+      expectedMode: getStripeMode(),
+      eventLivemode: existingSession?.livemode,
+      sessionLivemode: existingSession?.livemode
+    });
     try {
       validateStripeCheckoutScope({
         session: existingSession,
@@ -6055,16 +7503,16 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
         );
       }
       return {
-        ok: true,
         reused: true,
         quoteId,
         quoteNumber,
         url: providerUrl,
         sessionId: checkoutPlan.stripeSessionId,
-        sms: {
-          sent: false,
-          reason: "existing_checkout_reused"
-        }
+        checkoutGeneration: checkoutPlan.checkoutGeneration,
+        expectedPayment: normalizeCheckoutTransitionState(quote.payment),
+        preparedPayment: normalizeCheckoutTransitionState(quote.payment),
+        publishedPayment: normalizeCheckoutTransitionState(quote.payment),
+        paymentAlreadyPublished: true
       };
     }
     if (providerSessionStatus === "open") {
@@ -6091,8 +7539,10 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
   cancelUrl.searchParams.set("payment", "cancelled");
 
   const checkoutGeneration = checkoutPlan.nextCheckoutGeneration;
-  const session = await stripe.checkout.sessions.create(
-    {
+  let session;
+  try {
+    session = await stripe.checkout.sessions.create(
+      {
       mode: "payment",
       success_url: successUrl.toString(),
       cancel_url: cancelUrl.toString(),
@@ -6101,7 +7551,13 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
         quoteId,
         quoteNumber,
         organizationId: organizationId || "",
-        portalKey: quotePortalKey || ""
+        portalKey: quotePortalKey || "",
+        quoteRevisionId: resolveQuoteDeliveryRevisionId(quote, quoteId),
+        approvalRequestId: normalizedApprovalRequestId,
+        actionScopeDigest: normalizedScopeDigest,
+        paymentKind: "deposit",
+        currency: "usd",
+        checkoutGeneration: String(checkoutGeneration)
       },
       line_items: [
         {
@@ -6116,17 +7572,25 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
           }
         }
       ]
-    },
-    {
-      idempotencyKey: buildStripeCheckoutIdempotencyKey({
-        quoteId,
-        organizationId,
-        portalKey: quotePortalKey,
-        amountTotal: depositCents,
-        checkoutGeneration
-      })
-    }
-  );
+      },
+      {
+        idempotencyKey: buildStripeCheckoutIdempotencyKey({
+          quoteId,
+          organizationId,
+          portalKey: quotePortalKey,
+          amountTotal: depositCents,
+          checkoutGeneration
+        })
+      }
+    );
+  } catch (err) {
+    if (!isAmbiguousStripeProviderError(err)) throw err;
+    const stripeType = normalizeText(err?.type || err?.rawType).toLowerCase();
+    const status = Number(err?.statusCode || err?.status || 0);
+    throw annotatePaymentCheckoutOutcome(err, {
+      reason: stripeType || `stripe_http_${status || "unknown"}`
+    });
+  }
 
   const sessionId = normalizeText(session.id);
   if (!sessionId) {
@@ -6137,7 +7601,12 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
   }
   let sessionUrl = "";
   try {
-    const currentSession = await stripe.checkout.sessions.retrieve(sessionId);
+    const currentSession = session;
+    assertStripeObjectMode({
+      expectedMode: getStripeMode(),
+      eventLivemode: currentSession?.livemode,
+      sessionLivemode: currentSession?.livemode
+    });
     validateStripeCheckoutScope({
       session: currentSession,
       quote: {
@@ -6166,20 +7635,36 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
     sessionUrl = parseStoredPaymentLinkOrThrow(currentSession.url);
   } catch (err) {
     let neutralized = false;
+    let cleanupError = null;
     try {
       neutralized = await neutralizeRejectedStripeCheckout(stripe, sessionId);
     } catch (expireError) {
+      cleanupError = expireError;
       functions.logger.error("Failed to expire an invalid Stripe checkout session", {
         sessionId,
         errorMessage: normalizeText(expireError?.message).slice(0, 180)
       });
     }
     if (neutralized) {
-      await advanceCheckoutGenerationIfUnchanged({
-        quoteId,
-        organizationId,
-        expectedPayment: quote.payment || {},
-        checkoutGeneration
+      let generationAdvanced = false;
+      try {
+        generationAdvanced = await advanceCheckoutGenerationIfUnchanged({
+          quoteId,
+          organizationId,
+          expectedPayment: quote.payment || {},
+          checkoutGeneration
+        });
+      } catch (generationError) {
+        cleanupError = generationError;
+      }
+      if (!generationAdvanced) {
+        throw annotatePaymentCheckoutOutcome(cleanupError || err, {
+          reason: "post_create_generation_cleanup_ambiguous"
+        });
+      }
+    } else {
+      throw annotatePaymentCheckoutOutcome(cleanupError || err, {
+        reason: "post_create_provider_cleanup_ambiguous"
       });
     }
     if (err instanceof PaymentSafetyError) {
@@ -6187,72 +7672,159 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
     }
     throw err;
   }
-  const nowISO = new Date().toISOString();
-  const nextPayment = {
-    ...(quote.payment || {}),
-    depositLink: sessionUrl,
-    depositStatus: "sent",
-    depositConfirmedAtISO: "",
+  const expectedPayment = normalizeCheckoutTransitionState(quote.payment);
+  const preparedPayment = buildPreparedCheckoutState({
+    expectedPayment,
     stripeSessionId: sessionId,
     checkoutGeneration
-  };
-  try {
-    await patchPaymentState({
-      quoteId,
-      organizationId,
-      portalKey: quotePortalKey,
-      paymentPatch: {
-        depositLink: sessionUrl,
-        depositStatus: "sent",
-        depositConfirmedAtISO: "",
-        stripeSessionId: sessionId,
-        checkoutGeneration,
-        lastCheckoutCreatedAtISO: nowISO
-      },
-      auditContext: {
-        host: staff.host,
-        eventType: "checkout.session.created",
-        organizationId
-      },
-      checkoutTransition: {
-        expectedPayment: quote.payment || {},
-        nextPayment
-      }
-    });
-  } catch (err) {
-    let neutralized = false;
-    try {
-      neutralized = await neutralizeRejectedStripeCheckout(stripe, sessionId);
-    } catch (expireError) {
-      functions.logger.error("Failed to expire a rejected Stripe checkout session", {
-        sessionId,
-        errorMessage: normalizeText(expireError?.message).slice(0, 180)
-      });
-    }
-    if (neutralized) {
-      await advanceCheckoutGenerationIfUnchanged({
-        quoteId,
-        organizationId,
-        expectedPayment: quote.payment || {},
-        checkoutGeneration
-      });
-    }
-    throw err;
-  }
-
-  const smsResult = await sendOwnerSms(
-    `Deposit checkout created for ${quoteNumber}. Deposit ${currencyLabel(depositValue)}.`
-  );
+  });
+  const publishedPayment = buildPublishedCheckoutState({
+    preparedPayment,
+    depositLink: sessionUrl
+  });
 
   return {
-    ok: true,
     reused: false,
     quoteId,
     quoteNumber,
     url: sessionUrl,
     sessionId,
-    sms: smsResult
+    checkoutGeneration,
+    expectedPayment,
+    preparedPayment,
+    publishedPayment,
+    paymentAlreadyPublished: false
   };
+}
+
+exports.reconcileDepositCheckout = functions.region(REGION).https.onCall(async (data, context) => {
+  const staff = assertAdminStaff(await assertStaff(context));
+  const { quoteId, quote, quoteNumber, organizationId } = await readQuoteOrThrow(data?.quoteId, {
+    organizationId: staff.organizationId
+  });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Payment reconciliation requires same-organization admin authority."
+    );
+  }
+  const stripeSessionId = normalizeText(quote?.payment?.stripeSessionId);
+  if (!stripeSessionId) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "This quote has no server-recorded Stripe checkout session to reconcile."
+    );
+  }
+  try {
+    const stripe = getStripeClient();
+    const session = await stripe.checkout.sessions.retrieve(stripeSessionId, {
+      expand: ["payment_intent"]
+    });
+    assertStripeObjectMode({
+      expectedMode: getStripeMode(),
+      eventLivemode: session?.livemode,
+      sessionLivemode: session?.livemode
+    });
+    const validated = validateStripeCheckoutScope({
+      session,
+      quote,
+      quoteId,
+      organizationId
+    });
+    const observation = mapStripeCheckoutReconciliation(session);
+    const reconciliationEventId = `reconcile:${randomUUID()}`;
+    let result = {
+      duplicate: false,
+      applied: false,
+      ignored: observation.providerState,
+      eventId: reconciliationEventId
+    };
+    if (observation.actionable) {
+      result = await patchPaymentState({
+        quoteId,
+        organizationId,
+        portalKey: normalizeText(quote.portalKey),
+        auditContext: {
+          host: staff.host,
+          eventType: "checkout.session.reconciled",
+          organizationId,
+          source: "admin_reconciliation",
+          actorUid: staff.uid,
+          actorEmail: staff.email
+        },
+        stripeSession: session,
+        providerObservation: observation,
+        webhookEvent: {
+          eventId: reconciliationEventId,
+          eventType: "checkout.session.reconciled",
+          requestHost: staff.host,
+          requestIp: ""
+        }
+      });
+    } else {
+      await db.collection(WEBHOOK_EVENTS_COLLECTION).doc(`stripe-${reconciliationEventId}`).create({
+        provider: "stripe",
+        eventId: reconciliationEventId,
+        eventType: "checkout.session.reconciled",
+        source: "admin_reconciliation",
+        stripeSessionId: validated.sessionId,
+        livemode: session?.livemode === true,
+        providerState: observation.providerState,
+        status: observation.reviewRequired ? "review_required" : "observed",
+        result: observation.reviewRequired ? "ambiguous_provider_state" : "no_change",
+        actorUid: staff.uid,
+        actorEmail: staff.email,
+        organizationId,
+        quoteId,
+        processedAtISO: new Date().toISOString(),
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+    return {
+      ok: true,
+      organizationId,
+      quoteId,
+      quoteNumber,
+      stripeSessionId: validated.sessionId,
+      providerState: observation.providerState,
+      applied: result.applied === true,
+      reviewRequired: observation.reviewRequired === true,
+      auditEventId: reconciliationEventId
+    };
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (
+      err instanceof PaymentSafetyError
+      || err instanceof StripeProviderStateError
+    ) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    functions.logger.error("Stripe deposit reconciliation failed", {
+      organizationId,
+      quoteId,
+      stripeSessionId,
+      actorUid: staff.uid,
+      error: normalizeText(err?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to reconcile the Stripe checkout session."
+    );
+  }
+});
+
+exports.createDepositCheckout = functions.region(REGION).https.onCall(async (data, context) => {
+  assertAdminStaff(await assertStaff(context));
+  if (normalizeText(data?.successUrl) || normalizeText(data?.cancelUrl)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Checkout return URLs are server-derived and must not be supplied."
+    );
+  }
+  throw new functions.https.HttpsError(
+    "failed-precondition",
+    "Direct checkout creation is disabled. Approve and send the payment request as one operation."
+  );
 });
 
 exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res) => {
@@ -6275,9 +7847,15 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
     return;
   }
 
+  let stripe;
+  try {
+    stripe = getStripeClient();
+  } catch (err) {
+    res.status(500).send(`Stripe configuration failed: ${err.message}`);
+    return;
+  }
   let event;
   try {
-    const stripe = getStripeClient();
     event = stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
   } catch (err) {
     res.status(400).send(`Webhook verification failed: ${err.message}`);
@@ -6305,25 +7883,33 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
     return;
   }
 
-  const paymentEventTypes = new Set([
-    "checkout.session.completed",
-    "checkout.session.async_payment_succeeded"
-  ]);
-  if (!paymentEventTypes.has(normalizeText(event.type))) {
+  const session = event.data?.object || {};
+  let providerObservation;
+  try {
+    providerObservation = mapStripeCheckoutObservation({
+      eventType: event.type,
+      session
+    });
+  } catch (err) {
+    functions.logger.error("Invalid Stripe checkout observation", {
+      eventId,
+      eventType: normalizeText(event.type),
+      message: normalizeText(err?.message)
+    });
+    res.status(500).send("Failed to validate checkout observation.");
+    return;
+  }
+  if (!providerObservation.supported) {
     res.json({ received: true, ignored: "unsupported_event_type" });
     return;
   }
 
-  const session = event.data?.object || {};
-  if (
-    event.type === "checkout.session.completed"
-    && normalizeText(session.payment_status).toLowerCase() !== "paid"
-  ) {
-    res.json({ received: true, ignored: "awaiting_payment" });
-    return;
-  }
-
   try {
+    assertStripeObjectMode({
+      expectedMode: getStripeMode(),
+      eventLivemode: event?.livemode,
+      sessionLivemode: session?.livemode
+    });
     const quoteId = normalizeText(session?.metadata?.quoteId);
     const organizationId = normalizeOrganizationId(session?.metadata?.organizationId);
     if (!quoteId || !organizationId) {
@@ -6337,12 +7923,122 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
       return;
     }
 
-    const quoteDetails = await readQuoteOrThrow(quoteId, {
-      organizationId
-    });
+    let quoteDetails;
+    try {
+      quoteDetails = await readQuoteOrThrow(quoteId, { organizationId });
+    } catch (lookupError) {
+      const lookupCode = normalizeText(lookupError?.code).toLowerCase();
+      if (!new Set(["not-found", "permission-denied"]).has(lookupCode)) {
+        throw lookupError;
+      }
+      const missingAudit = await db.runTransaction(async (tx) => {
+        const existingSnap = await tx.get(dedupeRef);
+        if (existingSnap.exists) return { duplicate: true };
+        tx.create(dedupeRef, {
+          provider: "stripe",
+          source: "stripe_webhook",
+          eventId,
+          eventType: normalizeText(event.type),
+          requestHost,
+          requestIp,
+          organizationId,
+          quoteId,
+          stripeSessionId: normalizeText(session?.id),
+          livemode: session?.livemode === true,
+          providerState: providerObservation.providerState,
+          status: "ignored",
+          result: lookupCode === "not-found" ? "quote_not_found" : "quote_scope_mismatch",
+          providerEventCreatedAtISO: Number.isFinite(Number(event?.created))
+            ? new Date(Number(event.created) * 1000).toISOString()
+            : "",
+          processedAtISO: new Date().toISOString(),
+          createdAt: FieldValue.serverTimestamp()
+        });
+        return { duplicate: false };
+      });
+      res.json({
+        received: true,
+        ...(missingAudit.duplicate
+          ? { duplicate: true }
+          : { ignored: lookupCode === "not-found" ? "quote_not_found" : "quote_scope_mismatch" })
+      });
+      return;
+    }
     const quote = quoteDetails.quote || {};
     const quoteNumber = quoteDetails.quoteNumber || quoteId;
-    const validatedSession = validateStripeCheckoutCompletion({
+    const activeStripeSessionId = normalizeText(quote?.payment?.stripeSessionId);
+    const observedStripeSessionId = normalizeText(session?.id);
+    if (observedStripeSessionId !== activeStripeSessionId) {
+      let commercialScopeValid = true;
+      let commercialScopeError = "";
+      try {
+        validateStripeCheckoutScope({
+          session,
+          quote: {
+            ...quote,
+            payment: {
+              ...(quote.payment || {}),
+              stripeSessionId: observedStripeSessionId
+            }
+          },
+          quoteId,
+          organizationId: quoteDetails.organizationId
+        });
+      } catch (scopeError) {
+        commercialScopeValid = false;
+        commercialScopeError = normalizeText(scopeError?.message).slice(0, 240);
+      }
+      const knownSession = isKnownStripeSessionId(quote.payment, observedStripeSessionId);
+      const stalePaidReview = providerObservation.providerState === "paid";
+      const staleResult = knownSession ? "stale_known_session" : "unrecognized_session";
+      const staleScopeResult = commercialScopeValid
+        ? staleResult
+        : `${staleResult}_scope_mismatch`;
+      const staleAudit = await db.runTransaction(async (tx) => {
+        const existingSnap = await tx.get(dedupeRef);
+        if (existingSnap.exists) return { duplicate: true };
+        tx.create(dedupeRef, {
+          provider: "stripe",
+          source: "stripe_webhook",
+          eventId,
+          eventType: normalizeText(event.type),
+          requestHost,
+          requestIp,
+          organizationId: quoteDetails.organizationId,
+          quoteId,
+          stripeSessionId: observedStripeSessionId,
+          activeStripeSessionId,
+          knownSession,
+          commercialScopeValid,
+          commercialScopeError,
+          livemode: session?.livemode === true,
+          providerState: providerObservation.providerState,
+          status: stalePaidReview ? "review_required" : "ignored",
+          result: stalePaidReview ? `${staleScopeResult}_paid_review` : staleScopeResult,
+          providerEventCreatedAtISO: Number.isFinite(Number(event?.created))
+            ? new Date(Number(event.created) * 1000).toISOString()
+            : "",
+          processedAtISO: new Date().toISOString(),
+          createdAt: FieldValue.serverTimestamp()
+        });
+        return { duplicate: false };
+      });
+      if (staleAudit.duplicate) {
+        res.json({ received: true, duplicate: true });
+        return;
+      }
+      if (stalePaidReview) {
+        await sendOwnerSms(
+          `Stripe reported a paid delayed checkout for ${quoteNumber}. Review event ${eventId} before changing payment evidence.`
+        );
+      }
+      res.json({
+        received: true,
+        ignored: stalePaidReview ? "stale_paid_requires_review" : staleResult
+      });
+      return;
+    }
+    const validatedSession = validateStripeCheckoutScope({
       session,
       quote,
       quoteId,
@@ -6352,31 +8048,37 @@ exports.stripeWebhook = functions.region(REGION).https.onRequest(async (req, res
       quoteId,
       organizationId: quoteDetails.organizationId,
       portalKey: normalizeText(quote.portalKey),
-      paymentPatch: {
-        depositStatus: "paid",
-        depositConfirmedAtISO: new Date().toISOString(),
-        stripeSessionId: validatedSession.sessionId
-      },
       auditContext: {
         host: requestHost,
         eventType: event.type,
-        organizationId: quoteDetails.organizationId
+        organizationId: quoteDetails.organizationId,
+        source: "stripe_webhook"
       },
       stripeSession: session,
+      providerObservation,
       webhookEvent: {
         eventId,
         eventType: event.type,
         requestHost,
-        requestIp
+        requestIp,
+        providerEventCreatedAtISO: Number.isFinite(Number(event?.created))
+          ? new Date(Number(event.created) * 1000).toISOString()
+          : ""
       }
     });
     if (paymentResult.duplicate) {
       res.json({ received: true, duplicate: true });
       return;
     }
-    await sendOwnerSms(
-      `Deposit paid for ${quoteNumber}. Amount ${currencyLabel(validatedSession.amountTotal / 100)}.`
-    );
+    if (paymentResult.applied && providerObservation.providerState === "paid") {
+      await sendOwnerSms(
+        `Deposit paid for ${quoteNumber}. Amount ${currencyLabel(validatedSession.amountTotal / 100)}.`
+      );
+    }
+    if (paymentResult.ignored) {
+      res.json({ received: true, ignored: paymentResult.ignored });
+      return;
+    }
   } catch (err) {
     functions.logger.error("Failed processing Stripe checkout payment event", {
       eventId,

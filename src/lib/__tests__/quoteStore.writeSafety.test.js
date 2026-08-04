@@ -289,7 +289,7 @@ describe("quoteStore Firebase write safety", () => {
     });
   });
 
-  test("portal sync payloads omit server-owned payment link and Stripe session fields", () => {
+  test("portal sync payloads omit all server-owned payment evidence", () => {
     expect(buildClientWritablePortalPayment({
       depositLink: "https://checkout.stripe.com/c/pay/cs_test_server",
       stripeSessionId: "cs_test_server",
@@ -300,10 +300,7 @@ describe("quoteStore Firebase write safety", () => {
       checkoutGeneration: 2,
       depositStatus: "sent",
       depositConfirmedAtISO: ""
-    })).toEqual({
-      depositStatus: "sent",
-      depositConfirmedAtISO: ""
-    });
+    })).toEqual({});
   });
 
   test("CRM provider sends cannot execute from the browser", async () => {

@@ -545,15 +545,16 @@ test("unresolved quote delivery locks conflicting mutations but keeps read-only 
   for (const control of await row.locator("select").all()) {
     await expect(control).toBeDisabled();
   }
-  for (const name of ["Edit", "Rotate Portal", "Create Stripe Link", "Delete"]) {
+  for (const name of ["Edit", "Rotate Portal", "Delete"]) {
     await expect(row.getByRole("button", { name })).toBeDisabled();
   }
+  await expect(row.getByRole("button", { name: "Send Pay Request" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Duplicate" })).toBeEnabled();
   await expect(row.getByRole("button", { name: "PDF" })).toBeEnabled();
   await expect(row.getByRole("button", { name: "Copy Email" })).toBeEnabled();
 });
 
-test("quote history supports export and safely blocks an unconfigured payment link", async ({ page }) => {
+test("quote history supports export and hides an unapproved payment link", async ({ page }) => {
   await createQuoteToHistory(page, { guests: 84 });
 
   const firstQuoteRow = page.locator(".history-table-wrap tbody tr").filter({
@@ -572,8 +573,7 @@ test("quote history supports export and safely blocks an unconfigured payment li
   const pdfDownload = await downloadPromise;
   expect(pdfDownload.suggestedFilename()).toMatch(/\.pdf$/i);
 
-  await firstQuoteRow.getByRole("button", { name: "Copy Pay Link" }).click();
-  await expect(page.getByRole("dialog").getByRole("alert")).toContainText(/No approved Stripe deposit link/i);
+  await expect(firstQuoteRow.getByRole("button", { name: "Copy Pay Link" })).toHaveCount(0);
 });
 
 test("sales workflow persists a follow-up plan", async ({ page }) => {

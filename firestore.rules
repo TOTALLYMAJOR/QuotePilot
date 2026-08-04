@@ -395,16 +395,11 @@ service cloud.firestore {
       return staffVersionPointerPatchAllowed(orgId, quoteId)
         || (
           affectedKeys.hasOnly([
-            "payment",
             "booking",
             "workflow",
             "integrations",
             "updatedAtISO"
           ])
-          && (
-            !affectedKeys.hasAny(["payment"])
-            || isOrgAdmin(orgId)
-          )
           && (
             !affectedKeys.hasAny(["booking"])
             || (
@@ -441,18 +436,22 @@ service cloud.firestore {
         ]);
     }
 
-    function serverOwnedPaymentReferencesUnchanged() {
+    function serverOwnedPaymentEvidenceUnchanged() {
       let previousPayment = resource.data.get("payment", {});
       let nextPayment = request.resource.data.get("payment", {});
       return previousPayment is map
         && nextPayment is map
         && nextPayment.get("depositLink", "") == previousPayment.get("depositLink", "")
+        && nextPayment.get("depositStatus", "unpaid") == previousPayment.get("depositStatus", "unpaid")
+        && nextPayment.get("depositConfirmedAtISO", "") == previousPayment.get("depositConfirmedAtISO", "")
         && nextPayment.get("stripeSessionId", "") == previousPayment.get("stripeSessionId", "")
+        && nextPayment.get("stripeCheckoutState", "") == previousPayment.get("stripeCheckoutState", "")
         && nextPayment.get("lastCheckoutCreatedAtISO", "") == previousPayment.get("lastCheckoutCreatedAtISO", "")
         && nextPayment.get("lastHost", "") == previousPayment.get("lastHost", "")
         && nextPayment.get("lastEventType", "") == previousPayment.get("lastEventType", "")
         && nextPayment.get("lastOrganizationId", "") == previousPayment.get("lastOrganizationId", "")
-        && nextPayment.get("checkoutGeneration", 0) == previousPayment.get("checkoutGeneration", 0);
+        && nextPayment.get("checkoutGeneration", 0) == previousPayment.get("checkoutGeneration", 0)
+        && nextPayment.get("knownStripeSessionIds", []) == previousPayment.get("knownStripeSessionIds", []);
     }
 
     function serverOwnedContractEvidenceUnchanged() {
@@ -471,7 +470,7 @@ service cloud.firestore {
 
     function staffQuoteStatusUpdateAllowed(orgId, quoteId) {
       return !(resource.data.get("workflow", {}).get("quoteDelivery", {}).get("state", "") in ["sending", "outcome_ambiguous", "outcome_unknown"])
-        && serverOwnedPaymentReferencesUnchanged()
+        && serverOwnedPaymentEvidenceUnchanged()
         && customerDecisionEvidenceUnchanged()
         && (
           (
@@ -846,6 +845,10 @@ service cloud.firestore {
     match /organizations/{orgId}/quoteApprovalExecutions/{executionId} {
       allow read: if isOrgAdmin(orgId);
       allow write: if false;
+    }
+
+    match /organizations/{orgId}/privatePaymentDispatches/{dispatchId} {
+      allow read, write: if false;
     }
 
     match /organizations/{orgId}/quotes/{quoteId} {

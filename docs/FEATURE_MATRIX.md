@@ -23,7 +23,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 5 | Live sticky summary panel with real-time totals | Implemented (local mobile acceptance) | `src/components/LiveBreakdown.jsx`, `src/App.jsx` (`MobilePricingSummary`), `src/styles.css` (`.breakdown-panel`, `.mobile-pricing-summary`), `e2e/quote-wizard.smoke.spec.js` |
 | 6 | Quote system (trusted create/duplicate/edit, snapshots, statuses) | Implemented (branch) | `functions/index.js` (`createQuoteDraft`, `duplicateQuoteDraft`, `updateQuoteDraft`), `functions/quoteCreation.js`, `src/lib/quoteStore.js` (`submitQuote`, `duplicateQuote`, `updateQuote`), `src/components/QuoteHistoryModal.jsx` |
 | 7 | Quote history + versioning | Implemented | `src/lib/quoteStore.js` (`saveQuoteVersion`, `getQuoteHistory`), `firestore.rules` (`organizations/{orgId}/quotes/{quoteId}/versions/{versionId}`) |
-| 8 | Quote management UI (list, sort, filters, exact draft-save handoff, role-safe actions, revision-bound email delivery, evidence-gated portal sharing) | Implemented (branch) | `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js` (`duplicateQuote`, `reopenQuote`, `hardDeleteQuote`, `updateQuotePaymentStatus`), `src/lib/proposalExport.js`, `functions/quoteDelivery.js`, `functions/index.js` (`sendQuoteToCustomer`, `resolveQuoteDeliveryOutcome`, `rotateQuotePortalKey`, `reopenQuote`, `hardDeleteQuote`, `purgeDeletedQuotesForOrganization`) |
+| 8 | Quote management UI (list, sort, filters, exact draft-save handoff, role-safe actions, revision-bound email delivery, evidence-gated portal sharing, scope-bound Stripe deposit request/reconciliation, provider-owned deposit status) | Implemented (branch) | `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js` (`duplicateQuote`, `reopenQuote`, `hardDeleteQuote`), `src/lib/commerceOps.js`, `src/lib/proposalExport.js`, `functions/quoteDelivery.js`, `functions/paymentApprovalScope.js`, `functions/paymentDispatchState.js`, `functions/paymentSafety.js`, `functions/stripeProviderState.js`, `functions/index.js` (`sendQuoteToCustomer`, `resolveQuoteDeliveryOutcome`, `sendPaymentRequestEmail`, `reconcileDepositCheckout`, `stripeWebhook`, disabled direct `createDepositCheckout`, `rotateQuotePortalKey`, `reopenQuote`, `hardDeleteQuote`; the legacy bulk purge callable fails closed), `firestore.rules` (`privatePaymentDispatches` is server-only) |
 | 9 | Admin panel tabbed UX + hierarchical menu management | Implemented | `src/components/AdminCatalogModal.jsx`, `src/styles.css` (`.admin-tabs`) |
 | 10 | Inline editing with blur/enter persistence | Implemented | `src/components/AdminCatalogModal.jsx` (`handleManagedMenuItemBlur`, `handleManagedMenuItemKeyDown`) |
 | 11 | Booking lifecycle (availability checks, contract conversion, confirmations, staff assignments) | Implemented (contract callable deploy pending) | `functions/contractWorkflow.js`, `functions/index.js` (`convertQuoteToContract`), `src/lib/quoteStore.js` (`checkEventAvailability`, `convertQuoteToContract`, `updateQuoteBookingConfirmation`, `updateQuoteBookingAssignment`), `src/components/EventScheduleModal.jsx`, `src/components/QuoteHistoryModal.jsx` |
@@ -74,6 +74,21 @@ This matrix maps the master feature checklist to current implementation and sour
   permanent deletion require an exact approved request. Functions record the
   server-owned execution outcome in the quote workflow and in an admin-readable,
   server-write-only organization audit record.
+- The Stripe deposit request approval is additionally bound to the exact quote
+  revision, portal issuance, recipient, currency, and amount. The resumable
+  server operation registers a prepared Session with no browser-readable link,
+  stores QuotePilot's URL copy only in a client-denied private dispatch record,
+  and publishes to the quote/portal only after durable email-provider
+  acceptance. Ambiguous creation or send outcomes reuse the exact approval and
+  executing-admin/provider identities; durable acceptance resumes publication
+  without another send, while definite failure requires safe checkout
+  neutralization before a new approval. Direct standalone checkout creation and
+  browser payment-evidence writes fail closed.
+  Explicit `STRIPE_MODE` must match the key and provider objects. Four signed
+  Checkout Session events drive monotonic state, and same-tenant admins can
+  reconcile the exact server-recorded Session. This branch has no hosted Stripe
+  test/live acceptance, and refunds, disputes, and final-balance automation are
+  not implemented.
 - Firebase quote email is bound to the saved revision and portal issuance. Only
   server-recorded provider acceptance owns the `sent` transition, and only
   acceptance for the exact current valid issuance activates its portal. If the

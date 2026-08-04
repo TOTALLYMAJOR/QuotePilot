@@ -94,11 +94,12 @@ function readPortalKeyFromUrl() {
   return String(params.get("portal") || "").trim();
 }
 
-function readPortalPaymentReturnFromUrl() {
+function readPaymentReturnFromUrl() {
   if (typeof window === "undefined") return "";
-  const params = new URLSearchParams(window.location.search);
-  const paymentReturn = String(params.get("payment") || "").trim().toLowerCase();
-  return paymentReturn === "success" ? paymentReturn : "";
+  const value = String(new URLSearchParams(window.location.search).get("payment") || "")
+    .trim()
+    .toLowerCase();
+  return ["success", "cancelled"].includes(value) ? value : "";
 }
 
 function toNumber(value, fallback = 0) {
@@ -346,8 +347,8 @@ export default function App() {
   const tenantContext = useTenantContext();
   const authSession = useAuthSession({ tenantContext });
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
-  const [portalPaymentReturn] = useState(() => readPortalPaymentReturnFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
+  const [paymentReturn] = useState(() => readPaymentReturnFromUrl());
   const isUnscopedPlatformOperator = (
     tenantContext.ready
     && (tenantContext.hostType === "app" || tenantContext.hostType === "local")
@@ -1634,7 +1635,7 @@ export default function App() {
       <div className="app-shell" style={appThemeVars}>
         <CustomerPortalView
           initialPortalKey={portalKey}
-          initialPaymentReturn={portalPaymentReturn}
+          initialPaymentReturn={paymentReturn}
           onBackToStaff={closePortalMode}
         />
       </div>
