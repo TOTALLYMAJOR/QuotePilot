@@ -4,6 +4,7 @@ const { createHash } = require("node:crypto");
 
 const BUYER_ACCESS_FLOW = "buyer_access";
 const BUYER_ACCESS_PLAN = "starter";
+const BUYER_ACCESS_MODE = "controlled_test";
 const BUYER_ACCESS_AMOUNT_CENTS = 100;
 const BUYER_ACCESS_CURRENCY = "usd";
 const BUYER_ACCESS_STATUSES = Object.freeze([
@@ -28,6 +29,36 @@ function text(value) {
 
 function normalizedEmail(value) {
   return text(value).toLowerCase();
+}
+
+function normalizeBuyerAccessAllowedEmails(value) {
+  const emails = text(value)
+    .split(",")
+    .map(normalizedEmail)
+    .filter(Boolean);
+  if (
+    !emails.length
+    || emails.some((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+  ) {
+    throw new BuyerAccessError(
+      "Buyer access requires a nonempty valid tester email allowlist."
+    );
+  }
+  return [...new Set(emails)];
+}
+
+function assertBuyerAccessAllowedEmail({ allowedEmails, ownerEmail } = {}) {
+  const email = normalizedEmail(ownerEmail);
+  const normalizedAllowedEmails = Array.isArray(allowedEmails)
+    ? normalizeBuyerAccessAllowedEmails(allowedEmails.join(","))
+    : normalizeBuyerAccessAllowedEmails(allowedEmails);
+  if (!email || !normalizedAllowedEmails.includes(email)) {
+    throw new BuyerAccessError(
+      "This account is not authorized for buyer access testing.",
+      "permission-denied"
+    );
+  }
+  return email;
 }
 
 function normalizeStripeMode(value) {
@@ -211,9 +242,24 @@ function isBuyerAccessSession(session = {}) {
   return text(session?.metadata?.flow).toLowerCase() === BUYER_ACCESS_FLOW;
 }
 
+function normalizeBuyerAccessInvoiceId(value, { required = false } = {}) {
+  const invoiceId = text(typeof value === "string" ? value : value?.id);
+  if (!invoiceId) {
+    if (required) {
+      throw new BuyerAccessError("Paid buyer access requires a valid Stripe invoice identity.");
+    }
+    return "";
+  }
+  if (!/^in_[A-Za-z0-9]+$/.test(invoiceId)) {
+    throw new BuyerAccessError("Stripe invoice identity is invalid.");
+  }
+  return invoiceId;
+}
+
 function assertBuyerAccessSessionBinding({
   eventLivemode,
   order,
+  requireInvoice = false,
   session,
   stripeMode
 } = {}) {
@@ -266,10 +312,18 @@ function assertBuyerAccessSessionBinding({
   if (!ownerEmail || sessionEmails.length === 0 || sessionEmails.some((email) => email !== ownerEmail)) {
     throw new BuyerAccessError("Stripe Checkout Session owner email is invalid.");
   }
+  const invoiceId = normalizeBuyerAccessInvoiceId(session?.invoice, {
+    required: requireInvoice
+  });
+  const storedInvoiceId = normalizeBuyerAccessInvoiceId(order?.stripeInvoiceId);
+  if (storedInvoiceId && invoiceId !== storedInvoiceId) {
+    throw new BuyerAccessError("Stripe invoice does not match the buyer order.");
+  }
   return {
     amountCents: BUYER_ACCESS_AMOUNT_CENTS,
     currency: BUYER_ACCESS_CURRENCY,
     generation,
+    invoiceId,
     orderId,
     ownerEmail,
     ownerUid,
@@ -371,9 +425,11 @@ module.exports = {
   BUYER_ACCESS_AMOUNT_CENTS,
   BUYER_ACCESS_CURRENCY,
   BUYER_ACCESS_FLOW,
+  BUYER_ACCESS_MODE,
   BUYER_ACCESS_PLAN,
   BUYER_ACCESS_STATUSES,
   BuyerAccessError,
+  assertBuyerAccessAllowedEmail,
   assertBuyerAccessRuntime,
   assertBuyerAccessSessionBinding,
   buildBuyerAccessCheckout,
@@ -383,6 +439,8 @@ module.exports = {
   buyerAccessStatusResponse,
   isBuyerAccessSession,
   neutralizeBuyerAccessCheckoutSession,
+  normalizeBuyerAccessInvoiceId,
+  normalizeBuyerAccessAllowedEmails,
   normalizeBuyerAccessRequest,
   planBuyerAccessTransition
 };

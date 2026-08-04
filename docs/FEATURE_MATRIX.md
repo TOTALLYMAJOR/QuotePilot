@@ -41,7 +41,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 23 | Sales workflow (attention queue/count, readiness, follow-ups, request-ID-bound current change handling, lifecycle, approval queue and exact action execution) | Implemented (branch; approval callables and workflow rules deploy pending) | `src/App.jsx`, `src/lib/quoteWorkflow.js`, `src/components/SalesWorkflowModal.jsx`, `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js`, `functions/approvalWorkflow.js`, `functions/contractWorkflow.js`, `functions/index.js` (approval and governed-action callables), `firestore.rules` |
 | 24 | Tenant Import Studio (customer/catalog CSV recognition, validation, receipts, rollback) | Implemented (branch) | `src/components/ImportStudioModal.jsx`, `src/lib/importStudio.js`, `src/lib/importBatchService.js`, `firestore.rules` (`importBatches`) |
 | 25 | Platform tenant provisioning (verified owner, neutral defaults, atomic create, explicit entitlements, repair, cleanup) | Implemented (branch; production acceptance pending) | `functions/index.js` (`preflightCustomerOrder`, `provisionCustomerOrder`, `repairCustomerProvisioningOrder`, cleanup callables), `src/components/IntegrationOpsModal.jsx`, `scripts/provisioning-emulator-acceptance.mjs` |
-| 26 | Public $1 test buyer onboarding (verified account, fixed Stripe Checkout, invoice generation, signed-webhook Starter provisioning) | Implemented (branch; hosted staging acceptance pending) | `src/components/BuyerAccessPage.jsx`, `src/lib/buyerAccess.js`, `functions/buyerAccess.js`, `functions/index.js`, `firestore.rules` (`buyerAccessOrders`), `e2e/buyer-access.spec.js`, `scripts/firebase-staging-contract.mjs`, `scripts/deploy-firebase-staging.mjs` |
+| 26 | Controlled $1 buyer pilot on `tonicatering` (verified and allowlisted tester, dedicated Stripe test Checkout/invoice, signed-webhook Starter provisioning) | Implemented (branch; merged/deployed/hosted acceptance pending) | `src/components/BuyerAccessPage.jsx`, `src/lib/buyerAccess.js`, `functions/buyerAccess.js`, `functions/index.js` (`createBuyerAccessCheckout`, `getBuyerAccessCheckoutStatus`, `buyerAccessStripeWebhook`), Firebase Secret Manager bindings, `firestore.rules` (`buyerAccessOrders`), `e2e/buyer-access.spec.js`, `scripts/provisioning-emulator-acceptance.mjs` |
 
 ## Guided Flow (Where It Lives)
 - Wizard flow entry and steps: `src/App.jsx`
@@ -95,16 +95,19 @@ This matrix maps the master feature checklist to current implementation and sour
   same-tenant admins can reconcile the exact server-recorded Session for each
   rail. This source branch has no hosted Stripe test/live acceptance. Refund
   initiation/status and dispute handling remain manual or unimplemented.
-- The separate `/start` buyer-acquisition candidate is independently gated in
-  the browser and Functions runtime and fixes every eligible order to one $1
-  USD Starter Checkout in Stripe test mode with invoice generation. A success
-  query never grants access; only a signed, deduplicated event for the exact
-  owner/session-bound order may atomically provision the blank Starter tenant,
-  admin role, and entitlements. Browser access to buyer orders is denied. This
-  remains branch-only with no hosted Firebase/Stripe acceptance, and production
-  stays disabled. Refunds, disputes, cancellation, account/access revocation,
-  support, tax/accounting, registration abuse controls, and the live commercial
-  path remain release blockers.
+- The `/start` acquisition pilot uses the existing `tonicatering` Firebase
+  project but remains a separately gated Stripe test rail. A verified email must
+  also match the server allowlist. Buyer Stripe credentials live only in
+  Firebase Secret Manager, and `buyerAccessStripeWebhook` owns buyer events;
+  the quote-payment mode, credentials, `stripeWebhook`, deposit, and
+  final-balance rails remain unchanged. A success return never grants access.
+  `/start` is sign-in-only; the designated verified account must be created by
+  the approved operator path. Only the exact signed and deduplicated buyer event
+  may provision real production-project Auth-linked organization, neutral
+  settings, admin role, and Starter entitlements. Server-owned controlled
+  test-mode markers make the operator's required exclusion from live revenue
+  and live paid-customer classification explicit. This is branch/source
+  evidence, not hosted or provider acceptance and not a public sales channel.
 - Firebase quote email is bound to the saved revision and portal issuance. Only
   server-recorded provider acceptance owns the `sent` transition, and only
   acceptance for the exact current valid issuance activates its portal. If the

@@ -1,6 +1,6 @@
 {
   "schema": "com.mbmapps.quotepilot.release-uat-checklist/v2",
-  "version": "2026-08-04.1",
+  "version": "2026-08-04.4",
   "maximumAttestationAgeHours": 24,
   "items": [
     {
@@ -12,6 +12,21 @@
       "id": "auth.password-recovery",
       "label": "Email/password recovery shows the same on-screen confirmation for a designated account and an unknown address, the designated reset action changes the password and returns to the canonical app URL, and provider evidence confirms email-enumeration protection plus the authorized continue domain.",
       "targets": ["firebase-hosting", "firebase-all", "vercel"]
+    },
+    {
+      "id": "buyer.pilot-entry-guard",
+      "label": "The reviewed artifact compiles the /start surface as sign-in-only controlled test access while public account creation and the public marketing CTA remain absent; /start admits only an exact verified server-allowlisted tester, denies non-allowlisted, unverified, already-scoped, and cross-account identities, remains locked on a return until backend activation, and exposes /app only for the active owner-bound order.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
+    },
+    {
+      "id": "buyer.pilot-dedicated-checkout",
+      "label": "The buyer pilot uses dedicated Firebase Secret Manager Stripe test credentials and buyerAccessStripeWebhook to create only the server-fixed $1 USD Starter Checkout with post-purchase invoice generation, while the existing quote Stripe mode, credentials, stripeWebhook, deposit, and final-balance rails remain unchanged and reject buyer events.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "buyer.pilot-controlled-provisioning",
+      "label": "Only the exact signed and replay-deduplicated buyer test webhook with matching owner, order, generation, amount, currency, plan, invoice ID, and mode creates the real tonicatering organization, neutral settings, admin role, Starter entitlements, and audits; every buyer-created commercial or customer record carries the server-owned controlled test-mode marker and the operator confirms its exclusion from live revenue and live paid-customer classification, while mismatch, failure, replay, distinct events after activation, and cross-account paths create or restore no access.",
+      "targets": ["firebase-backend", "firebase-all"]
     },
     {
       "id": "quote.save",
