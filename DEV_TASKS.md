@@ -40,6 +40,23 @@ Last updated: August 4, 2026
   email/password self-registration with an invitation-bound flow or add
   equivalent App Check/reCAPTCHA abuse controls; generic reset copy does not
   prevent the registration endpoint from returning an existing-email result.
+- Publish the `$1` buyer-access candidate to its tracked branch, then qualify it
+  only in an isolated `quotepilot-staging-*` Firebase project with one Web app,
+  Email/Password Auth, independent browser/Functions gates, Stripe test
+  credentials, and all four Checkout Session webhook events. Use the guarded
+  `staging:firebase:validate`, `staging:firebase:prepare`, and exact-confirmation
+  `staging:firebase:deploy` commands from a clean local SHA that matches the
+  remote branch. Capture hosted evidence for email verification, fixed $1
+  Checkout, invoice generation, pending-until-webhook behavior, atomic Starter
+  access, replay safety, failed/expired state, and cross-account denial. Local
+  tests and configuration presence are not provider acceptance.
+- Keep buyer access disabled in production until refund, dispute,
+  cancellation, account/access revocation, support, tax/accounting, and
+  registration-abuse operations are implemented and accepted. A separately
+  authorized live-mode rollout must prove the exact merged SHA, coordinated
+  Hosting/Functions/rules deployment, matching Stripe live credentials and
+  webhook objects, invoice behavior, tenant activation, failure recovery, and
+  revocation before this becomes a public sales channel.
 - Release the Stripe deposit and final-balance lifecycles only as one
   exact-revision frontend, Functions, and Firestore-rules rollout. In isolated
   hosted acceptance set explicit `STRIPE_MODE=test` with a matching test key and

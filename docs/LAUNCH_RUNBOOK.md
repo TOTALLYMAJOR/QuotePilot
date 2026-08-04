@@ -262,6 +262,93 @@ Stripe webhook endpoint:
   - `checkout.session.async_payment_failed`
   - `checkout.session.expired`
 
+#### Isolated $1 buyer-access staging rehearsal
+
+The current branch also contains a distinct buyer-acquisition candidate at
+`/start`. It is separate from the quote deposit and final-balance rails below:
+the server fixes each buyer-access Checkout to one $1 USD Starter order in
+Stripe test mode with post-purchase invoice generation. The browser return URL
+never grants access. Only a signed, deduplicated webhook for the exact
+owner/session-bound order may provision an active Starter organization.
+
+This lane is source-only until a hosted rehearsal completes. Production
+Hosting and Functions must keep buyer access disabled, and a staging pass is
+not authorization for live credentials or a commercial launch.
+
+Use this acceptance sequence:
+
+1. Select an existing Firebase project whose id begins with
+   `quotepilot-staging-`. It must contain exactly one Firebase Web app. Enable
+   Email/Password Auth and authorize the staging Hosting domain. The guarded
+   scripts reject the production `tonicatering` project.
+2. In Stripe test mode, create a webhook endpoint at
+   `https://us-central1-<project>.cloudfunctions.net/stripeWebhook` and
+   subscribe it to `checkout.session.completed`,
+   `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed`, and
+   `checkout.session.expired`. Retain the test signing secret and prefer a
+   least-privilege `rk_test_` key; `sk_test_` is accepted when necessary.
+3. From an isolated credential-injected shell, supply the staging app
+   URL/domain, a real platform-admin email allowlist, independent
+   `BUYER_ACCESS_ENABLED=true` and `STRIPE_MODE=test` server gates, the test
+   Stripe credentials, and `none` email/SMS providers. Materialize the ignored
+   mode-0600 Functions environment without printing values:
+
+   ```bash
+   npm run staging:firebase:env -- --project quotepilot-staging-<name>
+   ```
+
+4. Commit and push the exact candidate branch so local `HEAD` matches its
+   tracked `origin` branch with no tracked or untracked changes. Set only the
+   non-secret browser gate in the validation shell, then run the read-only
+   target checks and exact staging build:
+
+   ```bash
+   export VITE_BUYER_ACCESS_ENABLED=true
+   npm run staging:firebase:validate -- --project quotepilot-staging-<name>
+   npm run staging:firebase:prepare -- --project quotepilot-staging-<name>
+   ```
+
+5. Review the printed project, branch, SHA, fixed
+   `hosting,functions,firestore` scope (rules and indexes), and confirmation token. A
+   separately authorized staging operator may then deploy those three surfaces
+   together:
+
+   ```bash
+   npm run staging:firebase:deploy -- \
+     --project quotepilot-staging-<name> \
+     --confirm "<exact token printed by prepare>"
+   ```
+
+6. At `https://<project>.web.app/start`, register a unique controlled buyer,
+   verify the email, enter an organization and owner name, and complete the
+   fixed $1 Checkout with a Stripe test payment method. Confirm Stripe created
+   the post-purchase invoice. The return page must remain pending or processing
+   until the signed event is accepted, then expose `/app` only after the order
+   is `active` and the owner has the expected Starter organization, admin role,
+   entitlements, neutral settings, and blank catalog.
+7. Exercise failure boundaries: a forged or malformed success query grants no
+   access; another account cannot read or redeem the order/session; cancelled,
+   failed, and expired attempts remain locked; a retry starts a fresh eligible
+   order; replay creates no duplicate tenant or entitlement state; live-mode or
+   mismatched events fail closed; and an already scoped user cannot buy another
+   workspace through this flow.
+8. Capture provider-bound evidence: Firebase project, exact source SHA,
+   deployment id/time, webhook endpoint and redacted event ids, redacted
+   Checkout/order/invoice ids, final order state, and tenant/role/entitlement
+   readback. Do not capture secrets, webhook signatures, payment details, or
+   customer personal data.
+
+`staging:firebase:validate` is read-only. `staging:firebase:prepare` validates
+and builds but does not mutate Firebase or Stripe. Only the exact-confirmation
+`staging:firebase:deploy` command mutates the explicit staging Firebase target;
+none of these commands creates a Stripe endpoint or proves webhook acceptance.
+
+Stop after the test-mode rehearsal. Keep both production gates off until a
+separately reviewed rollout implements and accepts refund, dispute,
+cancellation, account/access revocation, support, tax/accounting, registration
+abuse controls, and the complete live-mode operating path.
+
 The current source candidate handles deposit and final-balance collection as
 separate payment rails. An exact approved deposit scope binds organization,
 quote revision, portal issuance, customer email, currency, and deposit amount.
