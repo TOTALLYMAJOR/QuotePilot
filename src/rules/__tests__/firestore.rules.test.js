@@ -1215,6 +1215,49 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }
   });
 
+  test("buyer access orders are denied to every browser context", async () => {
+    const orderId = "buyer-access-order-0001";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "buyerAccessOrders", orderId), {
+        ownerUid: "admin-org-a",
+        ownerEmail: "admin-a@example.com",
+        organizationId: "buyer-org-a",
+        amountCents: 100,
+        currency: "usd",
+        status: "checkout_open"
+      });
+    });
+
+    const browserContexts = [
+      ["public", testEnv.unauthenticatedContext()],
+      ["owner", testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })],
+      ["other-user", testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })]
+    ];
+
+    for (const [label, context] of browserContexts) {
+      const db = context.firestore();
+      const existingRef = doc(db, "buyerAccessOrders", orderId);
+      const newRef = doc(db, "buyerAccessOrders", `browser-created-${label}`);
+      await assertFails(getDoc(existingRef));
+      await assertFails(setDoc(newRef, {
+        ownerUid: label,
+        amountCents: 100,
+        currency: "usd",
+        status: "paid"
+      }));
+      await assertFails(updateDoc(existingRef, { status: "provisioned" }));
+      await assertFails(deleteDoc(existingRef));
+    }
+  });
+
   test("Stripe payment state, references, and provider audit fields remain server-owned", async () => {
     const depositLink = "https://checkout.stripe.com/c/pay/cs_test_server";
     const stripeSessionId = "cs_test_server";
