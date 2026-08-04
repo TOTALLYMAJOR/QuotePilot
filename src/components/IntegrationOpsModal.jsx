@@ -26,8 +26,8 @@ const STATES = ["queued", "success", "error", "retrying", "skipped"];
 const DIRECTIONS = ["push", "pull"];
 const PROVISION_PLANS = ["starter", "growth", "enterprise"];
 const FUNCTIONS_ENV_SETUP_GUIDANCE = [
-  "Edit the ignored local file functions/.env.tonicatering (mode 0600).",
-  "Set provider values outside the browser; never commit or paste secrets here:",
+  "For local/emulator validation only, edit the ignored file functions/.env.tonicatering (mode 0600).",
+  "Use placeholders or non-production provider values only; never commit or paste secrets here:",
   "NOTIFICATIONS_SMS_PROVIDER=twilio",
   "TWILIO_ACCOUNT_SID=",
   "TWILIO_AUTH_TOKEN=",
@@ -37,16 +37,20 @@ const FUNCTIONS_ENV_SETUP_GUIDANCE = [
   "STRIPE_WEBHOOK_SECRET=",
   "",
   "Validate without rewriting:",
-  "FIREBASE_PROJECT_ID=tonicatering node --env-file=functions/.env.tonicatering scripts/materialize-functions-env.mjs --validate-only"
+  "FIREBASE_PROJECT_ID=tonicatering node --env-file=functions/.env.tonicatering scripts/materialize-functions-env.mjs --validate-only",
+  "Never upload this file or place production credentials in it. Production values belong only in the trusted deployer/runtime secret channel."
 ].join("\n");
 const SMS_DISABLE_GUIDANCE = [
-  "Set NOTIFICATIONS_SMS_PROVIDER=none in functions/.env.tonicatering,",
-  "validate the ignored file, then use the controlled Functions deploy."
+  "Keep NOTIFICATIONS_SMS_PROVIDER=none in the trusted runtime configuration",
+  "until an authorized backend promotion includes approved buyer-owned Twilio credentials."
 ].join(" ");
-const DEPLOY_FUNCTIONS_COMMAND = [
-  "npm run deploy:firebase:functions --",
-  '  --confirm "DEPLOY tonicatering firestore,functions"'
-].join(" \\\n");
+const PREPARE_BACKEND_GUIDANCE = [
+  "GitHub Actions -> Prepare Firebase Production Artifact",
+  "firebase_scope=backend (Firestore rules + Functions)",
+  "Use the matching firebase-backend UAT and exact release evidence inputs.",
+  "This stages a provider-mutation-credential-free payload with a deterministic manifest; it does not change runtime configuration or deploy.",
+  "Promotion remains blocked until the separately owned trusted deployer is implemented and qualified."
+].join("\n");
 
 function toIso(value) {
   const date = new Date(value || "");
@@ -162,10 +166,10 @@ function describeProvisionEmailStatus(email = {}) {
 }
 
 function describeSmsOutcome(sms) {
-  if (sms?.sent) return "Test SMS sent successfully.";
+  if (sms?.sent) return "Twilio accepted the test SMS request; delivery is not yet proven.";
   const reason = String(sms?.reason || "").trim();
-  if (reason === "sms_not_configured") return "SMS not configured yet. Add Twilio values and redeploy functions.";
-  if (reason === "sms_disabled") return "SMS is intentionally disabled (`NOTIFICATIONS_SMS_PROVIDER=none`).";
+  if (reason === "sms_not_configured") return "SMS is not configured in the current runtime. Production values require an authorized backend promotion through the trusted runtime channel.";
+  if (reason === "sms_disabled") return "SMS is intentionally disabled (NOTIFICATIONS_SMS_PROVIDER=none).";
   if (reason === "sms_provider_unsupported") return "Configured SMS provider is unsupported in this build.";
   if (reason === "sms_send_failed") return `SMS send failed${sms?.message ? `: ${sms.message}` : "."}`;
   return "SMS test did not send.";
@@ -920,15 +924,15 @@ export default function IntegrationOpsModal({
             <h3>Buyer Setup Assistant (Optional Twilio)</h3>
           </div>
           <p className="source-note">
-            Core quote + portal workflows continue without Twilio. Buyers can enable SMS later by supplying their own
-            provider credentials.
+            Core quote + portal workflows continue without Twilio. SMS can be enabled only after the trusted backend
+            promotion path exists, the sender is registered and provider-accepted, and buyer-owned credentials are supplied through its runtime secret channel. Production promotion is currently blocked until that separately owned trusted deployer is implemented and qualified.
           </p>
           {setupState.error && <p className="error-note">{setupState.error}</p>}
           {setupState.resultMessage && <p className="source-note">{setupState.resultMessage}</p>}
           <div className="status-strip">
             <span>SMS provider: <strong>{integrationStatus.smsProvider || "unknown"}</strong></span>
             <span>Twilio: <strong>{twilioStatus.configured ? "configured" : "not configured"}</strong></span>
-            <span>SMS send ready: <strong>{twilioStatus.canSend ? "yes" : "no"}</strong></span>
+            <span>SMS test configured: <strong>{twilioStatus.canSend ? "yes" : "no"}</strong></span>
             <span>Stripe: <strong>{stripeStatus.configured ? "configured" : "not configured"}</strong></span>
             <span>App base URL: <strong>{integrationStatus.appBaseUrlConfigured ? "configured" : "not configured"}</strong></span>
           </div>
@@ -950,7 +954,7 @@ export default function IntegrationOpsModal({
             </label>
           </div>
           <p className="source-note">
-            Provider secrets are configured only in the ignored local Functions environment, never in this browser.
+            Provider secrets belong in the trusted deployment/runtime secret channel, never in this browser, local validation file, or release artifact. This status reflects the current runtime; editing a local file does not change production.
           </p>
           <pre className="integration-command-block"><code>{FUNCTIONS_ENV_SETUP_GUIDANCE}</code></pre>
           <div className="right-actions">
@@ -962,14 +966,14 @@ export default function IntegrationOpsModal({
               className="ghost"
               onClick={() => handleCopyValue(SMS_DISABLE_GUIDANCE, "SMS disable guidance")}
             >
-              Copy SMS Off Command
+              Copy SMS Disable Guidance
             </button>
             <button
               type="button"
               className="ghost"
-              onClick={() => handleCopyValue(DEPLOY_FUNCTIONS_COMMAND, "Deploy command")}
+              onClick={() => handleCopyValue(PREPARE_BACKEND_GUIDANCE, "Prepare instructions")}
             >
-              Copy Deploy Command
+              Copy Prepare Instructions
             </button>
             <button
               type="button"

@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: July 27, 2026
+Last updated: August 3, 2026
 
 ## P0 - Tenant Provisioning Release
 - Commit and review the current provisioning slice, then deploy the
@@ -27,7 +27,36 @@ Last updated: July 27, 2026
 - Remaining P0 action: deploy hardened portal rules to production and run post-deploy smoke verification (active portal token succeeds; expired/deleted tokens are denied).
 
 ## P0 - Security and Reliability
-- Re-establish staging sign-off workflow and release checklist enforcement before broadening `main` merge velocity.
+- Review and merge the fail-closed exact-SHA release evidence source candidate.
+- Strengthen the existing `main` protection from zero required approvals to an
+  independently enforceable review policy with code-owner, stale-review, and
+  last-push controls. Add a non-admin collaborator or separately owned gate;
+  the current sole-admin collaborator model cannot provide independent review.
+- Create `production-uat`; protect it and `Production` with self-review
+  prevention, administrator bypass disabled, protected-branch policy, and an
+  independent reviewer; set `RELEASE_UAT_ATTESTER_IDS` to approved human GitHub
+  user ids. The August 3 audit found `production-uat` absent and `Production`
+  unprotected. Confirm the private repository plan supports these controls or
+  transfer/upgrade/use an external deployment protection gate.
+- Prevent Vercel Git integration or any alternate provider entrypoint from
+  bypassing the controlled production workflows.
+- Replace credential-bearing `npx` provider execution with a separately locked,
+  audited, checksum-verified Firebase/Vercel tool image or narrow provider API
+  client; do not import the currently vulnerable CLI dependency trees into the
+  application lockfile. Split preparation from mutation and expose the provider
+  token only to the fixed, minimal final tool process—not repository build,
+  verifier, npm, or application code.
+- Bind UAT to provider-derived staging project/deployment id, source SHA, READY
+  state, artifact/configuration digest, and timestamp. Validate the historical
+  GitHub deployment review and absence of bypass instead of relying only on
+  current environment policy.
+- Replace rollback ancestry alone with a signed provider-specific successful
+  deployment manifest and component-scoped last-known-good artifact.
+- Rehearse an exact-main immutable staging pass, protected UAT attestation, and
+  rejected invalid-evidence deploy without changing production; attach run ids
+  and environment-policy evidence.
+- Add a separately owned GitHub App/check or equivalent external verifier for
+  release-critical source changes when stronger tamper independence is needed.
 
 ## P1 - Performance and UX
 - Reduce largest JavaScript chunk size (split proposal/export-heavy paths where practical).

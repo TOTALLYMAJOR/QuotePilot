@@ -12,6 +12,7 @@ playwright-report/
 test-results/
 .playwright-cli/
 output/
+artifacts/release/
 playwright.firebase.isolated.config.js
 firebase.isolated.local.json
 /C:\\Users\\Administrator\\AppData\\Local\\lighthouse.*/

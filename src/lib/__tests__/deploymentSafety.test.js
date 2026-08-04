@@ -1,128 +1,92 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { afterEach, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
-const PRIMARY_DEPLOY_SCRIPT = path.resolve(
-  process.cwd(),
-  "scripts/deploy-firebase-production.mjs"
+const ROOT = process.cwd();
+const FIREBASE_WORKFLOW = path.join(
+  ROOT,
+  ".github",
+  "workflows",
+  "deploy-firebase-hosting.yml"
 );
-const CUSTOMER_DEPLOY_SCRIPT = path.resolve(
-  process.cwd(),
-  "scripts/deploy-hosting-customer.mjs"
+const VERCEL_WORKFLOW = path.join(
+  ROOT,
+  ".github",
+  "workflows",
+  "deploy-vercel-production.yml"
 );
-const VERCEL_DEPLOY_SCRIPT = path.resolve(
-  process.cwd(),
-  "scripts/deploy-vercel-production.mjs"
+const UAT_WORKFLOW = path.join(
+  ROOT,
+  ".github",
+  "workflows",
+  "release-uat-attestation.yml"
 );
-const tempDirs = [];
+const FIREBASE_STUB = path.join(ROOT, "scripts", "deploy-firebase-production.mjs");
+const VERCEL_STUB = path.join(ROOT, "scripts", "deploy-vercel-production.mjs");
+const CUSTOMER_DEPLOY_SCRIPT = path.join(ROOT, "scripts", "deploy-hosting-customer.mjs");
 
-function makeVercelDeployFixture(projectLink) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-vercel-deploy-"));
-  tempDirs.push(root);
-  fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
-  fs.copyFileSync(
-    VERCEL_DEPLOY_SCRIPT,
-    path.join(root, "scripts", "deploy-vercel-production.mjs")
-  );
-  if (projectLink) {
-    fs.mkdirSync(path.join(root, ".vercel"), { recursive: true });
-    fs.writeFileSync(
-      path.join(root, ".vercel", "project.json"),
-      JSON.stringify(projectLink)
+describe("production mutation retirement", () => {
+  test.each([
+    ["Firebase", FIREBASE_STUB],
+    ["Vercel", VERCEL_STUB]
+  ])("keeps the legacy %s command fail-closed", (_provider, script) => {
+    const result = spawnSync(process.execPath, [script, "--force"], {
+      cwd: ROOT,
+      encoding: "utf8"
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/direct .* production mutation is retired/i);
+    expect(result.stderr).toMatch(/separately owned trusted deployer/i);
+    expect(fs.readFileSync(script, "utf8")).not.toMatch(/\bnpx\b|spawnSync|execSync/);
+  });
+
+  test.each([
+    ["Firebase", FIREBASE_WORKFLOW],
+    ["Vercel", VERCEL_WORKFLOW]
+  ])("keeps the %s workflow provider-mutation-credential-free and prepare-only", (_provider, workflow) => {
+    const source = fs.readFileSync(workflow, "utf8");
+
+    expect(source).toMatch(/name: Prepare .* Production Artifact/i);
+    expect(source).toMatch(/run-name: prepare\/v1\//);
+    expect(source).not.toMatch(/FIREBASE_TOKEN|VERCEL_TOKEN/);
+    expect(source).not.toMatch(/secrets\./);
+    expect(source).not.toMatch(/\bnpx\b|firebase-tools|vercel\s+(?:build|deploy)/i);
+    expect(source).not.toMatch(/scripts\/deploy-(?:firebase|vercel)-production\.mjs/);
+    expect(source).toMatch(/persist-credentials:\s*false/);
+  });
+
+  test("does not persist checkout credentials in the UAT attestation job", () => {
+    expect(fs.readFileSync(UAT_WORKFLOW, "utf8")).toMatch(/persist-credentials:\s*false/);
+  });
+
+  test("retires the misleading Vercel build alias and legacy Functions scope", () => {
+    const rootPackage = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const functionsPackage = JSON.parse(
+      fs.readFileSync(path.join(ROOT, "functions", "package.json"), "utf8")
     );
-  }
-  return path.join(root, "scripts", "deploy-vercel-production.mjs");
-}
 
-afterEach(() => {
-  while (tempDirs.length) {
-    fs.rmSync(tempDirs.pop(), { recursive: true, force: true });
-  }
+    expect(rootPackage.scripts["deploy:vercel:build"]).toBeUndefined();
+    expect(rootPackage.scripts["deploy:vercel"]).toBe(
+      "node ./scripts/deploy-vercel-production.mjs"
+    );
+    expect(functionsPackage.scripts.deploy).toBe(
+      "node ../scripts/deploy-firebase-production.mjs"
+    );
+  });
 });
 
-describe("production deployment command safety", { timeout: 30_000 }, () => {
-  test("rejects undeclared force flags before any deployment work", () => {
-    const result = spawnSync(process.execPath, [
-      PRIMARY_DEPLOY_SCRIPT,
-      "--scope",
-      "all",
-      "--confirm",
-      "DEPLOY tonicatering hosting:app,firestore,functions",
-      "--force"
-    ], {
-      cwd: process.cwd(),
+describe("customer-site mutation retirement", () => {
+  test("keeps the customer-site command fail-closed without a provider runner", () => {
+    const source = fs.readFileSync(CUSTOMER_DEPLOY_SCRIPT, "utf8");
+    const result = spawnSync(process.execPath, [CUSTOMER_DEPLOY_SCRIPT, "--force"], {
+      cwd: ROOT,
       encoding: "utf8"
     });
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/unknown argument: --force/i);
-  });
-
-  test("rejects the primary Firebase site as a customer-site target", () => {
-    const result = spawnSync(process.execPath, [
-      CUSTOMER_DEPLOY_SCRIPT,
-      "--site",
-      "tonicatering",
-      "--project",
-      "tonicatering",
-      "--confirm",
-      "DEPLOY tonicatering hosting:tonicatering"
-    ], {
-      cwd: process.cwd(),
-      encoding: "utf8"
-    });
-
-    expect(result.status).not.toBe(0);
-    expect(result.stdout).toMatch(/usage:/i);
-    expect(result.stdout).not.toMatch(/vite build/i);
-  });
-
-  test("requires the exact production-domain confirmation for Vercel", () => {
-    const result = spawnSync(process.execPath, [
-      VERCEL_DEPLOY_SCRIPT,
-      "--confirm",
-      "DEPLOY another-domain.example via vercel"
-    ], {
-      cwd: process.cwd(),
-      encoding: "utf8"
-    });
-
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain(
-      'DEPLOY quotepilot.mbmapps.com via vercel'
-    );
-  });
-
-  test("rejects a missing Vercel project link before repository checks", () => {
-    const result = spawnSync(process.execPath, [
-      makeVercelDeployFixture(null),
-      "--confirm",
-      "DEPLOY quotepilot.mbmapps.com via vercel"
-    ], {
-      encoding: "utf8"
-    });
-
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/approved \.vercel\/project\.json link/i);
-  });
-
-  test("rejects a relinked Vercel project before repository checks", () => {
-    const result = spawnSync(process.execPath, [
-      makeVercelDeployFixture({
-        projectId: "prj_wrong",
-        orgId: "team_wrong",
-        projectName: "wrong-project"
-      }),
-      "--confirm",
-      "DEPLOY quotepilot.mbmapps.com via vercel"
-    ], {
-      encoding: "utf8"
-    });
-
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/unapproved project link/i);
-    expect(result.stderr).toMatch(/projectId, orgId, projectName/i);
+    expect(result.stderr).toMatch(/Customer Hosting deployment is retired/i);
+    expect(source).not.toMatch(/node:child_process|\bnpx\b|firebase-tools|spawnSync|execSync/);
   });
 });

@@ -1,5 +1,5 @@
-name: Prepare Firebase Production Artifact
-run-name: prepare/v1/firebase-${{ inputs.firebase_scope }}/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
+name: Prepare Vercel Production Artifact
+run-name: prepare/v1/vercel/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
 
 on:
   workflow_dispatch:
@@ -17,26 +17,17 @@ on:
         required: true
         type: string
       rollback_sha:
-        description: Full target-specific rollback commit SHA
+        description: Full Vercel rollback commit SHA
         required: true
         type: string
-      firebase_scope:
-        description: Exact Firebase production surface covered by UAT
-        required: true
-        default: hosting
-        type: choice
-        options:
-          - hosting
-          - backend
-          - all
 
 concurrency:
-  group: prepare-firebase-production
+  group: prepare-vercel-production
   cancel-in-progress: false
 
 jobs:
-  prepare_firebase:
-    name: Verify + Prepare Firebase Artifact
+  prepare_vercel:
+    name: Verify + Prepare Vercel Artifact
     if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -74,7 +65,6 @@ jobs:
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           UAT_RUN_ID: ${{ inputs.uat_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
-          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
         run: |
           set -euo pipefail
           node ./scripts/production-release-evidence.mjs \
@@ -82,23 +72,15 @@ jobs:
             --ci-run-id "${CI_RUN_ID}" \
             --uat-run-id "${UAT_RUN_ID}" \
             --rollback-sha "${ROLLBACK_SHA}" \
-            --target "${RELEASE_TARGET}"
+            --target vercel
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Functions dependencies (backend/all)
-        if: inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'
-        run: npm ci --prefix functions
-
-      - name: Run unit tests
-        run: npm run test:unit
-
       - name: Validate production browser configuration
         run: npm run check:env
 
-      - name: Build frontend payload (hosting/all)
-        if: inputs.firebase_scope == 'hosting' || inputs.firebase_scope == 'all'
+      - name: Build static production payload
         run: npm run build
 
       - name: Re-verify evidence after repository execution
@@ -107,7 +89,6 @@ jobs:
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           UAT_RUN_ID: ${{ inputs.uat_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
-          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -116,33 +97,29 @@ jobs:
             --ci-run-id "${CI_RUN_ID}" \
             --uat-run-id "${UAT_RUN_ID}" \
             --rollback-sha "${ROLLBACK_SHA}" \
-            --target "${RELEASE_TARGET}" \
+            --target vercel \
             --output artifacts/release/release-evidence.json
 
-      - name: Stage exact Firebase payload
-        env:
-          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
+      - name: Stage deployable prebuilt payload
         run: |
           node ./scripts/stage-production-payload.mjs \
-            --target "${RELEASE_TARGET}" \
-            --output "artifacts/release/payload/${RELEASE_TARGET}"
+            --target vercel \
+            --output artifacts/release/payload/vercel
 
       - name: Create deterministic production artifact manifest
-        env:
-          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
         run: |
           node ./scripts/prepare-production-artifact.mjs \
             --evidence-file "${GITHUB_WORKSPACE}/artifacts/release/release-evidence.json" \
-            --artifact-root "${GITHUB_WORKSPACE}/artifacts/release/payload/${RELEASE_TARGET}"
+            --artifact-root "${GITHUB_WORKSPACE}/artifacts/release/payload/vercel"
 
       - name: Upload verified prepare-only artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: production-input-firebase-${{ inputs.firebase_scope }}-${{ inputs.release_sha }}
+          name: production-input-vercel-${{ inputs.release_sha }}
           path: |
-            artifacts/release/payload/firebase-${{ inputs.firebase_scope }}
+            artifacts/release/payload/vercel
             artifacts/release/release-evidence.json
-            artifacts/release/firebase-${{ inputs.firebase_scope }}-${{ inputs.release_sha }}-*.manifest.json
+            artifacts/release/vercel-${{ inputs.release_sha }}-*.manifest.json
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 30
@@ -150,8 +127,8 @@ jobs:
       - name: Summarize preparation boundary
         run: |
           {
-            echo "### Firebase production artifact prepared"
-            echo "- Target: firebase-${{ inputs.firebase_scope }}"
+            echo "### Vercel production artifact prepared"
+            echo "- Target: vercel"
             echo "- Release SHA: ${{ inputs.release_sha }}"
             echo "- Production was not mutated. A separately owned trusted deployer is required."
           } >> "${GITHUB_STEP_SUMMARY}"
