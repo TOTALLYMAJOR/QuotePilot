@@ -10,18 +10,24 @@ Last updated: August 3, 2026
   2026. Main CI run `30837136091` passed all eight jobs, and hosted HTTP checks
   returned status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains
   the origin/fallback (`https://tonicatering.web.app`).
-- Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the current delivery-evidence head passes the
-  full release lane with 318 unit tests passed and 39 intentionally skipped,
-  production build, environment/secret checks, documentation governance, and
-  bundle budget. Firestore rules pass 38/38; the default Playwright suite passes
-  31 tests with 2 intentionally gated provisioning-role cases skipped; the
-  Firebase Auth/catalog and authoritative quote/delivery/portal browser lanes
-  each pass 1/1. The production Docker image builds successfully. Local
-  Lighthouse passes with performance 0.87, LCP 3,823 ms, CLS 0.001, and TBT 120
-  ms. Both the browser application and Functions production dependency trees
-  report zero known vulnerabilities under `npm audit --omit=dev`. This is
-  local/emulator evidence, not hosted tenant or provider acceptance.
+- Current branch product identity: install metadata, runtime defaults,
+  proposals, integration messages, and onboarding links use QuotePilot/MBMapps
+  branding; the legacy Firebase project ID and hosting origin remain unchanged
+  infrastructure identifiers.
+- Candidate validation: the combined sell-readiness working tree passes the
+  local quick/core gates: 624 unit tests pass with 39 intentional skips, the
+  production build, documentation governance, bundle budget, secret scan, and
+  environment check pass, and 327 focused release/deletion regressions plus all
+  four target-specific UAT item sets pass. Its product/runtime changes also
+  passed isolated Firestore rules (38/38), default Playwright (31 pass, 2
+  intentional skips), Firebase Auth and authoritative-pricing browser lanes,
+  the provisioning acceptance matrix, Docker production-image build,
+  Lighthouse, and both production dependency audits; only release
+  checklist/docs/tests changed after those high-risk runs. The candidate still
+  needs to be committed, published, and requalified by exact remote head; local
+  results are not hosted tenant or provider acceptance.
+  All local/emulator results remain distinct from hosted tenant and provider
+  acceptance.
 - Functions runtime readiness: Functions now target Node.js 22 and use Firebase
   Admin 14 modular app, Auth, and Firestore APIs. The local authoritative and
   provisioning matrices pass with that runtime candidate.
@@ -83,11 +89,12 @@ Last updated: August 3, 2026
   repair; deletion tombstones; and atomic terminal portal decisions across both
   quote copies. Until the coordinated production deployment is verified, these
   Functions/frontend changes do not have hosted tenant-acceptance proof.
-- Controlled Functions CI deploys now materialize an ignored project
-  environment only after validating the canonical `/app` URL, platform-admin
-  allowlist, approved QuotePilot sender identity, Stripe secrets, and
-  credentials for any explicitly enabled provider. The workflow remains gated
-  by `ENABLE_FUNCTIONS_DEPLOY=false` by default.
+- Policy-enforcing release preparation now packages Functions source without loading
+  or materializing runtime secrets. Firebase scope is an explicit workflow
+  input (`hosting`, `backend`, or `all`) bound to UAT and preparation evidence
+  rather than a mutable repository toggle; `backend` is Firestore rules plus
+  Functions. Runtime configuration remains the responsibility of a separately
+  owned credential-isolated deployer.
 - Current branch tenant identity fix: explicit blank tenant logo/contact/address/crew values no longer fall back to the legacy customer profile, and Catalog Admin branding edits retain their draft through parent rerenders with persistent save/discard affordances.
 - Current branch tenant authorization hardening: Firestore denies unverified
   email authority and conflicting claim/role organization scopes, permits
@@ -115,14 +122,24 @@ Last updated: August 3, 2026
   Contract conversion is server-planned, and completed atomic actions replay
   idempotently; failed provider execution requires a new approval. Direct
   Firestore approval-array, contract-evidence, and execution-audit writes are
-  denied after the rules rollout. A
-  confirmed missing-callable response alone may use the existing
-  rule-authorized path during the Vercel-first deployment window; other
-  callable errors fail closed. Pure planning, client delegation, rules denial,
+  denied after the rules rollout. Only approval request creation and resolution
+  may use the existing rule-authorized path after a confirmed missing-callable
+  response during the Vercel-first deployment window; the four governed action
+  executions never fall back, and every other callable error fails closed.
+  Pure planning, client delegation, rules denial,
   and the full provisioning emulator matrix pass. This boundary is not
   production behavior until the matching Functions and Firestore rules are
   deployed together.
-- CI gates: classifier-driven lane gates are configured (`lane:quick`, `lane:core`, `Docker Build Smoke`, `lane:playwright-smoke`, `lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`).
+- CI gates: all eight verifier-required jobs are configured (`Classify Changes
+  + Lane Plan`, `lane:quick`, `lane:core`, `Docker Build Smoke`,
+  `lane:playwright-smoke`, `lane:firebase-auth-rules`,
+  `lane:authoritative-pricing`, `lane:cwv-smoke`).
+- Legacy bulk deletion is retired: the old organization-wide quote purge
+  callable now fails closed, and its browser client and operator control are
+  removed. Within a retained organization, permanent quote deletion remains
+  one quote at a time through the exact approved `delete_quote` execution and
+  durable org-scoped audit. Separately governed archived-workspace teardown
+  still uses a platform-admin confirmation and deletion tombstone.
 - P0 fallback-retirement safeguard: classifier now elevates `menuService`/`useCatalogData`/`organizationService`/`OrganizationContext` edits to `high_risk`, so Firebase heavy lanes are required (not advisory) on feature branches.
 - Legacy global runtime fallback retired: frontend tenant data services and authoritative pricing/functions paths now fail closed when org context is missing instead of reading legacy global collections.
 - Firestore policy hardening: retired global business collections (`catalog*`, `pricing/settings`, `eventTypes`, `menu*`, `quotes`, `quoteHistory`) are now denied in rules so org-scoped paths are authoritative.
@@ -153,29 +170,95 @@ Last updated: August 3, 2026
 - E2E operational safety: Firebase browser lanes use an isolated emulator
   configuration and dedicated ports; they fail on a port conflict rather than
   terminating unrelated local processes.
-- Firebase hosting target safety: the primary deploy scripts and workflow bind
-  the `app` target to the `tonicatering` site before deploying `hosting:app`.
+- Firebase hosting target safety: the deterministic payload manifest binds the
+  `app` target to the `tonicatering` site and hashes the exact staged payload.
 - Functions emulator compatibility: `functions.config()` v7 removal path now degrades safely to environment values instead of throwing at runtime.
-- Deploy gate: production deployment is manual-only and requires a clean
-  `main` commit that matches local upstream and `origin/main`, has a semantic
-  release tag published to `origin`, and has completed the required CI/UAT
-  evidence.
+- Release gate: preparation requires an unchanged tracked checkout of a
+  semantically tagged `main` commit
+  matching `origin/main`. The current source candidate fail-closes on the exact
+  main-push CI run and eight required jobs, a fresh allowlisted-human UAT result,
+  the schema-v2 set of all and only checklist ids applicable to the selected
+  preparation target,
+  exactly one recorded approval for that UAT run by an independent current
+  direct reviewer, exactly one recorded `production` approval for the preparation
+  run by a reviewer other than its dispatcher and UAT attester, the tracked
+  checklist digest and human-entered staging label, a target-specific rollback
+  ancestor, and protected no-bypass
+  `production-uat`/`production` policy. It then stages an explicit payload and
+  records deterministic file hashes plus fixed provider identifiers without
+  receiving provider mutation credentials or Functions runtime secrets or
+  mutating production.
 - Delivery controls: canonical doc ownership and governance checks are now enforced in CI.
 - Commerce resilience: Twilio SMS failures are non-blocking for quote save and Stripe checkout.
 - Buyer onboarding: admin-only Integrations Ops includes an in-app setup assistant for optional Twilio configuration.
-- Production guardrail: `ENABLE_FUNCTIONS_DEPLOY=false` (default locked state).
-- Production fail-safe integration mode:
-  `NOTIFICATIONS_SMS_PROVIDER=none` in the ignored project-scoped Functions
-  environment.
+- Production guardrail: Firebase preparation scope defaults to `hosting`; a
+  `backend` or `all` artifact requires a matching evidence profile.
+- Source-defined production fail-safe integration mode is
+  `NOTIFICATIONS_SMS_PROVIDER=none`. That value still needs provider-hosted
+  runtime verification through the approved trusted channel; the ignored
+  project-scoped Functions environment is for local/emulator validation only.
 - Latest Vercel production operation: merged `main` deployment
-  `dpl_9K7pqmZjqAMBbegKq3uyUf6rGVXv`, including the canonical SPA rewrite and
-  returning `200` for direct `/app` and `/system` requests.
+  `dpl_9K7pqmZjqAMBbegKq3uyUf6rGVXv`, built from
+  `dc460e3dca79c0b0eea512bb1902ba20a4b7c67c`, including the canonical SPA
+  rewrite and returning `200` for direct `/app` and `/system` requests.
 - Last known good Firebase Hosting deploy:
   - commit: `a4a2568f06eaedcf9805c503bb161d2847d12710`
   - CI run: `CI Quality` #23203096351 (March 17, 2026 UTC)
-  - workflow run: `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
+  - workflow run (historical name): `Deploy Firebase Hosting (+ Optional Functions)` #23203174267 (March 17, 2026 UTC)
 
 ## Active Risks
+- The exact-SHA release gate is a source candidate, not an operationally proven
+  production control. As audited on August 3, `main` has strict required checks,
+  admin enforcement, linear history, and force-push/deletion denial, but it
+  requires zero PR approvals and has no code-owner, stale-review, or last-push
+  approval rule. The sole collaborator is the repository administrator.
+  `production-uat` does not exist; `Production` has no required reviewer,
+  deployment branch policy, variables, or environment secrets and permits
+  administrator bypass. Independent review is therefore not enforceable in
+  the present collaborator/environment setup. Confirm private-repository plan
+  eligibility or move to an eligible organization/external gate, then rehearse
+  the complete sequence outside production. Vercel Git integration must also
+  be prevented from bypassing the controlled workflow.
+- The verifier, workflows, checklist, test jobs, payload stager, and manifest
+  generator are all candidate-controlled code in this repository; they are not
+  an independent authorization authority. The separately owned trusted deployer
+  must revalidate the GitHub run/artifact identity and digest, both review
+  records, and every downloaded payload file against the manifest while rejecting
+  extras before any provider mutation credential is introduced.
+- Draft PR #21 (product hardening) and draft PR #22 (release preparation) have
+  each earned green eight-job GitHub CI on a published SHA; every subsequent
+  push still requires fresh exact-head qualification. Their Vercel Preview
+  deployments fail at `npm run check:env` because all six required Preview-scope
+  `VITE_FIREBASE_*` browser variables are absent. No hosted release-candidate
+  acceptance exists until those non-secret Preview variables are configured and
+  the exact PR SHA is reverified; source CI is not hosted proof.
+- The tracked UAT receipt still binds only a human-entered staging identifier.
+  Schema-v2 target applicability prevents one profile from claiming unrelated
+  checklist items, but it does not bind the tested provider surface or any
+  dependency; `firebase-all` still lacks a provider-derived compound receipt
+  tying Hosting, Functions, and Firestore rules to one SHA.
+  It does not query a provider to prove project, non-production environment,
+  READY status, source SHA, artifact/configuration digest, or timestamp. The
+  verifier now proves `APPROVED` review records are attached to the exact UAT and
+  preparation workflow runs, but GitHub exposes no review timestamp or historical
+  environment-policy snapshot through that object, and the uploaded UAT receipt
+  is not independently consumed. Bind provider-derived staging evidence and a
+  separately owned audit record before treating the result as tamper-independent
+  release proof.
+- Primary Firebase and Vercel workflows are now
+  provider-mutation-credential-free prepare-only jobs; their legacy deploy
+  commands fail closed and no longer resolve provider
+  CLIs through `npx`. Production promotion is intentionally unavailable until a
+  separately owned trusted deployer revalidates the uploaded artifact identity,
+  manifest, and payload and uses a locked audited provider client while holding
+  the minimum provider mutation credential. The
+  separate customer-site Hosting entrypoint now also fails closed; that
+  promotion path is intentionally unavailable until it moves behind the same
+  trusted boundary.
+- Rollback input currently proves Git ancestry only, not that the selected SHA
+  is a provider-specific last-known-good deployment. Record signed target
+  deployment manifests with provider deployment id, source SHA, artifact and
+  configuration digests, success status, and component-specific rollback data.
 - The Node.js 22/Firebase Admin 14 Functions candidate is locally validated but
   has not been deployed or observed on the production Functions runtime.
 - The Vercel deployment and custom-domain alias are provider-verified, but the authenticated production quote/save/export workflow still needs post-release browser acceptance.
@@ -208,8 +291,9 @@ Last updated: August 3, 2026
   matching `deliveryEvidence` remain inactive and must be recovered through an
   approved resend or truthful provider reconciliation. The dry-run-first,
   tenant-scoped projection tool is implemented and locally validated; it never
-  creates delivery evidence, and no production portal record was changed by
-  that validation.
+  creates delivery evidence, is not packaged or attested by a deployment-target
+  checklist, and requires separate explicit authorization before production
+  apply. No production portal record was changed by that validation.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
 - Bundle size remains a watch item; budget/CWV gates now prevent uncontrolled regressions.
 - The quote builder now has a locally accepted mobile pricing path: after the
@@ -228,19 +312,27 @@ Last updated: August 3, 2026
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
 
 ## Current Focus (Near-Term)
-1. Perform a controlled rules/Functions deployment from the reviewed merged
-   `main` revision, then run the hosted owner/quote/portal tenant acceptance
-   checklist against the already-live Vercel frontend.
-2. Verify the intended Resend sender domain in the Resend dashboard and authoritative DNS; only then configure `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and recipient proof from one controlled test.
-3. Deploy the updated `firestore.rules` and run hosted portal decision smoke
-   checks for current-issuance evidence, active, expired, deleted, rotated,
-   legacy-no-evidence, and change-request paths. Prove that a provider-accepted
-   invalid portal remains inactive until guarded rotation and a new send.
-4. Run and review the scoped production portal-projection dry run, resolve any
-   reported conflicts, then explicitly authorize the guarded apply and retain
-   its count-only evidence.
-5. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
-6. Improve large-chunk performance while staying inside bundle/CWV guardrails.
+1. Publish and remotely qualify the locally validated combined sell-readiness
+   candidate on one exact branch head; every new push requires fresh exact-head
+   evidence.
+2. Configure the six non-secret Preview-scope `VITE_FIREBASE_*` variables and
+   complete hosted release-candidate acceptance on that exact head.
+3. Configure protected no-bypass GitHub environments and independent direct
+   reviewers, disable provider-side bypasses, implement the separately owned
+   trusted deployer plus provider-specific staging/LKG receipts, and complete a
+   non-production rehearsal before any promotion.
+4. After those controls are qualified, promote the exact reviewed
+   rules/Functions/frontend artifacts and run the hosted owner/quote/portal
+   tenant acceptance checklist, including current/invalid issuance, active,
+   expired, deleted, approval execution, contract, and change-request paths.
+5. Verify the intended Resend sender domain in the Resend dashboard and
+   authoritative DNS; only then configure
+   `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and
+   recipient proof from one controlled test.
+6. Run and review the scoped production portal-projection dry run, resolve any
+   conflicts, then explicitly authorize guarded apply and retain count-only
+   evidence.
+7. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)
 - Focus completed: migration execution after fallback retirement and denial-matrix verification.

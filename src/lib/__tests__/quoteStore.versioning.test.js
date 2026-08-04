@@ -10,7 +10,6 @@ import {
   ensureLegacyQuoteCompatibility,
   getActiveQuoteVersion,
   getQuoteHistory,
-  purgeDeletedQuotesForOrganization,
   resolveQuotePricingSnapshot,
   resolveQuoteVersionMetadata,
   reopenQuote,
@@ -183,21 +182,6 @@ describe("quoteStore versioning and delete behavior", () => {
     const quotes = await getQuoteHistory();
     const updated = quotes.quotes.find((quote) => quote.id === "q1");
     expect(updated).toBeUndefined();
-  });
-
-  test("purges legacy deleted quotes from local fallback storage", async () => {
-    seedQuotes([
-      makeQuote({ id: "q-purge-1", status: "deleted", deletedAtISO: "2026-03-11T12:00:00.000Z" }),
-      makeQuote({ id: "q-purge-2", status: "draft" })
-    ]);
-
-    const result = await purgeDeletedQuotesForOrganization();
-    expect(result.ok).toBe(true);
-    expect(result.storage).toBe("local");
-    expect(result.deletedQuotes).toBe(1);
-
-    const quotes = await getQuoteHistory();
-    expect(quotes.quotes.map((quote) => quote.id)).toEqual(["q-purge-2"]);
   });
 
   test("captures a version before status updates", async () => {

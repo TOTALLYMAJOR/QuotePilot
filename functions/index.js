@@ -3864,40 +3864,10 @@ exports.purgeDeletedQuotesForOrganization = functions.region(REGION).https.onCal
     throw new functions.https.HttpsError("permission-denied", "Admin role required.");
   }
 
-  const requestedLimit = Number(data?.limit || 100);
-  const limit = Math.max(1, Math.min(300, Number.isFinite(requestedLimit) ? Math.round(requestedLimit) : 100));
-  const quotesRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).collection(QUOTES_COLLECTION);
-  const deletedSnap = await quotesRef.where("status", "==", "deleted").limit(limit).get();
-
-  let deletedQuotes = 0;
-  let portalSnapshotsDeleted = 0;
-  for (const docSnap of deletedSnap.docs) {
-    const quoteData = docSnap.data() || {};
-    const quoteOrganizationId = normalizeOrganizationId(quoteData.organizationId || organizationId);
-    if (quoteOrganizationId !== organizationId) {
-      continue;
-    }
-    const quoteId = docSnap.id;
-    const portalCleanup = await deletePortalSnapshotsForQuote({
-      quoteId,
-      organizationId,
-      fallbackPortalKey: quoteData?.portalKey
-    });
-    portalSnapshotsDeleted += portalCleanup.deleted;
-    await db.recursiveDelete(docSnap.ref);
-    deletedQuotes += 1;
-  }
-
-  return {
-    ok: true,
-    organizationId,
-    scanned: deletedSnap.size,
-    deletedQuotes,
-    portalSnapshotsDeleted,
-    limitApplied: limit,
-    hasMore: deletedSnap.size === limit,
-    completedAtISO: new Date().toISOString()
-  };
+  throw new functions.https.HttpsError(
+    "failed-precondition",
+    "Bulk quote purge is retired. Permanently delete one quote at a time with an exact approved delete_quote request."
+  );
 });
 
 exports.calculateQuotePricing = functions.region(REGION).https.onCall(async (data, context) => {

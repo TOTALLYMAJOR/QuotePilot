@@ -51,7 +51,6 @@ const QUOTE_DELIVERY_MUTATION_LOCK_STATES = new Set([
   "outcome_unknown"
 ]);
 const HARD_DELETE_QUOTE_CALLABLE = "hardDeleteQuote";
-const PURGE_DELETED_QUOTES_CALLABLE = "purgeDeletedQuotesForOrganization";
 const UPDATE_QUOTE_DRAFT_CALLABLE = "updateQuoteDraft";
 const REQUEST_QUOTE_APPROVAL_CALLABLE = "requestQuoteApproval";
 const RESOLVE_QUOTE_APPROVAL_CALLABLE = "resolveQuoteApprovalRequest";
@@ -3908,57 +3907,6 @@ export async function deleteQuote(id, {
     ok: true,
     storage: "local",
     quoteId
-  };
-}
-
-export async function purgeDeletedQuotesForOrganization({
-  organizationId = "",
-  limit = 100
-} = {}) {
-  const normalizedLimit = Math.max(1, Math.min(300, Math.round(toNumber(limit, 100))));
-
-  if (firebaseReady) {
-    const scopedOrganizationId = requireWriteOrganizationId(
-      organizationId,
-      "purge deleted quotes"
-    );
-    ensureCallableReady("purge deleted quotes");
-    const call = httpsCallable(cloudFunctions, PURGE_DELETED_QUOTES_CALLABLE);
-    const result = await call({
-      organizationId: scopedOrganizationId,
-      limit: normalizedLimit
-    });
-    return result?.data || { ok: false };
-  }
-
-  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
-  const deletedIds = new Set(
-    existing
-      .filter((quote) => normalizeStatus(quote?.status) === "deleted")
-      .map((quote) => String(quote?.id || "").trim())
-      .filter(Boolean)
-  );
-  if (!deletedIds.size) {
-    return {
-      ok: true,
-      storage: "local",
-      deletedQuotes: 0,
-      hasMore: false
-    };
-  }
-
-  const nextQuotes = existing.filter((quote) => !deletedIds.has(String(quote?.id || "").trim()));
-  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(nextQuotes));
-
-  const history = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY) || "[]");
-  const nextHistory = history.filter((item) => !deletedIds.has(String(item?.quoteId || "").trim()));
-  localStorage.setItem(LOCAL_QUOTE_HISTORY_KEY, JSON.stringify(nextHistory));
-
-  return {
-    ok: true,
-    storage: "local",
-    deletedQuotes: deletedIds.size,
-    hasMore: false
   };
 }
 

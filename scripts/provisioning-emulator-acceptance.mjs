@@ -1274,6 +1274,75 @@ const duplicatePaidAttempt = await callStripeWebhook(paymentEvent);
 assert.equal(duplicatePaidAttempt.status, 200);
 assert.equal(duplicatePaidAttempt.payload?.duplicate, true);
 
+const retiredBulkPurgeQuoteId = "retired-bulk-purge-quote";
+const retiredBulkPurgePortalKey = "retired-bulk-purge-portal-key";
+await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).create({
+  organizationId,
+  ownerUid: tenantMember.uid,
+  portalKey: retiredBulkPurgePortalKey,
+  status: "sent"
+});
+await db.collection("customerPortalQuotes").doc(retiredBulkPurgePortalKey).create({
+  portalKey: retiredBulkPurgePortalKey,
+  quoteId: retiredBulkPurgeQuoteId,
+  organizationId,
+  status: "sent"
+});
+const retiredBulkPurgeApproval = await requestAndApproveQuoteAction(
+  retiredBulkPurgeQuoteId,
+  "delete_quote",
+  "Delete the legacy fixture through the exact approved path."
+);
+const retiredBulkPurgeDeletedAtISO = new Date().toISOString();
+await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).update({
+  status: "deleted",
+  deletedAtISO: retiredBulkPurgeDeletedAtISO
+});
+await db.collection("customerPortalQuotes").doc(retiredBulkPurgePortalKey).update({
+  status: "deleted",
+  deletedAtISO: retiredBulkPurgeDeletedAtISO
+});
+await expectCallableError(
+  () => callFunction("purgeDeletedQuotesForOrganization", bootstrapToken, {
+    organizationId,
+    limit: 300
+  }),
+  "FAILED_PRECONDITION"
+);
+assert.equal(
+  (await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).get()).exists,
+  true
+);
+assert.equal(
+  (await db.collection("customerPortalQuotes").doc(retiredBulkPurgePortalKey).get()).exists,
+  true
+);
+const retiredBulkPurgeCleanup = await callFunction(
+  "hardDeleteQuote",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: retiredBulkPurgeQuoteId,
+    approvalRequestId: retiredBulkPurgeApproval.id
+  }
+);
+assert.equal(retiredBulkPurgeCleanup.ok, true);
+assert.equal(
+  (await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).get()).exists,
+  false
+);
+assert.equal(
+  (await db.collection("customerPortalQuotes").doc(retiredBulkPurgePortalKey).get()).exists,
+  false
+);
+const retiredBulkPurgeExecution = await orgRef
+  .collection("quoteApprovalExecutions")
+  .doc(retiredBulkPurgeApproval.id)
+  .get();
+assert.equal(retiredBulkPurgeExecution.data()?.state, "succeeded");
+assert.equal(retiredBulkPurgeExecution.data()?.action, "delete_quote");
+assert.equal(retiredBulkPurgeExecution.data()?.quoteId, retiredBulkPurgeQuoteId);
+
 const isolatedCleanupQuoteId = "isolated-cleanup-quote";
 const isolatedCleanupPortalKey = "isolated-cleanup-own-portal-key";
 const foreignCleanupPortalKey = "isolated-cleanup-foreign-portal-key";
@@ -1509,6 +1578,7 @@ console.log("- pending owner invite received a bounded server-authored expiry");
 console.log("- unauthenticated portal client accepted the quote and persisted the decision to both quote copies");
 console.log("- entitlement-only update preserved branding, catalog, and invite");
 console.log("- approval requests, resolutions, and exact admin executions used server-owned identity, outcomes, idempotency, and replay protection");
+console.log("- legacy bulk quote purge was denied without mutation and exact approved per-quote cleanup succeeded");
 console.log("- archived tenant resume/update was blocked");
 console.log("- quote cleanup preserved cross-tenant, unscoped, and mismatched portal rows");
 console.log("- provider/payment operations denied sales and rejected caller-supplied links");
