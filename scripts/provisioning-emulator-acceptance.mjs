@@ -733,18 +733,46 @@ try {
     draftAtISO: createdQuote.data()?.lifecycle?.draftAtISO,
     sentAtISO
   };
-  const sentBatch = writeBatch(ownerSession.db);
-  sentBatch.update(ownerQuoteRef, {
-    status: "sent",
-    updatedAtISO: sentAtISO,
-    lifecycle: sentLifecycle
+  const portalIssuedAtISO = String(createdQuote.data()?.portalIssuedAtISO || "");
+  const deliveryRevisionId = `v0001@${portalIssuedAtISO}`;
+  const deliveryEvidence = {
+    revisionId: deliveryRevisionId,
+    state: "provider_accepted",
+    portalActivationState: "active",
+    portalKey: acceptancePortalKey,
+    portalIssuedAtISO,
+    providerAcceptedAtISO: sentAtISO
+  };
+  // This emulator-only fixture stands in for an externally accepted provider
+  // response. Browser staff writes must never manufacture sent/portal evidence.
+  await db.runTransaction(async (transaction) => {
+    const quoteRef = db
+      .collection("organizations")
+      .doc(organizationId)
+      .collection("quotes")
+      .doc(acceptanceQuoteId);
+    const portalRef = db.collection("customerPortalQuotes").doc(acceptancePortalKey);
+    const quoteSnapshot = await transaction.get(quoteRef);
+    transaction.update(quoteRef, {
+      status: "sent",
+      updatedAtISO: sentAtISO,
+      lifecycle: sentLifecycle,
+      workflow: {
+        ...(quoteSnapshot.data()?.workflow || {}),
+        quoteDelivery: {
+          ...deliveryEvidence,
+          provider: "resend",
+          providerMessageId: "provisioning-emulator-provider-message"
+        }
+      }
+    });
+    transaction.update(portalRef, {
+      status: "sent",
+      updatedAtISO: sentAtISO,
+      lifecycle: sentLifecycle,
+      deliveryEvidence
+    });
   });
-  sentBatch.update(ownerPortalRef, {
-    status: "sent",
-    updatedAtISO: sentAtISO,
-    lifecycle: sentLifecycle
-  });
-  await sentBatch.commit();
 
   await closeClientSession(ownerSession);
   ownerSession = null;
@@ -790,6 +818,7 @@ try {
   const acceptedDecision = {
     decision: "accepted",
     message: "",
+    requestId: "portal-decision-provisioning-acceptance-0001",
     submittedAtISO: acceptedAtISO
   };
   const acceptedPatch = {

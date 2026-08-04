@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: March 27, 2026
+Last updated: August 3, 2026
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -27,6 +27,33 @@ Each major topic has one source of truth. Other docs should link to that source 
 | process | `.github/`, `scripts/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | deploy | `Dockerfile`, `docker-compose.yml`, `docker/*`, deploy workflows/config | one of `README.md`, `docs/LAUNCH_RUNBOOK.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | backlog | roadmap/backlog/task artifacts | `DEV_TASKS.md` |
+
+The GitHub job named `lane:firebase-auth-rules` must invoke the package lane of
+the same name. That lane owns both Firestore rule tests and the Firebase-backed
+browser smoke, so CI cannot silently omit either half of the authorization
+contract.
+
+## Proof-Sensitive Delivery Language
+Documentation about customer quote delivery must keep these states separate:
+- email-provider configuration is present,
+- the provider accepted an exact delivery attempt,
+- that acceptance matches the exact current valid portal issuance,
+- the provider later reports delivery or bounce, and
+- the recipient actually received or viewed the message.
+
+Only the server delivery callable or truthful audited provider reconciliation
+may establish `sent`; only a real customer portal visit may establish `viewed`.
+Generic staff status writes are never evidence for either state. Provider
+acceptance for an invalid or expired portal issuance may be recorded, but must
+be described as portal-inactive and `requires_rotation` until guarded rotation
+and a separate accepted send establish evidence for the new issuance.
+
+Projection migration or backfill must never be described as creating
+`deliveryEvidence` or proving historical acceptance. Legacy projections without
+that evidence fail closed and recover through an approved resend or truthful
+provider reconciliation. Release docs must also keep local validation, hosted
+verification, provider evidence, production deployment, and human acceptance
+as separate claims.
 
 ## Data Ownership Matrix
 | Topic | Canonical Doc | Notes |

@@ -5,7 +5,7 @@ export const WIZARD_STEP_DEFINITIONS = [
   { label: "Menu Selection", microcopy: "Build your menu" },
   { label: "Add-ons / Rentals", microcopy: "Refine services and rentals" },
   { label: "Pricing Summary", microcopy: "Review pricing details" },
-  { label: "Save / Submit", microcopy: "Finalize and send" }
+  { label: "Save Quote", microcopy: "Review and save a draft" }
 ];
 
 export const STEP1_REQUIRED_FIELDS = [

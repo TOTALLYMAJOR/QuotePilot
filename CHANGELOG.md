@@ -87,6 +87,52 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- The final quote action now says `Save draft`, opens Quote History on the exact
+  saved quote, and states that customer delivery has not occurred. The targeted
+  handoff offers a provider-send action only to Firebase admins with a complete,
+  supported email-provider configuration, and offers sales staff a draft PDF
+  without an unusable portal link. Copying an email template no longer changes
+  a draft to sent, and the raw draft portal URL is no longer rendered as a
+  shareable artifact.
+- Quote email delivery is now server-owned and bound to both the saved content
+  revision and current portal issuance. The callable preflights an existing
+  tenant-matching portal with a future expiry, builds the customer email and
+  portal URL on the server, and rejects browser-supplied attachments for quote
+  and payment-request email. A durable lease and deterministic provider key
+  suppress duplicate automatic attempts only inside a 23-hour retry window.
+  Provider acceptance records the quote `sent` lifecycle and activates the
+  portal only when the accepted revision still matches a valid current portal
+  issuance. If acceptance is known after that portal becomes invalid or
+  expires, the provider evidence is retained as `requires_rotation` while the
+  portal remains inactive; guarded rotation creates a new issuance that must
+  be sent separately before it is customer-visible. Unresolved outcomes lock
+  edits, status/payment, checkout, contract, portal rotation, customer
+  decisions, and deletion until safe retry or audited reconciliation. Definite
+  failures may start a fresh delivery generation after the original retry
+  window, while ambiguous outcomes require review. A server-observed provider
+  acceptance can never be reconciled as not sent. Generic staff status writes
+  cannot claim `sent` or `viewed` or rewrite provider/customer lifecycle
+  evidence, and owner draft notifications omit the inactive portal token.
+- Portal projection now carries explicit current-issuance delivery evidence.
+  Copy Portal and portal links inside PDFs fail closed after draft save or
+  portal rotation until the matching issuance has provider acceptance.
+  Legacy projections without that evidence remain inactive and must be
+  recovered through an approved resend or truthful provider reconciliation;
+  migration/backfill tooling never fabricates delivery evidence. Configuration
+  readiness and provider acceptance remain distinct from sender-domain,
+  inbox-delivery, and bounce proof.
+- Browser-driven quote expiry now updates the organization quote and matching
+  portal status/lifecycle in one rules-enforced batch, so a stale public portal
+  cannot survive a quote-only transition. Quote History exposes the trusted
+  admin `Reopen` recovery for eligible expired records; it restores a draft with
+  a new portal issuance, while portal rotation remains limited to draft, sent,
+  and viewed records. Expiry persistence is deferred while delivery remains
+  unresolved, keeping `Review Delivery` reachable; per-record persistence
+  failures no longer blank the history list, and successful reconciliation
+  reloads the row into the expiry/Reopen path.
+- The GitHub `lane:firebase-auth-rules` job now invokes the matching package
+  lane so Firestore authorization tests and the Firebase browser smoke run
+  together instead of allowing the rules half to be omitted.
 - Customer change-request acknowledgment and handling now use a narrow
   transaction that revalidates the exact portal request, derives the actor from
   the authenticated Firebase user, preserves the original customer decision,
@@ -261,7 +307,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Tenant branding/contact normalization now preserves intentional blank logo, crew, phone, email, and address values instead of restoring the legacy customer defaults; custom tenants with missing legacy color fields receive neutral appearance defaults. Catalog Admin also keeps edits stable during parent rerenders, shows an always-visible save control and unsaved state, and warns before discarding changes.
 - Customer portal snapshots now include customer-safe event scope, pricing breakdowns, selection labels, payment state, and decision receipts; Firestore portal patches remain constrained to allowed status and portal-decision fields.
 - Sensitive-action approval resolution records admin intent without executing payment, contract, portal-link, or deletion actions; those actions remain separate admin operations.
-- Quote History now uses the authenticated staff role to hide payment, booking, portal rotation, contract conversion, reopen, and delete controls from sales users while preserving proposal preparation. Sales can make only an exact draft-to-sent status transition and non-evidentiary schedule updates (staff lead, assignment time, kitchen checkpoints, and production checklist).
+- Quote History now uses the authenticated staff role to hide payment, booking,
+  portal rotation, contract conversion, reopen, and delete controls from sales
+  users while preserving proposal preparation. Neither sales nor admin users
+  can claim `sent` or `viewed` through generic status writes: the delivery
+  callable owns provider acceptance and the customer portal owns view evidence.
+  Sales schedule updates remain limited to non-evidentiary staff lead,
+  assignment time, kitchen checkpoint, and production checklist fields.
 - `CI Quality` workflow now uses classifier-driven lane orchestration, branch concurrency cancellation, hard-vs-advisory heavy lane behavior, and artifact retention windows for failure triage.
 - CI lane classifier now treats fallback-retirement-sensitive org/fallback modules (`src/lib/menuService.js`, `src/hooks/useCatalogData.js`, `src/lib/organizationService.js`, `src/context/OrganizationContext.jsx`) as high-risk, making Firebase heavy lanes required (non-advisory) on feature branches.
 - Production deploy automation now requires controlled manual dispatch after

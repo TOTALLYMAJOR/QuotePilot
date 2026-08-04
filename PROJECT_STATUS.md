@@ -11,14 +11,17 @@ Last updated: August 3, 2026
   returned status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains
   the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the release candidate passes 262 unit tests (36
-  intentionally skipped), 35 focused Firestore rules tests, and the default
-  Playwright suite (30 passed, 2 intentionally gated provisioning-role cases
-  skipped). The Firebase Auth/catalog browser lane, authoritative
-  pricing/quote/portal browser lane, and full provisioning emulator acceptance
-  matrix also pass. Both the browser application and Functions production
-  dependency trees report zero known vulnerabilities under `npm audit
-  --omit=dev`. This is local/emulator evidence, not hosted tenant acceptance.
+- Build and local validation: the current delivery-evidence head passes the
+  full release lane with 318 unit tests passed and 39 intentionally skipped,
+  production build, environment/secret checks, documentation governance, and
+  bundle budget. Firestore rules pass 38/38; the default Playwright suite passes
+  31 tests with 2 intentionally gated provisioning-role cases skipped; the
+  Firebase Auth/catalog and authoritative quote/delivery/portal browser lanes
+  each pass 1/1. The production Docker image builds successfully. Local
+  Lighthouse passes with performance 0.87, LCP 3,823 ms, CLS 0.001, and TBT 120
+  ms. Both the browser application and Functions production dependency trees
+  report zero known vulnerabilities under `npm audit --omit=dev`. This is
+  local/emulator evidence, not hosted tenant or provider acceptance.
 - Functions runtime readiness: Functions now target Node.js 22 and use Firebase
   Admin 14 modular app, Auth, and Firestore APIs. The local authoritative and
   provisioning matrices pass with that runtime candidate.
@@ -36,6 +39,37 @@ Last updated: August 3, 2026
   values in Advanced Pricing. Existing saved/template values trigger a visible
   review warning and survive collapse/reopen; 1440px, 390px, and 320px layout
   containment is locally covered without changing pricing or persistence code.
+- Current branch draft handoff: the final wizard action explicitly saves a
+  draft, Quote History focuses the exact saved quote with a role-safe next
+  action, copying an email template preserves draft status, and draft portal
+  links are neither rendered nor copyable as customer-ready artifacts. Firebase
+  admin delivery fails closed until a supported provider configuration is
+  present, is bound to the saved content revision plus portal issuance, and
+  sends only server-built
+  email/portal content; browser PDF attachments are rejected. A 23-hour bounded
+  provider-idempotency window supports prompt same-key retry, while uncertain
+  outcomes enter a mutation-locked review state. An expired definite failure
+  starts a fresh delivery generation; an ambiguous outcome requires same-key
+  retry or audited provider review. A server-observed provider acceptance cannot
+  be reconciled as not sent. Provider acceptance activates the portal only when
+  it matches the valid current issuance. Acceptance against an invalid or
+  expired portal is retained as `requires_rotation`; that portal remains
+  inactive until guarded rotation and a new provider send establish evidence
+  for the new issuance. Generic staff writes cannot claim `sent` or `viewed`,
+  customer portal decisions are blocked during unresolved delivery, and owner
+  draft SMS omits the inactive portal token. Copy Portal and portal links inside
+  PDFs remain withheld without matching current-issuance delivery evidence.
+  Admin expiry writes quote and portal lifecycle state atomically; the visible
+  `Reopen` recovery returns an eligible expired quote to draft with a new portal
+  issuance, while accepted, declined, and booked portal identities remain
+  terminal. A quote expiring during unresolved delivery remains visible for
+  provider review, and one failed legacy expiry projection no longer prevents
+  the rest of Quote History from loading.
+  The configuration check does not prove sender-domain verification or inbox
+  delivery. Focused source/unit/rules coverage and a
+  provider-disabled emulator failure path are local evidence; successful
+  provider acceptance, atomic hosted completion, inbox delivery, and bounce
+  handling remain unproved until provider/hosted acceptance is captured.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
 - Current branch tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
 - Current release-candidate provisioning hardening adds verified-email,
@@ -59,9 +93,9 @@ Last updated: August 3, 2026
   email authority and conflicting claim/role organization scopes, permits
   tenant-domain mapping changes only for same-organization admins, and keeps
   commercial entitlements server-owned. Direct quote and portal deletion is
-  denied, sales status authority is limited to an exact draft-to-sent
-  transition, and sales schedule writes are limited to non-evidentiary
-  staff/checklist fields.
+  denied, generic staff status writes cannot create `sent` or `viewed` evidence
+  or rewrite an existing provider/customer lifecycle, and sales schedule writes
+  are limited to non-evidentiary staff/checklist fields.
 - Current branch provider authorization hardening: outbound quote email, owner
   SMS, payment requests, checkout creation, provider status, and provider tests
   require the current authoritative admin role. Disabled providers reject and
@@ -99,8 +133,17 @@ Last updated: August 3, 2026
   Firestore REST execution when ADC credentials are unavailable, defaults to a
   read-only dry run, requires explicit project/organization scope, and requires
   an exact confirmation token before apply mode.
-- Portal token rule hardening is implemented and emulator-validated: portal snapshot reads/status updates now require active (non-deleted + non-expired) snapshots at the Firestore rule layer.
-- Portal snapshot expiry-ms backfill was executed for production org `250` (`customerPortalQuotes patched=2`) to preserve existing portal-link behavior under hardened rules.
+- Portal token and delivery-evidence hardening is implemented in the current
+  source candidate: portal reads and customer decisions require a non-deleted,
+  non-expired snapshot whose delivery evidence matches provider acceptance for
+  the quote's current portal issuance. The Firestore emulator suite passes
+  38/38, including fail-closed legacy/no-evidence coverage; the rules are not
+  yet production behavior.
+- A prior portal expiry-ms backfill was executed for production org `250`
+  (`customerPortalQuotes patched=2`). That historical expiry field is not
+  delivery evidence. Legacy projections without the new evidence fail closed
+  under the current candidate and require an approved resend or truthful
+  reconciliation; no backfill may fabricate acceptance.
 - Legacy quote safety: Firebase writes no longer copy legacy global quote data
   into an organization during mutation. Direct quote creation is denied by
   Firestore rules, trusted Functions create and edit canonical drafts
@@ -160,10 +203,13 @@ Last updated: August 3, 2026
   hosted production behavior. Automated customer/staff notifications and
   escalation delivery remain unimplemented.
 - Existing portal snapshots still need a reviewed production dry run and apply
-  before older links can display every newly added event, selection, and
-  pricing field. A dry-run-first, tenant-scoped backfill tool is implemented
-  and locally validated, including transactional emulator acceptance; no
-  production portal record was changed by that validation.
+  before their customer-safe event, selection, and pricing projection is
+  complete. Projection backfill is not delivery authority: legacy links without
+  matching `deliveryEvidence` remain inactive and must be recovered through an
+  approved resend or truthful provider reconciliation. The dry-run-first,
+  tenant-scoped projection tool is implemented and locally validated; it never
+  creates delivery evidence, and no production portal record was changed by
+  that validation.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
 - Bundle size remains a watch item; budget/CWV gates now prevent uncontrolled regressions.
 - The quote builder now has a locally accepted mobile pricing path: after the
@@ -186,7 +232,10 @@ Last updated: August 3, 2026
    `main` revision, then run the hosted owner/quote/portal tenant acceptance
    checklist against the already-live Vercel frontend.
 2. Verify the intended Resend sender domain in the Resend dashboard and authoritative DNS; only then configure `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and recipient proof from one controlled test.
-3. Deploy the updated `firestore.rules` and run hosted portal decision smoke checks, including active, expired, deleted, and change-request paths.
+3. Deploy the updated `firestore.rules` and run hosted portal decision smoke
+   checks for current-issuance evidence, active, expired, deleted, rotated,
+   legacy-no-evidence, and change-request paths. Prove that a provider-accepted
+   invalid portal remains inactive until guarded rotation and a new send.
 4. Run and review the scoped production portal-projection dry run, resolve any
    reported conflicts, then explicitly authorize the guarded apply and retain
    its count-only evidence.

@@ -8,12 +8,19 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 ## Access and Roles
 - Staff access (`sales` or `admin`) is required for the quote builder workspace.
 - Admin access is required for Catalog Admin configuration.
-- Sales users can prepare quotes through the trusted edit workflow and send an
-  exact draft quote. They cannot set another lifecycle state, alter payment or
-  customer-decision evidence, rotate portals, reopen, or delete. Their schedule
-  updates are limited to staff assignment, kitchen checkpoints, and production
-  checklist fields that do not prove booking, payment, or acceptance.
-- Customer Portal links are generated from saved quotes and can be shared with clients.
+- Sales users can prepare quotes through the trusted edit workflow, download a
+  draft PDF, and copy an email template. The current Quote History UI reserves
+  provider-backed email and lifecycle controls for admins. Sales cannot create
+  delivery or portal-view evidence, alter payment or customer-decision evidence,
+  rotate portals, reopen, or delete. Their schedule updates are limited to staff
+  assignment, kitchen checkpoints, and production checklist fields that do not
+  prove booking, payment, or acceptance.
+- Neither staff role can mark a quote `sent` or `viewed` through a generic
+  status update. The server delivery callable owns provider-acceptance evidence,
+  and the customer portal owns view evidence.
+- A saved draft has a reserved Customer Portal identity, but the link is not
+  customer-visible or copyable. Only provider acceptance for the exact current,
+  valid portal issuance activates that portal.
 
 ## Staff Workflow (Quote Builder)
 1. Open the app and sign in.
@@ -22,13 +29,35 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
    - `Menu Selection`
    - `Add-ons / Rentals`
    - `Pricing Summary`
-   - `Save / Submit`
+   - `Save Quote`
 3. Review the sticky Live Breakdown panel while editing. After entering the
    wizard on a phone or tablet, all five steps keep Total and Deposit in view.
    Use `View breakdown` for the focus-contained itemized sheet and `Close` or
    Escape to return focus to the workflow.
-4. Save or submit from the final step.
-5. Copy/share the generated customer portal link if needed.
+4. Select `Save draft` from the final step. Saving creates or updates the quote
+   but does not send it to the customer or mark it sent.
+5. Quote History opens on the exact saved quote. A Firebase-backed admin can
+   submit that saved revision only after QuotePilot confirms that a supported
+   email-provider configuration is present. Provider email contains the
+   server-built customer portal link; browser-generated PDF attachments are not
+   accepted. Sales staff can
+   download a draft PDF or copy the email template, and the draft PDF
+   deliberately omits the inactive portal link. A PDF generated after portal
+   rotation also omits the link until the new issuance has provider-acceptance
+   evidence. PDF export remains available to both roles as a separate operator
+   artifact.
+6. Provider acceptance records quote `sent` status. It activates the portal in
+   the same server transaction only when the evidence matches the exact current,
+   valid issuance. Acceptance proves provider handling, not recipient inbox
+   delivery. If the provider accepts a message whose portal issuance is already
+   invalid or expired, QuotePilot keeps the acceptance evidence, marks the
+   portal `requires_rotation`, and leaves it inactive. An admin must complete
+   guarded rotation and send the new issuance separately before sharing it.
+   Re-sending unchanged content and issuance within the provider idempotency
+   window returns the existing acceptance record. A definite failed attempt
+   whose safe retry window has closed starts a fresh delivery generation; an
+   ambiguous outcome stays locked for provider review. Edit and save a new
+   revision before sending updated content.
 
 ## Quote Builder Details
 - Event Type drives dynamic menu categories and items.
@@ -56,15 +85,53 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   - Duplicate to a new draft
   - Permanently delete through the admin-only cleanup callable. Direct quote or
     portal document deletion is denied.
-  - Admin-only safe reopen for an expired or legacy `status=deleted` quote when
-    its active version is valid and nonterminal. Accepted, declined, booked,
-    paid, or refunded evidence blocks reopen; a permanently deleted quote cannot
-    be restored.
+  - Admin-only `Reopen` for an expired quote. It restores the last eligible
+    nonterminal version as a draft and creates a new portal issuance. The trusted
+    callable can also recover an eligible legacy `status=deleted` record, but a
+    permanently deleted quote cannot be restored. Accepted, declined, booked,
+    paid, or refunded evidence blocks both paths.
   - Export PDF
-  - Copy email template and portal link
-  - Admin only: send customer email, copy a verified Stripe payment link,
-    create/send a Stripe deposit request, and rotate a customer portal token
-    when a link expires or should be reissued
+  - Copy email template. Copying prepares an artifact only; it does not send
+    anything or change draft status.
+  - Copy a customer portal link only after the current saved revision has
+    provider-acceptance evidence for its exact current valid issuance; draft,
+    rotated-but-unsent, and legacy portals without that evidence fail closed.
+  - Admin only: submit customer email to the configured provider, copy a
+    verified Stripe payment link, create/send a Stripe deposit request, and
+    rotate a customer portal token for a draft, sent, or viewed quote when its
+    issuance should be replaced. Use `Reopen` when the quote itself is expired;
+    accepted, declined, and booked records cannot rotate their portal identity.
+    Quote email submission is bound to the exact saved version and portal
+    issuance, remains disabled in local fallback mode, and fails closed while
+    provider configuration readiness is unknown. This configuration check does
+    not prove sender-domain verification, provider acceptance, inbox delivery,
+    or bounce handling. Rotation invalidates prior portal activation evidence,
+    so both Copy Portal and the portal link inside a PDF remain unavailable
+    until a separate provider send accepts the new issuance.
+- While quote delivery is `sending`, or its provider outcome needs manual
+  review, QuotePilot locks quote status/payment, edit, checkout, payment email,
+  contract, portal rotation, and deletion controls. PDF download, email-template
+  copy, and duplication remain available because they do not mutate the locked
+  customer record.
+- If the quote validity window ends while delivery is unresolved, Quote History
+  keeps the derived expired row visible and defers lifecycle persistence instead
+  of hiding the review control. Complete `Review Delivery`; QuotePilot reloads
+  the record, persists eligible quote/portal expiry together, and then exposes
+  `Reopen`.
+- If a delivery lease expires inside the 23-hour provider idempotency window,
+  `Retry Quote Email` resubmits the exact revision with the same provider key.
+  A definite provider failure after that window starts a fresh delivery
+  generation before another send. If the outcome is ambiguous, use `Review
+  Delivery`: check the provider first, then record its accepted message ID or
+  confirm with an audit note that no message was accepted. QuotePilot does not
+  allow a known server-observed provider message ID to be reconciled as no-send.
+  Provider acceptance for an invalid or expired issuance remains recorded, but
+  the portal stays inactive and requires guarded rotation plus a new send. Do
+  not clear an uncertain outcome without checking the provider.
+- Firebase staff cannot set a quote to `sent` or `viewed` through the generic
+  status menu. The delivery callable or audited provider reconciliation owns
+  `sent`; an actual customer portal visit owns `viewed`. Owner SMS on draft
+  creation contains the quote summary but never the inactive portal URL.
 - Status filtering supports grouped views:
   - `Submitted` (sent/viewed/accepted)
   - `Archived` (booked/declined/expired)
@@ -266,7 +333,10 @@ Complete every item before calling the new tenant operational:
   token, and initial version; client-supplied totals, pricing, record/owner
   identities, and deposit links are not quote-creation authority. Direct
   Firestore quote creation must remain denied.
-- Copy the customer portal link, open it in a signed-out/private browser,
+- Submit the representative quote from `Quote History`, confirm provider
+  acceptance and current-issuance activation evidence are recorded for that
+  exact revision, then copy the customer portal link and open it in a
+  signed-out/private browser,
   complete a representative decision, and confirm the result appears in staff
   quote history. The public snapshot and organization quote must change in the
   same atomic commit, and accepted/declined outcomes cannot be flipped by a
@@ -285,7 +355,16 @@ Complete every item before calling the new tenant operational:
   quote; a terminal accepted or declined decision is immutable from the public
   portal.
 - Portal tokens are time-bound and expire automatically.
-- Admins can use `Rotate Portal` in `Quote History` to issue a fresh link and invalidate the old one.
+- A portal is active only when its projection contains delivery evidence for
+  the exact current valid issuance. Legacy projections without
+  `deliveryEvidence` fail closed; recover them through an approved resend or
+  truthful provider reconciliation, never by fabricating or backfilling
+  acceptance evidence.
+- Admins can use `Rotate Portal` on draft, sent, or viewed records to issue a
+  fresh link and invalidate the old one. The replacement link remains
+  unavailable until a provider accepts a separate send for that new issuance.
+  An expired quote uses `Reopen`, which restores an eligible draft and creates a
+  new issuance; terminal accepted, declined, or booked records are not reissued.
 
 ## Notifications and Confirmations
 - Toast notifications are shown for save/update/delete and key operational actions.

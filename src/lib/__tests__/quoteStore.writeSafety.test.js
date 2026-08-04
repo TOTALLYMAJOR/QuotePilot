@@ -79,6 +79,7 @@ vi.mock("../organizationService", () => ({
 import {
   buildClientWritablePortalPayment,
   convertQuoteToContract,
+  getQuoteHistory,
   getWorkflowAttentionSnapshot,
   requestQuoteApproval,
   reopenQuote,
@@ -90,6 +91,7 @@ import {
   syncQuoteToCrm,
   updateQuote,
   updateQuoteChangeRequestHandling,
+  updateQuoteStatus,
   updatePortalDecision
 } from "../quoteStore";
 
@@ -947,6 +949,162 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.runTransaction).not.toHaveBeenCalled();
     expect(mockState.transactionSet).not.toHaveBeenCalled();
     expect(mockState.writeBatch).not.toHaveBeenCalled();
+  });
+
+  test("history derives expiry without attempting a staff write by default", async () => {
+    mockState.getDocs.mockResolvedValue({
+      docs: [{
+        id: "quote-expired",
+        data: () => ({
+          organizationId: "org-one",
+          portalKey: "portal-key-12345678901234567890",
+          status: "sent",
+          createdAtISO: "2026-01-01T00:00:00.000Z",
+          updatedAtISO: "2026-01-01T00:00:00.000Z",
+          expiresAtISO: "2026-01-02T00:00:00.000Z",
+          portalExpiresAtISO: "2026-01-02T00:00:00.000Z"
+        })
+      }]
+    });
+
+    const result = await getQuoteHistory({ organizationId: "org-one" });
+
+    expect(result.quotes[0]?.status).toBe("expired");
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
+  });
+
+  test("history keeps an expired unresolved delivery visible without attempting lifecycle persistence", async () => {
+    mockState.getDocs.mockResolvedValue({
+      docs: [{
+        id: "quote-unresolved-expiry",
+        data: () => ({
+          organizationId: "org-one",
+          portalKey: "portal-key-unresolved-12345678901234567890",
+          status: "sent",
+          createdAtISO: "2026-01-01T00:00:00.000Z",
+          updatedAtISO: "2026-01-01T00:00:00.000Z",
+          expiresAtISO: "2026-01-02T00:00:00.000Z",
+          portalExpiresAtISO: "2026-01-02T00:00:00.000Z",
+          workflow: {
+            quoteDelivery: {
+              state: "outcome_unknown"
+            }
+          }
+        })
+      }]
+    });
+
+    const result = await getQuoteHistory({
+      organizationId: "org-one",
+      persistExpiredStatuses: true
+    });
+
+    expect(result.quotes[0]?.status).toBe("expired");
+    expect(result.expiryPersistenceFailures).toEqual([]);
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
+  });
+
+  test("one failed expiry persistence does not blank quote history", async () => {
+    setQuoteStoreOrganizationId("org-one");
+    const storedQuote = {
+      organizationId: "org-one",
+      portalKey: "portal-key-failed-12345678901234567890",
+      portalIssuedAtISO: "2026-01-01T00:00:00.000Z",
+      portalExpiresAtISO: "2026-01-02T00:00:00.000Z",
+      status: "sent",
+      createdAtISO: "2026-01-01T00:00:00.000Z",
+      updatedAtISO: "2026-01-01T00:00:00.000Z",
+      expiresAtISO: "2026-01-02T00:00:00.000Z",
+      customer: {},
+      event: {},
+      totals: {},
+      payment: {},
+      booking: {},
+      lifecycle: { sentAtISO: "2026-01-01T00:00:00.000Z" },
+      latestVersionNumber: 1,
+      activeVersionId: "v0001"
+    };
+    mockState.getDocs.mockResolvedValue({
+      docs: [{
+        id: "quote-failed-expiry",
+        data: () => storedQuote
+      }]
+    });
+    mockState.getDoc.mockResolvedValue({
+      id: "quote-failed-expiry",
+      exists: () => true,
+      data: () => storedQuote
+    });
+    mockState.writeBatch.mockReturnValue({
+      update: vi.fn(),
+      commit: vi.fn().mockRejectedValue(new Error("matching portal missing"))
+    });
+
+    const result = await getQuoteHistory({
+      organizationId: "org-one",
+      persistExpiredStatuses: true
+    });
+
+    expect(result.quotes[0]?.status).toBe("expired");
+    expect(result.expiryPersistenceFailures).toEqual(["quote-failed-expiry"]);
+    expect(mockState.writeBatch).toHaveBeenCalledTimes(1);
+  });
+
+  test("admin expiry persists quote and portal in one batch", async () => {
+    setQuoteStoreOrganizationId("org-one");
+    const batchUpdate = vi.fn();
+    const batchSet = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    mockState.writeBatch.mockReturnValue({
+      update: batchUpdate,
+      set: batchSet,
+      commit: batchCommit
+    });
+    mockState.getDoc.mockResolvedValue({
+      id: "quote-1",
+      exists: () => true,
+      data: () => ({
+        id: "quote-1",
+        organizationId: "org-one",
+        portalKey: "portal-key-12345678901234567890",
+        portalIssuedAtISO: "2026-08-03T17:00:00.000Z",
+        portalExpiresAtISO: "2026-09-02T17:00:00.000Z",
+        status: "sent",
+        customer: {},
+        event: {},
+        totals: {},
+        payment: {},
+        booking: {},
+        lifecycle: { sentAtISO: "2026-08-03T17:00:00.000Z" },
+        latestVersionNumber: 1,
+        activeVersionId: "v0001"
+      })
+    });
+
+    await updateQuoteStatus("quote-1", "expired");
+
+    expect(batchUpdate).toHaveBeenCalledTimes(2);
+    expect(batchUpdate.mock.calls[1][0]).toMatchObject({
+      refType: "doc",
+      args: [mockState.db, "customerPortalQuotes", "portal-key-12345678901234567890"]
+    });
+    expect(batchUpdate.mock.calls[1][1]).toMatchObject({
+      status: "expired",
+      lifecycle: {
+        sentAtISO: "2026-08-03T17:00:00.000Z"
+      }
+    });
+    expect(batchUpdate.mock.calls[1][1].lifecycle.expiredAtISO).toEqual(expect.any(String));
+    expect(Object.keys(batchUpdate.mock.calls[1][1]).sort()).toEqual([
+      "lifecycle",
+      "status",
+      "updatedAtISO"
+    ]);
+    expect(batchSet).not.toHaveBeenCalled();
+    expect(batchCommit).toHaveBeenCalledTimes(1);
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
   });
 
   test("change-request handling rejects a stale source before any write", async () => {

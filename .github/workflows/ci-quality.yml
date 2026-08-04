@@ -206,8 +206,8 @@ jobs:
       - name: Install Playwright browser + Linux deps
         run: npx playwright install --with-deps chromium
 
-      - name: Run Playwright Firebase emulator smoke suite
-        run: npm run test:e2e:firebase
+      - name: Run Firestore rules and Firebase emulator browser lane
+        run: npm run lane:firebase-auth-rules
 
       - name: Upload Playwright report (failure)
         if: failure()

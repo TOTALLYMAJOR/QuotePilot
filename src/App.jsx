@@ -9,7 +9,10 @@ import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useAuthSession } from "./hooks/useAuthSession";
 import { useCatalogData } from "./hooks/useCatalogData";
 import { useTenantContext } from "./hooks/useTenantContext";
-import { calculateQuotePricing, notifyOwnerNewQuote, sendQuoteToCustomerEmail } from "./lib/commerceOps";
+import {
+  calculateQuotePricing,
+  notifyOwnerNewQuote
+} from "./lib/commerceOps";
 import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
@@ -24,12 +27,10 @@ import {
 } from "./lib/wizardUi";
 import {
   checkEventAvailability,
-  getQuoteById,
   getWorkflowAttentionSnapshot,
   setQuoteStoreOrganizationId,
   submitQuote,
-  updateQuote,
-  updateQuoteStatus
+  updateQuote
 } from "./lib/quoteStore";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
 
@@ -91,13 +92,6 @@ function readPortalKeyFromUrl() {
   if (typeof window === "undefined") return "";
   const params = new URLSearchParams(window.location.search);
   return String(params.get("portal") || "").trim();
-}
-
-function copyText(text) {
-  if (!navigator?.clipboard) {
-    throw new Error("Clipboard is unavailable in this browser.");
-  }
-  return navigator.clipboard.writeText(text);
 }
 
 function toNumber(value, fallback = 0) {
@@ -338,6 +332,7 @@ export default function App() {
   const stepperRef = useRef(null);
   const mobilePricingToggleRef = useRef(null);
   const historyTriggerRef = useRef(null);
+  const saveQuoteButtonRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { setOrganizationId } = useOrganization();
@@ -495,6 +490,7 @@ export default function App() {
   const [importStudioOpen, setImportStudioOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState({ quoteId: "", reason: "" });
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [salesWorkflowOpen, setSalesWorkflowOpen] = useState(false);
@@ -554,11 +550,7 @@ export default function App() {
   const salesWorkflowMounted = useStickyMount(salesWorkflowOpen);
   const [submitState, setSubmitState] = useState({
     saving: false,
-    sendingQuoteEmail: false,
-    message: "",
-    portalLink: "",
-    quoteId: "",
-    quoteNumber: ""
+    message: ""
   });
   const [availabilityNotice, setAvailabilityNotice] = useState("");
   const [editingQuote, setEditingQuote] = useState({ id: "", quoteNumber: "" });
@@ -1210,10 +1202,7 @@ export default function App() {
     setSubmitState((prev) => ({
       ...prev,
       saving: true,
-      message: "",
-      portalLink: "",
-      quoteId: "",
-      quoteNumber: ""
+      message: ""
     }));
     try {
       const availability = await checkEventAvailability({
@@ -1237,14 +1226,10 @@ export default function App() {
           : "";
         setSubmitState({
           saving: false,
-          sendingQuoteEmail: false,
           message:
             `Availability conflict: this date/venue is already booked.` +
             `${conflictRefs ? ` Existing booking(s): ${conflictRefs}.` : ""}` +
-            capacityNote,
-          portalLink: "",
-          quoteId: "",
-          quoteNumber: ""
+            capacityNote
         });
         return;
       }
@@ -1344,57 +1329,60 @@ export default function App() {
         SAVE_FLOW_TIMEOUT_MS,
         isEditingQuote ? "updateQuote" : "submitQuote"
       );
-      const basePath = `${window.location.origin}${window.location.pathname}`;
-      const portalLink = result.portalKey ? `${basePath}?portal=${result.portalKey}` : "";
-
       if (isEditingQuote) {
         setSubmitState({
           saving: false,
-          sendingQuoteEmail: false,
-          message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`,
-          portalLink,
-          quoteId: result.id,
-          quoteNumber: result.quoteNumber || ""
+          message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`
         });
         pushToast(`Quote ${result.quoteNumber} updated.`, "success");
+        setHistoryTarget({ quoteId: result.id, reason: "updated" });
         setHistoryOpen(true);
         return;
       }
 
-      let smsSuffix = "";
-      if (result.storage === "firebase" && authSession.isAdmin) {
-        try {
-          const smsResult = await withTimeout(
-            notifyOwnerNewQuote({
-              quoteId: result.id
-            }),
-            OWNER_SMS_TIMEOUT_MS,
-            "notifyOwnerNewQuote"
-          );
-          if (smsResult?.sms?.sent) {
-            smsSuffix = " Owner SMS sent.";
-          } else if (smsResult?.sms?.reason === "sms_not_configured") {
-            smsSuffix = " Owner SMS not configured yet.";
-          } else if (smsResult?.sms?.reason === "sms_disabled") {
-            smsSuffix = " Owner SMS disabled by configuration.";
-          } else if (smsResult?.sms?.reason === "sms_send_failed") {
-            smsSuffix = " Owner SMS failed to send.";
-          }
-        } catch (smsErr) {
-          smsSuffix = " Owner SMS failed to send.";
-        }
-      }
+      const savedDraftMessage = `Quote ${result.quoteNumber} saved as a draft in ${result.storage}. It has not been sent to the customer.`;
       setSubmitState({
         saving: false,
-        sendingQuoteEmail: false,
-        message: `Quote ${result.quoteNumber} saved to ${result.storage}.${smsSuffix}${pricingAdjustmentNote}`,
-        portalLink,
-        quoteId: result.id,
-        quoteNumber: result.quoteNumber || ""
+        message: `${savedDraftMessage}${pricingAdjustmentNote}`
       });
-      pushToast(`Quote ${result.quoteNumber} saved.`, "success");
+      pushToast(`Quote ${result.quoteNumber} saved as a draft.`, "success");
       requestWorkflowAttentionRefresh({ force: true });
+      setHistoryTarget({ quoteId: result.id, reason: "created" });
       setHistoryOpen(true);
+
+      // Quote persistence is the handoff boundary. Owner notification is
+      // intentionally non-blocking so a slow/disabled SMS provider cannot
+      // delay the exact saved-draft review surface.
+      if (result.storage === "firebase" && authSession.isAdmin) {
+        void withTimeout(
+          notifyOwnerNewQuote({
+            quoteId: result.id
+          }),
+          OWNER_SMS_TIMEOUT_MS,
+          "notifyOwnerNewQuote"
+        )
+          .then((smsResult) => {
+            let smsSuffix = "";
+            if (smsResult?.sms?.sent) {
+              smsSuffix = " Owner SMS sent.";
+            } else if (smsResult?.sms?.reason === "sms_not_configured") {
+              smsSuffix = " Owner SMS not configured yet.";
+            } else if (smsResult?.sms?.reason === "sms_disabled") {
+              smsSuffix = " Owner SMS disabled by configuration.";
+            } else if (smsResult?.sms?.reason === "sms_send_failed") {
+              smsSuffix = " Owner SMS failed to send.";
+            }
+            if (!smsSuffix) return;
+            setSubmitState((current) => current.message.startsWith(savedDraftMessage)
+              ? { ...current, message: `${savedDraftMessage}${smsSuffix}${pricingAdjustmentNote}` }
+              : current);
+          })
+          .catch(() => {
+            setSubmitState((current) => current.message.startsWith(savedDraftMessage)
+              ? { ...current, message: `${savedDraftMessage} Owner SMS failed to send.${pricingAdjustmentNote}` }
+              : current);
+          });
+      }
     } catch (err) {
       recordDiagnosticError(err, {
         surface: "app",
@@ -1407,11 +1395,7 @@ export default function App() {
       setSubmitState((prev) => ({
         ...prev,
         saving: false,
-        sendingQuoteEmail: false,
-        message: err?.message || "Failed to save quote.",
-        portalLink: "",
-        quoteId: "",
-        quoteNumber: ""
+        message: err?.message || "Failed to save quote."
       }));
     }
   };
@@ -1514,96 +1498,15 @@ export default function App() {
     });
     setTouchedFields({});
     setShowStepValidation(false);
+    setHistoryTarget({ quoteId: "", reason: "" });
     setHistoryOpen(false);
     setStep(1);
     setSubmitState({
       saving: false,
-      sendingQuoteEmail: false,
-      message: `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`,
-      portalLink: "",
-      quoteId: "",
-      quoteNumber: ""
+      message: `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
-  };
-
-  const handleCopyPortalLink = async () => {
-    try {
-      if (!submitState.portalLink) return;
-      await copyText(submitState.portalLink);
-      setSubmitState((prev) => ({ ...prev, message: "Customer portal link copied." }));
-    } catch (err) {
-      recordDiagnosticError(err, {
-        surface: "app",
-        action: "copy-portal-link"
-      });
-      setSubmitState((prev) => ({
-        ...prev,
-        message: err?.message || "Failed to copy customer portal link."
-      }));
-    }
-  };
-
-  const handleSendQuoteEmail = async () => {
-    const quoteId = String(submitState.quoteId || "").trim();
-    if (!quoteId) {
-      setSubmitState((prev) => ({ ...prev, message: "Save a quote before sending email." }));
-      return;
-    }
-
-    setSubmitState((prev) => ({
-      ...prev,
-      sendingQuoteEmail: true,
-      message: ""
-    }));
-
-    try {
-      const quote = await getQuoteById(quoteId);
-      const { exportQuoteProposal } = await import("./lib/proposalExport");
-      const basePortalUrl = `${window.location.origin}${window.location.pathname}`;
-      const attachment = await exportQuoteProposal(quote, {
-        basePortalUrl,
-        output: "base64",
-        compact: true
-      });
-      await sendQuoteToCustomerEmail({
-        quoteId,
-        attachment
-      });
-
-      const currentStatus = String(quote.status || "draft").trim().toLowerCase();
-      if (currentStatus === "draft") {
-        try {
-          await updateQuoteStatus(quoteId, "sent");
-        } catch (statusErr) {
-          recordDiagnosticError(statusErr, {
-            surface: "app",
-            action: "mark-quote-sent-after-email",
-            quoteId
-          });
-        }
-      }
-
-      setSubmitState((prev) => ({
-        ...prev,
-        sendingQuoteEmail: false,
-        message: `Quote ${quote.quoteNumber || submitState.quoteNumber || quoteId} emailed with portal link and PDF attachment.`
-      }));
-      pushToast(`Quote ${quote.quoteNumber || quoteId} emailed to customer.`, "success");
-    } catch (err) {
-      recordDiagnosticError(err, {
-        surface: "app",
-        action: "send-quote-email",
-        quoteId
-      });
-      setSubmitState((prev) => ({
-        ...prev,
-        sendingQuoteEmail: false,
-        message: err?.message || "Failed to send quote email."
-      }));
-      pushToast(err?.message || "Failed to send quote email.", "error");
-    }
   };
 
   const handleGetInstantQuote = () => {
@@ -1954,7 +1857,10 @@ export default function App() {
             <button
               className="ghost"
               ref={historyTriggerRef}
-              onClick={() => setHistoryOpen(true)}
+              onClick={() => {
+                setHistoryTarget({ quoteId: "", reason: "" });
+                setHistoryOpen(true);
+              }}
             >
               Quote History
             </button>
@@ -2135,34 +2041,16 @@ export default function App() {
                 <>
                 <button
                   className="cta"
+                  ref={saveQuoteButtonRef}
                   onClick={handleSubmitQuote}
                   disabled={submitState.saving || catalog.loading || totals.guests <= 0}
                 >
-                    {submitState.saving ? (isEditingQuote ? "Saving Changes..." : "Saving...") : (isEditingQuote ? "Save Changes" : "Save & Submit")}
+                    {submitState.saving ? (isEditingQuote ? "Saving Changes..." : "Saving Draft...") : (isEditingQuote ? "Save Changes" : "Save draft")}
                   </button>
                 </>
               )}
             </div>
           </div>
-
-          {(submitState.portalLink || submitState.quoteId) && (
-            <div className="portal-link-row">
-              {submitState.portalLink && <input type="text" readOnly value={submitState.portalLink} />}
-              {submitState.portalLink && (
-                <button type="button" className="ghost" onClick={handleCopyPortalLink}>Copy Portal Link</button>
-              )}
-              {submitState.quoteId && authSession.isAdmin && (
-                <button
-                  type="button"
-                  className="cta"
-                  onClick={handleSendQuoteEmail}
-                  disabled={submitState.saving || submitState.sendingQuoteEmail}
-                >
-                  {submitState.sendingQuoteEmail ? "Sending Quote Email..." : "Send Quote Email (Portal + PDF)"}
-                </button>
-              )}
-            </div>
-          )}
 
           <p className="source-note">Quote validity: {Math.max(1, Number(catalog.settings?.quoteValidityDays || 30))} days</p>
           {isEditingQuote && (
@@ -2234,15 +2122,21 @@ export default function App() {
           <QuoteHistoryModal
             open={historyOpen}
             onClose={() => {
+              const returnToSave = Boolean(historyTarget.quoteId);
               setHistoryOpen(false);
+              setHistoryTarget({ quoteId: "", reason: "" });
               requestWorkflowAttentionRefresh({ force: true });
-              window.requestAnimationFrame(() => historyTriggerRef.current?.focus());
+              window.requestAnimationFrame(() => (
+                returnToSave ? saveQuoteButtonRef.current : historyTriggerRef.current
+              )?.focus());
             }}
             basePortalUrl={`${window.location.origin}${window.location.pathname}`}
             organizationId={authSession.organizationId}
             currentUserUid={authSession.user?.uid || ""}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
+            focusQuoteId={historyTarget.quoteId}
+            focusReason={historyTarget.reason}
             onEditQuote={(quote) => {
               requestWorkflowAttentionRefresh({ force: true });
               handleEditQuote(quote);
@@ -2258,6 +2152,7 @@ export default function App() {
             onClose={() => setSalesWorkflowOpen(false)}
             onOpenQuoteHistory={() => {
               setSalesWorkflowOpen(false);
+              setHistoryTarget({ quoteId: "", reason: "" });
               setHistoryOpen(true);
             }}
             organizationId={authSession.organizationId}

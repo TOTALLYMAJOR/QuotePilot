@@ -16,6 +16,15 @@ const EXPIRED_PORTAL_KEY = "expired-abcdefghijklmnopqrstuvwxyz";
 const DELETED_PORTAL_KEY = "deleted-abcdefghijklmnopqrstuvwxyz";
 const ACTIVE_PORTAL_EXPIRES_MS = 4102444800000; // 2100-01-01T00:00:00.000Z
 const EXPIRED_PORTAL_EXPIRES_MS = 1577836800000; // 2020-01-01T00:00:00.000Z
+const PORTAL_ISSUED_AT_ISO = "2026-03-20T00:00:00.000Z";
+const PORTAL_DELIVERY_EVIDENCE = {
+  revisionId: `v0001@${PORTAL_ISSUED_AT_ISO}`,
+  state: "provider_accepted",
+  portalActivationState: "active",
+  portalKey: VALID_PORTAL_KEY,
+  portalIssuedAtISO: PORTAL_ISSUED_AT_ISO,
+  providerAcceptedAtISO: PORTAL_ISSUED_AT_ISO
+};
 const RULES_PRICING = {
   pricingVersion: "pricing-v1",
   authority: "server_authoritative",
@@ -126,6 +135,7 @@ async function seedBaseData() {
       organizationId: "org-a",
       customerEmailKey: "customer-a@example.com",
       portalKey: VALID_PORTAL_KEY,
+      portalIssuedAtISO: PORTAL_ISSUED_AT_ISO,
       quoteNumber: "QP-RULES-001",
       customer: {
         name: "Rules Customer",
@@ -160,6 +170,18 @@ async function seedBaseData() {
       updatedAtISO: "2026-03-20T00:00:00.000Z",
       lifecycle: {},
       portalDecision: {},
+      workflow: {
+        quoteDelivery: {
+          revisionId: `v0001@${PORTAL_ISSUED_AT_ISO}`,
+          state: "provider_accepted",
+          provider: "resend",
+          providerMessageId: "rules-provider-message-1",
+          providerAcceptedAtISO: PORTAL_ISSUED_AT_ISO,
+          portalActivationState: "active",
+          portalKey: VALID_PORTAL_KEY,
+          portalIssuedAtISO: PORTAL_ISSUED_AT_ISO
+        }
+      },
       latestVersionNumber: 0
     });
     await setDoc(doc(db, "organizations", "org-a", "quotes", "q-expired"), {
@@ -179,6 +201,8 @@ async function seedBaseData() {
       quoteId: "q1",
       organizationId: "org-a",
       status: "sent",
+      portalIssuedAtISO: PORTAL_ISSUED_AT_ISO,
+      deliveryEvidence: PORTAL_DELIVERY_EVIDENCE,
       portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
       updatedAtISO: "2026-03-20T00:00:00.000Z",
       lifecycle: {}
@@ -382,6 +406,8 @@ function buildCanonicalPortalPayload(overrides = {}) {
     portalKey: VALID_PORTAL_KEY,
     quoteId: "q1",
     organizationId: "org-a",
+    portalIssuedAtISO: PORTAL_ISSUED_AT_ISO,
+    deliveryEvidence: PORTAL_DELIVERY_EVIDENCE,
     quoteNumber: "QP-RULES-001",
     customerName: "Rules Customer",
     customerEmail: "rules-customer@example.com",
@@ -521,7 +547,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(batch.commit());
   });
 
-  test("staff portal creation must be a canonical projection of its existing quote", async () => {
+  test("browser staff cannot create or forge customer portal projections", async () => {
     const db = testEnv.authenticatedContext("sales-org-a", {
       email: "sales-a@example.com",
       email_verified: true
@@ -531,10 +557,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await deleteDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY));
     });
-    await assertSucceeds(setDoc(portalRef, buildCanonicalPortalPayload()));
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await deleteDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY));
-    });
+    await assertFails(setDoc(portalRef, buildCanonicalPortalPayload()));
     await assertFails(setDoc(portalRef, buildCanonicalPortalPayload({
       total: 1
     })));
@@ -550,6 +573,16 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         stripeSessionId: "cs_client_injected",
         depositStatus: "unpaid"
       }
+    })));
+    await assertFails(setDoc(portalRef, buildCanonicalPortalPayload({
+      deliveryEvidence: {
+        ...PORTAL_DELIVERY_EVIDENCE,
+        providerAcceptedAtISO: "2026-03-22T00:00:00.000Z"
+      }
+    })));
+    await assertFails(setDoc(portalRef, buildCanonicalPortalPayload({
+      portalExpiresAtISO: "2199-12-31T00:00:00.000Z",
+      portalExpiresAtMs: 7258118400000
     })));
     for (const [field, value] of Object.entries({
       lastCheckoutCreatedAtISO: "2026-03-22T00:00:00.000Z",
@@ -1173,7 +1206,8 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }
   });
 
-  test("sales can send a draft but only admins can perform other staff lifecycle transitions", async () => {
+  test("direct staff writes cannot claim delivery while admins retain non-delivery lifecycle authority", async () => {
+    const adminTransitionPortalKey = "admin-expiry-portal-abcdefghijklmnopqrstuvwxyz";
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(
@@ -1188,12 +1222,23 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       await setDoc(
         doc(db, "organizations", "org-a", "quotes", "q-admin-transition"),
         buildQuotePayload("admin-org-a", "org-a", {
+          portalKey: adminTransitionPortalKey,
           status: "draft",
           lifecycle: {
             draftAtISO: "2026-03-20T00:00:00.000Z"
           }
         })
       );
+      await setDoc(doc(db, "customerPortalQuotes", adminTransitionPortalKey), {
+        portalKey: adminTransitionPortalKey,
+        quoteId: "q-admin-transition",
+        organizationId: "org-a",
+        status: "draft",
+        updatedAtISO: "2026-03-20T00:00:00.000Z",
+        lifecycle: {
+          draftAtISO: "2026-03-20T00:00:00.000Z"
+        }
+      });
     });
 
     const salesSendRef = quoteRefFor(
@@ -1202,7 +1247,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       "org-a",
       "q-sales-send"
     );
-    await assertSucceeds(updateDoc(salesSendRef, {
+    await assertFails(updateDoc(salesSendRef, {
       status: "sent",
       updatedAtISO: "2026-03-22T00:00:00.000Z",
       lifecycle: {
@@ -1227,12 +1272,172 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       "org-a",
       "q-admin-transition"
     );
-    await assertSucceeds(updateDoc(adminTransitionRef, {
+    await assertFails(updateDoc(adminTransitionRef, {
+      status: "sent",
+      updatedAtISO: "2026-03-22T01:30:00.000Z",
+      lifecycle: {
+        draftAtISO: "2026-03-20T00:00:00.000Z",
+        sentAtISO: "2026-03-22T01:30:00.000Z"
+      }
+    }));
+    await assertFails(updateDoc(adminTransitionRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-22T01:35:00.000Z",
+      lifecycle: {
+        draftAtISO: "2026-03-20T00:00:00.000Z",
+        viewedAtISO: "2026-03-22T01:35:00.000Z"
+      }
+    }));
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    await assertFails(updateDoc(doc(adminDb, "customerPortalQuotes", VALID_PORTAL_KEY), {
+      status: "viewed",
+      updatedAtISO: "2026-03-22T01:40:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-22T01:40:00.000Z"
+      }
+    }));
+    await assertFails(updateDoc(doc(adminDb, "organizations", "org-a", "quotes", "q1"), {
+      status: "draft",
+      updatedAtISO: "2026-03-22T01:45:00.000Z",
+      lifecycle: {
+        draftAtISO: "2026-03-22T01:45:00.000Z"
+      }
+    }));
+    const expiryPatch = {
       status: "expired",
       updatedAtISO: "2026-03-22T02:00:00.000Z",
       lifecycle: {
         draftAtISO: "2026-03-20T00:00:00.000Z",
         expiredAtISO: "2026-03-22T02:00:00.000Z"
+      }
+    };
+    await assertFails(updateDoc(adminTransitionRef, expiryPatch));
+
+    const expiryBatch = writeBatch(adminDb);
+    expiryBatch.update(
+      doc(adminDb, "organizations", "org-a", "quotes", "q-admin-transition"),
+      expiryPatch
+    );
+    expiryBatch.update(
+      doc(adminDb, "customerPortalQuotes", adminTransitionPortalKey),
+      expiryPatch
+    );
+    await assertSucceeds(expiryBatch.commit());
+  });
+
+  test("staff cannot change lifecycle status while server quote delivery is unresolved", async () => {
+    const deliveryPortalKey = "delivery-sending-abcdefghijklmnopqrstuvwxyz";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(
+        doc(db, "organizations", "org-a", "quotes", "q-delivery-sending"),
+        buildQuotePayload("admin-org-a", "org-a", {
+          portalKey: deliveryPortalKey,
+          status: "draft",
+          lifecycle: {
+            draftAtISO: "2026-03-20T00:00:00.000Z"
+          },
+          workflow: {
+            quoteDelivery: {
+              revisionId: "v0001",
+              state: "sending",
+              attemptId: "attempt-a",
+              leaseExpiresAtISO: "2099-03-22T00:00:00.000Z"
+            }
+          }
+        })
+      );
+      await setDoc(doc(db, "customerPortalQuotes", deliveryPortalKey), {
+        portalKey: deliveryPortalKey,
+        quoteId: "q-delivery-sending",
+        organizationId: "org-a",
+        status: "draft",
+        portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
+        updatedAtISO: "2026-03-20T00:00:00.000Z",
+        lifecycle: {
+          draftAtISO: "2026-03-20T00:00:00.000Z"
+        }
+      });
+    });
+
+    for (const [uid, email] of [
+      ["admin-org-a", "admin-a@example.com"],
+      ["sales-org-a", "sales-a@example.com"]
+    ]) {
+      const quoteRef = quoteRefFor(uid, email, "org-a", "q-delivery-sending");
+      await assertFails(updateDoc(quoteRef, {
+        status: "sent",
+        updatedAtISO: "2026-03-22T00:00:00.000Z",
+        lifecycle: {
+          draftAtISO: "2026-03-20T00:00:00.000Z",
+          sentAtISO: "2026-03-22T00:00:00.000Z"
+        }
+      }));
+      const staffDb = testEnv.authenticatedContext(uid, {
+        email,
+        email_verified: true
+      }).firestore();
+      await assertFails(updateDoc(doc(staffDb, "customerPortalQuotes", deliveryPortalKey), {
+        status: "sent",
+        updatedAtISO: "2026-03-22T00:00:00.000Z",
+        lifecycle: {
+          draftAtISO: "2026-03-20T00:00:00.000Z",
+          sentAtISO: "2026-03-22T00:00:00.000Z"
+        }
+      }));
+    }
+  });
+
+  test("customer portal decisions are blocked while quote delivery is unresolved", async () => {
+    const quoteId = "q-customer-delivery-sending";
+    const portalKey = "customer-delivery-sending-abcdefghijklmnopqrstuvwxyz";
+    const sentAtISO = "2026-03-20T00:00:00.000Z";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(
+        doc(db, "organizations", "org-a", "quotes", quoteId),
+        buildQuotePayload("admin-org-a", "org-a", {
+          portalKey,
+          status: "sent",
+          lifecycle: { sentAtISO },
+          workflow: {
+            quoteDelivery: {
+              revisionId: "v0001",
+              state: "outcome_ambiguous",
+              attemptId: "attempt-customer-race",
+              leaseExpiresAtISO: ""
+            }
+          }
+        })
+      );
+      await setDoc(doc(db, "customerPortalQuotes", portalKey), {
+        portalKey,
+        quoteId,
+        organizationId: "org-a",
+        status: "sent",
+        portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
+        updatedAtISO: sentAtISO,
+        lifecycle: { sentAtISO },
+        portalDecision: {}
+      });
+    });
+
+    const acceptedAtISO = "2026-03-22T03:00:00.000Z";
+    await assertFails(updatePortalPair(portalKey, "org-a", quoteId, {
+      status: "accepted",
+      updatedAtISO: acceptedAtISO,
+      lifecycle: {
+        sentAtISO,
+        acceptedAtISO
+      },
+      portalDecision: {
+        decision: "accepted",
+        message: "",
+        requestId: "portal-decision-delivery-race-0001",
+        submittedAtISO: acceptedAtISO
       }
     }));
   });
@@ -1559,6 +1764,31 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }));
   });
 
+  test("public portal snapshots fail closed without current server delivery evidence", async () => {
+    const activeRef = portalSnapshotRefFor(VALID_PORTAL_KEY);
+    await assertSucceeds(getDoc(activeRef));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY), {
+        deliveryEvidence: deleteField()
+      });
+    });
+
+    await assertFails(getDoc(activeRef));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY), {
+        portalIssuedAtISO: "",
+        deliveryEvidence: {
+          ...PORTAL_DELIVERY_EVIDENCE,
+          portalIssuedAtISO: ""
+        }
+      });
+    });
+
+    await assertFails(getDoc(activeRef));
+  });
+
   test("portal decisions reject drafts, divergent audit metadata, and injected lifecycle events", async () => {
     const draftPortalKey = "draft-portal-key-abcdefghijklmnopqrstuvwxyz";
     const draftQuoteId = "q-draft-portal";
@@ -1826,6 +2056,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     const quoteId = "provisioned-quote";
     const portalKey = "provisioned-portal-key-abcdefghijklmnopqrstuvwxyz";
     const sentAtISO = "2026-03-21T00:00:00.000Z";
+    const revisionId = `v0001@${sentAtISO}`;
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(doc(db, "organizations", organizationId), {
@@ -1840,16 +2071,38 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         quoteId,
         organizationId,
         portalKey,
+        portalIssuedAtISO: sentAtISO,
         status: "sent",
         portalDecision: {},
         lifecycle: {
           sentAtISO
+        },
+        workflow: {
+          quoteDelivery: {
+            revisionId,
+            state: "provider_accepted",
+            provider: "resend",
+            providerMessageId: "provisioned-provider-message-1",
+            providerAcceptedAtISO: sentAtISO,
+            portalActivationState: "active",
+            portalKey,
+            portalIssuedAtISO: sentAtISO
+          }
         }
       });
       await setDoc(doc(db, "customerPortalQuotes", portalKey), {
         quoteId,
         organizationId,
         portalKey,
+        portalIssuedAtISO: sentAtISO,
+        deliveryEvidence: {
+          revisionId,
+          state: "provider_accepted",
+          portalActivationState: "active",
+          portalKey,
+          portalIssuedAtISO: sentAtISO,
+          providerAcceptedAtISO: sentAtISO
+        },
         status: "sent",
         portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
         portalDecision: {},

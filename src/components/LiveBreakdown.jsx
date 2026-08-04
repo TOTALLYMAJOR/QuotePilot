@@ -366,7 +366,7 @@ export default function LiveBreakdown({
 
       <section className="breakdown-financial-block">
         <header>
-          <h4>🍽 Menu</h4>
+          <h4>Menu</h4>
           <span>{money(displayValues.package + displayValues.menu + displayValues.addons + displayValues.rentals)}</span>
         </header>
         <dl className="breakdown-money-list">
@@ -403,7 +403,7 @@ export default function LiveBreakdown({
 
       <section className="breakdown-financial-block">
         <header>
-          <h4>👨‍🍳 Staff</h4>
+          <h4>Staff</h4>
           <span>{money(displayValues.labor)}</span>
         </header>
         <dl className="breakdown-money-list">
@@ -438,7 +438,7 @@ export default function LiveBreakdown({
 
       <section className="breakdown-financial-block">
         <header>
-          <h4>🚚 Travel / Logistics</h4>
+          <h4>Travel / Logistics</h4>
           <span>{money(displayValues.travel)}</span>
         </header>
         <dl className="breakdown-money-list">

@@ -23,11 +23,11 @@ This matrix maps the master feature checklist to current implementation and sour
 | 5 | Live sticky summary panel with real-time totals | Implemented (local mobile acceptance) | `src/components/LiveBreakdown.jsx`, `src/App.jsx` (`MobilePricingSummary`), `src/styles.css` (`.breakdown-panel`, `.mobile-pricing-summary`), `e2e/quote-wizard.smoke.spec.js` |
 | 6 | Quote system (trusted create/duplicate/edit, snapshots, statuses) | Implemented (branch) | `functions/index.js` (`createQuoteDraft`, `duplicateQuoteDraft`, `updateQuoteDraft`), `functions/quoteCreation.js`, `src/lib/quoteStore.js` (`submitQuote`, `duplicateQuote`, `updateQuote`), `src/components/QuoteHistoryModal.jsx` |
 | 7 | Quote history + versioning | Implemented | `src/lib/quoteStore.js` (`saveQuoteVersion`, `getQuoteHistory`), `firestore.rules` (`organizations/{orgId}/quotes/{quoteId}/versions/{versionId}`) |
-| 8 | Quote management UI (list, sort, filters, role-safe actions) | Implemented (branch) | `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js` (`duplicateQuote`, `reopenQuote`, `hardDeleteQuote`, `updateQuotePaymentStatus`), `functions/index.js` (`reopenQuote`, `hardDeleteQuote`, `purgeDeletedQuotesForOrganization`) |
+| 8 | Quote management UI (list, sort, filters, exact draft-save handoff, role-safe actions, revision-bound email delivery, evidence-gated portal sharing) | Implemented (branch) | `src/components/QuoteHistoryModal.jsx`, `src/lib/quoteStore.js` (`duplicateQuote`, `reopenQuote`, `hardDeleteQuote`, `updateQuotePaymentStatus`), `src/lib/proposalExport.js`, `functions/quoteDelivery.js`, `functions/index.js` (`sendQuoteToCustomer`, `resolveQuoteDeliveryOutcome`, `rotateQuotePortalKey`, `reopenQuote`, `hardDeleteQuote`, `purgeDeletedQuotesForOrganization`) |
 | 9 | Admin panel tabbed UX + hierarchical menu management | Implemented | `src/components/AdminCatalogModal.jsx`, `src/styles.css` (`.admin-tabs`) |
 | 10 | Inline editing with blur/enter persistence | Implemented | `src/components/AdminCatalogModal.jsx` (`handleManagedMenuItemBlur`, `handleManagedMenuItemKeyDown`) |
 | 11 | Booking lifecycle (availability checks, contract conversion, confirmations, staff assignments) | Implemented (contract callable deploy pending) | `functions/contractWorkflow.js`, `functions/index.js` (`convertQuoteToContract`), `src/lib/quoteStore.js` (`checkEventAvailability`, `convertQuoteToContract`, `updateQuoteBookingConfirmation`, `updateQuoteBookingAssignment`), `src/components/EventScheduleModal.jsx`, `src/components/QuoteHistoryModal.jsx` |
-| 12 | Customer decision center (scope/pricing + accept/change request/decline + token lifecycle) | Implemented | `src/components/CustomerPortalView.jsx`, `src/lib/quoteStore.js` (`getPortalQuote`, `updatePortalDecision`, `rotateQuotePortalKey`), `firestore.rules` (`customerPortalQuotes`) |
+| 12 | Customer decision center (scope/pricing + accept/change request/decline + evidence-bound token lifecycle) | Implemented (branch; delivery-evidence rules deploy pending) | `src/components/CustomerPortalView.jsx`, `src/lib/quoteStore.js` (`getPortalQuote`, `updatePortalDecision`, `rotateQuotePortalKey`), `functions/quoteDelivery.js`, `functions/index.js`, `firestore.rules` (`customerPortalQuotes`) |
 | 13 | Admin-only provider operations + scoped integration audit logging | Implemented (branch; provider activation pending) | `src/components/IntegrationOpsModal.jsx`, `src/lib/quoteStore.js` (`recordQuoteIntegrationSync`; browser CRM sends fail closed), `src/lib/commerceOps.js`, `functions/index.js` (admin-only provider callables) |
 | 14 | Reporting dashboard (pipeline, conversion, revenue metrics) | Implemented | `src/components/ReportingDashboardModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`) |
 | 15 | Event schedule board (month/week, conflicts, assignments, production checklist) | Implemented | `src/components/EventScheduleModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`, `updateQuoteBookingAssignment`, `updateQuoteProductionChecklist`) |
@@ -63,10 +63,33 @@ This matrix maps the master feature checklist to current implementation and sour
   permanent cleanup are admin-callable operations; direct quote/portal deletes
   are denied, and terminal commercial evidence cannot be reopened or
   overwritten.
+- Quote History derives expiry without a staff write for non-admin readers. An
+  admin expiry persists only status, lifecycle, and update time to the quote and
+  matching portal in one rules-enforced batch; a quote-only or portal-only
+  transition is denied. Unresolved deliveries stay visible with persistence
+  deferred until provider review, and one malformed legacy portal cannot blank
+  the history list. The admin `Reopen` action restores an eligible expired quote
+  as a draft with a new portal issuance.
 - Firebase payment-request email, contract conversion, portal rotation, and
   permanent deletion require an exact approved request. Functions record the
   server-owned execution outcome in the quote workflow and in an admin-readable,
   server-write-only organization audit record.
+- Firebase quote email is bound to the saved revision and portal issuance. Only
+  server-recorded provider acceptance owns the `sent` transition, and only
+  acceptance for the exact current valid issuance activates its portal. If the
+  provider accepts a message whose issuance is invalid or expired, QuotePilot
+  retains that evidence as `requires_rotation` while keeping the portal
+  inactive; guarded rotation and a separate accepted send are required.
+- A definite provider failure whose safe retry window has expired starts a
+  fresh delivery generation. An ambiguous outcome remains locked for same-key
+  retry or audited provider review, and known server-observed acceptance cannot
+  be reconciled as no-send. Generic staff updates cannot claim `sent` or
+  `viewed`; the customer portal owns actual view evidence.
+- Copy Portal and the PDF portal link require evidence for the exact current
+  issuance and remain withheld after rotation. Legacy portal projections
+  without `deliveryEvidence` fail closed and must recover through an approved
+  resend or truthful provider reconciliation; projection backfill never
+  fabricates acceptance evidence.
 - Menu backfill for `pricingType` + `active` is implemented in `scripts/seed-firestore-menu.mjs`.
 - Multi-tenant org scoping is authoritative for protected catalog and quote
   writes. Direct quote creation is denied in Firestore; trusted Functions

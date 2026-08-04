@@ -469,19 +469,9 @@ service cloud.firestore {
         && nextBooking.get("availabilitySummary", {}) == previousBooking.get("availabilitySummary", {});
     }
 
-    function salesDraftSendTransitionOnly() {
-      let previousLifecycle = resource.data.get("lifecycle", {});
-      let nextLifecycle = request.resource.data.get("lifecycle", {});
-      let lifecycleKeys = nextLifecycle.diff(previousLifecycle).affectedKeys();
-      return resource.data.status == "draft"
-        && request.resource.data.status == "sent"
-        && lifecycleKeys.hasOnly(["sentAtISO"])
-        && lifecycleKeys.hasAll(["sentAtISO"])
-        && nextLifecycle.sentAtISO == request.resource.data.updatedAtISO;
-    }
-
     function staffQuoteStatusUpdateAllowed(orgId, quoteId) {
-      return serverOwnedPaymentReferencesUnchanged()
+      return !(resource.data.get("workflow", {}).get("quoteDelivery", {}).get("state", "") in ["sending", "outcome_ambiguous", "outcome_unknown"])
+        && serverOwnedPaymentReferencesUnchanged()
         && customerDecisionEvidenceUnchanged()
         && (
           (
@@ -491,12 +481,9 @@ service cloud.firestore {
           || (
             request.resource.data.status != resource.data.status
             && !(resource.data.status in ["accepted", "declined", "booked", "expired", "deleted"])
-            && request.resource.data.status in ["draft", "sent", "viewed", "expired", "deleted"]
+            && request.resource.data.status == "expired"
             && staffNonterminalTransitionPatchOnly()
-            && (
-              isOrgAdmin(orgId)
-              || salesDraftSendTransitionOnly()
-            )
+            && isOrgAdmin(orgId)
           )
         );
     }
@@ -507,11 +494,45 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/customerPortalQuotes/$(portalKey));
     }
 
+    function portalDeliveryEvidenceActive(data, portalKey) {
+      let evidence = data.get("deliveryEvidence", {});
+      return evidence is map
+        && evidence.keys().hasOnly([
+          "revisionId",
+          "state",
+          "portalActivationState",
+          "portalKey",
+          "portalIssuedAtISO",
+          "providerAcceptedAtISO"
+        ])
+        && evidence.keys().hasAll([
+          "revisionId",
+          "state",
+          "portalActivationState",
+          "portalKey",
+          "portalIssuedAtISO",
+          "providerAcceptedAtISO"
+        ])
+        && evidence.revisionId is string
+        && evidence.revisionId.size() > 0
+        && evidence.state == "provider_accepted"
+        && evidence.portalActivationState == "active"
+        && evidence.portalKey == portalKey
+        && data.get("portalIssuedAtISO", "") is string
+        && data.get("portalIssuedAtISO", "").size() > 0
+        && evidence.portalIssuedAtISO is string
+        && evidence.portalIssuedAtISO.size() > 0
+        && evidence.portalIssuedAtISO == data.get("portalIssuedAtISO", "")
+        && evidence.providerAcceptedAtISO is string
+        && evidence.providerAcceptedAtISO.size() > 0;
+    }
+
     function portalSnapshotDataActive(data, portalKey) {
       return data.portalKey == portalKey
         && data.organizationId is string
         && organizationActive(data.organizationId)
         && data.status in ["sent", "viewed", "accepted", "declined", "booked"]
+        && portalDeliveryEvidenceActive(data, portalKey)
         && (
           data.portalExpiresAtMs is int
           || data.portalExpiresAtMs is float
@@ -527,17 +548,22 @@ service cloud.firestore {
         );
     }
 
-    function portalMatchesOrgQuoteAfter(portalKey, quoteId, orgId) {
+    function portalStateMatchesOrgQuoteAfter(portalKey, quoteId, orgId) {
       let portalPath = /databases/$(database)/documents/customerPortalQuotes/$(portalKey);
       let portalData = getAfter(portalPath).data;
       return existsAfter(portalPath)
-        && portalSnapshotDataActive(portalData, portalKey)
         && portalData.quoteId == quoteId
         && portalData.organizationId == orgId
         && portalData.status == request.resource.data.status
         && portalData.get("portalDecision", {}) == request.resource.data.get("portalDecision", {})
         && portalData.get("updatedAtISO", "") == request.resource.data.get("updatedAtISO", "")
         && portalData.get("lifecycle", {}) == request.resource.data.get("lifecycle", {});
+    }
+
+    function portalMatchesOrgQuoteAfter(portalKey, quoteId, orgId) {
+      let portalPath = /databases/$(database)/documents/customerPortalQuotes/$(portalKey);
+      return portalStateMatchesOrgQuoteAfter(portalKey, quoteId, orgId)
+        && portalSnapshotDataActive(getAfter(portalPath).data, portalKey);
     }
 
     function portalUpdateMatchesOrgQuoteAfter(orgId, quoteId, portalKey) {
@@ -564,7 +590,11 @@ service cloud.firestore {
         && resource.data.organizationId == orgId
         && request.resource.data.organizationId == orgId
         && request.resource.data.portalKey == resource.data.portalKey
-        && staffQuoteStatusUpdateAllowed(orgId, quoteId);
+        && staffQuoteStatusUpdateAllowed(orgId, quoteId)
+        && (
+          request.resource.data.status == resource.data.status
+          || portalStateMatchesOrgQuoteAfter(resource.data.portalKey, quoteId, orgId)
+        );
     }
 
     function orgQuotePortalUpdateAllowed(orgId, quoteId) {
@@ -572,6 +602,7 @@ service cloud.firestore {
           !isSignedIn()
           || !isOrgStaff(orgId)
         )
+        && !(resource.data.get("workflow", {}).get("quoteDelivery", {}).get("state", "") in ["sending", "outcome_ambiguous", "outcome_unknown"])
         && statusPatchOnly()
         && portalChangeRequestDoesNotReplayHandledRecord()
         && portalMatchesOrgQuoteAfter(resource.data.portalKey, quoteId, orgId);
@@ -579,29 +610,39 @@ service cloud.firestore {
 
     function portalStaffUpdateAllowed(portalKey) {
       let orgId = resource.data.organizationId;
+      let quoteId = resource.data.quoteId;
+      let quotePath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId);
       return isSignedIn()
         && orgId is string
+        && quoteId is string
+        && exists(quotePath)
+        && !(get(quotePath).data.get("workflow", {}).get("quoteDelivery", {}).get("state", "") in ["sending", "outcome_ambiguous", "outcome_unknown"])
         && isOrgStaff(orgId)
         && request.resource.data.organizationId == orgId
         && request.resource.data.portalKey == resource.data.portalKey
-        && request.resource.data.quoteId == resource.data.quoteId
-        && staffQuoteStatusUpdateAllowed(orgId, resource.data.quoteId);
+        && request.resource.data.quoteId == quoteId
+        && staffQuoteStatusUpdateAllowed(orgId, quoteId)
+        && portalUpdateMatchesOrgQuoteAfter(orgId, quoteId, portalKey);
     }
 
     function portalCustomerUpdateAllowed(portalKey) {
       let orgId = resource.data.organizationId;
+      let quoteId = resource.data.quoteId;
+      let quotePath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId);
       return orgId is string
+        && quoteId is string
+        && quoteId.size() > 0
+        && exists(quotePath)
+        && !(get(quotePath).data.get("workflow", {}).get("quoteDelivery", {}).get("state", "") in ["sending", "outcome_ambiguous", "outcome_unknown"])
         && (
           !isSignedIn()
           || !isOrgStaff(orgId)
         )
         && portalStatusPatchOnly(portalKey)
         && portalSnapshotDataActive(resource.data, portalKey)
-        && resource.data.quoteId is string
-        && resource.data.quoteId.size() > 0
         && portalUpdateMatchesOrgQuoteAfter(
           orgId,
-          resource.data.quoteId,
+          quoteId,
           portalKey
         );
     }
@@ -646,50 +687,6 @@ service cloud.firestore {
         && snapshot.get("payment", {}) == quoteData.get("payment", {})
         && snapshot.status == quoteData.status
         && quoteData.status == request.resource.data.status;
-    }
-
-    function validPortalSnapshotCreate(portalKey) {
-      let orgId = request.resource.data.organizationId;
-      let quoteId = request.resource.data.quoteId;
-      let quotePath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId);
-      let quoteData = get(quotePath).data;
-      let portalPayment = request.resource.data.get("payment", {});
-      let quotePayment = quoteData.get("payment", {});
-      return exists(quotePath)
-        && request.resource.data.portalKey == portalKey
-        && portalKey.size() >= 20
-        && orgId is string
-        && quoteId is string
-        && quoteData.organizationId == orgId
-        && quoteData.portalKey == portalKey
-        && request.resource.data.status == quoteData.status
-        && request.resource.data.get("portalDecision", {}) == quoteData.get("portalDecision", {})
-        && request.resource.data.get("lifecycle", {}) == quoteData.get("lifecycle", {})
-        && request.resource.data.quoteNumber == quoteData.quoteNumber
-        && request.resource.data.customerName == quoteData.customer.name
-        && request.resource.data.customerEmail == quoteData.customer.email
-        && request.resource.data.eventName == quoteData.event.name
-        && request.resource.data.eventDate == quoteData.event.date
-        && request.resource.data.eventTime == quoteData.event.time
-        && request.resource.data.eventHours == quoteData.event.hours
-        && request.resource.data.eventGuests == quoteData.event.guests
-        && request.resource.data.eventStyle == quoteData.event.style
-        && request.resource.data.venue == quoteData.event.venue
-        && request.resource.data.venueAddress == quoteData.event.venueAddress
-        && request.resource.data.dietaryRestrictions == quoteData.event.dietaryRestrictions
-        && request.resource.data.total == quoteData.totals.total
-        && request.resource.data.deposit == quoteData.totals.deposit
-        && request.resource.data.expiresAtISO == quoteData.expiresAtISO
-        && portalPayment is map
-        && quotePayment is map
-        && portalPayment.get("depositLink", "") == ""
-        && portalPayment.get("stripeSessionId", "") == ""
-        && portalPayment.get("lastCheckoutCreatedAtISO", "") == ""
-        && portalPayment.get("lastHost", "") == ""
-        && portalPayment.get("lastEventType", "") == ""
-        && portalPayment.get("lastOrganizationId", "") == ""
-        && portalPayment.get("checkoutGeneration", 0) == 0
-        && portalPayment.get("depositStatus", "") == quotePayment.get("depositStatus", "");
     }
 
     function commercialSettingsUnchanged() {
@@ -884,9 +881,7 @@ service cloud.firestore {
     match /customerPortalQuotes/{portalKey} {
       allow get: if portalSnapshotActive(portalKey);
       allow list: if false;
-      allow create: if request.resource.data.organizationId is string
-        && isOrgStaff(request.resource.data.organizationId)
-        && validPortalSnapshotCreate(portalKey);
+      allow create: if false;
       allow delete: if false;
       allow update: if portalStaffUpdateAllowed(portalKey);
       allow update: if portalCustomerUpdateAllowed(portalKey);

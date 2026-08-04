@@ -952,13 +952,6 @@ thead th {
   flex-wrap: wrap;
 }
 
-.portal-link-row {
-  margin-top: 0.75rem;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.5rem;
-}
-
 .cta,
 .ghost {
   border-radius: 999px;
@@ -1991,6 +1984,63 @@ hr {
   gap: 0.5rem;
 }
 
+.saved-quote-handoff {
+  margin-top: 0.8rem;
+  padding: 0.9rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgba(54, 115, 89, 0.5);
+  border-left: 4px solid #367359;
+  border-radius: 12px;
+  background: rgba(239, 248, 243, 0.94);
+}
+
+.saved-quote-handoff-copy {
+  min-width: 0;
+}
+
+.saved-quote-handoff:focus-visible {
+  outline: 3px solid rgba(54, 115, 89, 0.32);
+  outline-offset: 3px;
+}
+
+.saved-quote-handoff .eyebrow {
+  margin-bottom: 0.18rem;
+  color: #2f6a50;
+}
+
+.saved-quote-handoff h3,
+.saved-quote-handoff p {
+  margin: 0;
+}
+
+.saved-quote-handoff h3 {
+  color: #2e230f;
+  font-family: var(--font-display);
+}
+
+.saved-quote-handoff p:last-child {
+  margin-top: 0.3rem;
+  color: #52645c;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.saved-quote-handoff-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.history-row-target {
+  background: rgba(239, 248, 243, 0.72);
+  box-shadow: inset 4px 0 0 #367359;
+}
+
 .row-actions {
   display: flex;
   gap: 0.4rem;
@@ -2032,6 +2082,25 @@ hr {
   margin: 0;
   color: #4b391f;
   font-size: 0.86rem;
+}
+
+.delivery-review-panel h3 {
+  margin: 0;
+  color: #2f2417;
+}
+
+.delivery-review-panel label {
+  display: grid;
+  gap: 0.3rem;
+  color: #5f4a2f;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.delivery-review-panel textarea {
+  min-height: 5.5rem;
+  resize: vertical;
 }
 
 .toast-stack {
@@ -4091,6 +4160,16 @@ hr {
     grid-template-columns: 1fr;
   }
 
+  .saved-quote-handoff {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .saved-quote-handoff-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .diagnostics-controls {
     grid-template-columns: 1fr;
   }
@@ -4103,7 +4182,6 @@ hr {
     grid-template-columns: 1fr;
   }
 
-  .portal-link-row,
   .portal-entry {
     grid-template-columns: 1fr;
   }

@@ -26,7 +26,7 @@ async function advanceToSave(page) {
       await depositLink.fill("https://checkout.stripe.com/c/pay/cs_test_sales_review");
     }
 
-    const saveButton = page.getByRole("button", { name: "Save & Submit" });
+    const saveButton = page.getByRole("button", { name: "Save draft" });
     if (await saveButton.count()) {
       await expect(saveButton).toBeVisible();
       await saveButton.click();
@@ -36,7 +36,7 @@ async function advanceToSave(page) {
     await page.getByRole("button", { name: "Next" }).click();
   }
 
-  throw new Error("Unable to reach Save & Submit");
+  throw new Error("Unable to reach Save draft");
 }
 
 test.beforeEach(async ({ page }) => {
@@ -47,13 +47,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("sales quote history preserves proposal actions and hides payment and booking authority controls", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/app");
   await expect(page.getByText("Role: sales")).toBeVisible();
 
   await fillRequiredQuoteFields(page);
   await advanceToSave(page);
-  await expect(page.getByText(/Quote .* saved to/i)).toBeVisible();
 
   const historyHeading = page.getByRole("heading", { name: "Quote History" });
   await expect(historyHeading).toBeVisible();
@@ -62,6 +61,14 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog).toContainText("Sales can prepare proposal artifacts");
+  const handoff = dialog.locator(".saved-quote-handoff");
+  await expect(handoff).toContainText(/Saved as a draft/i);
+  await expect(handoff).toContainText(/has not been sent/i);
+  await expect(handoff).toBeFocused();
+  await expect(handoff).toHaveAttribute("aria-describedby", "saved-quote-handoff-description");
+  await expect(handoff.getByRole("button", { name: "Download draft PDF" })).toBeVisible();
+  await expect(handoff.getByRole("button", { name: "Copy customer portal link" })).toHaveCount(0);
+  await expect(handoff.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
 
   const row = dialog.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })
@@ -73,7 +80,14 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(row.getByRole("button", { name: "PDF" })).toBeVisible();
   await expect(row.getByRole("button", { name: "Send Quote Email" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Copy Email" })).toBeVisible();
-  await expect(row.getByRole("button", { name: "Copy Portal" })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Copy Portal" })).toBeDisabled();
+  await expect(row.getByRole("button", { name: "Copy Portal" })).toHaveAttribute(
+    "title",
+    "Customer portal sharing requires an active delivered status and valid future expiry."
+  );
+
+  await row.getByRole("button", { name: "Copy Email" }).click();
+  await expect(dialog.getByRole("status")).toContainText(/remains a draft/i);
 
   await expect(row.getByRole("button", { name: "Copy Pay Link" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Create Stripe Link" })).toHaveCount(0);
@@ -83,6 +97,26 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(row.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await expect(row.getByRole("combobox")).toHaveCount(0);
 
-  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(hasHorizontalOverflow).toBe(false);
+  const containment = await dialog.locator(".history-card").evaluate((card) => {
+    const cardRect = card.getBoundingClientRect();
+    const handoffRect = card.querySelector(".saved-quote-handoff")?.getBoundingClientRect();
+    const actionRect = card.querySelector(".saved-quote-handoff-actions button")?.getBoundingClientRect();
+    return {
+      viewportWidth: document.documentElement.clientWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      cardLeft: cardRect.left,
+      cardRight: cardRect.right,
+      handoffLeft: handoffRect?.left ?? -1,
+      handoffRight: handoffRect?.right ?? -1,
+      actionLeft: actionRect?.left ?? -1,
+      actionRight: actionRect?.right ?? -1
+    };
+  });
+  expect(containment.documentWidth).toBeLessThanOrEqual(containment.viewportWidth);
+  expect(containment.cardLeft).toBeGreaterThanOrEqual(-1);
+  expect(containment.cardRight).toBeLessThanOrEqual(containment.viewportWidth + 1);
+  expect(containment.handoffLeft).toBeGreaterThanOrEqual(-1);
+  expect(containment.handoffRight).toBeLessThanOrEqual(containment.viewportWidth + 1);
+  expect(containment.actionLeft).toBeGreaterThanOrEqual(-1);
+  expect(containment.actionRight).toBeLessThanOrEqual(containment.viewportWidth + 1);
 });

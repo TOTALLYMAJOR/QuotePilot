@@ -45,6 +45,11 @@ const DEFAULT_VALIDITY_DAYS = 30;
 const PORTAL_TOKEN_VALIDITY_DAYS = 30;
 const PORTAL_TOKEN_EXPIRED_ERROR = "Quote link is invalid or expired.";
 const PORTAL_VISIBLE_STATUSES = new Set(["sent", "viewed", "accepted", "declined", "booked"]);
+const QUOTE_DELIVERY_MUTATION_LOCK_STATES = new Set([
+  "sending",
+  "outcome_ambiguous",
+  "outcome_unknown"
+]);
 const HARD_DELETE_QUOTE_CALLABLE = "hardDeleteQuote";
 const PURGE_DELETED_QUOTES_CALLABLE = "purgeDeletedQuotesForOrganization";
 const UPDATE_QUOTE_DRAFT_CALLABLE = "updateQuoteDraft";
@@ -482,6 +487,11 @@ function hasTerminalDecisionEvidence(quote = {}) {
     || ["paid", "refunded"].includes(String(payment.depositStatus || "").trim().toLowerCase())
     || Boolean(String(payment.depositConfirmedAtISO || "").trim())
   );
+}
+
+function hasUnresolvedQuoteDelivery(quote = {}) {
+  const state = String(quote?.workflow?.quoteDelivery?.state || "").trim().toLowerCase();
+  return QUOTE_DELIVERY_MUTATION_LOCK_STATES.has(state);
 }
 
 function normalizeIntegrationState(value) {
@@ -3439,6 +3449,7 @@ export async function getQuoteHistory(filters = {}) {
   const normalizedEventTypeId = String(filters?.eventTypeId || "").trim();
   const normalizedCustomerName = normalizeCustomerNameKey(filters?.customerName || "");
   const includeDeleted = filters?.includeDeleted === true;
+  const persistExpiredStatuses = filters?.persistExpiredStatuses === true;
   const nowISO = isoNow();
 
   if (firebaseReady) {
@@ -3498,19 +3509,18 @@ export async function getQuoteHistory(filters = {}) {
       (quote, idx) => quote.status === "expired" && quotes[idx].status !== "expired"
     );
 
-    if (autoExpired.length) {
-      const writableAutoExpired = autoExpired.filter((quote) => normalizeOrganizationId(quote.organizationId));
-      await Promise.all(
-        writableAutoExpired.map(async (quote) => {
-          await saveQuoteVersion(quote.id);
-          await updateDoc(quoteWriteDocRef(quote.id, quote.organizationId, "getQuoteHistory auto-expire"), {
-            status: "expired",
-            updatedAtISO: nowISO,
-            "lifecycle.expiredAtISO": quote.lifecycle?.expiredAtISO || nowISO
-          });
-          await syncPortalSnapshotFromQuoteDoc(quote.id, quote.organizationId);
-        })
+    let expiryPersistenceFailures = [];
+    if (persistExpiredStatuses && autoExpired.length) {
+      const writableAutoExpired = autoExpired.filter((quote) => (
+        normalizeOrganizationId(quote.organizationId)
+        && !hasUnresolvedQuoteDelivery(quote)
+      ));
+      const persistenceResults = await Promise.allSettled(
+        writableAutoExpired.map((quote) => updateQuoteStatus(quote.id, "expired"))
       );
+      expiryPersistenceFailures = persistenceResults
+        .map((result, index) => (result.status === "rejected" ? writableAutoExpired[index].id : ""))
+        .filter(Boolean);
     }
 
     const filteredQuotes = applyQuoteHistoryFilters(nextQuotes, {
@@ -3521,7 +3531,8 @@ export async function getQuoteHistory(filters = {}) {
 
     return {
       source: "firebase",
-      quotes: filteredQuotes
+      quotes: filteredQuotes,
+      expiryPersistenceFailures
     };
   }
 
@@ -3575,8 +3586,32 @@ export async function updateQuoteStatus(quoteId, status) {
   await saveQuoteVersion(id);
 
   if (firebaseReady) {
-    await updateDoc(quoteWriteDocRef(id, existingQuote.organizationId, "updateQuoteStatus"), statusPayload);
-    await syncPortalSnapshotFromQuoteDoc(id, existingQuote.organizationId);
+    const nextQuote = {
+      ...existingQuote,
+      status: nextStatus,
+      deletedAtISO: nextStatus === "deleted" ? nowISO : "",
+      updatedAtISO: nowISO,
+      lifecycle: lifecycleObject(nextStatus, nowISO, existingQuote.lifecycle),
+      booking: nextStatus === "booked"
+        ? {
+            ...hydrateBooking(existingQuote.booking),
+            bookedAtISO: existingQuote.booking?.bookedAtISO || nowISO
+          }
+        : hydrateBooking(existingQuote.booking)
+    };
+    const batch = writeBatch(db);
+    batch.update(
+      quoteWriteDocRef(id, existingQuote.organizationId, "updateQuoteStatus"),
+      statusPayload
+    );
+    if (nextQuote.portalKey) {
+      batch.update(portalDocRef(nextQuote.portalKey), {
+        status: nextQuote.status,
+        updatedAtISO: nextQuote.updatedAtISO,
+        lifecycle: nextQuote.lifecycle
+      });
+    }
+    await batch.commit();
   } else {
     const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
     const next = existing.map((quote) => {
