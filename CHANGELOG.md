@@ -395,6 +395,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   Sales schedule updates remain limited to non-evidentiary staff lead,
   assignment time, kitchen checkpoint, and production checklist fields.
 - `CI Quality` workflow now uses classifier-driven lane orchestration, branch concurrency cancellation, hard-vs-advisory heavy lane behavior, and artifact retention windows for failure triage.
+- `CI Quality` now grants its GitHub token only read access to repository
+  contents and prevents all eight checkout steps from persisting that token in
+  local Git configuration before repository-controlled checks execute.
 - CI lane classifier now treats fallback-retirement-sensitive org/fallback modules (`src/lib/menuService.js`, `src/hooks/useCatalogData.js`, `src/lib/organizationService.js`, `src/context/OrganizationContext.jsx`) as high-risk, making Firebase heavy lanes required (non-advisory) on feature branches.
 - Production artifact preparation now requires controlled manual dispatch after
   the main-branch quality gates and published release tag are complete.

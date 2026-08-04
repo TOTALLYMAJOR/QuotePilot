@@ -19,7 +19,7 @@ Last updated: August 3, 2026
   `30877272489`; Vercel Preview `dpl_DGyMkDEpA2i4GkfXTRxoqCVWszbf` failed
   before build because all six required `VITE_FIREBASE_*` values are scoped
   only to the older `fix/quote-history-role-permissions` branch. The local
-  quick/core gates pass: 627 unit tests pass with 39 intentional skips, the
+  quick/core gates pass: 631 unit tests pass with 39 intentional skips, the
   production build, documentation governance, bundle budget, secret scan,
   environment check, and checksum-pinned workflow lint pass, along with 327
   focused release/deletion regressions and all four target-specific UAT item
@@ -139,6 +139,8 @@ Last updated: August 3, 2026
   `lane:authoritative-pricing`, `lane:cwv-smoke`). The required quick lane now
   downloads the exact actionlint v1.7.12 platform archive, verifies its tracked
   official SHA-256, and checks all workflows before dependency installation.
+  CI Quality grants only `contents: read` and none of its eight checkout steps
+  persist the GitHub token while repository-controlled checks execute.
 - Legacy bulk deletion is retired: the old organization-wide quote purge
   callable now fails closed, and its browser client and operator control are
   removed. Within a retained organization, permanent quote deletion remains
