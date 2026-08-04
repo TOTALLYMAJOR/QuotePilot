@@ -17,14 +17,18 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - `/`: hospitality-first public QuotePilot marketing page.
 - `/system`: saved dark product and operating-system overview.
 - `/app`: authenticated staff quote workspace.
+- `/start`: $1 Stripe test buyer onboarding when
+  `VITE_BUYER_ACCESS_ENABLED=true`; production builds keep the route closed and
+  hide its marketing CTA by default.
 - `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal; existing token links remain compatible.
 
 ## Product Scope
 The app supports a 5-step quote wizard, dynamic event-type menus, pricing
 configuration, proposal export, customer portal updates, tenant-locked
 customer/catalog CSV imports, server-authoritative deposit and final-balance
-collection in the current source candidate, and operations workflows (history,
-scheduling, reporting, diagnostics).
+collection in the current source candidate, test-only paid Starter onboarding
+in the paid-buyer branch, and operations workflows (history, scheduling,
+reporting, diagnostics).
 
 Tenant safety mode:
 - Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
@@ -95,6 +99,8 @@ Optional:
 - `VITE_APP_HOST`
 - `VITE_APP_URL` (canonical HTTPS `/app` return URL for Firebase email actions;
   its domain must be authorized in Firebase Authentication)
+- `VITE_BUYER_ACCESS_ENABLED` (defaults off; use `true` only for the isolated
+  $1 buyer-access test staging lane)
 
 To create `.env.local` from the authenticated Firebase project config without
 touching `.env`, run:
@@ -120,6 +126,10 @@ webhook secret. Event and Checkout Session `livemode` must also match. The
 tracked Functions template is inventory only; use the credential-isolated
 runtime channel described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and
 never place real Stripe values in a browser environment or committed file.
+The paid buyer test additionally requires server-only
+`BUYER_ACCESS_ENABLED=true`; it rejects any mode other than
+`STRIPE_MODE=test`. Browser and Functions gates are independent and both
+default off outside the explicit staging lane.
 
 The policy-enforcing repository preparation workflow packages Functions source without loading or
 materializing runtime secrets. Every `.env` file is excluded from the artifact.
@@ -360,6 +370,74 @@ Refund initiation/status and dispute handling remain manual or unimplemented.
 See the
 [launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--twilio--resend-providers)
 for configuration and proof requirements.
+
+## $1 Buyer Access (Test/Staging Source Candidate)
+
+The `feature/paid-buyer-onboarding` branch adds a separate test-only acquisition
+flow at `/start`. A buyer creates or signs in to a Firebase email/password
+account, verifies the address, enters a business name and owner name, and then
+continues to Stripe-hosted Checkout. The server—not the browser—fixes the order
+to Starter access, $1 USD, Stripe test mode, and post-purchase invoice
+generation. Existing scoped users are sent to `/app` without a new purchase.
+
+The success return is not fulfillment evidence. QuotePilot polls the exact
+owner/session-bound order and keeps access locked while Checkout is pending or
+processing. Only a signed, deduplicated Stripe event with matching test-mode
+Session, owner, order, $1 amount, USD currency, Starter plan, and invoice
+configuration may atomically provision the active organization, neutral blank
+catalog/settings, admin role, entitlements, and audit records. Failed, expired,
+cancelled, malformed, mismatched, and replayed states fail closed.
+
+This is source-only behavior. It is not on `main`, is not enabled on the
+production marketing page or Functions runtime, and has no hosted Firebase or
+Stripe acceptance. Refund, dispute, cancellation, account/access revocation,
+support, tax, and live commercial operating paths are not automated by this
+flow and remain blockers to a production sales rollout.
+
+### Isolated Firebase staging entrypoints
+
+The staging lane requires an existing Firebase project named
+`quotepilot-staging-<name>`, exactly one Firebase Web app, Email/Password Auth,
+a clean committed branch whose `HEAD` exactly matches its `origin` branch, an
+authenticated local Firebase CLI session, and a Stripe test webhook subscribed
+to all four supported Checkout Session events. The production project
+`tonicatering` is rejected.
+
+From a credential-injected shell, provide the staging app URL/domain, a real
+operator allowlist, `BUYER_ACCESS_ENABLED=true`, `STRIPE_MODE=test`, a
+least-privilege `rk_test_` key when possible (or a test secret key), the test
+endpoint signing secret, and disabled email/SMS providers. Then create the
+ignored mode-0600 project environment without printing or committing values:
+
+```bash
+npm run staging:firebase:env -- --project quotepilot-staging-<name>
+```
+
+Leave only the non-secret browser gate in the validation shell, then validate
+and prepare the exact coordinated payload:
+
+```bash
+export VITE_BUYER_ACCESS_ENABLED=true
+npm run staging:firebase:validate -- --project quotepilot-staging-<name>
+npm run staging:firebase:prepare -- --project quotepilot-staging-<name>
+```
+
+`validate` performs read-only Firebase SDK-config and safety checks. `prepare`
+repeats validation and builds with sanitized exact staging browser values; it
+does not mutate a provider. After reviewing its exact project, branch, SHA,
+scope, and confirmation token, the separately authorized staging operator may
+deploy Hosting, Functions, and Firestore rules/indexes together:
+
+```bash
+npm run staging:firebase:deploy -- \
+  --project quotepilot-staging-<name> \
+  --confirm "<exact token printed by prepare>"
+```
+
+That final command mutates only the explicit staging Firebase project. It is
+not a production deploy, live-mode authorization, or provider acceptance
+claim. See the [launch runbook](docs/LAUNCH_RUNBOOK.md#isolated-1-buyer-access-staging-rehearsal)
+for webhook setup, acceptance evidence, and stop conditions.
 
 ## Customer Provisioning (No Stripe)
 Provision a customer organization, enforce order-based feature entitlements
