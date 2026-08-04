@@ -6,6 +6,22 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Added
+
+- Exact-SHA production release evidence verification for Firebase and Vercel,
+  including required CI jobs, versioned UAT attestation, rollback ancestry,
+  protected-environment policy, and the exact human-dispatched workflow run.
+- A versioned release UAT checklist, protected attestation workflow and receipt
+  artifact, plus a controlled Vercel production workflow.
+
+### Changed
+
+- Production deploy entry points now bind Firebase and Vercel execution to the
+  exact tagged `main` SHA and recheck release evidence immediately before any
+  provider mutation.
+- Release-critical workflows and actions are pinned and classified as high
+  risk so Firebase and browser-performance lanes remain hard gates.
+
 ## [0.2.3] - 2026-08-05
 
 ### Added

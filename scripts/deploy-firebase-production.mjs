@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { verifyProductionReleaseEvidence } from "./production-release-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROJECT_ID = "tonicatering";
@@ -32,12 +33,24 @@ function readArg(name) {
 
 function validateArgs() {
   const args = process.argv.slice(2);
-  const allowed = new Set(["--scope", "--confirm"]);
+  const allowed = new Set([
+    "--scope",
+    "--confirm",
+    "--release-sha",
+    "--ci-run-id",
+    "--uat-run-id",
+    "--rollback-sha"
+  ]);
+  const seen = new Set();
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
     if (!allowed.has(token)) {
       throw new Error(`Unknown argument: ${token}`);
     }
+    if (seen.has(token)) {
+      throw new Error(`Duplicate argument: ${token}`);
+    }
+    seen.add(token);
     if (!args[index + 1] || args[index + 1].startsWith("--")) {
       throw new Error(`${token} requires a value.`);
     }
@@ -75,13 +88,25 @@ function validateCleanPublishedRevision() {
     throw new Error("Refusing production deployment from a dirty working tree.");
   }
   const branch = capture("git", ["branch", "--show-current"]);
-  if (branch !== "main") {
+  const isExactMainDispatch =
+    process.env.GITHUB_ACTIONS === "true"
+    && process.env.GITHUB_EVENT_NAME === "workflow_dispatch"
+    && process.env.GITHUB_REF === "refs/heads/main";
+  if (branch !== "main" && !(branch === "" && isExactMainDispatch)) {
     throw new Error("Refusing production deployment from anything other than main.");
   }
   const head = capture("git", ["rev-parse", "HEAD"]);
-  const upstream = capture("git", ["rev-parse", "@{upstream}"]);
-  if (head !== upstream) {
-    throw new Error("Refusing production deployment until HEAD matches its configured upstream.");
+  if (!isExactMainDispatch) {
+    throw new Error("Refusing production deployment outside an exact main workflow dispatch.");
+  }
+  if (String(process.env.GITHUB_SHA || "").toLowerCase() !== head.toLowerCase()) {
+    throw new Error("Refusing production deployment because GITHUB_SHA does not match HEAD.");
+  }
+  if (branch === "main") {
+    const upstream = capture("git", ["rev-parse", "@{upstream}"]);
+    if (head !== upstream) {
+      throw new Error("Refusing production deployment until HEAD matches its configured upstream.");
+    }
   }
   const remoteLine = capture("git", ["ls-remote", "--heads", "origin", "refs/heads/main"]);
   const remoteHead = remoteLine.split(/\s+/)[0] || "";
@@ -120,6 +145,7 @@ function validateCleanPublishedRevision() {
       "Refusing production deployment until HEAD has a semantic release tag published to origin."
     );
   }
+  return head;
 }
 
 function validateFunctionsEnvironment() {
@@ -162,7 +188,7 @@ const scopes = {
     build: true,
     functions: false
   },
-  functions: {
+  backend: {
     selector: "firestore,functions",
     confirmation: `DEPLOY ${PROJECT_ID} firestore,functions`,
     build: false,
@@ -178,18 +204,36 @@ const scopes = {
 const selected = scopes[scope];
 
 if (!selected) {
-  throw new Error("--scope must be one of: hosting, functions, all.");
+  throw new Error("--scope must be one of: hosting, backend, all.");
 }
 if (readArg("--confirm") !== selected.confirmation) {
   throw new Error(`Production deployment requires --confirm "${selected.confirmation}".`);
 }
+const releaseTarget = `firebase-${scope}`;
 
-validateCleanPublishedRevision();
+async function verifyReleaseEvidence(headSha) {
+  return verifyProductionReleaseEvidence({
+    releaseSha: readArg("--release-sha"),
+    ciRunId: readArg("--ci-run-id"),
+    uatRunId: readArg("--uat-run-id"),
+    rollbackSha: readArg("--rollback-sha"),
+    target: releaseTarget,
+    headSha,
+    deploymentRunId: process.env.GITHUB_RUN_ID,
+    token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
+    attesterIds: process.env.RELEASE_UAT_ATTESTER_IDS,
+    root: ROOT
+  });
+}
+
+await verifyReleaseEvidence(validateCleanPublishedRevision());
 run("npm", ["run", "check:env"]);
 if (selected.functions) validateFunctionsEnvironment();
 if (selected.build) run("npm", ["run", "build"]);
 
-if (scope !== "functions") {
+await verifyReleaseEvidence(validateCleanPublishedRevision());
+
+if (scope !== "backend") {
   run("npx", [
     "firebase-tools",
     "target:apply",

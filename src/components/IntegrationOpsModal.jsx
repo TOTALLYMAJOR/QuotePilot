@@ -41,12 +41,13 @@ const FUNCTIONS_ENV_SETUP_GUIDANCE = [
 ].join("\n");
 const SMS_DISABLE_GUIDANCE = [
   "Set NOTIFICATIONS_SMS_PROVIDER=none in functions/.env.tonicatering,",
-  "validate the ignored file, then use the controlled Functions deploy."
+  "validate the ignored file, then use the controlled Firebase backend deploy."
 ].join(" ");
-const DEPLOY_FUNCTIONS_COMMAND = [
-  "npm run deploy:firebase:functions --",
-  '  --confirm "DEPLOY tonicatering firestore,functions"'
-].join(" \\\n");
+const DEPLOY_BACKEND_COMMAND = [
+  "GitHub Actions -> Deploy Firebase Hosting / Backend",
+  "firebase_scope=backend (Firestore rules + Functions)",
+  "Use the matching firebase-backend UAT and exact release evidence inputs."
+].join("\n");
 
 function toIso(value) {
   const date = new Date(value || "");
@@ -164,7 +165,7 @@ function describeProvisionEmailStatus(email = {}) {
 function describeSmsOutcome(sms) {
   if (sms?.sent) return "Test SMS sent successfully.";
   const reason = String(sms?.reason || "").trim();
-  if (reason === "sms_not_configured") return "SMS not configured yet. Add Twilio values and redeploy functions.";
+  if (reason === "sms_not_configured") return "SMS not configured yet. Add Twilio values and redeploy the Firebase backend.";
   if (reason === "sms_disabled") return "SMS is intentionally disabled (`NOTIFICATIONS_SMS_PROVIDER=none`).";
   if (reason === "sms_provider_unsupported") return "Configured SMS provider is unsupported in this build.";
   if (reason === "sms_send_failed") return `SMS send failed${sms?.message ? `: ${sms.message}` : "."}`;
@@ -967,7 +968,7 @@ export default function IntegrationOpsModal({
             <button
               type="button"
               className="ghost"
-              onClick={() => handleCopyValue(DEPLOY_FUNCTIONS_COMMAND, "Deploy command")}
+              onClick={() => handleCopyValue(DEPLOY_BACKEND_COMMAND, "Deploy command")}
             >
               Copy Deploy Command
             </button>

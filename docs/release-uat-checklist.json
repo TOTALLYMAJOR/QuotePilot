@@ -1,0 +1,47 @@
+{
+  "schema": "com.mbmapps.quotepilot.release-uat-checklist/v1",
+  "version": "2026-08-03",
+  "maximumAttestationAgeHours": 24,
+  "items": [
+    {
+      "id": "staging.immutable-release",
+      "label": "The immutable staging deployment identifies the exact release candidate."
+    },
+    {
+      "id": "quote.save",
+      "label": "A quote saves successfully."
+    },
+    {
+      "id": "quote.authoritative-create",
+      "label": "Trusted pricing creates the draft quote, portal projection, and initial version."
+    },
+    {
+      "id": "quote.authoritative-edit",
+      "label": "An eligible edit is server-repriced and atomically updates quote, portal, and version state."
+    },
+    {
+      "id": "quote.terminal-guards",
+      "label": "Terminal evidence blocks edit and reopen, sales cannot cross the allowed status boundary, and direct quote or portal deletion is denied."
+    },
+    {
+      "id": "history.open",
+      "label": "The saved quote appears in Quote History and opens successfully."
+    },
+    {
+      "id": "portal.decision",
+      "label": "Customer accept or decline updates the portal and organization quote consistently."
+    },
+    {
+      "id": "proposal.pdf",
+      "label": "The proposal PDF exports successfully with customer-safe content."
+    },
+    {
+      "id": "integrations.status",
+      "label": "Integrations Ops loads and reports provider configuration truthfully."
+    },
+    {
+      "id": "sms.disabled-nonblocking",
+      "label": "With SMS disabled, the SMS test reports disabled or not configured without blocking the core quote flow."
+    }
+  ]
+}
