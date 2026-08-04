@@ -66,7 +66,11 @@ git checkout -b feature/<scope>-<topic>
    - `Classify Changes + Lane Plan`
    - `lane:quick (Preflight + Secrets)`
      - runs before dependency installation, so its environment and secret
-       checks must use only Node built-ins and repository scripts;
+       checks plus the checksum-pinned GitHub workflow lint must use only Node
+       built-ins and repository scripts;
+     - workflow lint downloads an exact actionlint v1.7.12 platform archive,
+       verifies its tracked SHA-256, and checks every workflow while disabling
+       runner-dependent shellcheck/pyflakes integrations;
      - CI uses canonical non-secret Firebase test identifiers, including the
        production project ID, while host/provider secrets remain absent.
    - `lane:core (Unit + Build + Governance + Bundle)`

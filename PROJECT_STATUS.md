@@ -14,17 +14,20 @@ Last updated: August 3, 2026
   proposals, integration messages, and onboarding links use QuotePilot/MBMapps
   branding; the legacy Firebase project ID and hosting origin remain unchanged
   infrastructure identifiers.
-- Candidate validation: the combined sell-readiness working tree passes the
-  local quick/core gates: 624 unit tests pass with 39 intentional skips, the
-  production build, documentation governance, bundle budget, secret scan, and
-  environment check pass, and 327 focused release/deletion regressions plus all
-  four target-specific UAT item sets pass. Its product/runtime changes also
-  passed isolated Firestore rules (38/38), default Playwright (31 pass, 2
-  intentional skips), Firebase Auth and authoritative-pricing browser lanes,
-  the provisioning acceptance matrix, Docker production-image build,
-  Lighthouse, and both production dependency audits; only release
-  checklist/docs/tests changed after those high-risk runs. The candidate still
-  needs to be committed, published, and requalified by exact remote head; local
+- Candidate validation: draft PR #23 publishes the combined sell-readiness
+  candidate. Its initial exact head passed all eight source CI jobs in run
+  `30877272489`; Vercel Preview `dpl_DGyMkDEpA2i4GkfXTRxoqCVWszbf` failed
+  before build because all six required `VITE_FIREBASE_*` values are scoped
+  only to the older `fix/quote-history-role-permissions` branch. The local
+  quick/core gates pass: 627 unit tests pass with 39 intentional skips, the
+  production build, documentation governance, bundle budget, secret scan,
+  environment check, and checksum-pinned workflow lint pass, along with 327
+  focused release/deletion regressions and all four target-specific UAT item
+  sets. Product/runtime changes also passed isolated Firestore rules (38/38),
+  default Playwright (31 pass, 2 intentional skips), Firebase Auth and
+  authoritative-pricing browser lanes, the provisioning acceptance matrix,
+  Docker production-image build, Lighthouse, and both production dependency
+  audits. Every subsequent PR head requires fresh exact-head CI; local/source
   results are not hosted tenant or provider acceptance.
   All local/emulator results remain distinct from hosted tenant and provider
   acceptance.
@@ -133,7 +136,9 @@ Last updated: August 3, 2026
 - CI gates: all eight verifier-required jobs are configured (`Classify Changes
   + Lane Plan`, `lane:quick`, `lane:core`, `Docker Build Smoke`,
   `lane:playwright-smoke`, `lane:firebase-auth-rules`,
-  `lane:authoritative-pricing`, `lane:cwv-smoke`).
+  `lane:authoritative-pricing`, `lane:cwv-smoke`). The required quick lane now
+  downloads the exact actionlint v1.7.12 platform archive, verifies its tracked
+  official SHA-256, and checks all workflows before dependency installation.
 - Legacy bulk deletion is retired: the old organization-wide quote purge
   callable now fails closed, and its browser client and operator control are
   removed. Within a retained organization, permanent quote deletion remains
@@ -225,13 +230,14 @@ Last updated: August 3, 2026
   must revalidate the GitHub run/artifact identity and digest, both review
   records, and every downloaded payload file against the manifest while rejecting
   extras before any provider mutation credential is introduced.
-- Draft PR #21 (product hardening) and draft PR #22 (release preparation) have
-  each earned green eight-job GitHub CI on a published SHA; every subsequent
-  push still requires fresh exact-head qualification. Their Vercel Preview
-  deployments fail at `npm run check:env` because all six required Preview-scope
-  `VITE_FIREBASE_*` browser variables are absent. No hosted release-candidate
-  acceptance exists until those non-secret Preview variables are configured and
-  the exact PR SHA is reverified; source CI is not hosted proof.
+- Draft PR #23 converges the product-hardening and release-preparation work
+  previously split across draft PRs #21 and #22. Its first exact head earned
+  green eight-job GitHub CI, but its Vercel Preview failed at
+  `npm run check:env`: all six required `VITE_FIREBASE_*` values exist only as
+  branch-scoped Preview variables for `fix/quote-history-role-permissions`, so
+  none apply to the release branch. No hosted release-candidate acceptance
+  exists until those non-secret values are intentionally scoped to PR #23 and
+  the resulting exact deployment is reverified; source CI is not hosted proof.
 - The tracked UAT receipt still binds only a human-entered staging identifier.
   Schema-v2 target applicability prevents one profile from claiming unrelated
   checklist items, but it does not bind the tested provider surface or any
@@ -312,27 +318,25 @@ Last updated: August 3, 2026
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
 
 ## Current Focus (Near-Term)
-1. Publish and remotely qualify the locally validated combined sell-readiness
-   candidate on one exact branch head; every new push requires fresh exact-head
-   evidence.
-2. Configure the six non-secret Preview-scope `VITE_FIREBASE_*` variables and
-   complete hosted release-candidate acceptance on that exact head.
-3. Configure protected no-bypass GitHub environments and independent direct
+1. Keep draft PR #23 source-green on its exact head and intentionally scope the
+   six non-secret Vercel Preview Firebase variables to its release branch, then
+   complete hosted release-candidate acceptance on that exact deployment.
+2. Configure protected no-bypass GitHub environments and independent direct
    reviewers, disable provider-side bypasses, implement the separately owned
    trusted deployer plus provider-specific staging/LKG receipts, and complete a
    non-production rehearsal before any promotion.
-4. After those controls are qualified, promote the exact reviewed
+3. After those controls are qualified, promote the exact reviewed
    rules/Functions/frontend artifacts and run the hosted owner/quote/portal
    tenant acceptance checklist, including current/invalid issuance, active,
    expired, deleted, approval execution, contract, and change-request paths.
-5. Verify the intended Resend sender domain in the Resend dashboard and
+4. Verify the intended Resend sender domain in the Resend dashboard and
    authoritative DNS; only then configure
    `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and
    recipient proof from one controlled test.
-6. Run and review the scoped production portal-projection dry run, resolve any
+5. Run and review the scoped production portal-projection dry run, resolve any
    conflicts, then explicitly authorize guarded apply and retain count-only
    evidence.
-7. Improve large-chunk performance while staying inside bundle/CWV guardrails.
+6. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)
 - Focus completed: migration execution after fallback retirement and denial-matrix verification.

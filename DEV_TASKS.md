@@ -64,9 +64,6 @@ Last updated: August 3, 2026
   and environment-policy evidence.
 - Add a separately owned GitHub App/check or equivalent external verifier for
   release-critical source changes when stronger tamper independence is needed.
-- Add a reproducible workflow-lint gate so edited UAT, preparation, recovery,
-  and failure-only artifact-upload paths are checked in CI, not only by local
-  release-manager evidence.
 
 ## P1 - Performance and UX
 - Reduce largest JavaScript chunk size (split proposal/export-heavy paths where practical).

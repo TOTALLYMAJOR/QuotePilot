@@ -122,6 +122,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   production apply still requires its own explicit scope-bound authorization.
 - Release-critical workflows now use officially published immutable Node 24
   Action pins: checkout v7.0.1, setup-node v7.0.0, and upload-artifact v7.0.1.
+- The required quick lane now runs a reproducible GitHub workflow lint gate:
+  it downloads only the exact actionlint v1.7.12 platform archive, verifies a
+  repository-pinned official SHA-256, disables host-tool version drift, and
+  checks every tracked workflow before dependency installation.
 - The legacy organization-wide deleted-quote purge is retired and fails closed.
   Its browser client and operator control are removed; permanent deletion is
   available within a retained organization only one quote at a time through the
