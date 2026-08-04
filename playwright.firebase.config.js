@@ -36,6 +36,7 @@ export default defineConfig({
     url: BASE_URL,
     env: {
       VITE_E2E_BYPASS_AUTH: "false",
+      VITE_APP_URL: `${BASE_URL}/app`,
       VITE_FIREBASE_API_KEY: "demo-api-key",
       VITE_FIREBASE_PROJECT_ID: process.env.E2E_FIREBASE_PROJECT_ID || "demo-e2e",
       VITE_FIREBASE_AUTH_DOMAIN: "demo-e2e.firebaseapp.com",
@@ -46,7 +47,7 @@ export default defineConfig({
       VITE_USE_FIREBASE_EMULATORS: "true",
       VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING: allowNonAuthoritativePricing,
       VITE_FIREBASE_EMULATOR_HOST: "127.0.0.1",
-      VITE_FIREBASE_AUTH_EMULATOR_PORT: process.env.E2E_FIREBASE_AUTH_EMULATOR_PORT || "9099",
+      VITE_FIREBASE_AUTH_EMULATOR_PORT: process.env.E2E_FIREBASE_AUTH_EMULATOR_PORT || "9399",
       VITE_FIRESTORE_EMULATOR_PORT: process.env.E2E_FIRESTORE_EMULATOR_PORT || "8080",
       VITE_FIREBASE_FUNCTIONS_EMULATOR_PORT: process.env.E2E_FIREBASE_FUNCTIONS_EMULATOR_PORT || "5001"
     },

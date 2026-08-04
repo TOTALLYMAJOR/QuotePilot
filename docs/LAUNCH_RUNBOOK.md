@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: August 3, 2026
+Last updated: August 4, 2026
 
 ## Goal
 Prepare, promote, and verify QuotePilot safely with isolated credentials,
@@ -11,6 +11,12 @@ target-scoped payloads, deterministic manifests, and clear post-launch evidence.
 2. Enable Firestore Database.
 3. Create Firebase Web App and capture `VITE_FIREBASE_*` values.
 4. Enable Authentication providers needed by staff (`Email/Password`, `Google`).
+5. In Authentication settings, enable email-enumeration protection and confirm
+   the canonical `VITE_APP_URL` domain is authorized for email-action continue
+   URLs. The generic reset confirmation is not provider proof, and public
+   registration can still return an existing-email error; retain separate abuse
+   controls and registration hardening as required by the production threat
+   model.
 
 ## 2) Configure Local Environment
 1. Copy `.env.example` to `.env`.
@@ -256,17 +262,27 @@ Stripe webhook endpoint:
   - `checkout.session.async_payment_failed`
   - `checkout.session.expired`
 
-The current source candidate handles deposits only. An exact approved payment
-scope binds organization, quote revision, portal issuance, customer email,
-currency, and deposit amount. The server runs one governed, resumable operation:
-it registers a new Session as `prepared` with no browser-readable link, stores
+The current source candidate handles deposit and final-balance collection as
+separate payment rails. An exact approved deposit scope binds organization,
+quote revision, portal issuance, customer email, currency, and deposit amount.
+An exact final-balance scope is available only for a booked contract with a
+verified provider-paid deposit. QuotePilot derives the remaining amount from
+the authoritative total and deposit and additionally binds the contract,
+deposit evidence, payment kind, and checkout generation. A versioned payment
+ledger and distinct `payment.finalBalance` projection prevent final-balance
+events from rewriting deposit truth.
+
+For either rail, the server runs one governed, resumable operation: it
+registers a new Session as `prepared` with no browser-readable link, stores
 QuotePilot's URL copy in the server-only `privatePaymentDispatches` record, and
-submits the payment-request email using an approval-bound provider idempotency
-key. Only after email-provider acceptance is durably recorded does one
+submits the matching payment-request email using approval-bound provider
+idempotency. Only after email-provider acceptance is durably recorded does one
 transaction publish the payment link to the quote and portal and complete the
 approval. Direct standalone checkout creation fails closed. Signed events own
-payment state, and the admin-only `Reconcile Payment` action re-reads the exact
-server-recorded Session without downgrading paid/refunded truth.
+payment state, and the admin-only `Reconcile Payment` or `Reconcile Final
+Balance` action re-reads the exact server-recorded Session without downgrading
+settled truth or crossing payment rails. Customer-readable projections omit
+Stripe Session, operation, known-Session, and private-dispatch identifiers.
 
 Checkout creation and provider email are external calls, so “combined send” is
 not an atomic provider/database claim. An ambiguous creation or email outcome
@@ -280,40 +296,52 @@ failure may require a new approval only after the unsent checkout is
 neutralized and the private URL cleared. If cleanup cannot be confirmed, keep
 the exact execution resumable for retry or provider reconciliation.
 
-Promote this slice only as one exact-revision frontend, Functions, and Firestore
-rules rollout. The frontend exposes the combined send and reconciliation
-controls, Functions own approval scope/provider calls/webhook transitions, and
-rules deny browser payment-evidence writes. A frontend-only or backend-only
-promotion is not acceptance of this workflow. The prepare job still does not
-deploy or materialize provider secrets; the credential-isolated trusted
-deployer must configure the runtime and promote the coordinated artifact.
+Promote these rails only as one exact-revision frontend, Functions, and
+Firestore rules rollout. The frontend exposes the separate send/resume and
+reconciliation controls, Functions own approval scope/provider calls/webhook
+transitions, and rules deny browser payment-evidence writes. A frontend-only or
+backend-only promotion is not acceptance of this workflow. The prepare job
+still does not deploy or materialize provider secrets; the
+credential-isolated trusted deployer must configure the runtime and promote
+the coordinated artifact.
 
 Provider acceptance must cover, first in hosted test mode and then under a
 separate live-mode authorization:
 
-1. An accepted/booked quote with an exact approval creates or safely reuses one
-   scoped deposit Session and registers `prepared` state without writing its
-   URL to any browser-readable QuotePilot record before provider dispatch.
-2. A changed quote revision, portal issuance, recipient, amount, or currency
-   invalidates the prior approval.
-3. An ambiguous Stripe-creation or email outcome leaves the exact approval
-   resumable only for the same executing admin and uses the same Stripe/provider
-   identities; a changed actor fails closed. It does not publish the URL to the
-   quote/portal or create an independent replacement checkout. Treat external
-   email acceptance as unknown until reconciled by the same-key retry.
-4. Durable email-provider acceptance precedes quote/portal publication. An
+1. An eligible quote with an exact deposit approval creates or safely reuses
+   one scoped deposit Session and registers `prepared` state without writing
+   its URL to any browser-readable QuotePilot record before provider dispatch.
+2. A booked contract with verified provider-paid deposit evidence creates a
+   separate final-balance approval and Session for only the server-derived
+   remainder. Missing prerequisites, stale contract/deposit evidence, or a
+   browser-supplied amount or payment kind fails closed.
+3. A changed quote revision, portal issuance, recipient, amount, currency,
+   contract, paid-deposit evidence, payment kind, or checkout generation
+   invalidates the affected approval without changing the other rail.
+4. An ambiguous Stripe-creation or email outcome leaves that exact approval
+   resumable only for the same executing admin and reuses the same
+   Stripe/provider identities; a changed actor fails closed. It does not
+   publish the URL to the quote/portal or create an independent replacement
+   checkout. Treat external email acceptance as unknown until reconciled by
+   the same-key retry.
+5. Durable email-provider acceptance precedes quote/portal publication. An
    induced publication interruption resumes without another provider send.
-5. A definite provider failure safely neutralizes the unsent Session and clears
-   its private URL before requiring a new approval; unresolved cleanup remains
-   resumable instead of guessing.
-6. The four configured webhook events produce paid, processing, failed, or
-   expired results without allowing a late event to downgrade settled truth.
-7. `Reconcile Payment` reads the stored Session and either applies provider
-   truth or records a review-required result; it is not a manual paid toggle.
+6. A definite provider failure safely neutralizes the unsent Session and
+   clears its private URL before requiring a new approval; unresolved cleanup
+   remains resumable instead of guessing.
+7. The four configured webhook events produce paid, processing, failed, or
+   expired results, accept a valid late settlement, reject replay, and cannot
+   downgrade settled truth or apply an event to the other payment rail.
+8. `Reconcile Payment` and `Reconcile Final Balance` each read only their
+   server-recorded Session and either apply provider truth or record a
+   review-required result; neither is a manual paid toggle.
+9. Staff and customer surfaces expose only eligible, published payment actions
+   and customer-safe state; unpublished links and private provider identifiers
+   remain absent.
 
-Refund initiation/status, dispute handling, and final-balance collection or
-reconciliation remain outside this deposit slice. Keep those processes manual
-and separately audited until server-authoritative automation is implemented.
+Refund initiation/status and dispute handling remain manual or unimplemented.
+Do not infer either from a paid, failed, expired, or reconciled Checkout
+Session.
 
 ## 6) Candidate UAT and Exact-Main Release Attestation
 
@@ -325,6 +353,26 @@ v2 target applicability in `docs/release-uat-checklist.json`; changes to that
 file change its SHA-256 digest and invalidate older attestations. The broader
 source-acceptance list below also includes the portal backfill tool, which is a
 separate data operation and is deliberately absent from deployment-target UAT.
+
+For any release containing either Stripe collection rail, the applicable
+tracked `payment.*` items are mandatory, not optional spot checks. The exact
+target item set covers deposit dispatch, final-balance dispatch,
+signed-webhook/reconciliation behavior, cross-rail isolation, customer-safe
+projection, and customer/staff payment surfaces as applicable. Complete all
+items printed by `npm run release:uat:items` against the exact coordinated
+hosted candidate. Local unit, rules, or emulator success is source evidence;
+it does not satisfy hosted payment UAT or establish Stripe test/live provider
+acceptance. A target attestation also does not prove the SHA or identity of an
+unbound frontend/backend dependency, so retain a separate provider acceptance
+record tying the coordinated frontend, Functions, and rules revision together.
+
+For any release containing email/password recovery, complete
+`auth.password-recovery` with a designated test account and an unknown address.
+Prove the action changes the designated password and returns to the canonical
+`/app` URL, then retain read-only provider evidence that email-enumeration
+protection is enabled and the continue domain is authorized. The same rendered
+confirmation alone is not network-level enumeration protection, and public
+registration remains a separate abuse-control boundary.
 
 1. CI is fully green:
    - `Classify Changes + Lane Plan`
@@ -364,21 +412,31 @@ separate data operation and is deliberately absent from deployment-target UAT.
    - each sensitive action consumes only its exact approved request, writes a
      server-owned organization-scoped outcome audit, and a completed replay
      returns the stored result without executing again,
-   - the payment-request approval is invalidated by any change to its quote
-     revision, portal issuance, customer email, currency, or deposit amount;
-     the valid action privately registers prepared state, durably records
-     provider dispatch/acceptance, and only then publishes the payment link,
-     while direct checkout creation fails closed,
-   - an ambiguous checkout/email outcome resumes the exact approval with the
-     same executing admin and provider keys and no quote/portal link; external
-     email acceptance remains unknown until same-key retry. Durable provider
-     acceptance resumes publication without resending; a definite failure
-     neutralizes and clears the unsent checkout before a new approval becomes
-     eligible,
+   - the deposit approval is invalidated by any change to its quote revision,
+     portal issuance, customer email, currency, or deposit amount; the valid
+     action privately registers prepared state, durably records provider
+     dispatch/acceptance, and only then publishes the payment link, while
+     direct checkout creation fails closed,
+   - final-balance collection requires a booked contract and verified
+     provider-paid deposit, derives only the authoritative remainder, and binds
+     the contract, deposit evidence, revision, portal, customer, amount,
+     currency, payment kind, and generation into a separate approval, ledger
+     entry, and projection; stale scope or missing prerequisites fail closed,
+   - an ambiguous checkout/email outcome on either rail resumes the exact
+     approval with the same executing admin and provider keys and no
+     quote/portal link; external email acceptance remains unknown until
+     same-key retry. Durable provider acceptance resumes publication without
+     resending; a definite failure neutralizes and clears the unsent checkout
+     before a new approval becomes eligible,
    - explicit Stripe mode, key prefix, Event `livemode`, and Session `livemode`
      agree; all four configured Checkout Session events transition provider
-     state without downgrading paid/refunded truth, and the same-tenant admin
-     reconciliation reads only the server-recorded Session,
+     state, reject replay, accept valid late settlement, and do not downgrade
+     paid/refunded truth or cross payment rails; each same-tenant admin
+     reconciliation reads only the server-recorded Session for its rail,
+   - customer and staff payment surfaces keep unpublished links and Stripe
+     Session, operation, known-Session, and private-dispatch identifiers out of
+     customer-readable projections while exposing each eligible rail
+     independently,
    - an accepted quote converts only through the exact approved server action
      to one booked contract with a server-owned contract number and availability
      result; unapproved or mismatched conversion fails closed,
@@ -509,17 +567,21 @@ scope-bound confirmation shown in the README. Do not infer permission to apply
 from deployment, merge, UAT, or release approval, and never copy portal tokens
 or customer data into release evidence.
 
-For a release containing the Stripe deposit slice, retain a separate provider
-acceptance record. Exercise the exact coordinated frontend/Functions/rules
-revision first against an isolated hosted `STRIPE_MODE=test` runtime with all
-four webhook subscriptions. Exercise private prepared state, ambiguous
-same-key recovery, publication-only recovery after durable acceptance, and
-definite-failure cleanup in that environment. After explicit production
-authorization, verify the matching `STRIPE_MODE=live` runtime and capture one
-controlled live payment request, provider event, customer payment-state
-refresh, and admin reconciliation observation. Redact keys, signatures, portal
-tokens, and customer data from evidence. Test-mode success is not live-mode
-acceptance, and neither proves refund, dispute, or final-balance automation.
+For a release containing either Stripe collection rail, retain a separate
+provider acceptance record for deposit and final balance. Exercise the exact
+coordinated frontend/Functions/rules revision first against an isolated hosted
+`STRIPE_MODE=test` runtime with all four webhook subscriptions. For each rail,
+exercise exact approval scope, private prepared state, ambiguous same-key
+recovery, publication-only recovery after durable acceptance, definite-failure
+cleanup, signed-event replay protection, reconciliation, and customer-safe
+projection. Also prove that Session metadata and stored scope prevent an event
+or reconciliation from crossing rails. After explicit production
+authorization, verify the matching `STRIPE_MODE=live` runtime and capture a
+controlled request, provider event, customer payment-state refresh, and admin
+reconciliation observation separately for each enabled rail. Redact keys,
+signatures, portal tokens, private provider identifiers, and customer data from
+evidence. Test-mode success is not live-mode acceptance. Neither mode proves
+refund or dispute automation; those workflows remain manual or unimplemented.
 
 1. Create a quote end-to-end.
 2. Confirm quote appears in history.
@@ -539,7 +601,11 @@ acceptance, and neither proves refund, dispute, or final-balance automation.
    - Confirm a second public request cannot flip an accepted/declined outcome.
 8. Confirm a legacy projection without `deliveryEvidence` stays inactive and
    the recovery path does not fabricate acceptance evidence.
-9. Validate mobile layout and key interaction flows.
+9. For an enabled Stripe release, verify deposit and final-balance actions,
+   customer state, webhook/reconciliation results, and cross-rail isolation
+   against the exact coordinated revision. Record each provider proof layer
+   separately from the release attestation.
+10. Validate mobile layout and key interaction flows.
 
 ## 8) Rollback
 

@@ -20,7 +20,11 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal; existing token links remain compatible.
 
 ## Product Scope
-The app supports a 5-step quote wizard, dynamic event-type menus, pricing configuration, proposal export, customer portal updates, tenant-locked customer/catalog CSV imports, and operations workflows (history, scheduling, reporting, diagnostics).
+The app supports a 5-step quote wizard, dynamic event-type menus, pricing
+configuration, proposal export, customer portal updates, tenant-locked
+customer/catalog CSV imports, server-authoritative deposit and final-balance
+collection in the current source candidate, and operations workflows (history,
+scheduling, reporting, diagnostics).
 
 Tenant safety mode:
 - Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
@@ -89,7 +93,8 @@ Create `.env` from `.env.example` and set required Firebase keys:
 Optional:
 - `VITE_FIREBASE_FUNCTIONS_REGION`
 - `VITE_APP_HOST`
-- `VITE_APP_URL`
+- `VITE_APP_URL` (canonical HTTPS `/app` return URL for Firebase email actions;
+  its domain must be authorized in Firebase Authentication)
 
 To create `.env.local` from the authenticated Firebase project config without
 touching `.env`, run:
@@ -188,7 +193,8 @@ instruction if that browser is unavailable.
   - Covers provisioning authority, owner activation, trusted quote and portal
     behavior, provider/payment failure boundaries, cleanup, and
     server-authoritative approval request, resolution, exact governed-action
-    execution, outcome audit, idempotency, and replay protection.
+    execution, outcome audit, idempotency, replay protection, and separate
+    signed-webhook acceptance for deposit and final-balance collection.
   - The runner refuses non-`demo-*` projects or missing emulator host variables;
     it is local evidence and does not replace hosted tenant acceptance.
 
@@ -289,38 +295,53 @@ commercial records. The create-only private (`0600`) evidence destination is
 reserved before any database work and completed atomically with aggregate
 counts rather than portal tokens or customer data.
 
-## Stripe Deposit Workflow (Source Candidate)
+## Stripe Deposit and Final-Balance Workflows (Source Candidate)
 
-The current source candidate makes an approved deposit request one
-server-authoritative, resumable operation. Its immutable approval scope includes
+The current source candidate implements deposit and final-balance collection as
+separate server-authoritative payment rails. An approved deposit request binds
 the organization, quote revision, current portal issuance, customer email,
-currency, and deposit amount. A new Checkout Session is first registered as
-`prepared` with no browser-readable payment link; QuotePilot retains its URL
-only in a server-only dispatch record. The server submits the payment-request
+currency, and deposit amount. A final-balance request additionally requires a
+booked contract and verified provider-paid deposit; QuotePilot derives the
+remaining amount from the authoritative total and deposit and binds the
+contract, deposit evidence, revision, portal, customer, currency, amount, and
+checkout generation into its own approval. A versioned ledger and distinct
+`payment.finalBalance` projection prevent either rail from rewriting the
+other's evidence.
+
+For either rail, a new Checkout Session is first registered as `prepared` with
+no browser-readable payment link; QuotePilot retains its URL only in a
+server-only dispatch record. The server submits the matching payment-request
 email and publishes the link to the quote and customer portal only after
-provider acceptance is durably recorded. The browser cannot create a standalone
-checkout or mark payment evidence manually.
+provider acceptance is durably recorded. The browser cannot create a
+standalone checkout, choose a payment kind or amount, or mark payment evidence
+manually. The customer projection omits Stripe Session and private-dispatch
+identifiers.
 
 If Stripe creation or email delivery has an ambiguous outcome, the approval
-execution remains in progress. The same admin uses `Resume Pay Request`, which
-reuses the Stripe-creation and email-provider identities; when a prepared
-Session is known, it is reused. If provider acceptance was recorded but
-database publication was interrupted, resume finishes publication without
-sending again. A definite email failure clears the private URL and requires a
-new approval only after the unsent Session is safely neutralized; unresolved
-cleanup stays resumable for retry or provider reconciliation.
+execution remains in progress. The same admin uses `Resume Pay Request` or
+`Resume Balance Request`, which reuses the Stripe-creation and email-provider
+identities; when a prepared Session is known, it is reused. If provider
+acceptance was recorded but database publication was interrupted, resume
+finishes publication without sending again. A definite email failure clears
+the private URL and requires a new approval only after the unsent Session is
+safely neutralized; unresolved cleanup stays resumable for retry or provider
+reconciliation. Late provider settlement may promote a failed or expired
+observation to paid without reopening or crossing payment rails.
 
 Payment state is driven by signed, deduplicated
 `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
 `checkout.session.async_payment_failed`, and `checkout.session.expired` events.
-An admin reconciliation action re-reads the exact server-recorded Session when
-provider delivery needs review, without overriding settled payment truth.
+Admin reconciliation re-reads the exact server-recorded Session for the
+selected rail when provider delivery needs review, without overriding settled
+payment truth or mutating the other rail.
 
-This behavior is not deployed by the repository preparation workflow. Release
-requires one coordinated exact-revision frontend, Functions, and Firestore
-rules promotion plus hosted Stripe test-mode and separately authorized
-live-mode acceptance. Refunds, disputes, and final-balance automation are not
-part of this deposit workflow. See the
+This behavior is source/local evidence only. The repository preparation
+workflow does not deploy it, configure Stripe, or prove provider acceptance.
+Release requires one coordinated exact-revision frontend, Functions, and
+Firestore rules promotion plus mandatory hosted payment UAT in Stripe test
+mode and separately authorized live-mode acceptance for each enabled rail.
+Refund initiation/status and dispute handling remain manual or unimplemented.
+See the
 [launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--twilio--resend-providers)
 for configuration and proof requirements.
 
@@ -453,6 +474,15 @@ contract for the selected target and its recorded test environment, not proof
 of an unbound dependency's SHA or provider identity. Portal projection backfill
 is not packaged by any target and remains a separately authorized data
 operation outside target attestation.
+
+For a release containing either Stripe collection rail, every applicable
+`payment.*` item printed for the selected target is mandatory. Deposit and
+final-balance dispatch, signed-webhook/reconciliation behavior, cross-rail
+isolation, customer-safe projection, and browser surfaces must be observed on
+the exact coordinated hosted candidate as their target applicability requires.
+Local tests and emulator events are source evidence only, while a successful
+UAT attestation records the observed application contract; neither alone is
+Stripe test-mode or live-mode provider acceptance.
 
 The `backend` and `all` scopes package Firestore rules plus Functions without
 runtime `.env` files. The manifest binds the Firebase project, Hosting target,

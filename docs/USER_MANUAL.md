@@ -8,6 +8,13 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 ## Access and Roles
 - Staff access (`sales` or `admin`) is required for the quote builder workspace.
 - Admin access is required for Catalog Admin configuration.
+- Email/password users who cannot sign in can enter their email and select
+  `Forgot password?`. QuotePilot always shows the same confirmation whether or
+  not Firebase returns an account-state error. Follow the Firebase
+  password-reset message for that exact email, then use its Continue action to
+  return to QuotePilot. The confirmation is on-screen privacy behavior, not
+  proof that an account exists or that a message was delivered;
+  Google-authenticated users continue through Google instead.
 - Sales users can prepare quotes through the trusted edit workflow, download a
   draft PDF, and copy an email template. The current Quote History UI reserves
   provider-backed email and lifecycle controls for admins. Sales cannot create
@@ -182,9 +189,10 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - This workflow is not production behavior until its matching frontend,
   Functions, and Firestore rules are deployed together and hosted Stripe
   test/live acceptance is recorded separately for deposit and final-balance
-  collection. This source branch is not `main`, and no hosted or Stripe-provider
-  acceptance has been recorded for final-balance collection. Refunds and
-  disputes remain separate manual processes.
+  collection. This source branch is not `main`, and no hosted or
+  Stripe-provider acceptance has been recorded for either payment rail. Refund
+  initiation/status and dispute handling remain manual or unimplemented
+  outside the automated collection workflow.
 - While quote delivery is `sending`, or its provider outcome needs manual
   review, QuotePilot locks quote status/payment, edit, checkout, payment email,
   contract, portal rotation, and deletion controls. PDF download, email-template

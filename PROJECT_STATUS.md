@@ -38,6 +38,26 @@ Last updated: August 4, 2026
 - Functions runtime readiness: Functions now target Node.js 22 and use Firebase
   Admin 14 modular app, Auth, and Firestore APIs. The local authoritative and
   provisioning matrices pass with that runtime candidate.
+- Current branch account recovery: the staff sign-in screen now lets
+  email/password users request a Firebase password-reset message. The helper
+  normalizes the entered email, supplies a validated HTTPS `/app` return
+  URL, returns the same on-screen confirmation for unknown or disabled account
+  errors, and preserves operational failures instead of claiming a message was
+  sent. Seven focused unit tests and an isolated two-test
+  Auth/Firestore/Functions browser run pass, including action-code creation,
+  password replacement, QuotePilot return state, and sign-in with the new
+  password. Exact-head CI must repeat the package lane, and emulator evidence
+  remains distinct from hosted password-reset delivery. Production acceptance
+  must separately verify the return domain is authorized and Firebase
+  email-enumeration protection is enabled. Public registration may still
+  return an existing-email error, so this feature is not claimed as full
+  account-enumeration resistance.
+- Current branch release UAT contract: checklist version `2026-08-04.1` now
+  makes hosted password recovery and target-applicable deposit, final-balance,
+  webhook/reconciliation, cross-rail isolation, projection privacy, and payment
+  surface observations mandatory. The regression suite fixes those critical
+  IDs to their intended target profiles so a mechanical checklist edit cannot
+  silently remove them.
 - Current branch Stripe payment lifecycle: an exact approved deposit scope now
   binds the quote revision, current portal issuance, customer email, currency,
   and amount before one resumable server operation prepares/restores the

@@ -8,6 +8,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Firebase email/password account recovery on the staff sign-in screen, with
+  normalized reset requests, the same on-screen confirmation for unknown or
+  disabled account errors, a validated HTTPS `/app` return URL, action-specific
+  loading state, accessible live status, focused helper coverage, and an
+  Auth-emulator browser assertion that completes the password change and signs
+  in with the replacement password. Full account-enumeration resistance still
+  depends on provider configuration and registration hardening.
 - Tenant-scoped Workflow Attention queue for active quotes, with a post-idle
   header count, due/overdue follow-ups, pending approvals, new and acknowledged
   customer change requests, request-ID-bound current handling records, and
@@ -146,6 +153,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- The versioned release UAT checklist now requires hosted password-recovery
+  completion plus target-applicable deposit, final-balance,
+  webhook/reconciliation, cross-rail isolation, customer-projection privacy,
+  and staff/customer payment-surface observations. Release-evidence tests pin
+  those critical item IDs and deployment profiles in a dedicated semantic map,
+  so changing only the generic expected target lists cannot silently weaken
+  them.
 - Product hardening and exact-SHA release controls are converged into one
   sell-readiness candidate so approval, delivery, portal, onboarding, CI, UAT,
   artifact, and rollback boundaries can be qualified on one immutable head.

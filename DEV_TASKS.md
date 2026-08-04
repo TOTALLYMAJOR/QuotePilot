@@ -35,6 +35,11 @@ Last updated: August 4, 2026
 - Configure all six non-secret Preview-scope `VITE_FIREBASE_*` variables, then
   reverify the exact candidate SHA and complete hosted owner/quote/portal
   acceptance. Source CI alone is not hosted proof.
+- Verify Firebase email-enumeration protection is enabled and the canonical
+  password-reset continue domain is authorized. Then replace public
+  email/password self-registration with an invitation-bound flow or add
+  equivalent App Check/reCAPTCHA abuse controls; generic reset copy does not
+  prevent the registration endpoint from returning an existing-email result.
 - Release the Stripe deposit and final-balance lifecycles only as one
   exact-revision frontend, Functions, and Firestore-rules rollout. In isolated
   hosted acceptance set explicit `STRIPE_MODE=test` with a matching test key and

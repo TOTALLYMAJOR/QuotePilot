@@ -54,11 +54,13 @@ const DEPLOYMENT_PROFILES = [
 const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
   "firebase-hosting": [
     "staging.immutable-release",
+    "auth.password-recovery",
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
     "portal.decision",
     "delivery.link-surface-gating",
+    "payment.customer-surface",
     "proposal.pdf",
     "integrations.status",
     "sms.disabled-nonblocking"
@@ -75,11 +77,17 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "delivery.invalid-issuance",
     "approval.execution-audit-replay",
     "contract.approved-conversion",
+    "payment.deposit-scoped-dispatch",
+    "payment.final-balance-scoped-dispatch",
+    "payment.webhook-reconciliation",
+    "payment.cross-rail-isolation",
+    "payment.customer-projection-privacy",
     "integrations.status",
     "sms.disabled-nonblocking"
   ],
   "firebase-all": [
     "staging.immutable-release",
+    "auth.password-recovery",
     "quote.save",
     "quote.authoritative-create",
     "quote.authoritative-edit",
@@ -93,21 +101,38 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "delivery.link-surface-gating",
     "approval.execution-audit-replay",
     "contract.approved-conversion",
+    "payment.deposit-scoped-dispatch",
+    "payment.final-balance-scoped-dispatch",
+    "payment.webhook-reconciliation",
+    "payment.cross-rail-isolation",
+    "payment.customer-projection-privacy",
+    "payment.customer-surface",
     "proposal.pdf",
     "integrations.status",
     "sms.disabled-nonblocking"
   ],
   vercel: [
     "staging.immutable-release",
+    "auth.password-recovery",
     "quote.save",
     "quote.legacy-bulk-purge-ui-absent",
     "history.open",
     "portal.decision",
     "delivery.link-surface-gating",
+    "payment.customer-surface",
     "proposal.pdf",
     "integrations.status",
     "sms.disabled-nonblocking"
   ]
+});
+const CRITICAL_UAT_TARGETS = Object.freeze({
+  "auth.password-recovery": ["firebase-hosting", "firebase-all", "vercel"],
+  "payment.deposit-scoped-dispatch": ["firebase-backend", "firebase-all"],
+  "payment.final-balance-scoped-dispatch": ["firebase-backend", "firebase-all"],
+  "payment.webhook-reconciliation": ["firebase-backend", "firebase-all"],
+  "payment.cross-rail-isolation": ["firebase-backend", "firebase-all"],
+  "payment.customer-projection-privacy": ["firebase-backend", "firebase-all"],
+  "payment.customer-surface": ["firebase-hosting", "firebase-all", "vercel"]
 });
 const NOW = new Date("2026-08-04T12:00:00.000Z");
 const CI_COMPLETED_AT = "2026-08-04T09:00:00.000Z";
@@ -528,7 +553,7 @@ describe("tracked UAT checklist", () => {
     expect(checklist.checklist.schema).toBe(
       "com.mbmapps.quotepilot.release-uat-checklist/v2"
     );
-    expect(checklist.checklist.version).toBe("2026-08-03.2");
+    expect(checklist.checklist.version).toBe("2026-08-04.1");
     expect(checklist.itemIds).toHaveLength(checklist.checklist.items.length);
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
@@ -547,6 +572,16 @@ describe("tracked UAT checklist", () => {
     expect(checklist.itemIdsByTarget["firebase-all"]).toEqual(
       checklist.itemIds.filter((itemId) => combinedNarrowTargets.has(itemId))
     );
+  });
+
+  test("cannot silently drop or weaken critical auth or payment UAT coverage", () => {
+    const targetsByItemId = new Map(
+      checklist.checklist.items.map((item) => [item.id, item.targets])
+    );
+
+    for (const [itemId, expectedTargets] of Object.entries(CRITICAL_UAT_TARGETS)) {
+      expect(targetsByItemId.get(itemId), itemId).toEqual(expectedTargets);
+    }
   });
 
   test("changes the checklist digest when only target applicability changes", () => {
