@@ -133,6 +133,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - The GitHub `lane:firebase-auth-rules` job now invokes the matching package
   lane so Firestore authorization tests and the Firebase browser smoke run
   together instead of allowing the rules half to be omitted.
+- The Firebase Auth/rules package lane now prepares and selects Java 21 before
+  its first emulator command, so Firestore rules cannot bypass the existing
+  local-JRE fallback on runners with an older system Java.
 - Customer change-request acknowledgment and handling now use a narrow
   transaction that revalidates the exact portal request, derives the actor from
   the authenticated Firebase user, preserves the original customer decision,

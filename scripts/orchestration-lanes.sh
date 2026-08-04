@@ -21,6 +21,16 @@ Lanes:
 USAGE
 }
 
+prepare_firebase_java() {
+  bash ./scripts/ensure-local-jre.sh
+
+  local local_jre="$ROOT_DIR/.cache/tools/jre21"
+  if [[ -x "$local_jre/bin/java" ]]; then
+    export JAVA_HOME="$local_jre"
+    export PATH="$local_jre/bin:$PATH"
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     lane:quick|lane:core|lane:firebase-auth-rules|lane:authoritative-pricing|lane:release)
@@ -63,6 +73,7 @@ case "$lane" in
     ;;
   lane:firebase-auth-rules)
     echo "==> lane:firebase-auth-rules"
+    prepare_firebase_java
     npm run test:rules:firestore
     npm run test:e2e:firebase
     ;;
