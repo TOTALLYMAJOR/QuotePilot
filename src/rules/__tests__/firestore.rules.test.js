@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { beforeAll, beforeEach, afterAll, describe, test } from "vitest";
+import { beforeAll, beforeEach, afterAll, describe, expect, test } from "vitest";
 import {
   assertFails,
   assertSucceeds,
@@ -16,6 +16,15 @@ const EXPIRED_PORTAL_KEY = "expired-abcdefghijklmnopqrstuvwxyz";
 const DELETED_PORTAL_KEY = "deleted-abcdefghijklmnopqrstuvwxyz";
 const ACTIVE_PORTAL_EXPIRES_MS = 4102444800000; // 2100-01-01T00:00:00.000Z
 const EXPIRED_PORTAL_EXPIRES_MS = 1577836800000; // 2020-01-01T00:00:00.000Z
+const PORTAL_ISSUED_AT_ISO = "2026-03-20T00:00:00.000Z";
+const PORTAL_DELIVERY_EVIDENCE = {
+  revisionId: `v0001@${PORTAL_ISSUED_AT_ISO}`,
+  state: "provider_accepted",
+  portalActivationState: "active",
+  portalKey: VALID_PORTAL_KEY,
+  portalIssuedAtISO: PORTAL_ISSUED_AT_ISO,
+  providerAcceptedAtISO: PORTAL_ISSUED_AT_ISO
+};
 const RULES_PRICING = {
   pricingVersion: "pricing-v1",
   authority: "server_authoritative",
@@ -126,6 +135,7 @@ async function seedBaseData() {
       organizationId: "org-a",
       customerEmailKey: "customer-a@example.com",
       portalKey: VALID_PORTAL_KEY,
+      portalIssuedAtISO: PORTAL_ISSUED_AT_ISO,
       quoteNumber: "QP-RULES-001",
       customer: {
         name: "Rules Customer",
@@ -160,6 +170,18 @@ async function seedBaseData() {
       updatedAtISO: "2026-03-20T00:00:00.000Z",
       lifecycle: {},
       portalDecision: {},
+      workflow: {
+        quoteDelivery: {
+          revisionId: `v0001@${PORTAL_ISSUED_AT_ISO}`,
+          state: "provider_accepted",
+          provider: "resend",
+          providerMessageId: "rules-provider-message-1",
+          providerAcceptedAtISO: PORTAL_ISSUED_AT_ISO,
+          portalActivationState: "active",
+          portalKey: VALID_PORTAL_KEY,
+          portalIssuedAtISO: PORTAL_ISSUED_AT_ISO
+        }
+      },
       latestVersionNumber: 0
     });
     await setDoc(doc(db, "organizations", "org-a", "quotes", "q-expired"), {
@@ -179,6 +201,8 @@ async function seedBaseData() {
       quoteId: "q1",
       organizationId: "org-a",
       status: "sent",
+      portalIssuedAtISO: PORTAL_ISSUED_AT_ISO,
+      deliveryEvidence: PORTAL_DELIVERY_EVIDENCE,
       portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
       updatedAtISO: "2026-03-20T00:00:00.000Z",
       lifecycle: {}
@@ -382,6 +406,8 @@ function buildCanonicalPortalPayload(overrides = {}) {
     portalKey: VALID_PORTAL_KEY,
     quoteId: "q1",
     organizationId: "org-a",
+    portalIssuedAtISO: PORTAL_ISSUED_AT_ISO,
+    deliveryEvidence: PORTAL_DELIVERY_EVIDENCE,
     quoteNumber: "QP-RULES-001",
     customerName: "Rules Customer",
     customerEmail: "rules-customer@example.com",
@@ -521,7 +547,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(batch.commit());
   });
 
-  test("staff portal creation must be a canonical projection of its existing quote", async () => {
+  test("browser staff cannot create or forge customer portal projections", async () => {
     const db = testEnv.authenticatedContext("sales-org-a", {
       email: "sales-a@example.com",
       email_verified: true
@@ -531,10 +557,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await deleteDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY));
     });
-    await assertSucceeds(setDoc(portalRef, buildCanonicalPortalPayload()));
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await deleteDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY));
-    });
+    await assertFails(setDoc(portalRef, buildCanonicalPortalPayload()));
     await assertFails(setDoc(portalRef, buildCanonicalPortalPayload({
       total: 1
     })));
@@ -550,6 +573,16 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         stripeSessionId: "cs_client_injected",
         depositStatus: "unpaid"
       }
+    })));
+    await assertFails(setDoc(portalRef, buildCanonicalPortalPayload({
+      deliveryEvidence: {
+        ...PORTAL_DELIVERY_EVIDENCE,
+        providerAcceptedAtISO: "2026-03-22T00:00:00.000Z"
+      }
+    })));
+    await assertFails(setDoc(portalRef, buildCanonicalPortalPayload({
+      portalExpiresAtISO: "2199-12-31T00:00:00.000Z",
+      portalExpiresAtMs: 7258118400000
     })));
     for (const [field, value] of Object.entries({
       lastCheckoutCreatedAtISO: "2026-03-22T00:00:00.000Z",
@@ -815,7 +848,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       resolvedByEmail: "",
       resolutionNote: ""
     };
-    await assertSucceeds(updateDoc(salesQuoteRef, {
+    await assertFails(updateDoc(salesQuoteRef, {
       "workflow.approvalRequests": [approvalRequest],
       updatedAtISO: "2026-03-22T00:20:00.000Z"
     }));
@@ -828,6 +861,13 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         resolutionNote: "Forged approval"
       }],
       updatedAtISO: "2026-03-22T00:30:00.000Z"
+    }));
+    await assertFails(updateDoc(adminQuoteRef, {
+      "workflow.approvalRequests": [{
+        ...approvalRequest,
+        requestedByEmail: "admin-a@example.com"
+      }],
+      updatedAtISO: "2026-03-22T00:20:00.000Z"
     }));
     await assertFails(updateDoc(salesQuoteRef, {
       integrations: {
@@ -849,7 +889,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         reason: "forged_without_immutable_version"
       }
     }));
-    await assertSucceeds(updateDoc(adminQuoteRef, {
+    await assertFails(updateDoc(adminQuoteRef, {
       payment: {
         depositLink: "",
         depositStatus: "paid",
@@ -857,21 +897,331 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       },
       updatedAtISO: "2026-03-22T01:00:00.000Z"
     }));
-    await assertSucceeds(updateDoc(adminQuoteRef, {
+    await assertFails(updateDoc(adminQuoteRef, {
       booking: {
         contractNumber: "ADMIN-CONTRACT",
         contractConvertedAtISO: "2026-03-22T01:30:00.000Z"
       },
       updatedAtISO: "2026-03-22T01:30:00.000Z"
     }));
+    await assertSucceeds(updateDoc(adminQuoteRef, {
+      "booking.confirmationStatus": "sent",
+      "booking.confirmationSentAtISO": "2026-03-22T01:35:00.000Z",
+      updatedAtISO: "2026-03-22T01:35:00.000Z"
+    }));
   });
 
-  test("Stripe payment references and provider audit fields remain server-owned", async () => {
+  test("change-request handling is exact-request, tenant, actor, and transition bound", async () => {
+    const requestSubmittedAtISO = "2026-03-22T02:00:00.000Z";
+    const requestId = "change-request-000000000001";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "organizations", "org-a", "quotes", "q1"), {
+        status: "viewed",
+        portalDecision: {
+          decision: "changes_requested",
+          message: "Please revise the service plan.",
+          requestId,
+          submittedAtISO: requestSubmittedAtISO
+        },
+        lifecycle: { viewedAtISO: requestSubmittedAtISO },
+        updatedAtISO: requestSubmittedAtISO,
+        workflow: {}
+      }, { merge: true });
+    });
+
+    const salesQuoteRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q1");
+    const adminQuoteRef = quoteRefFor("admin-org-a", "admin-a@example.com", "org-a", "q1");
+    const customerQuoteRef = quoteRefFor("customer-org-a", "customer-a@example.com", "org-a", "q1");
+    const foreignQuoteRef = quoteRefFor("sales-org-b", "sales-b@example.com", "org-a", "q1");
+    const conflictingClaimRef = quoteRefForWithClaims(
+      "sales-org-a",
+      "sales-a@example.com",
+      { organizationId: "org-b" },
+      "org-a",
+      "q1"
+    );
+    const unverifiedQuoteRef = doc(
+      testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: false
+      }).firestore(),
+      "organizations",
+      "org-a",
+      "quotes",
+      "q1"
+    );
+    const acknowledgedAtISO = "2026-03-22T02:10:00.000Z";
+    const acknowledged = {
+      sourceRequestId: requestId,
+      sourceSubmittedAtISO: requestSubmittedAtISO,
+      sourceMessage: "Please revise the service plan.",
+      state: "acknowledged",
+      acknowledgedAtISO,
+      acknowledgedByEmail: "sales-a@example.com",
+      handledAtISO: "",
+      handledByEmail: "",
+      note: ""
+    };
+
+    await assertFails(updateDoc(customerQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(foreignQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(conflictingClaimRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(unverifiedQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        acknowledgedByEmail: "forged@example.com"
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        sourceRequestId: "change-request-000000000099"
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        sourceSubmittedAtISO: "2026-03-22T01:00:00.000Z"
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        sourceMessage: "A different customer request."
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        state: "handled",
+        handledAtISO: acknowledgedAtISO,
+        handledByEmail: "sales-a@example.com",
+        note: ""
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...acknowledged,
+        state: "handled",
+        handledAtISO: acknowledgedAtISO,
+        handledByEmail: "sales-a@example.com",
+        note: "x".repeat(801)
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+    await assertFails(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      "workflow.followUp": {
+        stage: "contacted",
+        dueDate: "2026-03-30",
+        note: "Compound write",
+        completed: false,
+        completedAtISO: "",
+        updatedAtISO: acknowledgedAtISO,
+        updatedByEmail: "sales-a@example.com"
+      },
+      updatedAtISO: acknowledgedAtISO
+    }));
+
+    await assertSucceeds(updateDoc(salesQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: acknowledgedAtISO
+    }));
+
+    const handledAtISO = "2026-03-22T02:20:00.000Z";
+    const handled = {
+      ...acknowledged,
+      state: "handled",
+      handledAtISO,
+      handledByEmail: "admin-a@example.com",
+      note: "Revised the proposal and recorded the customer follow-up."
+    };
+    await assertSucceeds(updateDoc(adminQuoteRef, {
+      "workflow.changeRequestHandling": handled,
+      updatedAtISO: handledAtISO
+    }));
+    await assertFails(updateDoc(adminQuoteRef, {
+      "workflow.changeRequestHandling": {
+        ...handled,
+        handledAtISO: "2026-03-22T02:30:00.000Z"
+      },
+      updatedAtISO: "2026-03-22T02:30:00.000Z"
+    }));
+    await assertFails(updateDoc(adminQuoteRef, {
+      "workflow.changeRequestHandling": acknowledged,
+      updatedAtISO: "2026-03-22T02:30:00.000Z"
+    }));
+
+    const persisted = await getDoc(adminQuoteRef);
+    expect(persisted.data().portalDecision).toEqual({
+      decision: "changes_requested",
+      message: "Please revise the service plan.",
+      requestId,
+      submittedAtISO: requestSubmittedAtISO
+    });
+    expect(persisted.data().workflow.changeRequestHandling).toEqual(handled);
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY), {
+        status: "viewed",
+        portalDecision: persisted.data().portalDecision,
+        lifecycle: { viewedAtISO: requestSubmittedAtISO },
+        updatedAtISO: requestSubmittedAtISO
+      });
+    });
+    const replayedAtISO = "2026-03-22T02:40:00.000Z";
+    await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+      status: "viewed",
+      portalDecision: {
+        decision: "changes_requested",
+        message: "A replayed request must not inherit handled state.",
+        requestId,
+        submittedAtISO: replayedAtISO
+      },
+      lifecycle: { viewedAtISO: replayedAtISO },
+      updatedAtISO: replayedAtISO
+    }));
+    const nextRequestAtISO = "2026-03-22T02:45:00.000Z";
+    await assertSucceeds(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+      status: "viewed",
+      portalDecision: {
+        decision: "changes_requested",
+        message: "A new request identity reopens staff attention.",
+        requestId: "change-request-000000000002",
+        submittedAtISO: nextRequestAtISO
+      },
+      lifecycle: { viewedAtISO: nextRequestAtISO },
+      updatedAtISO: nextRequestAtISO
+    }));
+  });
+
+  test("approval execution audit is admin-readable and server-write-only", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "organizations", "org-a", "quoteApprovalExecutions", "approval-execution-0001"),
+        {
+          organizationId: "org-a",
+          quoteId: "q1",
+          approvalRequestId: "approval-execution-0001",
+          action: "convert_to_contract",
+          state: "succeeded"
+        }
+      );
+    });
+    const adminRef = doc(
+      testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      }).firestore(),
+      "organizations",
+      "org-a",
+      "quoteApprovalExecutions",
+      "approval-execution-0001"
+    );
+    const salesRef = doc(
+      testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      }).firestore(),
+      "organizations",
+      "org-a",
+      "quoteApprovalExecutions",
+      "approval-execution-0001"
+    );
+    await assertSucceeds(getDoc(adminRef));
+    await assertFails(getDoc(salesRef));
+    await assertFails(updateDoc(adminRef, { state: "failed" }));
+    await assertFails(deleteDoc(adminRef));
+  });
+
+  test("private payment dispatch evidence is denied to every browser context", async () => {
+    const dispatchId = "payment-dispatch-approval-0001";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "organizations", "org-a", "privatePaymentDispatches", dispatchId),
+        {
+          organizationId: "org-a",
+          quoteId: "q1",
+          approvalRequestId: dispatchId,
+          privateDepositLink: "https://checkout.stripe.com/c/pay/private-dispatch-fixture",
+          exposureState: "prepared"
+        }
+      );
+    });
+
+    const browserContexts = [
+      ["public", testEnv.unauthenticatedContext()],
+      ["admin", testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })],
+      ["sales", testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })],
+      ["customer", testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })]
+    ];
+
+    for (const [label, context] of browserContexts) {
+      const db = context.firestore();
+      const existingRef = doc(
+        db,
+        "organizations",
+        "org-a",
+        "privatePaymentDispatches",
+        dispatchId
+      );
+      const newRef = doc(
+        db,
+        "organizations",
+        "org-a",
+        "privatePaymentDispatches",
+        `browser-created-${label}`
+      );
+      await assertFails(getDoc(existingRef));
+      await assertFails(setDoc(newRef, {
+        organizationId: "org-a",
+        quoteId: "q1",
+        privateDepositLink: "https://checkout.stripe.com/c/pay/browser-forgery"
+      }));
+      await assertFails(updateDoc(existingRef, { exposureState: "published" }));
+      await assertFails(deleteDoc(existingRef));
+    }
+  });
+
+  test("Stripe payment state, references, and provider audit fields remain server-owned", async () => {
     const depositLink = "https://checkout.stripe.com/c/pay/cs_test_server";
     const stripeSessionId = "cs_test_server";
     const protectedPaymentFields = {
       depositLink,
       stripeSessionId,
+      stripeCheckoutState: "open",
       lastCheckoutCreatedAtISO: "2026-03-22T01:50:00.000Z",
       lastHost: "quotepilot.mbmapps.com",
       lastEventType: "checkout.session.created",
@@ -911,14 +1261,96 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
           updatedAtISO: "2026-03-22T02:05:00.000Z"
         }));
       }
-      await assertSucceeds(updateDoc(ref, {
-        "payment.depositStatus": "sent",
+      for (const depositStatus of ["sent", "paid", "refunded"]) {
+        await assertFails(updateDoc(ref, {
+          "payment.depositStatus": depositStatus,
+          updatedAtISO: "2026-03-22T02:10:00.000Z"
+        }));
+      }
+      await assertFails(updateDoc(ref, {
+        "payment.depositConfirmedAtISO": "2026-03-22T02:10:00.000Z",
         updatedAtISO: "2026-03-22T02:10:00.000Z"
+      }));
+    }
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const confirmedPayment = {
+        ...protectedPaymentFields,
+        depositStatus: "paid",
+        depositConfirmedAtISO: "2026-03-22T02:20:00.000Z"
+      };
+      await updateDoc(doc(db, "organizations", "org-a", "quotes", "q1"), {
+        payment: confirmedPayment
+      });
+      await updateDoc(doc(db, "customerPortalQuotes", VALID_PORTAL_KEY), {
+        payment: confirmedPayment
+      });
+    });
+
+    for (const ref of [quoteRef, portalRef]) {
+      await assertFails(updateDoc(ref, {
+        "payment.depositStatus": "unpaid",
+        "payment.depositConfirmedAtISO": "",
+        updatedAtISO: "2026-03-22T02:30:00.000Z"
       }));
     }
   });
 
-  test("sales can send a draft but only admins can perform other staff lifecycle transitions", async () => {
+  test("public and authenticated customer portal paths cannot forge Stripe payment evidence", async () => {
+    const forgedAtISO = "2026-03-22T03:00:00.000Z";
+    const forgedPayment = {
+      depositLink: "https://checkout.stripe.com/c/pay/cs_test_browser_forged",
+      depositStatus: "paid",
+      depositConfirmedAtISO: forgedAtISO,
+      stripeSessionId: "cs_test_browser_forged",
+      stripeCheckoutState: "paid",
+      checkoutGeneration: 99,
+      lastCheckoutCreatedAtISO: forgedAtISO,
+      lastHost: "attacker.example",
+      lastEventType: "checkout.session.completed",
+      lastOrganizationId: "org-a"
+    };
+    const browserContexts = [
+      testEnv.unauthenticatedContext(),
+      testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true,
+        organizationId: "org-a"
+      })
+    ];
+
+    for (const context of browserContexts) {
+      const db = context.firestore();
+      const quoteRef = doc(db, "organizations", "org-a", "quotes", "q1");
+      const portalRef = doc(db, "customerPortalQuotes", VALID_PORTAL_KEY);
+
+      await assertFails(updateDoc(quoteRef, {
+        payment: forgedPayment,
+        updatedAtISO: forgedAtISO
+      }));
+      await assertFails(updateDoc(portalRef, {
+        payment: forgedPayment,
+        updatedAtISO: forgedAtISO
+      }));
+
+      const pair = writeBatch(db);
+      const otherwiseValidViewedPatch = {
+        status: "viewed",
+        lifecycle: {
+          viewedAtISO: forgedAtISO
+        },
+        payment: forgedPayment,
+        updatedAtISO: forgedAtISO
+      };
+      pair.update(quoteRef, otherwiseValidViewedPatch);
+      pair.update(portalRef, otherwiseValidViewedPatch);
+      await assertFails(pair.commit());
+    }
+  });
+
+  test("direct staff writes cannot claim delivery while admins retain non-delivery lifecycle authority", async () => {
+    const adminTransitionPortalKey = "admin-expiry-portal-abcdefghijklmnopqrstuvwxyz";
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(
@@ -933,12 +1365,23 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       await setDoc(
         doc(db, "organizations", "org-a", "quotes", "q-admin-transition"),
         buildQuotePayload("admin-org-a", "org-a", {
+          portalKey: adminTransitionPortalKey,
           status: "draft",
           lifecycle: {
             draftAtISO: "2026-03-20T00:00:00.000Z"
           }
         })
       );
+      await setDoc(doc(db, "customerPortalQuotes", adminTransitionPortalKey), {
+        portalKey: adminTransitionPortalKey,
+        quoteId: "q-admin-transition",
+        organizationId: "org-a",
+        status: "draft",
+        updatedAtISO: "2026-03-20T00:00:00.000Z",
+        lifecycle: {
+          draftAtISO: "2026-03-20T00:00:00.000Z"
+        }
+      });
     });
 
     const salesSendRef = quoteRefFor(
@@ -947,7 +1390,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       "org-a",
       "q-sales-send"
     );
-    await assertSucceeds(updateDoc(salesSendRef, {
+    await assertFails(updateDoc(salesSendRef, {
       status: "sent",
       updatedAtISO: "2026-03-22T00:00:00.000Z",
       lifecycle: {
@@ -972,12 +1415,172 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       "org-a",
       "q-admin-transition"
     );
-    await assertSucceeds(updateDoc(adminTransitionRef, {
+    await assertFails(updateDoc(adminTransitionRef, {
+      status: "sent",
+      updatedAtISO: "2026-03-22T01:30:00.000Z",
+      lifecycle: {
+        draftAtISO: "2026-03-20T00:00:00.000Z",
+        sentAtISO: "2026-03-22T01:30:00.000Z"
+      }
+    }));
+    await assertFails(updateDoc(adminTransitionRef, {
+      status: "viewed",
+      updatedAtISO: "2026-03-22T01:35:00.000Z",
+      lifecycle: {
+        draftAtISO: "2026-03-20T00:00:00.000Z",
+        viewedAtISO: "2026-03-22T01:35:00.000Z"
+      }
+    }));
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    await assertFails(updateDoc(doc(adminDb, "customerPortalQuotes", VALID_PORTAL_KEY), {
+      status: "viewed",
+      updatedAtISO: "2026-03-22T01:40:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-22T01:40:00.000Z"
+      }
+    }));
+    await assertFails(updateDoc(doc(adminDb, "organizations", "org-a", "quotes", "q1"), {
+      status: "draft",
+      updatedAtISO: "2026-03-22T01:45:00.000Z",
+      lifecycle: {
+        draftAtISO: "2026-03-22T01:45:00.000Z"
+      }
+    }));
+    const expiryPatch = {
       status: "expired",
       updatedAtISO: "2026-03-22T02:00:00.000Z",
       lifecycle: {
         draftAtISO: "2026-03-20T00:00:00.000Z",
         expiredAtISO: "2026-03-22T02:00:00.000Z"
+      }
+    };
+    await assertFails(updateDoc(adminTransitionRef, expiryPatch));
+
+    const expiryBatch = writeBatch(adminDb);
+    expiryBatch.update(
+      doc(adminDb, "organizations", "org-a", "quotes", "q-admin-transition"),
+      expiryPatch
+    );
+    expiryBatch.update(
+      doc(adminDb, "customerPortalQuotes", adminTransitionPortalKey),
+      expiryPatch
+    );
+    await assertSucceeds(expiryBatch.commit());
+  });
+
+  test("staff cannot change lifecycle status while server quote delivery is unresolved", async () => {
+    const deliveryPortalKey = "delivery-sending-abcdefghijklmnopqrstuvwxyz";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(
+        doc(db, "organizations", "org-a", "quotes", "q-delivery-sending"),
+        buildQuotePayload("admin-org-a", "org-a", {
+          portalKey: deliveryPortalKey,
+          status: "draft",
+          lifecycle: {
+            draftAtISO: "2026-03-20T00:00:00.000Z"
+          },
+          workflow: {
+            quoteDelivery: {
+              revisionId: "v0001",
+              state: "sending",
+              attemptId: "attempt-a",
+              leaseExpiresAtISO: "2099-03-22T00:00:00.000Z"
+            }
+          }
+        })
+      );
+      await setDoc(doc(db, "customerPortalQuotes", deliveryPortalKey), {
+        portalKey: deliveryPortalKey,
+        quoteId: "q-delivery-sending",
+        organizationId: "org-a",
+        status: "draft",
+        portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
+        updatedAtISO: "2026-03-20T00:00:00.000Z",
+        lifecycle: {
+          draftAtISO: "2026-03-20T00:00:00.000Z"
+        }
+      });
+    });
+
+    for (const [uid, email] of [
+      ["admin-org-a", "admin-a@example.com"],
+      ["sales-org-a", "sales-a@example.com"]
+    ]) {
+      const quoteRef = quoteRefFor(uid, email, "org-a", "q-delivery-sending");
+      await assertFails(updateDoc(quoteRef, {
+        status: "sent",
+        updatedAtISO: "2026-03-22T00:00:00.000Z",
+        lifecycle: {
+          draftAtISO: "2026-03-20T00:00:00.000Z",
+          sentAtISO: "2026-03-22T00:00:00.000Z"
+        }
+      }));
+      const staffDb = testEnv.authenticatedContext(uid, {
+        email,
+        email_verified: true
+      }).firestore();
+      await assertFails(updateDoc(doc(staffDb, "customerPortalQuotes", deliveryPortalKey), {
+        status: "sent",
+        updatedAtISO: "2026-03-22T00:00:00.000Z",
+        lifecycle: {
+          draftAtISO: "2026-03-20T00:00:00.000Z",
+          sentAtISO: "2026-03-22T00:00:00.000Z"
+        }
+      }));
+    }
+  });
+
+  test("customer portal decisions are blocked while quote delivery is unresolved", async () => {
+    const quoteId = "q-customer-delivery-sending";
+    const portalKey = "customer-delivery-sending-abcdefghijklmnopqrstuvwxyz";
+    const sentAtISO = "2026-03-20T00:00:00.000Z";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(
+        doc(db, "organizations", "org-a", "quotes", quoteId),
+        buildQuotePayload("admin-org-a", "org-a", {
+          portalKey,
+          status: "sent",
+          lifecycle: { sentAtISO },
+          workflow: {
+            quoteDelivery: {
+              revisionId: "v0001",
+              state: "outcome_ambiguous",
+              attemptId: "attempt-customer-race",
+              leaseExpiresAtISO: ""
+            }
+          }
+        })
+      );
+      await setDoc(doc(db, "customerPortalQuotes", portalKey), {
+        portalKey,
+        quoteId,
+        organizationId: "org-a",
+        status: "sent",
+        portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
+        updatedAtISO: sentAtISO,
+        lifecycle: { sentAtISO },
+        portalDecision: {}
+      });
+    });
+
+    const acceptedAtISO = "2026-03-22T03:00:00.000Z";
+    await assertFails(updatePortalPair(portalKey, "org-a", quoteId, {
+      status: "accepted",
+      updatedAtISO: acceptedAtISO,
+      lifecycle: {
+        sentAtISO,
+        acceptedAtISO
+      },
+      portalDecision: {
+        decision: "accepted",
+        message: "",
+        requestId: "portal-decision-delivery-race-0001",
+        submittedAtISO: acceptedAtISO
       }
     }));
   });
@@ -1189,7 +1792,34 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "changes_requested",
         message: "Please revise the entree.",
+        requestId: "portal-decision-000000000001",
         submittedAtISO: "2026-03-21T01:00:00.000Z"
+      }
+    }));
+    await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T01:10:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T01:10:00.000Z"
+      },
+      portalDecision: {
+        decision: "changes_requested",
+        message: " Please revise the entree. ",
+        requestId: "portal-decision-000000000015",
+        submittedAtISO: "2026-03-21T01:10:00.000Z"
+      }
+    }));
+    await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+      status: "viewed",
+      updatedAtISO: "2026-03-21T01:20:00.000Z",
+      lifecycle: {
+        viewedAtISO: "2026-03-21T01:20:00.000Z"
+      },
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Please revise the entree.",
+        requestId: " portal-decision-000000000016 ",
+        submittedAtISO: "2026-03-21T01:20:00.000Z"
       }
     }));
     await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
@@ -1201,6 +1831,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "changes_requested",
         message: "",
+        requestId: "portal-decision-000000000002",
         submittedAtISO: "2026-03-21T02:00:00.000Z"
       }
     }));
@@ -1214,6 +1845,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "declined",
         message: "",
+        requestId: "portal-decision-000000000003",
         submittedAtISO: "2026-03-21T02:30:00.000Z"
       }
     }));
@@ -1235,6 +1867,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000004",
         submittedAtISO: "2026-03-21T03:00:00.000Z"
       }
     }));
@@ -1248,6 +1881,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "declined",
         message: "",
+        requestId: "portal-decision-000000000005",
         submittedAtISO: "2026-03-21T03:15:00.000Z"
       }
     }));
@@ -1271,6 +1905,31 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         viewedAtISO: "2026-03-21T00:00:00.000Z"
       }
     }));
+  });
+
+  test("public portal snapshots fail closed without current server delivery evidence", async () => {
+    const activeRef = portalSnapshotRefFor(VALID_PORTAL_KEY);
+    await assertSucceeds(getDoc(activeRef));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY), {
+        deliveryEvidence: deleteField()
+      });
+    });
+
+    await assertFails(getDoc(activeRef));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), "customerPortalQuotes", VALID_PORTAL_KEY), {
+        portalIssuedAtISO: "",
+        deliveryEvidence: {
+          ...PORTAL_DELIVERY_EVIDENCE,
+          portalIssuedAtISO: ""
+        }
+      });
+    });
+
+    await assertFails(getDoc(activeRef));
   });
 
   test("portal decisions reject drafts, divergent audit metadata, and injected lifecycle events", async () => {
@@ -1314,6 +1973,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000006",
         submittedAtISO: acceptedAtISO
       }
     };
@@ -1332,6 +1992,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         portalDecision: {
           decision: "accepted",
           message: "",
+          requestId: "portal-decision-000000000007",
           submittedAtISO: portalAcceptedAtISO
         }
       },
@@ -1342,6 +2003,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         portalDecision: {
           decision: "accepted",
           message: "",
+          requestId: "portal-decision-000000000007",
           submittedAtISO: quoteAcceptedAtISO
         }
       }
@@ -1357,6 +2019,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000008",
         submittedAtISO: acceptedAtISO
       }
     }));
@@ -1375,6 +2038,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000009",
         submittedAtISO: acceptedAtISO
       }
     };
@@ -1439,6 +2103,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000010",
         submittedAtISO: "2026-03-21T03:00:00.000Z"
       }
     }));
@@ -1455,6 +2120,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "changes_requested",
         message: "Please revise the entree.",
+        requestId: "portal-decision-000000000011",
         submittedAtISO: "2026-03-21T00:00:00.000Z"
       }
     }));
@@ -1467,6 +2133,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "changes_requested",
         message: "Please revise the entree.",
+        requestId: "portal-decision-000000000011",
         submittedAtISO: "2026-03-21T00:00:00.000Z"
       }
     }));
@@ -1488,6 +2155,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000012",
         submittedAtISO: "2026-03-21T01:15:00.000Z"
       }
     }));
@@ -1502,6 +2170,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "declined",
         message: "",
+        requestId: "portal-decision-000000000013",
         submittedAtISO: "2026-03-21T01:30:00.000Z"
       }
     }));
@@ -1530,6 +2199,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     const quoteId = "provisioned-quote";
     const portalKey = "provisioned-portal-key-abcdefghijklmnopqrstuvwxyz";
     const sentAtISO = "2026-03-21T00:00:00.000Z";
+    const revisionId = `v0001@${sentAtISO}`;
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(doc(db, "organizations", organizationId), {
@@ -1544,16 +2214,38 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         quoteId,
         organizationId,
         portalKey,
+        portalIssuedAtISO: sentAtISO,
         status: "sent",
         portalDecision: {},
         lifecycle: {
           sentAtISO
+        },
+        workflow: {
+          quoteDelivery: {
+            revisionId,
+            state: "provider_accepted",
+            provider: "resend",
+            providerMessageId: "provisioned-provider-message-1",
+            providerAcceptedAtISO: sentAtISO,
+            portalActivationState: "active",
+            portalKey,
+            portalIssuedAtISO: sentAtISO
+          }
         }
       });
       await setDoc(doc(db, "customerPortalQuotes", portalKey), {
         quoteId,
         organizationId,
         portalKey,
+        portalIssuedAtISO: sentAtISO,
+        deliveryEvidence: {
+          revisionId,
+          state: "provider_accepted",
+          portalActivationState: "active",
+          portalKey,
+          portalIssuedAtISO: sentAtISO,
+          providerAcceptedAtISO: sentAtISO
+        },
         status: "sent",
         portalExpiresAtMs: ACTIVE_PORTAL_EXPIRES_MS,
         portalDecision: {},
@@ -1574,6 +2266,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       portalDecision: {
         decision: "accepted",
         message: "",
+        requestId: "portal-decision-000000000014",
         submittedAtISO: acceptedAtISO
       }
     }));

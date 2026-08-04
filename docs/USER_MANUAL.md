@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: July 27, 2026
+Last updated: August 3, 2026
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -8,12 +8,19 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 ## Access and Roles
 - Staff access (`sales` or `admin`) is required for the quote builder workspace.
 - Admin access is required for Catalog Admin configuration.
-- Sales users can prepare quotes through the trusted edit workflow and send an
-  exact draft quote. They cannot set another lifecycle state, alter payment or
-  customer-decision evidence, rotate portals, reopen, or delete. Their schedule
-  updates are limited to staff assignment, kitchen checkpoints, and production
-  checklist fields that do not prove booking, payment, or acceptance.
-- Customer Portal links are generated from saved quotes and can be shared with clients.
+- Sales users can prepare quotes through the trusted edit workflow, download a
+  draft PDF, and copy an email template. The current Quote History UI reserves
+  provider-backed email and lifecycle controls for admins. Sales cannot create
+  delivery or portal-view evidence, alter payment or customer-decision evidence,
+  rotate portals, reopen, or delete. Their schedule updates are limited to staff
+  assignment, kitchen checkpoints, and production checklist fields that do not
+  prove booking, payment, or acceptance.
+- Neither staff role can mark a quote `sent` or `viewed` through a generic
+  status update. The server delivery callable owns provider-acceptance evidence,
+  and the customer portal owns view evidence.
+- A saved draft has a reserved Customer Portal identity, but the link is not
+  customer-visible or copyable. Only provider acceptance for the exact current,
+  valid portal issuance activates that portal.
 
 ## Staff Workflow (Quote Builder)
 1. Open the app and sign in.
@@ -22,13 +29,44 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
    - `Menu Selection`
    - `Add-ons / Rentals`
    - `Pricing Summary`
-   - `Save / Submit`
-3. Review the sticky Live Breakdown panel while editing.
-4. Save or submit from the final step.
-5. Copy/share the generated customer portal link if needed.
+   - `Save Quote`
+3. Review the sticky Live Breakdown panel while editing. After entering the
+   wizard on a phone or tablet, all five steps keep Total and Deposit in view.
+   Use `View breakdown` for the focus-contained itemized sheet and `Close` or
+   Escape to return focus to the workflow.
+4. Select `Save draft` from the final step. Saving creates or updates the quote
+   but does not send it to the customer or mark it sent.
+5. Quote History opens on the exact saved quote. A Firebase-backed admin can
+   submit that saved revision only after QuotePilot confirms that a supported
+   email-provider configuration is present. Provider email contains the
+   server-built customer portal link; browser-generated PDF attachments are not
+   accepted. Sales staff can
+   download a draft PDF or copy the email template, and the draft PDF
+   deliberately omits the inactive portal link. A PDF generated after portal
+   rotation also omits the link until the new issuance has provider-acceptance
+   evidence. PDF export remains available to both roles as a separate operator
+   artifact.
+6. Provider acceptance records quote `sent` status. It activates the portal in
+   the same server transaction only when the evidence matches the exact current,
+   valid issuance. Acceptance proves provider handling, not recipient inbox
+   delivery. If the provider accepts a message whose portal issuance is already
+   invalid or expired, QuotePilot keeps the acceptance evidence, marks the
+   portal `requires_rotation`, and leaves it inactive. An admin must complete
+   guarded rotation and send the new issuance separately before sharing it.
+   Re-sending unchanged content and issuance within the provider idempotency
+   window returns the existing acceptance record. A definite failed attempt
+   whose safe retry window has closed starts a fresh delivery generation; an
+   ambiguous outcome stays locked for provider review. Edit and save a new
+   revision before sending updated content.
 
 ## Quote Builder Details
 - Event Type drives dynamic menu categories and items.
+- `Core Event Basics` keeps guest count and the Servers, Chefs, and Bartenders
+  counts together under `Attendance & staffing`.
+- `Advanced Pricing Overrides` starts collapsed. Open it only for exceptional
+  template, tax, season, disposables, or staffing-rate values. If a saved quote
+  or template already contains staffing-rate values, the collapsed section
+  displays a review warning; opening and closing it does not clear those values.
 - The review step shows a proposal readiness score and any missing customer, event, menu, or total details.
 - `Compare Scenario` presents Good/Better/Best package options with recalculated totals; applying a scenario updates the active quote draft.
 - Pricing supports:
@@ -47,25 +85,127 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   - Duplicate to a new draft
   - Permanently delete through the admin-only cleanup callable. Direct quote or
     portal document deletion is denied.
-  - Admin-only safe reopen for an expired or legacy `status=deleted` quote when
-    its active version is valid and nonterminal. Accepted, declined, booked,
-    paid, or refunded evidence blocks reopen; a permanently deleted quote cannot
-    be restored.
+  - Admin-only `Reopen` for an expired quote. It restores the last eligible
+    nonterminal version as a draft and creates a new portal issuance. The trusted
+    callable can also recover an eligible legacy `status=deleted` record, but a
+    permanently deleted quote cannot be restored. Accepted, declined, booked,
+    paid, or refunded evidence blocks both paths.
   - Export PDF
-  - Copy email template and portal link
-  - Admin only: send customer email, copy a verified Stripe payment link,
-    create/send a Stripe deposit request, and rotate a customer portal token
-    when a link expires or should be reissued
+  - Copy email template. Copying prepares an artifact only; it does not send
+    anything or change draft status.
+  - Copy a customer portal link only after the current saved revision has
+    provider-acceptance evidence for its exact current valid issuance; draft,
+    rotated-but-unsent, and legacy portals without that evidence fail closed.
+  - Admin only: submit customer email to the configured provider, copy a
+    verified Stripe payment link, send the approved Stripe deposit request, and
+    rotate a customer portal token for a draft, sent, or viewed quote when its
+    issuance should be replaced. Use `Reopen` when the quote itself is expired;
+    accepted, declined, and booked records cannot rotate their portal identity.
+    Quote email submission is bound to the exact saved version and portal
+    issuance, remains disabled in local fallback mode, and fails closed while
+    provider configuration readiness is unknown. This configuration check does
+    not prove sender-domain verification, provider acceptance, inbox delivery,
+    or bounce handling. Rotation invalidates prior portal activation evidence,
+    so both Copy Portal and the portal link inside a PDF remain unavailable
+    until a separate provider send accepts the new issuance.
+- In the current source candidate, `Send Pay Request` is available only for an
+  accepted or booked quote with an exact approved action. That approval is
+  bound to the organization, quote revision, current portal issuance, customer
+  email, currency, and deposit amount. QuotePilot privately prepares or safely
+  restores the Stripe Checkout Session, then submits the payment-request email;
+  there is no separate browser checkout-creation step. While prepared, the
+  quote records the Session without exposing its payment link, and the URL is
+  kept out of browser-readable app records in a server-only dispatch record.
+  QuotePilot publishes the link to the quote and portal only after
+  email-provider acceptance is durably recorded. If any bound value changes,
+  request and approve a new action before sending.
+- If the action reports an uncertain Stripe-creation or email-provider outcome,
+  do not create a second request or manually share a link. Reload Quote History
+  and have the admin who began the action use `Resume Pay Request`; another
+  admin cannot take over the in-progress provider identity. QuotePilot keeps the
+  exact approval in progress and reuses the same Stripe-creation and provider
+  identities; a known prepared Session is reused. The hidden link does not prove
+  the customer received nothing—an ambiguous provider call may still have been
+  accepted. If acceptance was already recorded but payment publication was
+  interrupted, resume completes publication without another email send.
+- A definite provider failure requires a new approval only after QuotePilot
+  safely expires any prepared unsent checkout and clears its private URL. If
+  cleanup cannot be confirmed, the exact operation remains resumable; retry it
+  or use `Reconcile Payment` rather than starting a replacement.
+- Payment state is provider-owned. Signed Stripe events can record processing,
+  paid, failed, or expired state; a failed or expired Session clears the
+  published payment link so a new exact approval/send can create a replacement.
+  Paid or refunded truth cannot be downgraded through the staff UI.
+- Admins may select `Reconcile Payment` when the stored Stripe Session needs
+  provider review, such as after delayed webhook delivery. Reconciliation reads
+  the server-recorded Session and applies or reports provider truth; it is not a
+  manual paid button. A review-required result must be investigated in Stripe.
+- This workflow is not production behavior until its matching frontend,
+  Functions, and Firestore rules are deployed together and hosted Stripe
+  test/live acceptance is recorded. It covers deposits only; refunds, disputes,
+  and final-balance requests remain separate manual processes.
+- While quote delivery is `sending`, or its provider outcome needs manual
+  review, QuotePilot locks quote status/payment, edit, checkout, payment email,
+  contract, portal rotation, and deletion controls. PDF download, email-template
+  copy, and duplication remain available because they do not mutate the locked
+  customer record.
+- If the quote validity window ends while delivery is unresolved, Quote History
+  keeps the derived expired row visible and defers lifecycle persistence instead
+  of hiding the review control. Complete `Review Delivery`; QuotePilot reloads
+  the record, persists eligible quote/portal expiry together, and then exposes
+  `Reopen`.
+- If a delivery lease expires inside the 23-hour provider idempotency window,
+  `Retry Quote Email` resubmits the exact revision with the same provider key.
+  A definite provider failure after that window starts a fresh delivery
+  generation before another send. If the outcome is ambiguous, use `Review
+  Delivery`: check the provider first, then record its accepted message ID or
+  confirm with an audit note that no message was accepted. QuotePilot does not
+  allow a known server-observed provider message ID to be reconciled as no-send.
+  Provider acceptance for an invalid or expired issuance remains recorded, but
+  the portal stays inactive and requires guarded rotation plus a new send. Do
+  not clear an uncertain outcome without checking the provider.
+- Firebase staff cannot set a quote to `sent` or `viewed` through the generic
+  status menu. The delivery callable or audited provider reconciliation owns
+  `sent`; an actual customer portal visit owns `viewed`. Owner SMS on draft
+  creation contains the quote summary but never the inactive portal URL.
 - Status filtering supports grouped views:
   - `Submitted` (sent/viewed/accepted)
   - `Archived` (booked/declined/expired)
 
 ## Sales Workflow
 - Open `Sales Workflow` from the top navigation.
+- When active quotes need action, the navigation control shows the number of
+  affected quotes. One quote counts once even when it has multiple attention
+  reasons. The count loads after the main workspace becomes interactive and
+  does not eagerly load the Sales Workflow modal.
 - Summary metrics show active opportunities, readiness gaps, follow-ups due, and pending approval requests.
+- `Attention` opens first when work is present. It consolidates new or
+  acknowledged customer change requests, overdue or due-today follow-ups, and
+  pending approvals. Use `Review follow-up` or `Review approvals` to move to
+  the exact operating view.
+- For a customer change request, `Acknowledge internally` records that staff
+  saw the exact current request but keeps it in Attention. `Mark handled
+  internally` requires a short internal note and clears only that exact request.
+  A later customer request automatically reappears. These actions do not edit
+  or resend the quote, contact the customer, accept/decline the proposal,
+  confirm payment, or create a booking. Use `Edit quote` and the normal
+  send/review workflow for the actual revision.
 - The `Follow-ups` view supports lead stage, due date, note, completion state, proposal readiness, and a lifecycle timeline for each quote.
 - Sales staff can request approval for sensitive actions such as payment requests, contract conversion, portal-link rotation, or quote deletion.
-- Admins can approve or reject those requests with a resolution note. Approval records intent only; it does not execute the sensitive action. The admin must complete the separate action in Quote History.
+- Admins can approve or reject those requests with a resolution note. Approval
+  records authority but does not execute the action; select `Open Quote
+  History` and complete the matching operation there. Firebase-backed actions
+  consume that exact approval once and display awaiting, in-progress,
+  completed, or failed execution evidence. A failed provider action requires a
+  new approval request.
+- In the current source candidate, Firebase-backed request and resolution
+  records prefer trusted Functions using the authenticated staff identity and
+  server timestamp. A narrowly scoped missing-endpoint fallback preserves the
+  existing rule-authorized path during a Vercel-first rollout; other callable
+  errors fail closed. Sensitive action execution has no browser-write fallback.
+  Once the matching Functions and Firestore rules are deployed together,
+  direct approval-array, contract-evidence, and execution-audit writes are
+  denied.
 
 ## Event Schedule and Production Checklist
 - Open `Schedule` to review accepted and booked events by month or week, inspect conflicts, and assign a staff lead.
@@ -229,7 +369,10 @@ Complete every item before calling the new tenant operational:
   token, and initial version; client-supplied totals, pricing, record/owner
   identities, and deposit links are not quote-creation authority. Direct
   Firestore quote creation must remain denied.
-- Copy the customer portal link, open it in a signed-out/private browser,
+- Submit the representative quote from `Quote History`, confirm provider
+  acceptance and current-issuance activation evidence are recorded for that
+  exact revision, then copy the customer portal link and open it in a
+  signed-out/private browser,
   complete a representative decision, and confirm the result appears in staff
   quote history. The public snapshot and organization quote must change in the
   same atomic commit, and accepted/declined outcomes cannot be flipped by a
@@ -244,14 +387,28 @@ Complete every item before calling the new tenant operational:
 - Portal decisions support `Accept`, `Request Changes`, and `Decline`; change requests require a customer note.
 - Proposal acceptance is recorded separately from payment and booking confirmation.
 - Portal updates are reflected in staff quote history.
+- After returning from Stripe, the portal may refresh its payment display while
+  the signed webhook is processed. The return URL itself never proves payment;
+  only server-observed provider state or admin reconciliation may update it.
 - Portal decisions persist atomically to the public snapshot and organization
   quote; a terminal accepted or declined decision is immutable from the public
   portal.
 - Portal tokens are time-bound and expire automatically.
-- Admins can use `Rotate Portal` in `Quote History` to issue a fresh link and invalidate the old one.
+- A portal is active only when its projection contains delivery evidence for
+  the exact current valid issuance. Legacy projections without
+  `deliveryEvidence` fail closed; recover them through an approved resend or
+  truthful provider reconciliation, never by fabricating or backfilling
+  acceptance evidence.
+- Admins can use `Rotate Portal` on draft, sent, or viewed records to issue a
+  fresh link and invalidate the old one. The replacement link remains
+  unavailable until a provider accepts a separate send for that new issuance.
+  An expired quote uses `Reopen`, which restores an eligible draft and creates a
+  new issuance; terminal accepted, declined, or booked records are not reissued.
 
 ## Notifications and Confirmations
 - Toast notifications are shown for save/update/delete and key operational actions.
+- Workflow Attention is an in-app queue only. It does not send email or SMS and
+  does not prove that a customer or staff member received a notification.
 - Permanent quote deletion uses an explicit admin confirmation and
   callable-owned quote/version/portal cleanup.
 
@@ -266,7 +423,10 @@ Complete every item before calling the new tenant operational:
   - event name
   - venue
   - guest count > 0
-- If payment links fail, verify Firebase Functions/Stripe configuration in Integrations settings.
+- If payment links fail, verify the coordinated frontend/Functions/rules
+  revision, all four Stripe webhook subscriptions, and explicit
+  `STRIPE_MODE=test|live` with a matching key in the trusted runtime. Do not
+  paste provider secrets into the browser or a tracked environment file.
 
 ## Related Docs
 - Product setup and commands: `README.md`

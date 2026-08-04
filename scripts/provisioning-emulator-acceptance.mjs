@@ -182,12 +182,12 @@ async function expectCallableError(action, expectedStatus) {
   assert.equal(caught.status, expectedStatus);
 }
 
-async function callStripeWebhook(event) {
+async function callStripeWebhook(event, { signingSecret = "" } = {}) {
   const webhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || "").trim();
   assert.ok(webhookSecret, "STRIPE_WEBHOOK_SECRET is required for webhook acceptance.");
   const body = JSON.stringify(event);
   const timestamp = Math.floor(Date.now() / 1000);
-  const signature = createHmac("sha256", webhookSecret)
+  const signature = createHmac("sha256", signingSecret || webhookSecret)
     .update(`${timestamp}.${body}`)
     .digest("hex");
   const response = await fetch(
@@ -733,18 +733,46 @@ try {
     draftAtISO: createdQuote.data()?.lifecycle?.draftAtISO,
     sentAtISO
   };
-  const sentBatch = writeBatch(ownerSession.db);
-  sentBatch.update(ownerQuoteRef, {
-    status: "sent",
-    updatedAtISO: sentAtISO,
-    lifecycle: sentLifecycle
+  const portalIssuedAtISO = String(createdQuote.data()?.portalIssuedAtISO || "");
+  const deliveryRevisionId = `v0001@${portalIssuedAtISO}`;
+  const deliveryEvidence = {
+    revisionId: deliveryRevisionId,
+    state: "provider_accepted",
+    portalActivationState: "active",
+    portalKey: acceptancePortalKey,
+    portalIssuedAtISO,
+    providerAcceptedAtISO: sentAtISO
+  };
+  // This emulator-only fixture stands in for an externally accepted provider
+  // response. Browser staff writes must never manufacture sent/portal evidence.
+  await db.runTransaction(async (transaction) => {
+    const quoteRef = db
+      .collection("organizations")
+      .doc(organizationId)
+      .collection("quotes")
+      .doc(acceptanceQuoteId);
+    const portalRef = db.collection("customerPortalQuotes").doc(acceptancePortalKey);
+    const quoteSnapshot = await transaction.get(quoteRef);
+    transaction.update(quoteRef, {
+      status: "sent",
+      updatedAtISO: sentAtISO,
+      lifecycle: sentLifecycle,
+      workflow: {
+        ...(quoteSnapshot.data()?.workflow || {}),
+        quoteDelivery: {
+          ...deliveryEvidence,
+          provider: "resend",
+          providerMessageId: "provisioning-emulator-provider-message"
+        }
+      }
+    });
+    transaction.update(portalRef, {
+      status: "sent",
+      updatedAtISO: sentAtISO,
+      lifecycle: sentLifecycle,
+      deliveryEvidence
+    });
   });
-  sentBatch.update(ownerPortalRef, {
-    status: "sent",
-    updatedAtISO: sentAtISO,
-    lifecycle: sentLifecycle
-  });
-  await sentBatch.commit();
 
   await closeClientSession(ownerSession);
   ownerSession = null;
@@ -790,6 +818,7 @@ try {
   const acceptedDecision = {
     decision: "accepted",
     message: "",
+    requestId: "portal-decision-provisioning-acceptance-0001",
     submittedAtISO: acceptedAtISO
   };
   const acceptedPatch = {
@@ -880,6 +909,154 @@ await db.collection("userRoles").doc(tenantMember.uid).update({
   email: "member.provisioning@example.test"
 });
 await expectCallableError(
+  () => callFunction("requestQuoteApproval", tenantMember.idToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    action: "forged_action"
+  }),
+  "INVALID_ARGUMENT"
+);
+const approvalRequested = await callFunction(
+  "requestQuoteApproval",
+  tenantMember.idToken,
+  {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    action: "delete_quote",
+    note: "Duplicate quote requires admin cleanup."
+  }
+);
+assert.equal(approvalRequested.ok, true);
+assert.equal(approvalRequested.request?.state, "pending");
+assert.equal(
+  approvalRequested.request?.requestedByEmail,
+  "member.provisioning@example.test"
+);
+await expectCallableError(
+  () => callFunction("requestQuoteApproval", tenantMember.idToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    action: "delete_quote"
+  }),
+  "ALREADY_EXISTS"
+);
+await expectCallableError(
+  () => callFunction("resolveQuoteApprovalRequest", tenantMember.idToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    requestId: approvalRequested.request.id,
+    state: "approved"
+  }),
+  "PERMISSION_DENIED"
+);
+const approvalResolved = await callFunction(
+  "resolveQuoteApprovalRequest",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    requestId: approvalRequested.request.id,
+    state: "approved",
+    resolutionNote: "Approved for a separate audited admin action."
+  }
+);
+assert.equal(approvalResolved.ok, true);
+assert.equal(approvalResolved.request?.state, "approved");
+assert.equal(approvalResolved.request?.resolvedByEmail, ownerEmail);
+assert.equal(
+  (await orgRef.collection("quotes").doc(acceptanceQuoteId).get())
+    .data()?.workflow?.approvalRequests?.[0]?.id,
+  approvalRequested.request.id
+);
+await expectCallableError(
+  () => callFunction("resolveQuoteApprovalRequest", bootstrapToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    requestId: approvalRequested.request.id,
+    state: "rejected"
+  }),
+  "FAILED_PRECONDITION"
+);
+async function requestAndApproveQuoteAction(quoteId, action, note = "Approved emulator action.") {
+  const requested = await callFunction("requestQuoteApproval", tenantMember.idToken, {
+    organizationId,
+    quoteId,
+    action,
+    note
+  });
+  assert.equal(requested.ok, true);
+  const resolved = await callFunction("resolveQuoteApprovalRequest", bootstrapToken, {
+    organizationId,
+    quoteId,
+    requestId: requested.request.id,
+    state: "approved",
+    resolutionNote: "Approved for exact server execution."
+  });
+  assert.equal(resolved.request?.executionState, "awaiting_execution");
+  return resolved.request;
+}
+
+const contractApproval = await requestAndApproveQuoteAction(
+  acceptanceQuoteId,
+  "convert_to_contract",
+  "Customer acceptance is ready for contract conversion."
+);
+const contractConverted = await callFunction("convertQuoteToContract", bootstrapToken, {
+  organizationId,
+  quoteId: acceptanceQuoteId,
+  approvalRequestId: contractApproval.id
+});
+assert.equal(contractConverted.ok, true);
+assert.equal(contractConverted.status, "booked");
+assert.equal(contractConverted.approvalRequest?.executionState, "succeeded");
+assert.equal(
+  (await orgRef.collection("quotes").doc(acceptanceQuoteId).get())
+    .data()?.workflow?.approvalRequests
+    ?.find((item) => item.id === contractApproval.id)
+    ?.executionState,
+  "succeeded"
+);
+const repeatedContractConversion = await callFunction(
+  "convertQuoteToContract",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    approvalRequestId: contractApproval.id
+  }
+);
+assert.equal(repeatedContractConversion.idempotent, true);
+
+const rotationFixture = await callFunction("duplicateQuoteDraft", bootstrapToken, {
+  organizationId,
+  sourceQuoteId: acceptanceQuoteId
+});
+assert.equal(rotationFixture.ok, true);
+const successfulRotateApproval = await requestAndApproveQuoteAction(
+  rotationFixture.id,
+  "rotate_portal_link",
+  "Rotate the duplicate quote portal before customer delivery."
+);
+const successfulRotation = await callFunction("rotateQuotePortalKey", bootstrapToken, {
+  organizationId,
+  quoteId: rotationFixture.id,
+  approvalRequestId: successfulRotateApproval.id
+});
+assert.equal(successfulRotation.ok, true);
+assert.equal(successfulRotation.approvalRequest?.executionState, "succeeded");
+const repeatedRotation = await callFunction("rotateQuotePortalKey", bootstrapToken, {
+  organizationId,
+  quoteId: rotationFixture.id,
+  approvalRequestId: successfulRotateApproval.id
+});
+assert.equal(repeatedRotation.idempotent, true);
+
+const paymentRequestApproval = await requestAndApproveQuoteAction(
+  acceptanceQuoteId,
+  "send_payment_request",
+  "Send the accepted deposit request."
+);
+await expectCallableError(
   () => callFunction("notifyOwnerNewQuote", tenantMember.idToken, {
     quoteId: acceptanceQuoteId
   }),
@@ -961,7 +1138,8 @@ await acceptanceQuoteRef.set({
 await expectCallableError(
   () => callFunction("sendPaymentRequestEmail", bootstrapToken, {
     organizationId,
-    quoteId: acceptanceQuoteId
+    quoteId: acceptanceQuoteId,
+    approvalRequestId: paymentRequestApproval.id
   }),
   "FAILED_PRECONDITION"
 );
@@ -980,15 +1158,48 @@ const paymentStateSent = {
   depositLink: paymentLink,
   depositStatus: "sent",
   depositConfirmedAtISO: "",
-  stripeSessionId: paymentSessionId
+  stripeSessionId: paymentSessionId,
+  stripeCheckoutState: "open",
+  checkoutGeneration: 1,
+  knownStripeSessionIds: [paymentSessionId]
 };
+const orphanedPreparedPayment = {
+  ...paymentStateSent,
+  depositLink: "",
+  depositStatus: "unpaid",
+  stripeCheckoutState: "prepared"
+};
+await acceptanceQuoteRef.set({
+  payment: orphanedPreparedPayment
+}, { merge: true });
+await expectCallableError(
+  () => callFunction("sendPaymentRequestEmail", bootstrapToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    approvalRequestId: paymentRequestApproval.id
+  }),
+  "FAILED_PRECONDITION"
+);
+assert.equal(
+  (await acceptanceQuoteRef.get())
+    .data()?.workflow?.approvalRequests
+    ?.find((item) => item.id === paymentRequestApproval.id)
+    ?.executionState,
+  "failed"
+);
 await acceptanceQuoteRef.set({
   payment: paymentStateSent
 }, { merge: true });
+const rotateApproval = await requestAndApproveQuoteAction(
+  acceptanceQuoteId,
+  "rotate_portal_link",
+  "Rotate the customer portal after review."
+);
 await expectCallableError(
   () => callFunction("rotateQuotePortalKey", bootstrapToken, {
     organizationId,
-    quoteId: acceptanceQuoteId
+    quoteId: acceptanceQuoteId,
+    approvalRequestId: rotateApproval.id
   }),
   "FAILED_PRECONDITION"
 );
@@ -1004,11 +1215,14 @@ const paymentEvent = {
   id: paymentEventId,
   object: "event",
   type: "checkout.session.completed",
+  livemode: false,
   data: {
     object: {
       id: paymentSessionId,
       object: "checkout.session",
+      livemode: false,
       mode: "payment",
+      status: "complete",
       payment_status: "paid",
       currency: "usd",
       amount_total: expectedDepositCents,
@@ -1020,8 +1234,24 @@ const paymentEvent = {
     }
   }
 };
+const invalidSignatureEvent = {
+  ...paymentEvent,
+  id: "evt_quotepilot_invalid_signature"
+};
+const invalidSignatureAttempt = await callStripeWebhook(invalidSignatureEvent, {
+  signingSecret: "whsec_intentionally_invalid_fixture"
+});
+assert.equal(invalidSignatureAttempt.status, 400, invalidSignatureAttempt.responseText);
+assert.equal(
+  (await db.collection("webhookEvents").doc(`stripe-${invalidSignatureEvent.id}`).get()).exists,
+  false
+);
 const corruptPortalPaymentAttempt = await callStripeWebhook(paymentEvent);
-assert.equal(corruptPortalPaymentAttempt.status, 500);
+assert.equal(
+  corruptPortalPaymentAttempt.status,
+  500,
+  corruptPortalPaymentAttempt.responseText
+);
 assert.equal(
   (await db.collection("webhookEvents").doc(`stripe-${paymentEventId}`).get()).exists,
   false
@@ -1042,7 +1272,7 @@ const underpaidAttempt = await callStripeWebhook({
     }
   }
 });
-assert.equal(underpaidAttempt.status, 500);
+assert.equal(underpaidAttempt.status, 500, underpaidAttempt.responseText);
 assert.equal(
   (await db.collection("webhookEvents").doc(`stripe-${paymentEventId}`).get()).exists,
   false
@@ -1070,6 +1300,203 @@ await expectCallableError(
 const duplicatePaidAttempt = await callStripeWebhook(paymentEvent);
 assert.equal(duplicatePaidAttempt.status, 200);
 assert.equal(duplicatePaidAttempt.payload?.duplicate, true);
+
+const stalePaidSessionId = "cs_test_quotepilot_stale_paid";
+await Promise.all([
+  acceptanceQuoteRef.update({
+    "payment.knownStripeSessionIds": [stalePaidSessionId, paymentSessionId]
+  }),
+  acceptancePortalRef.update({
+    "payment.knownStripeSessionIds": [stalePaidSessionId, paymentSessionId]
+  })
+]);
+const stalePaidEvent = {
+  ...paymentEvent,
+  id: "evt_quotepilot_stale_paid",
+  data: {
+    object: {
+      ...paymentEvent.data.object,
+      id: stalePaidSessionId,
+      amount_total: expectedDepositCents + 123,
+      metadata: {
+        ...paymentEvent.data.object.metadata,
+        portalKey: "retired-portal-key"
+      }
+    }
+  }
+};
+const stalePaidAttempt = await callStripeWebhook(stalePaidEvent);
+assert.equal(stalePaidAttempt.status, 200, stalePaidAttempt.responseText);
+assert.equal(stalePaidAttempt.payload?.ignored, "stale_paid_requires_review");
+const [quoteAfterStalePaid, portalAfterStalePaid, stalePaidAudit] = await Promise.all([
+  acceptanceQuoteRef.get(),
+  acceptancePortalRef.get(),
+  db.collection("webhookEvents").doc(`stripe-${stalePaidEvent.id}`).get()
+]);
+assert.equal(quoteAfterStalePaid.data()?.payment?.depositStatus, "paid");
+assert.equal(quoteAfterStalePaid.data()?.payment?.stripeSessionId, paymentSessionId);
+assert.equal(portalAfterStalePaid.data()?.payment?.depositStatus, "paid");
+assert.equal(portalAfterStalePaid.data()?.payment?.stripeSessionId, paymentSessionId);
+assert.equal(stalePaidAudit.data()?.status, "review_required");
+assert.equal(
+  stalePaidAudit.data()?.result,
+  "stale_known_session_scope_mismatch_paid_review"
+);
+assert.equal(stalePaidAudit.data()?.knownSession, true);
+assert.equal(stalePaidAudit.data()?.commercialScopeValid, false);
+assert.match(
+  stalePaidAudit.data()?.commercialScopeError || "",
+  /amount does not match the quote deposit/i
+);
+const duplicateStalePaidAttempt = await callStripeWebhook(stalePaidEvent);
+assert.equal(duplicateStalePaidAttempt.status, 200, duplicateStalePaidAttempt.responseText);
+assert.equal(duplicateStalePaidAttempt.payload?.duplicate, true);
+
+const paidDowngradeEvent = {
+  ...paymentEvent,
+  id: "evt_quotepilot_paid_downgrade",
+  type: "checkout.session.expired",
+  data: {
+    object: {
+      ...paymentEvent.data.object,
+      status: "expired",
+      payment_status: "unpaid"
+    }
+  }
+};
+const paidDowngradeAttempt = await callStripeWebhook(paidDowngradeEvent);
+assert.equal(paidDowngradeAttempt.status, 200, paidDowngradeAttempt.responseText);
+assert.equal(paidDowngradeAttempt.payload?.ignored, "settlement_is_monotonic");
+assert.equal((await acceptanceQuoteRef.get()).data()?.payment?.depositStatus, "paid");
+
+for (const [providerState, eventType] of [
+  ["failed", "checkout.session.async_payment_failed"],
+  ["expired", "checkout.session.expired"]
+]) {
+  const terminalQuoteId = `stripe-${providerState}-quote`;
+  const terminalPortalKey = `stripe-${providerState}-portal-key-abcdefghijklmnopqrstuvwxyz`;
+  const terminalSessionId = `cs_test_quotepilot_${providerState}`;
+  const terminalLink = `https://checkout.stripe.com/c/pay/quotepilot-${providerState}`;
+  const terminalPayment = {
+    ...(paymentQuoteBefore.data()?.payment || {}),
+    depositLink: terminalLink,
+    depositStatus: "sent",
+    depositConfirmedAtISO: "",
+    stripeSessionId: terminalSessionId,
+    stripeCheckoutState: "open",
+    checkoutGeneration: 1
+  };
+  await orgRef.collection("quotes").doc(terminalQuoteId).set({
+    ...paymentQuoteBefore.data(),
+    quoteId: terminalQuoteId,
+    portalKey: terminalPortalKey,
+    payment: terminalPayment
+  }, { merge: false });
+  await db.collection("customerPortalQuotes").doc(terminalPortalKey).set({
+    ...paymentPortalBefore.data(),
+    quoteId: terminalQuoteId,
+    portalKey: terminalPortalKey,
+    organizationId,
+    payment: terminalPayment
+  }, { merge: false });
+  const terminalEvent = {
+    ...paymentEvent,
+    id: `evt_quotepilot_${providerState}`,
+    type: eventType,
+    data: {
+      object: {
+        ...paymentEvent.data.object,
+        id: terminalSessionId,
+        status: providerState === "expired" ? "expired" : "complete",
+        payment_status: "unpaid",
+        metadata: {
+          quoteId: terminalQuoteId,
+          organizationId,
+          portalKey: terminalPortalKey
+        }
+      }
+    }
+  };
+  const terminalAttempt = await callStripeWebhook(terminalEvent);
+  assert.equal(terminalAttempt.status, 200, terminalAttempt.responseText);
+  const [terminalQuote, terminalPortal] = await Promise.all([
+    orgRef.collection("quotes").doc(terminalQuoteId).get(),
+    db.collection("customerPortalQuotes").doc(terminalPortalKey).get()
+  ]);
+  assert.equal(terminalQuote.data()?.payment?.depositStatus, "unpaid");
+  assert.equal(terminalQuote.data()?.payment?.depositLink, "");
+  assert.equal(terminalQuote.data()?.payment?.stripeCheckoutState, providerState);
+  assert.equal(terminalPortal.data()?.payment?.stripeCheckoutState, providerState);
+}
+
+const retiredBulkPurgeQuoteId = "retired-bulk-purge-quote";
+const retiredBulkPurgePortalKey = "retired-bulk-purge-portal-key";
+await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).create({
+  organizationId,
+  ownerUid: tenantMember.uid,
+  portalKey: retiredBulkPurgePortalKey,
+  status: "sent"
+});
+await db.collection("customerPortalQuotes").doc(retiredBulkPurgePortalKey).create({
+  portalKey: retiredBulkPurgePortalKey,
+  quoteId: retiredBulkPurgeQuoteId,
+  organizationId,
+  status: "sent"
+});
+const retiredBulkPurgeApproval = await requestAndApproveQuoteAction(
+  retiredBulkPurgeQuoteId,
+  "delete_quote",
+  "Delete the legacy fixture through the exact approved path."
+);
+const retiredBulkPurgeDeletedAtISO = new Date().toISOString();
+await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).update({
+  status: "deleted",
+  deletedAtISO: retiredBulkPurgeDeletedAtISO
+});
+await db.collection("customerPortalQuotes").doc(retiredBulkPurgePortalKey).update({
+  status: "deleted",
+  deletedAtISO: retiredBulkPurgeDeletedAtISO
+});
+await expectCallableError(
+  () => callFunction("purgeDeletedQuotesForOrganization", bootstrapToken, {
+    organizationId,
+    limit: 300
+  }),
+  "FAILED_PRECONDITION"
+);
+assert.equal(
+  (await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).get()).exists,
+  true
+);
+assert.equal(
+  (await db.collection("customerPortalQuotes").doc(retiredBulkPurgePortalKey).get()).exists,
+  true
+);
+const retiredBulkPurgeCleanup = await callFunction(
+  "hardDeleteQuote",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: retiredBulkPurgeQuoteId,
+    approvalRequestId: retiredBulkPurgeApproval.id
+  }
+);
+assert.equal(retiredBulkPurgeCleanup.ok, true);
+assert.equal(
+  (await orgRef.collection("quotes").doc(retiredBulkPurgeQuoteId).get()).exists,
+  false
+);
+assert.equal(
+  (await db.collection("customerPortalQuotes").doc(retiredBulkPurgePortalKey).get()).exists,
+  false
+);
+const retiredBulkPurgeExecution = await orgRef
+  .collection("quoteApprovalExecutions")
+  .doc(retiredBulkPurgeApproval.id)
+  .get();
+assert.equal(retiredBulkPurgeExecution.data()?.state, "succeeded");
+assert.equal(retiredBulkPurgeExecution.data()?.action, "delete_quote");
+assert.equal(retiredBulkPurgeExecution.data()?.quoteId, retiredBulkPurgeQuoteId);
 
 const isolatedCleanupQuoteId = "isolated-cleanup-quote";
 const isolatedCleanupPortalKey = "isolated-cleanup-own-portal-key";
@@ -1118,16 +1545,32 @@ await db.collection("customerPortalQuotes").doc(mismatchedFallbackPortalKey).cre
   organizationId,
   status: "sent"
 });
+const isolatedDeleteApproval = await requestAndApproveQuoteAction(
+  isolatedCleanupQuoteId,
+  "delete_quote",
+  "Remove the isolated cleanup fixture."
+);
 const isolatedCleanup = await callFunction(
   "hardDeleteQuote",
-  adminPrincipal.idToken,
+  bootstrapToken,
   {
     organizationId,
-    quoteId: isolatedCleanupQuoteId
+    quoteId: isolatedCleanupQuoteId,
+    approvalRequestId: isolatedDeleteApproval.id
   }
 );
 assert.equal(isolatedCleanup.ok, true);
 assert.equal(isolatedCleanup.portalSnapshotsDeleted, 2);
+const repeatedIsolatedCleanup = await callFunction(
+  "hardDeleteQuote",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: isolatedCleanupQuoteId,
+    approvalRequestId: isolatedDeleteApproval.id
+  }
+);
+assert.equal(repeatedIsolatedCleanup.idempotent, true);
 assert.equal(
   (await orgRef.collection("quotes").doc(isolatedCleanupQuoteId).get()).exists,
   false
@@ -1148,12 +1591,18 @@ assert.equal(
   (await db.collection("customerPortalQuotes").doc(provenLegacyFallbackPortalKey).get()).exists,
   false
 );
+const mismatchedDeleteApproval = await requestAndApproveQuoteAction(
+  mismatchedFallbackQuoteId,
+  "delete_quote",
+  "Remove the mismatched fallback cleanup fixture."
+);
 const mismatchedFallbackCleanup = await callFunction(
   "hardDeleteQuote",
-  adminPrincipal.idToken,
+  bootstrapToken,
   {
     organizationId,
-    quoteId: mismatchedFallbackQuoteId
+    quoteId: mismatchedFallbackQuoteId,
+    approvalRequestId: mismatchedDeleteApproval.id
   }
 );
 assert.equal(mismatchedFallbackCleanup.ok, true);
@@ -1283,8 +1732,10 @@ console.log("- unverified owner could not consume the admin invite; verified ema
 console.log("- pending owner invite received a bounded server-authored expiry");
 console.log("- unauthenticated portal client accepted the quote and persisted the decision to both quote copies");
 console.log("- entitlement-only update preserved branding, catalog, and invite");
+console.log("- approval requests, resolutions, and exact admin executions used server-owned identity, outcomes, idempotency, and replay protection");
+console.log("- legacy bulk quote purge was denied without mutation and exact approved per-quote cleanup succeeded");
 console.log("- archived tenant resume/update was blocked");
 console.log("- quote cleanup preserved cross-tenant, unscoped, and mismatched portal rows");
 console.log("- provider/payment operations denied sales and rejected caller-supplied links");
-console.log("- Stripe webhook rejected corrupt portals and underpayment, then atomically accepted and deduplicated the exact paid session");
+console.log("- Stripe webhook rejected corrupt portals and underpayment, atomically accepted the exact paid session, and acknowledged a signed stale paid session with durable review evidence");
 console.log("- hard delete retired roles/invites/portal snapshots and tombstone blocked tenant resurrection");

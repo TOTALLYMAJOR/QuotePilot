@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "./components/CustomerPortalView";
 import LiveBreakdown from "./components/LiveBreakdown";
@@ -9,11 +9,14 @@ import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useAuthSession } from "./hooks/useAuthSession";
 import { useCatalogData } from "./hooks/useCatalogData";
 import { useTenantContext } from "./hooks/useTenantContext";
-import { calculateQuotePricing, notifyOwnerNewQuote, sendQuoteToCustomerEmail } from "./lib/commerceOps";
+import {
+  calculateQuotePricing,
+  notifyOwnerNewQuote
+} from "./lib/commerceOps";
 import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
-import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import { buildProposalReadiness, buildWorkflowAttentionSummary } from "./lib/quoteWorkflow";
 import {
   applyEventTypeTemplateDefaults,
   buildStepperModel,
@@ -24,11 +27,10 @@ import {
 } from "./lib/wizardUi";
 import {
   checkEventAvailability,
-  getQuoteById,
+  getWorkflowAttentionSnapshot,
   setQuoteStoreOrganizationId,
   submitQuote,
-  updateQuote,
-  updateQuoteStatus
+  updateQuote
 } from "./lib/quoteStore";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
 
@@ -92,11 +94,12 @@ function readPortalKeyFromUrl() {
   return String(params.get("portal") || "").trim();
 }
 
-function copyText(text) {
-  if (!navigator?.clipboard) {
-    throw new Error("Clipboard is unavailable in this browser.");
-  }
-  return navigator.clipboard.writeText(text);
+function readPaymentReturnFromUrl() {
+  if (typeof window === "undefined") return "";
+  const value = String(new URLSearchParams(window.location.search).get("payment") || "")
+    .trim()
+    .toLowerCase();
+  return ["success", "cancelled"].includes(value) ? value : "";
 }
 
 function toNumber(value, fallback = 0) {
@@ -148,6 +151,57 @@ function toOptionalNumber(value) {
   if (value === null || value === undefined || value === "") return "";
   const n = Number(value);
   return Number.isFinite(n) ? n : "";
+}
+
+function useStickyMount(active) {
+  const [hasMounted, setHasMounted] = useState(Boolean(active));
+
+  useEffect(() => {
+    if (active) setHasMounted(true);
+  }, [active]);
+
+  return Boolean(active) || hasMounted;
+}
+
+function WorkspaceModalFallback() {
+  return (
+    <div className="modal-overlay modal-loading-overlay" role="status" aria-live="polite">
+      <div className="modal-card modal-loading-card">
+        <strong>Opening workspace...</strong>
+        <span>Loading this tool only when it is needed.</span>
+      </div>
+    </div>
+  );
+}
+
+function MobilePricingSummary({ step, totals, open, onToggle, toggleRef }) {
+  if (step < 1 || step > 5) return null;
+
+  return (
+    <section
+      className="mobile-pricing-summary"
+      aria-label="Current quote pricing"
+      data-testid="mobile-pricing-summary"
+    >
+      <div className="mobile-pricing-value">
+        <span>Total</span>
+        <strong data-testid="mobile-pricing-total">{currency(totals.total)}</strong>
+      </div>
+      <div className="mobile-pricing-value">
+        <span>Deposit</span>
+        <strong>{currency(totals.deposit)}</strong>
+      </div>
+      <button
+        ref={toggleRef}
+        type="button"
+        aria-expanded={open}
+        aria-controls="live-breakdown"
+        onClick={onToggle}
+      >
+        {open ? "Hide breakdown" : "View breakdown"}
+      </button>
+    </section>
+  );
 }
 
 function normalizeFeatureFlags(input) {
@@ -283,6 +337,10 @@ function buildTotalsFromPricingSnapshot(pricingSnapshot = {}, fallbackTotals = {
 
 export default function App() {
   const wizardRef = useRef(null);
+  const stepperRef = useRef(null);
+  const mobilePricingToggleRef = useRef(null);
+  const historyTriggerRef = useRef(null);
+  const saveQuoteButtonRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { setOrganizationId } = useOrganization();
@@ -290,6 +348,7 @@ export default function App() {
   const authSession = useAuthSession({ tenantContext });
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
+  const [paymentReturn] = useState(() => readPaymentReturnFromUrl());
   const isUnscopedPlatformOperator = (
     tenantContext.ready
     && (tenantContext.hostType === "app" || tenantContext.hostType === "local")
@@ -325,22 +384,182 @@ export default function App() {
   const [dynamicMenuLoading, setDynamicMenuLoading] = useState(false);
   const [dynamicMenuError, setDynamicMenuError] = useState("");
   const [step, setStep] = useState(1);
+  const [mobilePricingOpen, setMobilePricingOpen] = useState(false);
+
+  const closeMobilePricing = () => {
+    setMobilePricingOpen(false);
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => mobilePricingToggleRef.current?.focus());
+    }
+  };
+
+  useEffect(() => {
+    setMobilePricingOpen(false);
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    let frame = 0;
+    const centerCurrentStep = () => {
+      if (!window.matchMedia("(max-width: 640px)").matches) return;
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const stepper = stepperRef.current;
+        const currentStep = stepper?.querySelector('[aria-current="step"]');
+        if (!stepper || !currentStep) return;
+        const railRect = stepper.getBoundingClientRect();
+        const stepRect = currentStep.getBoundingClientRect();
+        stepper.scrollTo({
+          left: Math.max(
+            0,
+            stepper.scrollLeft
+              + (stepRect.left - railRect.left)
+              - ((railRect.width - stepRect.width) / 2)
+          ),
+          behavior: "auto"
+        });
+      });
+    };
+
+    centerCurrentStep();
+    window.addEventListener("resize", centerCurrentStep);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", centerCurrentStep);
+    };
+  }, [step]);
+
+  useEffect(() => {
+    if (!mobilePricingOpen || typeof window === "undefined") return undefined;
+    const mobileLayout = window.matchMedia("(max-width: 980px)");
+    const backgroundTargets = [
+      document.querySelector(".site-header"),
+      document.querySelector(".hero"),
+      wizardRef.current?.querySelector(".wizard-panel"),
+      document.querySelector(".toast-stack")
+    ].filter(Boolean);
+    const previousInertValues = backgroundTargets.map((element) => element.inert);
+    const previousBodyOverflow = document.body.style.overflow;
+
+    backgroundTargets.forEach((element) => {
+      element.inert = true;
+    });
+    document.body.style.overflow = "hidden";
+
+    const frame = window.requestAnimationFrame(() => {
+      document.querySelector("#live-breakdown .breakdown-mobile-close")?.focus();
+    });
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMobilePricing();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const breakdown = document.querySelector("#live-breakdown");
+      const focusable = Array.from(breakdown?.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) || []).filter((element) => element.getClientRects().length > 0);
+      if (!focusable.length) {
+        event.preventDefault();
+        breakdown?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !breakdown?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !breakdown?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    const handleLayoutChange = (event) => {
+      if (event.matches) return;
+      setMobilePricingOpen(false);
+      window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    mobileLayout.addEventListener("change", handleLayoutChange);
+    if (!mobileLayout.matches) handleLayoutChange(mobileLayout);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", handleKeyDown);
+      mobileLayout.removeEventListener("change", handleLayoutChange);
+      backgroundTargets.forEach((element, index) => {
+        element.inert = previousInertValues[index];
+      });
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [mobilePricingOpen]);
+
   const [adminOpen, setAdminOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [importStudioOpen, setImportStudioOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState({ quoteId: "", reason: "" });
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [salesWorkflowOpen, setSalesWorkflowOpen] = useState(false);
+  const workflowAttentionScopeKey = `${String(authSession.organizationId || "").trim()}:${String(authSession.role || "").trim().toLowerCase()}`;
+  const [workflowAttentionBadge, setWorkflowAttentionBadge] = useState({ scopeKey: "", count: null });
+  const workflowAttentionCount = workflowAttentionBadge.scopeKey === workflowAttentionScopeKey
+    ? workflowAttentionBadge.count
+    : null;
+  const [workflowAttentionRefreshToken, setWorkflowAttentionRefreshToken] = useState(0);
+  const workflowAttentionGenerationRef = useRef(0);
+  const workflowAttentionForceRefreshRef = useRef(false);
+  const workflowAttentionRequestRef = useRef({
+    scopeKey: "",
+    inFlight: null,
+    lastSuccessAt: 0,
+    pendingForce: false
+  });
+  const requestWorkflowAttentionRefresh = useCallback(({ force = false } = {}) => {
+    const requestState = workflowAttentionRequestRef.current;
+    if (force && requestState.inFlight) {
+      requestState.pendingForce = true;
+      return;
+    }
+    if (!force && (
+      requestState.inFlight
+      || (requestState.lastSuccessAt > 0 && Date.now() - requestState.lastSuccessAt < 60000)
+    )) {
+      return;
+    }
+    workflowAttentionForceRefreshRef.current = force;
+    setWorkflowAttentionRefreshToken((value) => value + 1);
+  }, []);
+  const handleWorkflowAttentionSummary = useCallback((summary) => {
+    const summaryOrganizationId = String(summary?.organizationId || "").trim();
+    if (summaryOrganizationId !== String(authSession.organizationId || "").trim()) return;
+    const nextCount = Number(summary?.quoteCount || 0);
+    setWorkflowAttentionBadge((current) => (
+      current.scopeKey === workflowAttentionScopeKey && current.count === nextCount
+        ? current
+        : { scopeKey: workflowAttentionScopeKey, count: nextCount }
+    ));
+    const requestState = workflowAttentionRequestRef.current;
+    if (requestState.scopeKey !== workflowAttentionScopeKey) return;
+    requestState.lastSuccessAt = Date.now();
+    if (requestState.inFlight) {
+      workflowAttentionGenerationRef.current += 1;
+    }
+  }, [authSession.organizationId, workflowAttentionScopeKey]);
+  const adminMounted = useStickyMount(adminOpen);
+  const scheduleMounted = useStickyMount(scheduleOpen);
+  const integrationsMounted = useStickyMount(integrationsOpen);
+  const importStudioMounted = useStickyMount(importStudioOpen);
+  const diagnosticsMounted = useStickyMount(diagnosticsOpen);
+  const historyMounted = useStickyMount(historyOpen);
+  const dashboardMounted = useStickyMount(dashboardOpen);
+  const compareMounted = useStickyMount(compareOpen);
+  const salesWorkflowMounted = useStickyMount(salesWorkflowOpen);
   const [submitState, setSubmitState] = useState({
     saving: false,
-    sendingQuoteEmail: false,
-    message: "",
-    portalLink: "",
-    quoteId: "",
-    quoteNumber: ""
+    message: ""
   });
   const [availabilityNotice, setAvailabilityNotice] = useState("");
   const [editingQuote, setEditingQuote] = useState({ id: "", quoteNumber: "" });
@@ -447,6 +666,132 @@ export default function App() {
     setActiveOrganizationId(authSession.organizationId);
     setQuoteStoreOrganizationId(authSession.organizationId);
   }, [authSession.organizationId, setOrganizationId]);
+
+  useEffect(() => {
+    const organizationId = String(authSession.organizationId || "").trim();
+    const role = String(authSession.role || "").trim().toLowerCase();
+    const isStaff = ["admin", "sales"].includes(role);
+    const scopeKey = `${organizationId}:${role}`;
+    const generation = workflowAttentionGenerationRef.current + 1;
+    workflowAttentionGenerationRef.current = generation;
+    let cancelled = false;
+    let idleId = 0;
+    let timeoutId = 0;
+
+    if (!organizationId || !isStaff) {
+      workflowAttentionRequestRef.current = {
+        scopeKey: "",
+        inFlight: null,
+        lastSuccessAt: 0,
+        pendingForce: false
+      };
+      setWorkflowAttentionBadge({ scopeKey: "", count: null });
+      return undefined;
+    }
+
+    const scopeChanged = workflowAttentionRequestRef.current.scopeKey !== scopeKey;
+    if (scopeChanged) {
+      workflowAttentionRequestRef.current = {
+        scopeKey,
+        inFlight: null,
+        lastSuccessAt: 0,
+        pendingForce: false
+      };
+      setWorkflowAttentionBadge({ scopeKey, count: null });
+    }
+    if (catalog.loading) return undefined;
+
+    const force = workflowAttentionForceRefreshRef.current;
+    workflowAttentionForceRefreshRef.current = false;
+    const currentRequestState = workflowAttentionRequestRef.current;
+    if (!force && (
+      currentRequestState.inFlight
+      || (currentRequestState.lastSuccessAt > 0 && Date.now() - currentRequestState.lastSuccessAt < 60000)
+    )) {
+      return undefined;
+    }
+
+    const loadAttention = async () => {
+      const requestState = workflowAttentionRequestRef.current;
+      if (requestState.scopeKey !== scopeKey || requestState.inFlight) return;
+      if (!force && requestState.lastSuccessAt > 0 && Date.now() - requestState.lastSuccessAt < 60000) {
+        return;
+      }
+      const request = getWorkflowAttentionSnapshot({ organizationId });
+      requestState.inFlight = request;
+      try {
+        const result = await request;
+        if (
+          cancelled
+          || workflowAttentionGenerationRef.current !== generation
+          || workflowAttentionRequestRef.current !== requestState
+          || requestState.pendingForce
+        ) return;
+        requestState.lastSuccessAt = Date.now();
+        setWorkflowAttentionBadge({
+          scopeKey,
+          count: buildWorkflowAttentionSummary(result.quotes).quoteCount
+        });
+      } catch {
+        // Preserve a same-tenant count when a background refresh fails.
+      } finally {
+        if (workflowAttentionRequestRef.current !== requestState || requestState.inFlight !== request) return;
+        requestState.inFlight = null;
+        if (requestState.pendingForce || cancelled) {
+          requestState.pendingForce = false;
+          workflowAttentionForceRefreshRef.current = true;
+          setWorkflowAttentionRefreshToken((value) => value + 1);
+        }
+      }
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(loadAttention, { timeout: 2500 });
+    } else {
+      timeoutId = window.setTimeout(loadAttention, 900);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleId && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [authSession.organizationId, authSession.role, catalog.loading, workflowAttentionRefreshToken]);
+
+  useEffect(() => {
+    const organizationId = String(authSession.organizationId || "").trim();
+    const isStaff = ["admin", "sales"].includes(String(authSession.role || "").trim().toLowerCase());
+    if (!organizationId || !isStaff) return undefined;
+    const requestRefresh = () => requestWorkflowAttentionRefresh();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") requestRefresh();
+    };
+    const handleStorage = (event) => {
+      if (event.key === "quoteWizard.quotes") requestWorkflowAttentionRefresh({ force: true });
+    };
+    let midnightTimer = 0;
+    const scheduleMidnightRefresh = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 0, 100);
+      midnightTimer = window.setTimeout(() => {
+        requestWorkflowAttentionRefresh({ force: true });
+        scheduleMidnightRefresh();
+      }, Math.max(1000, nextMidnight.getTime() - now.getTime()));
+    };
+    scheduleMidnightRefresh();
+    window.addEventListener("focus", requestRefresh);
+    window.addEventListener("storage", handleStorage);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearTimeout(midnightTimer);
+      window.removeEventListener("focus", requestRefresh);
+      window.removeEventListener("storage", handleStorage);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [authSession.organizationId, authSession.role, requestWorkflowAttentionRefresh]);
 
   useEffect(() => {
     if (isUnscopedPlatformOperator || catalog.loading) return;
@@ -866,10 +1211,7 @@ export default function App() {
     setSubmitState((prev) => ({
       ...prev,
       saving: true,
-      message: "",
-      portalLink: "",
-      quoteId: "",
-      quoteNumber: ""
+      message: ""
     }));
     try {
       const availability = await checkEventAvailability({
@@ -893,14 +1235,10 @@ export default function App() {
           : "";
         setSubmitState({
           saving: false,
-          sendingQuoteEmail: false,
           message:
             `Availability conflict: this date/venue is already booked.` +
             `${conflictRefs ? ` Existing booking(s): ${conflictRefs}.` : ""}` +
-            capacityNote,
-          portalLink: "",
-          quoteId: "",
-          quoteNumber: ""
+            capacityNote
         });
         return;
       }
@@ -1000,56 +1338,60 @@ export default function App() {
         SAVE_FLOW_TIMEOUT_MS,
         isEditingQuote ? "updateQuote" : "submitQuote"
       );
-      const basePath = `${window.location.origin}${window.location.pathname}`;
-      const portalLink = result.portalKey ? `${basePath}?portal=${result.portalKey}` : "";
-
       if (isEditingQuote) {
         setSubmitState({
           saving: false,
-          sendingQuoteEmail: false,
-          message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`,
-          portalLink,
-          quoteId: result.id,
-          quoteNumber: result.quoteNumber || ""
+          message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`
         });
         pushToast(`Quote ${result.quoteNumber} updated.`, "success");
+        setHistoryTarget({ quoteId: result.id, reason: "updated" });
         setHistoryOpen(true);
         return;
       }
 
-      let smsSuffix = "";
-      if (result.storage === "firebase" && authSession.isAdmin) {
-        try {
-          const smsResult = await withTimeout(
-            notifyOwnerNewQuote({
-              quoteId: result.id
-            }),
-            OWNER_SMS_TIMEOUT_MS,
-            "notifyOwnerNewQuote"
-          );
-          if (smsResult?.sms?.sent) {
-            smsSuffix = " Owner SMS sent.";
-          } else if (smsResult?.sms?.reason === "sms_not_configured") {
-            smsSuffix = " Owner SMS not configured yet.";
-          } else if (smsResult?.sms?.reason === "sms_disabled") {
-            smsSuffix = " Owner SMS disabled by configuration.";
-          } else if (smsResult?.sms?.reason === "sms_send_failed") {
-            smsSuffix = " Owner SMS failed to send.";
-          }
-        } catch (smsErr) {
-          smsSuffix = " Owner SMS failed to send.";
-        }
-      }
+      const savedDraftMessage = `Quote ${result.quoteNumber} saved as a draft in ${result.storage}. It has not been sent to the customer.`;
       setSubmitState({
         saving: false,
-        sendingQuoteEmail: false,
-        message: `Quote ${result.quoteNumber} saved to ${result.storage}.${smsSuffix}${pricingAdjustmentNote}`,
-        portalLink,
-        quoteId: result.id,
-        quoteNumber: result.quoteNumber || ""
+        message: `${savedDraftMessage}${pricingAdjustmentNote}`
       });
-      pushToast(`Quote ${result.quoteNumber} saved.`, "success");
+      pushToast(`Quote ${result.quoteNumber} saved as a draft.`, "success");
+      requestWorkflowAttentionRefresh({ force: true });
+      setHistoryTarget({ quoteId: result.id, reason: "created" });
       setHistoryOpen(true);
+
+      // Quote persistence is the handoff boundary. Owner notification is
+      // intentionally non-blocking so a slow/disabled SMS provider cannot
+      // delay the exact saved-draft review surface.
+      if (result.storage === "firebase" && authSession.isAdmin) {
+        void withTimeout(
+          notifyOwnerNewQuote({
+            quoteId: result.id
+          }),
+          OWNER_SMS_TIMEOUT_MS,
+          "notifyOwnerNewQuote"
+        )
+          .then((smsResult) => {
+            let smsSuffix = "";
+            if (smsResult?.sms?.sent) {
+              smsSuffix = " Owner SMS sent.";
+            } else if (smsResult?.sms?.reason === "sms_not_configured") {
+              smsSuffix = " Owner SMS not configured yet.";
+            } else if (smsResult?.sms?.reason === "sms_disabled") {
+              smsSuffix = " Owner SMS disabled by configuration.";
+            } else if (smsResult?.sms?.reason === "sms_send_failed") {
+              smsSuffix = " Owner SMS failed to send.";
+            }
+            if (!smsSuffix) return;
+            setSubmitState((current) => current.message.startsWith(savedDraftMessage)
+              ? { ...current, message: `${savedDraftMessage}${smsSuffix}${pricingAdjustmentNote}` }
+              : current);
+          })
+          .catch(() => {
+            setSubmitState((current) => current.message.startsWith(savedDraftMessage)
+              ? { ...current, message: `${savedDraftMessage} Owner SMS failed to send.${pricingAdjustmentNote}` }
+              : current);
+          });
+      }
     } catch (err) {
       recordDiagnosticError(err, {
         surface: "app",
@@ -1062,11 +1404,7 @@ export default function App() {
       setSubmitState((prev) => ({
         ...prev,
         saving: false,
-        sendingQuoteEmail: false,
-        message: err?.message || "Failed to save quote.",
-        portalLink: "",
-        quoteId: "",
-        quoteNumber: ""
+        message: err?.message || "Failed to save quote."
       }));
     }
   };
@@ -1169,95 +1507,15 @@ export default function App() {
     });
     setTouchedFields({});
     setShowStepValidation(false);
+    setHistoryTarget({ quoteId: "", reason: "" });
     setHistoryOpen(false);
     setStep(1);
     setSubmitState({
       saving: false,
-      sendingQuoteEmail: false,
-      message: `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`,
-      portalLink: "",
-      quoteId: "",
-      quoteNumber: ""
+      message: `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const handleCopyPortalLink = async () => {
-    try {
-      if (!submitState.portalLink) return;
-      await copyText(submitState.portalLink);
-      setSubmitState((prev) => ({ ...prev, message: "Customer portal link copied." }));
-    } catch (err) {
-      recordDiagnosticError(err, {
-        surface: "app",
-        action: "copy-portal-link"
-      });
-      setSubmitState((prev) => ({
-        ...prev,
-        message: err?.message || "Failed to copy customer portal link."
-      }));
-    }
-  };
-
-  const handleSendQuoteEmail = async () => {
-    const quoteId = String(submitState.quoteId || "").trim();
-    if (!quoteId) {
-      setSubmitState((prev) => ({ ...prev, message: "Save a quote before sending email." }));
-      return;
-    }
-
-    setSubmitState((prev) => ({
-      ...prev,
-      sendingQuoteEmail: true,
-      message: ""
-    }));
-
-    try {
-      const quote = await getQuoteById(quoteId);
-      const { exportQuoteProposal } = await import("./lib/proposalExport");
-      const basePortalUrl = `${window.location.origin}${window.location.pathname}`;
-      const attachment = await exportQuoteProposal(quote, {
-        basePortalUrl,
-        output: "base64",
-        compact: true
-      });
-      await sendQuoteToCustomerEmail({
-        quoteId,
-        attachment
-      });
-
-      const currentStatus = String(quote.status || "draft").trim().toLowerCase();
-      if (currentStatus === "draft") {
-        try {
-          await updateQuoteStatus(quoteId, "sent");
-        } catch (statusErr) {
-          recordDiagnosticError(statusErr, {
-            surface: "app",
-            action: "mark-quote-sent-after-email",
-            quoteId
-          });
-        }
-      }
-
-      setSubmitState((prev) => ({
-        ...prev,
-        sendingQuoteEmail: false,
-        message: `Quote ${quote.quoteNumber || submitState.quoteNumber || quoteId} emailed with portal link and PDF attachment.`
-      }));
-      pushToast(`Quote ${quote.quoteNumber || quoteId} emailed to customer.`, "success");
-    } catch (err) {
-      recordDiagnosticError(err, {
-        surface: "app",
-        action: "send-quote-email",
-        quoteId
-      });
-      setSubmitState((prev) => ({
-        ...prev,
-        sendingQuoteEmail: false,
-        message: err?.message || "Failed to send quote email."
-      }));
-      pushToast(err?.message || "Failed to send quote email.", "error");
-    }
+    window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
   };
 
   const handleGetInstantQuote = () => {
@@ -1323,6 +1581,7 @@ export default function App() {
   const closePortalMode = () => {
     setPortalMode(false);
     setPortalKey("");
+    requestWorkflowAttentionRefresh({ force: true });
     const nextUrl = `${window.location.pathname}${window.location.hash}`;
     window.history.replaceState({}, "", nextUrl);
   };
@@ -1369,7 +1628,11 @@ export default function App() {
   if (portalMode && customerPortalEnabled) {
     return (
       <div className="app-shell" style={appThemeVars}>
-        <CustomerPortalView initialPortalKey={portalKey} onBackToStaff={closePortalMode} />
+        <CustomerPortalView
+          initialPortalKey={portalKey}
+          initialPaymentReturn={paymentReturn}
+          onBackToStaff={closePortalMode}
+        />
       </div>
     );
   }
@@ -1446,18 +1709,20 @@ export default function App() {
           </section>
         </main>
 
-        <Suspense fallback={null}>
-          <IntegrationOpsModal
-            open={integrationsOpen}
-            onClose={() => setIntegrationsOpen(false)}
-            organizationId=""
-            settings={{}}
-            currentUserEmail={authSession.user?.email || ""}
-            currentUserUid={authSession.user?.uid || ""}
-            canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
-            canManageProviders={authSession.isAdmin}
-            provisioningOnly
-          />
+        <Suspense fallback={<WorkspaceModalFallback />}>
+          {integrationsMounted && (
+            <IntegrationOpsModal
+              open={integrationsOpen}
+              onClose={() => setIntegrationsOpen(false)}
+              organizationId=""
+              settings={{}}
+              currentUserEmail={authSession.user?.email || ""}
+              currentUserUid={authSession.user?.uid || ""}
+              canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
+              canManageProviders={authSession.isAdmin}
+              provisioningOnly
+            />
+          )}
         </Suspense>
       </div>
     );
@@ -1523,8 +1788,8 @@ export default function App() {
           </section>
         </main>
 
-        <Suspense fallback={null}>
-          {authSession.isAdmin && (
+        <Suspense fallback={<WorkspaceModalFallback />}>
+          {authSession.isAdmin && adminMounted && (
             <AdminCatalogModal
               open={adminOpen}
               catalog={catalog}
@@ -1584,12 +1849,34 @@ export default function App() {
             </div>
           )}
           <div className="right-actions header-actions">
-            <button className="ghost" onClick={() => setSalesWorkflowOpen(true)}>Sales Workflow</button>
+            <button
+              className="ghost workflow-attention-trigger"
+              onClick={() => setSalesWorkflowOpen(true)}
+              aria-label={workflowAttentionCount === null
+                ? "Sales Workflow"
+                : workflowAttentionCount > 0
+                  ? `Sales Workflow, ${workflowAttentionCount} ${workflowAttentionCount === 1 ? "quote needs" : "quotes need"} attention`
+                  : "Sales Workflow, no quotes need attention"}
+            >
+              <span>Sales Workflow</span>
+              {workflowAttentionCount > 0 && (
+                <span className="workflow-attention-badge" aria-hidden="true">{workflowAttentionCount}</span>
+              )}
+            </button>
             {eventScheduleEnabled && <button className="ghost" onClick={() => setScheduleOpen(true)}>Schedule</button>}
             {integrationsEnabled && <button className="ghost" onClick={() => setIntegrationsOpen(true)}>Integrations</button>}
             {diagnosticsEnabled && <button className="ghost" onClick={() => setDiagnosticsOpen(true)}>Diagnostics</button>}
             {dashboardEnabled && <button className="ghost" onClick={() => setDashboardOpen(true)}>Dashboard</button>}
-            <button className="ghost" onClick={() => setHistoryOpen(true)}>Quote History</button>
+            <button
+              className="ghost"
+              ref={historyTriggerRef}
+              onClick={() => {
+                setHistoryTarget({ quoteId: "", reason: "" });
+                setHistoryOpen(true);
+              }}
+            >
+              Quote History
+            </button>
             {authSession.isAdmin && <button className="ghost" onClick={() => setAdminOpen(true)}>Admin Catalog</button>}
             {authSession.isAdmin && <button className="ghost" onClick={() => setImportStudioOpen(true)}>Import Studio</button>}
             {customerPortalEnabled && <button className="ghost" onClick={openPortalMode}>Customer Portal</button>}
@@ -1630,15 +1917,20 @@ export default function App() {
         </div>
       </section>
 
-      <main className="container wizard-grid" ref={wizardRef}>
+      <main
+        className="container wizard-grid"
+        ref={wizardRef}
+        tabIndex={-1}
+      >
         <section className="panel wizard-panel">
-          <ol className="stepper">
+          <ol className="stepper" ref={stepperRef}>
             {stepperModel.map((stepMeta) => {
               const stepOneMissing = stepMeta.stepNumber === 1 && !step1Validation.valid;
               return (
                 <li
                   key={stepMeta.label}
                   className={`stepper-item status-${stepMeta.status} ${stepMeta.isLocked ? "is-locked" : ""}`.trim()}
+                  aria-current={stepMeta.stepNumber === step ? "step" : undefined}
                 >
                   <span className="step-badge">
                     {stepMeta.status === "completed" ? "✓" : stepOneMissing ? "!" : stepMeta.stepNumber}
@@ -1654,6 +1946,14 @@ export default function App() {
               );
             })}
           </ol>
+
+          <MobilePricingSummary
+            step={step}
+            totals={totals}
+            open={mobilePricingOpen}
+            onToggle={() => setMobilePricingOpen((current) => !current)}
+            toggleRef={mobilePricingToggleRef}
+          />
 
           <div className="step-stage" key={step}>
             {catalog.loading && <p className="source-note">Loading catalog...</p>}
@@ -1754,34 +2054,16 @@ export default function App() {
                 <>
                 <button
                   className="cta"
+                  ref={saveQuoteButtonRef}
                   onClick={handleSubmitQuote}
                   disabled={submitState.saving || catalog.loading || totals.guests <= 0}
                 >
-                    {submitState.saving ? (isEditingQuote ? "Saving Changes..." : "Saving...") : (isEditingQuote ? "Save Changes" : "Save & Submit")}
+                    {submitState.saving ? (isEditingQuote ? "Saving Changes..." : "Saving Draft...") : (isEditingQuote ? "Save Changes" : "Save draft")}
                   </button>
                 </>
               )}
             </div>
           </div>
-
-          {(submitState.portalLink || submitState.quoteId) && (
-            <div className="portal-link-row">
-              {submitState.portalLink && <input type="text" readOnly value={submitState.portalLink} />}
-              {submitState.portalLink && (
-                <button type="button" className="ghost" onClick={handleCopyPortalLink}>Copy Portal Link</button>
-              )}
-              {submitState.quoteId && authSession.isAdmin && (
-                <button
-                  type="button"
-                  className="cta"
-                  onClick={handleSendQuoteEmail}
-                  disabled={submitState.saving || submitState.sendingQuoteEmail}
-                >
-                  {submitState.sendingQuoteEmail ? "Sending Quote Email..." : "Send Quote Email (Portal + PDF)"}
-                </button>
-              )}
-            </div>
-          )}
 
           <p className="source-note">Quote validity: {Math.max(1, Number(catalog.settings?.quoteValidityDays || 30))} days</p>
           {isEditingQuote && (
@@ -1795,7 +2077,14 @@ export default function App() {
           {submitState.message && <p className="source-note">{submitState.message}</p>}
         </section>
 
-        <LiveBreakdown form={form} totals={totals} settings={effectiveSettings} catalog={catalog} />
+        <LiveBreakdown
+          form={form}
+          totals={totals}
+          settings={effectiveSettings}
+          catalog={catalog}
+          mobileExpanded={mobilePricingOpen}
+          onMobileClose={closeMobilePricing}
+        />
       </main>
 
       {toasts.length > 0 && (
@@ -1808,8 +2097,8 @@ export default function App() {
         </div>
       )}
 
-      <Suspense fallback={null}>
-        {authSession.isAdmin && (
+      <Suspense fallback={<WorkspaceModalFallback />}>
+        {authSession.isAdmin && adminMounted && (
           <AdminCatalogModal
             open={adminOpen}
             catalog={catalog}
@@ -1823,7 +2112,7 @@ export default function App() {
           />
         )}
 
-        {authSession.isAdmin && (
+        {authSession.isAdmin && importStudioMounted && (
           <ImportStudioModal
             open={importStudioOpen}
             onClose={() => setImportStudioOpen(false)}
@@ -1842,33 +2131,56 @@ export default function App() {
           />
         )}
 
-        <QuoteHistoryModal
-          open={historyOpen}
-          onClose={() => setHistoryOpen(false)}
-          basePortalUrl={`${window.location.origin}${window.location.pathname}`}
-          organizationId={authSession.organizationId}
-          currentUserUid={authSession.user?.uid || ""}
-          currentUserEmail={authSession.user?.email || ""}
-          currentUserRole={authSession.role}
-          onEditQuote={handleEditQuote}
-          canDeleteQuotes={authSession.isAdmin}
-          onToast={pushToast}
-        />
+        {historyMounted && (
+          <QuoteHistoryModal
+            open={historyOpen}
+            onClose={() => {
+              const returnToSave = Boolean(historyTarget.quoteId);
+              setHistoryOpen(false);
+              setHistoryTarget({ quoteId: "", reason: "" });
+              requestWorkflowAttentionRefresh({ force: true });
+              window.requestAnimationFrame(() => (
+                returnToSave ? saveQuoteButtonRef.current : historyTriggerRef.current
+              )?.focus());
+            }}
+            basePortalUrl={`${window.location.origin}${window.location.pathname}`}
+            organizationId={authSession.organizationId}
+            currentUserUid={authSession.user?.uid || ""}
+            currentUserEmail={authSession.user?.email || ""}
+            currentUserRole={authSession.role}
+            focusQuoteId={historyTarget.quoteId}
+            focusReason={historyTarget.reason}
+            onEditQuote={(quote) => {
+              requestWorkflowAttentionRefresh({ force: true });
+              handleEditQuote(quote);
+            }}
+            canDeleteQuotes={authSession.isAdmin}
+            onToast={pushToast}
+          />
+        )}
 
-        <SalesWorkflowModal
-          open={salesWorkflowOpen}
-          onClose={() => setSalesWorkflowOpen(false)}
-          onOpenQuoteHistory={() => {
-            setSalesWorkflowOpen(false);
-            setHistoryOpen(true);
-          }}
-          organizationId={authSession.organizationId}
-          currentUserEmail={authSession.user?.email || ""}
-          currentUserRole={authSession.role}
-          onToast={pushToast}
-        />
+        {salesWorkflowMounted && (
+          <SalesWorkflowModal
+            open={salesWorkflowOpen}
+            onClose={() => setSalesWorkflowOpen(false)}
+            onOpenQuoteHistory={() => {
+              setSalesWorkflowOpen(false);
+              setHistoryTarget({ quoteId: "", reason: "" });
+              setHistoryOpen(true);
+            }}
+            organizationId={authSession.organizationId}
+            currentUserEmail={authSession.user?.email || ""}
+            currentUserRole={authSession.role}
+            onEditQuote={(quote) => {
+              setSalesWorkflowOpen(false);
+              handleEditQuote(quote);
+            }}
+            onAttentionSummaryChange={handleWorkflowAttentionSummary}
+            onToast={pushToast}
+          />
+        )}
 
-        {eventScheduleEnabled && (
+        {eventScheduleEnabled && scheduleMounted && (
           <EventScheduleModal
             open={scheduleOpen}
             onClose={() => setScheduleOpen(false)}
@@ -1879,7 +2191,7 @@ export default function App() {
           />
         )}
 
-        {integrationsEnabled && (
+        {integrationsEnabled && integrationsMounted && (
           <IntegrationOpsModal
             open={integrationsOpen}
             onClose={() => setIntegrationsOpen(false)}
@@ -1892,14 +2204,14 @@ export default function App() {
           />
         )}
 
-        {diagnosticsEnabled && (
+        {diagnosticsEnabled && diagnosticsMounted && (
           <DiagnosticsModal
             open={diagnosticsOpen}
             onClose={() => setDiagnosticsOpen(false)}
           />
         )}
 
-        {quoteCompareEnabled && (
+        {quoteCompareEnabled && compareMounted && (
           <QuoteCompareModal
             open={compareOpen}
             onClose={() => setCompareOpen(false)}
@@ -1912,7 +2224,7 @@ export default function App() {
           />
         )}
 
-        {dashboardEnabled && (
+        {dashboardEnabled && dashboardMounted && (
           <ReportingDashboardModal
             open={dashboardOpen}
             onClose={() => setDashboardOpen(false)}

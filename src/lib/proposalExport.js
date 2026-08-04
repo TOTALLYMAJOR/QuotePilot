@@ -10,6 +10,43 @@ function text(v) {
   return String(v ?? "-");
 }
 
+function stablePdfFileId(seed) {
+  const source = String(seed || "quotepilot-pdf");
+  return [0, 1, 2, 3].map((salt) => {
+    let hash = (0x811c9dc5 ^ salt) >>> 0;
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash.toString(16).padStart(8, "0");
+  }).join("");
+}
+
+function resolvePdfRevisionSeed(quote) {
+  const versionId = String(
+    quote?.activeVersionId
+    || quote?.versionMeta?.versionId
+    || quote?.latestVersionNumber
+    || "legacy"
+  ).trim();
+  return [quote?.organizationId, quote?.id, quote?.quoteNumber, versionId]
+    .map((value) => String(value || "").trim())
+    .join("|");
+}
+
+function resolvePdfCreationDate(quote) {
+  const candidate = String(
+    quote?.versionMeta?.createdAt
+    || quote?.updatedAtISO
+    || quote?.createdAtISO
+    || ""
+  ).trim();
+  const parsed = new Date(candidate);
+  return Number.isNaN(parsed.getTime())
+    ? new Date("2000-01-01T00:00:00.000Z")
+    : parsed;
+}
+
 function hexToRgb(value, fallback) {
   const raw = String(value || "").trim();
   const full = /^#[\da-fA-F]{6}$/.test(raw)
@@ -284,7 +321,8 @@ function renderHeader({
 export async function exportQuoteProposal(quote, {
   basePortalUrl = "",
   output = "save",
-  compact = false
+  compact = false,
+  includePortalLink = false
 } = {}) {
   if (!quote) {
     throw new Error("Missing quote data for PDF export.");
@@ -302,6 +340,8 @@ export async function exportQuoteProposal(quote, {
     format: "letter",
     compress: compact === true
   });
+  doc.setCreationDate(resolvePdfCreationDate(quote));
+  doc.setFileId(stablePdfFileId(resolvePdfRevisionSeed(quote)));
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const left = 44;
@@ -310,7 +350,10 @@ export async function exportQuoteProposal(quote, {
   const lineGap = 17;
   const contentBottomPadding = 74;
   const palette = resolvePalette(meta);
-  const portalLink = resolvePortalLink(quote, basePortalUrl);
+  const quoteIsDraft = String(quote?.status || "draft").trim().toLowerCase() === "draft";
+  const portalLink = !quoteIsDraft && includePortalLink === true
+    ? resolvePortalLink(quote, basePortalUrl)
+    : "";
   const showDisposablesNote = meta.includeDisposables !== false;
   const perPersonRate = proposal.event.guests > 0 ? proposal.totals.base / proposal.event.guests : 0;
   const headerHeight = 124;
@@ -427,7 +470,10 @@ export async function exportQuoteProposal(quote, {
 
   section("Action and Acceptance");
   row("Acceptance Contact", meta.acceptanceEmail || meta.businessEmail || "-");
-  row("Customer Portal", portalLink || (quote.portalKey ? `Portal Key: ${quote.portalKey}` : "-"));
+  row(
+    "Customer Portal",
+    portalLink || (quoteIsDraft ? "Available after delivery is recorded" : "-")
+  );
   row("Deposit Payment Link", depositPaymentLink || "-");
   row("Deposit Status", proposal.payment.depositStatus || "unpaid");
 

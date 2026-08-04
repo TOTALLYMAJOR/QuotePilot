@@ -1,16 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getQuoteHistory,
   requestQuoteApproval,
   resolveQuoteApprovalRequest,
+  updateQuoteChangeRequestHandling,
   updateQuoteFollowUp
 } from "../lib/quoteStore";
 import {
   APPROVAL_ACTIONS,
   buildProposalReadiness,
   buildQuoteLifecycleTimeline,
+  buildWorkflowAttentionSummary,
   FOLLOW_UP_STAGES
 } from "../lib/quoteWorkflow";
+
+const WORKFLOW_TABS = ["attention", "followups", "approvals"];
 
 function fmtDateTime(value) {
   if (!value) return "-";
@@ -44,6 +48,19 @@ function actionLabel(action) {
   return APPROVAL_ACTIONS.find((item) => item.id === action)?.label || action || "Sensitive action";
 }
 
+function approvalOutcomeLabel(request) {
+  if (request?.state === "rejected") return "Rejected";
+  const executionState = String(request?.executionState || "").trim().toLowerCase();
+  if (executionState === "in_progress") return "Admin action in progress";
+  if (executionState === "succeeded") return "Admin action completed";
+  if (executionState === "failed") return "Admin action failed — new approval required";
+  return "Approved, awaiting admin action";
+}
+
+function safeDomId(value) {
+  return String(value || "item").replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
 function followUpFromQuote(quote) {
   const followUp = quote?.workflow?.followUp || {};
   return {
@@ -58,6 +75,8 @@ export default function SalesWorkflowModal({
   open,
   onClose,
   onOpenQuoteHistory,
+  onEditQuote,
+  onAttentionSummaryChange,
   organizationId = "",
   currentUserEmail = "",
   currentUserRole = "customer",
@@ -68,15 +87,34 @@ export default function SalesWorkflowModal({
     error: "",
     feedback: "",
     source: "",
+    organizationId: "",
     quotes: []
   });
-  const [activeTab, setActiveTab] = useState("followups");
+  const [activeTab, setActiveTab] = useState("attention");
   const [selectedQuoteId, setSelectedQuoteId] = useState("");
   const [followUpDraft, setFollowUpDraft] = useState(() => followUpFromQuote(null));
   const [approvalAction, setApprovalAction] = useState(APPROVAL_ACTIONS[0]?.id || "");
   const [approvalNote, setApprovalNote] = useState("");
   const [resolutionNotes, setResolutionNotes] = useState({});
+  const [handlingNotes, setHandlingNotes] = useState({});
   const [busyKey, setBusyKey] = useState("");
+  const dialogRef = useRef(null);
+  const detailHeadingRef = useRef(null);
+  const attentionEmptyHeadingRef = useRef(null);
+  const tabRefs = useRef({});
+  const returnFocusRef = useRef(null);
+  const skipReturnFocusRef = useRef(false);
+  const tabInteractedRef = useRef(false);
+  const loadGenerationRef = useRef(0);
+  const workflowScopeRef = useRef("");
+  const onCloseRef = useRef(onClose);
+  workflowScopeRef.current = [organizationId, currentUserRole, currentUserEmail]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .join(":");
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   const pushToast = (message, tone = "info") => {
     if (typeof onToast === "function") onToast(message, tone);
@@ -86,21 +124,34 @@ export default function SalesWorkflowModal({
     pushToast(message, "success");
   };
 
-  const load = async () => {
+  const load = async ({ selectDefaultTab = false } = {}) => {
+    const loadOrganizationId = String(organizationId || "").trim();
+    const loadScope = [organizationId, currentUserRole, currentUserEmail]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .join(":");
+    if (workflowScopeRef.current !== loadScope) return;
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
     setState((prev) => ({ ...prev, loading: true, error: "", feedback: "" }));
     try {
       const result = await getQuoteHistory({ organizationId });
+      if (generation !== loadGenerationRef.current || workflowScopeRef.current !== loadScope) return;
       setState({
         loading: false,
         error: "",
         feedback: "",
         source: result.source,
+        organizationId: loadOrganizationId,
         quotes: result.quotes
       });
       setSelectedQuoteId((current) => (
         result.quotes.some((item) => item.id === current) ? current : result.quotes[0]?.id || ""
       ));
+      if (selectDefaultTab && !tabInteractedRef.current) {
+        setActiveTab(buildWorkflowAttentionSummary(result.quotes).quoteCount > 0 ? "attention" : "followups");
+      }
     } catch (err) {
+      if (generation !== loadGenerationRef.current || workflowScopeRef.current !== loadScope) return;
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -111,11 +162,67 @@ export default function SalesWorkflowModal({
 
   useEffect(() => {
     if (!open) return;
-    setActiveTab("followups");
+    tabInteractedRef.current = false;
+    skipReturnFocusRef.current = false;
+    setState((prev) => ({
+      ...prev,
+      loading: false,
+      error: "",
+      feedback: "",
+      source: "",
+      organizationId: "",
+      quotes: []
+    }));
+    setActiveTab("attention");
     setApprovalNote("");
     setResolutionNotes({});
-    load();
+    setHandlingNotes({});
+    setBusyKey("");
+    load({ selectDefaultTab: true });
   }, [open, organizationId]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    returnFocusRef.current = document.activeElement;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => dialogRef.current?.focus());
+    const handleDialogKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(dialogRef.current?.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ) || []).filter((element) => element.getClientRects().length > 0);
+      if (!focusable.length) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleDialogKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleDialogKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+      const returnTarget = returnFocusRef.current;
+      if (!skipReturnFocusRef.current && returnTarget?.isConnected) {
+        window.requestAnimationFrame(() => returnTarget.focus());
+      }
+    };
+  }, [open]);
 
   const selectedQuote = useMemo(
     () => state.quotes.find((item) => item.id === selectedQuoteId) || null,
@@ -161,22 +268,66 @@ export default function SalesWorkflowModal({
     [state.quotes]
   );
 
+  const attentionSummary = useMemo(
+    () => buildWorkflowAttentionSummary(state.quotes),
+    [state.quotes]
+  );
+
+  useEffect(() => {
+    if (
+      !open
+      || state.loading
+      || state.organizationId !== String(organizationId || "").trim()
+      || typeof onAttentionSummaryChange !== "function"
+    ) return;
+    onAttentionSummaryChange({
+      ...attentionSummary,
+      organizationId: state.organizationId
+    });
+  }, [
+    attentionSummary.itemCount,
+    attentionSummary.quoteCount,
+    open,
+    onAttentionSummaryChange,
+    organizationId,
+    state.loading,
+    state.organizationId
+  ]);
+
   const metrics = useMemo(() => {
-    const today = todayIso();
     return {
       active: state.quotes.filter((quote) => ["draft", "sent", "viewed", "accepted"].includes(quote.status)).length,
       needsReadiness: quoteSummaries.filter((item) => item.readiness.score < 100).length,
-      due: quoteSummaries.filter((item) => (
-        !item.followUp.completed && item.followUp.dueDate && item.followUp.dueDate <= today
-      )).length,
+      due: attentionSummary.counts.followUps,
       pendingApprovals: approvalQueue.filter((item) => item.request.state === "pending").length
     };
-  }, [state.quotes, quoteSummaries, approvalQueue]);
+  }, [state.quotes, quoteSummaries, approvalQueue, attentionSummary.counts.followUps]);
 
   const readiness = selectedQuote ? buildProposalReadiness(selectedQuote) : null;
   const timeline = selectedQuote ? buildQuoteLifecycleTimeline(selectedQuote) : [];
   const isAdmin = String(currentUserRole || "").toLowerCase() === "admin";
   const isStaff = ["admin", "sales"].includes(String(currentUserRole || "").toLowerCase());
+
+  const selectTab = (tabId, { focus = false } = {}) => {
+    tabInteractedRef.current = true;
+    setActiveTab(tabId);
+    if (focus) {
+      window.requestAnimationFrame(() => tabRefs.current[tabId]?.focus());
+    }
+  };
+
+  const handleTabKeyDown = (event, tabId) => {
+    const currentIndex = WORKFLOW_TABS.indexOf(tabId);
+    let nextIndex = currentIndex;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % WORKFLOW_TABS.length;
+    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + WORKFLOW_TABS.length) % WORKFLOW_TABS.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = WORKFLOW_TABS.length - 1;
+    if (nextIndex === currentIndex) return;
+    event.preventDefault();
+    const nextTab = WORKFLOW_TABS[nextIndex];
+    selectTab(nextTab, { focus: true });
+  };
 
   const applyQuoteLocally = (quoteId, updater) => {
     setState((prev) => ({
@@ -187,7 +338,9 @@ export default function SalesWorkflowModal({
 
   const handleSaveFollowUp = async () => {
     if (!selectedQuote?.id || !isStaff) return;
-    setBusyKey(`followup:${selectedQuote.id}`);
+    const actionScope = workflowScopeRef.current;
+    const actionBusyKey = `followup:${selectedQuote.id}`;
+    setBusyKey(actionBusyKey);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
       const result = await updateQuoteFollowUp({
@@ -195,6 +348,7 @@ export default function SalesWorkflowModal({
         ...followUpDraft,
         actorEmail: currentUserEmail
       });
+      if (workflowScopeRef.current !== actionScope) return;
       applyQuoteLocally(selectedQuote.id, (quote) => ({
         ...quote,
         workflow: {
@@ -205,15 +359,20 @@ export default function SalesWorkflowModal({
       }));
       reportSuccess(`Follow-up saved for ${selectedQuote.quoteNumber}.`);
     } catch (err) {
+      if (workflowScopeRef.current !== actionScope) return;
       setState((prev) => ({ ...prev, error: err?.message || "Failed to save follow-up." }));
     } finally {
-      setBusyKey("");
+      if (workflowScopeRef.current === actionScope) {
+        setBusyKey((current) => (current === actionBusyKey ? "" : current));
+      }
     }
   };
 
   const handleRequestApproval = async () => {
     if (!selectedQuote?.id || !isStaff || !approvalAction) return;
-    setBusyKey(`request:${selectedQuote.id}`);
+    const actionScope = workflowScopeRef.current;
+    const actionBusyKey = `request:${selectedQuote.id}`;
+    setBusyKey(actionBusyKey);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
       const result = await requestQuoteApproval({
@@ -223,6 +382,7 @@ export default function SalesWorkflowModal({
         actorEmail: currentUserEmail,
         actorRole: currentUserRole
       });
+      if (workflowScopeRef.current !== actionScope) return;
       applyQuoteLocally(selectedQuote.id, (quote) => ({
         ...quote,
         workflow: {
@@ -234,15 +394,20 @@ export default function SalesWorkflowModal({
       setApprovalNote("");
       reportSuccess(`${actionLabel(approvalAction)} approval requested.`);
     } catch (err) {
+      if (workflowScopeRef.current !== actionScope) return;
       setState((prev) => ({ ...prev, error: err?.message || "Failed to request approval." }));
     } finally {
-      setBusyKey("");
+      if (workflowScopeRef.current === actionScope) {
+        setBusyKey((current) => (current === actionBusyKey ? "" : current));
+      }
     }
   };
 
   const handleResolveApproval = async (quoteId, requestId, nextState) => {
     if (!isAdmin) return;
-    setBusyKey(`resolve:${requestId}`);
+    const actionScope = workflowScopeRef.current;
+    const actionBusyKey = `resolve:${requestId}:${nextState}`;
+    setBusyKey(actionBusyKey);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
       const result = await resolveQuoteApprovalRequest({
@@ -253,6 +418,7 @@ export default function SalesWorkflowModal({
         actorEmail: currentUserEmail,
         actorRole: currentUserRole
       });
+      if (workflowScopeRef.current !== actionScope) return;
       applyQuoteLocally(quoteId, (quote) => ({
         ...quote,
         workflow: {
@@ -264,10 +430,117 @@ export default function SalesWorkflowModal({
       }));
       setResolutionNotes((prev) => ({ ...prev, [requestId]: "" }));
       reportSuccess(`Approval request ${nextState}.`);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const resolvedRow = Array.from(dialogRef.current?.querySelectorAll(".approval-row") || [])
+            .find((element) => element.dataset.requestId === requestId);
+          (resolvedRow || tabRefs.current.approvals)?.focus();
+        });
+      });
     } catch (err) {
+      if (workflowScopeRef.current !== actionScope) return;
       setState((prev) => ({ ...prev, error: err?.message || "Failed to resolve approval." }));
     } finally {
-      setBusyKey("");
+      if (workflowScopeRef.current === actionScope) {
+        setBusyKey((current) => (current === actionBusyKey ? "" : current));
+      }
+    }
+  };
+
+  const handleReviewFollowUp = (quoteId) => {
+    setSelectedQuoteId(quoteId);
+    selectTab("followups");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => detailHeadingRef.current?.focus());
+    });
+  };
+
+  const handleReviewApprovals = (quoteId) => {
+    selectTab("approvals");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const quoteApproval = Array.from(dialogRef.current?.querySelectorAll(".approval-row") || [])
+          .find((element) => element.dataset.quoteId === quoteId && element.dataset.pending === "true");
+        (quoteApproval || tabRefs.current.approvals)?.focus();
+      });
+    });
+  };
+
+  const handleEditQuote = (quote) => {
+    skipReturnFocusRef.current = true;
+    onEditQuote?.(quote);
+  };
+
+  const handleOpenQuoteHistory = () => {
+    skipReturnFocusRef.current = true;
+    onOpenQuoteHistory?.();
+  };
+
+  const focusAttentionItem = (candidateIds = []) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const rows = Array.from(dialogRef.current?.querySelectorAll(".workflow-attention-row") || []);
+        const target = candidateIds
+          .map((candidateId) => rows.find((row) => row.dataset.attentionId === candidateId))
+          .find(Boolean);
+        (target || attentionEmptyHeadingRef.current || tabRefs.current.attention)?.focus();
+      });
+    });
+  };
+
+  const handleChangeRequestAction = async (item, action) => {
+    if (!isStaff || !item?.quoteId || item.unhandleable) return;
+    const actionScope = workflowScopeRef.current;
+    const note = handlingNotes[item.id] || "";
+    const busyId = `change-request:${item.quoteId}:${action}`;
+    const itemIndex = attentionSummary.items.findIndex((candidate) => candidate.id === item.id);
+    const nextItemId = attentionSummary.items[itemIndex + 1]?.id || "";
+    const previousItemId = attentionSummary.items[itemIndex - 1]?.id || "";
+    setBusyKey(busyId);
+    setState((prev) => ({ ...prev, error: "", feedback: "" }));
+    try {
+      const result = await updateQuoteChangeRequestHandling({
+        organizationId,
+        quoteId: item.quoteId,
+        sourceRequestId: item.sourceRequestId,
+        sourceSubmittedAtISO: item.sourceSubmittedAtISO,
+        sourceMessage: item.sourceMessage,
+        action,
+        note,
+        actorEmail: currentUserEmail,
+        actorRole: currentUserRole
+      });
+      if (workflowScopeRef.current !== actionScope) return;
+      applyQuoteLocally(item.quoteId, (quote) => ({
+        ...quote,
+        workflow: {
+          ...(quote.workflow || {}),
+          changeRequestHandling: result.handling
+        }
+      }));
+      if (action === "mark_handled") {
+        setHandlingNotes((prev) => ({ ...prev, [item.id]: "" }));
+      }
+      reportSuccess(action === "mark_handled"
+        ? "Change request marked handled internally. No customer message was sent."
+        : "Change request acknowledged internally. No customer message was sent.");
+      focusAttentionItem(action === "mark_handled"
+        ? [nextItemId, previousItemId].filter(Boolean)
+        : [item.id]);
+    } catch (err) {
+      if (workflowScopeRef.current !== actionScope) return;
+      if (err?.code === "workflow/stale-change-request") {
+        await load();
+      }
+      if (workflowScopeRef.current !== actionScope) return;
+      setState((prev) => ({
+        ...prev,
+        error: err?.message || "Failed to update change request handling."
+      }));
+    } finally {
+      if (workflowScopeRef.current === actionScope) {
+        setBusyKey((current) => (current === busyId ? "" : current));
+      }
     }
   };
 
@@ -275,7 +548,12 @@ export default function SalesWorkflowModal({
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="sales-workflow-title">
-      <div className="modal-card sales-workflow-card">
+      <div
+        className="modal-card sales-workflow-card"
+        ref={dialogRef}
+        tabIndex={-1}
+        aria-busy={state.loading}
+      >
         <div className="modal-head">
           <div>
             <h2 id="sales-workflow-title">Sales Workflow</h2>
@@ -289,7 +567,10 @@ export default function SalesWorkflowModal({
           </div>
         </div>
 
-        {state.error && <p className="error-note">{state.error}</p>}
+        <p className="visually-hidden" role="status" aria-live="polite">
+          {state.loading ? "Loading sales workflow." : ""}
+        </p>
+        {state.error && <p className="error-note" role="alert">{state.error}</p>}
         {state.feedback && <p className="source-note">{state.feedback}</p>}
 
         <div className="workflow-metrics" aria-label="Sales workflow summary">
@@ -303,25 +584,213 @@ export default function SalesWorkflowModal({
           <button
             type="button"
             role="tab"
+            id="workflow-tab-attention"
+            aria-controls="workflow-panel-attention"
+            tabIndex={activeTab === "attention" ? 0 : -1}
+            ref={(node) => { tabRefs.current.attention = node; }}
+            onKeyDown={(event) => handleTabKeyDown(event, "attention")}
+            aria-selected={activeTab === "attention"}
+            className={activeTab === "attention" ? "active" : ""}
+            onClick={() => selectTab("attention")}
+          >
+            Attention ({attentionSummary.quoteCount})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="workflow-tab-followups"
+            aria-controls="workflow-panel-followups"
+            tabIndex={activeTab === "followups" ? 0 : -1}
+            ref={(node) => { tabRefs.current.followups = node; }}
+            onKeyDown={(event) => handleTabKeyDown(event, "followups")}
             aria-selected={activeTab === "followups"}
             className={activeTab === "followups" ? "active" : ""}
-            onClick={() => setActiveTab("followups")}
+            onClick={() => selectTab("followups")}
           >
             Follow-ups
           </button>
           <button
             type="button"
             role="tab"
+            id="workflow-tab-approvals"
+            aria-controls="workflow-panel-approvals"
+            tabIndex={activeTab === "approvals" ? 0 : -1}
+            ref={(node) => { tabRefs.current.approvals = node; }}
+            onKeyDown={(event) => handleTabKeyDown(event, "approvals")}
             aria-selected={activeTab === "approvals"}
             className={activeTab === "approvals" ? "active" : ""}
-            onClick={() => setActiveTab("approvals")}
+            onClick={() => selectTab("approvals")}
           >
             Approvals ({metrics.pendingApprovals})
           </button>
         </div>
 
-        {activeTab === "followups" && (
-          <div className="sales-workflow-layout">
+        <section
+          className="workflow-attention-panel"
+          role="tabpanel"
+          id="workflow-panel-attention"
+          aria-labelledby="workflow-tab-attention"
+          tabIndex={0}
+          hidden={activeTab !== "attention"}
+        >
+            <p className="workflow-attention-boundary">
+              This is an in-app queue. Acknowledging or marking work handled does not edit a quote or send email or SMS.
+            </p>
+            {attentionSummary.items.length === 0 && !state.loading && (
+              <div className="workflow-attention-empty">
+                <h3 ref={attentionEmptyHeadingRef} tabIndex={-1}>No workflow attention needed</h3>
+                <p>Due follow-ups, customer change requests, and pending approvals will appear here.</p>
+              </div>
+            )}
+            <ol className="workflow-attention-list" aria-label="Quotes needing workflow attention">
+              {attentionSummary.items.map((item) => {
+                const quote = item.quote;
+                const customerLabel = quote.customer?.name || quote.customer?.email || "Customer";
+                const quoteLabel = quote.quoteNumber || quote.id;
+                const acknowledgeBusyKey = `change-request:${item.quoteId}:acknowledge`;
+                const handleBusyKey = `change-request:${item.quoteId}:mark_handled`;
+                const acknowledging = busyKey === acknowledgeBusyKey;
+                const markingHandled = busyKey === handleBusyKey;
+                const itemBusy = acknowledging || markingHandled;
+                const handlingNote = handlingNotes[item.id] || "";
+                const itemDomId = `workflow-attention-${safeDomId(item.id)}`;
+                return (
+                  <li key={item.id}>
+                    <article
+                      className={`workflow-attention-row attention-${item.type} state-${item.state}`}
+                      tabIndex={-1}
+                      data-attention-id={item.id}
+                      aria-labelledby={`${itemDomId}-priority ${itemDomId}-quote`}
+                    >
+                      <div className="workflow-attention-head">
+                        <div>
+                          <span className="workflow-attention-priority" id={`${itemDomId}-priority`}>
+                            {item.type === "change_request"
+                              ? item.state === "acknowledged"
+                                ? "Acknowledged change request"
+                                : item.state === "invalid"
+                                  ? "Change request data issue"
+                                  : "New customer change request"
+                              : item.type === "follow_up"
+                                ? item.state === "overdue"
+                                  ? `Overdue follow-up${item.daysOverdue ? ` · ${item.daysOverdue}d` : ""}`
+                                  : "Follow-up due today"
+                                : `${item.pendingRequests.length} pending approval${item.pendingRequests.length === 1 ? "" : "s"}`}
+                          </span>
+                          <h3 id={`${itemDomId}-quote`}>{quoteLabel}</h3>
+                          <p>{customerLabel}</p>
+                        </div>
+                        <time dateTime={item.dateISO}>{item.type === "follow_up" ? fmtDueDate(item.dateISO) : fmtDateTime(item.dateISO)}</time>
+                      </div>
+
+                      {item.type === "change_request" && (
+                        <>
+                          <p className="workflow-attention-message">
+                            {quote.portalDecision?.message || "The customer request has no readable message."}
+                          </p>
+                          {item.unhandleable ? (
+                            <p className="error-note">
+                              This request is missing valid identity or message evidence. Review the quote data before taking action.
+                            </p>
+                          ) : (
+                            <label className="field workflow-handling-note">
+                              <span>Internal handling note (required to mark handled)</span>
+                              <textarea
+                                rows="2"
+                                maxLength="800"
+                                aria-label={`Internal handling note (required to mark handled) — ${quoteLabel}`}
+                                value={handlingNote}
+                                placeholder="What was changed or how was the request addressed?"
+                                onChange={(event) => setHandlingNotes((prev) => ({
+                                  ...prev,
+                                  [item.id]: event.target.value
+                                }))}
+                              />
+                            </label>
+                          )}
+                          <div className="workflow-attention-actions">
+                            {!item.unhandleable && item.state === "new" && (
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                onClick={() => handleChangeRequestAction(item, "acknowledge")}
+                                disabled={itemBusy}
+                                aria-label={acknowledging
+                                  ? `Saving... acknowledgment — ${quoteLabel}`
+                                  : `Acknowledge internally — ${quoteLabel}`}
+                                aria-busy={acknowledging}
+                              >
+                                {acknowledging ? "Saving..." : "Acknowledge internally"}
+                              </button>
+                            )}
+                            {!item.unhandleable && (
+                              <button
+                                type="button"
+                                className="cta compact"
+                                onClick={() => handleChangeRequestAction(item, "mark_handled")}
+                                disabled={itemBusy || !handlingNote.trim()}
+                                aria-label={markingHandled
+                                  ? `Saving... handled state — ${quoteLabel}`
+                                  : `Mark handled internally — ${quoteLabel}`}
+                                aria-busy={markingHandled}
+                              >
+                                {markingHandled ? "Saving..." : "Mark handled internally"}
+                              </button>
+                            )}
+                            {typeof onEditQuote === "function" && (
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                onClick={() => handleEditQuote(quote)}
+                                aria-label={`Edit quote — ${quoteLabel}`}
+                              >
+                                Edit quote
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      {item.type === "follow_up" && (
+                        <div className="workflow-attention-actions">
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleReviewFollowUp(item.quoteId)}
+                            aria-label={`Review follow-up for ${quoteLabel}`}
+                          >
+                            Review follow-up
+                          </button>
+                        </div>
+                      )}
+
+                      {item.type === "approval" && (
+                        <div className="workflow-attention-actions">
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleReviewApprovals(item.quoteId)}
+                            aria-label={`Review approvals for ${quoteLabel}`}
+                          >
+                            Review approvals
+                          </button>
+                        </div>
+                      )}
+                    </article>
+                  </li>
+                );
+              })}
+            </ol>
+        </section>
+
+        <div
+          className="sales-workflow-layout"
+          role="tabpanel"
+          id="workflow-panel-followups"
+          aria-labelledby="workflow-tab-followups"
+          tabIndex={0}
+          hidden={activeTab !== "followups"}
+        >
             <section className="workflow-quote-list" aria-label="Quotes and follow-ups">
               {quoteSummaries.length === 0 && !state.loading && <p className="muted">No quotes saved yet.</p>}
               {quoteSummaries.map(({ quote, readiness: itemReadiness, followUp }) => {
@@ -352,10 +821,19 @@ export default function SalesWorkflowModal({
               {!selectedQuote && <p className="muted">Select a quote to manage its workflow.</p>}
               {selectedQuote && readiness && (
                 <>
-                  <header className="workflow-detail-head">
+                  <header
+                    className="workflow-detail-head"
+                    ref={detailHeadingRef}
+                    tabIndex={-1}
+                    aria-labelledby={`workflow-detail-${safeDomId(selectedQuote.id)}-quote workflow-detail-${safeDomId(selectedQuote.id)}-customer`}
+                  >
                     <div>
-                      <p className="eyebrow">{selectedQuote.quoteNumber || selectedQuote.id}</p>
-                      <h3>{selectedQuote.customer?.name || selectedQuote.customer?.email || "Customer"}</h3>
+                      <p className="eyebrow" id={`workflow-detail-${safeDomId(selectedQuote.id)}-quote`}>
+                        {selectedQuote.quoteNumber || selectedQuote.id}
+                      </p>
+                      <h3 id={`workflow-detail-${safeDomId(selectedQuote.id)}-customer`}>
+                        {selectedQuote.customer?.name || selectedQuote.customer?.email || "Customer"}
+                      </h3>
                     </div>
                     <span className={`status-badge status-${selectedQuote.status || "draft"}`}>
                       {selectedQuote.status || "draft"}
@@ -430,9 +908,9 @@ export default function SalesWorkflowModal({
                     </div>
                   </section>
 
-                  {!isAdmin && isStaff && (
+                  {isStaff && (
                     <section className="workflow-form-section">
-                      <h4>Request admin approval</h4>
+                      <h4>Request sensitive action approval</h4>
                       <div className="workflow-approval-request">
                         <select value={approvalAction} onChange={(event) => setApprovalAction(event.target.value)}>
                           {APPROVAL_ACTIONS.map((item) => (
@@ -476,21 +954,41 @@ export default function SalesWorkflowModal({
                 </>
               )}
             </section>
-          </div>
-        )}
+        </div>
 
-        {activeTab === "approvals" && (
-          <section className="approval-queue" aria-label="Sensitive action approval queue">
+        <section
+          className="approval-queue"
+          aria-label="Sensitive action approval queue"
+          role="tabpanel"
+          id="workflow-panel-approvals"
+          aria-labelledby="workflow-tab-approvals"
+          tabIndex={0}
+          hidden={activeTab !== "approvals"}
+        >
             {approvalQueue.length === 0 && !state.loading && (
               <p className="muted">No approval requests yet.</p>
             )}
-            {approvalQueue.map(({ quote, request }) => (
-              <article key={`${quote.id}-${request.id}`} className={`approval-row state-${request.state}`}>
+            {approvalQueue.map(({ quote, request }) => {
+              const approvalDomId = `workflow-approval-${safeDomId(quote.id)}-${safeDomId(request.id)}`;
+              const quoteLabel = quote.quoteNumber || quote.id;
+              const resolvingApproval = busyKey === `resolve:${request.id}:approved`;
+              const resolvingRejection = busyKey === `resolve:${request.id}:rejected`;
+              const requestResolving = resolvingApproval || resolvingRejection;
+              return (
+              <article
+                key={`${quote.id}-${request.id}`}
+                className={`approval-row state-${request.state}`}
+                tabIndex={-1}
+                data-quote-id={quote.id}
+                data-request-id={request.id}
+                data-pending={request.state === "pending"}
+                aria-labelledby={`${approvalDomId}-action ${approvalDomId}-quote`}
+              >
                 <div className="approval-row-main">
                   <div>
                     <span className="approval-state">{request.state}</span>
-                    <h3>{actionLabel(request.action)}</h3>
-                    <p>{quote.quoteNumber} · {quote.customer?.name || quote.customer?.email || "Customer"}</p>
+                    <h3 id={`${approvalDomId}-action`}>{actionLabel(request.action)}</h3>
+                    <p id={`${approvalDomId}-quote`}>{quoteLabel} · {quote.customer?.name || quote.customer?.email || "Customer"}</p>
                   </div>
                   <div className="approval-audit">
                     <span>Requested by {request.requestedByEmail || "staff"}</span>
@@ -504,6 +1002,7 @@ export default function SalesWorkflowModal({
                       type="text"
                       maxLength="800"
                       placeholder="Resolution note"
+                      aria-label={`Resolution note for ${actionLabel(request.action)} on ${quoteLabel}`}
                       value={resolutionNotes[request.id] || ""}
                       onChange={(event) => setResolutionNotes((prev) => ({
                         ...prev,
@@ -514,38 +1013,61 @@ export default function SalesWorkflowModal({
                       type="button"
                       className="cta compact"
                       onClick={() => handleResolveApproval(quote.id, request.id, "approved")}
-                      disabled={busyKey === `resolve:${request.id}`}
+                      disabled={requestResolving}
+                      aria-label={resolvingApproval
+                        ? `Approving... ${actionLabel(request.action)} for ${quoteLabel}`
+                        : `Approve ${actionLabel(request.action)} for ${quoteLabel}`}
+                      aria-busy={resolvingApproval}
                     >
-                      Approve
+                      {resolvingApproval ? "Approving..." : "Approve"}
                     </button>
                     <button
                       type="button"
                       className="ghost compact"
                       onClick={() => handleResolveApproval(quote.id, request.id, "rejected")}
-                      disabled={busyKey === `resolve:${request.id}`}
+                      disabled={requestResolving}
+                      aria-label={resolvingRejection
+                        ? `Rejecting... ${actionLabel(request.action)} for ${quoteLabel}`
+                        : `Reject ${actionLabel(request.action)} for ${quoteLabel}`}
+                      aria-busy={resolvingRejection}
                     >
-                      Reject
+                      {resolvingRejection ? "Rejecting..." : "Reject"}
                     </button>
                   </div>
                 )}
                 {request.state !== "pending" && (
                   <div className="approval-resolution-summary">
-                    <strong>{request.state === "approved" ? "Approved, awaiting admin action" : "Rejected"}</strong>
+                    <strong>{approvalOutcomeLabel(request)}</strong>
                     <span>{request.resolutionNote || "No resolution note."}</span>
                     <small>{request.resolvedByEmail || "admin"} · {fmtDateTime(request.resolvedAtISO)}</small>
+                    {request.executionState && (
+                      <small>
+                        {request.executedByEmail || "admin"}
+                        {request.executionCompletedAtISO
+                          ? ` · ${fmtDateTime(request.executionCompletedAtISO)}`
+                          : request.executionStartedAtISO
+                            ? ` · started ${fmtDateTime(request.executionStartedAtISO)}`
+                            : ""}
+                      </small>
+                    )}
+                    {request.executionReference && <span>{request.executionReference}</span>}
+                    {request.executionError && <span>{request.executionError}</span>}
                   </div>
                 )}
               </article>
-            ))}
-            {isAdmin && approvalQueue.some((item) => item.request.state === "approved") && (
+              );
+            })}
+            {isAdmin && approvalQueue.some((item) => (
+              item.request.state === "approved"
+              && (!["in_progress", "succeeded", "failed"].includes(item.request.executionState))
+            )) && (
               <div className="right-actions approval-queue-actions">
-                <button type="button" className="cta" onClick={onOpenQuoteHistory}>
+                <button type="button" className="cta" onClick={handleOpenQuoteHistory}>
                   Open Quote History
                 </button>
               </div>
             )}
-          </section>
-        )}
+        </section>
       </div>
     </div>
   );

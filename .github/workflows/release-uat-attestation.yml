@@ -1,0 +1,115 @@
+name: Release UAT Attestation
+run-name: release-uat/v1/${{ inputs.release_sha }}/${{ inputs.target }}/${{ inputs.rollback_sha }}/${{ inputs.staging_id }}/${{ inputs.checklist_digest }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full main commit SHA exercised in staging
+        required: true
+        type: string
+      target:
+        description: Production target covered by this UAT pass
+        required: true
+        type: choice
+        options:
+          - firebase-hosting
+          - firebase-backend
+          - firebase-all
+          - vercel
+      rollback_sha:
+        description: Full target-specific rollback commit SHA
+        required: true
+        type: string
+      staging_id:
+        description: Immutable staging deployment identifier
+        required: true
+        type: string
+      checklist_digest:
+        description: SHA-256 from npm run release:uat:digest
+        required: true
+        type: string
+      checked_item_ids:
+        description: Comma-separated checklist ids applicable to the selected target
+        required: true
+        type: string
+      confirmation:
+        description: ATTEST UAT followed by the full release SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-uat-${{ inputs.release_sha }}-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  attest_release_uat:
+    name: release-uat-attestation
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production-uat
+    permissions:
+      contents: read
+    env:
+      RELEASE_UAT_ATTESTER_IDS: ${{ vars.RELEASE_UAT_ATTESTER_IDS }}
+    steps:
+      - name: Checkout exact release SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Validate and record UAT evidence
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          RELEASE_TARGET: ${{ inputs.target }}
+          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+          STAGING_ID: ${{ inputs.staging_id }}
+          CHECKLIST_DIGEST: ${{ inputs.checklist_digest }}
+          CHECKED_ITEM_IDS: ${{ inputs.checked_item_ids }}
+          UAT_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git cat-file -e "${ROLLBACK_SHA}^{commit}"
+          git merge-base --is-ancestor "${ROLLBACK_SHA}" "${RELEASE_SHA}"
+          node ./scripts/release-uat-attestation.mjs \
+            --release-sha "${RELEASE_SHA}" \
+            --target "${RELEASE_TARGET}" \
+            --rollback-sha "${ROLLBACK_SHA}" \
+            --staging-id "${STAGING_ID}" \
+            --checklist-digest "${CHECKLIST_DIGEST}" \
+            --checked-item-ids "${CHECKED_ITEM_IDS}" \
+            --confirmation "${UAT_CONFIRMATION}" \
+            --output artifacts/release/uat-attestation.json
+
+      - name: Upload UAT receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-uat-${{ inputs.release_sha }}-${{ inputs.target }}
+          path: artifacts/release/uat-attestation.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize attestation
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          RELEASE_TARGET: ${{ inputs.target }}
+          STAGING_ID: ${{ inputs.staging_id }}
+        run: |
+          {
+            echo "### Release UAT attested"
+            echo "- Release SHA: ${RELEASE_SHA}"
+            echo "- Target: ${RELEASE_TARGET}"
+            echo "- Immutable staging id: ${STAGING_ID}"
+          } >> "${GITHUB_STEP_SUMMARY}"

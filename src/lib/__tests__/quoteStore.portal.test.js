@@ -132,6 +132,7 @@ describe("quoteStore portal token policy", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -157,9 +158,26 @@ describe("quoteStore portal token policy", () => {
       decision: "changes_requested",
       message: "Please replace the salmon entree."
     });
+    expect(result.portalDecision.requestId).toMatch(/^[a-zA-Z0-9-]{20,80}$/);
     const refreshed = await getPortalQuote("portal-key-12345678901234567890");
     expect(refreshed.status).toBe("viewed");
     expect(refreshed.portalDecision.decision).toBe("changes_requested");
+    expect(refreshed.portalDecision.requestId).toBe(result.portalDecision.requestId);
+  });
+
+  test("keeps fallback request IDs compatible with the Firestore rule contract", async () => {
+    vi.stubGlobal("crypto", {});
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    seedQuotes([makeQuote()]);
+
+    const result = await updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "changes_requested",
+      message: "Please replace the salmon entree."
+    });
+
+    expect(result.portalDecision.requestId).toMatch(/^[a-zA-Z0-9-]{20,80}$/);
+    expect(result.portalDecision.requestId).toHaveLength(21);
   });
 
   test("rejects decisions for drafts and prevents terminal decision rewrites", async () => {

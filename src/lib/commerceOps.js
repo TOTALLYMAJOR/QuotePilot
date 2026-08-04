@@ -1,7 +1,6 @@
 import { httpsCallable } from "firebase/functions";
 import { cloudFunctions, firebaseReady } from "./firebase";
 
-const MAX_EMAIL_ATTACHMENT_BYTES = 7 * 1024 * 1024;
 const DEFAULT_SAVE_CALLABLE_TIMEOUT_MS = 45_000;
 
 function toPositiveTimeout(value, fallback) {
@@ -40,21 +39,6 @@ async function withTimeout(promise, timeoutMs, operation) {
   });
 }
 
-function estimateBase64SizeBytes(base64Value = "") {
-  const normalized = String(base64Value || "")
-    .replace(/^data:application\/pdf;base64,/i, "")
-    .replace(/\s+/g, "");
-  if (!normalized) return 0;
-  return Math.floor((normalized.length * 3) / 4);
-}
-
-function assertAttachmentWithinEmailLimit(attachment) {
-  if (!attachment || typeof attachment !== "object") return;
-  const approxBytes = estimateBase64SizeBytes(attachment.base64);
-  if (approxBytes <= MAX_EMAIL_ATTACHMENT_BYTES) return;
-  throw new Error("Attachment is too large (max 7 MB). Reduce PDF size before sending.");
-}
-
 export async function notifyOwnerNewQuote({ quoteId }) {
   ensureFunctionsReady();
   const call = httpsCallable(cloudFunctions, "notifyOwnerNewQuote");
@@ -66,18 +50,36 @@ export async function notifyOwnerNewQuote({ quoteId }) {
   return result.data || {};
 }
 
-export async function createDepositCheckout({ quoteId }) {
-  ensureFunctionsReady();
-  const call = httpsCallable(cloudFunctions, "createDepositCheckout");
-  const result = await call({ quoteId });
-  return result.data || {};
-}
-
 export async function getIntegrationSetupStatus() {
   ensureFunctionsReady();
   const call = httpsCallable(cloudFunctions, "getIntegrationSetupStatus");
   const result = await call({});
   return result.data || {};
+}
+
+export async function reconcileDepositCheckout({ quoteId } = {}) {
+  ensureFunctionsReady();
+  const normalizedQuoteId = String(quoteId || "").trim();
+  if (!normalizedQuoteId) {
+    throw new Error("Quote id is required for payment reconciliation.");
+  }
+  const call = httpsCallable(cloudFunctions, "reconcileDepositCheckout");
+  const result = await call({ quoteId: normalizedQuoteId });
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== normalizedQuoteId
+    || !/^cs_[A-Za-z0-9_]+$/.test(String(response.stripeSessionId || "").trim())
+    || !["open", "processing", "paid", "failed", "expired", "unknown"].includes(
+      String(response.providerState || "").trim().toLowerCase()
+    )
+    || !String(response.auditEventId || "").trim()
+    || Object.prototype.hasOwnProperty.call(response, "paymentLink")
+    || Object.prototype.hasOwnProperty.call(response, "url")
+  ) {
+    throw new Error("Payment reconciliation returned an invalid authoritative response.");
+  }
+  return response;
 }
 
 export async function sendIntegrationTestSms({ message = "" } = {}) {
@@ -107,27 +109,138 @@ export async function calculateQuotePricing({ organizationId = "", pricingInput 
   return result.data || {};
 }
 
-export async function sendQuoteToCustomerEmail({ quoteId, attachment = null } = {}) {
+export function resolveQuoteDeliveryRevisionId(quote = {}) {
+  const explicit = String(quote.activeVersionId || quote.versionMeta?.versionId || "")
+    .trim()
+    .slice(0, 80);
+  const versionNumber = Number(quote.latestVersionNumber || quote.versionMeta?.versionNumber);
+  const contentRevisionId = explicit || (
+    Number.isSafeInteger(versionNumber) && versionNumber > 0
+      ? `v${String(versionNumber).padStart(4, "0")}`
+      : ""
+  );
+  if (!contentRevisionId) {
+    throw new Error("Save this quote as a versioned draft before sending customer email.");
+  }
+  const portalIssuedAt = String(quote.portalIssuedAtISO || "").trim();
+  const parsedPortalIssuedAt = portalIssuedAt ? new Date(portalIssuedAt) : null;
+  const portalIdentity = parsedPortalIssuedAt && !Number.isNaN(parsedPortalIssuedAt.getTime())
+    ? parsedPortalIssuedAt.toISOString()
+    : String(quote.portalKey || "").trim().slice(0, 64);
+  return portalIdentity
+    ? `${contentRevisionId}@${portalIdentity}`
+    : contentRevisionId;
+}
+
+export async function sendQuoteToCustomerEmail({
+  quoteId,
+  quoteRevisionId
+} = {}) {
   ensureFunctionsReady();
-  assertAttachmentWithinEmailLimit(attachment);
+  const normalizedQuoteId = String(quoteId || "").trim();
+  const normalizedRevisionId = String(quoteRevisionId || "").trim();
+  if (!normalizedQuoteId || !normalizedRevisionId) {
+    throw new Error("A saved quote revision is required before sending customer email.");
+  }
   const call = httpsCallable(cloudFunctions, "sendQuoteToCustomer");
   const result = await call({
-    quoteId,
-    attachment
+    quoteId: normalizedQuoteId,
+    quoteRevisionId: normalizedRevisionId
   });
-  return result.data || {};
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  const responseStatus = String(response.status || "").trim().toLowerCase();
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== normalizedQuoteId
+    || String(response.quoteRevisionId || "").trim() !== normalizedRevisionId
+    || !["sent", "viewed", "accepted", "declined", "booked"].includes(responseStatus)
+    || response.email?.sent !== true
+    || !String(response.email?.provider || "").trim()
+    || !String(response.email?.messageId || "").trim()
+    || String(response.delivery?.revisionId || "").trim() !== normalizedRevisionId
+    || String(response.delivery?.state || "").trim().toLowerCase() !== "provider_accepted"
+  ) {
+    throw new Error("Quote delivery returned an invalid authoritative response.");
+  }
+  return response;
+}
+
+export async function resolveQuoteDeliveryOutcome({
+  quoteId,
+  quoteRevisionId,
+  resolution,
+  note,
+  providerMessageId = ""
+} = {}) {
+  ensureFunctionsReady();
+  const normalizedQuoteId = String(quoteId || "").trim();
+  const normalizedRevisionId = String(quoteRevisionId || "").trim();
+  const normalizedResolution = String(resolution || "").trim().toLowerCase();
+  const normalizedNote = String(note || "").trim();
+  const normalizedProviderMessageId = String(providerMessageId || "").trim();
+  if (!normalizedQuoteId || !normalizedRevisionId) {
+    throw new Error("A saved quote revision is required for delivery review.");
+  }
+  if (!["confirmed_not_sent", "provider_accepted"].includes(normalizedResolution)) {
+    throw new Error("Choose a valid delivery review outcome.");
+  }
+  if (normalizedNote.length < 8) {
+    throw new Error("Add a short audit note describing the provider check.");
+  }
+  if (normalizedResolution === "provider_accepted" && !normalizedProviderMessageId) {
+    throw new Error("Provider message ID is required to record provider acceptance.");
+  }
+  const call = httpsCallable(cloudFunctions, "resolveQuoteDeliveryOutcome");
+  const result = await call({
+    quoteId: normalizedQuoteId,
+    quoteRevisionId: normalizedRevisionId,
+    resolution: normalizedResolution,
+    note: normalizedNote,
+    providerMessageId: normalizedProviderMessageId
+  });
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  const expectedState = normalizedResolution === "provider_accepted"
+    ? "provider_accepted"
+    : "reconciled_not_sent";
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== normalizedQuoteId
+    || String(response.quoteRevisionId || "").trim() !== normalizedRevisionId
+    || String(response.resolution || "").trim().toLowerCase() !== normalizedResolution
+    || String(response.delivery?.revisionId || "").trim() !== normalizedRevisionId
+    || String(response.delivery?.state || "").trim().toLowerCase() !== expectedState
+  ) {
+    throw new Error("Delivery review returned an invalid authoritative response.");
+  }
+  return response;
 }
 
 export async function sendPaymentRequestToCustomerEmail({
   quoteId,
-  attachment = null
+  approvalRequestId
 } = {}) {
   ensureFunctionsReady();
-  assertAttachmentWithinEmailLimit(attachment);
   const call = httpsCallable(cloudFunctions, "sendPaymentRequestEmail");
   const result = await call({
     quoteId,
-    attachment
+    approvalRequestId
   });
-  return result.data || {};
+  const response = result.data && typeof result.data === "object" ? result.data : {};
+  if (
+    response.ok !== true
+    || String(response.quoteId || "").trim() !== String(quoteId || "").trim()
+    || String(response.approvalRequest?.id || "").trim() !== String(approvalRequestId || "").trim()
+    || String(response.approvalRequest?.executionState || "").trim().toLowerCase() !== "succeeded"
+    || response.email?.sent !== true
+    || !String(response.email?.provider || "").trim()
+    || !String(response.email?.messageId || "").trim()
+    || !/^cs_[A-Za-z0-9_]+$/.test(String(response.stripeSessionId || "").trim())
+    || !Number.isSafeInteger(Number(response.checkoutGeneration))
+    || typeof response.published !== "boolean"
+    || Object.prototype.hasOwnProperty.call(response, "paymentLink")
+    || Object.prototype.hasOwnProperty.call(response, "url")
+  ) {
+    throw new Error("Payment request returned an invalid authoritative response.");
+  }
+  return response;
 }

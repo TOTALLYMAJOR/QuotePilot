@@ -5,7 +5,7 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 ## Quick Links
 - Live app: https://quotepilot.mbmapps.com
 - Firebase Hosting origin/fallback: https://tonicatering.web.app
-- Repository: https://github.com/TOTALLYMAJOR/Firebase-quote-wizard
+- Repository: https://github.com/TOTALLYMAJOR/quoteflow
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
@@ -103,22 +103,26 @@ and the exact confirmation token printed by the command.
 The root `.env.example` is for browser-safe `VITE_*` values only. Server-side
 Firebase Functions placeholders live in
 [`functions/.env.example`](functions/.env.example). Copy that template to an
-ignored `functions/.env.<firebase-project-id>` file and replace only the values
-needed for the intended provider deployment; never commit real provider
-credentials. Confirm the target is ignored with
+ignored `functions/.env.<firebase-project-id>` file only for local/emulator
+validation; never put production provider credentials in that file or commit
+real provider credentials. Confirm the target is ignored with
 `git check-ignore -v functions/.env.<firebase-project-id>` before adding any
-secret.
+non-production value.
 
-When the controlled GitHub deploy enables Functions, CI runs
-`scripts/materialize-functions-env.mjs` before deployment. The script fails
-closed unless it receives the canonical QuotePilot `/app` URL and domain, a
-non-placeholder platform-admin allowlist, the approved
-`QuotePilot by MBMapps <onboarding@quotepilot.mbmapps.com>` sender identity,
-Stripe server secrets, and any credentials required by an explicitly enabled
-email or SMS provider. It writes the project-specific Functions environment
-file with restricted permissions and does not print secret values. The approved
-sender identity in configuration does not prove the Resend domain is verified
-or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider truth.
+Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
+`test` or `live`, a secret/restricted key with the matching mode prefix, and a
+webhook secret. Event and Checkout Session `livemode` must also match. The
+tracked Functions template is inventory only; use the credential-isolated
+runtime channel described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and
+never place real Stripe values in a browser environment or committed file.
+
+The policy-enforcing repository preparation workflow packages Functions source without loading or
+materializing runtime secrets. Every `.env` file is excluded from the artifact.
+A separately owned trusted deployer must validate and materialize the approved
+Functions runtime configuration inside its credential-isolated boundary. The
+approved sender identity in configuration does not prove the Resend domain is
+verified or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider
+truth.
 
 ## Quality Gates
 ```bash
@@ -130,10 +134,17 @@ npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
 npm run build
 npm run check:secrets
+npm run check:workflows
 npm run check:docs:governance
 npm run check:perf:bundle
 npm run check:perf:cwv
 ```
+
+`check:workflows` downloads only the platform-specific official actionlint
+v1.7.12 archive, verifies its repository-pinned SHA-256, and checks every
+tracked GitHub Actions workflow. The required `lane:quick` runs this gate before
+dependency installation and disables host-provided shellcheck/pyflakes
+integrations so runner tool versions cannot change the result.
 
 ## Orchestration Lanes
 ```bash
@@ -171,6 +182,15 @@ instruction if that browser is unavailable.
   - Firebase emulator browser lane that also starts Functions emulator.
   - Requires authoritative pricing callable success and trusted quote creation
     in the save path (no client-only pricing fallback).
+- `scripts/provisioning-emulator-acceptance.mjs`
+  - Full emulator-only platform/tenant lifecycle matrix run under Auth,
+    Firestore, and Functions emulators.
+  - Covers provisioning authority, owner activation, trusted quote and portal
+    behavior, provider/payment failure boundaries, cleanup, and
+    server-authoritative approval request, resolution, exact governed-action
+    execution, outcome audit, idempotency, and replay protection.
+  - The runner refuses non-`demo-*` projects or missing emulator host variables;
+    it is local evidence and does not replace hosted tenant acceptance.
 
 Optional env vars for Firebase emulator lane:
 - `E2E_FIREBASE_PROJECT_ID` (default: `demo-e2e`)
@@ -232,6 +252,77 @@ npm run migrate:multi-tenant -- \
 ```
 
 Do not reuse a confirmation for a different project or tenant.
+
+## Customer Portal Projection Backfill
+
+Legacy active customer portal records can be inspected and refreshed from their
+organization-scoped quote without replacing customer decisions, payment or
+booking evidence, lifecycle history, or unrecognized operator fields. The
+command is read-only by default and requires explicit project and organization
+scope:
+
+```bash
+npm run portal:backfill -- \
+  --project <firebase-project-id> \
+  --organization <organization-id> \
+  --dry-run \
+  --evidence-out <new-evidence-file.json>
+```
+
+Review the count-only evidence and resolve every conflict before applying. An
+apply requires Firebase Admin Application Default Credentials, a new evidence
+path, and an exact scope-bound confirmation. Release, merge, UAT, or deployment
+approval does not authorize this separate production-data operation:
+
+```bash
+npm run portal:backfill -- \
+  --project <firebase-project-id> \
+  --organization <organization-id> \
+  --apply \
+  --confirm "BACKFILL PORTALS <firebase-project-id> <organization-id>" \
+  --evidence-out <new-evidence-file.json>
+```
+
+Apply mode re-reads each quote and portal in a transaction before writing. It
+skips foreign-tenant, deleted, expired, identity-mismatched, and conflicting
+commercial records. The create-only private (`0600`) evidence destination is
+reserved before any database work and completed atomically with aggregate
+counts rather than portal tokens or customer data.
+
+## Stripe Deposit Workflow (Source Candidate)
+
+The current source candidate makes an approved deposit request one
+server-authoritative, resumable operation. Its immutable approval scope includes
+the organization, quote revision, current portal issuance, customer email,
+currency, and deposit amount. A new Checkout Session is first registered as
+`prepared` with no browser-readable payment link; QuotePilot retains its URL
+only in a server-only dispatch record. The server submits the payment-request
+email and publishes the link to the quote and customer portal only after
+provider acceptance is durably recorded. The browser cannot create a standalone
+checkout or mark payment evidence manually.
+
+If Stripe creation or email delivery has an ambiguous outcome, the approval
+execution remains in progress. The same admin uses `Resume Pay Request`, which
+reuses the Stripe-creation and email-provider identities; when a prepared
+Session is known, it is reused. If provider acceptance was recorded but
+database publication was interrupted, resume finishes publication without
+sending again. A definite email failure clears the private URL and requires a
+new approval only after the unsent Session is safely neutralized; unresolved
+cleanup stays resumable for retry or provider reconciliation.
+
+Payment state is driven by signed, deduplicated
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+`checkout.session.async_payment_failed`, and `checkout.session.expired` events.
+An admin reconciliation action re-reads the exact server-recorded Session when
+provider delivery needs review, without overriding settled payment truth.
+
+This behavior is not deployed by the repository preparation workflow. Release
+requires one coordinated exact-revision frontend, Functions, and Firestore
+rules promotion plus hosted Stripe test-mode and separately authorized
+live-mode acceptance. Refunds, disputes, and final-balance automation are not
+part of this deposit workflow. See the
+[launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--twilio--resend-providers)
+for configuration and proof requirements.
 
 ## Customer Provisioning (No Stripe)
 Provision a customer organization, enforce order-based feature entitlements
@@ -315,40 +406,79 @@ What the preview script does:
 Do not use the CLI to create or update an organization. Use the explicit in-app
 platform-admin workflow.
 
-## Deploy Entry Points
-- Firebase hosting/rules/functions: `npm run deploy:firebase -- --confirm "DEPLOY tonicatering hosting:app,firestore,functions"`
-- Firebase rules/functions only: `npm run deploy:firebase:functions -- --confirm "DEPLOY tonicatering firestore,functions"`
-- Firebase primary hosting site (`app` target): `npm run deploy:firebase:hosting -- --confirm "DEPLOY tonicatering hosting:app"`
-- Firebase customer hosting site (`customer` target): `npm run deploy:firebase:hosting:customer -- --site <siteId> --project tonicatering --confirm "DEPLOY tonicatering hosting:<siteId>"`
-- Vercel production: `npm run deploy:vercel -- --confirm "DEPLOY quotepilot.mbmapps.com via vercel"`
+## Release Entry Points
 
-The primary Firebase scripts require a clean pushed `main` revision that
-matches `origin/main`, a semantic release tag on the same commit that is
-published to `origin`, and an exact scope-bound confirmation. The same
-published-revision gate applies to Vercel production. Functions scopes also
-validate the ignored
-`functions/.env.tonicatering` file before deployment. The scripts bind Hosting
-target `app` to site `tonicatering`; do not replace this with an unscoped
-default Hosting deploy.
+Primary production preparation is workflow-only:
+
+- `Release UAT Attestation` records an allowlisted human's exact-main UAT
+  statement while running in the configured `production-uat` environment.
+- `Prepare Firebase Production Artifact` verifies the evidence, stages the
+  selected Firebase surface, and uploads a target-scoped payload with a
+  deterministic manifest.
+- `Prepare Vercel Production Artifact` verifies the same evidence contract,
+  builds the static SPA, translates it into a deployable `.vercel/output`
+  payload, and uploads it with a deterministic manifest.
+- Customer-specific Firebase Hosting promotion is not yet supported by the
+  credential-isolated release path. The legacy tracked customer-site entrypoint
+  fails closed without invoking a provider client.
+
+Each prepare workflow requires four common evidence inputs: the full release
+SHA, the successful exact-SHA `CI Quality` run id, the successful `Release UAT
+Attestation` run id, and a full target-specific rollback SHA. Firebase
+preparation additionally requires `firebase_scope`. The preparation profile is
+explicit and evidence-bound: `firebase-hosting`,
+`firebase-backend`, `firebase-all`, or `vercel`; a repository variable cannot
+silently widen the Firebase scope after UAT. The workflows fail before
+dependency execution
+unless the checkout is the exact tagged `main` SHA, all eight CI jobs passed,
+the tracked UAT checklist digest matches, the attestation is fresh and came
+from an allowlisted human, the current run is the canonical in-progress target
+preparation dispatched by a human, the exact UAT run has one recorded approval
+by an independent current direct reviewer, the exact preparation run has one
+recorded `production` approval by a current direct reviewer other than both the
+dispatcher and UAT attester, and the current `production-uat` and `production`
+environment policies match the source contract. The verifier still
+does not prove provider identity behind the human-entered staging id or the
+historical environment-policy snapshot. Run `npm run
+release:uat:digest` on the release SHA to obtain the checklist digest, then run:
+
+```bash
+npm run release:uat:items -- --target <firebase-hosting|firebase-backend|firebase-all|vercel>
+```
+
+Use that exact comma-separated output for `checked_item_ids`. Checklist schema
+v2 binds each item to explicit targets; the attestation rejects missing,
+duplicate, and valid-but-inapplicable ids. A successful item is an observed UAT
+contract for the selected target and its recorded test environment, not proof
+of an unbound dependency's SHA or provider identity. Portal projection backfill
+is not packaged by any target and remains a separately authorized data
+operation outside target attestation.
+
+The `backend` and `all` scopes package Firestore rules plus Functions without
+runtime `.env` files. The manifest binds the Firebase project, Hosting target,
+Vercel project/team, exact release evidence, and the SHA-256/size/mode of every
+payload file. Provider/environment setup and the full operator sequence live in
+[docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md).
+
+These two primary preparation workflows are a source candidate, not an
+operational production gate, and they do not mutate production. The legacy
+primary deploy commands fail closed. Promotion remains blocked until protected
+environments and independent
+reviewers exist, provider staging/rollback evidence is machine-bound, Vercel
+bypass paths are closed, and a separately owned trusted deployer revalidates the
+uploaded payload against its manifest and GitHub run/artifact identity before
+receiving provider mutation credentials.
 
 ### Multi-Site Hosting (Per Customer)
 Use one Firebase project with multiple Hosting sites, then map each customer domain to its site.
 
-One-time per customer site:
-```bash
-npx firebase-tools hosting:sites:create <siteId>
-```
-
-Deploy to a specific customer site:
-```bash
-npm run deploy:firebase:hosting:customer -- \
-  --site <siteId> \
-  --project tonicatering \
-  --confirm "DEPLOY tonicatering hosting:<siteId>"
-```
-
-The customer deploy always runs a fresh environment check and build; it rejects
-implicit projects and stale `dist` reuse.
+Create the site and domain mapping through an authorized provider operator, and
+promote only an independently verified target-specific artifact through the
+separately owned trusted deployer. The existing
+`deploy:firebase:hosting:customer` helper is not an approved production path:
+it now fails closed without invoking a provider client. Customer-site promotion
+is blocked until it is implemented behind the same isolated, audited boundary
+as the primary targets.
 
 ## Governance Docs
 - Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)

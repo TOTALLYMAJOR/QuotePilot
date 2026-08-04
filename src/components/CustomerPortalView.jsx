@@ -72,11 +72,57 @@ function decisionReceipt(quote) {
   };
 }
 
-export default function CustomerPortalView({ initialPortalKey = "", onBackToStaff }) {
+export function getPaymentReturnMessage(paymentReturn, payment = {}) {
+  const returnState = String(paymentReturn || "").trim().toLowerCase();
+  const depositStatus = String(payment.depositStatus || "").trim().toLowerCase();
+  const checkoutState = String(payment.stripeCheckoutState || "").trim().toLowerCase();
+  if (!new Set(["success", "cancelled"]).has(returnState)) return null;
+  if (depositStatus === "paid") {
+    return {
+      tone: "confirmed",
+      text: "Deposit confirmed. This status comes from Stripe's verified server notification."
+    };
+  }
+  if (depositStatus === "refunded") {
+    return {
+      tone: "refunded",
+      text: "The deposit is recorded as refunded in the verified payment record."
+    };
+  }
+  if (checkoutState === "processing") {
+    return {
+      tone: "processing",
+      text: "Stripe reports that this payment is processing. Deposit confirmation is not final yet; this page will refresh briefly."
+    };
+  }
+  if (["failed", "expired"].includes(checkoutState)) {
+    return {
+      tone: "failed",
+      text: "Stripe did not confirm this payment. Contact the quote owner for a fresh payment request."
+    };
+  }
+  if (returnState === "cancelled") {
+    return {
+      tone: "cancelled",
+      text: "You returned without a verified payment confirmation. Your current payment status appears below; you can return when you are ready."
+    };
+  }
+  return {
+    tone: "processing",
+    text: "You returned from checkout, but no verified payment confirmation has been received. This page will refresh briefly."
+  };
+}
+
+export default function CustomerPortalView({
+  initialPortalKey = "",
+  initialPaymentReturn = "",
+  onBackToStaff
+}) {
   const [portalKey, setPortalKey] = useState(initialPortalKey);
   const [decisionDraft, setDecisionDraft] = useState("accepted");
   const [decisionMessage, setDecisionMessage] = useState("");
   const [acceptanceConfirmed, setAcceptanceConfirmed] = useState(false);
+  const [paymentRefreshAttempts, setPaymentRefreshAttempts] = useState(0);
   const [state, setState] = useState({
     loading: false,
     busy: false,
@@ -163,6 +209,31 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
     if (initialPortalKey) load(initialPortalKey);
   }, [initialPortalKey]);
 
+  useEffect(() => {
+    if (
+      initialPaymentReturn !== "success"
+      || !quote?.portalKey
+      || payment.depositStatus === "paid"
+      || ["failed", "expired"].includes(String(payment.stripeCheckoutState || "").toLowerCase())
+      || paymentRefreshAttempts >= 4
+    ) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      setPaymentRefreshAttempts((current) => current + 1);
+      load(quote.portalKey);
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [
+    initialPaymentReturn,
+    payment.depositStatus,
+    payment.stripeCheckoutState,
+    paymentRefreshAttempts,
+    quote?.portalKey
+  ]);
+
+  const paymentReturnMessage = getPaymentReturnMessage(initialPaymentReturn, payment);
+
   const pricingRows = [
     ["Package", totals.base],
     ["Menu selections", totals.menu],
@@ -212,6 +283,11 @@ export default function CustomerPortalView({ initialPortalKey = "", onBackToStaf
 
         {state.error && <p className="error-note">{state.error}</p>}
         {state.status && <p className="source-note">{state.status}</p>}
+        {quote && paymentReturnMessage && (
+          <p className={`portal-payment-return return-${paymentReturnMessage.tone}`} role="status">
+            {paymentReturnMessage.text}
+          </p>
+        )}
 
         {quote && (
           <div className="portal-decision-layout">

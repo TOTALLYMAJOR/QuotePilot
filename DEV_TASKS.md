@@ -1,11 +1,12 @@
 # Dev Tasks
 
-Last updated: July 27, 2026
+Last updated: August 3, 2026
 
 ## P0 - Tenant Provisioning Release
-- Commit and review the current provisioning slice, then deploy the
-  role-authoritative Firestore rules, provisioning/repair/cleanup Functions,
-  and `/app` frontend from that one revision.
+- Deploy the reviewed role-authoritative Firestore rules and
+  provisioning/repair/cleanup Functions from the merged `main` revision; the
+  `/app` frontend is live on Vercel, but the coordinated Firebase runtime slice
+  remains locked.
 - Run a disposable second-tenant acceptance: platform-admin create, exact owner
   email verification/invite activation, cross-tenant denial, neutral default
   inspection, reviewed package/event/pricing setup, conflict-safe catalog save,
@@ -27,19 +28,74 @@ Last updated: July 27, 2026
 - Remaining P0 action: deploy hardened portal rules to production and run post-deploy smoke verification (active portal token succeeds; expired/deleted tokens are denied).
 
 ## P0 - Security and Reliability
-- Re-establish staging sign-off workflow and release checklist enforcement before broadening `main` merge velocity.
+- Publish and remotely qualify the locally validated combined sell-readiness
+  source candidate that converges product hardening with fail-closed exact-SHA
+  release preparation; merge only after fresh exact-head CI and hosted Preview
+  evidence.
+- Configure all six non-secret Preview-scope `VITE_FIREBASE_*` variables, then
+  reverify the exact candidate SHA and complete hosted owner/quote/portal
+  acceptance. Source CI alone is not hosted proof.
+- Release the Stripe deposit lifecycle only as one exact-revision frontend,
+  Functions, and Firestore-rules rollout. In isolated hosted acceptance set
+  explicit `STRIPE_MODE=test` with a matching test key and subscribe all four
+  Checkout Session events; after that evidence, separately authorize live mode,
+  configure a matching live key, and capture real webhook plus admin
+  reconciliation evidence. Prove that prepared URLs remain absent from
+  browser-readable quote/portal records, ambiguous checkout/email outcomes
+  resume under the same executing admin with the same keys, durable provider
+  acceptance resumes publication without another send, and definite failure
+  does not publish an unsent checkout. Local tests and emulator events are not
+  provider acceptance.
+- Strengthen the existing `main` protection from zero required approvals to an
+  independently enforceable review policy with code-owner, stale-review, and
+  last-push controls. Add a non-admin collaborator or separately owned gate;
+  the current sole-admin collaborator model cannot provide independent review.
+- Create `production-uat`; protect it and `Production` with self-review
+  prevention, administrator bypass disabled, protected-branch policy, and an
+  independent reviewer; set `RELEASE_UAT_ATTESTER_IDS` to approved human GitHub
+  user ids. The August 3 audit found `production-uat` absent and `Production`
+  unprotected. Confirm the private repository plan supports these controls or
+  transfer/upgrade/use an external deployment protection gate.
+- Prevent Vercel Git integration or any alternate provider entrypoint from
+  bypassing the controlled production workflows.
+- Replace credential-bearing `npx` provider execution with a separately locked,
+  audited, checksum-verified Firebase/Vercel tool image or narrow provider API
+  client; do not import the currently vulnerable CLI dependency trees into the
+  application lockfile. Split preparation from mutation and expose the provider
+  token only to the fixed, minimal final tool process—not repository build,
+  verifier, npm, or application code.
+- Bind UAT to provider-derived staging project/deployment id, source SHA, READY
+  state, artifact/configuration digest, and timestamp. Validate the historical
+  GitHub deployment review and absence of bypass instead of relying only on
+  current environment policy.
+- Replace rollback ancestry alone with a signed provider-specific successful
+  deployment manifest and component-scoped last-known-good artifact.
+- Rehearse an exact-main immutable staging pass, protected UAT attestation, and
+  rejected invalid-evidence deploy without changing production; attach run ids
+  and environment-policy evidence.
+- Add a separately owned GitHub App/check or equivalent external verifier for
+  release-critical source changes when stronger tamper independence is needed.
 
 ## P1 - Performance and UX
 - Reduce largest JavaScript chunk size (split proposal/export-heavy paths where practical).
-- Improve wizard mobile layout for dense review/pricing states.
+- Continue mobile-density cleanup beyond the implemented persistent pricing
+  summary, active-step rail, compact operator action rail, and simplified
+  Step 1 staffing-pricing boundary.
 - Add intentional transition/motion polish for step changes and live breakdown updates.
 
 ## P1 - Product Capability
-- Add automated notifications and escalation rules for due follow-ups and new customer change requests.
-- Add server-authoritative enforcement and audit linkage from approved sensitive-action requests to separate admin execution.
-- Refresh/backfill existing portal snapshots so older active links receive the new decision-center event, selection, and pricing fields.
+- Add opt-in, provider-backed notifications and configurable escalation rules
+  for due follow-ups and new customer change requests; preserve the in-app
+  Workflow Attention queue as operational tracking rather than delivery proof.
+- Run and review the tenant-scoped production portal-projection dry run, resolve
+  conflicts, then explicitly authorize the guarded apply so older active links
+  receive the new decision-center event, selection, and pricing fields. The
+  tool and emulator acceptance are complete; production execution is not.
 - Add basic analytics events for funnel drop-off and add-on selection trends.
 - Extend operations audit controls (retry dashboards, sync health trends, role-based action logs).
+- Add server-authoritative refund, dispute, and final-balance workflows. The
+  current Stripe candidate intentionally covers deposit checkout only; these
+  later money movements must not be inferred from deposit status.
 
 ## P2 - Integrations
 - Add CRM adapters (HubSpot/Salesforce or webhook bridge).

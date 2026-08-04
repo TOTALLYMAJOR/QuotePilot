@@ -12,13 +12,23 @@ usage() {
 Usage: orchestration-lanes.sh <lane> [--with-cwv]
 
 Lanes:
-  lane:quick               check:env + check:secrets
+  lane:quick               check:env + check:secrets + check:workflows
   lane:core                test:unit + build + docs governance + bundle budget
   lane:firebase-auth-rules test:rules:firestore + test:e2e:firebase
   lane:authoritative-pricing
                            test:e2e:firebase:authoritative
   lane:release             lane:quick + lane:core (+ optional check:perf:cwv)
 USAGE
+}
+
+prepare_firebase_java() {
+  bash ./scripts/ensure-local-jre.sh
+
+  local local_jre="$ROOT_DIR/.cache/tools/jre21"
+  if [[ -x "$local_jre/bin/java" ]]; then
+    export JAVA_HOME="$local_jre"
+    export PATH="$local_jre/bin:$PATH"
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -53,6 +63,7 @@ case "$lane" in
     echo "==> lane:quick"
     npm run check:env
     npm run check:secrets
+    npm run check:workflows
     ;;
   lane:core)
     echo "==> lane:core"
@@ -63,6 +74,7 @@ case "$lane" in
     ;;
   lane:firebase-auth-rules)
     echo "==> lane:firebase-auth-rules"
+    prepare_firebase_java
     npm run test:rules:firestore
     npm run test:e2e:firebase
     ;;

@@ -1,79 +1,157 @@
-name: Deploy Firebase Hosting (+ Optional Functions)
+name: Prepare Firebase Production Artifact
+run-name: prepare/v1/firebase-${{ inputs.firebase_scope }}/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
 
 on:
   workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full tagged main commit SHA to prepare
+        required: true
+        type: string
+      ci_run_id:
+        description: Successful main-push CI Quality run id for release_sha
+        required: true
+        type: string
+      uat_run_id:
+        description: Successful Release UAT Attestation run id for release_sha
+        required: true
+        type: string
+      rollback_sha:
+        description: Full target-specific rollback commit SHA
+        required: true
+        type: string
+      firebase_scope:
+        description: Exact Firebase production surface covered by UAT
+        required: true
+        default: hosting
+        type: choice
+        options:
+          - hosting
+          - backend
+          - all
 
 concurrency:
-  group: deploy-firebase-production
+  group: prepare-firebase-production
   cancel-in-progress: false
 
 jobs:
-  deploy_hosting:
-    name: Build + Deploy Firebase
-    if: github.ref == 'refs/heads/main'
+  prepare_firebase:
+    name: Verify + Prepare Firebase Artifact
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
     permissions:
+      actions: read
       contents: read
     env:
-      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY || secrets.VITE_FIREBASE_API_KEY }}
-      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN || secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID || secrets.VITE_FIREBASE_PROJECT_ID }}
-      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET || secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID || secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID || secrets.VITE_FIREBASE_APP_ID }}
+      RELEASE_UAT_ATTESTER_IDS: ${{ vars.RELEASE_UAT_ATTESTER_IDS }}
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_FUNCTIONS_REGION: ${{ vars.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1' }}
-      FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID || secrets.VITE_FIREBASE_PROJECT_ID }}
-      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
-      APP_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
-      AUTH_PLATFORM_ADMIN_EMAILS: ${{ secrets.AUTH_PLATFORM_ADMIN_EMAILS }}
-      NOTIFICATIONS_EMAIL_PROVIDER: ${{ vars.NOTIFICATIONS_EMAIL_PROVIDER || 'none' }}
-      EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
-      EMAIL_FROM_EMAIL: ${{ vars.EMAIL_FROM_EMAIL }}
-      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      NOTIFICATIONS_SMS_PROVIDER: ${{ vars.NOTIFICATIONS_SMS_PROVIDER || 'none' }}
-      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
-      TWILIO_FROM_NUMBER: ${{ vars.TWILIO_FROM_NUMBER }}
-      NOTIFICATIONS_OWNER_PHONE: ${{ vars.NOTIFICATIONS_OWNER_PHONE }}
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout exact release SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
 
+      - name: Verify exact-SHA release evidence before dependency execution
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          UAT_RUN_ID: ${{ inputs.uat_run_id }}
+          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
+        run: |
+          set -euo pipefail
+          node ./scripts/production-release-evidence.mjs \
+            --release-sha "${RELEASE_SHA}" \
+            --ci-run-id "${CI_RUN_ID}" \
+            --uat-run-id "${UAT_RUN_ID}" \
+            --rollback-sha "${ROLLBACK_SHA}" \
+            --target "${RELEASE_TARGET}"
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Install functions dependencies (when enabled)
-        if: vars.ENABLE_FUNCTIONS_DEPLOY == 'true'
+      - name: Install Functions dependencies (backend/all)
+        if: inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'
         run: npm ci --prefix functions
 
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Validate and materialize Functions runtime env
-        if: vars.ENABLE_FUNCTIONS_DEPLOY == 'true'
-        run: node ./scripts/materialize-functions-env.mjs
+      - name: Validate production browser configuration
+        run: npm run check:env
 
-      - name: Deploy to Firebase (hosting always, functions optional)
-        run: |
-          if [ "${{ vars.ENABLE_FUNCTIONS_DEPLOY }}" = "true" ]; then
-            node ./scripts/deploy-firebase-production.mjs \
-              --scope all \
-              --confirm "DEPLOY tonicatering hosting:app,firestore,functions"
-          else
-            node ./scripts/deploy-firebase-production.mjs \
-              --scope hosting \
-              --confirm "DEPLOY tonicatering hosting:app"
-          fi
+      - name: Build frontend payload (hosting/all)
+        if: inputs.firebase_scope == 'hosting' || inputs.firebase_scope == 'all'
+        run: npm run build
+
+      - name: Re-verify evidence after repository execution
         env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          UAT_RUN_ID: ${{ inputs.uat_run_id }}
+          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node ./scripts/production-release-evidence.mjs \
+            --release-sha "${RELEASE_SHA}" \
+            --ci-run-id "${CI_RUN_ID}" \
+            --uat-run-id "${UAT_RUN_ID}" \
+            --rollback-sha "${ROLLBACK_SHA}" \
+            --target "${RELEASE_TARGET}" \
+            --output artifacts/release/release-evidence.json
+
+      - name: Stage exact Firebase payload
+        env:
+          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
+        run: |
+          node ./scripts/stage-production-payload.mjs \
+            --target "${RELEASE_TARGET}" \
+            --output "artifacts/release/payload/${RELEASE_TARGET}"
+
+      - name: Create deterministic production artifact manifest
+        env:
+          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
+        run: |
+          node ./scripts/prepare-production-artifact.mjs \
+            --evidence-file "${GITHUB_WORKSPACE}/artifacts/release/release-evidence.json" \
+            --artifact-root "${GITHUB_WORKSPACE}/artifacts/release/payload/${RELEASE_TARGET}"
+
+      - name: Upload verified prepare-only artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-input-firebase-${{ inputs.firebase_scope }}-${{ inputs.release_sha }}
+          path: |
+            artifacts/release/payload/firebase-${{ inputs.firebase_scope }}
+            artifacts/release/release-evidence.json
+            artifacts/release/firebase-${{ inputs.firebase_scope }}-${{ inputs.release_sha }}-*.manifest.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+      - name: Summarize preparation boundary
+        run: |
+          {
+            echo "### Firebase production artifact prepared"
+            echo "- Target: firebase-${{ inputs.firebase_scope }}"
+            echo "- Release SHA: ${{ inputs.release_sha }}"
+            echo "- Production was not mutated. A separately owned trusted deployer is required."
+          } >> "${GITHUB_STEP_SUMMARY}"

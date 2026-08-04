@@ -199,6 +199,52 @@ describe("trusted server quote creation documents", () => {
       depositLink: "",
       depositStatus: "sent"
     });
+    expect(portal.deliveryEvidence).toEqual({
+      revisionId: "",
+      state: "",
+      portalActivationState: "",
+      portalKey: "",
+      portalIssuedAtISO: "",
+      providerAcceptedAtISO: ""
+    });
+  });
+
+  test("projects only current issuance-bound provider acceptance into the public portal", () => {
+    const portalKey = "0123456789abcdef0123456789abcdef";
+    const portalIssuedAtISO = "2026-07-27T12:00:00.000Z";
+    const quote = {
+      organizationId: "org-a",
+      portalKey,
+      portalIssuedAtISO,
+      portalExpiresAtISO: "2026-08-26T12:00:00.000Z",
+      createdAtISO: portalIssuedAtISO,
+      updatedAtISO: portalIssuedAtISO,
+      workflow: {
+        quoteDelivery: {
+          revisionId: `v0001@${portalIssuedAtISO}`,
+          state: "provider_accepted",
+          portalActivationState: "active",
+          portalKey,
+          portalIssuedAtISO,
+          providerAcceptedAtISO: "2026-07-27T12:01:00.000Z",
+          providerMessageId: "private-provider-message-id"
+        }
+      }
+    };
+
+    expect(buildCanonicalPortalSnapshot("quote-current", quote).deliveryEvidence).toEqual({
+      revisionId: `v0001@${portalIssuedAtISO}`,
+      state: "provider_accepted",
+      portalActivationState: "active",
+      portalKey,
+      portalIssuedAtISO,
+      providerAcceptedAtISO: "2026-07-27T12:01:00.000Z"
+    });
+    expect(buildCanonicalPortalSnapshot("quote-rotated", {
+      ...quote,
+      portalKey: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      portalIssuedAtISO: "2026-07-28T12:00:00.000Z"
+    }).deliveryEvidence.state).toBe("");
   });
 
   test("sanitizes bounded presentation input and excludes untrusted payment state", () => {
@@ -396,6 +442,16 @@ describe("trusted server quote creation documents", () => {
         draftAtISO: "2026-07-27T12:00:00.000Z",
         sentAtISO: "2026-07-27T13:00:00.000Z"
       },
+      workflow: {
+        quoteDelivery: {
+          revisionId: "v0001@2026-07-27T12:00:00.000Z",
+          state: "provider_accepted",
+          portalActivationState: "active",
+          portalKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          portalIssuedAtISO: "2026-07-27T12:00:00.000Z",
+          providerAcceptedAtISO: "2026-07-27T13:00:00.000Z"
+        }
+      },
       updatedAtISO: "2026-07-27T13:00:00.000Z"
     };
 
@@ -427,6 +483,7 @@ describe("trusted server quote creation documents", () => {
       portalExpiresAtISO: "2026-08-27T12:00:00.000Z",
       lifecycle: sourceQuote.lifecycle
     });
+    expect(rotation.portal.deliveryEvidence.state).toBe("");
     expect(rotation.version).toMatchObject({
       versionId: "v0002",
       versionNumber: 2,
@@ -443,7 +500,7 @@ describe("trusted server quote creation documents", () => {
     });
   });
 
-  test("rejects non-admin and expired portal rotations", () => {
+  test("rejects non-admin, terminal, and expired portal rotations", () => {
     const quote = {
       organizationId: "org-a",
       portalKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -462,6 +519,22 @@ describe("trusted server quote creation documents", () => {
       },
       nowISO: "2026-07-28T12:00:00.000Z"
     })).toThrow(/admin role required/i);
+    for (const status of ["accepted", "declined", "booked", "expired", "deleted"]) {
+      expect(() => buildPortalRotationDocuments({
+        quoteId: "quote-a",
+        quote: {
+          ...quote,
+          status
+        },
+        newPortalKey: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        staff: {
+          uid: "admin-a",
+          email: "admin@example.com",
+          role: "admin"
+        },
+        nowISO: "2026-07-28T12:00:00.000Z"
+      })).toThrow(/terminal commercial state/i);
+    }
     expect(() => buildPortalRotationDocuments({
       quoteId: "quote-a",
       quote: {

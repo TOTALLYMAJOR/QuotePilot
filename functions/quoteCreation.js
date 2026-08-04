@@ -423,18 +423,50 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
   const booking = isRecord(quote?.booking) ? quote.booking : {};
   const portalDecision = isRecord(quote?.portalDecision) ? quote.portalDecision : {};
   const lifecycle = isRecord(quote?.lifecycle) ? quote.lifecycle : {};
+  const quoteDelivery = isRecord(quote?.workflow?.quoteDelivery)
+    ? quote.workflow.quoteDelivery
+    : {};
   const addonSnapshots = Array.isArray(selection.addonSnapshots) ? selection.addonSnapshots : [];
   const rentalSnapshots = Array.isArray(selection.rentalSnapshots) ? selection.rentalSnapshots : [];
   const menuItemNames = Array.isArray(selection.menuItemNames) ? selection.menuItemNames : [];
   const createdAtISO = normalizeISO(quote?.createdAtISO, "");
   const updatedAtISO = normalizeISO(quote?.updatedAtISO, createdAtISO);
   const portalExpiresAtISO = normalizeISO(quote?.portalExpiresAtISO, "");
+  const portalKey = sanitizeIdentifier(quote?.portalKey, 128);
+  const portalIssuedAtISO = normalizeISO(quote?.portalIssuedAtISO, createdAtISO);
+  const deliveryPortalKey = sanitizeIdentifier(quoteDelivery.portalKey, 128);
+  const deliveryPortalIssuedAtISO = normalizeISO(quoteDelivery.portalIssuedAtISO, "");
+  const deliveryEvidenceIsCurrent = (
+    text(quoteDelivery.state, 32).toLowerCase() === "provider_accepted"
+    && text(quoteDelivery.portalActivationState, 32).toLowerCase() === "active"
+    && deliveryPortalKey === portalKey
+    && deliveryPortalIssuedAtISO === portalIssuedAtISO
+    && Boolean(text(quoteDelivery.revisionId, 160))
+    && Boolean(normalizeISO(quoteDelivery.providerAcceptedAtISO, ""))
+  );
+  const deliveryEvidence = deliveryEvidenceIsCurrent
+    ? {
+        revisionId: text(quoteDelivery.revisionId, 160),
+        state: "provider_accepted",
+        portalActivationState: "active",
+        portalKey,
+        portalIssuedAtISO,
+        providerAcceptedAtISO: normalizeISO(quoteDelivery.providerAcceptedAtISO, "")
+      }
+    : {
+        revisionId: "",
+        state: "",
+        portalActivationState: "",
+        portalKey: "",
+        portalIssuedAtISO: "",
+        providerAcceptedAtISO: ""
+      };
 
   return {
     quoteId: sanitizeIdentifier(quoteId),
     organizationId: sanitizeIdentifier(quote?.organizationId),
-    portalKey: sanitizeIdentifier(quote?.portalKey, 128),
-    portalIssuedAtISO: normalizeISO(quote?.portalIssuedAtISO, createdAtISO),
+    portalKey,
+    portalIssuedAtISO,
     portalExpiresAtISO,
     portalExpiresAtMs: new Date(portalExpiresAtISO).getTime(),
     quoteNumber: text(quote?.quoteNumber, 80),
@@ -488,6 +520,7 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
     },
     portalDecision: { ...portalDecision },
     lifecycle: { ...lifecycle },
+    deliveryEvidence,
     createdAtISO,
     updatedAtISO
   };
@@ -805,10 +838,10 @@ function buildPortalRotationDocuments({
       "Admin role required to rotate portal links."
     );
   }
-  if (status === "deleted" || status === "expired") {
+  if (!["draft", "sent", "viewed"].includes(status)) {
     throw new QuoteCreationError(
       "failed-precondition",
-      "Deleted or expired quotes must be reopened before portal rotation."
+      "Portal rotation is available only before a quote reaches a terminal commercial state."
     );
   }
 

@@ -1,0 +1,134 @@
+name: Prepare Vercel Production Artifact
+run-name: prepare/v1/vercel/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full tagged main commit SHA to prepare
+        required: true
+        type: string
+      ci_run_id:
+        description: Successful main-push CI Quality run id for release_sha
+        required: true
+        type: string
+      uat_run_id:
+        description: Successful Release UAT Attestation run id for release_sha
+        required: true
+        type: string
+      rollback_sha:
+        description: Full Vercel rollback commit SHA
+        required: true
+        type: string
+
+concurrency:
+  group: prepare-vercel-production
+  cancel-in-progress: false
+
+jobs:
+  prepare_vercel:
+    name: Verify + Prepare Vercel Artifact
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      actions: read
+      contents: read
+    env:
+      RELEASE_UAT_ATTESTER_IDS: ${{ vars.RELEASE_UAT_ATTESTER_IDS }}
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_FUNCTIONS_REGION: ${{ vars.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1' }}
+    steps:
+      - name: Checkout exact release SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify exact-SHA release evidence before dependency execution
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          UAT_RUN_ID: ${{ inputs.uat_run_id }}
+          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+        run: |
+          set -euo pipefail
+          node ./scripts/production-release-evidence.mjs \
+            --release-sha "${RELEASE_SHA}" \
+            --ci-run-id "${CI_RUN_ID}" \
+            --uat-run-id "${UAT_RUN_ID}" \
+            --rollback-sha "${ROLLBACK_SHA}" \
+            --target vercel
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate production browser configuration
+        run: npm run check:env
+
+      - name: Build static production payload
+        run: npm run build
+
+      - name: Re-verify evidence after repository execution
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          UAT_RUN_ID: ${{ inputs.uat_run_id }}
+          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node ./scripts/production-release-evidence.mjs \
+            --release-sha "${RELEASE_SHA}" \
+            --ci-run-id "${CI_RUN_ID}" \
+            --uat-run-id "${UAT_RUN_ID}" \
+            --rollback-sha "${ROLLBACK_SHA}" \
+            --target vercel \
+            --output artifacts/release/release-evidence.json
+
+      - name: Stage deployable prebuilt payload
+        run: |
+          node ./scripts/stage-production-payload.mjs \
+            --target vercel \
+            --output artifacts/release/payload/vercel
+
+      - name: Create deterministic production artifact manifest
+        run: |
+          node ./scripts/prepare-production-artifact.mjs \
+            --evidence-file "${GITHUB_WORKSPACE}/artifacts/release/release-evidence.json" \
+            --artifact-root "${GITHUB_WORKSPACE}/artifacts/release/payload/vercel"
+
+      - name: Upload verified prepare-only artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-input-vercel-${{ inputs.release_sha }}
+          path: |
+            artifacts/release/payload/vercel
+            artifacts/release/release-evidence.json
+            artifacts/release/vercel-${{ inputs.release_sha }}-*.manifest.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+      - name: Summarize preparation boundary
+        run: |
+          {
+            echo "### Vercel production artifact prepared"
+            echo "- Target: vercel"
+            echo "- Release SHA: ${{ inputs.release_sha }}"
+            echo "- Production was not mutated. A separately owned trusted deployer is required."
+          } >> "${GITHUB_STEP_SUMMARY}"
