@@ -65,6 +65,13 @@ describe("buyer access Invoice endpoint isolation", () => {
     expect(buyerWebhook).toContain("RESEND_API_KEY_SECRET_NAME");
     expect(buyerWebhook).not.toContain("BUYER_ACCESS_STRIPE_SECRET_NAME");
     expect(buyerWebhook).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET_NAME");
+
+    const repair = exportedFunctionSource("repairBuyerAccessInvoice");
+    expect(repair).toContain("BUYER_ACCESS_STRIPE_SECRET_NAME");
+    expect(repair).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME");
+    expect(repair).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET_NAME");
+    expect(repair).not.toContain("BUYER_ACCESS_RATE_LIMIT_SECRET_NAME");
+    expect(repair).not.toContain("RESEND_API_KEY_SECRET_NAME");
   });
 
   test("binds generic provider secrets only to their complete call graph", () => {
@@ -350,25 +357,18 @@ describe("buyer access Invoice endpoint isolation", () => {
     expect(buyerWebhook).not.toContain("getStripeClient()");
   });
 
-  test("requires signed-void evidence for replacement and ignores superseded late payment", () => {
-    const signedVoidEvidence = sourceBetween(
-      FUNCTIONS_INDEX_SOURCE,
-      "function hasSignedBuyerAccessVoidEvidence",
-      "async function preparePublicBuyerAccessOrder"
-    );
-    expect(signedVoidEvidence).toContain('status).toLowerCase() === "void"');
-    expect(signedVoidEvidence).toContain("order.signedVoidObserved === true");
-    expect(signedVoidEvidence).toContain('lastProviderState).toLowerCase() === "void"');
-    expect(signedVoidEvidence).toContain('lastStripeEventType) === "invoice.voided"');
-    expect(signedVoidEvidence).toContain("order.lastStripeEventId");
-
+  test("requires verified provider-void evidence for replacement and ignores superseded late payment", () => {
+    expect(BUYER_ACCESS_SOURCE).toContain("function hasBuyerAccessReissuableVoidEvidence");
+    expect(BUYER_ACCESS_SOURCE).toContain("order.signedVoidObserved === true");
+    expect(BUYER_ACCESS_SOURCE).toContain("order.operatorVoidObserved === true");
+    expect(BUYER_ACCESS_SOURCE).toContain('lastProviderObservationSource) === "admin_reconciliation"');
     const preparation = sourceBetween(
       FUNCTIONS_INDEX_SOURCE,
       "async function preparePublicBuyerAccessOrder",
       "async function persistBuyerAccessProviderStep"
     );
     expect(preparation).toContain('.where("ownerEmail", "=="');
-    expect(preparation).toContain("!hasSignedBuyerAccessVoidEvidence");
+    expect(preparation).toContain("!hasBuyerAccessReissuableVoidEvidence");
     expect(preparation).toContain("supersededByOrderId: identifiers.orderId");
     expect(preparation).toContain('"Buyer access request cannot be completed."');
 
@@ -389,6 +389,17 @@ describe("buyer access Invoice endpoint isolation", () => {
     expect(processing).toContain("if (normalizeText(order.supersededByOrderId))");
     expect(processing).toContain('ignored: "superseded_order"');
     expect(processing).toContain('signedVoidObserved: providerState === "void"');
+
+    const repair = exportedFunctionSource("repairBuyerAccessInvoice");
+    expect(repair).toContain("staff.role !== \"admin\" || !staff.platformAdmin");
+    expect(repair).toContain("normalizeBuyerAccessRepairRequest(data)");
+    expect(repair).toContain("stripe.invoices.retrieve");
+    expect(repair).toContain("stripe.invoices.voidInvoice");
+    expect(repair).toContain("assertBuyerAccessRepairArtifactsAbsent(order)");
+    expect(repair).toContain("tx.create(auditRef");
+    expect(repair).toContain('source: "admin_reconciliation"');
+    expect(repair).toContain("operatorVoidObserved: true");
+    expect(repair).not.toContain("hostedInvoiceUrl: invoice");
   });
 
   test("paid settlement creates workspace and pending invite but no role or claims", () => {

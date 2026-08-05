@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getIntegrationSetupStatus, sendIntegrationTestSms } from "../lib/commerceOps";
+import {
+  buildBuyerAccessRepairConfirmationToken,
+  getIntegrationSetupStatus,
+  repairBuyerAccessInvoice,
+  sendIntegrationTestSms
+} from "../lib/commerceOps";
 import {
   archiveOrganizationWorkspace,
   deleteOrganizationWorkspace,
@@ -253,6 +258,15 @@ export default function IntegrationOpsModal({
     loading: false,
     error: "",
     result: null
+  });
+  const [buyerRepairState, setBuyerRepairState] = useState({
+    loading: false,
+    error: "",
+    result: null
+  });
+  const [buyerRepairForm, setBuyerRepairForm] = useState({
+    orderId: "",
+    confirmationToken: ""
   });
   const [cleanupForm, setCleanupForm] = useState({
     organizationId: normalizeOrganizationSlug(organizationId),
@@ -620,6 +634,56 @@ export default function IntegrationOpsModal({
     }
   };
 
+  const handleRepairBuyerInvoice = async () => {
+    if (!canProvisionCustomer) {
+      setBuyerRepairState((prev) => ({
+        ...prev,
+        error: "Platform administrator authority is required for buyer invoice repair."
+      }));
+      return;
+    }
+    const orderId = String(buyerRepairForm.orderId || "").trim().toLowerCase();
+    const expectedToken = buildBuyerAccessRepairConfirmationToken(orderId);
+    if (!expectedToken) {
+      setBuyerRepairState((prev) => ({
+        ...prev,
+        error: "Enter a valid buyer access order id."
+      }));
+      return;
+    }
+    if (String(buyerRepairForm.confirmationToken || "").trim() !== expectedToken) {
+      setBuyerRepairState((prev) => ({
+        ...prev,
+        error: `Repair token mismatch. Use exactly: ${expectedToken}`
+      }));
+      return;
+    }
+    const confirmed = window.confirm(
+      `Verify and permanently void the terminal Stripe test Invoice for "${orderId}"? This action is audited and cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setBuyerRepairState({ loading: true, error: "", result: null });
+    setFeedback("");
+    try {
+      const result = await repairBuyerAccessInvoice({
+        orderId,
+        confirmationToken: expectedToken
+      });
+      setBuyerRepairState({ loading: false, error: "", result });
+      setBuyerRepairForm({ orderId, confirmationToken: "" });
+      setFeedback(
+        `Buyer Invoice ${orderId} is provider-verified void. A fresh request is allowed after the server-owned email window.`
+      );
+    } catch (err) {
+      setBuyerRepairState({
+        loading: false,
+        error: err?.message || "Buyer invoice repair failed.",
+        result: null
+      });
+    }
+  };
+
   const handleDeleteOrganization = async () => {
     if (!canProvisionCustomer) {
       setCleanupState((prev) => ({ ...prev, error: "Admin role is required for organization cleanup." }));
@@ -707,6 +771,8 @@ export default function IntegrationOpsModal({
     });
     setLastProvisioningResult(readLastProvisioningResult(currentUserUid));
     setProvisionForm(createCustomerProvisioningForm(getCanonicalAppUrl()));
+    setBuyerRepairState({ loading: false, error: "", result: null });
+    setBuyerRepairForm({ orderId: "", confirmationToken: "" });
     if (!provisioningOnly) {
       setCleanupState({
         loading: false,
@@ -1194,6 +1260,83 @@ export default function IntegrationOpsModal({
             </>
           )}
         </section>
+
+        {canManageProviders && <section className="admin-section">
+          <div className="admin-section-head">
+            <h3>Buyer Invoice Recovery (Platform Admin)</h3>
+          </div>
+          <p className="warning-note">
+            This recovery is only for a terminal unpaid Stripe test Invoice. QuotePilot verifies the exact stored
+            Invoice, voids an uncollectible Invoice at Stripe, rechecks that no workspace or invitation exists, and
+            records an operator audit before a replacement can be requested.
+          </p>
+          {!canProvisionCustomer && (
+            <p className="warning-note">Recovery controls require platform administrator authority.</p>
+          )}
+          {canProvisionCustomer && (
+            <>
+              {buyerRepairState.error && <p className="error-note">{buyerRepairState.error}</p>}
+              <div className="admin-grid-settings integration-form-grid">
+                <label>
+                  Buyer test purchase reference
+                  <input
+                    type="text"
+                    placeholder="ba-<40 hex characters>"
+                    value={buyerRepairForm.orderId}
+                    onChange={(event) => setBuyerRepairForm((prev) => ({
+                      ...prev,
+                      orderId: event.target.value,
+                      confirmationToken: ""
+                    }))}
+                  />
+                </label>
+                <label>
+                  Repair token
+                  <input
+                    type="text"
+                    placeholder={buildBuyerAccessRepairConfirmationToken(buyerRepairForm.orderId)
+                      || "VOID BUYER INVOICE ba-..."}
+                    value={buyerRepairForm.confirmationToken}
+                    onChange={(event) => setBuyerRepairForm((prev) => ({
+                      ...prev,
+                      confirmationToken: event.target.value
+                    }))}
+                  />
+                </label>
+              </div>
+              <div className="right-actions">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setBuyerRepairForm((prev) => ({
+                    ...prev,
+                    confirmationToken: buildBuyerAccessRepairConfirmationToken(prev.orderId)
+                  }))}
+                  disabled={!buildBuyerAccessRepairConfirmationToken(buyerRepairForm.orderId)}
+                >
+                  Fill Repair Token
+                </button>
+                <button
+                  type="button"
+                  className="cta"
+                  onClick={handleRepairBuyerInvoice}
+                  disabled={buyerRepairState.loading}
+                >
+                  {buyerRepairState.loading ? "Verifying Stripe..." : "Void and Release Test Invoice"}
+                </button>
+              </div>
+              {buyerRepairState.result?.ok && (
+                <div className="status-strip">
+                  <span>Order: <strong>{buyerRepairState.result.orderId}</strong></span>
+                  <span>Provider: <strong>{buyerRepairState.result.providerState}</strong></span>
+                  <span>Provider void verified: <strong>{buyerRepairState.result.providerVoidVerified ? "yes" : "no"}</strong></span>
+                  <span>24-hour email window: <strong>{buyerRepairState.result.emailWindowStillApplies ? "still applies" : "unknown"}</strong></span>
+                  <span>Audit: <strong>{buyerRepairState.result.auditEventId}</strong></span>
+                </div>
+              )}
+            </>
+          )}
+        </section>}
 
         {!provisioningOnly && canManageProviders && <section className="admin-section">
           <div className="admin-section-head">

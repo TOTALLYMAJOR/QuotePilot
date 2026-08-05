@@ -405,14 +405,18 @@ Invoice creation first reserves the request-scoped order identity in the same
 durable limiter before any Auth, invitation, or order lookup. An exact retry
 continues to consume the per-network budget but does not charge the normalized
 email twice during the 24-hour reservation. A different request may replace an
-older order only after the email window has elapsed and a signed webhook has
-put every prior same-email order in true `void` state. Open and payment-failed
+older order only after the email window has elapsed and every prior same-email
+order has a provider-verified `void` state. Open and payment-failed
 orders may return the same invoice only to the exact original creation request.
 Uncollectible/expired, paid, and activation orders cannot be replaced
-automatically. They continue only through the existing status/account path or a
-documented operator stop; no buyer-specific repair callable exists, so live sale
-remains blocked until audited recovery is implemented. The old void order is
-marked superseded so a stale event cannot provision a second workspace.
+automatically. A platform administrator may recover only an exact terminal
+unpaid test Invoice through Integrations Ops: the server retrieves the stored
+Invoice identity from Stripe, permanently voids an uncollectible Invoice,
+rechecks that no workspace, settings, invitation, or provisioning record exists,
+and records an operator audit. Paid, open, partially paid, fulfilled,
+superseded, or mismatched targets fail closed, and the 24-hour email window still
+applies before a fresh request. The old void order is marked superseded so a
+stale event cannot provision a second workspace.
 
 The Firebase Hosting and Vercel preparation workflows compile `/start` and its
 public marketing CTA only with a syntactically valid, non-placeholder,

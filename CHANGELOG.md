@@ -29,11 +29,18 @@ This changelog is backfilled from git history and will be maintained going forwa
   reserves a request-scoped order before any identity/order lookup. Exact retry
   still consumes network capacity while avoiding duplicate email charge during
   the 24-hour reservation; a fresh post-window request can replace only a
-  signed-void prior order, which is marked superseded against stale events.
+  provider-verified void prior order, which is marked superseded against stale
+  events. Void authority may come from the exact signed webhook or the new
+  platform-admin recovery path after it verifies and, when necessary, voids the
+  exact terminal unpaid test Invoice at Stripe.
   Open and payment-failed exact retries return the same Hosted Invoice Page;
   a server-reported void can start a fresh same-tab test request while the
-  24-hour window remains server-enforced. Uncollectible/expired recovery has no
-  automated buyer repair path and remains an explicit live-sale blocker. Public
+  24-hour window remains server-enforced. The admin-only Buyer Invoice Recovery
+  surface now requires an exact order-bound confirmation, server-derived
+  provider identity, Stripe test-mode retrieval, absence of fulfillment
+  artifacts, and an audited irreversible void before replacement eligibility.
+  Paid, open, fulfilled, superseded, mismatched, or partially paid targets fail
+  closed, and a provider void cannot bypass the existing email window. Public
   status polling atomically consumes one 60-request-per-five-minute network
   lease per request before its first buyer-order read. Well-formed unknown-order
   and wrong-token checks consume the same budget, while missing rate

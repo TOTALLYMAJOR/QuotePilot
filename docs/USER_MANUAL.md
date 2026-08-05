@@ -340,12 +340,19 @@ A safe retry with the same browser request should return the same Hosted Invoice
 Page only while the invoice is open or payment-failed, and consumes another
 network-rate attempt without charging the email window again. Do not start a
 replacement while an invoice is open, payment-failed,
-uncollectible/expired, paid, or activating. After 24 hours, only an operator-
-confirmed signed `invoice.voided` state permits a fresh request to supersede the
-old order. When the page reports `void`, use `Start a new test request`; the
-server will still reject it until the 24-hour email window has elapsed. An
-uncollectible/expired order has no automated buyer repair path and must stop for
-operator support. Do not bypass a rate limit with additional emails or accounts.
+uncollectible/expired, paid, or activating. After 24 hours, only a provider-
+verified `void` state permits a fresh request to supersede the old order. A
+signed `invoice.voided` webhook establishes that state automatically. For an
+uncollectible test Invoice, a platform administrator may open Customer
+Provisioning or Integrations Ops and use Buyer Invoice Recovery with the exact
+`ba-...` order id and generated
+`VOID BUYER INVOICE <orderId>` confirmation. The server derives the Invoice
+identity, verifies it with Stripe, permanently voids it, confirms no fulfillment
+artifacts exist, and records the operator audit. Paid, open, partially paid,
+fulfilled, superseded, or mismatched orders cannot use this recovery. When the
+page reports `void`, use `Start a new test request`; the server still rejects it
+until the 24-hour email window has elapsed. Do not bypass a rate limit with
+additional emails or accounts.
 Report only the approximate time and redacted order/invoice
 references. Never send a payment method, hosted invoice URL, token, provider
 secret, webhook signature, Turnstile response, or customer personal data.

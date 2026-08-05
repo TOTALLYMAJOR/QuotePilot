@@ -2118,7 +2118,7 @@ function buildBuyerAccessInvoiceEvent(fixture, {
         customer_email: fixture.email,
         currency: "usd",
         amount_due: invoiceAmountDue,
-        total: invoiceAmountDue,
+        total: amountDue,
         amount_paid: paid ? invoiceAmountDue : 0,
         amount_remaining: paid || voided ? 0 : invoiceAmountDue,
         paid_out_of_band: false,
@@ -2600,7 +2600,7 @@ async function assertBuyerAccessUnfulfilledLifecycle({
       amountDue: 0,
       amountPaid: 0,
       amountRemaining: 0,
-      total: 0
+      total: 100
     },
     "invoice.marked_uncollectible": {
       amountDue: 100,

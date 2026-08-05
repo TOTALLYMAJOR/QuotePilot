@@ -129,14 +129,18 @@ const {
   authorizeBuyerAccessStatusRequest,
   buildBuyerAccessIdentifiers,
   buildBuyerAccessStripePlan,
+  buyerAccessStripeIdempotencyKey,
   buyerAccessOrderIdForRequest,
   buyerAccessProviderStateForEvent,
+  buyerAccessProviderStateForInvoice,
   buyerAccessRateLimitDocumentId,
   buyerAccessStatusResponse,
   buyerAccessStatusTokenMatches,
   hashBuyerAccessSecret,
+  hasBuyerAccessReissuableVoidEvidence,
   isBuyerAccessInvoice,
   normalizeBuyerAccessRequest,
+  normalizeBuyerAccessRepairRequest,
   normalizeBuyerAccessStatusRequest,
   normalizeBuyerAccessTurnstileHostnames,
   planBuyerAccessCreationReservation,
@@ -9762,14 +9766,6 @@ async function assertPublicBuyerIdentityAvailable(ownerEmail) {
   return { existingUser, inviteRef };
 }
 
-function hasSignedBuyerAccessVoidEvidence(order = {}) {
-  return normalizeText(order.status).toLowerCase() === "void"
-    && order.signedVoidObserved === true
-    && normalizeText(order.lastProviderState).toLowerCase() === "void"
-    && normalizeText(order.lastStripeEventType) === "invoice.voided"
-    && /^[a-zA-Z0-9_:-]+$/.test(normalizeText(order.lastStripeEventId));
-}
-
 async function preparePublicBuyerAccessOrder({
   identifiers,
   input,
@@ -9806,7 +9802,7 @@ async function preparePublicBuyerAccessOrder({
       (docSnap) => docSnap.id !== identifiers.orderId
     );
     if (priorOrders.some(
-      (docSnap) => !hasSignedBuyerAccessVoidEvidence(docSnap.data() || {})
+      (docSnap) => !hasBuyerAccessReissuableVoidEvidence(docSnap.data() || {})
     )) {
       throw new functions.https.HttpsError(
         "permission-denied",
@@ -10070,6 +10066,256 @@ async function createOrResumeBuyerAccessInvoice({ input, order } = {}) {
     }
   });
 }
+
+function assertBuyerAccessRepairOrder(order = {}, orderId = "") {
+  const normalizedOrderId = normalizeText(orderId).toLowerCase();
+  const status = normalizeText(order.status).toLowerCase();
+  if (
+    normalizeText(order.orderId).toLowerCase() !== normalizedOrderId
+    || !["invoice_open", "payment_processing", "payment_failed", "expired", "void"]
+      .includes(status)
+    || normalizeText(order.supersededByOrderId)
+    || order.accessGranted === true
+    || order.workspaceReady === true
+    || order.activationEmailSent === true
+    || normalizeText(order.ownerUid)
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access repair requires one unfulfilled order with a server-recorded Invoice."
+    );
+  }
+  return order;
+}
+
+function buyerAccessRepairArtifactRefs(order = {}) {
+  const organizationId = normalizeOrganizationId(order.organizationId);
+  const ownerEmail = normalizeEmail(order.ownerEmail);
+  if (!organizationId || !isValidEmail(ownerEmail)) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access repair target identity is invalid."
+    );
+  }
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return {
+    inviteRef: db.collection(INVITES_COLLECTION).doc(inviteDocIdFromEmail(ownerEmail)),
+    organizationRef,
+    provisioningOrderRef: db.collection(PROVISIONING_ORDERS_COLLECTION).doc(order.orderId),
+    settingsRef: organizationRef.collection("settings").doc("config")
+  };
+}
+
+async function assertBuyerAccessRepairArtifactsAbsent(order = {}) {
+  const refs = buyerAccessRepairArtifactRefs(order);
+  const snapshots = await Promise.all(Object.values(refs).map((ref) => ref.get()));
+  if (snapshots.some((snapshot) => snapshot.exists)) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Buyer access repair is blocked because fulfillment artifacts already exist."
+    );
+  }
+  return refs;
+}
+
+exports.repairBuyerAccessInvoice = functions
+  .runWith({ secrets: [BUYER_ACCESS_STRIPE_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    const staff = await assertStaff(context);
+    if (staff.role !== "admin" || !staff.platformAdmin) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Platform administrator authority is required for buyer invoice repair."
+      );
+    }
+
+    let input;
+    try {
+      input = normalizeBuyerAccessRepairRequest(data);
+    } catch (err) {
+      throwBuyerAccessHttpsError(err);
+    }
+    const orderRef = db.collection(BUYER_ACCESS_ORDERS_COLLECTION).doc(input.orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Buyer access order not found.");
+    }
+    let order = assertBuyerAccessRepairOrder(orderSnap.data() || {}, input.orderId);
+    await assertPublicBuyerIdentityAvailable(order.ownerEmail);
+    let artifactRefs = await assertBuyerAccessRepairArtifactsAbsent(order);
+
+    const stripe = getBuyerAccessStripeClient();
+    let invoice;
+    try {
+      invoice = await stripe.invoices.retrieve(normalizeText(order.stripeInvoiceId));
+    } catch (err) {
+      functions.logger.error("Buyer access repair Invoice retrieval failed", {
+        orderId: input.orderId,
+        errorCode: normalizeText(err?.code || err?.type || "provider_unavailable").slice(0, 80)
+      });
+      throw new functions.https.HttpsError(
+        "unavailable",
+        "Stripe could not verify the buyer access Invoice."
+      );
+    }
+
+    let providerState = buyerAccessProviderStateForInvoice(invoice);
+    if (!["expired", "void"].includes(providerState)) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        providerState === "paid"
+          ? "Stripe reports this buyer access Invoice as paid; void repair is forbidden."
+          : "Stripe does not report a terminal unpaid Invoice that can be repaired."
+      );
+    }
+    try {
+      assertBuyerAccessInvoiceBinding({
+        invoice,
+        order,
+        providerState,
+        stripeMode: "test"
+      });
+    } catch (err) {
+      throwBuyerAccessHttpsError(err);
+    }
+
+    const providerMutation = providerState === "expired";
+    if (providerMutation) {
+      try {
+        invoice = await stripe.invoices.voidInvoice(
+          normalizeText(order.stripeInvoiceId),
+          {},
+          {
+            idempotencyKey: buyerAccessStripeIdempotencyKey({
+              generation: order.invoiceGeneration,
+              orderId: input.orderId,
+              step: "operator_void"
+            })
+          }
+        );
+        providerState = buyerAccessProviderStateForInvoice(invoice);
+        assertBuyerAccessInvoiceBinding({
+          invoice,
+          order,
+          providerState,
+          stripeMode: "test"
+        });
+      } catch (err) {
+        if (err instanceof BuyerAccessError || err instanceof functions.https.HttpsError) {
+          throwBuyerAccessHttpsError(err);
+        }
+        functions.logger.error("Buyer access repair Invoice void failed", {
+          orderId: input.orderId,
+          errorCode: normalizeText(err?.code || err?.type || "provider_unavailable").slice(0, 80)
+        });
+        throw new functions.https.HttpsError(
+          "unavailable",
+          "Stripe could not void the terminal buyer access Invoice."
+        );
+      }
+      if (providerState !== "void") {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Stripe did not return a void buyer access Invoice."
+        );
+      }
+    }
+
+    const auditEventId = `stripe-buyer-repair-${randomUUID()}`;
+    const auditRef = db.collection(WEBHOOK_EVENTS_COLLECTION).doc(auditEventId);
+    const nowISO = new Date().toISOString();
+    await db.runTransaction(async (tx) => {
+      const latestOrderSnap = await tx.get(orderRef);
+      if (!latestOrderSnap.exists) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Buyer access order disappeared during repair."
+        );
+      }
+      const latestOrder = assertBuyerAccessRepairOrder(
+        latestOrderSnap.data() || {},
+        input.orderId
+      );
+      if (
+        normalizeText(latestOrder.stripeInvoiceId) !== normalizeText(order.stripeInvoiceId)
+        || normalizeText(latestOrder.stripeCustomerId) !== normalizeText(order.stripeCustomerId)
+        || Number(latestOrder.invoiceGeneration) !== Number(order.invoiceGeneration)
+      ) {
+        throw new functions.https.HttpsError(
+          "aborted",
+          "Buyer access provider identity changed during repair."
+        );
+      }
+      artifactRefs = buyerAccessRepairArtifactRefs(latestOrder);
+      const artifactSnapshots = await Promise.all(
+        Object.values(artifactRefs).map((ref) => tx.get(ref))
+      );
+      if (artifactSnapshots.some((snapshot) => snapshot.exists)) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Buyer access repair is blocked because fulfillment artifacts now exist."
+        );
+      }
+      assertBuyerAccessInvoiceBinding({
+        invoice,
+        order: latestOrder,
+        providerState: "void",
+        stripeMode: "test"
+      });
+      tx.create(auditRef, {
+        provider: "stripe",
+        flow: BUYER_ACCESS_FLOW,
+        buyerAccessMode: BUYER_ACCESS_MODE,
+        source: "admin_reconciliation",
+        eventId: auditEventId,
+        eventType: "invoice.voided.operator_repair",
+        status: "processed",
+        result: providerMutation ? "uncollectible_invoice_voided" : "void_invoice_reconciled",
+        livemode: false,
+        buyerAccessOrderId: input.orderId,
+        stripeInvoiceId: normalizeText(invoice.id),
+        stripeCustomerId: normalizeText(invoice.customer),
+        invoiceGeneration: Number(latestOrder.invoiceGeneration),
+        providerState: "void",
+        actorUid: staff.uid,
+        actorEmail: staff.email,
+        requestHost: staff.host,
+        processedAtISO: nowISO,
+        createdAt: FieldValue.serverTimestamp()
+      });
+      tx.set(orderRef, {
+        status: "void",
+        accessGranted: false,
+        workspaceReady: false,
+        activationEmailSent: false,
+        signedVoidObserved: latestOrder.signedVoidObserved === true,
+        operatorVoidObserved: true,
+        operatorVoidAuditEventId: auditEventId,
+        lastProviderState: "void",
+        lastProviderObservationSource: "admin_reconciliation",
+        hostedInvoiceUrl: "",
+        repairedAtISO: nowISO,
+        repairedBy: {
+          uid: staff.uid,
+          email: staff.email
+        },
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+
+    return {
+      ok: true,
+      orderId: input.orderId,
+      status: "void",
+      providerState: "void",
+      providerVoidVerified: true,
+      emailWindowStillApplies: true,
+      providerMutation: providerMutation ? "voided" : "already_void",
+      auditEventId
+    };
+  });
 
 exports.createBuyerAccessInvoice = functions
   .runWith({

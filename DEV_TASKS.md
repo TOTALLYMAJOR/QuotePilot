@@ -71,13 +71,14 @@ Last updated: August 4, 2026
   consumes the per-network plus one-per-email lease before every Auth, invite,
   or order read. Exact retries must continue charging the network budget while
   avoiding duplicate email charge during the 24-hour Timestamp-backed
-  reservation. A fresh post-window request may replace only a prior signed-
-  void order; verify supersession dedupe and stale-event denial. Open and
+  reservation. A fresh post-window request may replace only a prior provider-
+  verified void order; verify supersession dedupe and stale-event denial. Open and
   payment-failed orders must return the same invoice only to the exact original
   request; uncollectible/expired, paid, and activation orders must reject
-  automatic replacement and use the existing status/account path or documented
-  operator stop. Implement an audited buyer-specific reconciliation/repair path
-  before any live sale.
+  automatic replacement. Qualify the implemented platform-admin repair path in
+  hosted Stripe test mode: prove exact provider retrieval, permanent void of an
+  uncollectible Invoice, partial/paid/fulfilled/mismatched denial, private audit
+  creation, unchanged fulfillment state, and post-window replacement.
 - Configure `buyerAccessStripeWebhook` in Stripe test mode for only
   `invoice.paid`, `invoice.payment_failed`, `invoice.voided`, and
   `invoice.marked_uncollectible`, with both the dedicated buyer API client and

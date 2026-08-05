@@ -52,7 +52,7 @@ Last updated: August 4, 2026
   email-enumeration protection is enabled. Public registration may still
   return an existing-email error, so this feature is not claimed as full
   account-enumeration resistance.
-- Current branch release UAT contract: checklist version `2026-08-04.9` now
+- Current branch release UAT contract: checklist version `2026-08-04.10` now
   makes hosted password recovery and target-applicable deposit, final-balance,
   webhook/reconciliation, cross-rail isolation, projection privacy, and payment
   surface observations mandatory. It also binds public buyer onboarding to
@@ -114,13 +114,20 @@ Last updated: August 4, 2026
   Auth, invite, or order read. Exact retry consumes IP capacity again without a
   duplicate email charge during the 24-hour reservation; reservation and rate
   records carry a Firestore Timestamp `expiresAt`. After the one-email-per-
-  24-hour window, a fresh request can replace only a prior signed-void order,
+  24-hour window, a fresh request can replace only a prior provider-verified
+  void order,
   which is durably marked superseded so stale events cannot fulfill it. Open
   and payment-failed orders return the same invoice only to the exact original
   creation request. Uncollectible/expired, paid, and activation orders cannot
-  be replaced automatically. They require the existing status/account path or
-  a documented operator stop; no buyer-specific repair callable exists, and
-  that recovery gap remains a blocker for live sale. Creation and status record
+  be replaced automatically. The source candidate now includes a platform-
+  admin-only Buyer Invoice Recovery surface and callable. It accepts only an
+  exact order-bound confirmation, derives provider identity server-side,
+  retrieves the terminal unpaid test Invoice from Stripe, permanently voids an
+  uncollectible Invoice, rechecks the absence of fulfillment artifacts in the
+  commit transaction, and records a private operator audit before replacement
+  eligibility. Paid, open, partially paid, fulfilled, superseded, and
+  mismatched targets fail closed. This closes the source recovery gap but
+  remains unproved in hosted Stripe test mode. Creation and status record
   identifiers are HMAC-derived without raw network or email identity.
   The Functions gate must still stay off until the fourth Secret Manager binding,
   the `buyerAccessRateLimits.expiresAt` TTL policy, coordinated deployment, and
@@ -480,7 +487,10 @@ Last updated: August 4, 2026
   evidence are release requirements. No hosted invoice, payment, webhook,
   workspace preparation, optional onboarding-email acceptance, Firebase verification-
   email delivery, verified claim, role readback, or proof that the live quote
-  Stripe rail stayed unchanged exists yet. Refund,
+  Stripe rail stayed unchanged exists yet. The platform-admin terminal Invoice
+  repair is also source-only: hosted UAT has not proved exact provider void,
+  private audit persistence, fulfillment-artifact denial, or the subsequent
+  post-window replacement. Refund,
   dispute, cancellation, account/access revocation, support, tax/accounting,
   and any live-mode launch remain separate operating gates.
 - CRM outbound synchronization is intentionally disabled until a
