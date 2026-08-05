@@ -395,9 +395,10 @@ For an approved hosted test-mode acceptance window:
    dedicated endpoint signing secret as `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET` in
    Firebase Secret Manager. Generate a separate high-entropy value of at least
    32 characters for `BUYER_ACCESS_RATE_LIMIT_SECRET`; do not reuse a Stripe or
-   Turnstile secret. Enable Firestore TTL for the Timestamp field
-   `buyerAccessRateLimits.expiresAt`. Confirm dedicated buyer API requests use
-   `2024-06-20`, and configure `buyerAccessStripeWebhook` for only the four
+   Turnstile secret. Promote the tracked Firestore field override that enables
+   TTL for the Timestamp field `buyerAccessRateLimits.expiresAt`, then verify
+   the provider reports the policy enabled. Confirm dedicated buyer API requests
+   use `2024-06-20`, and configure `buyerAccessStripeWebhook` for only the four
    invoice events above with endpoint API version `2024-06-20`. Leave the quote
    Stripe client and endpoint version unchanged. Provider console configuration
    is required; source declarations do not create the endpoint subscription.

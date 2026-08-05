@@ -129,8 +129,10 @@ Last updated: August 4, 2026
   mismatched targets fail closed. This closes the source recovery gap but
   remains unproved in hosted Stripe test mode. Creation and status record
   identifiers are HMAC-derived without raw network or email identity.
-  The Functions gate must still stay off until the fourth Secret Manager binding,
-  the `buyerAccessRateLimits.expiresAt` TTL policy, coordinated deployment, and
+  The source now declares the `buyerAccessRateLimits.expiresAt` TTL policy in
+  deployable Firestore configuration. The Functions gate must still stay off
+  until the fourth Secret Manager binding, exact-config promotion and TTL
+  provider readback, coordinated deployment, and
   hosted valid/invalid polling acceptance are provider-proven; optional edge or
   App Check controls remain defense in depth rather than source evidence.
   The existing live quote-payment mode, credentials, `stripeWebhook`,
@@ -480,7 +482,8 @@ Last updated: August 4, 2026
   abuse, duplicate-invoice, provider-delivery, and identity-claim risk, so the
   independently disabled server gate, exact Turnstile host/action checks,
   secret-keyed durable rate limits before status order reads, deterministic
-  idempotency, four separate buyer Secret Manager bindings, Firestore rate TTL,
+  idempotency, four separate buyer Secret Manager bindings, promoted and
+  provider-verified Firestore rate TTL,
   signed invoice events, pending-invite boundary, proof-safe manual verified-
   email handoff when the workspace is ready, exact-email claim, and hosted
   negative-path
@@ -500,8 +503,8 @@ Last updated: August 4, 2026
 ## Current Focus (Near-Term)
 1. Finish and review the single-project invoice-first buyer candidate, keeping
    the server gate disabled until Turnstile, durable rate/idempotency controls,
-   all four dedicated buyer secrets, the rate-record TTL policy, and
-   target-scoped UAT are approved. Route the
+   all four dedicated buyer secrets, tracked rate-record TTL promotion/readback,
+   and target-scoped UAT are approved. Route the
    four supported buyer invoice events only to `buyerAccessStripeWebhook`, keep
    the existing live quote Stripe configuration and `stripeWebhook` unchanged,
    and treat the compiled public CTA as artifact configuration rather than
