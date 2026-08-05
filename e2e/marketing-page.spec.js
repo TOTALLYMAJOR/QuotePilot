@@ -52,7 +52,7 @@ test("public landing page stays contained on mobile and honors reduced motion", 
 test("customer portal query takes precedence over the public landing page", async ({ page }) => {
   await page.goto("/?portal=e2e-route-precedence");
 
-  await expect(page.getByRole("heading", { name: "Proposal Decision Center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your proposal" })).toBeVisible();
   await expect(page.getByRole("heading", {
     name: /Build confident catering quotes without the spreadsheet chase/i
   })).toHaveCount(0);
@@ -61,7 +61,7 @@ test("customer portal query takes precedence over the public landing page", asyn
 test("staff route loads the workspace boundary rather than the public landing page", async ({ page }) => {
   await page.goto("/app");
 
-  const workspaceSurface = page.getByRole("button", { name: "Get Instant Quote" }).or(
+  const workspaceSurface = page.getByRole("button", { name: "New Quote" }).or(
     page.getByRole("heading", { name: "Catalog Unavailable" })
   );
   await expect(workspaceSurface).toBeVisible();

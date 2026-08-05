@@ -60,9 +60,9 @@ git checkout -b feature/<scope>-<topic>
      - Firebase heavy lanes install the independently locked `functions/`
        dependencies before starting emulators; root installation alone is not
        a Functions runtime proof;
-     - Firebase emulator runners require Java 21 or newer and automatically
-       select an isolated repository-local JRE when the runner's system Java is
-       older.
+     - Firebase emulator lanes require Java 21 or newer. The package lane
+       prepares and selects an isolated repository-local JRE before its first
+       emulator command when the runner's system Java is older.
      - The CWV lane builds a fresh production bundle and explicitly selects the
        installed Playwright Chromium binary before Lighthouse starts.
    - `Docker Build Smoke`

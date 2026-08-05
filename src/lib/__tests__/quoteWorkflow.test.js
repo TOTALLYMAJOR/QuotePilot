@@ -3,7 +3,8 @@ import {
   buildProductionChecklist,
   buildProposalReadiness,
   buildQuoteLifecycleTimeline,
-  buildQuoteScenarios
+  buildQuoteScenarios,
+  buildWorkflowAttentionSummary
 } from "../quoteWorkflow";
 
 function completeForm() {
@@ -83,12 +84,55 @@ describe("quote workflow helpers", () => {
       booking: {
         contractNumber: "C-100",
         contractConvertedAtISO: "2026-05-04T10:00:00.000Z"
+      },
+      workflow: {
+        approvalRequests: [{
+          id: "approval-1",
+          action: "convert_to_contract",
+          state: "approved",
+          requestedAtISO: "2026-05-03T08:00:00.000Z",
+          resolvedAtISO: "2026-05-03T09:00:00.000Z",
+          executionState: "succeeded",
+          executionCompletedAtISO: "2026-05-04T09:59:00.000Z",
+          executionReference: "C-100"
+        }]
       }
     });
 
     expect(timeline[0].label).toBe("Quote created");
     expect(timeline.at(-1).label).toBe("Contract created");
     expect(timeline.some((item) => item.label === "Customer accepted proposal")).toBe(true);
+    expect(timeline.some((item) => item.label === "Approved action completed")).toBe(true);
+  });
+
+  test("adds exact-request internal handling to the lifecycle without replacing customer evidence", () => {
+    const timeline = buildQuoteLifecycleTimeline({
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Update the menu.",
+        requestId: "request-current",
+        submittedAtISO: "2026-05-02T10:00:00.000Z"
+      },
+      workflow: {
+        changeRequestHandling: {
+          sourceRequestId: "request-current",
+          sourceSubmittedAtISO: "2026-05-02T10:00:00.000Z",
+          sourceMessage: "Update the menu.",
+          state: "handled",
+          acknowledgedAtISO: "2026-05-02T11:00:00.000Z",
+          acknowledgedByEmail: "sales@example.com",
+          handledAtISO: "2026-05-02T12:00:00.000Z",
+          handledByEmail: "sales@example.com",
+          note: "Updated the menu and prepared the revision."
+        }
+      }
+    });
+
+    expect(timeline.map((item) => item.label)).toEqual([
+      "Customer requested changes",
+      "Change request acknowledged internally",
+      "Change request marked handled internally"
+    ]);
   });
 
   test("merges persisted production completion into the fixed checklist", () => {
@@ -110,5 +154,194 @@ describe("quote workflow helpers", () => {
     expect(checklist.completed).toBe(1);
     expect(checklist.percent).toBe(10);
     expect(checklist.items[0]).toMatchObject({ id: "event-brief", completed: true });
+  });
+
+  test("builds one attention count per quote while retaining each actionable reason", () => {
+    const quotes = [{
+      id: "quote-attention",
+      quoteNumber: "Q-ATTENTION",
+      status: "viewed",
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Please remove the coffee service.",
+        requestId: "request-attention",
+        submittedAtISO: "2026-08-02T15:00:00.000Z"
+      },
+      workflow: {
+        followUp: {
+          stage: "awaiting_response",
+          dueDate: "2026-08-01",
+          completed: false
+        },
+        approvalRequests: [{
+          id: "approval-1",
+          action: "rotate_portal_link",
+          state: "pending",
+          requestedAtISO: "2026-08-02T16:00:00.000Z"
+        }]
+      }
+    }];
+    const original = structuredClone(quotes);
+    const summary = buildWorkflowAttentionSummary(quotes, { todayISO: "2026-08-03" });
+
+    expect(summary).toMatchObject({
+      quoteCount: 1,
+      itemCount: 3,
+      counts: { changeRequests: 1, followUps: 1, approvals: 1 }
+    });
+    expect(summary.items.map((item) => item.type)).toEqual([
+      "change_request",
+      "follow_up",
+      "approval"
+    ]);
+    expect(summary.items[1]).toMatchObject({ state: "overdue", daysOverdue: 2 });
+    expect(summary.items[0]).toMatchObject({
+      sourceRequestId: "request-attention",
+      sourceMessage: "Please remove the coffee service."
+    });
+    expect(quotes).toEqual(original);
+  });
+
+  test("keeps due-today distinct and sorts same-priority work by date then quote number", () => {
+    const summary = buildWorkflowAttentionSummary([
+      {
+        id: "quote-z",
+        quoteNumber: "Q-Z",
+        status: "sent",
+        workflow: { followUp: { dueDate: "2026-08-02", completed: false } }
+      },
+      {
+        id: "quote-b",
+        quoteNumber: "Q-B",
+        status: "sent",
+        workflow: { followUp: { dueDate: "2026-08-01", completed: false } }
+      },
+      {
+        id: "quote-a",
+        quoteNumber: "Q-A",
+        status: "sent",
+        workflow: { followUp: { dueDate: "2026-08-01", completed: false } }
+      },
+      {
+        id: "quote-today",
+        quoteNumber: "Q-TODAY",
+        status: "sent",
+        workflow: { followUp: { dueDate: "2026-08-03", completed: false } }
+      }
+    ], { todayISO: "2026-08-03" });
+
+    expect(summary.items.map((item) => item.quoteId)).toEqual([
+      "quote-a",
+      "quote-b",
+      "quote-z",
+      "quote-today"
+    ]);
+    expect(summary.items.at(-1)).toMatchObject({ state: "due_today", daysOverdue: 0 });
+  });
+
+  test("keeps acknowledged change requests visible and reopens attention for a later request", () => {
+    const quote = {
+      id: "quote-change-request",
+      status: "sent",
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Change the menu.",
+        requestId: "request-current",
+        submittedAtISO: "2026-08-03T10:00:00.000Z"
+      },
+      workflow: {
+        changeRequestHandling: {
+          sourceRequestId: "request-current",
+          sourceSubmittedAtISO: "2026-08-03T10:00:00.000Z",
+          sourceMessage: "Change the menu.",
+          state: "acknowledged"
+        }
+      }
+    };
+
+    const acknowledged = buildWorkflowAttentionSummary([quote], { todayISO: "2026-08-03" });
+    expect(acknowledged.items[0]).toMatchObject({ type: "change_request", state: "acknowledged" });
+
+    const handled = buildWorkflowAttentionSummary([{
+      ...quote,
+      workflow: {
+        changeRequestHandling: {
+          sourceRequestId: "request-current",
+          sourceSubmittedAtISO: "2026-08-03T10:00:00.000Z",
+          sourceMessage: "Change the menu.",
+          state: "handled"
+        }
+      }
+    }], { todayISO: "2026-08-03" });
+    expect(handled.quoteCount).toBe(0);
+
+    const laterRequest = buildWorkflowAttentionSummary([{
+      ...quote,
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Change the menu again.",
+        requestId: "request-later",
+        submittedAtISO: "2026-08-03T11:00:00.000Z"
+      },
+      workflow: {
+        changeRequestHandling: {
+          sourceRequestId: "request-current",
+          sourceSubmittedAtISO: "2026-08-03T10:00:00.000Z",
+          sourceMessage: "Change the menu.",
+          state: "handled"
+        }
+      }
+    }], { todayISO: "2026-08-03" });
+    expect(laterRequest.items[0]).toMatchObject({ type: "change_request", state: "new" });
+  });
+
+  test("suppresses non-active, future, completed, and won follow-up work", () => {
+    const summary = buildWorkflowAttentionSummary([
+      {
+        id: "terminal",
+        status: "booked",
+        workflow: { followUp: { dueDate: "2026-08-01", completed: false } }
+      },
+      {
+        id: "future",
+        status: "sent",
+        workflow: { followUp: { dueDate: "2026-08-04", completed: false } }
+      },
+      {
+        id: "complete",
+        status: "sent",
+        workflow: { followUp: { dueDate: "2026-08-01", completed: true } }
+      },
+      {
+        id: "won",
+        status: "accepted",
+        workflow: { followUp: { stage: "won", dueDate: "2026-08-01", completed: false } }
+      }
+    ], { todayISO: "2026-08-03" });
+
+    expect(summary).toMatchObject({ quoteCount: 0, itemCount: 0 });
+  });
+
+  test("surfaces malformed current change-request evidence as unhandleable attention", () => {
+    const summary = buildWorkflowAttentionSummary([{
+      id: "malformed-change-request",
+      status: "viewed",
+      updatedAtISO: "2026-08-03T12:00:00.000Z",
+      portalDecision: {
+        decision: "changes_requested",
+        submittedAtISO: "not-a-date"
+      }
+    }], { todayISO: "2026-08-03" });
+
+    expect(summary).toMatchObject({
+      quoteCount: 1,
+      itemCount: 1,
+      counts: { changeRequests: 1 }
+    });
+    expect(summary.items[0]).toMatchObject({
+      type: "change_request",
+      state: "invalid",
+      unhandleable: true
+    });
   });
 });

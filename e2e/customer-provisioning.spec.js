@@ -11,7 +11,7 @@ async function openCustomerProvisioning(page) {
   if (await platformLauncher.isVisible()) {
     await platformLauncher.click();
   } else {
-    await expect(page.getByRole("button", { name: "Get Instant Quote" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "New Quote" })).toBeVisible();
     await scopedLauncher.click();
   }
 

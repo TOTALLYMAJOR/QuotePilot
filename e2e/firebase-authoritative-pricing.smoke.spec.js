@@ -6,7 +6,7 @@ const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  const quoteButton = page.getByRole("button", { name: "Get Instant Quote" });
+  const quoteButton = page.getByRole("button", { name: "New Quote" });
   await expect(signInHeading.or(quoteButton)).toBeVisible({ timeout: 45_000 });
   if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();
@@ -36,7 +36,7 @@ async function fillRequiredQuoteFields(page) {
   await page.getByRole("textbox", { name: /Email/i }).fill("client@example.com");
 }
 
-async function advanceToSave(page, saveLabel = "Save & Submit") {
+async function advanceToSave(page, saveLabel = "Save draft") {
   for (let i = 0; i < 6; i += 1) {
     const saveButton = page.getByRole("button", { name: saveLabel });
     if (await saveButton.count()) {
@@ -53,17 +53,56 @@ async function advanceToSave(page, saveLabel = "Save & Submit") {
   throw new Error(`Unable to reach ${saveLabel}`);
 }
 
-test("owner saves an authoritative quote and the customer accepts it", async ({ page, browser }) => {
+test("owner saves an authoritative quote and disabled delivery cannot activate its portal", async ({ page }) => {
   test.setTimeout(180_000);
   await signInAsStaff(page);
   await fillRequiredQuoteFields(page);
-  await advanceToSave(page, "Save & Submit");
+  await advanceToSave(page, "Save draft");
 
   const historyHeading = page.getByRole("heading", { name: "Quote History" });
-  if (!(await historyHeading.isVisible())) {
-    await page.getByRole("button", { name: "Quote History" }).click();
-  }
   await expect(historyHeading).toBeVisible({ timeout: 45_000 });
+  const handoff = page.getByRole("dialog", { name: "Quote History" }).locator(".saved-quote-handoff");
+  await expect(handoff).toContainText(/Saved as a draft/i, { timeout: 45_000 });
+  await expect(handoff).toBeFocused();
+  await expect(page.getByText(/Email delivery unavailable/i)).toBeVisible();
+  await expect(handoff.getByRole("button", { name: "Download draft PDF" })).toBeVisible();
+  await expect(handoff.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
+  const quoteId = await handoff.getAttribute("data-quote-id");
+  expect(quoteId).toBeTruthy();
+
+  const rejectedDelivery = await page.evaluate(async (savedQuoteId) => {
+    const store = await import("/src/lib/quoteStore.js");
+    const commerce = await import("/src/lib/commerceOps.js");
+    const quote = await store.getQuoteById(savedQuoteId);
+    let message = "";
+    try {
+      await commerce.sendQuoteToCustomerEmail({
+        quoteId: savedQuoteId,
+        quoteRevisionId: commerce.resolveQuoteDeliveryRevisionId(quote)
+      });
+    } catch (error) {
+      message = String(error?.message || error);
+    }
+    const persisted = await store.getQuoteById(savedQuoteId);
+    let draftPortalRejected = false;
+    try {
+      await store.getPortalQuote(persisted.portalKey);
+    } catch {
+      draftPortalRejected = true;
+    }
+    return {
+      message,
+      status: persisted.status,
+      deliveryState: persisted.workflow?.quoteDelivery?.state || "",
+      draftPortalRejected
+    };
+  }, quoteId);
+  expect(rejectedDelivery.message).toMatch(/email provider is disabled|email provider/i);
+  expect(rejectedDelivery).toMatchObject({
+    status: "draft",
+    deliveryState: "failed",
+    draftPortalRejected: true
+  });
 
   const rows = page.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })
@@ -78,31 +117,30 @@ test("owner saves an authoritative quote and the customer accepts it", async ({ 
 
   const quoteRow = rows.filter({ hasText: "96" }).first();
   const statusSelect = quoteRow.locator("td").nth(7).locator("select");
+  const copyPortalButton = quoteRow.getByRole("button", { name: "Copy Portal" });
+  const sendQuoteButton = quoteRow.getByRole("button", { name: /^(Send|Retry) Quote Email$/ });
   await expect(statusSelect).toHaveValue("draft");
-  await statusSelect.selectOption("sent");
-  await expect(statusSelect).toHaveValue("sent");
+  await expect(statusSelect.locator('option[value="sent"]')).toHaveCount(0);
+  await expect(copyPortalButton).toBeDisabled();
+  await expect(sendQuoteButton).toBeDisabled();
+  await expect(sendQuoteButton).toHaveAttribute("title", /Configure a supported email provider/i);
 
-  await quoteRow.getByRole("button", { name: "Copy Portal" }).click();
-  const portalLink = await page.evaluate(() => navigator.clipboard.readText());
-  expect(portalLink).toMatch(/\/app\?portal=[A-Za-z0-9_-]{20,}/);
-
-  const customerContext = await browser.newContext();
-  try {
-    const customerPage = await customerContext.newPage();
-    await customerPage.goto(portalLink);
-    await expect(customerPage.getByRole("heading", { name: "Proposal Decision Center" })).toBeVisible({
-      timeout: 45_000
-    });
-    await expect(customerPage.getByText("Authoritative Pricing E2E")).toBeVisible();
-    await customerPage.getByLabel(/I reviewed the event details and proposal total/i).check();
-    await customerPage.getByRole("button", { name: "Submit Decision" }).click();
-    await expect(customerPage.getByText("Proposal accepted")).toBeVisible({ timeout: 45_000 });
-    await expect(customerPage.getByText("Acceptance is recorded")).toBeVisible();
-  } finally {
-    await customerContext.close();
-  }
-
-  await refreshButton.click();
-  await expect(statusSelect).toHaveValue("accepted", { timeout: 45_000 });
+  const directDeliveryClaimsRejected = await page.evaluate(async (savedQuoteId) => {
+    const store = await import("/src/lib/quoteStore.js");
+    const messages = {};
+    for (const status of ["sent", "viewed"]) {
+      try {
+        await store.updateQuoteStatus(savedQuoteId, status);
+      } catch (error) {
+        messages[status] = String(error?.message || error);
+      }
+    }
+    const persisted = await store.getQuoteById(savedQuoteId);
+    return { messages, status: persisted.status };
+  }, quoteId);
+  expect(directDeliveryClaimsRejected.messages.sent).toBeTruthy();
+  expect(directDeliveryClaimsRejected.messages.viewed).toBeTruthy();
+  expect(directDeliveryClaimsRejected.status).toBe("draft");
+  await expect(copyPortalButton).toBeDisabled();
   await expect(page.getByText(/Failed to calculate authoritative quote pricing/i)).toHaveCount(0);
 });

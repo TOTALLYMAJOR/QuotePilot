@@ -1,7 +1,7 @@
 const functions = require("firebase-functions/v1");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
-const { randomUUID } = require("node:crypto");
+const { createHash, randomInt, randomUUID } = require("node:crypto");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 const Stripe = require("stripe");
 const twilio = require("twilio");
@@ -11,6 +11,7 @@ const {
 } = require("./pricingEngine");
 const {
   QuoteCreationError,
+  buildCanonicalPortalSnapshot,
   buildDuplicateQuoteForm,
   buildPortalRotationDocuments,
   buildQuoteReopenDocuments,
@@ -43,6 +44,31 @@ const {
   validateStripeCheckoutScope,
   validateStripeCheckoutCompletion
 } = require("./paymentSafety");
+const {
+  ApprovalWorkflowError,
+  buildApprovalExecutionOutcome,
+  buildApprovalExecutionStart,
+  buildApprovalRequest,
+  buildApprovalResolution
+} = require("./approvalWorkflow");
+const {
+  ContractWorkflowError,
+  planContractConversion
+} = require("./contractWorkflow");
+const {
+  QuoteDeliveryError,
+  assertNoConflictingQuoteExecution,
+  assertQuoteDeliveryPortalActivation,
+  assertQuoteDeliveryPortalSnapshot,
+  assertQuoteDeliveryRevision,
+  assertQuoteEditNotDispatching,
+  buildQuoteDeliverySuccess,
+  classifyQuoteDeliveryAttemptError,
+  claimQuoteDelivery,
+  normalizeProviderMessageId,
+  planQuoteDeliveryAttemptFailure,
+  planQuoteDeliveryOutcomeResolution
+} = require("./quoteDelivery");
 
 initializeApp();
 
@@ -61,6 +87,7 @@ const EMAIL_PROVIDERS = new Set(["resend", "none"]);
 const APPROVED_EMAIL_FROM_NAME = "QuotePilot by MBMapps";
 const APPROVED_EMAIL_FROM_EMAIL = "onboarding@quotepilot.mbmapps.com";
 const QUOTES_COLLECTION = "quotes";
+const QUOTE_APPROVAL_EXECUTIONS_COLLECTION = "quoteApprovalExecutions";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
@@ -68,6 +95,8 @@ let cachedFunctionsConfig = undefined;
 let functionsConfigErrorLogged = false;
 const CLAIMS_VERSION = 1;
 const PROVISIONING_EMAIL_LEASE_MS = 2 * 60 * 1000;
+const QUOTE_DELIVERY_LEASE_MS = 2 * 60 * 1000;
+const QUOTE_DELIVERY_RETRY_WINDOW_MS = 23 * 60 * 60 * 1000;
 const PROVISIONING_INVITE_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000;
 const RESERVED_SUBDOMAINS = new Set(["www", "app", "api", "admin"]);
 const UNKNOWN_HOST_WINDOW_MS = Math.max(1_000, Number(readConfig("security.unknown_host_window_ms", "300000")) || 300000);
@@ -1360,6 +1389,79 @@ function getQuoteDocRef(quoteId, organizationId = "") {
   return db.collection(ORGANIZATIONS_COLLECTION).doc(orgId).collection(QUOTES_COLLECTION).doc(id);
 }
 
+function normalizeApprovalExecutionId(value) {
+  const id = normalizeText(value);
+  return /^[A-Za-z0-9_-]{1,160}$/.test(id) ? id : "";
+}
+
+function getQuoteApprovalExecutionDocRef(organizationId, approvalRequestId) {
+  const orgId = normalizeOrganizationId(organizationId);
+  const executionId = normalizeApprovalExecutionId(approvalRequestId);
+  if (!orgId || !executionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId and a valid approvalRequestId are required."
+    );
+  }
+  return db
+    .collection(ORGANIZATIONS_COLLECTION)
+    .doc(orgId)
+    .collection(QUOTE_APPROVAL_EXECUTIONS_COLLECTION)
+    .doc(executionId);
+}
+
+function buildApprovalExecutionAudit({
+  organizationId,
+  quoteId,
+  approvalRequest,
+  staff,
+  state,
+  startedAtISO,
+  completedAtISO = "",
+  result = {},
+  error = ""
+} = {}) {
+  return {
+    organizationId: normalizeOrganizationId(organizationId),
+    quoteId: normalizeText(quoteId),
+    approvalRequestId: normalizeApprovalExecutionId(approvalRequest?.id),
+    action: normalizeText(approvalRequest?.action),
+    approvalResolvedAtISO: normalizeText(approvalRequest?.resolvedAtISO),
+    approvalResolvedByEmail: normalizeEmail(approvalRequest?.resolvedByEmail),
+    state: normalizeText(state).toLowerCase(),
+    startedAtISO: normalizeText(startedAtISO),
+    completedAtISO: normalizeText(completedAtISO),
+    executedBy: {
+      uid: normalizeText(staff?.uid),
+      email: normalizeEmail(staff?.email),
+      role: normalizeText(staff?.role).toLowerCase()
+    },
+    result: result && typeof result === "object" ? result : {},
+    error: normalizeText(error).slice(0, 500),
+    updatedAtISO: normalizeText(completedAtISO || startedAtISO),
+    updatedAt: FieldValue.serverTimestamp()
+  };
+}
+
+function assertMatchingApprovalExecutionRecord(record, {
+  organizationId,
+  quoteId,
+  approvalRequestId,
+  action
+} = {}) {
+  if (
+    normalizeOrganizationId(record?.organizationId) !== normalizeOrganizationId(organizationId)
+    || normalizeText(record?.quoteId) !== normalizeText(quoteId)
+    || normalizeApprovalExecutionId(record?.approvalRequestId) !== normalizeApprovalExecutionId(approvalRequestId)
+    || normalizeText(record?.action) !== normalizeText(action)
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Approval execution audit identity does not match this action."
+    );
+  }
+}
+
 async function readQuoteOrThrow(quoteId, { organizationId = "" } = {}) {
   const id = normalizeText(quoteId);
   if (!id) {
@@ -1470,33 +1572,95 @@ function resolvePortalLink(quote) {
   return portalUrl.toString();
 }
 
-function normalizeAttachment(attachmentInput) {
-  if (!attachmentInput || typeof attachmentInput !== "object") return null;
-
-  const filenameRaw = normalizeText(attachmentInput.filename || "quote-proposal.pdf");
-  const filename = filenameRaw.endsWith(".pdf") ? filenameRaw : `${filenameRaw}.pdf`;
-  const mimeType = normalizeText(attachmentInput.mimeType || "application/pdf").toLowerCase();
-  if (mimeType !== "application/pdf") {
-    throw new functions.https.HttpsError("invalid-argument", "Only PDF attachments are supported.");
-  }
-
-  const base64Source = normalizeText(attachmentInput.base64)
-    .replace(/^data:application\/pdf;base64,/i, "")
-    .replace(/\s+/g, "");
-  if (!base64Source) return null;
-  if (!/^[A-Za-z0-9+/=]+$/.test(base64Source)) {
-    throw new functions.https.HttpsError("invalid-argument", "Attachment payload is not valid base64.");
-  }
-
-  const approxByteSize = Math.floor((base64Source.length * 3) / 4);
-  if (approxByteSize > 7 * 1024 * 1024) {
-    throw new functions.https.HttpsError("invalid-argument", "Attachment is too large (max 7 MB).");
-  }
-
+function assertQuoteDeliveryPortal({
+  quote,
+  quoteId,
+  organizationId,
+  portalSnapshot,
+  nowISO
+} = {}) {
+  const portal = assertQuoteDeliveryPortalSnapshot({
+    quote,
+    quoteId,
+    organizationId,
+    portalSnapshot,
+    nowISO
+  });
   return {
-    filename,
-    content: base64Source
+    ...portal,
+    portalLink: resolvePortalLink(quote)
   };
+}
+
+function buildQuoteDeliveryEmailPayload({ quote, quoteId, portalLink } = {}) {
+  const customerEmail = normalizeEmail(quote?.customer?.email);
+  if (!customerEmail) {
+    throw new QuoteDeliveryError("failed-precondition", "Quote customer email is missing.");
+  }
+  if (!normalizeText(portalLink)) {
+    throw new QuoteDeliveryError(
+      "failed-precondition",
+      "Customer portal URL is unavailable. Configure the application URL before sending."
+    );
+  }
+  const quoteNumber = normalizeText(quote?.quoteNumber) || normalizeText(quoteId);
+  const customerName = normalizeText(quote?.customer?.name) || "there";
+  const eventName = normalizeText(quote?.event?.name) || "your event";
+  const eventDate = normalizeText(quote?.event?.date) || "your event date";
+  const venue = normalizeText(quote?.event?.venue) || "your venue";
+  const total = currencyLabel(quote?.totals?.total);
+  const deposit = currencyLabel(quote?.totals?.deposit);
+  const storedPaymentLink = normalizeText(quote?.payment?.depositLink);
+  const paymentLink = storedPaymentLink
+    ? parseStoredPaymentLinkOrThrow(storedPaymentLink)
+    : "";
+  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "QuotePilot";
+  const lines = [
+    `Hi ${customerName},`,
+    "",
+    `Your quote ${quoteNumber} is ready for ${eventName} on ${eventDate} at ${venue}.`,
+    `Estimated total: ${total}.`,
+    `Deposit due: ${deposit}.`,
+    `Review and accept your quote: ${portalLink}`,
+    paymentLink ? `Deposit payment link: ${paymentLink}` : "Reply if you need a deposit payment link.",
+    "",
+    "Thank you."
+  ];
+  return {
+    toEmail: customerEmail,
+    subject: `${brandName} Quote ${quoteNumber} - ${eventDate}`,
+    text: lines.join("\n"),
+    html: `
+      <p>Hi ${escapeHtml(customerName)},</p>
+      <p>Your quote <strong>${escapeHtml(quoteNumber)}</strong> is ready for <strong>${escapeHtml(eventName)}</strong> on <strong>${escapeHtml(eventDate)}</strong> at <strong>${escapeHtml(venue)}</strong>.</p>
+      <p>Estimated total: <strong>${escapeHtml(total)}</strong><br/>Deposit due: <strong>${escapeHtml(deposit)}</strong></p>
+      <p><a href="${escapeHtml(portalLink)}">Review and accept your quote</a></p>
+      ${paymentLink ? `<p><a href="${escapeHtml(paymentLink)}">Open deposit payment link</a></p>` : ""}
+      <p>Thank you.</p>
+    `,
+    quoteNumber
+  };
+}
+
+function annotateQuoteDeliveryAttemptError(error, {
+  outcome = "",
+  reason = "",
+  providerHttpStatus = 0
+} = {}) {
+  const annotated = error instanceof Error
+    ? error
+    : new Error(normalizeText(error) || "Email provider request failed.");
+  if (normalizeText(outcome)) {
+    annotated.quoteDeliveryOutcome = normalizeText(outcome).toLowerCase();
+  }
+  if (normalizeText(reason)) {
+    annotated.quoteDeliveryReason = normalizeText(reason).toLowerCase();
+  }
+  const status = Number(providerHttpStatus);
+  if (Number.isInteger(status) && status >= 100 && status <= 599) {
+    annotated.providerHttpStatus = status;
+  }
+  return annotated;
 }
 
 async function sendEmailViaResend({
@@ -1506,26 +1670,32 @@ async function sendEmailViaResend({
   subject,
   text,
   html = "",
-  attachments = [],
   idempotencyKey = ""
 }) {
   const normalizedIdempotencyKey = normalizeText(idempotencyKey).slice(0, 256);
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      ...(normalizedIdempotencyKey ? { "Idempotency-Key": normalizedIdempotencyKey } : {})
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      subject,
-      text,
-      html: html || undefined,
-      attachments: attachments.length ? attachments : undefined
-    })
-  });
+  let response;
+  try {
+    response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        ...(normalizedIdempotencyKey ? { "Idempotency-Key": normalizedIdempotencyKey } : {})
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        text,
+        html: html || undefined
+      })
+    });
+  } catch (error) {
+    throw annotateQuoteDeliveryAttemptError(error, {
+      outcome: "ambiguous",
+      reason: "provider_network_error"
+    });
+  }
 
   let payload = null;
   try {
@@ -1536,11 +1706,25 @@ async function sendEmailViaResend({
 
   if (!response.ok) {
     const message = normalizeText(payload?.message || payload?.error || response.statusText || "Email provider error.");
-    throw new Error(message);
+    throw annotateQuoteDeliveryAttemptError(new Error(message), {
+      reason: `provider_http_${response.status}`,
+      providerHttpStatus: response.status
+    });
   }
 
+  const id = normalizeProviderMessageId(payload?.id);
+  if (!id) {
+    throw annotateQuoteDeliveryAttemptError(
+      new Error("Email provider response did not include a message identifier."),
+      {
+        outcome: "ambiguous",
+        reason: "provider_2xx_missing_message_id",
+        providerHttpStatus: response.status
+      }
+    );
+  }
   return {
-    id: normalizeText(payload?.id)
+    id
   };
 }
 
@@ -1549,14 +1733,13 @@ async function sendCustomerEmail({
   subject,
   text,
   html = "",
-  attachment = null,
   idempotencyKey = ""
 }) {
   const emailConfig = getEmailConfig();
   if (emailConfig.provider === "none") {
     throw new functions.https.HttpsError(
       "failed-precondition",
-      "Email provider is disabled. Configure NOTIFICATIONS_EMAIL_PROVIDER and the verified sender environment."
+      "Email provider is disabled. Configure NOTIFICATIONS_EMAIL_PROVIDER and the approved sender configuration."
     );
   }
   if (!EMAIL_PROVIDERS.has(emailConfig.provider)) {
@@ -1596,9 +1779,17 @@ async function sendCustomerEmail({
         subject: normalizeText(subject),
         text: normalizeText(text),
         html,
-        attachments: attachment ? [attachment] : [],
         idempotencyKey
       });
+      if (!normalizeProviderMessageId(result.id)) {
+        throw annotateQuoteDeliveryAttemptError(
+          new Error("Email provider response did not include a message identifier."),
+          {
+            outcome: "ambiguous",
+            reason: "provider_2xx_missing_message_id"
+          }
+        );
+      }
       return {
         sent: true,
         provider: "resend",
@@ -1615,7 +1806,15 @@ async function sendCustomerEmail({
       subject: normalizeText(subject),
       error: normalizeText(error?.message)
     });
-    throw new functions.https.HttpsError("internal", normalizeText(error?.message || "Failed to send email."));
+    const classification = classifyQuoteDeliveryAttemptError(error);
+    const publicError = new functions.https.HttpsError(
+      "internal",
+      normalizeText(error?.message || "Failed to send email.")
+    );
+    publicError.quoteDeliveryOutcome = classification.outcome;
+    publicError.quoteDeliveryReason = classification.reason;
+    publicError.providerHttpStatus = classification.providerHttpStatus;
+    throw publicError;
   }
 
   throw new functions.https.HttpsError("failed-precondition", "No supported email provider is configured.");
@@ -3471,8 +3670,12 @@ exports.deleteOrganizationWorkspace = functions.region(REGION).https.onCall(asyn
 exports.hardDeleteQuote = functions.region(REGION).https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
-  if (!quoteId) {
-    throw new functions.https.HttpsError("invalid-argument", "quoteId is required.");
+  const approvalRequestId = normalizeApprovalExecutionId(data?.approvalRequestId);
+  if (!quoteId || !approvalRequestId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "quoteId and approvalRequestId are required."
+    );
   }
 
   const staff = await assertStaff(context, {
@@ -3486,25 +3689,168 @@ exports.hardDeleteQuote = functions.region(REGION).https.onCall(async (data, con
   if (!scopedOrganizationId) {
     throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
   }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== scopedOrganizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Quote deletion requires same-organization admin authority."
+    );
+  }
 
-  const { quote, quoteRef, organizationId } = await readQuoteOrThrow(quoteId, {
-    organizationId: scopedOrganizationId
-  });
-  const portalCleanup = await deletePortalSnapshotsForQuote({
-    quoteId,
+  const organizationId = scopedOrganizationId;
+  const quoteRef = getQuoteDocRef(quoteId, organizationId);
+  const executionRef = getQuoteApprovalExecutionDocRef(
     organizationId,
-    fallbackPortalKey: quote?.portalKey
-  });
+    approvalRequestId
+  );
+  const operationStartedAtISO = new Date().toISOString();
+  try {
+    const claim = await db.runTransaction(async (tx) => {
+      const [quoteSnap, executionSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(executionRef)
+      ]);
+      if (quoteSnap.exists) {
+        const currentQuote = quoteSnap.data() || {};
+        if (normalizeOrganizationId(currentQuote.organizationId) !== organizationId) {
+          throw new functions.https.HttpsError(
+            "permission-denied",
+            "Quote is outside your organization."
+          );
+        }
+        assertQuoteEditNotDispatching(
+          { ...currentQuote, id: quoteId },
+          operationStartedAtISO
+        );
+      }
+      if (executionSnap.exists) {
+        const existingExecution = executionSnap.data() || {};
+        assertMatchingApprovalExecutionRecord(existingExecution, {
+          organizationId,
+          quoteId,
+          approvalRequestId,
+          action: "delete_quote"
+        });
+        const executionState = normalizeText(existingExecution.state).toLowerCase();
+        if (executionState === "succeeded") {
+          return {
+            completed: true,
+            result: existingExecution.result || {}
+          };
+        }
+        if (executionState !== "in_progress") {
+          throw new ApprovalWorkflowError(
+            "failed-precondition",
+            "Quote deletion approval execution is not resumable."
+          );
+        }
+        if (normalizeText(existingExecution.executedBy?.uid) !== staff.uid) {
+          throw new ApprovalWorkflowError(
+            "aborted",
+            "Quote deletion is already owned by another administrator."
+          );
+        }
+        return {
+          completed: false,
+          portalKey: normalizeText(existingExecution.result?.portalKey),
+          startedAtISO: normalizeText(existingExecution.startedAtISO) || operationStartedAtISO
+        };
+      }
+      if (!quoteSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Quote not found.");
+      }
+      const quote = quoteSnap.data() || {};
+      if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "Quote is outside your organization."
+        );
+      }
+      const started = buildApprovalExecutionStart({
+        workflow: quote.workflow,
+        requestId: approvalRequestId,
+        action: "delete_quote",
+        actorEmail: staff.email,
+        nowISO: operationStartedAtISO,
+        operationId: approvalRequestId
+      });
+      const portalKey = normalizeText(quote.portalKey);
+      tx.update(quoteRef, {
+        "workflow.approvalRequests": started.approvalRequests,
+        updatedAtISO: operationStartedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.create(executionRef, buildApprovalExecutionAudit({
+        organizationId,
+        quoteId,
+        approvalRequest: started.request,
+        staff,
+        state: "in_progress",
+        startedAtISO: operationStartedAtISO,
+        result: { portalKey }
+      }));
+      return {
+        completed: false,
+        portalKey,
+        startedAtISO: operationStartedAtISO
+      };
+    });
 
-  await db.recursiveDelete(quoteRef);
+    if (claim.completed) {
+      return {
+        ok: true,
+        quoteId,
+        organizationId,
+        idempotent: true,
+        ...(claim.result || {})
+      };
+    }
 
-  return {
-    ok: true,
-    quoteId,
-    organizationId,
-    portalSnapshotsDeleted: portalCleanup.deleted,
-    completedAtISO: new Date().toISOString()
-  };
+    const portalCleanup = await deletePortalSnapshotsForQuote({
+      quoteId,
+      organizationId,
+      fallbackPortalKey: claim.portalKey
+    });
+    await db.recursiveDelete(quoteRef);
+    const completedAtISO = new Date().toISOString();
+    const result = {
+      portalSnapshotsDeleted: portalCleanup.deleted,
+      completedAtISO
+    };
+    await executionRef.set({
+      state: "succeeded",
+      result,
+      error: "",
+      completedAtISO,
+      updatedAtISO: completedAtISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    return {
+      ok: true,
+      quoteId,
+      organizationId,
+      ...result
+    };
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (err instanceof QuoteDeliveryError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    if (err instanceof ApprovalWorkflowError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    functions.logger.error("Hard quote deletion failed", {
+      organizationId,
+      quoteId,
+      approvalRequestId,
+      actorUid: staff.uid,
+      error: normalizeText(err?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to permanently delete quote. Retry the same approved action."
+    );
+  }
 });
 
 exports.purgeDeletedQuotesForOrganization = functions.region(REGION).https.onCall(async (data, context) => {
@@ -3750,6 +4096,7 @@ async function updateTrustedQuoteDraftInternal({
         "Quote is outside your organization."
       );
     }
+    assertQuoteEditNotDispatching({ ...quote, id: quoteId }, nowISO);
 
     const documents = buildTrustedQuoteEditDocuments({
       quoteId,
@@ -3821,7 +4168,13 @@ function quoteCreationFailure(err, {
   organizationId,
   failureMessage = "Failed to create quote."
 }) {
-  if (err instanceof QuoteCreationError || err instanceof PricingEngineError) {
+  if (
+    err instanceof QuoteCreationError
+    || err instanceof PricingEngineError
+    || err instanceof ApprovalWorkflowError
+    || err instanceof ContractWorkflowError
+    || err instanceof QuoteDeliveryError
+  ) {
     throw new functions.https.HttpsError(err.code, err.message);
   }
   functions.logger.error(`${operation} failed`, {
@@ -3943,6 +4296,391 @@ exports.updateQuoteDraft = functions.region(REGION).https.onCall(async (data, co
   }
 });
 
+exports.requestQuoteApproval = functions.region(REGION).https.onCall(async (data, context) => {
+  const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: requestedOrganizationId
+  });
+  const organizationId = normalizeOrganizationId(
+    requestedOrganizationId || staff.organizationId
+  );
+  const quoteId = normalizeText(data?.quoteId);
+  if (!organizationId || !quoteId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId and quoteId are required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Approval requests require same-organization staff authority."
+    );
+  }
+
+  try {
+    const quoteRef = getQuoteDocRef(quoteId, organizationId);
+    const requestedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const quoteSnap = await tx.get(quoteRef);
+      if (!quoteSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Quote not found.");
+      }
+      const quote = quoteSnap.data() || {};
+      if (normalizeOrganizationId(quote.organizationId || organizationId) !== organizationId) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "Quote is outside your organization."
+        );
+      }
+      if (normalizeText(quote.status).toLowerCase() === "deleted" || normalizeText(quote.deletedAtISO)) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Deleted quotes cannot receive approval requests."
+        );
+      }
+
+      const planned = buildApprovalRequest({
+        workflow: quote.workflow,
+        action: data?.action,
+        note: data?.note,
+        actorEmail: staff.email,
+        nowISO: requestedAtISO,
+        requestId: randomUUID().replace(/-/g, "")
+      });
+      tx.update(quoteRef, {
+        "workflow.approvalRequests": planned.approvalRequests,
+        updatedAtISO: requestedAtISO
+      });
+      return planned.request;
+    });
+
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      request: result
+    };
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (err instanceof ApprovalWorkflowError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    functions.logger.error("Approval request failed", {
+      organizationId,
+      quoteId,
+      actorUid: staff.uid,
+      error: normalizeText(err?.message)
+    });
+    throw new functions.https.HttpsError("internal", "Failed to request quote approval.");
+  }
+});
+
+exports.resolveQuoteApprovalRequest = functions.region(REGION).https.onCall(async (data, context) => {
+  const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: requestedOrganizationId
+  });
+  assertAdminStaff(staff);
+  const organizationId = normalizeOrganizationId(
+    requestedOrganizationId || staff.organizationId
+  );
+  const quoteId = normalizeText(data?.quoteId);
+  const requestId = normalizeText(data?.requestId);
+  if (!organizationId || !quoteId || !requestId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId, quoteId, and requestId are required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Approval resolution requires same-organization admin authority."
+    );
+  }
+
+  try {
+    const quoteRef = getQuoteDocRef(quoteId, organizationId);
+    const resolvedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const quoteSnap = await tx.get(quoteRef);
+      if (!quoteSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Quote not found.");
+      }
+      const quote = quoteSnap.data() || {};
+      if (normalizeOrganizationId(quote.organizationId || organizationId) !== organizationId) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "Quote is outside your organization."
+        );
+      }
+      if (normalizeText(quote.status).toLowerCase() === "deleted" || normalizeText(quote.deletedAtISO)) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Deleted quote approvals cannot be resolved."
+        );
+      }
+
+      const planned = buildApprovalResolution({
+        workflow: quote.workflow,
+        requestId,
+        state: data?.state,
+        resolutionNote: data?.resolutionNote,
+        actorEmail: staff.email,
+        nowISO: resolvedAtISO
+      });
+      tx.update(quoteRef, {
+        "workflow.approvalRequests": planned.approvalRequests,
+        updatedAtISO: resolvedAtISO
+      });
+      return planned.request;
+    });
+
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      request: result
+    };
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (err instanceof ApprovalWorkflowError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    functions.logger.error("Approval resolution failed", {
+      organizationId,
+      quoteId,
+      requestId,
+      actorUid: staff.uid,
+      error: normalizeText(err?.message)
+    });
+    throw new functions.https.HttpsError("internal", "Failed to resolve quote approval.");
+  }
+});
+
+exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (data, context) => {
+  const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: requestedOrganizationId
+  }));
+  const organizationId = normalizeOrganizationId(
+    requestedOrganizationId || staff.organizationId
+  );
+  const quoteId = normalizeText(data?.quoteId);
+  const approvalRequestId = normalizeApprovalExecutionId(data?.approvalRequestId);
+  if (!organizationId || !quoteId || !approvalRequestId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId, quoteId, and approvalRequestId are required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Contract conversion requires same-organization admin authority."
+    );
+  }
+
+  try {
+    const quoteRef = getQuoteDocRef(quoteId, organizationId);
+    const executionRef = getQuoteApprovalExecutionDocRef(
+      organizationId,
+      approvalRequestId
+    );
+    const settingsRef = db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .doc(organizationId)
+      .collection("settings")
+      .doc("config");
+    const convertedAtISO = new Date().toISOString();
+    const contractDate = convertedAtISO.slice(2, 10).replace(/-/g, "");
+    const contractNumber = `C-${contractDate}-${String(randomInt(0, 100_000)).padStart(5, "0")}`;
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, executionSnap, settingsSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(executionRef),
+        tx.get(settingsRef)
+      ]);
+      if (executionSnap.exists) {
+        const existingExecution = executionSnap.data() || {};
+        assertMatchingApprovalExecutionRecord(existingExecution, {
+          organizationId,
+          quoteId,
+          approvalRequestId,
+          action: "convert_to_contract"
+        });
+        if (normalizeText(existingExecution.state).toLowerCase() === "succeeded") {
+          return {
+            ...(existingExecution.result || {}),
+            idempotent: true
+          };
+        }
+        throw new ApprovalWorkflowError(
+          "aborted",
+          "Contract conversion is already in progress."
+        );
+      }
+      if (!quoteSnap.exists) {
+        throw new QuoteCreationError("not-found", "Quote not found.");
+      }
+      const quote = quoteSnap.data() || {};
+      if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+        throw new QuoteCreationError(
+          "permission-denied",
+          "Quote is outside your organization."
+        );
+      }
+      assertQuoteEditNotDispatching({ ...quote, id: quoteId }, convertedAtISO);
+
+      const eventDate = normalizeText(quote.event?.date);
+      const conflictQuery = quoteRef.parent.where("event.date", "==", eventDate || "__missing__");
+      const conflictSnap = await tx.get(conflictQuery);
+      const peerQuotes = conflictSnap.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...(docSnap.data() || {})
+      }));
+      const nextVersionNumber = Math.max(0, Number(quote.latestVersionNumber || 0)) + 1;
+      const versionId = `v${String(nextVersionNumber).padStart(4, "0")}`;
+      const versionRef = quoteRef.collection("versions").doc(versionId);
+      const versionSnap = await tx.get(versionRef);
+      if (versionSnap.exists) {
+        throw new QuoteCreationError(
+          "already-exists",
+          "Contract conversion version identity collided. Retry the action."
+        );
+      }
+
+      const started = buildApprovalExecutionStart({
+        workflow: quote.workflow,
+        requestId: approvalRequestId,
+        action: "convert_to_contract",
+        actorEmail: staff.email,
+        nowISO: convertedAtISO,
+        operationId: approvalRequestId
+      });
+      const conversion = planContractConversion({
+        quoteId,
+        quote,
+        peerQuotes,
+        actorEmail: staff.email,
+        nowISO: convertedAtISO,
+        contractNumber,
+        capacityLimit: settingsSnap.data()?.capacityLimit || 400
+      });
+      const completed = buildApprovalExecutionOutcome({
+        workflow: {
+          ...(quote.workflow || {}),
+          approvalRequests: started.approvalRequests
+        },
+        requestId: approvalRequestId,
+        action: "convert_to_contract",
+        actorEmail: staff.email,
+        nowISO: convertedAtISO,
+        operationId: approvalRequestId,
+        state: "succeeded",
+        reference: contractNumber
+      });
+      const workflow = {
+        ...(quote.workflow || {}),
+        approvalRequests: completed.approvalRequests
+      };
+      const versionMeta = {
+        versionId,
+        versionNumber: nextVersionNumber,
+        createdAt: convertedAtISO,
+        createdBy: {
+          uid: staff.uid,
+          email: staff.email,
+          role: staff.role
+        },
+        reason: "convert_to_contract_before_update"
+      };
+      const quotePatch = {
+        ...conversion.quotePatch,
+        workflow,
+        latestVersionNumber: nextVersionNumber,
+        versionMeta
+      };
+      const convertedQuote = {
+        ...quote,
+        ...quotePatch,
+        id: quoteId
+      };
+      const portalKey = normalizeText(quote.portalKey);
+      if (!portalKey) {
+        throw new QuoteCreationError(
+          "failed-precondition",
+          "Quote portal identity is required for contract conversion."
+        );
+      }
+      const response = {
+        status: conversion.status,
+        booking: conversion.booking,
+        lifecycle: conversion.lifecycle,
+        contractNumber: conversion.contractNumber,
+        availability: conversion.availability,
+        approvalRequest: completed.request,
+        versionId,
+        versionNumber: nextVersionNumber
+      };
+
+      tx.create(versionRef, {
+        versionId,
+        quoteId,
+        organizationId,
+        versionNumber: nextVersionNumber,
+        createdAtISO: convertedAtISO,
+        reason: versionMeta.reason,
+        createdBy: versionMeta.createdBy,
+        status: normalizeText(quote.status).toLowerCase(),
+        pricing: quote.pricing || {},
+        snapshot: {
+          ...quote,
+          id: quoteId
+        },
+        createdAt: FieldValue.serverTimestamp()
+      });
+      tx.update(quoteRef, {
+        ...quotePatch,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.set(db.collection(PORTAL_COLLECTION).doc(portalKey), {
+        ...buildCanonicalPortalSnapshot(quoteId, convertedQuote),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.create(executionRef, buildApprovalExecutionAudit({
+        organizationId,
+        quoteId,
+        approvalRequest: completed.request,
+        staff,
+        state: "succeeded",
+        startedAtISO: convertedAtISO,
+        completedAtISO: convertedAtISO,
+        result: response
+      }));
+      return response;
+    });
+
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      ...result
+    };
+  } catch (err) {
+    return quoteCreationFailure(err, {
+      operation: "convertQuoteToContract",
+      staff,
+      organizationId,
+      failureMessage: "Failed to convert quote to contract."
+    });
+  }
+});
+
 exports.reopenQuote = functions.region(REGION).https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
   const staff = await assertStaff(context, {
@@ -3982,6 +4720,7 @@ exports.reopenQuote = functions.region(REGION).https.onCall(async (data, context
           "Quote is outside your organization."
         );
       }
+      assertQuoteEditNotDispatching({ ...quote, id: quoteId }, reopenedAtISO);
 
       const activeVersionId = normalizeText(quote.activeVersionId);
       let activeSnapshot = null;
@@ -4096,26 +4835,59 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
     requestedOrganizationId || staff.organizationId
   );
   const quoteId = normalizeText(data?.quoteId);
+  const approvalRequestId = normalizeApprovalExecutionId(data?.approvalRequestId);
   if (staff.role !== "admin") {
     throw new functions.https.HttpsError(
       "permission-denied",
       "Admin role required to rotate portal links."
     );
   }
-  if (!organizationId || !quoteId) {
+  if (!organizationId || !quoteId || !approvalRequestId) {
     throw new functions.https.HttpsError(
       "invalid-argument",
-      "organizationId and quoteId are required."
+      "organizationId, quoteId, and approvalRequestId are required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Portal rotation requires same-organization admin authority."
     );
   }
 
   try {
     const quoteRef = getQuoteDocRef(quoteId, organizationId);
+    const executionRef = getQuoteApprovalExecutionDocRef(
+      organizationId,
+      approvalRequestId
+    );
     const newPortalKey = randomUUID().replace(/-/g, "");
     const newPortalRef = db.collection(PORTAL_COLLECTION).doc(newPortalKey);
     const rotatedAtISO = new Date().toISOString();
     const result = await db.runTransaction(async (tx) => {
-      const quoteSnap = await tx.get(quoteRef);
+      const [quoteSnap, executionSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(executionRef)
+      ]);
+      if (executionSnap.exists) {
+        const existingExecution = executionSnap.data() || {};
+        assertMatchingApprovalExecutionRecord(existingExecution, {
+          organizationId,
+          quoteId,
+          approvalRequestId,
+          action: "rotate_portal_link"
+        });
+        if (normalizeText(existingExecution.state).toLowerCase() === "succeeded") {
+          return {
+            ...(existingExecution.result || {}),
+            idempotent: true
+          };
+        }
+        throw new ApprovalWorkflowError(
+          "aborted",
+          "Portal rotation is already in progress."
+        );
+      }
       if (!quoteSnap.exists) {
         throw new QuoteCreationError("not-found", "Quote not found.");
       }
@@ -4126,6 +4898,7 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
           "Quote is outside your organization."
         );
       }
+      assertQuoteEditNotDispatching({ ...quote, id: quoteId }, rotatedAtISO);
       try {
         const paymentPlan = planDepositCheckout(quote.payment);
         if (paymentPlan.action !== "create") {
@@ -4147,6 +4920,35 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
         staff,
         nowISO: rotatedAtISO
       });
+      const started = buildApprovalExecutionStart({
+        workflow: quote.workflow,
+        requestId: approvalRequestId,
+        action: "rotate_portal_link",
+        actorEmail: staff.email,
+        nowISO: rotatedAtISO,
+        operationId: approvalRequestId
+      });
+      const completed = buildApprovalExecutionOutcome({
+        workflow: {
+          ...(quote.workflow || {}),
+          approvalRequests: started.approvalRequests
+        },
+        requestId: approvalRequestId,
+        action: "rotate_portal_link",
+        actorEmail: staff.email,
+        nowISO: rotatedAtISO,
+        operationId: approvalRequestId,
+        state: "succeeded",
+        reference: documents.result.versionId
+      });
+      documents.quotePatch.workflow = {
+        ...(quote.workflow || {}),
+        approvalRequests: completed.approvalRequests
+      };
+      const response = {
+        ...documents.result,
+        approvalRequest: completed.request
+      };
       const versionRef = quoteRef
         .collection("versions")
         .doc(documents.version.versionId);
@@ -4181,7 +4983,18 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
         tx.delete(db.collection(PORTAL_COLLECTION).doc(documents.previousPortalKey));
       }
 
-      return documents.result;
+      tx.create(executionRef, buildApprovalExecutionAudit({
+        organizationId,
+        quoteId,
+        approvalRequest: completed.request,
+        staff,
+        state: "succeeded",
+        startedAtISO: rotatedAtISO,
+        completedAtISO: rotatedAtISO,
+        result: response
+      }));
+
+      return response;
     });
 
     return {
@@ -4215,12 +5028,10 @@ exports.notifyOwnerNewQuote = functions.region(REGION).https.onCall(async (data,
   const customerName = normalizeText(quote.customer?.name) || normalizeEmail(quote.customer?.email) || "Unknown customer";
   const eventDate = normalizeText(quote.event?.date) || "date not set";
   const total = currencyLabel(quote.totals?.total);
-  const portalLink = resolvePortalLink(quote);
 
   const smsText =
     `New quote ${quoteNumber} saved for ${customerName}. ` +
-    `Event ${eventDate}. Total ${total}.` +
-    `${portalLink ? ` Portal: ${portalLink}` : ""}`;
+    `Event ${eventDate}. Total ${total}.`;
   const smsResult = await sendOwnerSms(smsText);
 
   return {
@@ -4238,128 +5049,831 @@ exports.sendQuoteToCustomer = functions.region(REGION).https.onCall(async (data,
       "portalLink is server-derived and must not be supplied."
     );
   }
-  const { quoteId, quote, quoteNumber } = await readQuoteOrThrow(data?.quoteId, {
-    organizationId: staff.organizationId
-  });
-  const customerEmail = normalizeEmail(quote.customer?.email);
-  if (!customerEmail) {
-    throw new functions.https.HttpsError("failed-precondition", "Quote customer email is missing.");
+  if (data?.attachment != null) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Quote delivery attachments are server-controlled and are not accepted from the browser."
+    );
+  }
+  const organizationId = normalizeOrganizationId(staff.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const expectedRevisionId = normalizeText(data?.quoteRevisionId);
+  if (!organizationId || !quoteId || !expectedRevisionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "An organization-scoped quoteId and quoteRevisionId are required."
+    );
+  }
+  const quoteRef = getQuoteDocRef(quoteId, organizationId);
+  const attemptId = randomUUID();
+  const startedAtISO = new Date().toISOString();
+  const attemptProvider = getEmailProvider();
+
+  let claim;
+  try {
+    claim = await db.runTransaction(async (tx) => {
+      const quoteSnap = await tx.get(quoteRef);
+      if (!quoteSnap.exists) {
+        throw new QuoteDeliveryError("not-found", "Quote not found.");
+      }
+      const quote = quoteSnap.data() || {};
+      if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+        throw new QuoteDeliveryError("permission-denied", "Quote is outside your organization.");
+      }
+      assertQuoteDeliveryRevision(quote, expectedRevisionId, quoteId);
+      const existingDelivery = quote.workflow?.quoteDelivery || {};
+      if (
+        normalizeText(existingDelivery.revisionId) === expectedRevisionId
+        && normalizeText(existingDelivery.state).toLowerCase() === "provider_accepted"
+      ) {
+        const planned = claimQuoteDelivery({
+          quote,
+          quoteId,
+          organizationId,
+          expectedRevisionId,
+          actorEmail: staff.email,
+          attemptId,
+          attemptProvider,
+          payloadSha256: "",
+          nowISO: startedAtISO,
+          leaseMs: QUOTE_DELIVERY_LEASE_MS,
+          retryWindowMs: QUOTE_DELIVERY_RETRY_WINDOW_MS
+        });
+        return {
+          ...planned,
+          quote: { ...quote, id: quoteId },
+          emailPayload: null,
+          portalKey: normalizeText(quote.portalKey),
+          portalLink: ""
+        };
+      }
+      if (
+        normalizeText(existingDelivery.revisionId) === expectedRevisionId
+        && ["sending", "outcome_ambiguous", "outcome_unknown"].includes(
+          normalizeText(existingDelivery.state).toLowerCase()
+        )
+      ) {
+        const unresolvedPlan = claimQuoteDelivery({
+          quote,
+          quoteId,
+          organizationId,
+          expectedRevisionId,
+          actorEmail: staff.email,
+          attemptId,
+          attemptProvider,
+          payloadSha256: normalizeText(existingDelivery.payloadSha256),
+          nowISO: startedAtISO,
+          leaseMs: QUOTE_DELIVERY_LEASE_MS,
+          retryWindowMs: QUOTE_DELIVERY_RETRY_WINDOW_MS
+        });
+        if (["in_progress", "manual_review"].includes(unresolvedPlan.state)) {
+          if (unresolvedPlan.state === "manual_review") {
+            tx.update(quoteRef, {
+              workflow: {
+                ...(quote.workflow || {}),
+                quoteDelivery: unresolvedPlan.delivery
+              },
+              updatedAt: FieldValue.serverTimestamp()
+            });
+          }
+          return {
+            ...unresolvedPlan,
+            quote: { ...quote, id: quoteId },
+            emailPayload: null,
+            portalKey: normalizeText(quote.portalKey),
+            portalLink: ""
+          };
+        }
+      }
+      assertNoConflictingQuoteExecution(quote);
+      const portalKey = normalizeText(quote.portalKey);
+      const portalRef = portalKey
+        ? db.collection(PORTAL_COLLECTION).doc(portalKey)
+        : null;
+      const portalSnap = portalRef ? await tx.get(portalRef) : null;
+      const portal = assertQuoteDeliveryPortal({
+        quote,
+        quoteId,
+        organizationId,
+        portalSnapshot: portalSnap?.exists ? portalSnap.data() : null,
+        nowISO: startedAtISO
+      });
+      const emailPayload = buildQuoteDeliveryEmailPayload({
+        quote,
+        quoteId,
+        portalLink: portal.portalLink
+      });
+      const payloadSha256 = createHash("sha256")
+        .update(JSON.stringify({
+          toEmail: emailPayload.toEmail,
+          subject: emailPayload.subject,
+          text: emailPayload.text,
+          html: emailPayload.html,
+          portalKey: portal.portalKey,
+          portalExpiresAtISO: portal.portalExpiresAtISO
+        }))
+        .digest("hex");
+      const planned = claimQuoteDelivery({
+        quote,
+        quoteId,
+        organizationId,
+        expectedRevisionId,
+        actorEmail: staff.email,
+        attemptId,
+        attemptProvider,
+        payloadSha256,
+        nowISO: startedAtISO,
+        leaseMs: QUOTE_DELIVERY_LEASE_MS,
+        retryWindowMs: QUOTE_DELIVERY_RETRY_WINDOW_MS
+      });
+      if (["acquired", "manual_review"].includes(planned.state)) {
+        tx.update(quoteRef, {
+          workflow: {
+            ...(quote.workflow || {}),
+            quoteDelivery: planned.delivery
+          },
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      return {
+        ...planned,
+        quote: { ...quote, id: quoteId },
+        emailPayload,
+        portalKey: portal.portalKey,
+        portalLink: portal.portalLink
+      };
+    });
+  } catch (err) {
+    if (err instanceof QuoteDeliveryError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
   }
 
-  const customerName = normalizeText(quote.customer?.name) || "there";
-  const eventName = normalizeText(quote.event?.name) || "your event";
-  const eventDate = normalizeText(quote.event?.date) || "your event date";
-  const venue = normalizeText(quote.event?.venue) || "your venue";
-  const total = currencyLabel(quote.totals?.total);
-  const deposit = currencyLabel(quote.totals?.deposit);
-  const portalLink = resolvePortalLink(quote);
-  const storedPaymentLink = normalizeText(quote?.payment?.depositLink);
-  const paymentLink = storedPaymentLink
-    ? parseStoredPaymentLinkOrThrow(storedPaymentLink)
-    : "";
-  const attachment = normalizeAttachment(data?.attachment);
-  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "QuotePilot";
+  const quote = claim.quote;
+  const quoteNumber = normalizeText(claim.emailPayload?.quoteNumber)
+    || normalizeText(quote.quoteNumber)
+    || quoteId;
+  const portalLink = normalizeText(claim.portalLink);
+  if (claim.state === "provider_accepted") {
+    return {
+      ok: true,
+      organizationId,
+      quoteId,
+      quoteNumber,
+      quoteRevisionId: claim.revisionId,
+      portalLink,
+      status: normalizeText(quote.status).toLowerCase() || "sent",
+      lifecycle: quote.lifecycle || {},
+      delivery: claim.delivery,
+      email: {
+        sent: true,
+        provider: normalizeText(claim.delivery.provider),
+        messageId: normalizeText(claim.delivery.providerMessageId)
+      },
+      idempotent: true
+    };
+  }
+  if (claim.state === "in_progress") {
+    throw new functions.https.HttpsError(
+      "aborted",
+      "Quote email delivery is already in progress. Retry this saved revision shortly."
+    );
+  }
+  if (claim.state === "manual_review") {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "This delivery requires provider-outcome reconciliation before changing or sending the quote again."
+    );
+  }
 
-  const lines = [
-    `Hi ${customerName},`,
-    "",
-    `Your quote ${quoteNumber} is ready for ${eventName} on ${eventDate} at ${venue}.`,
-    `Estimated total: ${total}.`,
-    `Deposit due: ${deposit}.`,
-    portalLink ? `Review and accept your quote: ${portalLink}` : "Reply if you need a portal acceptance link.",
-    paymentLink ? `Deposit payment link: ${paymentLink}` : "Reply if you need a deposit payment link.",
-    "",
-    "Thank you."
-  ];
+  let providerAccepted = false;
+  let acceptedEmail = null;
+  try {
+    const email = await sendCustomerEmail({
+      ...claim.emailPayload,
+      idempotencyKey: claim.delivery.idempotencyKey
+    });
+    providerAccepted = true;
+    acceptedEmail = email;
+    const completedAtISO = new Date().toISOString();
+    const completion = await db.runTransaction(async (tx) => {
+      const portalRef = db.collection(PORTAL_COLLECTION).doc(claim.portalKey);
+      const [quoteSnap, portalSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(portalRef)
+      ]);
+      if (!quoteSnap.exists) {
+        throw new QuoteDeliveryError("aborted", "Quote disappeared after provider delivery.");
+      }
+      const currentQuote = quoteSnap.data() || {};
+      assertQuoteDeliveryRevision(currentQuote, claim.revisionId, quoteId);
+      assertQuoteDeliveryPortal({
+        quote: currentQuote,
+        quoteId,
+        organizationId,
+        portalSnapshot: portalSnap.exists ? portalSnap.data() : null,
+        nowISO: completedAtISO
+      });
+      const currentDelivery = currentQuote.workflow?.quoteDelivery || {};
+      if (
+        normalizeText(currentDelivery.revisionId) === claim.revisionId
+        && normalizeText(currentDelivery.state).toLowerCase() === "provider_accepted"
+      ) {
+        return {
+          status: normalizeText(currentQuote.status).toLowerCase() || "sent",
+          lifecycle: currentQuote.lifecycle || {},
+          delivery: currentDelivery,
+          idempotent: true
+        };
+      }
+      if (
+        normalizeText(currentDelivery.revisionId) !== claim.revisionId
+        || normalizeText(currentDelivery.attemptId) !== claim.delivery.attemptId
+        || normalizeText(currentDelivery.state).toLowerCase() !== "sending"
+      ) {
+        throw new QuoteDeliveryError(
+          "aborted",
+          "Quote delivery audit changed before provider completion could be recorded."
+        );
+      }
+      const delivery = buildQuoteDeliverySuccess({
+        delivery: currentDelivery,
+        email,
+        nowISO: completedAtISO,
+        portalKey: normalizeText(currentQuote.portalKey),
+        portalIssuedAtISO: normalizeText(currentQuote.portalIssuedAtISO)
+      });
+      const currentStatus = normalizeText(currentQuote.status).toLowerCase() || "draft";
+      const status = currentStatus === "draft" ? "sent" : currentStatus;
+      const lifecycle = {
+        ...(currentQuote.lifecycle || {}),
+        sentAtISO: normalizeText(currentQuote.lifecycle?.sentAtISO) || completedAtISO
+      };
+      const workflow = {
+        ...(currentQuote.workflow || {}),
+        quoteDelivery: delivery
+      };
+      const updatedQuote = {
+        ...currentQuote,
+        status,
+        lifecycle,
+        workflow,
+        updatedAtISO: completedAtISO
+      };
+      tx.update(quoteRef, {
+        status,
+        lifecycle,
+        workflow,
+        updatedAtISO: completedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.update(portalRef, {
+        ...buildCanonicalPortalSnapshot(quoteId, updatedQuote),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      return {
+        status,
+        lifecycle,
+        delivery,
+        idempotent: false
+      };
+    });
 
-  const email = await sendCustomerEmail({
-    toEmail: customerEmail,
-    subject: `${brandName} Quote ${quoteNumber} - ${eventDate}`,
-    text: lines.join("\n"),
-    html: `
-      <p>Hi ${escapeHtml(customerName)},</p>
-      <p>Your quote <strong>${escapeHtml(quoteNumber)}</strong> is ready for <strong>${escapeHtml(eventName)}</strong> on <strong>${escapeHtml(eventDate)}</strong> at <strong>${escapeHtml(venue)}</strong>.</p>
-      <p>Estimated total: <strong>${escapeHtml(total)}</strong><br/>Deposit due: <strong>${escapeHtml(deposit)}</strong></p>
-      ${portalLink ? `<p><a href="${escapeHtml(portalLink)}">Review and accept your quote</a></p>` : ""}
-      ${paymentLink ? `<p><a href="${escapeHtml(paymentLink)}">Open deposit payment link</a></p>` : ""}
-      <p>Thank you.</p>
-    `,
-    attachment
-  });
+    return {
+      ok: true,
+      organizationId,
+      quoteId,
+      quoteNumber,
+      quoteRevisionId: claim.revisionId,
+      portalLink,
+      email,
+      ...completion
+    };
+  } catch (err) {
+    const outcomeAtISO = new Date().toISOString();
+    const completionRequiresManualReview = providerAccepted
+      && err instanceof QuoteDeliveryError
+      && err.code === "failed-precondition";
+    const auditError = providerAccepted
+      ? annotateQuoteDeliveryAttemptError(err, {
+        outcome: completionRequiresManualReview ? "manual_review" : "ambiguous",
+        reason: completionRequiresManualReview
+          ? "provider_accepted_portal_validation_failed"
+          : "provider_accepted_completion_failed"
+      })
+      : err;
+    try {
+      await db.runTransaction(async (tx) => {
+        const quoteSnap = await tx.get(quoteRef);
+        if (!quoteSnap.exists) return;
+        const currentQuote = quoteSnap.data() || {};
+        const currentDelivery = currentQuote.workflow?.quoteDelivery || {};
+        if (
+          normalizeText(currentDelivery.revisionId) !== claim.revisionId
+          || normalizeText(currentDelivery.attemptId) !== claim.delivery.attemptId
+          || normalizeText(currentDelivery.state).toLowerCase() !== "sending"
+        ) return;
+        const failurePlan = planQuoteDeliveryAttemptFailure({
+          delivery: currentDelivery,
+          error: auditError,
+          nowISO: outcomeAtISO,
+          providerObservation: providerAccepted ? acceptedEmail : {}
+        });
+        tx.update(quoteRef, {
+          workflow: {
+            ...(currentQuote.workflow || {}),
+            quoteDelivery: failurePlan.delivery
+          },
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      });
+    } catch (auditErr) {
+      functions.logger.error("Quote email outcome audit could not be persisted", {
+        organizationId,
+        quoteId,
+        revisionId: claim.revisionId,
+        error: normalizeText(auditErr?.message)
+      });
+    }
+    if (providerAccepted) {
+      functions.logger.error("Quote email provider accepted but lifecycle completion failed", {
+        organizationId,
+        quoteId,
+        revisionId: claim.revisionId,
+        error: normalizeText(err?.message)
+      });
+      if (completionRequiresManualReview) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "The email provider accepted this quote after its portal became invalid. Reconcile the provider outcome manually before changing or sending the quote again."
+        );
+      }
+      throw new functions.https.HttpsError(
+        "aborted",
+        "The email provider accepted this quote, but its lifecycle audit is incomplete. Retry this exact saved revision promptly; automatic retries stop before the provider idempotency window expires."
+      );
+    }
+    if (err instanceof QuoteDeliveryError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+});
 
-  return {
-    ok: true,
-    quoteId,
-    quoteNumber,
-    portalLink,
-    email
-  };
+exports.resolveQuoteDeliveryOutcome = functions.region(REGION).https.onCall(async (data, context) => {
+  const staff = assertAdminStaff(await assertStaff(context));
+  const organizationId = normalizeOrganizationId(staff.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const expectedRevisionId = normalizeText(data?.quoteRevisionId);
+  const resolution = normalizeText(data?.resolution).toLowerCase();
+  const note = normalizeText(data?.note);
+  const providerMessageId = data?.providerMessageId;
+  if (!organizationId || !quoteId || !expectedRevisionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "An organization-scoped quoteId and quoteRevisionId are required."
+    );
+  }
+  const quoteRef = getQuoteDocRef(quoteId, organizationId);
+  const resolvedAtISO = new Date().toISOString();
+
+  try {
+    return await db.runTransaction(async (tx) => {
+      const quoteSnap = await tx.get(quoteRef);
+      if (!quoteSnap.exists) {
+        throw new QuoteDeliveryError("not-found", "Quote not found.");
+      }
+      const quote = quoteSnap.data() || {};
+      if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+        throw new QuoteDeliveryError("permission-denied", "Quote is outside your organization.");
+      }
+      const portalKey = normalizeText(quote.portalKey);
+      let portalRef = null;
+      let portalSnap = null;
+      let portalActivation = {
+        active: false,
+        portalKey,
+        portalIssuedAtISO: normalizeText(quote.portalIssuedAtISO)
+      };
+      if (resolution === "provider_accepted" && portalKey) {
+        portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
+        portalSnap = await tx.get(portalRef);
+        try {
+          assertQuoteDeliveryPortalSnapshot({
+            quote,
+            quoteId,
+            organizationId,
+            portalSnapshot: portalSnap.exists ? portalSnap.data() : null,
+            nowISO: resolvedAtISO
+          });
+          portalActivation = {
+            ...portalActivation,
+            active: true
+          };
+        } catch (portalError) {
+          if (!(portalError instanceof QuoteDeliveryError)) throw portalError;
+        }
+      }
+      const resolutionPlan = planQuoteDeliveryOutcomeResolution({
+        quote,
+        quoteId,
+        organizationId,
+        expectedRevisionId,
+        resolution,
+        note,
+        providerMessageId,
+        portalActivation,
+        actorUid: staff.uid,
+        actorEmail: staff.email,
+        nowISO: resolvedAtISO
+      });
+      const currentStatus = normalizeText(quote.status).toLowerCase() || "draft";
+      let status = currentStatus;
+      let lifecycle = quote.lifecycle || {};
+
+      if (resolutionPlan.state === "provider_accepted") {
+        status = currentStatus === "draft" ? "sent" : currentStatus;
+        lifecycle = {
+          ...(quote.lifecycle || {}),
+          sentAtISO: normalizeText(quote.lifecycle?.sentAtISO) || resolvedAtISO
+        };
+        const workflow = {
+          ...(quote.workflow || {}),
+          quoteDelivery: resolutionPlan.delivery
+        };
+        const updatedQuote = {
+          ...quote,
+          status,
+          lifecycle,
+          workflow,
+          updatedAtISO: resolvedAtISO
+        };
+        tx.update(quoteRef, {
+          status,
+          lifecycle,
+          workflow,
+          updatedAtISO: resolvedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        if (portalActivation.active && portalRef && portalSnap?.exists) {
+          tx.update(portalRef, {
+            ...buildCanonicalPortalSnapshot(quoteId, updatedQuote),
+            updatedAt: FieldValue.serverTimestamp()
+          });
+        }
+      } else if (!resolutionPlan.idempotent) {
+        tx.update(quoteRef, {
+          workflow: {
+            ...(quote.workflow || {}),
+            quoteDelivery: resolutionPlan.delivery
+          },
+          updatedAtISO: resolvedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+
+      return {
+        ok: true,
+        quoteId,
+        quoteRevisionId: resolutionPlan.revisionId,
+        resolution,
+        status,
+        lifecycle,
+        delivery: resolutionPlan.delivery
+      };
+    });
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (err instanceof QuoteDeliveryError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    functions.logger.error("Quote delivery outcome reconciliation failed", {
+      organizationId,
+      quoteId,
+      revisionId: expectedRevisionId,
+      resolution,
+      error: normalizeText(err?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to reconcile the quote delivery outcome."
+    );
+  }
 });
 
 exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (data, context) => {
   const staff = assertAdminStaff(await assertStaff(context));
+  const approvalRequestId = normalizeApprovalExecutionId(data?.approvalRequestId);
+  if (!approvalRequestId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "approvalRequestId is required."
+    );
+  }
   if (normalizeText(data?.paymentLink) || normalizeText(data?.portalLink)) {
     throw new functions.https.HttpsError(
       "invalid-argument",
       "Payment and portal links are server-derived and must not be supplied."
     );
   }
-  const { quoteId, quote, quoteNumber } = await readQuoteOrThrow(data?.quoteId, {
-    organizationId: staff.organizationId
-  });
-  const status = normalizeText(quote.status).toLowerCase();
-  if (!["accepted", "booked"].includes(status)) {
+  if (data?.attachment != null) {
     throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Payment requests can be sent only after quote acceptance."
+      "invalid-argument",
+      "Payment-request attachments are server-controlled and are not accepted from the browser."
+    );
+  }
+  const organizationId = normalizeOrganizationId(staff.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  if (!organizationId || !quoteId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "An organization-scoped quoteId is required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Payment requests require same-organization admin authority."
     );
   }
 
-  const customerEmail = normalizeEmail(quote.customer?.email);
-  if (!customerEmail) {
-    throw new functions.https.HttpsError("failed-precondition", "Quote customer email is missing.");
+  const quoteRef = getQuoteDocRef(quoteId, organizationId);
+  const executionRef = getQuoteApprovalExecutionDocRef(
+    organizationId,
+    approvalRequestId
+  );
+  const startedAtISO = new Date().toISOString();
+  let claimedQuote = null;
+  let providerAccepted = false;
+  try {
+    const claim = await db.runTransaction(async (tx) => {
+      const [quoteSnap, executionSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(executionRef)
+      ]);
+      if (executionSnap.exists) {
+        const existingExecution = executionSnap.data() || {};
+        assertMatchingApprovalExecutionRecord(existingExecution, {
+          organizationId,
+          quoteId,
+          approvalRequestId,
+          action: "send_payment_request"
+        });
+        const executionState = normalizeText(existingExecution.state).toLowerCase();
+        if (executionState === "succeeded") {
+          return {
+            completed: true,
+            result: existingExecution.result || {}
+          };
+        }
+        if (executionState !== "in_progress") {
+          throw new ApprovalWorkflowError(
+            "failed-precondition",
+            "Failed payment-request execution requires a new approval."
+          );
+        }
+        if (normalizeText(existingExecution.executedBy?.uid) !== staff.uid) {
+          throw new ApprovalWorkflowError(
+            "aborted",
+            "Payment-request execution is already owned by another administrator."
+          );
+        }
+      }
+      if (!quoteSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Quote not found.");
+      }
+      const quote = quoteSnap.data() || {};
+      if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "Quote is outside your organization."
+        );
+      }
+      assertQuoteEditNotDispatching({ ...quote, id: quoteId }, startedAtISO);
+      const status = normalizeText(quote.status).toLowerCase();
+      if (!["accepted", "booked"].includes(status)) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Payment requests can be sent only after quote acceptance."
+        );
+      }
+      if (!normalizeEmail(quote.customer?.email)) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Quote customer email is missing."
+        );
+      }
+      parseStoredPaymentLinkOrThrow(quote?.payment?.depositLink);
+      const portalKey = normalizeText(quote.portalKey);
+      const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
+      const portalSnap = await tx.get(portalRef);
+      assertQuoteDeliveryPortalActivation({
+        quote,
+        quoteId,
+        organizationId,
+        portalSnapshot: portalSnap.exists ? portalSnap.data() : null,
+        nowISO: startedAtISO
+      });
+
+      if (!executionSnap.exists) {
+        const started = buildApprovalExecutionStart({
+          workflow: quote.workflow,
+          requestId: approvalRequestId,
+          action: "send_payment_request",
+          actorEmail: staff.email,
+          nowISO: startedAtISO,
+          operationId: approvalRequestId
+        });
+        tx.update(quoteRef, {
+          "workflow.approvalRequests": started.approvalRequests,
+          updatedAtISO: startedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        tx.create(executionRef, buildApprovalExecutionAudit({
+          organizationId,
+          quoteId,
+          approvalRequest: started.request,
+          staff,
+          state: "in_progress",
+          startedAtISO
+        }));
+      }
+      return {
+        completed: false,
+        quote
+      };
+    });
+
+    if (claim.completed) {
+      return {
+        ok: true,
+        organizationId,
+        quoteId,
+        idempotent: true,
+        ...(claim.result || {})
+      };
+    }
+
+    claimedQuote = claim.quote;
+    const quoteNumber = normalizeText(claimedQuote.quoteNumber) || quoteId;
+    const customerEmail = normalizeEmail(claimedQuote.customer?.email);
+    const paymentLink = parseStoredPaymentLinkOrThrow(claimedQuote?.payment?.depositLink);
+    const portalLink = resolvePortalLink(claimedQuote);
+    const customerName = normalizeText(claimedQuote.customer?.name) || "there";
+    const eventName = normalizeText(claimedQuote.event?.name) || "your event";
+    const deposit = currencyLabel(claimedQuote.totals?.deposit);
+    const brandName = normalizeText(claimedQuote?.quoteMeta?.brandName) || "QuotePilot";
+    const lines = [
+      `Hi ${customerName},`,
+      "",
+      `Your quote ${quoteNumber} for ${eventName} has been accepted.`,
+      `Please submit your deposit payment of ${deposit}: ${paymentLink}`,
+      portalLink ? `You can also review your quote in the customer portal: ${portalLink}` : "",
+      "",
+      "Thank you."
+    ].filter(Boolean);
+    const email = await sendCustomerEmail({
+      toEmail: customerEmail,
+      subject: `${brandName} Deposit Request - ${quoteNumber}`,
+      text: lines.join("\n"),
+      html: `
+        <p>Hi ${escapeHtml(customerName)},</p>
+        <p>Your quote <strong>${escapeHtml(quoteNumber)}</strong> for <strong>${escapeHtml(eventName)}</strong> has been accepted.</p>
+        <p>Please submit your deposit payment of <strong>${escapeHtml(deposit)}</strong>.</p>
+        <p><a href="${escapeHtml(paymentLink)}">Pay deposit now</a></p>
+        ${portalLink ? `<p><a href="${escapeHtml(portalLink)}">Open customer portal</a></p>` : ""}
+        <p>Thank you.</p>
+      `,
+      idempotencyKey: `quote-approval/${organizationId}/${quoteId}/${approvalRequestId}`
+    });
+    providerAccepted = true;
+    const completedAtISO = new Date().toISOString();
+    const completed = await db.runTransaction(async (tx) => {
+      const [quoteSnap, executionSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(executionRef)
+      ]);
+      if (!quoteSnap.exists || !executionSnap.exists) {
+        throw new ApprovalWorkflowError(
+          "failed-precondition",
+          "Payment-request execution audit disappeared before completion."
+        );
+      }
+      const currentQuote = quoteSnap.data() || {};
+      const execution = executionSnap.data() || {};
+      assertMatchingApprovalExecutionRecord(execution, {
+        organizationId,
+        quoteId,
+        approvalRequestId,
+        action: "send_payment_request"
+      });
+      if (normalizeText(execution.state).toLowerCase() === "succeeded") {
+        return execution.result || {};
+      }
+      const outcome = buildApprovalExecutionOutcome({
+        workflow: currentQuote.workflow,
+        requestId: approvalRequestId,
+        action: "send_payment_request",
+        actorEmail: staff.email,
+        nowISO: completedAtISO,
+        operationId: approvalRequestId,
+        state: "succeeded",
+        reference: email.messageId || "email-provider-accepted"
+      });
+      const response = {
+        quoteNumber,
+        paymentLink,
+        email,
+        approvalRequest: outcome.request
+      };
+      tx.update(quoteRef, {
+        "workflow.approvalRequests": outcome.approvalRequests,
+        updatedAtISO: completedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.set(executionRef, {
+        state: "succeeded",
+        result: response,
+        error: "",
+        completedAtISO,
+        updatedAtISO: completedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return response;
+    });
+
+    return {
+      ok: true,
+      organizationId,
+      quoteId,
+      ...completed
+    };
+  } catch (err) {
+    if (claimedQuote && !providerAccepted) {
+      const failedAtISO = new Date().toISOString();
+      try {
+        await db.runTransaction(async (tx) => {
+          const [quoteSnap, executionSnap] = await Promise.all([
+            tx.get(quoteRef),
+            tx.get(executionRef)
+          ]);
+          if (!quoteSnap.exists || !executionSnap.exists) return;
+          const currentQuote = quoteSnap.data() || {};
+          const execution = executionSnap.data() || {};
+          if (normalizeText(execution.state).toLowerCase() !== "in_progress") return;
+          const outcome = buildApprovalExecutionOutcome({
+            workflow: currentQuote.workflow,
+            requestId: approvalRequestId,
+            action: "send_payment_request",
+            actorEmail: staff.email,
+            nowISO: failedAtISO,
+            operationId: approvalRequestId,
+            state: "failed",
+            error: "Payment request email could not be sent."
+          });
+          tx.update(quoteRef, {
+            "workflow.approvalRequests": outcome.approvalRequests,
+            updatedAtISO: failedAtISO,
+            updatedAt: FieldValue.serverTimestamp()
+          });
+          tx.set(executionRef, {
+            state: "failed",
+            result: {},
+            error: "Payment request email could not be sent.",
+            completedAtISO: failedAtISO,
+            updatedAtISO: failedAtISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+      } catch (auditErr) {
+        functions.logger.error("Payment-request failure audit could not be finalized", {
+          organizationId,
+          quoteId,
+          approvalRequestId,
+          error: normalizeText(auditErr?.message)
+        });
+      }
+    }
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (err instanceof QuoteDeliveryError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    if (err instanceof ApprovalWorkflowError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    functions.logger.error("Approved payment request failed", {
+      organizationId,
+      quoteId,
+      approvalRequestId,
+      actorUid: staff.uid,
+      error: normalizeText(err?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to send the approved payment request."
+    );
   }
-
-  const paymentLink = parseStoredPaymentLinkOrThrow(quote?.payment?.depositLink);
-  const portalLink = resolvePortalLink(quote);
-  const attachment = normalizeAttachment(data?.attachment);
-  const customerName = normalizeText(quote.customer?.name) || "there";
-  const eventName = normalizeText(quote.event?.name) || "your event";
-  const deposit = currencyLabel(quote.totals?.deposit);
-  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "QuotePilot";
-
-  const lines = [
-    `Hi ${customerName},`,
-    "",
-    `Your quote ${quoteNumber} for ${eventName} has been accepted.`,
-    `Please submit your deposit payment of ${deposit}: ${paymentLink}`,
-    portalLink ? `You can also review your quote in the customer portal: ${portalLink}` : "",
-    "",
-    "Thank you."
-  ].filter(Boolean);
-
-  const email = await sendCustomerEmail({
-    toEmail: customerEmail,
-    subject: `${brandName} Deposit Request - ${quoteNumber}`,
-    text: lines.join("\n"),
-    html: `
-      <p>Hi ${escapeHtml(customerName)},</p>
-      <p>Your quote <strong>${escapeHtml(quoteNumber)}</strong> for <strong>${escapeHtml(eventName)}</strong> has been accepted.</p>
-      <p>Please submit your deposit payment of <strong>${escapeHtml(deposit)}</strong>.</p>
-      <p><a href="${escapeHtml(paymentLink)}">Pay deposit now</a></p>
-      ${portalLink ? `<p><a href="${escapeHtml(portalLink)}">Open customer portal</a></p>` : ""}
-      <p>Thank you.</p>
-    `,
-    attachment
-  });
-
-  return {
-    ok: true,
-    quoteId,
-    quoteNumber,
-    paymentLink,
-    email
-  };
 });
 
 exports.getIntegrationSetupStatus = functions.region(REGION).https.onCall(async (_data, context) => {
@@ -4397,6 +5911,17 @@ exports.createDepositCheckout = functions.region(REGION).https.onCall(async (dat
   const { quoteId, quote, quoteNumber, organizationId } = await readQuoteOrThrow(data?.quoteId, {
     organizationId: staff.organizationId
   });
+  try {
+    assertQuoteEditNotDispatching(
+      { ...quote, id: quoteId },
+      new Date().toISOString()
+    );
+  } catch (err) {
+    if (err instanceof QuoteDeliveryError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
   const quoteStatus = normalizeText(quote?.status).toLowerCase();
   if (!["accepted", "booked"].includes(quoteStatus)) {
     throw new functions.https.HttpsError(

@@ -101,11 +101,13 @@ service cloud.firestore {
           && request.resource.data.portalDecision.keys().hasAll([
             "decision",
             "message",
+            "requestId",
             "submittedAtISO"
           ])
           && request.resource.data.portalDecision.keys().hasOnly([
             "decision",
             "message",
+            "requestId",
             "submittedAtISO"
           ])
           && request.resource.data.portalDecision.decision in [
@@ -123,13 +125,30 @@ service cloud.firestore {
           && request.resource.data.portalDecision.message is string
           && request.resource.data.portalDecision.message.size() <= 1200
           && (
+            request.resource.data.portalDecision.message.size() == 0
+            || request.resource.data.portalDecision.message.matches('^(\\S|\\S[\\s\\S]*\\S)$')
+          )
+          && (
             request.resource.data.portalDecision.decision != "changes_requested"
             || request.resource.data.portalDecision.message.size() > 0
           )
           && request.resource.data.portalDecision.submittedAtISO is string
           && request.resource.data.portalDecision.submittedAtISO.size() > 0
+          && request.resource.data.portalDecision.submittedAtISO.matches(
+            '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$'
+          )
           && request.resource.data.portalDecision.submittedAtISO == request.resource.data.updatedAtISO
+          && request.resource.data.portalDecision.requestId is string
+          && request.resource.data.portalDecision.requestId.matches('^[A-Za-z0-9-]{20,80}$')
         );
+    }
+
+    function portalChangeRequestDoesNotReplayHandledRecord() {
+      let nextDecision = request.resource.data.get("portalDecision", {});
+      let handling = resource.data.get("workflow", {}).get("changeRequestHandling", {});
+      return nextDecision.get("decision", "") != "changes_requested"
+        || handling.get("state", "") != "handled"
+        || nextDecision.get("requestId", "") != handling.get("sourceRequestId", "");
     }
 
     function validPortalLifecyclePatch() {
@@ -230,65 +249,102 @@ service cloud.firestore {
         && followUp.updatedByEmail == request.auth.token.email;
     }
 
-    function salesApprovalRequestAppendOnly() {
+    function changeRequestHandlingPatchOnly() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
       let previousWorkflow = resource.data.get("workflow", {});
       let nextWorkflow = request.resource.data.get("workflow", {});
-      let previousRequests = previousWorkflow.get("approvalRequests", []);
-      let nextRequests = nextWorkflow.get("approvalRequests", []);
-      let addedRequests = nextRequests.removeAll(previousRequests);
-      let requestItem = addedRequests.size() == 1 ? addedRequests[0] : {};
-      return previousWorkflow is map
+      let previousHandling = previousWorkflow.get("changeRequestHandling", {});
+      let nextHandling = nextWorkflow.get("changeRequestHandling", {});
+      let sameRequest = previousHandling.get("sourceRequestId", "")
+          == nextHandling.get("sourceRequestId", "")
+        && previousHandling.get("sourceSubmittedAtISO", "")
+          == nextHandling.get("sourceSubmittedAtISO", "")
+        && previousHandling.get("sourceMessage", "")
+          == nextHandling.get("sourceMessage", "");
+      return affectedKeys.hasOnly(["workflow", "updatedAtISO"])
+        && affectedKeys.hasAll(["workflow", "updatedAtISO"])
+        && previousWorkflow is map
         && nextWorkflow is map
-        && previousRequests is list
-        && nextRequests is list
-        && nextWorkflow.diff(previousWorkflow).affectedKeys().hasOnly(["approvalRequests"])
-        && nextRequests.size() == previousRequests.size() + 1
-        && previousRequests.removeAll(nextRequests).size() == 0
-        && addedRequests.size() == 1
-        && requestItem is map
-        && requestItem.keys().hasOnly([
-          "id",
-          "action",
+        && nextWorkflow.diff(previousWorkflow).affectedKeys().hasOnly(["changeRequestHandling"])
+        && nextWorkflow.diff(previousWorkflow).affectedKeys().hasAll(["changeRequestHandling"])
+        && resource.data.status != "deleted"
+        && resource.data.get("portalDecision", {}).get("decision", "") == "changes_requested"
+        && nextHandling is map
+        && nextHandling.keys().hasOnly([
+          "sourceRequestId",
+          "sourceSubmittedAtISO",
+          "sourceMessage",
           "state",
-          "note",
-          "requestedAtISO",
-          "requestedByEmail",
-          "resolvedAtISO",
-          "resolvedByEmail",
-          "resolutionNote"
+          "acknowledgedAtISO",
+          "acknowledgedByEmail",
+          "handledAtISO",
+          "handledByEmail",
+          "note"
         ])
-        && requestItem.keys().hasAll([
-          "id",
-          "action",
+        && nextHandling.keys().hasAll([
+          "sourceRequestId",
+          "sourceSubmittedAtISO",
+          "sourceMessage",
           "state",
-          "note",
-          "requestedAtISO",
-          "requestedByEmail",
-          "resolvedAtISO",
-          "resolvedByEmail",
-          "resolutionNote"
+          "acknowledgedAtISO",
+          "acknowledgedByEmail",
+          "handledAtISO",
+          "handledByEmail",
+          "note"
         ])
-        && requestItem.id is string
-        && requestItem.id.size() >= 20
-        && requestItem.id.size() <= 160
-        && requestItem.action in [
-          "send_payment_request",
-          "convert_to_contract",
-          "rotate_portal_link",
-          "delete_quote"
-        ]
-        && requestItem.state == "pending"
-        && requestItem.note is string
-        && requestItem.note.size() <= 800
-        && requestItem.requestedAtISO == request.resource.data.updatedAtISO
-        && requestItem.requestedByEmail == request.auth.token.email
-        && requestItem.resolvedAtISO == ""
-        && requestItem.resolvedByEmail == ""
-        && requestItem.resolutionNote == "";
-    }
-
-    function salesWorkflowPatchOnly() {
-      return salesFollowUpPatchOnly() || salesApprovalRequestAppendOnly();
+        && nextHandling.sourceRequestId is string
+        && nextHandling.sourceRequestId
+          == resource.data.get("portalDecision", {}).get("requestId", "")
+        && nextHandling.sourceSubmittedAtISO is string
+        && nextHandling.sourceSubmittedAtISO.size() > 0
+        && nextHandling.sourceSubmittedAtISO
+          == resource.data.get("portalDecision", {}).get("submittedAtISO", "")
+        && nextHandling.sourceMessage is string
+        && nextHandling.sourceMessage.size() > 0
+        && nextHandling.sourceMessage.size() <= 1200
+        && nextHandling.sourceMessage
+          == resource.data.get("portalDecision", {}).get("message", "")
+        && nextHandling.state in ["acknowledged", "handled"]
+        && request.resource.data.updatedAtISO is string
+        && request.resource.data.updatedAtISO.size() > 0
+        && nextHandling.acknowledgedAtISO is string
+        && nextHandling.acknowledgedAtISO.size() > 0
+        && nextHandling.acknowledgedByEmail is string
+        && nextHandling.handledAtISO is string
+        && nextHandling.handledByEmail is string
+        && nextHandling.note is string
+        && nextHandling.note.size() <= 800
+        && (
+          (
+            !sameRequest
+            && nextHandling.acknowledgedAtISO == request.resource.data.updatedAtISO
+            && nextHandling.acknowledgedByEmail == request.auth.token.email
+            && (
+              (
+                nextHandling.state == "acknowledged"
+                && nextHandling.handledAtISO == ""
+                && nextHandling.handledByEmail == ""
+                && nextHandling.note == ""
+              )
+              || (
+                nextHandling.state == "handled"
+                && nextHandling.handledAtISO == request.resource.data.updatedAtISO
+                && nextHandling.handledByEmail == request.auth.token.email
+                && nextHandling.note.size() > 0
+              )
+            )
+          )
+          || (
+            sameRequest
+            && previousHandling.get("state", "") == "acknowledged"
+            && nextHandling.state == "handled"
+            && nextHandling.acknowledgedAtISO == previousHandling.get("acknowledgedAtISO", "")
+            && nextHandling.acknowledgedByEmail == previousHandling.get("acknowledgedByEmail", "")
+            && nextHandling.handledAtISO == request.resource.data.updatedAtISO
+            && nextHandling.handledByEmail == request.auth.token.email
+            && nextHandling.note.size() > 0
+          )
+        );
     }
 
     function staffVersionPointerPatchAllowed(orgId, quoteId) {
@@ -351,13 +407,18 @@ service cloud.firestore {
           )
           && (
             !affectedKeys.hasAny(["booking"])
-            || isOrgAdmin(orgId)
-            || salesBookingOperationsOnly()
+            || (
+              serverOwnedContractEvidenceUnchanged()
+              && (
+                isOrgAdmin(orgId)
+                || salesBookingOperationsOnly()
+              )
+            )
           )
           && (
             !affectedKeys.hasAny(["workflow"])
-            || isOrgAdmin(orgId)
-            || salesWorkflowPatchOnly()
+            || salesFollowUpPatchOnly()
+            || changeRequestHandlingPatchOnly()
           )
           && (
             !affectedKeys.hasAny(["integrations"])
@@ -380,22 +441,6 @@ service cloud.firestore {
         ]);
     }
 
-    function staffAcceptedBookingTransitionPatchOnly() {
-      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
-      return affectedKeys.hasOnly([
-          "status",
-          "booking",
-          "updatedAtISO",
-          "lifecycle"
-        ])
-        && affectedKeys.hasAll([
-          "status",
-          "booking",
-          "updatedAtISO",
-          "lifecycle"
-        ]);
-    }
-
     function serverOwnedPaymentReferencesUnchanged() {
       let previousPayment = resource.data.get("payment", {});
       let nextPayment = request.resource.data.get("payment", {});
@@ -410,19 +455,23 @@ service cloud.firestore {
         && nextPayment.get("checkoutGeneration", 0) == previousPayment.get("checkoutGeneration", 0);
     }
 
-    function salesDraftSendTransitionOnly() {
-      let previousLifecycle = resource.data.get("lifecycle", {});
-      let nextLifecycle = request.resource.data.get("lifecycle", {});
-      let lifecycleKeys = nextLifecycle.diff(previousLifecycle).affectedKeys();
-      return resource.data.status == "draft"
-        && request.resource.data.status == "sent"
-        && lifecycleKeys.hasOnly(["sentAtISO"])
-        && lifecycleKeys.hasAll(["sentAtISO"])
-        && nextLifecycle.sentAtISO == request.resource.data.updatedAtISO;
+    function serverOwnedContractEvidenceUnchanged() {
+      let previousBooking = resource.data.get("booking", {});
+      let nextBooking = request.resource.data.get("booking", {});
+      return previousBooking is map
+        && nextBooking is map
+        && nextBooking.get("bookedAtISO", "") == previousBooking.get("bookedAtISO", "")
+        && nextBooking.get("bookedByEmail", "") == previousBooking.get("bookedByEmail", "")
+        && nextBooking.get("contractNumber", "") == previousBooking.get("contractNumber", "")
+        && nextBooking.get("contractConvertedAtISO", "") == previousBooking.get("contractConvertedAtISO", "")
+        && nextBooking.get("contractConvertedByEmail", "") == previousBooking.get("contractConvertedByEmail", "")
+        && nextBooking.get("availabilityCheckedAtISO", "") == previousBooking.get("availabilityCheckedAtISO", "")
+        && nextBooking.get("availabilitySummary", {}) == previousBooking.get("availabilitySummary", {});
     }
 
     function staffQuoteStatusUpdateAllowed(orgId, quoteId) {
-      return serverOwnedPaymentReferencesUnchanged()
+      return !(resource.data.get("workflow", {}).get("quoteDelivery", {}).get("state", "") in ["sending", "outcome_ambiguous", "outcome_unknown"])
+        && serverOwnedPaymentReferencesUnchanged()
         && customerDecisionEvidenceUnchanged()
         && (
           (
@@ -432,19 +481,9 @@ service cloud.firestore {
           || (
             request.resource.data.status != resource.data.status
             && !(resource.data.status in ["accepted", "declined", "booked", "expired", "deleted"])
-            && request.resource.data.status in ["draft", "sent", "viewed", "expired", "deleted"]
+            && request.resource.data.status == "expired"
             && staffNonterminalTransitionPatchOnly()
-            && (
-              isOrgAdmin(orgId)
-              || salesDraftSendTransitionOnly()
-            )
-          )
-          || (
-            isOrgAdmin(orgId)
-            && resource.data.status == "accepted"
-            && request.resource.data.status == "booked"
-            && resource.data.get("portalDecision", {}).get("decision", "") == "accepted"
-            && staffAcceptedBookingTransitionPatchOnly()
+            && isOrgAdmin(orgId)
           )
         );
     }
@@ -455,11 +494,45 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/customerPortalQuotes/$(portalKey));
     }
 
+    function portalDeliveryEvidenceActive(data, portalKey) {
+      let evidence = data.get("deliveryEvidence", {});
+      return evidence is map
+        && evidence.keys().hasOnly([
+          "revisionId",
+          "state",
+          "portalActivationState",
+          "portalKey",
+          "portalIssuedAtISO",
+          "providerAcceptedAtISO"
+        ])
+        && evidence.keys().hasAll([
+          "revisionId",
+          "state",
+          "portalActivationState",
+          "portalKey",
+          "portalIssuedAtISO",
+          "providerAcceptedAtISO"
+        ])
+        && evidence.revisionId is string
+        && evidence.revisionId.size() > 0
+        && evidence.state == "provider_accepted"
+        && evidence.portalActivationState == "active"
+        && evidence.portalKey == portalKey
+        && data.get("portalIssuedAtISO", "") is string
+        && data.get("portalIssuedAtISO", "").size() > 0
+        && evidence.portalIssuedAtISO is string
+        && evidence.portalIssuedAtISO.size() > 0
+        && evidence.portalIssuedAtISO == data.get("portalIssuedAtISO", "")
+        && evidence.providerAcceptedAtISO is string
+        && evidence.providerAcceptedAtISO.size() > 0;
+    }
+
     function portalSnapshotDataActive(data, portalKey) {
       return data.portalKey == portalKey
         && data.organizationId is string
         && organizationActive(data.organizationId)
         && data.status in ["sent", "viewed", "accepted", "declined", "booked"]
+        && portalDeliveryEvidenceActive(data, portalKey)
         && (
           data.portalExpiresAtMs is int
           || data.portalExpiresAtMs is float
@@ -475,17 +548,22 @@ service cloud.firestore {
         );
     }
 
-    function portalMatchesOrgQuoteAfter(portalKey, quoteId, orgId) {
+    function portalStateMatchesOrgQuoteAfter(portalKey, quoteId, orgId) {
       let portalPath = /databases/$(database)/documents/customerPortalQuotes/$(portalKey);
       let portalData = getAfter(portalPath).data;
       return existsAfter(portalPath)
-        && portalSnapshotDataActive(portalData, portalKey)
         && portalData.quoteId == quoteId
         && portalData.organizationId == orgId
         && portalData.status == request.resource.data.status
         && portalData.get("portalDecision", {}) == request.resource.data.get("portalDecision", {})
         && portalData.get("updatedAtISO", "") == request.resource.data.get("updatedAtISO", "")
         && portalData.get("lifecycle", {}) == request.resource.data.get("lifecycle", {});
+    }
+
+    function portalMatchesOrgQuoteAfter(portalKey, quoteId, orgId) {
+      let portalPath = /databases/$(database)/documents/customerPortalQuotes/$(portalKey);
+      return portalStateMatchesOrgQuoteAfter(portalKey, quoteId, orgId)
+        && portalSnapshotDataActive(getAfter(portalPath).data, portalKey);
     }
 
     function portalUpdateMatchesOrgQuoteAfter(orgId, quoteId, portalKey) {
@@ -512,7 +590,11 @@ service cloud.firestore {
         && resource.data.organizationId == orgId
         && request.resource.data.organizationId == orgId
         && request.resource.data.portalKey == resource.data.portalKey
-        && staffQuoteStatusUpdateAllowed(orgId, quoteId);
+        && staffQuoteStatusUpdateAllowed(orgId, quoteId)
+        && (
+          request.resource.data.status == resource.data.status
+          || portalStateMatchesOrgQuoteAfter(resource.data.portalKey, quoteId, orgId)
+        );
     }
 
     function orgQuotePortalUpdateAllowed(orgId, quoteId) {
@@ -520,35 +602,47 @@ service cloud.firestore {
           !isSignedIn()
           || !isOrgStaff(orgId)
         )
+        && !(resource.data.get("workflow", {}).get("quoteDelivery", {}).get("state", "") in ["sending", "outcome_ambiguous", "outcome_unknown"])
         && statusPatchOnly()
+        && portalChangeRequestDoesNotReplayHandledRecord()
         && portalMatchesOrgQuoteAfter(resource.data.portalKey, quoteId, orgId);
     }
 
     function portalStaffUpdateAllowed(portalKey) {
       let orgId = resource.data.organizationId;
+      let quoteId = resource.data.quoteId;
+      let quotePath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId);
       return isSignedIn()
         && orgId is string
+        && quoteId is string
+        && exists(quotePath)
+        && !(get(quotePath).data.get("workflow", {}).get("quoteDelivery", {}).get("state", "") in ["sending", "outcome_ambiguous", "outcome_unknown"])
         && isOrgStaff(orgId)
         && request.resource.data.organizationId == orgId
         && request.resource.data.portalKey == resource.data.portalKey
-        && request.resource.data.quoteId == resource.data.quoteId
-        && staffQuoteStatusUpdateAllowed(orgId, resource.data.quoteId);
+        && request.resource.data.quoteId == quoteId
+        && staffQuoteStatusUpdateAllowed(orgId, quoteId)
+        && portalUpdateMatchesOrgQuoteAfter(orgId, quoteId, portalKey);
     }
 
     function portalCustomerUpdateAllowed(portalKey) {
       let orgId = resource.data.organizationId;
+      let quoteId = resource.data.quoteId;
+      let quotePath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId);
       return orgId is string
+        && quoteId is string
+        && quoteId.size() > 0
+        && exists(quotePath)
+        && !(get(quotePath).data.get("workflow", {}).get("quoteDelivery", {}).get("state", "") in ["sending", "outcome_ambiguous", "outcome_unknown"])
         && (
           !isSignedIn()
           || !isOrgStaff(orgId)
         )
         && portalStatusPatchOnly(portalKey)
         && portalSnapshotDataActive(resource.data, portalKey)
-        && resource.data.quoteId is string
-        && resource.data.quoteId.size() > 0
         && portalUpdateMatchesOrgQuoteAfter(
           orgId,
-          resource.data.quoteId,
+          quoteId,
           portalKey
         );
     }
@@ -593,50 +687,6 @@ service cloud.firestore {
         && snapshot.get("payment", {}) == quoteData.get("payment", {})
         && snapshot.status == quoteData.status
         && quoteData.status == request.resource.data.status;
-    }
-
-    function validPortalSnapshotCreate(portalKey) {
-      let orgId = request.resource.data.organizationId;
-      let quoteId = request.resource.data.quoteId;
-      let quotePath = /databases/$(database)/documents/organizations/$(orgId)/quotes/$(quoteId);
-      let quoteData = get(quotePath).data;
-      let portalPayment = request.resource.data.get("payment", {});
-      let quotePayment = quoteData.get("payment", {});
-      return exists(quotePath)
-        && request.resource.data.portalKey == portalKey
-        && portalKey.size() >= 20
-        && orgId is string
-        && quoteId is string
-        && quoteData.organizationId == orgId
-        && quoteData.portalKey == portalKey
-        && request.resource.data.status == quoteData.status
-        && request.resource.data.get("portalDecision", {}) == quoteData.get("portalDecision", {})
-        && request.resource.data.get("lifecycle", {}) == quoteData.get("lifecycle", {})
-        && request.resource.data.quoteNumber == quoteData.quoteNumber
-        && request.resource.data.customerName == quoteData.customer.name
-        && request.resource.data.customerEmail == quoteData.customer.email
-        && request.resource.data.eventName == quoteData.event.name
-        && request.resource.data.eventDate == quoteData.event.date
-        && request.resource.data.eventTime == quoteData.event.time
-        && request.resource.data.eventHours == quoteData.event.hours
-        && request.resource.data.eventGuests == quoteData.event.guests
-        && request.resource.data.eventStyle == quoteData.event.style
-        && request.resource.data.venue == quoteData.event.venue
-        && request.resource.data.venueAddress == quoteData.event.venueAddress
-        && request.resource.data.dietaryRestrictions == quoteData.event.dietaryRestrictions
-        && request.resource.data.total == quoteData.totals.total
-        && request.resource.data.deposit == quoteData.totals.deposit
-        && request.resource.data.expiresAtISO == quoteData.expiresAtISO
-        && portalPayment is map
-        && quotePayment is map
-        && portalPayment.get("depositLink", "") == ""
-        && portalPayment.get("stripeSessionId", "") == ""
-        && portalPayment.get("lastCheckoutCreatedAtISO", "") == ""
-        && portalPayment.get("lastHost", "") == ""
-        && portalPayment.get("lastEventType", "") == ""
-        && portalPayment.get("lastOrganizationId", "") == ""
-        && portalPayment.get("checkoutGeneration", 0) == 0
-        && portalPayment.get("depositStatus", "") == quotePayment.get("depositStatus", "");
     }
 
     function commercialSettingsUnchanged() {
@@ -775,6 +825,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /organizations/{orgId}/quoteApprovalExecutions/{executionId} {
+      allow read: if isOrgAdmin(orgId);
+      allow write: if false;
+    }
+
     match /organizations/{orgId}/quotes/{quoteId} {
       allow create: if false;
       allow read: if isOrgStaff(orgId) || quoteBelongsToUser(resource.data, orgId);
@@ -826,9 +881,7 @@ service cloud.firestore {
     match /customerPortalQuotes/{portalKey} {
       allow get: if portalSnapshotActive(portalKey);
       allow list: if false;
-      allow create: if request.resource.data.organizationId is string
-        && isOrgStaff(request.resource.data.organizationId)
-        && validPortalSnapshotCreate(portalKey);
+      allow create: if false;
       allow delete: if false;
       allow update: if portalStaffUpdateAllowed(portalKey);
       allow update: if portalCustomerUpdateAllowed(portalKey);

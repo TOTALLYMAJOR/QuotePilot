@@ -27,10 +27,11 @@ function AccordionGroup({
   onToggle,
   children,
   optional = false,
-  collapsedHint = ""
+  collapsedHint = "",
+  attention = false
 }) {
   return (
-    <section className={joinClassNames("accordion-group", open && "open")}> 
+    <section className={joinClassNames("accordion-group", open && "open", attention && "has-attention")}>
       <button
         type="button"
         className="accordion-trigger"
@@ -134,6 +135,13 @@ export function StepEvent({
   const staffingChargeModeLabel = staffingChargeMode === "per_event_per_staff"
     ? "Per event x staff count"
     : "Per hour x staff count";
+  const hasStaffingRateValues = [
+    form.serverRateOverride,
+    form.serverRateMixCsv,
+    form.chefRateOverride,
+    form.chefRateMixCsv,
+    form.bartenderRateOverride
+  ].some((value) => String(value ?? "").trim() !== "");
 
   const toggleGroup = (groupId) => {
     setOpenGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -226,105 +234,48 @@ export function StepEvent({
             </div>
           </Field>
 
-          <StepperNumberInput
-            label="Guests (max 400)"
-            min={0}
-            max={400}
-            value={Math.max(0, Number(form.guests || 0))}
-            onChange={(value) => updateField("guests", value)}
-            onBlur={() => markBlur("guests")}
-            error={getError("guests")}
-            required
-          />
+          <fieldset className="wizard-fieldset">
+            <legend>Attendance &amp; staffing</legend>
+            <div className="grid two-col">
+              <StepperNumberInput
+                label="Guests (max 400)"
+                min={0}
+                max={400}
+                value={Math.max(0, Number(form.guests || 0))}
+                onChange={(value) => updateField("guests", value)}
+                onBlur={() => markBlur("guests")}
+                error={getError("guests")}
+                required
+              />
 
-          <StepperNumberInput
-            label="Servers"
-            min={0}
-            max={30}
-            value={Math.max(0, Number(form.servers || 0))}
-            onChange={(value) => updateField("servers", value)}
-            onBlur={() => markBlur("servers")}
-          />
+              <StepperNumberInput
+                label="Servers"
+                min={0}
+                max={30}
+                value={Math.max(0, Number(form.servers || 0))}
+                onChange={(value) => updateField("servers", value)}
+                onBlur={() => markBlur("servers")}
+              />
 
-          <StepperNumberInput
-            label="Chefs"
-            min={0}
-            max={20}
-            value={Math.max(0, Number(form.chefs || 0))}
-            onChange={(value) => updateField("chefs", value)}
-            onBlur={() => markBlur("chefs")}
-          />
+              <StepperNumberInput
+                label="Chefs"
+                min={0}
+                max={20}
+                value={Math.max(0, Number(form.chefs || 0))}
+                onChange={(value) => updateField("chefs", value)}
+                onBlur={() => markBlur("chefs")}
+              />
 
-          <StepperNumberInput
-            label="Bartenders"
-            min={0}
-            max={20}
-            value={Math.max(0, Number(form.bartenders || 0))}
-            onChange={(value) => updateField("bartenders", value)}
-            onBlur={() => markBlur("bartenders")}
-          />
-
-          <Field label="Server rate override (optional)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.serverRateOverride ?? ""}
-              onChange={(e) => updateField("serverRateOverride", e.target.value)}
-              onBlur={() => markBlur("serverRateOverride")}
-              placeholder={`Default from admin (${staffingChargeModeLabel})`}
-            />
-          </Field>
-
-          <Field
-            label="Server rates (optional, one per server)"
-            hint="Applied in order to each server count; remaining servers use Server rate override/default."
-          >
-            <input
-              type="text"
-              value={String(form.serverRateMixCsv || "")}
-              onChange={(e) => updateField("serverRateMixCsv", String(e.target.value || "").slice(0, 300))}
-              onBlur={() => markBlur("serverRateMixCsv")}
-              placeholder="25, 30, 30, 35"
-            />
-          </Field>
-
-          <Field label="Chef rate override (optional)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.chefRateOverride ?? ""}
-              onChange={(e) => updateField("chefRateOverride", e.target.value)}
-              onBlur={() => markBlur("chefRateOverride")}
-              placeholder={`Default from admin (${staffingChargeModeLabel})`}
-            />
-          </Field>
-
-          <Field
-            label="Chef rates (optional, one per chef)"
-            hint="Applied in order to each chef count; remaining chefs use Chef rate override/default."
-          >
-            <input
-              type="text"
-              value={String(form.chefRateMixCsv || "")}
-              onChange={(e) => updateField("chefRateMixCsv", String(e.target.value || "").slice(0, 300))}
-              onBlur={() => markBlur("chefRateMixCsv")}
-              placeholder="45, 50, 55"
-            />
-          </Field>
-
-          <Field label="Bartender rate override (optional)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.bartenderRateOverride ?? ""}
-              onChange={(e) => updateField("bartenderRateOverride", e.target.value)}
-              onBlur={() => markBlur("bartenderRateOverride")}
-              placeholder={`Default from admin (${staffingChargeModeLabel})`}
-            />
-          </Field>
+              <StepperNumberInput
+                label="Bartenders"
+                min={0}
+                max={20}
+                value={Math.max(0, Number(form.bartenders || 0))}
+                onChange={(value) => updateField("bartenders", value)}
+                onBlur={() => markBlur("bartenders")}
+              />
+            </div>
+          </fieldset>
 
           <Field label="Event name" error={getError("eventName")} required>
             <input
@@ -411,9 +362,14 @@ export function StepEvent({
       <AccordionGroup
         id="advancedPricing"
         title="Advanced Pricing Overrides"
-        description="Optional controls for templates, seasonality, and tax context"
+        description={hasStaffingRateValues
+          ? "Staffing rate values are set — open to review"
+          : "Optional templates, seasonality, tax, and staffing rates"}
         optional
-        collapsedHint="Optional: use only when you need custom pricing context beyond core event details."
+        collapsedHint={hasStaffingRateValues
+          ? "Staffing rate values are set on this quote. Show this section to review them before sending."
+          : "Leave closed to use approved admin pricing and automatic defaults."}
+        attention={hasStaffingRateValues}
         open={openGroups.advancedPricing}
         onToggle={toggleGroup}
       >
@@ -470,6 +426,75 @@ export function StepEvent({
               <option value="no">No</option>
             </select>
           </Field>
+          <fieldset className="wizard-fieldset">
+            <legend>Staffing pricing</legend>
+            <p className="field-hint">
+              Leave these values blank to use approved admin rates. Saved quotes may carry rate values forward, so review them before sending.
+            </p>
+            <div className="grid two-col">
+              <Field label="Server rate override (optional)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.serverRateOverride ?? ""}
+                  onChange={(e) => updateField("serverRateOverride", e.target.value)}
+                  onBlur={() => markBlur("serverRateOverride")}
+                  placeholder={`Default from admin (${staffingChargeModeLabel})`}
+                />
+              </Field>
+
+              <Field
+                label="Server rates (optional, one per server)"
+                hint="Applied in order to each server count; remaining servers use Server rate override/default."
+              >
+                <input
+                  type="text"
+                  value={String(form.serverRateMixCsv || "")}
+                  onChange={(e) => updateField("serverRateMixCsv", String(e.target.value || "").slice(0, 300))}
+                  onBlur={() => markBlur("serverRateMixCsv")}
+                  placeholder="25, 30, 30, 35"
+                />
+              </Field>
+
+              <Field label="Chef rate override (optional)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.chefRateOverride ?? ""}
+                  onChange={(e) => updateField("chefRateOverride", e.target.value)}
+                  onBlur={() => markBlur("chefRateOverride")}
+                  placeholder={`Default from admin (${staffingChargeModeLabel})`}
+                />
+              </Field>
+
+              <Field
+                label="Chef rates (optional, one per chef)"
+                hint="Applied in order to each chef count; remaining chefs use Chef rate override/default."
+              >
+                <input
+                  type="text"
+                  value={String(form.chefRateMixCsv || "")}
+                  onChange={(e) => updateField("chefRateMixCsv", String(e.target.value || "").slice(0, 300))}
+                  onBlur={() => markBlur("chefRateMixCsv")}
+                  placeholder="45, 50, 55"
+                />
+              </Field>
+
+              <Field label="Bartender rate override (optional)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.bartenderRateOverride ?? ""}
+                  onChange={(e) => updateField("bartenderRateOverride", e.target.value)}
+                  onBlur={() => markBlur("bartenderRateOverride")}
+                  placeholder={`Default from admin (${staffingChargeModeLabel})`}
+                />
+              </Field>
+            </div>
+          </fieldset>
         </div>
       </AccordionGroup>
 
@@ -820,41 +845,15 @@ export function StepReview({ form, totals, settings, readiness = null }) {
   const effectivePerPerson = totals.guests > 0 ? totals.base / totals.guests : 0;
   const staffingOnly = Math.max(0, totals.labor - totals.bartenderLabor);
   const staffingLaborEnabled = totals.staffingLaborEnabled !== false;
-  const staffingChargeMode = String(totals.staffingChargeMode || "per_hour").trim().toLowerCase();
-  const staffingChargeModeLabel = staffingChargeMode === "per_event_per_staff"
-    ? "per event x staff count"
-    : "per hour x staff count";
-  const formatRateList = (rates, limit = 6) => {
-    const safeRates = Array.isArray(rates)
-      ? rates
-        .map((rate) => Number(rate))
-        .filter((rate) => Number.isFinite(rate) && rate >= 0)
-      : [];
-    if (!safeRates.length) return "";
-    const labels = safeRates.map((rate) => currency(rate));
-    if (labels.length <= limit) return labels.join(", ");
-    return `${labels.slice(0, limit).join(", ")} (+${labels.length - limit} more)`;
-  };
-  const serverRatesApplied = Array.isArray(totals.serverRatesApplied)
-    ? totals.serverRatesApplied
-      .map((rate) => Number(rate))
-      .filter((rate) => Number.isFinite(rate) && rate >= 0)
-    : [];
-  const chefRatesApplied = Array.isArray(totals.chefRatesApplied)
-    ? totals.chefRatesApplied
-      .map((rate) => Number(rate))
-      .filter((rate) => Number.isFinite(rate) && rate >= 0)
-    : [];
-  const hasCustomServerMix = String(form.serverRateMixCsv || "").trim() !== ""
-    || serverRatesApplied.some((rate) => Math.abs(rate - Number(totals.serverRateApplied || 0)) >= 0.01);
-  const hasCustomChefMix = String(form.chefRateMixCsv || "").trim() !== ""
-    || chefRatesApplied.some((rate) => Math.abs(rate - Number(totals.chefRateApplied || 0)) >= 0.01);
-  const serverRatesLabel = serverRatesApplied.length
-    ? formatRateList(serverRatesApplied)
-    : `${currency(totals.serverRateApplied || 0)} x ${Math.max(0, Number(totals.servers || 0))}`;
-  const chefRatesLabel = chefRatesApplied.length
-    ? formatRateList(chefRatesApplied)
-    : `${currency(totals.chefRateApplied || 0)} x ${Math.max(0, Number(totals.chefs || 0))}`;
+  const staffTeamLabel = [
+    ["server", totals.servers],
+    ["chef", totals.chefs],
+    ["bartender", totals.bartenders]
+  ]
+    .map(([role, count]) => [role, Math.max(0, Number(count || 0))])
+    .filter(([, count]) => count > 0)
+    .map(([role, count]) => `${count} ${role}${count === 1 ? "" : "s"}`)
+    .join(" · ");
   const validityDays = Math.max(1, Number(settings.quoteValidityDays || 30));
   const businessContact = [
     settings.businessAddress,
@@ -912,33 +911,13 @@ export function StepReview({ form, totals, settings, readiness = null }) {
           {staffingLaborEnabled && <div className="quote-charge"><span>Staffing</span><strong>{currency(staffingOnly)}</strong></div>}
           <div className="quote-charge"><span>Travel Fee</span><strong>{currency(totals.travel)}</strong></div>
           {staffingLaborEnabled && <div className="quote-charge"><span>Bartender</span><strong>{currency(totals.bartenderLabor)}</strong></div>}
-          {staffingLaborEnabled && (
+          {staffingLaborEnabled && staffTeamLabel && (
             <div className="quote-charge quote-charge-wide">
-              <span>Staff Count ({staffingChargeModeLabel})</span>
-              <strong>
-                S {Math.max(0, Number(totals.servers || 0))} / C {Math.max(0, Number(totals.chefs || 0))} / B {Math.max(0, Number(totals.bartenders || 0))}
-              </strong>
+              <span>Staffing team</span>
+              <strong>{staffTeamLabel}</strong>
             </div>
           )}
-          {staffingLaborEnabled && hasCustomServerMix && Math.max(0, Number(totals.servers || 0)) > 0 && (
-            <div className="quote-charge quote-charge-wide">
-              <span>Server Rates (Applied)</span>
-              <strong>{serverRatesLabel}</strong>
-            </div>
-          )}
-          {staffingLaborEnabled && hasCustomChefMix && Math.max(0, Number(totals.chefs || 0)) > 0 && (
-            <div className="quote-charge quote-charge-wide">
-              <span>Chef Rates (Applied)</span>
-              <strong>{chefRatesLabel}</strong>
-            </div>
-          )}
-          {!staffingLaborEnabled && (
-            <div className="quote-charge quote-charge-wide">
-              <span>Staffing labor automation</span>
-              <strong>Disabled</strong>
-            </div>
-          )}
-          <div className="quote-charge"><span>Gratuity</span><strong>{currency(totals.serviceFee)}</strong></div>
+          <div className="quote-charge"><span>Service charge ({Math.round(Number(totals.serviceFeePctApplied || 0) * 1000) / 10}%)</span><strong>{currency(totals.serviceFee)}</strong></div>
           {(totals.addons > 0 || totals.rentals > 0 || totals.menu > 0) && (
             <div className="quote-charge quote-charge-wide">
               <span>Add-ons/Rentals/Menu</span>
@@ -958,8 +937,7 @@ export function StepReview({ form, totals, settings, readiness = null }) {
         </div>
         <p className="quote-acceptance">To accept quote, please sign and return to {settings.acceptanceEmail || settings.businessEmail || "-"}</p>
         <p className="quote-deposit-tag"><strong>{settings.depositNotice || "30% deposit is required to lock in your date."}</strong></p>
-        <p className="quote-signoff">Gratuity is never expected but is always appreciated!</p>
-        <p className="quote-contact-strip">{businessContact || "-"}</p>
+        {businessContact && <p className="quote-contact-strip">{businessContact}</p>}
       </article>
 
       <div className="summary-total">

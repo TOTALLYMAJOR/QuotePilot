@@ -2,8 +2,8 @@ import { currency } from "./quoteCalculator";
 import { sanitizeStripePaymentLink } from "./paymentLink";
 
 const DEFAULT_BRANDING = {
-  name: "QuotePilot",
-  tagline: "Quote-to-event operations by MBMapps",
+  name: "",
+  tagline: "",
   logoPath: "",
   crewMembers: []
 };
@@ -52,7 +52,7 @@ export function resolveBranding(meta = {}) {
   return {
     brandName,
     brandTagline,
-    title: `${brandName} Proposal`,
+    title: brandName ? `${brandName} Proposal` : "Catering Proposal",
     logoPath: cleanText(meta.brandLogoUrl, DEFAULT_BRANDING.logoPath),
     crewMembers: normalizeCrewMembers(meta.brandCrew)
   };
@@ -185,20 +185,20 @@ export function buildQuoteEmailPayload(quote) {
   const eventDate = proposal.event.date || "your event date";
   const eventName = proposal.event.name || "your event";
   const venue = proposal.event.venue || "your venue";
-  const signature = proposal.meta.quotePreparedBy || proposal.branding.brandName;
+  const brandName = proposal.branding.brandName;
+  const signature = proposal.meta.quotePreparedBy || brandName || "The catering team";
   const total = currency(proposal.totals.total);
   const deposit = currency(proposal.totals.deposit);
-  const subject = `${proposal.branding.brandName} Quote ${proposal.quoteNumber} - ${eventDate}`;
+  const subject = `${brandName ? `${brandName} ` : ""}Quote ${proposal.quoteNumber} - ${eventDate}`;
   const lines = [
     `Hi ${customerName},`,
     "",
-    `Thank you for considering ${proposal.branding.brandName} for ${eventName} on ${eventDate} at ${venue}.`,
+    `Thank you for considering ${brandName || "us"} for ${eventName} on ${eventDate} at ${venue}.`,
     `Your quote (${proposal.quoteNumber}) total is ${total}.`,
     `To reserve your date, the deposit due is ${deposit}.`,
     proposal.payment.depositLink
       ? `Deposit payment link: ${proposal.payment.depositLink}`
       : "Reply to this email if you need a payment link.",
-    `Deposit status: ${proposal.payment.depositStatus}.`,
     proposal.expiresOn !== "-" ? `This quote is valid through ${proposal.expiresOn}.` : "",
     "",
     "Please reply with any questions or requested adjustments.",

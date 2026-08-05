@@ -45,9 +45,17 @@ const DEFAULT_VALIDITY_DAYS = 30;
 const PORTAL_TOKEN_VALIDITY_DAYS = 30;
 const PORTAL_TOKEN_EXPIRED_ERROR = "Quote link is invalid or expired.";
 const PORTAL_VISIBLE_STATUSES = new Set(["sent", "viewed", "accepted", "declined", "booked"]);
+const QUOTE_DELIVERY_MUTATION_LOCK_STATES = new Set([
+  "sending",
+  "outcome_ambiguous",
+  "outcome_unknown"
+]);
 const HARD_DELETE_QUOTE_CALLABLE = "hardDeleteQuote";
 const PURGE_DELETED_QUOTES_CALLABLE = "purgeDeletedQuotesForOrganization";
 const UPDATE_QUOTE_DRAFT_CALLABLE = "updateQuoteDraft";
+const REQUEST_QUOTE_APPROVAL_CALLABLE = "requestQuoteApproval";
+const RESOLVE_QUOTE_APPROVAL_CALLABLE = "resolveQuoteApprovalRequest";
+const CONVERT_QUOTE_TO_CONTRACT_CALLABLE = "convertQuoteToContract";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
@@ -59,6 +67,13 @@ const MAX_RATE_MIX_CSV_LENGTH = 300;
 const MAX_FOLLOW_UP_NOTE_LENGTH = 1200;
 const MAX_APPROVAL_NOTE_LENGTH = 800;
 const MAX_PORTAL_DECISION_MESSAGE_LENGTH = 1200;
+const WORKFLOW_ATTENTION_STATUSES = [
+  "draft",
+  "sent",
+  "viewed",
+  "accepted"
+];
+const MAX_CHANGE_REQUEST_HANDLING_NOTE_LENGTH = 800;
 const KITCHEN_CHECKPOINT_DEFS = [
   { id: "prep-start", label: "Prep kickoff", minuteOffset: -180 },
   { id: "line-check", label: "Line check", minuteOffset: -120 },
@@ -169,6 +184,11 @@ function ensureCallableReady(action = "quote callable") {
   if (!cloudFunctions) {
     throw new Error(`Cloud Functions unavailable for ${action}.`);
   }
+}
+
+function isMissingCallableError(error) {
+  const code = String(error?.code || "").trim().toLowerCase();
+  return code === "functions/not-found" || code === "not-found";
 }
 
 function quoteVersionsWriteCollectionRef(quoteId, organizationId = undefined, action = "quote version write") {
@@ -391,7 +411,18 @@ function normalizeApprovalRequests(input) {
         resolvedByEmail: state === "pending" ? "" : normalizeEmail(item?.resolvedByEmail),
         resolutionNote: state === "pending"
           ? ""
-          : String(item?.resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+          : String(item?.resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH),
+        executionState: ["awaiting_execution", "in_progress", "succeeded", "failed"].includes(
+          String(item?.executionState || "").trim().toLowerCase()
+        )
+          ? String(item.executionState).trim().toLowerCase()
+          : "",
+        executionStartedAtISO: String(item?.executionStartedAtISO || "").trim(),
+        executionCompletedAtISO: String(item?.executionCompletedAtISO || "").trim(),
+        executedByEmail: normalizeEmail(item?.executedByEmail),
+        executionOperationId: String(item?.executionOperationId || "").trim(),
+        executionReference: String(item?.executionReference || "").trim().slice(0, 500),
+        executionError: String(item?.executionError || "").trim().slice(0, 500)
       };
     })
     .filter(Boolean)
@@ -404,10 +435,36 @@ function normalizePortalDecision(input) {
     ? source.decision
     : "";
   if (!decision) return {};
-  return {
+  const normalized = {
     decision,
     message: String(source.message || "").trim().slice(0, MAX_PORTAL_DECISION_MESSAGE_LENGTH),
     submittedAtISO: String(source.submittedAtISO || "").trim()
+  };
+  const requestId = String(source.requestId || "").trim();
+  if (requestId) normalized.requestId = requestId;
+  return normalized;
+}
+
+function normalizeChangeRequestHandling(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const state = ["acknowledged", "handled"].includes(source.state) ? source.state : "";
+  const sourceRequestId = String(source.sourceRequestId || "");
+  const sourceSubmittedAtISO = String(source.sourceSubmittedAtISO || "");
+  if (!state || !sourceSubmittedAtISO.trim()) return {};
+  return {
+    sourceRequestId,
+    sourceSubmittedAtISO,
+    sourceMessage: String(source.sourceMessage || ""),
+    state,
+    acknowledgedAtISO: String(source.acknowledgedAtISO || "").trim(),
+    acknowledgedByEmail: normalizeEmail(source.acknowledgedByEmail),
+    handledAtISO: state === "handled"
+      ? String(source.handledAtISO || "").trim()
+      : "",
+    handledByEmail: state === "handled" ? normalizeEmail(source.handledByEmail) : "",
+    note: state === "handled"
+      ? String(source.note || "").trim().slice(0, MAX_CHANGE_REQUEST_HANDLING_NOTE_LENGTH)
+      : ""
   };
 }
 
@@ -430,6 +487,11 @@ function hasTerminalDecisionEvidence(quote = {}) {
     || ["paid", "refunded"].includes(String(payment.depositStatus || "").trim().toLowerCase())
     || Boolean(String(payment.depositConfirmedAtISO || "").trim())
   );
+}
+
+function hasUnresolvedQuoteDelivery(quote = {}) {
+  const state = String(quote?.workflow?.quoteDelivery?.state || "").trim().toLowerCase();
+  return QUOTE_DELIVERY_MUTATION_LOCK_STATES.has(state);
 }
 
 function normalizeIntegrationState(value) {
@@ -464,7 +526,11 @@ function buildPortalKey() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID().replace(/-/g, "");
   }
-  return `${Date.now()}${Math.floor(Math.random() * 1e9)}`;
+  const timestampPart = Date.now().toString(36).padStart(10, "0");
+  const randomPart = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
+    .toString(36)
+    .padStart(11, "0");
+  return `${timestampPart}${randomPart}`;
 }
 
 function timestampToISO(value, fallback = isoNow()) {
@@ -849,7 +915,8 @@ function hydrateQuote(item, nowISO = isoNow()) {
     workflow: {
       ...(item.workflow || {}),
       followUp: normalizeFollowUp(item.workflow?.followUp),
-      approvalRequests: normalizeApprovalRequests(item.workflow?.approvalRequests)
+      approvalRequests: normalizeApprovalRequests(item.workflow?.approvalRequests),
+      changeRequestHandling: normalizeChangeRequestHandling(item.workflow?.changeRequestHandling)
     },
     portalDecision: normalizePortalDecision(item.portalDecision),
     integrations: {
@@ -1459,11 +1526,62 @@ export async function getActiveQuoteVersion(quoteId, { organizationId = undefine
 export async function convertQuoteToContract({
   quoteId,
   actorEmail = "",
-  capacityLimit = 400
+  capacityLimit = 400,
+  approvalRequestId = ""
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
     throw new Error("Quote id is required.");
+  }
+
+  if (firebaseReady) {
+    const requestId = String(approvalRequestId || "").trim();
+    if (!requestId) {
+      throw new Error("An approved contract-conversion request is required.");
+    }
+    const organizationId = requireWriteOrganizationId(
+      undefined,
+      CONVERT_QUOTE_TO_CONTRACT_CALLABLE
+    );
+    ensureCallableReady(CONVERT_QUOTE_TO_CONTRACT_CALLABLE);
+    const call = httpsCallable(cloudFunctions, CONVERT_QUOTE_TO_CONTRACT_CALLABLE);
+    const response = await call({
+      organizationId,
+      quoteId: id,
+      approvalRequestId: requestId
+    });
+    const converted = response?.data && typeof response.data === "object"
+      ? response.data
+      : {};
+    const approvalRequest = normalizeApprovalRequests([converted.approvalRequest])[0];
+    if (
+      converted.ok !== true
+      || normalizeOrganizationId(converted.organizationId) !== organizationId
+      || String(converted.quoteId || "").trim() !== id
+      || String(converted.status || "").trim().toLowerCase() !== "booked"
+      || !String(converted.contractNumber || "").trim()
+      || !converted.booking
+      || !converted.lifecycle
+      || !converted.availability
+      || !approvalRequest
+      || approvalRequest.id !== requestId
+      || approvalRequest.action !== "convert_to_contract"
+      || approvalRequest.executionState !== "succeeded"
+    ) {
+      throw new Error("Trusted contract conversion returned an invalid response.");
+    }
+    return {
+      ok: true,
+      storage: "firebase",
+      status: "booked",
+      booking: converted.booking,
+      lifecycle: converted.lifecycle,
+      contractNumber: String(converted.contractNumber).trim(),
+      availability: converted.availability,
+      approvalRequest,
+      versionId: String(converted.versionId || "").trim(),
+      versionNumber: Math.max(1, Number(converted.versionNumber || 1))
+    };
   }
 
   const quote = await readQuoteById(id);
@@ -1501,25 +1619,6 @@ export async function convertQuoteToContract({
   };
 
   await saveQuoteVersion(id);
-
-  if (firebaseReady) {
-    await updateDoc(quoteWriteDocRef(id, quote.organizationId, "convertQuoteToContract"), {
-      status: "booked",
-      booking: nextBooking,
-      lifecycle: nextLifecycle,
-      updatedAtISO: nowISO
-    });
-    await syncPortalSnapshotFromQuoteDoc(id, quote.organizationId);
-    return {
-      ok: true,
-      storage: "firebase",
-      status: "booked",
-      booking: nextBooking,
-      lifecycle: nextLifecycle,
-      contractNumber,
-      availability
-    };
-  }
 
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   let found = false;
@@ -1915,6 +2014,175 @@ export async function updateQuoteFollowUp({
   return { ok: true, storage, followUp: nextFollowUp };
 }
 
+export async function updateQuoteChangeRequestHandling({
+  organizationId,
+  quoteId,
+  sourceRequestId = "",
+  sourceSubmittedAtISO,
+  sourceMessage,
+  action,
+  note = "",
+  actorEmail = "",
+  actorRole = ""
+} = {}) {
+  const id = String(quoteId || "").trim();
+  if (!id) {
+    throw new Error("Quote id is required.");
+  }
+  const normalizedRole = String(actorRole || "").trim().toLowerCase();
+  if (!["admin", "sales"].includes(normalizedRole)) {
+    throw new Error("Staff role required to handle customer change requests.");
+  }
+  const normalizedAction = String(action || "").trim().toLowerCase();
+  if (!["acknowledge", "mark_handled"].includes(normalizedAction)) {
+    throw new Error("Change request action must be acknowledge or mark_handled.");
+  }
+  const requestSource = String(sourceSubmittedAtISO || "").trim();
+  if (!requestSource) {
+    throw new Error("Customer change request timestamp is required.");
+  }
+  const requestId = String(sourceRequestId || "").trim();
+  const requestMessage = String(sourceMessage || "").trim().slice(0, MAX_PORTAL_DECISION_MESSAGE_LENGTH);
+  if (!requestMessage) {
+    throw new Error("Customer change request message is required.");
+  }
+  const normalizedNote = String(note || "").trim();
+  if (normalizedNote.length > MAX_CHANGE_REQUEST_HANDLING_NOTE_LENGTH) {
+    throw new Error(`Handling note must be ${MAX_CHANGE_REQUEST_HANDLING_NOTE_LENGTH} characters or fewer.`);
+  }
+  if (normalizedAction === "mark_handled" && !normalizedNote) {
+    throw new Error("A handling note is required before marking a change request handled.");
+  }
+  const auditActorEmail = firebaseReady
+    ? normalizeEmail(auth?.currentUser?.email)
+    : normalizeEmail(actorEmail);
+  if (!auditActorEmail) {
+    throw new Error("Authenticated email is required for the change request handling record.");
+  }
+  const nextState = normalizedAction === "mark_handled" ? "handled" : "acknowledged";
+  const staleRequestError = () => {
+    const error = new Error("This customer change request is stale. Refresh the workflow and try again.");
+    error.code = "workflow/stale-change-request";
+    return error;
+  };
+  const buildNextHandling = (current, nowISO, persistedSource) => {
+    const matchesCurrentRequest = (
+      String(current.sourceRequestId || "").trim() === requestId
+      && String(current.sourceSubmittedAtISO || "").trim() === requestSource
+      && String(current.sourceMessage || "").trim() === requestMessage
+    );
+    if (matchesCurrentRequest && current.state === "handled") {
+      if (nextState === "handled") return current;
+      throw new Error("A handled change request cannot be returned to acknowledged.");
+    }
+    if (matchesCurrentRequest && current.state === nextState) return current;
+    const acknowledgedAtISO = matchesCurrentRequest && current.acknowledgedAtISO
+      ? current.acknowledgedAtISO
+      : nowISO;
+    const acknowledgedByEmail = matchesCurrentRequest && current.acknowledgedByEmail
+      ? current.acknowledgedByEmail
+      : auditActorEmail;
+    return {
+      sourceRequestId: persistedSource.sourceRequestId,
+      sourceSubmittedAtISO: persistedSource.sourceSubmittedAtISO,
+      sourceMessage: persistedSource.sourceMessage,
+      state: nextState,
+      acknowledgedAtISO,
+      acknowledgedByEmail,
+      handledAtISO: nextState === "handled" ? nowISO : "",
+      handledByEmail: nextState === "handled" ? auditActorEmail : "",
+      note: nextState === "handled" ? normalizedNote : ""
+    };
+  };
+
+  const writeOrganizationId = requireWriteOrganizationId(
+    organizationId,
+    "change request handling"
+  );
+  if (firebaseReady) {
+    const quoteRef = quoteWriteDocRef(id, writeOrganizationId, "change request handling");
+    let result = null;
+    await runTransaction(db, async (transaction) => {
+      const quoteSnap = await transaction.get(quoteRef);
+      if (!quoteSnap.exists()) throw new Error("Quote not found.");
+      const quote = quoteSnap.data();
+      if (
+        quote.status === "deleted"
+        || quote.portalDecision?.decision !== "changes_requested"
+        || String(quote.portalDecision?.requestId || "").trim() !== requestId
+        || String(quote.portalDecision?.submittedAtISO || "").trim() !== requestSource
+        || String(quote.portalDecision?.message || "").trim() !== requestMessage
+      ) {
+        throw staleRequestError();
+      }
+      const current = normalizeChangeRequestHandling(quote.workflow?.changeRequestHandling);
+      const persistedSource = {
+        sourceRequestId: String(quote.portalDecision?.requestId || ""),
+        sourceSubmittedAtISO: String(quote.portalDecision?.submittedAtISO || ""),
+        sourceMessage: String(quote.portalDecision?.message || "")
+      };
+      const nextHandling = buildNextHandling(current, isoNow(), persistedSource);
+      if (
+        current.sourceRequestId === nextHandling.sourceRequestId
+        && current.sourceSubmittedAtISO === nextHandling.sourceSubmittedAtISO
+        && current.sourceMessage === nextHandling.sourceMessage
+        && current.state === nextHandling.state
+      ) {
+        result = { ok: true, storage: "unchanged", handling: current };
+        return;
+      }
+      transaction.update(quoteRef, {
+        "workflow.changeRequestHandling": nextHandling,
+        updatedAtISO: nextHandling.handledAtISO || nextHandling.acknowledgedAtISO
+      });
+      result = { ok: true, storage: "firebase", handling: nextHandling };
+    });
+    return result;
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  const quoteIndex = existing.findIndex((item) => (
+    item.id === id
+    && normalizeOrganizationId(item.organizationId) === writeOrganizationId
+  ));
+  if (quoteIndex < 0) throw new Error("Quote not found.");
+  const quote = existing[quoteIndex];
+  if (
+    quote.status === "deleted"
+    || quote.portalDecision?.decision !== "changes_requested"
+    || String(quote.portalDecision?.requestId || "").trim() !== requestId
+    || String(quote.portalDecision?.submittedAtISO || "").trim() !== requestSource
+    || String(quote.portalDecision?.message || "").trim() !== requestMessage
+  ) {
+    throw staleRequestError();
+  }
+  const current = normalizeChangeRequestHandling(quote.workflow?.changeRequestHandling);
+  const persistedSource = {
+    sourceRequestId: String(quote.portalDecision?.requestId || ""),
+    sourceSubmittedAtISO: String(quote.portalDecision?.submittedAtISO || ""),
+    sourceMessage: String(quote.portalDecision?.message || "")
+  };
+  const nextHandling = buildNextHandling(current, isoNow(), persistedSource);
+  if (
+    current.sourceRequestId === nextHandling.sourceRequestId
+    && current.sourceSubmittedAtISO === nextHandling.sourceSubmittedAtISO
+    && current.sourceMessage === nextHandling.sourceMessage
+    && current.state === nextHandling.state
+  ) {
+    return { ok: true, storage: "unchanged", handling: current };
+  }
+  existing[quoteIndex] = {
+    ...quote,
+    updatedAtISO: nextHandling.handledAtISO || nextHandling.acknowledgedAtISO,
+    workflow: {
+      ...(quote.workflow || {}),
+      changeRequestHandling: nextHandling
+    }
+  };
+  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+  return { ok: true, storage: "local", handling: nextHandling };
+}
+
 export async function requestQuoteApproval({
   quoteId,
   action,
@@ -1935,10 +2203,62 @@ export async function requestQuoteApproval({
     throw new Error("Invalid approval action.");
   }
 
+  if (firebaseReady) {
+    const organizationId = requireWriteOrganizationId(
+      undefined,
+      REQUEST_QUOTE_APPROVAL_CALLABLE
+    );
+    ensureCallableReady(REQUEST_QUOTE_APPROVAL_CALLABLE);
+    const call = httpsCallable(cloudFunctions, REQUEST_QUOTE_APPROVAL_CALLABLE);
+    try {
+      const response = await call({
+        organizationId,
+        quoteId: id,
+        action: normalizedAction,
+        note: String(note || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+      });
+      const result = response?.data && typeof response.data === "object"
+        ? response.data
+        : {};
+      const request = normalizeApprovalRequests([result.request])[0];
+      if (
+        result.ok !== true
+        || normalizeOrganizationId(result.organizationId) !== organizationId
+        || String(result.quoteId || "").trim() !== id
+        || !request
+        || request.action !== normalizedAction
+        || request.state !== "pending"
+      ) {
+        throw new Error("Trusted approval request returned an invalid response.");
+      }
+      return { ok: true, storage: "firebase", request };
+    } catch (err) {
+      // Vercel can promote the browser before the coordinated Functions/rules
+      // release. Only a confirmed missing endpoint may use the existing
+      // rule-authorized write path during that short rollout window.
+      if (!isMissingCallableError(err)) throw err;
+    }
+  }
+
+  const approvalActorEmail = firebaseReady
+    ? normalizeEmail(auth?.currentUser?.email)
+    : normalizeEmail(actorEmail);
+  if (firebaseReady && !approvalActorEmail) {
+    throw new Error("Authenticated email is required for approval audit fallback.");
+  }
   const quote = await readQuoteById(id);
   const current = normalizeApprovalRequests(quote.workflow?.approvalRequests);
-  if (current.some((item) => item.action === normalizedAction && item.state === "pending")) {
-    throw new Error("A pending approval request already exists for this action.");
+  if (current.some((item) => (
+    item.action === normalizedAction
+    && (
+      item.state === "pending"
+      || (
+        item.state === "approved"
+        && !["succeeded", "failed"].includes(item.executionState)
+      )
+    )
+  ))) {
+    throw new Error("An unresolved or unexecuted approval request already exists for this action.");
   }
   const nowISO = isoNow();
   const request = {
@@ -1947,10 +2267,17 @@ export async function requestQuoteApproval({
     state: "pending",
     note: String(note || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH),
     requestedAtISO: nowISO,
-    requestedByEmail: normalizeEmail(actorEmail),
+    requestedByEmail: approvalActorEmail,
     resolvedAtISO: "",
     resolvedByEmail: "",
-    resolutionNote: ""
+    resolutionNote: "",
+    executionState: "",
+    executionStartedAtISO: "",
+    executionCompletedAtISO: "",
+    executedByEmail: "",
+    executionOperationId: "",
+    executionReference: "",
+    executionError: ""
   };
   const nextRequests = normalizeApprovalRequests([...current, request]);
 
@@ -1992,6 +2319,47 @@ export async function resolveQuoteApprovalRequest({
     throw new Error("Approval resolution must be approved or rejected.");
   }
 
+  if (firebaseReady) {
+    const organizationId = requireWriteOrganizationId(
+      undefined,
+      RESOLVE_QUOTE_APPROVAL_CALLABLE
+    );
+    ensureCallableReady(RESOLVE_QUOTE_APPROVAL_CALLABLE);
+    const call = httpsCallable(cloudFunctions, RESOLVE_QUOTE_APPROVAL_CALLABLE);
+    try {
+      const response = await call({
+        organizationId,
+        quoteId: id,
+        requestId: approvalRequestId,
+        state: nextState,
+        resolutionNote: String(resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+      });
+      const result = response?.data && typeof response.data === "object"
+        ? response.data
+        : {};
+      const request = normalizeApprovalRequests([result.request])[0];
+      if (
+        result.ok !== true
+        || normalizeOrganizationId(result.organizationId) !== organizationId
+        || String(result.quoteId || "").trim() !== id
+        || !request
+        || request.id !== approvalRequestId
+        || request.state !== nextState
+      ) {
+        throw new Error("Trusted approval resolution returned an invalid response.");
+      }
+      return { ok: true, storage: "firebase", request };
+    } catch (err) {
+      if (!isMissingCallableError(err)) throw err;
+    }
+  }
+
+  const resolutionActorEmail = firebaseReady
+    ? normalizeEmail(auth?.currentUser?.email)
+    : normalizeEmail(actorEmail);
+  if (firebaseReady && !resolutionActorEmail) {
+    throw new Error("Authenticated email is required for approval resolution audit fallback.");
+  }
   const quote = await readQuoteById(id);
   const current = normalizeApprovalRequests(quote.workflow?.approvalRequests);
   const target = current.find((item) => item.id === approvalRequestId);
@@ -2008,8 +2376,15 @@ export async function resolveQuoteApprovalRequest({
         ...item,
         state: nextState,
         resolvedAtISO: nowISO,
-        resolvedByEmail: normalizeEmail(actorEmail),
-        resolutionNote: String(resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH)
+        resolvedByEmail: resolutionActorEmail,
+        resolutionNote: String(resolutionNote || "").trim().slice(0, MAX_APPROVAL_NOTE_LENGTH),
+        executionState: nextState === "approved" ? "awaiting_execution" : "",
+        executionStartedAtISO: "",
+        executionCompletedAtISO: "",
+        executedByEmail: "",
+        executionOperationId: "",
+        executionReference: "",
+        executionError: ""
       }
       : item
   ));
@@ -2747,7 +3122,11 @@ export async function updateQuote({
   };
 }
 
-export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
+export async function rotateQuotePortalKey({
+  quoteId,
+  actorEmail = "",
+  approvalRequestId = ""
+} = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
     throw new Error("Quote id is required.");
@@ -2755,6 +3134,10 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
 
   const quote = await readQuoteById(id);
   if (firebaseReady) {
+    const requestId = String(approvalRequestId || "").trim();
+    if (!requestId) {
+      throw new Error("An approved portal-rotation request is required.");
+    }
     const organizationId = requireWriteOrganizationId(
       quote.organizationId,
       "rotateQuotePortalKey"
@@ -2763,11 +3146,13 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
     const call = httpsCallable(cloudFunctions, "rotateQuotePortalKey");
     const response = await call({
       organizationId,
-      quoteId: id
+      quoteId: id,
+      approvalRequestId: requestId
     });
     const rotated = response?.data && typeof response.data === "object"
       ? response.data
       : {};
+    const approvalRequest = normalizeApprovalRequests([rotated.approvalRequest])[0];
     if (
       rotated.ok !== true
       || normalizeOrganizationId(rotated.organizationId) !== organizationId
@@ -2775,6 +3160,10 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
       || !String(rotated.portalKey || "").trim()
       || !String(rotated.portalIssuedAtISO || "").trim()
       || !String(rotated.portalExpiresAtISO || "").trim()
+      || !approvalRequest
+      || approvalRequest.id !== requestId
+      || approvalRequest.action !== "rotate_portal_link"
+      || approvalRequest.executionState !== "succeeded"
     ) {
       throw new Error("Trusted portal rotation returned an invalid response.");
     }
@@ -2785,7 +3174,8 @@ export async function rotateQuotePortalKey({ quoteId, actorEmail = "" } = {}) {
       portalIssuedAtISO: String(rotated.portalIssuedAtISO).trim(),
       portalExpiresAtISO: String(rotated.portalExpiresAtISO).trim(),
       versionId: String(rotated.versionId || "").trim(),
-      versionNumber: Math.max(1, Number(rotated.versionNumber || 1))
+      versionNumber: Math.max(1, Number(rotated.versionNumber || 1)),
+      approvalRequest
     };
   }
 
@@ -3014,10 +3404,52 @@ function applyQuoteHistoryFilters(quotes, { eventTypeId = "", customerName = "",
   });
 }
 
+export async function getWorkflowAttentionSnapshot({ organizationId = "" } = {}) {
+  const scopedOrgId = normalizeOrganizationId(organizationId);
+  if (!scopedOrgId) {
+    throw new Error("organizationId is required for workflow attention read.");
+  }
+  const nowISO = isoNow();
+
+  if (firebaseReady) {
+    const readableOrgId = requireReadOrganizationId(scopedOrgId, "workflow attention read");
+    const snap = await getDocs(query(
+      quotesCollectionRef(readableOrgId),
+      where("status", "in", WORKFLOW_ATTENTION_STATUSES)
+    ));
+    return {
+      source: "firebase",
+      quotes: sortQuotesDesc(snap.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const createdAtISO = timestampToISO(data.createdAtISO || data.createdAt, nowISO);
+        return applyExpiry(hydrateQuote({
+          id: docSnap.id,
+          ...data,
+          organizationId: normalizeOrganizationId(data.organizationId || readableOrgId),
+          createdAtISO
+        }, nowISO), nowISO);
+      }))
+    };
+  }
+
+  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+  const quotes = existing
+    .filter((quote) => (
+      normalizeOrganizationId(quote?.organizationId) === scopedOrgId
+      && WORKFLOW_ATTENTION_STATUSES.includes(normalizeStatus(quote?.status))
+    ))
+    .map((quote) => applyExpiry(hydrateQuote(quote, nowISO), nowISO));
+  return {
+    source: "local",
+    quotes: sortQuotesDesc(quotes)
+  };
+}
+
 export async function getQuoteHistory(filters = {}) {
   const normalizedEventTypeId = String(filters?.eventTypeId || "").trim();
   const normalizedCustomerName = normalizeCustomerNameKey(filters?.customerName || "");
   const includeDeleted = filters?.includeDeleted === true;
+  const persistExpiredStatuses = filters?.persistExpiredStatuses === true;
   const nowISO = isoNow();
 
   if (firebaseReady) {
@@ -3077,19 +3509,18 @@ export async function getQuoteHistory(filters = {}) {
       (quote, idx) => quote.status === "expired" && quotes[idx].status !== "expired"
     );
 
-    if (autoExpired.length) {
-      const writableAutoExpired = autoExpired.filter((quote) => normalizeOrganizationId(quote.organizationId));
-      await Promise.all(
-        writableAutoExpired.map(async (quote) => {
-          await saveQuoteVersion(quote.id);
-          await updateDoc(quoteWriteDocRef(quote.id, quote.organizationId, "getQuoteHistory auto-expire"), {
-            status: "expired",
-            updatedAtISO: nowISO,
-            "lifecycle.expiredAtISO": quote.lifecycle?.expiredAtISO || nowISO
-          });
-          await syncPortalSnapshotFromQuoteDoc(quote.id, quote.organizationId);
-        })
+    let expiryPersistenceFailures = [];
+    if (persistExpiredStatuses && autoExpired.length) {
+      const writableAutoExpired = autoExpired.filter((quote) => (
+        normalizeOrganizationId(quote.organizationId)
+        && !hasUnresolvedQuoteDelivery(quote)
+      ));
+      const persistenceResults = await Promise.allSettled(
+        writableAutoExpired.map((quote) => updateQuoteStatus(quote.id, "expired"))
       );
+      expiryPersistenceFailures = persistenceResults
+        .map((result, index) => (result.status === "rejected" ? writableAutoExpired[index].id : ""))
+        .filter(Boolean);
     }
 
     const filteredQuotes = applyQuoteHistoryFilters(nextQuotes, {
@@ -3100,7 +3531,8 @@ export async function getQuoteHistory(filters = {}) {
 
     return {
       source: "firebase",
-      quotes: filteredQuotes
+      quotes: filteredQuotes,
+      expiryPersistenceFailures
     };
   }
 
@@ -3154,8 +3586,32 @@ export async function updateQuoteStatus(quoteId, status) {
   await saveQuoteVersion(id);
 
   if (firebaseReady) {
-    await updateDoc(quoteWriteDocRef(id, existingQuote.organizationId, "updateQuoteStatus"), statusPayload);
-    await syncPortalSnapshotFromQuoteDoc(id, existingQuote.organizationId);
+    const nextQuote = {
+      ...existingQuote,
+      status: nextStatus,
+      deletedAtISO: nextStatus === "deleted" ? nowISO : "",
+      updatedAtISO: nowISO,
+      lifecycle: lifecycleObject(nextStatus, nowISO, existingQuote.lifecycle),
+      booking: nextStatus === "booked"
+        ? {
+            ...hydrateBooking(existingQuote.booking),
+            bookedAtISO: existingQuote.booking?.bookedAtISO || nowISO
+          }
+        : hydrateBooking(existingQuote.booking)
+    };
+    const batch = writeBatch(db);
+    batch.update(
+      quoteWriteDocRef(id, existingQuote.organizationId, "updateQuoteStatus"),
+      statusPayload
+    );
+    if (nextQuote.portalKey) {
+      batch.update(portalDocRef(nextQuote.portalKey), {
+        status: nextQuote.status,
+        updatedAtISO: nextQuote.updatedAtISO,
+        lifecycle: nextQuote.lifecycle
+      });
+    }
+    await batch.commit();
   } else {
     const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
     const next = existing.map((quote) => {
@@ -3406,17 +3862,27 @@ export async function reopenQuote(id) {
   };
 }
 
-export async function deleteQuote(id, { organizationId = undefined } = {}) {
+export async function deleteQuote(id, {
+  organizationId = undefined,
+  approvalRequestId = ""
+} = {}) {
   const quoteId = String(id || "").trim();
   if (!quoteId) {
     throw new Error("Quote id is required.");
   }
 
   if (firebaseReady) {
+    const requestId = String(approvalRequestId || "").trim();
+    if (!requestId) {
+      throw new Error("An approved quote-deletion request is required.");
+    }
     ensureCallableReady("hard delete quote");
     const call = httpsCallable(cloudFunctions, HARD_DELETE_QUOTE_CALLABLE);
     const resolvedOrganizationId = normalizeOrganizationId(organizationId) || resolveContextualOrganizationId();
-    const payload = { quoteId };
+    const payload = {
+      quoteId,
+      approvalRequestId: requestId
+    };
     if (resolvedOrganizationId) {
       payload.organizationId = resolvedOrganizationId;
     }
@@ -3565,6 +4031,7 @@ export async function updatePortalDecision({
     : {
       decision: normalizedDecision,
       message: normalizedMessage,
+      requestId: buildPortalKey(),
       submittedAtISO: nowISO
     };
   const portalDecisionPatch = normalizedDecision === "viewed" ? {} : { portalDecision };
@@ -3581,6 +4048,9 @@ export async function updatePortalDecision({
     }
     assertPortalTokenActive(portalData, nowISO);
     const currentStatus = normalizeStatus(portalData.status);
+    if (normalizedDecision === "viewed" && currentStatus === "viewed") {
+      return { ok: true, storage: "unchanged", status: currentStatus, portalDecision: {} };
+    }
     if (!["sent", "viewed"].includes(currentStatus)) {
       throw new Error(
         currentStatus === "draft"
@@ -3618,6 +4088,9 @@ export async function updatePortalDecision({
   }
   assertPortalTokenActive(localTarget, nowISO);
   const currentStatus = normalizeStatus(localTarget.status);
+  if (normalizedDecision === "viewed" && currentStatus === "viewed") {
+    return { ok: true, storage: "unchanged", status: currentStatus, portalDecision: {} };
+  }
   if (!["sent", "viewed"].includes(currentStatus)) {
     throw new Error(
       currentStatus === "draft"

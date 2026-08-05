@@ -203,11 +203,28 @@ Pass all checks before merging a release-intent PR to `main`:
      a draft quote, matching portal snapshot, and initial version,
    - an eligible quote edit is server-repriced and atomically updates the quote
      and portal while adding a version,
-   - terminal evidence blocks edit/reopen, sales cannot bypass the exact
-     draft-to-sent boundary, and direct quote/portal deletes fail,
+   - terminal evidence blocks edit/reopen, generic staff writes cannot claim
+     `sent` or `viewed`, and direct quote/portal deletes fail,
+   - an admin expiry changes the quote and matching portal atomically, a
+     quote-only or portal-only expiry fails, and `Reopen` restores an eligible
+     expired record as a draft with a new portal issuance,
    - quote history row appears and opens,
-   - customer portal accept/decline path updates state,
-   - PDF export succeeds,
+   - provider acceptance for the exact current valid issuance records `sent`
+     and activates that portal, while acceptance for an invalid or expired
+     issuance is retained as `requires_rotation` with the portal inactive,
+   - guarded rotation invalidates the prior issuance and withholds both Copy
+     Portal and the PDF portal link until a separate send accepts the new one,
+   - an expired definite provider failure starts a fresh delivery generation,
+     an ambiguous outcome remains locked for review, and a server-observed
+     provider message ID cannot be reconciled as no-send,
+   - a quote that expires during unresolved delivery remains visible for review;
+     completing reconciliation reloads it into the paired expiry/Reopen path,
+   - a legacy portal projection without `deliveryEvidence` stays inactive and
+     is recoverable only through an approved resend or truthful provider
+     reconciliation,
+   - customer portal view and accept/decline paths update their owned state,
+   - PDF export succeeds and omits any portal link without current issuance
+     evidence,
    - Integrations Ops setup assistant loads and reports status,
    - SMS test path returns disabled/not configured when
      `NOTIFICATIONS_SMS_PROVIDER=none` without blocking core flow.
@@ -225,14 +242,48 @@ evidence only; repeat the customer-visible flow against the exact hosted
 release before calling production onboarding seamless.
 
 ## 7) Post-Launch Verification
+
+Before testing legacy customer records, run the customer portal projection
+backfill as a separately reviewed production-data operation. Projection
+backfill may normalize eligible portal data, but it must not create
+`deliveryEvidence`, activate a portal, or infer provider acceptance. A legacy
+projection that lacks delivery evidence must continue to fail closed and be
+recovered through an approved resend or truthful provider reconciliation.
+Start with a tenant-scoped dry run and retain its aggregate evidence:
+
+```bash
+npm run portal:backfill -- \
+  --project tonicatering \
+  --organization <organization-id> \
+  --dry-run \
+  --evidence-out <new-dry-run-evidence-file.json>
+```
+
+Resolve all reported identity or commercial-evidence conflicts before apply.
+Apply requires Firebase Admin ADC, a new evidence file, and the exact
+scope-bound confirmation shown in the README. Do not infer permission to apply
+from deployment or merge approval, and never copy portal tokens or customer
+data into release evidence.
+
 1. Create a quote end-to-end.
 2. Confirm quote appears in history.
-3. Export PDF proposal.
-4. Verify customer portal accept/decline updates.
+3. Export the draft PDF and confirm it contains no inactive portal link.
+4. Submit the exact saved revision and confirm provider acceptance creates
+   current-issuance activation evidence before Copy Portal or the PDF portal
+   link becomes available.
+5. Rotate the portal and confirm both link surfaces are withheld until the new
+   issuance receives a separate provider-accepted send.
+6. Expire an eligible nonterminal quote and confirm the quote and public
+   projection leave the active portal surface together. Use `Reopen` and confirm
+   it returns as a draft with a new portal issuance; the prior token stays
+   unusable.
+7. Verify customer portal view and accept/decline updates.
    - Confirm the public snapshot and organization quote carry the same
      structured decision and timestamp.
    - Confirm a second public request cannot flip an accepted/declined outcome.
-5. Validate mobile layout and key interaction flows.
+8. Confirm a legacy projection without `deliveryEvidence` stays inactive and
+   the recovery path does not fabricate acceptance evidence.
+9. Validate mobile layout and key interaction flows.
 
 ## 8) Rollback
 Use the prior known-good commit SHA tracked in `PROJECT_STATUS.md`.

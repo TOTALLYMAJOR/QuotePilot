@@ -119,7 +119,6 @@ describe("proposal payload snapshots", () => {
       Your quote (Q-2026-0042) total is $8379.21.
       To reserve your date, the deposit due is $2513.76.
       Deposit payment link: https://checkout.stripe.com/c/pay/cs_test_q_2026_0042
-      Deposit status: sent.
       This quote is valid through 2026-04-09.
       Please reply with any questions or requested adjustments.
       Alex Rivera",
@@ -138,8 +137,10 @@ describe("proposal payload snapshots", () => {
       quoteMeta: {}
     });
 
-    expect(email.subject).toBe("QuotePilot Quote Q-1 - 2026-05-01");
-    expect(email.body).toContain("QuotePilot");
+    expect(email.subject).toBe("Quote Q-1 - 2026-05-01");
+    expect(email.body).toContain("Thank you for considering us");
+    expect(email.body).toContain("The catering team");
+    expect(email.body).not.toContain("QuotePilot");
   });
 
   test("removes unapproved stored payment links from customer-facing artifacts", () => {

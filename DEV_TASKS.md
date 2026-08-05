@@ -1,11 +1,12 @@
 # Dev Tasks
 
-Last updated: July 27, 2026
+Last updated: August 3, 2026
 
 ## P0 - Tenant Provisioning Release
-- Commit and review the current provisioning slice, then deploy the
-  role-authoritative Firestore rules, provisioning/repair/cleanup Functions,
-  and `/app` frontend from that one revision.
+- Deploy the reviewed role-authoritative Firestore rules and
+  provisioning/repair/cleanup Functions from the merged `main` revision; the
+  `/app` frontend is live on Vercel, but the coordinated Firebase runtime slice
+  remains locked.
 - Run a disposable second-tenant acceptance: platform-admin create, exact owner
   email verification/invite activation, cross-tenant denial, neutral default
   inspection, reviewed package/event/pricing setup, conflict-safe catalog save,
@@ -31,13 +32,19 @@ Last updated: July 27, 2026
 
 ## P1 - Performance and UX
 - Reduce largest JavaScript chunk size (split proposal/export-heavy paths where practical).
-- Improve wizard mobile layout for dense review/pricing states.
+- Continue mobile-density cleanup beyond the implemented persistent pricing
+  summary, active-step rail, compact operator action rail, and simplified
+  Step 1 staffing-pricing boundary.
 - Add intentional transition/motion polish for step changes and live breakdown updates.
 
 ## P1 - Product Capability
-- Add automated notifications and escalation rules for due follow-ups and new customer change requests.
-- Add server-authoritative enforcement and audit linkage from approved sensitive-action requests to separate admin execution.
-- Refresh/backfill existing portal snapshots so older active links receive the new decision-center event, selection, and pricing fields.
+- Add opt-in, provider-backed notifications and configurable escalation rules
+  for due follow-ups and new customer change requests; preserve the in-app
+  Workflow Attention queue as operational tracking rather than delivery proof.
+- Run and review the tenant-scoped production portal-projection dry run, resolve
+  conflicts, then explicitly authorize the guarded apply so older active links
+  receive the new decision-center event, selection, and pricing fields. The
+  tool and emulator acceptance are complete; production execution is not.
 - Add basic analytics events for funnel drop-off and add-on selection trends.
 - Extend operations audit controls (retry dashboards, sync health trends, role-based action logs).
 

@@ -20,6 +20,7 @@ const mockState = vi.hoisted(() => ({
   query: vi.fn(),
   runTransaction: vi.fn(),
   transactionSet: vi.fn(),
+  transactionUpdate: vi.fn(),
   serverTimestamp: vi.fn(),
   setDoc: vi.fn(),
   updateDoc: vi.fn(),
@@ -77,13 +78,20 @@ vi.mock("../organizationService", () => ({
 
 import {
   buildClientWritablePortalPayment,
+  convertQuoteToContract,
+  getQuoteHistory,
+  getWorkflowAttentionSnapshot,
+  requestQuoteApproval,
   reopenQuote,
+  resolveQuoteApprovalRequest,
   rotateQuotePortalKey,
   saveQuoteVersion,
   setQuoteStoreOrganizationId,
   submitQuote,
   syncQuoteToCrm,
   updateQuote,
+  updateQuoteChangeRequestHandling,
+  updateQuoteStatus,
   updatePortalDecision
 } from "../quoteStore";
 
@@ -110,7 +118,8 @@ describe("quoteStore Firebase write safety", () => {
           exists: () => true,
           data: () => ({ latestVersionNumber: 0 })
         }),
-        set: mockState.transactionSet
+        set: mockState.transactionSet,
+        update: mockState.transactionUpdate
       };
       return handler(tx);
     });
@@ -145,7 +154,57 @@ describe("quoteStore Firebase write safety", () => {
             portalIssuedAtISO: "2026-07-28T12:00:00.000Z",
             portalExpiresAtISO: "2026-08-27T12:00:00.000Z",
             versionId: "v0002",
-            versionNumber: 2
+            versionNumber: 2,
+            approvalRequest: {
+              id: "rotate-approval-request-000001",
+              action: "rotate_portal_link",
+              state: "approved",
+              resolvedAtISO: "2026-07-28T11:55:00.000Z",
+              resolvedByEmail: "current.admin@example.com",
+              executionState: "succeeded",
+              executionStartedAtISO: "2026-07-28T12:00:00.000Z",
+              executionCompletedAtISO: "2026-07-28T12:00:00.000Z",
+              executedByEmail: "current.admin@example.com",
+              executionOperationId: "rotate-approval-request-000001",
+              executionReference: "v0002"
+            }
+          }
+        });
+      }
+      if (name === "convertQuoteToContract") {
+        return vi.fn().mockResolvedValue({
+          data: {
+            ok: true,
+            organizationId: "org-one",
+            quoteId: "quote-1",
+            storage: "firebase",
+            status: "booked",
+            contractNumber: "C-260803-12345",
+            booking: {
+              contractNumber: "C-260803-12345",
+              contractConvertedByEmail: "current.admin@example.com"
+            },
+            lifecycle: { bookedAtISO: "2026-08-03T18:00:00.000Z" },
+            availability: {
+              conflicts: [],
+              hasBlockingConflict: false,
+              capacityExceeded: false,
+              capacityLimit: 400,
+              sameVenueLoad: 120
+            },
+            versionId: "v0002",
+            versionNumber: 2,
+            approvalRequest: {
+              id: "contract-approval-request-0001",
+              action: "convert_to_contract",
+              state: "approved",
+              executionState: "succeeded",
+              executionStartedAtISO: "2026-08-03T18:00:00.000Z",
+              executionCompletedAtISO: "2026-08-03T18:00:00.000Z",
+              executedByEmail: "current.admin@example.com",
+              executionOperationId: "contract-approval-request-0001",
+              executionReference: "C-260803-12345"
+            }
           }
         });
       }
@@ -163,6 +222,46 @@ describe("quoteStore Firebase write safety", () => {
             expiresAtISO: "2026-09-11T12:00:00.000Z",
             versionId: "v0002",
             versionNumber: 2
+          }
+        });
+      }
+      if (name === "requestQuoteApproval") {
+        return vi.fn().mockResolvedValue({
+          data: {
+            ok: true,
+            organizationId: "org-one",
+            quoteId: "quote-1",
+            request: {
+              id: "0123456789abcdef0123456789abcdef",
+              action: "delete_quote",
+              state: "pending",
+              note: "Remove duplicate quote.",
+              requestedAtISO: "2026-08-03T18:00:00.000Z",
+              requestedByEmail: "current.admin@example.com",
+              resolvedAtISO: "",
+              resolvedByEmail: "",
+              resolutionNote: ""
+            }
+          }
+        });
+      }
+      if (name === "resolveQuoteApprovalRequest") {
+        return vi.fn().mockResolvedValue({
+          data: {
+            ok: true,
+            organizationId: "org-one",
+            quoteId: "quote-1",
+            request: {
+              id: "0123456789abcdef0123456789abcdef",
+              action: "delete_quote",
+              state: "approved",
+              note: "Remove duplicate quote.",
+              requestedAtISO: "2026-08-03T18:00:00.000Z",
+              requestedByEmail: "sales@example.com",
+              resolvedAtISO: "2026-08-03T18:05:00.000Z",
+              resolvedByEmail: "current.admin@example.com",
+              resolutionNote: "Approved for separate execution."
+            }
           }
         });
       }
@@ -499,7 +598,8 @@ describe("quoteStore Firebase write safety", () => {
 
     const result = await rotateQuotePortalKey({
       quoteId: "quote-1",
-      actorEmail: "forged@example.com"
+      actorEmail: "forged@example.com",
+      approvalRequestId: "rotate-approval-request-000001"
     });
 
     expect(result).toMatchObject({
@@ -518,7 +618,8 @@ describe("quoteStore Firebase write safety", () => {
     );
     expect(callable).toHaveBeenCalledWith({
       organizationId: "org-one",
-      quoteId: "quote-1"
+      quoteId: "quote-1",
+      approvalRequestId: "rotate-approval-request-000001"
     });
     expect(callable.mock.calls[0][0]).not.toHaveProperty("actorEmail");
     expect(callable.mock.calls[0][0]).not.toHaveProperty("portalKey");
@@ -526,6 +627,45 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.updateDoc).not.toHaveBeenCalled();
     expect(mockState.setDoc).not.toHaveBeenCalled();
     expect(mockState.deleteDoc).not.toHaveBeenCalled();
+    expect(mockState.runTransaction).not.toHaveBeenCalled();
+  });
+
+  test("contract conversion requires and consumes a server-approved action", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+
+    const result = await convertQuoteToContract({
+      quoteId: "quote-1",
+      actorEmail: "forged@example.com",
+      capacityLimit: 999999,
+      approvalRequestId: "contract-approval-request-0001"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      status: "booked",
+      contractNumber: "C-260803-12345",
+      approvalRequest: {
+        id: "contract-approval-request-0001",
+        action: "convert_to_contract",
+        executionState: "succeeded"
+      }
+    });
+    const callable = mockState.httpsCallable.mock.results[0].value;
+    expect(mockState.httpsCallable).toHaveBeenCalledWith(
+      mockState.cloudFunctions,
+      "convertQuoteToContract"
+    );
+    expect(callable).toHaveBeenCalledWith({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      approvalRequestId: "contract-approval-request-0001"
+    });
+    expect(callable.mock.calls[0][0]).not.toHaveProperty("actorEmail");
+    expect(callable.mock.calls[0][0]).not.toHaveProperty("capacityLimit");
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.setDoc).not.toHaveBeenCalled();
     expect(mockState.runTransaction).not.toHaveBeenCalled();
   });
 
@@ -589,12 +729,415 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.runTransaction).not.toHaveBeenCalled();
   });
 
+  test("approval request and resolution use trusted callables without direct Firestore writes", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+
+    const requested = await requestQuoteApproval({
+      quoteId: "quote-1",
+      action: "delete_quote",
+      note: "Remove duplicate quote.",
+      actorEmail: "forged@example.com",
+      actorRole: "sales"
+    });
+    const resolved = await resolveQuoteApprovalRequest({
+      quoteId: "quote-1",
+      requestId: requested.request.id,
+      state: "approved",
+      resolutionNote: "Approved for separate execution.",
+      actorEmail: "forged@example.com",
+      actorRole: "admin"
+    });
+
+    expect(requested).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      request: {
+        state: "pending",
+        requestedByEmail: "current.admin@example.com"
+      }
+    });
+    expect(resolved).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      request: {
+        state: "approved",
+        resolvedByEmail: "current.admin@example.com"
+      }
+    });
+    expect(mockState.httpsCallable).toHaveBeenNthCalledWith(
+      1,
+      mockState.cloudFunctions,
+      "requestQuoteApproval"
+    );
+    expect(mockState.httpsCallable).toHaveBeenNthCalledWith(
+      2,
+      mockState.cloudFunctions,
+      "resolveQuoteApprovalRequest"
+    );
+    expect(mockState.httpsCallable.mock.results[0].value).toHaveBeenCalledWith({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      action: "delete_quote",
+      note: "Remove duplicate quote."
+    });
+    expect(mockState.httpsCallable.mock.results[1].value).toHaveBeenCalledWith({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      requestId: "0123456789abcdef0123456789abcdef",
+      state: "approved",
+      resolutionNote: "Approved for separate execution."
+    });
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.setDoc).not.toHaveBeenCalled();
+    expect(mockState.runTransaction).not.toHaveBeenCalled();
+  });
+
+  test("approval rollout fallback is limited to a confirmed missing callable", async () => {
+    mockState.getActiveOrganizationId.mockReturnValue("Org One");
+    const pendingRequest = {
+      id: "0123456789abcdef0123456789abcdef",
+      action: "delete_quote",
+      state: "pending",
+      note: "Remove duplicate quote.",
+      requestedAtISO: "2026-08-03T18:00:00.000Z",
+      requestedByEmail: "sales@example.com",
+      resolvedAtISO: "",
+      resolvedByEmail: "",
+      resolutionNote: ""
+    };
+    mockState.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        id: "quote-1",
+        quoteNumber: "Q-1",
+        organizationId: "org-one",
+        workflow: { approvalRequests: [pendingRequest] }
+      })
+    });
+    mockState.updateDoc.mockResolvedValue(undefined);
+    mockState.httpsCallable
+      .mockImplementationOnce(() => vi.fn().mockRejectedValue({ code: "functions/not-found" }))
+      .mockImplementationOnce(() => vi.fn().mockRejectedValue({ code: "functions/not-found" }))
+      .mockImplementationOnce(() => vi.fn().mockRejectedValue({ code: "functions/permission-denied" }));
+
+    const requested = await requestQuoteApproval({
+      quoteId: "quote-1",
+      action: "convert_to_contract",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    });
+    const resolved = await resolveQuoteApprovalRequest({
+      quoteId: "quote-1",
+      requestId: pendingRequest.id,
+      state: "approved",
+      actorEmail: "admin@example.com",
+      actorRole: "admin"
+    });
+
+    expect(requested).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      request: { requestedByEmail: "current.admin@example.com" }
+    });
+    expect(resolved).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      request: {
+        id: pendingRequest.id,
+        state: "approved",
+        resolvedByEmail: "current.admin@example.com"
+      }
+    });
+    expect(mockState.updateDoc).toHaveBeenCalledTimes(2);
+
+    await expect(requestQuoteApproval({
+      quoteId: "quote-1",
+      action: "rotate_portal_link",
+      actorEmail: "sales@example.com",
+      actorRole: "sales"
+    })).rejects.toMatchObject({ code: "functions/permission-denied" });
+    expect(mockState.updateDoc).toHaveBeenCalledTimes(2);
+  });
+
   test("saveQuoteVersion does not auto-migrate legacy global quote into scoped org path", async () => {
     mockState.getActiveOrganizationId.mockReturnValue("Org One");
     mockState.getDoc.mockResolvedValueOnce({ exists: () => false, data: () => ({}) });
 
     await expect(saveQuoteVersion("legacy-global-quote")).rejects.toThrow(/quote not found/i);
     expect(mockState.setDoc).not.toHaveBeenCalled();
+  });
+
+  test("change-request handling re-reads transactionally and writes only internal workflow audit", async () => {
+    const requestSubmittedAtISO = "2026-08-03T14:00:00.000Z";
+    mockState.runTransaction.mockImplementationOnce(async (_db, handler) => handler({
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          status: "viewed",
+          portalDecision: {
+            decision: "changes_requested",
+            message: "Please revise the service plan.",
+            requestId: "request-service-plan",
+            submittedAtISO: requestSubmittedAtISO
+          },
+          workflow: {}
+        })
+      }),
+      update: mockState.transactionUpdate
+    }));
+
+    const result = await updateQuoteChangeRequestHandling({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      sourceRequestId: "request-service-plan",
+      sourceSubmittedAtISO: requestSubmittedAtISO,
+      sourceMessage: "Please revise the service plan.",
+      action: "mark_handled",
+      note: "Prepared the revised proposal for customer review.",
+      actorEmail: "forged@example.com",
+      actorRole: "sales"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      storage: "firebase",
+      handling: {
+        sourceRequestId: "request-service-plan",
+        sourceSubmittedAtISO: requestSubmittedAtISO,
+        sourceMessage: "Please revise the service plan.",
+        state: "handled",
+        acknowledgedByEmail: "current.admin@example.com",
+        handledByEmail: "current.admin@example.com",
+        note: "Prepared the revised proposal for customer review."
+      }
+    });
+    expect(mockState.runTransaction).toHaveBeenCalledTimes(1);
+    expect(mockState.transactionUpdate).toHaveBeenCalledTimes(1);
+    const [quoteRef, patch] = mockState.transactionUpdate.mock.calls[0];
+    expect(quoteRef).toMatchObject({
+      refType: "org-doc",
+      name: "quotes",
+      docId: "quote-1",
+      orgId: "org-one"
+    });
+    expect(Object.keys(patch).sort()).toEqual([
+      "updatedAtISO",
+      "workflow.changeRequestHandling"
+    ]);
+    expect(patch["workflow.changeRequestHandling"]).toMatchObject({
+      acknowledgedByEmail: "current.admin@example.com",
+      handledByEmail: "current.admin@example.com"
+    });
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.transactionSet).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
+    expect(mockState.httpsCallable).not.toHaveBeenCalled();
+  });
+
+  test("workflow attention snapshot is a one-shot active-status read with no operational writes", async () => {
+    const result = await getWorkflowAttentionSnapshot({ organizationId: "org-one" });
+
+    expect(result).toEqual({ source: "firebase", quotes: [] });
+    expect(mockState.where).toHaveBeenCalledWith(
+      "status",
+      "in",
+      ["draft", "sent", "viewed", "accepted"]
+    );
+    expect(mockState.getDocs).toHaveBeenCalledTimes(1);
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.runTransaction).not.toHaveBeenCalled();
+    expect(mockState.transactionSet).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
+  });
+
+  test("history derives expiry without attempting a staff write by default", async () => {
+    mockState.getDocs.mockResolvedValue({
+      docs: [{
+        id: "quote-expired",
+        data: () => ({
+          organizationId: "org-one",
+          portalKey: "portal-key-12345678901234567890",
+          status: "sent",
+          createdAtISO: "2026-01-01T00:00:00.000Z",
+          updatedAtISO: "2026-01-01T00:00:00.000Z",
+          expiresAtISO: "2026-01-02T00:00:00.000Z",
+          portalExpiresAtISO: "2026-01-02T00:00:00.000Z"
+        })
+      }]
+    });
+
+    const result = await getQuoteHistory({ organizationId: "org-one" });
+
+    expect(result.quotes[0]?.status).toBe("expired");
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
+  });
+
+  test("history keeps an expired unresolved delivery visible without attempting lifecycle persistence", async () => {
+    mockState.getDocs.mockResolvedValue({
+      docs: [{
+        id: "quote-unresolved-expiry",
+        data: () => ({
+          organizationId: "org-one",
+          portalKey: "portal-key-unresolved-12345678901234567890",
+          status: "sent",
+          createdAtISO: "2026-01-01T00:00:00.000Z",
+          updatedAtISO: "2026-01-01T00:00:00.000Z",
+          expiresAtISO: "2026-01-02T00:00:00.000Z",
+          portalExpiresAtISO: "2026-01-02T00:00:00.000Z",
+          workflow: {
+            quoteDelivery: {
+              state: "outcome_unknown"
+            }
+          }
+        })
+      }]
+    });
+
+    const result = await getQuoteHistory({
+      organizationId: "org-one",
+      persistExpiredStatuses: true
+    });
+
+    expect(result.quotes[0]?.status).toBe("expired");
+    expect(result.expiryPersistenceFailures).toEqual([]);
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
+  });
+
+  test("one failed expiry persistence does not blank quote history", async () => {
+    setQuoteStoreOrganizationId("org-one");
+    const storedQuote = {
+      organizationId: "org-one",
+      portalKey: "portal-key-failed-12345678901234567890",
+      portalIssuedAtISO: "2026-01-01T00:00:00.000Z",
+      portalExpiresAtISO: "2026-01-02T00:00:00.000Z",
+      status: "sent",
+      createdAtISO: "2026-01-01T00:00:00.000Z",
+      updatedAtISO: "2026-01-01T00:00:00.000Z",
+      expiresAtISO: "2026-01-02T00:00:00.000Z",
+      customer: {},
+      event: {},
+      totals: {},
+      payment: {},
+      booking: {},
+      lifecycle: { sentAtISO: "2026-01-01T00:00:00.000Z" },
+      latestVersionNumber: 1,
+      activeVersionId: "v0001"
+    };
+    mockState.getDocs.mockResolvedValue({
+      docs: [{
+        id: "quote-failed-expiry",
+        data: () => storedQuote
+      }]
+    });
+    mockState.getDoc.mockResolvedValue({
+      id: "quote-failed-expiry",
+      exists: () => true,
+      data: () => storedQuote
+    });
+    mockState.writeBatch.mockReturnValue({
+      update: vi.fn(),
+      commit: vi.fn().mockRejectedValue(new Error("matching portal missing"))
+    });
+
+    const result = await getQuoteHistory({
+      organizationId: "org-one",
+      persistExpiredStatuses: true
+    });
+
+    expect(result.quotes[0]?.status).toBe("expired");
+    expect(result.expiryPersistenceFailures).toEqual(["quote-failed-expiry"]);
+    expect(mockState.writeBatch).toHaveBeenCalledTimes(1);
+  });
+
+  test("admin expiry persists quote and portal in one batch", async () => {
+    setQuoteStoreOrganizationId("org-one");
+    const batchUpdate = vi.fn();
+    const batchSet = vi.fn();
+    const batchCommit = vi.fn().mockResolvedValue(undefined);
+    mockState.writeBatch.mockReturnValue({
+      update: batchUpdate,
+      set: batchSet,
+      commit: batchCommit
+    });
+    mockState.getDoc.mockResolvedValue({
+      id: "quote-1",
+      exists: () => true,
+      data: () => ({
+        id: "quote-1",
+        organizationId: "org-one",
+        portalKey: "portal-key-12345678901234567890",
+        portalIssuedAtISO: "2026-08-03T17:00:00.000Z",
+        portalExpiresAtISO: "2026-09-02T17:00:00.000Z",
+        status: "sent",
+        customer: {},
+        event: {},
+        totals: {},
+        payment: {},
+        booking: {},
+        lifecycle: { sentAtISO: "2026-08-03T17:00:00.000Z" },
+        latestVersionNumber: 1,
+        activeVersionId: "v0001"
+      })
+    });
+
+    await updateQuoteStatus("quote-1", "expired");
+
+    expect(batchUpdate).toHaveBeenCalledTimes(2);
+    expect(batchUpdate.mock.calls[1][0]).toMatchObject({
+      refType: "doc",
+      args: [mockState.db, "customerPortalQuotes", "portal-key-12345678901234567890"]
+    });
+    expect(batchUpdate.mock.calls[1][1]).toMatchObject({
+      status: "expired",
+      lifecycle: {
+        sentAtISO: "2026-08-03T17:00:00.000Z"
+      }
+    });
+    expect(batchUpdate.mock.calls[1][1].lifecycle.expiredAtISO).toEqual(expect.any(String));
+    expect(Object.keys(batchUpdate.mock.calls[1][1]).sort()).toEqual([
+      "lifecycle",
+      "status",
+      "updatedAtISO"
+    ]);
+    expect(batchSet).not.toHaveBeenCalled();
+    expect(batchCommit).toHaveBeenCalledTimes(1);
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+  });
+
+  test("change-request handling rejects a stale source before any write", async () => {
+    mockState.runTransaction.mockImplementationOnce(async (_db, handler) => handler({
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          status: "viewed",
+          portalDecision: {
+            decision: "changes_requested",
+            message: "Please revise the service plan.",
+            requestId: "request-service-plan-new",
+            submittedAtISO: "2026-08-03T15:00:00.000Z"
+          },
+          workflow: {}
+        })
+      }),
+      update: mockState.transactionUpdate
+    }));
+
+    await expect(updateQuoteChangeRequestHandling({
+      organizationId: "org-one",
+      quoteId: "quote-1",
+      sourceRequestId: "request-service-plan",
+      sourceSubmittedAtISO: "2026-08-03T14:00:00.000Z",
+      sourceMessage: "Please revise the service plan.",
+      action: "acknowledge",
+      actorRole: "sales"
+    })).rejects.toMatchObject({ code: "workflow/stale-change-request" });
+
+    expect(mockState.transactionUpdate).not.toHaveBeenCalled();
+    expect(mockState.updateDoc).not.toHaveBeenCalled();
+    expect(mockState.transactionSet).not.toHaveBeenCalled();
   });
 
   test("portal acceptance commits the public snapshot and tenant quote atomically", async () => {

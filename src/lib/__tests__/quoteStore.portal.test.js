@@ -132,6 +132,7 @@ describe("quoteStore portal token policy", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -141,6 +142,28 @@ describe("quoteStore portal token policy", () => {
     expect(quote.portalKey).toBe("portal-key-12345678901234567890");
     expect(quote.portalExpiresAtISO).toBeTruthy();
     expect(Number(quote.portalExpiresAtMs)).toBeGreaterThan(0);
+  });
+
+  test("records the first portal view once and preserves its timestamp on reload", async () => {
+    seedQuotes([makeQuote()]);
+
+    const firstResult = await updatePortalQuoteStatus(
+      "portal-key-12345678901234567890",
+      "viewed"
+    );
+    const firstView = await getPortalQuote("portal-key-12345678901234567890");
+    expect(firstResult).toMatchObject({ status: "viewed", storage: "local" });
+    expect(firstView.status).toBe("viewed");
+    expect(firstView.lifecycle.viewedAtISO).toBe("2026-03-20T12:00:00.000Z");
+
+    vi.setSystemTime(new Date("2026-03-20T12:05:00.000Z"));
+    const repeatedResult = await updatePortalQuoteStatus(
+      "portal-key-12345678901234567890",
+      "viewed"
+    );
+    const repeatedView = await getPortalQuote("portal-key-12345678901234567890");
+    expect(repeatedResult.storage).toBe("unchanged");
+    expect(repeatedView.lifecycle.viewedAtISO).toBe(firstView.lifecycle.viewedAtISO);
   });
 
   test("stores a customer change request without accepting or booking the quote", async () => {
@@ -157,9 +180,26 @@ describe("quoteStore portal token policy", () => {
       decision: "changes_requested",
       message: "Please replace the salmon entree."
     });
+    expect(result.portalDecision.requestId).toMatch(/^[a-zA-Z0-9-]{20,80}$/);
     const refreshed = await getPortalQuote("portal-key-12345678901234567890");
     expect(refreshed.status).toBe("viewed");
     expect(refreshed.portalDecision.decision).toBe("changes_requested");
+    expect(refreshed.portalDecision.requestId).toBe(result.portalDecision.requestId);
+  });
+
+  test("keeps fallback request IDs compatible with the Firestore rule contract", async () => {
+    vi.stubGlobal("crypto", {});
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    seedQuotes([makeQuote()]);
+
+    const result = await updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "changes_requested",
+      message: "Please replace the salmon entree."
+    });
+
+    expect(result.portalDecision.requestId).toMatch(/^[a-zA-Z0-9-]{20,80}$/);
+    expect(result.portalDecision.requestId).toHaveLength(21);
   });
 
   test("rejects decisions for drafts and prevents terminal decision rewrites", async () => {

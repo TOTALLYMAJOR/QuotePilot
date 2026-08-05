@@ -3,21 +3,73 @@
 Last updated: August 3, 2026
 
 ## Operational Health
-- Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment `dpl_AsPnyL3M8o5rF8GUSMgJ8HvZWmRh`, which reached `READY` on July 27, 2026. Hosted HTTP checks returned the QuotePilot application shell with status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`).
+- Runtime: the public custom domain (`https://quotepilot.mbmapps.com`) is
+  aliased to Vercel production deployment
+  `dpl_9K7pqmZjqAMBbegKq3uyUf6rGVXv`, built from merged `main` commit
+  `dc460e3dca79c0b0eea512bb1902ba20a4b7c67c`; it reached `READY` on August 3,
+  2026. Main CI run `30837136091` passed all eight jobs, and hosted HTTP checks
+  returned status `200` at `/`, `/app`, and `/system`. Firebase Hosting remains
+  the origin/fallback (`https://tonicatering.web.app`).
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
-- Build and local validation: the release candidate passes 223 unit tests (33
-  intentionally skipped), 33 focused Firestore rules tests, and the default
-  Playwright suite (27 passed, 2 intentionally gated provisioning-role cases
-  skipped). The Firebase Auth/catalog browser lane, authoritative
-  pricing/quote/portal browser lane, and full provisioning emulator acceptance
-  matrix also pass. Both the browser application and Functions production
-  dependency trees report zero known vulnerabilities under `npm audit
-  --omit=dev`. This is local/emulator evidence, not hosted tenant acceptance.
+- Build and local validation: the current delivery-evidence head passes the
+  full release lane with 318 unit tests passed and 39 intentionally skipped,
+  production build, environment/secret checks, documentation governance, and
+  bundle budget. Firestore rules pass 38/38; the default Playwright suite passes
+  31 tests with 2 intentionally gated provisioning-role cases skipped; the
+  Firebase Auth/catalog and authoritative quote/delivery/portal browser lanes
+  each pass 1/1. The production Docker image builds successfully. Local
+  Lighthouse passes with performance 0.87, LCP 3,823 ms, CLS 0.001, and TBT 120
+  ms. Both the browser application and Functions production dependency trees
+  report zero known vulnerabilities under `npm audit --omit=dev`. This is
+  local/emulator evidence, not hosted tenant or provider acceptance.
 - Functions runtime readiness: Functions now target Node.js 22 and use Firebase
   Admin 14 modular app, Auth, and Firestore APIs. The local authoritative and
   provisioning matrices pass with that runtime candidate.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
-- Current branch workflow delivery: proposal readiness, Good/Better/Best scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action approval requests, the customer decision center, and event production checklists are implemented and locally covered.
+- Current branch workflow delivery: proposal readiness, Good/Better/Best
+  scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action
+  approval requests, the customer decision center, and event production
+  checklists are implemented and locally covered. A tenant-scoped Workflow
+  Attention queue now consolidates due follow-ups, pending approvals, and
+  current customer change requests. Its post-idle header count preserves the
+  lazy workspace boundary; request-ID-bound acknowledge/handled state is internal
+  only and never edits customer decision evidence or sends email/SMS.
+- Current branch quote-entry simplification: Step 1 keeps attendance and role
+  counts in the primary flow while placing five exceptional staffing-rate
+  values in Advanced Pricing. Existing saved/template values trigger a visible
+  review warning and survive collapse/reopen; 1440px, 390px, and 320px layout
+  containment is locally covered without changing pricing or persistence code.
+- Current branch draft handoff: the final wizard action explicitly saves a
+  draft, Quote History focuses the exact saved quote with a role-safe next
+  action, copying an email template preserves draft status, and draft portal
+  links are neither rendered nor copyable as customer-ready artifacts. Firebase
+  admin delivery fails closed until a supported provider configuration is
+  present, is bound to the saved content revision plus portal issuance, and
+  sends only server-built
+  email/portal content; browser PDF attachments are rejected. A 23-hour bounded
+  provider-idempotency window supports prompt same-key retry, while uncertain
+  outcomes enter a mutation-locked review state. An expired definite failure
+  starts a fresh delivery generation; an ambiguous outcome requires same-key
+  retry or audited provider review. A server-observed provider acceptance cannot
+  be reconciled as not sent. Provider acceptance activates the portal only when
+  it matches the valid current issuance. Acceptance against an invalid or
+  expired portal is retained as `requires_rotation`; that portal remains
+  inactive until guarded rotation and a new provider send establish evidence
+  for the new issuance. Generic staff writes cannot claim `sent` or `viewed`,
+  customer portal decisions are blocked during unresolved delivery, and owner
+  draft SMS omits the inactive portal token. Copy Portal and portal links inside
+  PDFs remain withheld without matching current-issuance delivery evidence.
+  Admin expiry writes quote and portal lifecycle state atomically; the visible
+  `Reopen` recovery returns an eligible expired quote to draft with a new portal
+  issuance, while accepted, declined, and booked portal identities remain
+  terminal. A quote expiring during unresolved delivery remains visible for
+  provider review, and one failed legacy expiry projection no longer prevents
+  the rest of Quote History from loading.
+  The configuration check does not prove sender-domain verification or inbox
+  delivery. Focused source/unit/rules coverage and a
+  provider-disabled emulator failure path are local evidence; successful
+  provider acceptance, atomic hosted completion, inbox delivery, and bounce
+  handling remain unproved until provider/hosted acceptance is captured.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
 - Current branch tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
 - Current release-candidate provisioning hardening adds verified-email,
@@ -41,15 +93,35 @@ Last updated: August 3, 2026
   email authority and conflicting claim/role organization scopes, permits
   tenant-domain mapping changes only for same-organization admins, and keeps
   commercial entitlements server-owned. Direct quote and portal deletion is
-  denied, sales status authority is limited to an exact draft-to-sent
-  transition, and sales schedule writes are limited to non-evidentiary
-  staff/checklist fields.
+  denied, generic staff status writes cannot create `sent` or `viewed` evidence
+  or rewrite an existing provider/customer lifecycle, and sales schedule writes
+  are limited to non-evidentiary staff/checklist fields.
 - Current branch provider authorization hardening: outbound quote email, owner
   SMS, payment requests, checkout creation, provider status, and provider tests
   require the current authoritative admin role. Disabled providers reject and
   omit retained credentials. Browser CRM networking is disabled; admins can
   record organization-scoped integration audit events without an outbound send.
-- Workflow authority boundaries: approval resolution does not execute a sensitive action; customer acceptance does not prove payment or booking; production checklist completion does not prove inventory availability.
+- Workflow authority boundaries: approval resolution authorizes but does not
+  itself execute a sensitive action; the matching Quote History operation must
+  consume that exact approval. Customer acceptance does not prove payment or
+  booking, and production checklist completion does not prove inventory
+  availability.
+- Current source-candidate approval authority: Firebase-backed approval request
+  creation and admin resolution use same-tenant callable transactions with
+  server-owned actor identity/timestamps and duplicate/replay rejection.
+  Payment-request email, contract conversion, portal-link rotation, and
+  permanent deletion require the exact approved request, persist server-owned
+  execution outcome fields, and write a durable org-scoped execution audit.
+  Contract conversion is server-planned, and completed atomic actions replay
+  idempotently; failed provider execution requires a new approval. Direct
+  Firestore approval-array, contract-evidence, and execution-audit writes are
+  denied after the rules rollout. A
+  confirmed missing-callable response alone may use the existing
+  rule-authorized path during the Vercel-first deployment window; other
+  callable errors fail closed. Pure planning, client delegation, rules denial,
+  and the full provisioning emulator matrix pass. This boundary is not
+  production behavior until the matching Functions and Firestore rules are
+  deployed together.
 - CI gates: classifier-driven lane gates are configured (`lane:quick`, `lane:core`, `Docker Build Smoke`, `lane:playwright-smoke`, `lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`).
 - P0 fallback-retirement safeguard: classifier now elevates `menuService`/`useCatalogData`/`organizationService`/`OrganizationContext` edits to `high_risk`, so Firebase heavy lanes are required (not advisory) on feature branches.
 - Legacy global runtime fallback retired: frontend tenant data services and authoritative pricing/functions paths now fail closed when org context is missing instead of reading legacy global collections.
@@ -61,8 +133,17 @@ Last updated: August 3, 2026
   Firestore REST execution when ADC credentials are unavailable, defaults to a
   read-only dry run, requires explicit project/organization scope, and requires
   an exact confirmation token before apply mode.
-- Portal token rule hardening is implemented and emulator-validated: portal snapshot reads/status updates now require active (non-deleted + non-expired) snapshots at the Firestore rule layer.
-- Portal snapshot expiry-ms backfill was executed for production org `250` (`customerPortalQuotes patched=2`) to preserve existing portal-link behavior under hardened rules.
+- Portal token and delivery-evidence hardening is implemented in the current
+  source candidate: portal reads and customer decisions require a non-deleted,
+  non-expired snapshot whose delivery evidence matches provider acceptance for
+  the quote's current portal issuance. The Firestore emulator suite passes
+  38/38, including fail-closed legacy/no-evidence coverage; the rules are not
+  yet production behavior.
+- A prior portal expiry-ms backfill was executed for production org `250`
+  (`customerPortalQuotes patched=2`). That historical expiry field is not
+  delivery evidence. Legacy projections without the new evidence fail closed
+  under the current candidate and require an approved resend or truthful
+  reconciliation; no backfill may fabricate acceptance.
 - Legacy quote safety: Firebase writes no longer copy legacy global quote data
   into an organization during mutation. Direct quote creation is denied by
   Firestore rules, trusted Functions create and edit canonical drafts
@@ -86,7 +167,9 @@ Last updated: August 3, 2026
 - Production fail-safe integration mode:
   `NOTIFICATIONS_SMS_PROVIDER=none` in the ignored project-scoped Functions
   environment.
-- Latest Vercel production operation: SPA rewrite hotfix restoring direct `/app` and `/system` requests on the custom domain.
+- Latest Vercel production operation: merged `main` deployment
+  `dpl_9K7pqmZjqAMBbegKq3uyUf6rGVXv`, including the canonical SPA rewrite and
+  returning `200` for direct `/app` and `/system` requests.
 - Last known good Firebase Hosting deploy:
   - commit: `a4a2568f06eaedcf9805c503bb161d2847d12710`
   - CI run: `CI Quality` #23203096351 (March 17, 2026 UTC)
@@ -95,40 +178,69 @@ Last updated: August 3, 2026
 ## Active Risks
 - The Node.js 22/Firebase Admin 14 Functions candidate is locally validated but
   has not been deployed or observed on the production Functions runtime.
-- The live Vercel SPA rewrite was deployed from an isolated hotfix based on
-  commit `3a9918910bf1bb224cf0b92d5061d0359107a7b9`; the release-candidate source
-  now contains the matching route and runbook changes, but the next production
-  promotion still needs exact committed-revision verification.
 - The Vercel deployment and custom-domain alias are provider-verified, but the authenticated production quote/save/export workflow still needs post-release browser acceptance.
-- Provisioning hardening is release-candidate implementation only. Do not treat the
-  in-app preflight, verified-owner activation, entitlement-only update path,
-  catalog conflict checks, trusted quote creation, CLI safety changes, or
-  onboarding checklist as production behavior until the reviewed
-  Functions/frontend/rules slice is deployed and exercised with a disposable
-  second organization.
+- Provisioning hardening remains production-incomplete. The frontend source is
+  live on Vercel, but do not treat the in-app preflight, verified-owner
+  activation, entitlement-only update path, catalog conflict checks, trusted
+  quote creation, CLI safety changes, or onboarding checklist as production
+  behavior until the reviewed Functions/rules slice is deployed and exercised
+  with a disposable second organization.
 - Resend custom-domain sending remains blocked because the account's one included domain slot is occupied by `leaguepilot.us`; adding `quotepilot.mbmapps.com` requires an account upgrade or explicit authorization to remove/migrate the existing domain, followed by authoritative DNS verification. The production custom-domain sender remains disabled. An external, manual Resend dashboard sandbox message from `QuotePilot by MBMapps <onboarding@resend.dev>` was provider-accepted and recorded as delivered (`34deea9f-8a1c-47ce-8f4e-2ea5164a2eec`), but that address is not an allowed QuotePilot Functions configuration and the result is not custom-domain or recipient-inbox proof.
-- Import Studio and its `importBatches` Firestore rules are implemented locally but are not deployed or hosted-smoke-verified. Excel intake, merge/update policies, saved import history UI, and active quote/payment/contract/booking imports are intentionally not included in this first slice.
-- The new `portalDecision` Firestore rule changes and enriched portal snapshots are implemented locally but are not deployed or hosted-smoke-verified in this branch.
-- Approval requests are role-gated in the application workflow, but stronger server-authoritative action-specific enforcement and end-to-end audit linkage remain follow-up work.
-- Existing portal snapshots need refresh/backfill before older links can display every newly added event, selection, and pricing field.
+- Import Studio frontend code is live on Vercel, but its `importBatches`
+  Firestore rules are not deployed or hosted-smoke-verified. Excel intake,
+  merge/update policies, saved import history UI, and active
+  quote/payment/contract/booking imports are intentionally not included in this
+  first slice.
+- The customer decision frontend is live on Vercel, but the new
+  `portalDecision` Firestore rule changes and enriched portal snapshots are not
+  deployed or hosted-smoke-verified.
+- Approval request creation, admin resolution, and action-specific execution
+  linkage are server-authoritative in the current source candidate, but the
+  matching Functions/rules deployment and hosted acceptance remain pending.
+- Workflow Attention and its change-request handling rules are locally covered
+  only. Until this branch is reviewed, merged, and the matching Firestore rules
+  are deployed, do not represent the header count or internal handling records as
+  hosted production behavior. Automated customer/staff notifications and
+  escalation delivery remain unimplemented.
+- Existing portal snapshots still need a reviewed production dry run and apply
+  before their customer-safe event, selection, and pricing projection is
+  complete. Projection backfill is not delivery authority: legacy links without
+  matching `deliveryEvidence` remain inactive and must be recovered through an
+  approved resend or truthful provider reconciliation. The dry-run-first,
+  tenant-scoped projection tool is implemented and locally validated; it never
+  creates delivery evidence, and no production portal record was changed by
+  that validation.
 - Firestore production hardening is in active P0 execution; fallback retirement, denial evidence, migration execution, and portal hardening implementation are complete, but production rollout of updated portal rules is not complete yet.
 - Bundle size remains a watch item; budget/CWV gates now prevent uncontrolled regressions.
+- The quote builder now has a locally accepted mobile pricing path: after the
+  user enters the wizard, Total and Deposit remain in view throughout steps
+  1–5 at tested 320px, 390px, and 768px widths; the active step recenters after
+  navigation and resize; and the one full breakdown opens as a focus-contained
+  sheet with background isolation, Close/Escape recovery, and one concise live
+  announcement. The 320px Save action remains unobstructed. Hosted mobile
+  acceptance is pending publication.
+- Authenticated workspace modal chunks now load on first use instead of during
+  initial `/app` startup; local request-level browser coverage verifies the
+  boundary, while hosted transfer/CWV evidence remains pending publication.
 - Functions integrations (Stripe, Twilio, and Resend) remain optional and require secure runtime configuration plus provider-level acceptance/delivery proof; committed placeholder templates are not provider configuration.
 - CRM outbound synchronization is intentionally disabled until a
   server-authorized connector with provider acceptance evidence is implemented.
 - Staging sign-off routine must be re-established to keep `main` release-only under higher delivery velocity.
 
 ## Current Focus (Near-Term)
-1. Commit and review the locally validated provisioning hardening slice, then
-   perform a controlled rules/Functions/frontend deployment and the hosted
-   owner/quote/portal tenant acceptance checklist.
+1. Perform a controlled rules/Functions deployment from the reviewed merged
+   `main` revision, then run the hosted owner/quote/portal tenant acceptance
+   checklist against the already-live Vercel frontend.
 2. Verify the intended Resend sender domain in the Resend dashboard and authoritative DNS; only then configure `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and recipient proof from one controlled test.
-3. Publish the Vercel SPA rewrite hotfix through normal version control.
-4. Deploy the updated `firestore.rules` and run hosted portal decision smoke checks, including active, expired, deleted, and change-request paths.
-5. Refresh/backfill existing customer portal snapshots with the new customer-safe event and pricing fields.
-6. Add server-authoritative enforcement and audit linkage for approval-request-to-admin-action execution.
-7. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
-8. Improve large-chunk performance while staying inside bundle/CWV guardrails.
+3. Deploy the updated `firestore.rules` and run hosted portal decision smoke
+   checks for current-issuance evidence, active, expired, deleted, rotated,
+   legacy-no-evidence, and change-request paths. Prove that a provider-accepted
+   invalid portal remains inactive until guarded rotation and a new send.
+4. Run and review the scoped production portal-projection dry run, resolve any
+   reported conflicts, then explicitly authorize the guarded apply and retain
+   its count-only evidence.
+5. Re-establish staging sign-off workflow before broadening merge velocity into `main`.
+6. Improve large-chunk performance while staying inside bundle/CWV guardrails.
 
 ## P0 Execution Tracking (Completed March 28, 2026)
 - Focus completed: migration execution after fallback retirement and denial-matrix verification.

@@ -6,8 +6,39 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Fixed
+
+- Customer portal visits now record the first valid `sent` to `viewed`
+  transition atomically, preserving the original view timestamp on reload so
+  lifecycle timelines and reporting can reflect actual portal views.
+- Stripe checkout success returns now trigger bounded portal snapshot refreshes
+  and show a secure confirmation state until the signature-verified webhook's
+  paid status is visible; the browser return itself never marks a deposit paid.
+
 ### Added
 
+- Tenant-scoped Workflow Attention queue for active quotes, with a post-idle
+  header count, due/overdue follow-ups, pending approvals, new and acknowledged
+  customer change requests, request-ID-bound current handling records, and
+  responsive keyboard-accessible operator controls. The queue is in-app only;
+  it does not send email or SMS or alter customer decision evidence.
+- Dry-run-first, tenant-scoped customer portal projection backfill tooling for
+  active legacy links, with canonical customer-safe quote projection, guarded
+  preservation of decision/payment/booking evidence, transactional apply-time
+  revalidation, pre-reserved count-only private evidence, and Firestore
+  emulator acceptance.
+- Server-authoritative quote approval request and resolution callables with
+  same-tenant staff enforcement, admin-only resolution, transaction-backed
+  duplicate/replay protection, and server-owned actor/timestamp audit fields.
+- Exact approval-to-execution enforcement for payment-request email, contract
+  conversion, portal-link rotation, and permanent quote deletion, including
+  server-owned execution outcomes, durable org-scoped audit records, and
+  idempotent replay behavior for completed operations.
+- Server-authoritative contract conversion planning and callable execution,
+  including conflict/capacity evidence and server-generated contract identity.
+- Focused approval workflow coverage across pure server planning, Firebase
+  client delegation, Firestore direct-write denial, and the full
+  Auth/Firestore/Functions emulator acceptance matrix.
 - Hospitality-first QuotePilot landing page at `/`, adapted from the approved Magic Patterns direction with original catered-event imagery, real QuotePilot interfaces, proof-safe quote-to-event language, responsive and dark layouts, restrained reveal motion, and reduced-motion support.
 - Durable landing-page design brief at `marketing/LandingPage.md`, including customer, copy, route, asset, preservation, and acceptance criteria.
 - Saved dark QuotePilot product overview at `/system`, including its six-capability feature drawer, animated workflow map, real app screenshots, keyboard focus containment, and full-screen mobile layout.
@@ -65,6 +96,85 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- The final quote action now says `Save draft`, opens Quote History on the exact
+  saved quote, and states that customer delivery has not occurred. The targeted
+  handoff offers a provider-send action only to Firebase admins with a complete,
+  supported email-provider configuration, and offers sales staff a draft PDF
+  without an unusable portal link. Copying an email template no longer changes
+  a draft to sent, and the raw draft portal URL is no longer rendered as a
+  shareable artifact.
+- Quote email delivery is now server-owned and bound to both the saved content
+  revision and current portal issuance. The callable preflights an existing
+  tenant-matching portal with a future expiry, builds the customer email and
+  portal URL on the server, and rejects browser-supplied attachments for quote
+  and payment-request email. A durable lease and deterministic provider key
+  suppress duplicate automatic attempts only inside a 23-hour retry window.
+  Provider acceptance records the quote `sent` lifecycle and activates the
+  portal only when the accepted revision still matches a valid current portal
+  issuance. If acceptance is known after that portal becomes invalid or
+  expires, the provider evidence is retained as `requires_rotation` while the
+  portal remains inactive; guarded rotation creates a new issuance that must
+  be sent separately before it is customer-visible. Unresolved outcomes lock
+  edits, status/payment, checkout, contract, portal rotation, customer
+  decisions, and deletion until safe retry or audited reconciliation. Definite
+  failures may start a fresh delivery generation after the original retry
+  window, while ambiguous outcomes require review. A server-observed provider
+  acceptance can never be reconciled as not sent. Generic staff status writes
+  cannot claim `sent` or `viewed` or rewrite provider/customer lifecycle
+  evidence, and owner draft notifications omit the inactive portal token.
+- Portal projection now carries explicit current-issuance delivery evidence.
+  Copy Portal and portal links inside PDFs fail closed after draft save or
+  portal rotation until the matching issuance has provider acceptance.
+  Legacy projections without that evidence remain inactive and must be
+  recovered through an approved resend or truthful provider reconciliation;
+  migration/backfill tooling never fabricates delivery evidence. Configuration
+  readiness and provider acceptance remain distinct from sender-domain,
+  inbox-delivery, and bounce proof.
+- Browser-driven quote expiry now updates the organization quote and matching
+  portal status/lifecycle in one rules-enforced batch, so a stale public portal
+  cannot survive a quote-only transition. Quote History exposes the trusted
+  admin `Reopen` recovery for eligible expired records; it restores a draft with
+  a new portal issuance, while portal rotation remains limited to draft, sent,
+  and viewed records. Expiry persistence is deferred while delivery remains
+  unresolved, keeping `Review Delivery` reachable; per-record persistence
+  failures no longer blank the history list, and successful reconciliation
+  reloads the row into the expiry/Reopen path.
+- The GitHub `lane:firebase-auth-rules` job now invokes the matching package
+  lane so Firestore authorization tests and the Firebase browser smoke run
+  together instead of allowing the rules half to be omitted.
+- The Firebase Auth/rules package lane now prepares and selects Java 21 before
+  its first emulator command, so Firestore rules cannot bypass the existing
+  local-JRE fallback on runners with an older system Java.
+- Customer change-request acknowledgment and handling now use a narrow
+  transaction that revalidates the exact portal request, derives the actor from
+  the authenticated Firebase user, preserves the original customer decision,
+  writes no quote version or portal snapshot, and requires an internal note
+  before work can be marked handled. Firestore rules constrain the same
+  tenant, actor, source-request, field, and state-transition boundaries.
+- Step 1 now groups guest and role counts under Attendance & Staffing while
+  keeping five exceptional staffing-rate fields inside the collapsed Advanced
+  Pricing section. Saved or template-applied rate values remain visible through
+  an active-pricing warning, and values survive collapse/reopen unchanged.
+- Phone and tablet quote building now keeps Total and Deposit in a sticky
+  summary throughout all five steps, exposes the single full breakdown as a
+  focus-contained sheet with background isolation and Close/Escape recovery,
+  recenters the active step after navigation or resize, and uses compact
+  scrollable header actions without covering workflow controls.
+- Authenticated operator workspaces now defer their lazy modal modules until
+  first use, keep opened modules mounted after close, and show an accessible
+  loading surface during the first chunk fetch instead of downloading every
+  admin tool during initial `/app` startup.
+- Firebase-backed Sales Workflow approval mutations now use trusted callables;
+  direct browser writes to `workflow.approvalRequests` are denied for both
+  sales and admin roles. A confirmed missing-callable response may use the
+  existing rule-authorized path only during a Vercel-first rollout window; all
+  other callable failures remain fail-closed. Local fallback mode retains its
+  existing offline behavior.
+- Firebase-backed sensitive actions now require the exact approved request id
+  and record awaiting, in-progress, succeeded, or failed execution state.
+  Failed provider delivery requires a new approval; completed atomic actions
+  return their stored result on replay. Direct browser writes cannot create
+  contract evidence or approval-execution audit records.
 - The repository, CI, Docker image, and Firebase Functions now target Node.js
   22. Functions use Firebase Admin 14 modular app, Auth, and Firestore APIs
   across runtime, emulator seed, provisioning, tenant migration, and catalog
@@ -209,7 +319,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Tenant branding/contact normalization now preserves intentional blank logo, crew, phone, email, and address values instead of restoring the legacy customer defaults; custom tenants with missing legacy color fields receive neutral appearance defaults. Catalog Admin also keeps edits stable during parent rerenders, shows an always-visible save control and unsaved state, and warns before discarding changes.
 - Customer portal snapshots now include customer-safe event scope, pricing breakdowns, selection labels, payment state, and decision receipts; Firestore portal patches remain constrained to allowed status and portal-decision fields.
 - Sensitive-action approval resolution records admin intent without executing payment, contract, portal-link, or deletion actions; those actions remain separate admin operations.
-- Quote History now uses the authenticated staff role to hide payment, booking, portal rotation, contract conversion, reopen, and delete controls from sales users while preserving proposal preparation. Sales can make only an exact draft-to-sent status transition and non-evidentiary schedule updates (staff lead, assignment time, kitchen checkpoints, and production checklist).
+- Quote History now uses the authenticated staff role to hide payment, booking,
+  portal rotation, contract conversion, reopen, and delete controls from sales
+  users while preserving proposal preparation. Neither sales nor admin users
+  can claim `sent` or `viewed` through generic status writes: the delivery
+  callable owns provider acceptance and the customer portal owns view evidence.
+  Sales schedule updates remain limited to non-evidentiary staff lead,
+  assignment time, kitchen checkpoint, and production checklist fields.
 - `CI Quality` workflow now uses classifier-driven lane orchestration, branch concurrency cancellation, hard-vs-advisory heavy lane behavior, and artifact retention windows for failure triage.
 - CI lane classifier now treats fallback-retirement-sensitive org/fallback modules (`src/lib/menuService.js`, `src/hooks/useCatalogData.js`, `src/lib/organizationService.js`, `src/context/OrganizationContext.jsx`) as high-risk, making Firebase heavy lanes required (non-advisory) on feature branches.
 - Production deploy automation now requires controlled manual dispatch after
