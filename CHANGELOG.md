@@ -8,6 +8,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Firebase Functions production packaging now declares the Firebase App and
+  App Compat peers required by Firebase Admin's database compatibility layer,
+  preventing Node.js 22 cold-start failures after a clean cloud install.
 - Customer portal visits now record the first valid `sent` to `viewed`
   transition atomically, preserving the original view timestamp on reload so
   lifecycle timelines and reporting can reflect actual portal views.
