@@ -11,6 +11,7 @@ const BUYER_ACCESS_STRIPE_API_VERSION = "2024-06-20";
 const BUYER_ACCESS_TURNSTILE_ACTION = "buyer_access_invoice";
 const BUYER_ACCESS_STATUS_RATE_LIMIT = 60;
 const BUYER_ACCESS_STATUS_RATE_WINDOW_MS = 5 * 60 * 1000;
+const BUYER_ACCESS_REPAIR_ACTION = "VOID BUYER INVOICE";
 const BUYER_ACCESS_INTERNAL_STATUSES = Object.freeze([
   "invoice_preparing",
   "invoice_open",
@@ -310,6 +311,31 @@ function normalizeBuyerAccessStatusRequest(data = {}) {
   };
 }
 
+function normalizeBuyerAccessRepairRequest(data = {}) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new BuyerAccessError("Buyer access repair request is invalid.", "invalid-argument");
+  }
+  const allowedKeys = new Set(["orderId", "confirmationToken"]);
+  if (Object.keys(data).some((key) => !allowedKeys.has(key))) {
+    throw new BuyerAccessError(
+      "Buyer access repair provider identities are server-owned.",
+      "invalid-argument"
+    );
+  }
+  const orderId = text(data.orderId).toLowerCase();
+  if (!/^ba-[a-f0-9]{40}$/.test(orderId)) {
+    throw new BuyerAccessError("A valid buyer access orderId is required.", "invalid-argument");
+  }
+  const expectedConfirmationToken = `${BUYER_ACCESS_REPAIR_ACTION} ${orderId}`;
+  if (text(data.confirmationToken) !== expectedConfirmationToken) {
+    throw new BuyerAccessError(
+      `confirmationToken mismatch. Expected: ${expectedConfirmationToken}`,
+      "invalid-argument"
+    );
+  }
+  return { confirmationToken: expectedConfirmationToken, orderId };
+}
+
 function slug(value, fallback = "workspace") {
   const normalized = text(value)
     .toLowerCase()
@@ -387,6 +413,18 @@ function buyerAccessStripeIdempotencyKey({ generation, orderId, step } = {}) {
     throw new BuyerAccessError("Buyer access provider step is invalid.", "internal");
   }
   return `buyer-access-${metadata.buyerAccessOrderId}-g${metadata.invoiceGeneration}-${normalizedStep}`;
+}
+
+function hasBuyerAccessReissuableVoidEvidence(order = {}) {
+  const signedWebhookVoid = order.signedVoidObserved === true
+    && text(order.lastStripeEventType) === "invoice.voided"
+    && /^[a-zA-Z0-9_:-]+$/.test(text(order.lastStripeEventId));
+  const operatorProviderVoid = order.operatorVoidObserved === true
+    && text(order.lastProviderObservationSource) === "admin_reconciliation"
+    && /^stripe-buyer-repair-[a-f0-9-]{36}$/.test(text(order.operatorVoidAuditEventId));
+  return text(order.status).toLowerCase() === "void"
+    && text(order.lastProviderState).toLowerCase() === "void"
+    && (signedWebhookVoid || operatorProviderVoid);
 }
 
 function buildBuyerAccessStripePlan({ generation, orderId, organizationName, ownerEmail, ownerName } = {}) {
@@ -490,6 +528,15 @@ function buyerAccessProviderStateForEvent(eventType) {
   return states[text(eventType).toLowerCase()] || "";
 }
 
+function buyerAccessProviderStateForInvoice(invoice = {}) {
+  return {
+    open: "open",
+    paid: "paid",
+    uncollectible: "expired",
+    void: "void"
+  }[text(invoice?.status).toLowerCase()] || "";
+}
+
 function assertBuyerAccessInvoiceBinding({ eventLivemode, invoice, order, providerState, stripeMode } = {}) {
   assertBuyerAccessRuntime({ enabled: "true", stripeMode });
   const expectedInvoiceId = normalizeStripeId(order?.stripeInvoiceId, "in", "invoice");
@@ -540,6 +587,15 @@ function assertBuyerAccessInvoiceBinding({ eventLivemode, invoice, order, provid
     )
   ) {
     throw new BuyerAccessError("Stripe Invoice amount or total is invalid.");
+  }
+  if (
+    ["void", "expired"].includes(observedState)
+    && (
+      Number(invoice?.total) !== BUYER_ACCESS_AMOUNT_CENTS
+      || Number(invoice?.amount_paid) !== 0
+    )
+  ) {
+    throw new BuyerAccessError("Stripe terminal Invoice amount or payment state is invalid.");
   }
   if (observedState === "open") {
     if (text(invoice?.status).toLowerCase() !== "open") {
@@ -789,6 +845,7 @@ module.exports = {
   BUYER_ACCESS_INTERNAL_STATUSES,
   BUYER_ACCESS_MODE,
   BUYER_ACCESS_PLAN,
+  BUYER_ACCESS_REPAIR_ACTION,
   BUYER_ACCESS_STATUS_RATE_LIMIT,
   BUYER_ACCESS_STATUS_RATE_WINDOW_MS,
   BUYER_ACCESS_STRIPE_API_VERSION,
@@ -801,15 +858,19 @@ module.exports = {
   buildBuyerAccessIdentifiers,
   buildBuyerAccessMetadata,
   buildBuyerAccessStripePlan,
+  buyerAccessStripeIdempotencyKey,
   buyerAccessOrderIdForRequest,
   buyerAccessProviderStateForEvent,
+  buyerAccessProviderStateForInvoice,
   buyerAccessRateLimitDocumentId,
   buyerAccessStatusResponse,
   buyerAccessStatusTokenMatches,
   hashBuyerAccessSecret,
+  hasBuyerAccessReissuableVoidEvidence,
   isBuyerAccessInvoice,
   normalizeBuyerAccessHostedInvoiceUrl,
   normalizeBuyerAccessRequest,
+  normalizeBuyerAccessRepairRequest,
   normalizeBuyerAccessRequestId,
   normalizeBuyerAccessStatusRequest,
   normalizeBuyerAccessTurnstileHostnames,

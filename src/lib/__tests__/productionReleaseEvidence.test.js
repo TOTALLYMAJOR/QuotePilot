@@ -576,7 +576,7 @@ describe("tracked UAT checklist", () => {
     expect(checklist.checklist.schema).toBe(
       "com.mbmapps.quotepilot.release-uat-checklist/v2"
     );
-    expect(checklist.checklist.version).toBe("2026-08-04.9");
+    expect(checklist.checklist.version).toBe("2026-08-04.10");
     expect(checklist.itemIds).toHaveLength(checklist.checklist.items.length);
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
@@ -619,10 +619,10 @@ describe("tracked UAT checklist", () => {
       /each public status request.*60-request-per-five-minute.*before its first buyer-order read.*wrong-token.*later fulfillment reads.*TTL/is
     );
     expect(labelsByItemId.get("buyer.public-initiation-controls")).toMatch(
-      /before any Auth.*request-scoped.*without duplicate email charge.*signed-void.*stale events/is
+      /before any Auth.*request-scoped.*without duplicate email charge.*provider-verified void.*stale events/is
     );
     expect(labelsByItemId.get("buyer.public-initiation-controls")).toMatch(
-      /open and payment-failed.*exact original creation request.*uncollectible or expired, paid, and activation.*reject automatic replacement.*operator stop.*no buyer-specific repair callable.*live sale remains blocked/is
+      /open and payment-failed.*exact original creation request.*uncollectible or expired, paid, and activation.*reject automatic replacement.*platform-admin recovery.*terminal unpaid test Invoice.*voids an uncollectible Invoice.*no fulfillment artifacts.*operator audit.*paid, open, partially paid, fulfilled, superseded, and mismatched.*fail closed/is
     );
     expect(labelsByItemId.get("security.provider-secret-cutover")).toMatch(
       /buyer gate stayed off.*least-privilege Firebase Secret Manager.*new-plus-old overlap.*Turnstile.*HMAC-key rotation.*revoked only after exact hosted\/provider UAT/is

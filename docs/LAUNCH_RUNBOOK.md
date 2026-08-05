@@ -340,8 +340,10 @@ rotation. Use this order:
    network, email, status, and request-reservation document identity as a fresh
    rate window. Leave old documents for the configured
    `buyerAccessRateLimits.expiresAt` TTL rather than deleting them. Close or
-   obtain signed `invoice.voided` state for every in-flight buyer invoice before
-   the change; exact retries may consume a new email window after rotation.
+   obtain provider-verified void state for every in-flight buyer invoice before
+   the change, using the signed `invoice.voided` webhook or the exact audited
+   platform-admin recovery; exact retries may consume a new email window after
+   rotation.
 6. Run the exact target-scoped UAT checklist against the immutable candidate,
    including webhook overlap/new-only delivery, checkout reconciliation,
    optional Resend acceptance if enabled or claimed, Turnstile coordination,
@@ -422,14 +424,22 @@ For an approved hosted test-mode acceptance window:
    identity is absent from rate-document ids and the configured TTL removes an
    expired record. A safe retry must recover the same still-open invoice. A
    fresh request after the 24-hour email window may create a replacement only
-   after the prior invoice has a signed `invoice.voided` state; the prior order
-   is then superseded and stale events are ignored with durable dedupe evidence.
+   after the prior invoice has a provider-verified void state, established by
+   the signed `invoice.voided` webhook or the exact platform-admin recovery
+   below; the prior order is then superseded and stale events are ignored with
+   durable dedupe evidence.
    Open and payment-failed orders may return the same invoice only to the exact
    original creation request. Uncollectible/expired, paid, and activation
-   orders must reject automatic replacement and continue through the existing
-   status/account path or a documented operator stop. No buyer-specific repair
-   callable exists; treat this as a live-sale blocker until audited recovery is
-   implemented. Burst, cross-key, or expired requests must not create
+   orders must reject automatic replacement. For a true uncollectible test
+   Invoice, use Customer Provisioning or Integrations Ops -> Buyer Invoice
+   Recovery only as a verified platform administrator. Enter the exact server order id and
+   `VOID BUYER INVOICE <orderId>` confirmation. Prove the callable derives the
+   provider identity, retrieves the exact test Invoice, permanently voids it at
+   Stripe, rechecks that no organization/settings/invitation/provisioning
+   artifacts exist, and records a private audit before replacement eligibility.
+   Paid, open, partially paid, fulfilled, superseded, and mismatched targets
+   must fail closed; recovery must not bypass the email window. Burst,
+   cross-key, or expired requests must not create
    uncontrolled duplicates or disclose whether an account or invoice exists.
 8. Use `createBuyerAccessInvoice` to create one fixed Starter $1 USD test
    invoice. Confirm Stripe finalizes the invoice before payment and QuotePilot
@@ -456,8 +466,9 @@ For an approved hosted test-mode acceptance window:
    to `active`.
 10. Exercise `payment_failed`, `void`, and `expired` public states, exact-request
     open/payment-failed recovery, terminal-state replacement denial, the
-    same-tab `Start a new test request` action, post-window signed-void
-    replacement, stale superseded events, webhook
+    same-tab `Start a new test request` action, post-window signed-void and
+    audited operator-void replacement, paid/open/partial/fulfilled repair
+    denial, stale superseded events, webhook
     replay, unsupported or mixed-mode events, amount/currency/plan/invoice
     mismatch, expired invitation, unverified email, different email,
     cross-account claim, and repeated activation. None may create or restore a
