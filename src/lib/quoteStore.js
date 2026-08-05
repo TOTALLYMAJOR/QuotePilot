@@ -4048,6 +4048,9 @@ export async function updatePortalDecision({
     }
     assertPortalTokenActive(portalData, nowISO);
     const currentStatus = normalizeStatus(portalData.status);
+    if (normalizedDecision === "viewed" && currentStatus === "viewed") {
+      return { ok: true, storage: "unchanged", status: currentStatus, portalDecision: {} };
+    }
     if (!["sent", "viewed"].includes(currentStatus)) {
       throw new Error(
         currentStatus === "draft"
@@ -4085,6 +4088,9 @@ export async function updatePortalDecision({
   }
   assertPortalTokenActive(localTarget, nowISO);
   const currentStatus = normalizeStatus(localTarget.status);
+  if (normalizedDecision === "viewed" && currentStatus === "viewed") {
+    return { ok: true, storage: "unchanged", status: currentStatus, portalDecision: {} };
+  }
   if (!["sent", "viewed"].includes(currentStatus)) {
     throw new Error(
       currentStatus === "draft"

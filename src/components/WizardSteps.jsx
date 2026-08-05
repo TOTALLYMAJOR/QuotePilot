@@ -845,41 +845,15 @@ export function StepReview({ form, totals, settings, readiness = null }) {
   const effectivePerPerson = totals.guests > 0 ? totals.base / totals.guests : 0;
   const staffingOnly = Math.max(0, totals.labor - totals.bartenderLabor);
   const staffingLaborEnabled = totals.staffingLaborEnabled !== false;
-  const staffingChargeMode = String(totals.staffingChargeMode || "per_hour").trim().toLowerCase();
-  const staffingChargeModeLabel = staffingChargeMode === "per_event_per_staff"
-    ? "per event x staff count"
-    : "per hour x staff count";
-  const formatRateList = (rates, limit = 6) => {
-    const safeRates = Array.isArray(rates)
-      ? rates
-        .map((rate) => Number(rate))
-        .filter((rate) => Number.isFinite(rate) && rate >= 0)
-      : [];
-    if (!safeRates.length) return "";
-    const labels = safeRates.map((rate) => currency(rate));
-    if (labels.length <= limit) return labels.join(", ");
-    return `${labels.slice(0, limit).join(", ")} (+${labels.length - limit} more)`;
-  };
-  const serverRatesApplied = Array.isArray(totals.serverRatesApplied)
-    ? totals.serverRatesApplied
-      .map((rate) => Number(rate))
-      .filter((rate) => Number.isFinite(rate) && rate >= 0)
-    : [];
-  const chefRatesApplied = Array.isArray(totals.chefRatesApplied)
-    ? totals.chefRatesApplied
-      .map((rate) => Number(rate))
-      .filter((rate) => Number.isFinite(rate) && rate >= 0)
-    : [];
-  const hasCustomServerMix = String(form.serverRateMixCsv || "").trim() !== ""
-    || serverRatesApplied.some((rate) => Math.abs(rate - Number(totals.serverRateApplied || 0)) >= 0.01);
-  const hasCustomChefMix = String(form.chefRateMixCsv || "").trim() !== ""
-    || chefRatesApplied.some((rate) => Math.abs(rate - Number(totals.chefRateApplied || 0)) >= 0.01);
-  const serverRatesLabel = serverRatesApplied.length
-    ? formatRateList(serverRatesApplied)
-    : `${currency(totals.serverRateApplied || 0)} x ${Math.max(0, Number(totals.servers || 0))}`;
-  const chefRatesLabel = chefRatesApplied.length
-    ? formatRateList(chefRatesApplied)
-    : `${currency(totals.chefRateApplied || 0)} x ${Math.max(0, Number(totals.chefs || 0))}`;
+  const staffTeamLabel = [
+    ["server", totals.servers],
+    ["chef", totals.chefs],
+    ["bartender", totals.bartenders]
+  ]
+    .map(([role, count]) => [role, Math.max(0, Number(count || 0))])
+    .filter(([, count]) => count > 0)
+    .map(([role, count]) => `${count} ${role}${count === 1 ? "" : "s"}`)
+    .join(" · ");
   const validityDays = Math.max(1, Number(settings.quoteValidityDays || 30));
   const businessContact = [
     settings.businessAddress,
@@ -937,33 +911,13 @@ export function StepReview({ form, totals, settings, readiness = null }) {
           {staffingLaborEnabled && <div className="quote-charge"><span>Staffing</span><strong>{currency(staffingOnly)}</strong></div>}
           <div className="quote-charge"><span>Travel Fee</span><strong>{currency(totals.travel)}</strong></div>
           {staffingLaborEnabled && <div className="quote-charge"><span>Bartender</span><strong>{currency(totals.bartenderLabor)}</strong></div>}
-          {staffingLaborEnabled && (
+          {staffingLaborEnabled && staffTeamLabel && (
             <div className="quote-charge quote-charge-wide">
-              <span>Staff Count ({staffingChargeModeLabel})</span>
-              <strong>
-                S {Math.max(0, Number(totals.servers || 0))} / C {Math.max(0, Number(totals.chefs || 0))} / B {Math.max(0, Number(totals.bartenders || 0))}
-              </strong>
+              <span>Staffing team</span>
+              <strong>{staffTeamLabel}</strong>
             </div>
           )}
-          {staffingLaborEnabled && hasCustomServerMix && Math.max(0, Number(totals.servers || 0)) > 0 && (
-            <div className="quote-charge quote-charge-wide">
-              <span>Server Rates (Applied)</span>
-              <strong>{serverRatesLabel}</strong>
-            </div>
-          )}
-          {staffingLaborEnabled && hasCustomChefMix && Math.max(0, Number(totals.chefs || 0)) > 0 && (
-            <div className="quote-charge quote-charge-wide">
-              <span>Chef Rates (Applied)</span>
-              <strong>{chefRatesLabel}</strong>
-            </div>
-          )}
-          {!staffingLaborEnabled && (
-            <div className="quote-charge quote-charge-wide">
-              <span>Staffing labor automation</span>
-              <strong>Disabled</strong>
-            </div>
-          )}
-          <div className="quote-charge"><span>Gratuity</span><strong>{currency(totals.serviceFee)}</strong></div>
+          <div className="quote-charge"><span>Service charge ({Math.round(Number(totals.serviceFeePctApplied || 0) * 1000) / 10}%)</span><strong>{currency(totals.serviceFee)}</strong></div>
           {(totals.addons > 0 || totals.rentals > 0 || totals.menu > 0) && (
             <div className="quote-charge quote-charge-wide">
               <span>Add-ons/Rentals/Menu</span>
@@ -983,8 +937,7 @@ export function StepReview({ form, totals, settings, readiness = null }) {
         </div>
         <p className="quote-acceptance">To accept quote, please sign and return to {settings.acceptanceEmail || settings.businessEmail || "-"}</p>
         <p className="quote-deposit-tag"><strong>{settings.depositNotice || "30% deposit is required to lock in your date."}</strong></p>
-        <p className="quote-signoff">Gratuity is never expected but is always appreciated!</p>
-        <p className="quote-contact-strip">{businessContact || "-"}</p>
+        {businessContact && <p className="quote-contact-strip">{businessContact}</p>}
       </article>
 
       <div className="summary-total">

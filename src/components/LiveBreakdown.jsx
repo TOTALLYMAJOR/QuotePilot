@@ -467,7 +467,7 @@ export default function LiveBreakdown({
           />
           <BreakdownMoneyRow
             rowKey="serviceFee"
-            label={`Service (${Math.round(totals.serviceFeePctApplied * 1000) / 10}%)`}
+            label={`Service charge (${Math.round(totals.serviceFeePctApplied * 1000) / 10}%)`}
             value={displayValues.serviceFee}
             changed={Boolean(rowEffects.serviceFee)}
             delta={rowEffects.serviceFee?.delta || 0}

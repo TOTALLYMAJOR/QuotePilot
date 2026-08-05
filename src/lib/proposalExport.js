@@ -201,18 +201,6 @@ function summarizeList(items, limit = 5) {
   return safeItems.length > limit ? `${preview}...` : preview;
 }
 
-function formatRateList(rates = [], limit = 8) {
-  const safeRates = Array.isArray(rates)
-    ? rates
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value) && value >= 0)
-    : [];
-  if (!safeRates.length) return "-";
-  const labels = safeRates.map((rate) => currency(rate));
-  if (labels.length <= limit) return labels.join(", ");
-  return `${labels.slice(0, limit).join(", ")} (+${labels.length - limit} more)`;
-}
-
 function resolvePortalLink(quote, basePortalUrl = "") {
   const portalKey = String(quote?.portalKey || "").trim();
   if (!portalKey) return "";
@@ -228,6 +216,30 @@ function resolvePortalLink(quote, basePortalUrl = "") {
   );
   if (!base) return "";
   return `${base}?portal=${encodeURIComponent(portalKey)}`;
+}
+
+function formatStaffTeam(servers, chefs, bartenders) {
+  return [["server", servers], ["chef", chefs], ["bartender", bartenders]]
+    .map(([role, count]) => [role, Math.max(0, Number(count || 0))])
+    .filter(([, count]) => count > 0)
+    .map(([role, count]) => `${count} ${role}${count === 1 ? "" : "s"}`)
+    .join(" · ");
+}
+
+function paymentMethodLabel(payMethod) {
+  const normalized = String(payMethod || "").trim().toLowerCase();
+  if (normalized === "card") return "Card";
+  if (normalized === "ach") return "ACH / Check";
+  return payMethod || "-";
+}
+
+function depositStatusLabel(depositStatus) {
+  const normalized = String(depositStatus || "unpaid").trim().toLowerCase();
+  if (normalized === "unpaid") return "Awaiting deposit";
+  if (normalized === "sent") return "Deposit requested";
+  if (normalized === "paid") return "Paid";
+  if (normalized === "refunded") return "Refunded";
+  return depositStatus;
 }
 
 function appendFooterToAllPages({
@@ -246,7 +258,11 @@ function appendFooterToAllPages({
     doc.setTextColor(...palette.muted);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.text(`${text(proposal.branding.brandName)} • Quote ${text(proposal.quoteNumber)}`, left, pageHeight - 22);
+    doc.text(
+      `${proposal.branding.brandName ? `${proposal.branding.brandName} • ` : ""}Quote ${text(proposal.quoteNumber)}`,
+      left,
+      pageHeight - 22
+    );
     doc.text(`Page ${page} of ${pageCount}`, right, pageHeight - 22, { align: "right" });
   }
 }
@@ -300,22 +316,14 @@ function renderHeader({
   doc.text(text(branding.title), titleX, 42);
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text(text(branding.brandTagline), titleX, 58);
+  if (branding.brandTagline) {
+    doc.text(branding.brandTagline, titleX, 58);
+  }
   doc.text(`Quote #${text(proposal.quoteNumber)}`, titleX, 74);
   doc.text(`Created: ${proposal.createdOn}`, right, 94, { align: "right" });
   doc.text(`Valid Through: ${proposal.expiresOn}`, right, 110, { align: "right" });
 
-  doc.setFillColor(...palette.cream);
-  doc.roundedRect(left, y - 14, maxWidth, 38, 10, 10, "F");
-  doc.setDrawColor(...palette.line);
-  doc.roundedRect(left, y - 14, maxWidth, 38, 10, 10);
-  doc.setTextColor(...palette.text);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text(`Status: ${text(proposal.status || "draft")}`, left + 12, y + 4);
-  doc.text(`Deposit Status: ${text(proposal.payment.depositStatus || "unpaid")}`, left + 160, y + 4);
-  doc.text(`Template: ${text(proposal.selection.eventTemplateId || "custom")}`, left + 350, y + 4);
-  return y + 56;
+  return y + 8;
 }
 
 export async function exportQuoteProposal(quote, {
@@ -451,7 +459,8 @@ export async function exportQuoteProposal(quote, {
   row("Venue Address", proposal.event.venueAddress || "-");
   row("Guests", proposal.event.guests);
   row("Service Style", proposal.event.style);
-  row("Staff Counts", `S ${proposal.event.servers || 0} / C ${proposal.event.chefs || 0} / B ${proposal.event.bartenders || 0}`);
+  const staffTeam = formatStaffTeam(proposal.event.servers, proposal.event.chefs, proposal.event.bartenders);
+  if (staffTeam) row("Staffing team", staffTeam);
   row("Dietary Restrictions", proposal.event.dietaryRestrictions || "-");
 
   section("Selections");
@@ -463,19 +472,14 @@ export async function exportQuoteProposal(quote, {
   row("Add-ons", proposal.selection.addons.join(", ") || "-");
   row("Rentals", proposal.selection.rentals.join(", ") || "-");
   row("Travel (miles RT)", proposal.selection.milesRT);
-  row("Tax Region", proposal.totals.taxRegionName || proposal.selection.taxRegion);
-  row("Season Profile", proposal.totals.seasonProfileName || proposal.selection.seasonProfileId);
-  row("Payment Method", proposal.selection.payMethod);
-  row("Deposit Link", depositPaymentLink || "-");
+  row("Payment Method", paymentMethodLabel(proposal.selection.payMethod));
 
   section("Action and Acceptance");
-  row("Acceptance Contact", meta.acceptanceEmail || meta.businessEmail || "-");
-  row(
-    "Customer Portal",
-    portalLink || (quoteIsDraft ? "Available after delivery is recorded" : "-")
-  );
-  row("Deposit Payment Link", depositPaymentLink || "-");
-  row("Deposit Status", proposal.payment.depositStatus || "unpaid");
+  const acceptanceContact = meta.acceptanceEmail || meta.businessEmail || "";
+  if (acceptanceContact) row("Acceptance Contact", acceptanceContact);
+  if (portalLink) row("Customer Portal", portalLink);
+  if (depositPaymentLink) row("Deposit Payment Link", depositPaymentLink);
+  row("Deposit Status", depositStatusLabel(proposal.payment.depositStatus));
 
   section("Pricing");
 
@@ -490,22 +494,6 @@ export async function exportQuoteProposal(quote, {
   countedAmountRow("Add-ons", proposal.selection.addons, proposal.totals.addons);
   countedAmountRow("Rentals", proposal.selection.rentals, proposal.totals.rentals);
 
-  const hasCustomServerMix = String(proposal.selection.serverRateMixCsv || "").trim() !== ""
-    || (Array.isArray(proposal.totals.serverRatesApplied)
-      && proposal.totals.serverRatesApplied.some(
-        (rate) => Math.abs(Number(rate || 0) - Number(proposal.totals.serverRateApplied || 0)) >= 0.01
-      ));
-  const hasCustomChefMix = String(proposal.selection.chefRateMixCsv || "").trim() !== ""
-    || (Array.isArray(proposal.totals.chefRatesApplied)
-      && proposal.totals.chefRatesApplied.some(
-        (rate) => Math.abs(Number(rate || 0) - Number(proposal.totals.chefRateApplied || 0)) >= 0.01
-      ));
-  if (hasCustomServerMix) {
-    row("  Server Rates (Applied)", formatRateList(proposal.totals.serverRatesApplied));
-  }
-  if (hasCustomChefMix) {
-    row("  Chef Rates (Applied)", formatRateList(proposal.totals.chefRatesApplied));
-  }
   const laborTotal = Number(proposal.totals.labor || 0);
   const bartenderLaborTotal = Number(proposal.totals.bartenderLabor || 0);
   const hasServerLabor = proposal.totals.serverLabor !== undefined && proposal.totals.serverLabor !== null;
@@ -549,7 +537,7 @@ export async function exportQuoteProposal(quote, {
   
   // Service fee and Tax
   row(
-    `Gratuity / Service Fee (${Math.round(Number(proposal.totals.serviceFeePctApplied || 0) * 1000) / 10}%)`,
+    `Service charge (${Math.round(Number(proposal.totals.serviceFeePctApplied || 0) * 1000) / 10}%)`,
     currency(proposal.totals.serviceFee || 0)
   );
   row(
@@ -589,11 +577,19 @@ export async function exportQuoteProposal(quote, {
     doc.text(meta.disposablesNote || "All disposables are included in this quote.", left, y);
     y += 14;
   }
-  doc.text(`Quote prepared by: ${text(meta.quotePreparedBy || "-")}`, left, y);
+  if (meta.quotePreparedBy) {
+    doc.text(`Quote prepared by: ${meta.quotePreparedBy}`, left, y);
+  }
   doc.text(`Quote is valid for ${Number(meta.quoteValidityDays || 30)} days.`, right, y, { align: "right" });
   y += 14;
-  doc.text(`To accept quote, please sign and return to ${text(meta.acceptanceEmail || meta.businessEmail || "-")}`, left, y);
-  y += 14;
+  const acceptanceInstruction = portalLink
+    ? `To accept this quote, open your customer portal link: ${portalLink}`
+    : (acceptanceContact ? `To accept quote, please sign and return to ${acceptanceContact}` : "");
+  if (acceptanceInstruction) {
+    const acceptanceLines = doc.splitTextToSize(acceptanceInstruction, maxWidth);
+    doc.text(acceptanceLines, left, y);
+    y += 14 * acceptanceLines.length;
+  }
   if (meta.depositNotice) {
     doc.setFillColor(255, 232, 77);
     doc.roundedRect(left, y - 10, maxWidth, 16, 3, 3, "F");

@@ -6,6 +6,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Fixed
+
+- Customer portal visits now record the first valid `sent` to `viewed`
+  transition atomically, preserving the original view timestamp on reload so
+  lifecycle timelines and reporting can reflect actual portal views.
+- Stripe checkout success returns now trigger bounded portal snapshot refreshes
+  and show a secure confirmation state until the signature-verified webhook's
+  paid status is visible; the browser return itself never marks a deposit paid.
+
 ### Added
 
 - Tenant-scoped Workflow Attention queue for active quotes, with a post-idle

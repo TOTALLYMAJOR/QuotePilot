@@ -94,6 +94,13 @@ function readPortalKeyFromUrl() {
   return String(params.get("portal") || "").trim();
 }
 
+function readPortalPaymentReturnFromUrl() {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  const paymentReturn = String(params.get("payment") || "").trim().toLowerCase();
+  return paymentReturn === "success" ? paymentReturn : "";
+}
+
 function toNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -339,6 +346,7 @@ export default function App() {
   const tenantContext = useTenantContext();
   const authSession = useAuthSession({ tenantContext });
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
+  const [portalPaymentReturn] = useState(() => readPortalPaymentReturnFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
   const isUnscopedPlatformOperator = (
     tenantContext.ready
@@ -422,7 +430,7 @@ export default function App() {
     const mobileLayout = window.matchMedia("(max-width: 980px)");
     const backgroundTargets = [
       document.querySelector(".site-header"),
-      document.querySelector(".hero"),
+      document.querySelector(".workspace-intro"),
       wizardRef.current?.querySelector(".wizard-panel"),
       document.querySelector(".toast-stack")
     ].filter(Boolean);
@@ -860,11 +868,6 @@ export default function App() {
     .map((member) => String(member?.label || "").trim())
     .filter(Boolean);
   const scheduleCapacityLimit = Math.max(1, Number(catalog.settings?.capacityLimit || 400));
-  const heroEyebrow = catalog.settings?.heroEyebrow || "Event Catering Workspace";
-  const heroHeadline = catalog.settings?.heroHeadline || `${brandName} Quote Operations`;
-  const heroDescription =
-    catalog.settings?.heroDescription ||
-    "Build quotes, configure pricing, and manage proposals from one workspace.";
   const appThemeVars = {
     "--tone-gold-1": brandAccentColor,
     "--tone-gold-2": brandPrimaryColor,
@@ -1168,6 +1171,11 @@ export default function App() {
     if (step === 1 && !step1CanAdvance) {
       markFieldsTouched(STEP1_REQUIRED_FIELDS.map((field) => field.key));
       setShowStepValidation(true);
+      window.requestAnimationFrame(() => {
+        const firstInvalid = document.querySelector(".wizard-panel [aria-invalid='true']");
+        firstInvalid?.scrollIntoView({ behavior: "smooth", block: "center" });
+        firstInvalid?.focus({ preventScroll: true });
+      });
       return;
     }
     setShowStepValidation(false);
@@ -1510,9 +1518,14 @@ export default function App() {
   };
 
   const handleGetInstantQuote = () => {
+    if (editingQuote.id && !window.confirm(`Start a new quote? Unsaved changes to ${editingQuote.quoteNumber || "the current quote"} will be discarded.`)) {
+      return;
+    }
     setEditingQuote({ id: "", quoteNumber: "" });
+    setForm(INITIAL_FORM);
     setTouchedFields({});
     setShowStepValidation(false);
+    setSubmitState((prev) => ({ ...prev, message: "" }));
     setStep(1);
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1619,7 +1632,11 @@ export default function App() {
   if (portalMode && customerPortalEnabled) {
     return (
       <div className="app-shell" style={appThemeVars}>
-        <CustomerPortalView initialPortalKey={portalKey} onBackToStaff={closePortalMode} />
+        <CustomerPortalView
+          initialPortalKey={portalKey}
+          initialPaymentReturn={portalPaymentReturn}
+          onBackToStaff={closePortalMode}
+        />
       </div>
     );
   }
@@ -1867,41 +1884,14 @@ export default function App() {
             {authSession.isAdmin && <button className="ghost" onClick={() => setAdminOpen(true)}>Admin Catalog</button>}
             {authSession.isAdmin && <button className="ghost" onClick={() => setImportStudioOpen(true)}>Import Studio</button>}
             {customerPortalEnabled && <button className="ghost" onClick={openPortalMode}>Customer Portal</button>}
-            <button className="cta header-quick-cta" onClick={handleGetInstantQuote}>Quick Quote</button>
+            <button className="cta header-quick-cta" type="button" onClick={handleGetInstantQuote}>New Quote</button>
             <button className="ghost" onClick={handleSignOut}>Sign Out</button>
           </div>
         </div>
       </header>
 
-      <section className="hero container">
-        <div className="hero-grid">
-          <div>
-            <p className="eyebrow">{heroEyebrow}</p>
-            <h1>{heroHeadline}</h1>
-            <p>{heroDescription}</p>
-            <div className="hero-cta-row">
-              <button className="cta hero-primary-cta" type="button" onClick={handleGetInstantQuote}>
-                Get Instant Quote
-              </button>
-              <p className="hero-cta-note">Start the guided flow with required fields first, then build the full proposal.</p>
-            </div>
-            <div className="hero-pills">
-              <span>Signed in: {authSession.user.email}</span>
-              <span>Role: {authSession.role}</span>
-              <span>Host: {tenantContext.hostname || "-"}</span>
-              <span>Source: {catalog.source}</span>
-            </div>
-          </div>
-          <aside className="hero-card">
-            <h3>Live Quote Snapshot</h3>
-            <dl>
-              <div><dt>Current Total</dt><dd>{currency(totals.total)}</dd></div>
-              <div><dt>Deposit</dt><dd>{currency(totals.deposit)}</dd></div>
-              <div><dt>Tax Region</dt><dd>{totals.taxRegionName}</dd></div>
-              <div><dt>Season</dt><dd>{totals.seasonProfileName}</dd></div>
-            </dl>
-          </aside>
-        </div>
+      <section className="workspace-intro container">
+        <p>Signed in as {authSession.user.email} · {authSession.role}</p>
       </section>
 
       <main
@@ -2033,7 +2023,7 @@ export default function App() {
                 <button
                   className="cta"
                   onClick={handleNextStep}
-                  disabled={catalog.loading || (step === 1 && !step1CanAdvance)}
+                  disabled={catalog.loading}
                 >
                   Next
                 </button>

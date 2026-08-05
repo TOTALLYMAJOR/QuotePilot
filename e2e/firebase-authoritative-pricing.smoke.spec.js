@@ -6,7 +6,7 @@ const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  const quoteButton = page.getByRole("button", { name: "Get Instant Quote" });
+  const quoteButton = page.getByRole("button", { name: "New Quote" });
   await expect(signInHeading.or(quoteButton)).toBeVisible({ timeout: 45_000 });
   if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();

@@ -51,7 +51,7 @@ describe("customer proposal PDF export", () => {
     });
     const pdfText = Buffer.from(attachment.base64, "base64").toString("latin1");
 
-    expect(pdfText).toContain("Available after delivery is recorded");
+    expect(pdfText).not.toContain("Customer Portal");
     expect(pdfText).not.toContain("https://quotepilot.example/app?portal=");
     expect(pdfText).not.toContain("0123456789abcdef0123456789abcdef");
   });

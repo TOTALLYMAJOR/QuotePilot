@@ -98,8 +98,9 @@ test.beforeEach(async ({ page }) => {
     localStorage.clear();
     sessionStorage.clear();
   });
+  page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/app");
-  await expect(page.getByRole("button", { name: "Get Instant Quote" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New Quote" })).toBeVisible();
 });
 
 test("operator workspaces load only when first opened and stay mounted after close", async ({ page }) => {
@@ -179,13 +180,20 @@ test("workflow attention throttles passive reads and retains a known count on re
   })).toBeVisible();
 });
 
-test("step 1 soft-lock keeps next disabled until required fields are complete", async ({ page }) => {
+test("step 1 next stays actionable and explains missing required fields", async ({ page }) => {
   const nextButton = page.getByRole("button", { name: "Next" });
-  await expect(nextButton).toBeDisabled();
+  await expect(nextButton).toBeEnabled();
   await expect(page.getByText(/Missing required fields/i)).toBeVisible();
 
+  await nextButton.click();
+  await expect(page.getByText(/Complete required fields before continuing/i)).toBeVisible();
+  await expect(page.locator("[aria-invalid='true']").first()).toBeFocused();
+  await expect(page.locator(".stepper-item[aria-current='step']")).toContainText("Event Basics");
+
   await fillRequiredQuoteFields(page, { guests: 58, eventName: "E2E Soft Lock", venue: "Guidance Hall" });
-  await expect(nextButton).toBeEnabled();
+  await expect(page.getByText(/Missing required fields/i)).toHaveCount(0);
+  await nextButton.click();
+  await expect(page.getByText(/Customized Cuisine Menu/i)).toBeVisible();
 });
 
 test("staffing counts stay primary while optional rate values remain reviewable", async ({ page }) => {
@@ -267,7 +275,7 @@ test("hero CTA remains available and returns workflow focus to step 1", async ({
   await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByText("Customized Cuisine Menu")).toBeVisible();
 
-  await page.getByRole("button", { name: "Get Instant Quote" }).click();
+  await page.getByRole("button", { name: "New Quote" }).click();
   await expect(page.getByText("Core Event Basics")).toBeVisible();
   await expect(page.getByRole("button", { name: "Next" })).toBeVisible();
 });
@@ -298,7 +306,7 @@ test("mobile quote pricing stays visible through the workflow without covering c
     })).toBe(true);
   };
 
-  await page.getByRole("button", { name: "Get Instant Quote" }).click();
+  await page.getByRole("button", { name: "New Quote" }).click();
   await expect(mobileSummary).toBeVisible();
   await expect(mobileSummary).toBeInViewport();
   await expect(breakdownToggle).toHaveAccessibleName("View breakdown");
@@ -425,13 +433,15 @@ test("draft save handoff targets the exact new quote and stays truthful across s
   await fillRequiredQuoteFields(page, { guests: 60, eventName: "E2E Quote A", venue: "Hall A" });
   await page.getByRole("button", { name: "Next" }).click();
 
-  const totalLocator = page.locator(".hero-card dd").first();
+  const totalLocator = page.locator(".breakdown-panel [data-row-key='total'] dd strong");
+  await page.waitForTimeout(700);
   const beforeTotal = parseMoney(await totalLocator.innerText());
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("110");
   await page.getByRole("button", { name: "Next" }).click();
 
+  await page.waitForTimeout(700);
   const afterTotal = parseMoney(await totalLocator.innerText());
   expect(afterTotal).toBeGreaterThan(beforeTotal);
 
@@ -454,7 +464,7 @@ test("draft save handoff targets the exact new quote and stays truthful across s
 
   await history.getByRole("button", { name: "Close" }).click();
   await expect(page.getByRole("button", { name: "Save draft" })).toBeFocused();
-  await page.getByRole("button", { name: "Quick Quote" }).click();
+  await page.getByRole("button", { name: "New Quote" }).click();
   await fillRequiredQuoteFields(page, {
     guests: 61,
     eventName: "E2E Quote B",
@@ -635,12 +645,22 @@ test("portal decision center records a customer change request", async ({ page }
     name: /Sales Workflow, no quotes need attention/i
   })).toBeVisible();
   await page.getByRole("button", { name: "Customer Portal" }).click();
-  await expect(page.getByRole("heading", { name: "Proposal Decision Center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your proposal" })).toBeVisible();
   await page.getByPlaceholder("Paste your quote key").fill(portalKey);
   await page.getByRole("button", { name: "Open Proposal" }).click();
   await expect(page.getByRole("heading", {
     name: `E2E Portal Decision on ${eventDateLabel}`
   })).toBeVisible();
+  const viewEvidence = await page.evaluate((key) => {
+    const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
+    const quote = quotes.find((item) => item.portalKey === key);
+    return {
+      status: quote?.status || "",
+      viewedAtISO: quote?.lifecycle?.viewedAtISO || ""
+    };
+  }, portalKey);
+  expect(viewEvidence.status).toBe("viewed");
+  expect(viewEvidence.viewedAtISO).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   await page.getByRole("button", { name: "Request Changes" }).click();
   await page.getByLabel("Requested changes").fill("Please replace the entree with a vegetarian option.");
   await page.getByRole("button", { name: "Submit Decision" }).click();
@@ -754,6 +774,73 @@ test("portal decision center records a customer change request", async ({ page }
   expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
 });
 
+test("portal refreshes webhook-backed payment state after a Stripe success return", async ({ page }) => {
+  const portalKey = "portal-payment-return-12345678901234567890";
+  const nowISO = new Date().toISOString();
+  const expiresAtISO = "2099-12-31T23:59:59.000Z";
+  await page.goto(`/app?portal=${encodeURIComponent(portalKey)}&payment=success`);
+  await expect(page.getByRole("heading", { name: "Your proposal" })).toBeVisible();
+  await page.evaluate(({ key, createdAtISO, portalExpiryISO }) => {
+    localStorage.setItem("quoteWizard.quotes", JSON.stringify([{
+      id: "quote-payment-return",
+      quoteNumber: "Q-PAYMENT-RETURN",
+      status: "accepted",
+      portalKey: key,
+      portalIssuedAtISO: createdAtISO,
+      portalExpiresAtISO: portalExpiryISO,
+      expiresAtISO: portalExpiryISO,
+      createdAtISO,
+      updatedAtISO: createdAtISO,
+      customer: { name: "Payment Return Customer", email: "customer@example.com" },
+      event: {
+        name: "Payment Return Dinner",
+        date: "2026-12-12",
+        time: "18:00",
+        hours: 4,
+        guests: 80,
+        venue: "Return Hall",
+        style: "Plated"
+      },
+      totals: { total: 5000, deposit: 1500 },
+      selection: {},
+      payment: { depositStatus: "unpaid", depositConfirmedAtISO: "" },
+      booking: {},
+      quoteMeta: {},
+      portalDecision: {
+        decision: "accepted",
+        message: "",
+        requestId: "payment-return-request-12345",
+        submittedAtISO: createdAtISO
+      },
+      lifecycle: { acceptedAtISO: createdAtISO }
+    }]));
+  }, { key: portalKey, createdAtISO: nowISO, portalExpiryISO: expiresAtISO });
+
+  await page.getByRole("button", { name: "Open Proposal" }).click();
+  await expect(page.getByRole("heading", { name: /Payment Return Dinner on/i })).toBeVisible();
+  const paymentReturnStatus = page.locator(".portal-pricing-section [role='status']");
+  await expect(paymentReturnStatus).toContainText(/confirming payment securely/i);
+  await expect(page).toHaveURL(new RegExp(`portal=${portalKey}$`));
+  await expect(page.locator(".portal-payment-state strong")).toHaveText(/awaiting deposit/i);
+
+  await page.evaluate(() => {
+    window.setTimeout(() => {
+      const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
+      quotes[0].payment = {
+        ...quotes[0].payment,
+        depositStatus: "paid",
+        depositConfirmedAtISO: new Date().toISOString()
+      };
+      localStorage.setItem("quoteWizard.quotes", JSON.stringify(quotes));
+    }, 250);
+  });
+
+  await expect(page.locator(".portal-payment-state strong")).toHaveText(/paid/i, {
+    timeout: 5000
+  });
+  await expect(paymentReturnStatus).toContainText(/payment confirmed/i);
+});
+
 test("accepted event production checklist persists completion", async ({ page }) => {
   const now = new Date();
   const today = [
@@ -865,7 +952,7 @@ test("conversion is blocked when another quote is already booked for same venue/
   await expect(baselineRow.locator("select").first()).toHaveValue("booked");
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
-  await page.getByRole("button", { name: "Get Instant Quote" }).click();
+  await page.getByRole("button", { name: "New Quote" }).click();
 
   await fillRequiredQuoteFields(page, {
     guests: 92,

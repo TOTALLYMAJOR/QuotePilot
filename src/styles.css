@@ -226,6 +226,16 @@ body {
   padding: 2.1rem 0 1.55rem;
 }
 
+.workspace-intro {
+  padding: 1.1rem 0 0.85rem;
+}
+
+.workspace-intro p {
+  margin: 0;
+  color: #f0d29a;
+  font-size: 0.84rem;
+}
+
 .hero-grid {
   display: grid;
   grid-template-columns: 1.65fr 1fr;
@@ -4476,4 +4486,9 @@ hr {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.portal-staff-entry {
+  margin: 0.9rem 0 0;
+  text-align: center;
 }

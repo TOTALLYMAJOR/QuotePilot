@@ -144,6 +144,28 @@ describe("quoteStore portal token policy", () => {
     expect(Number(quote.portalExpiresAtMs)).toBeGreaterThan(0);
   });
 
+  test("records the first portal view once and preserves its timestamp on reload", async () => {
+    seedQuotes([makeQuote()]);
+
+    const firstResult = await updatePortalQuoteStatus(
+      "portal-key-12345678901234567890",
+      "viewed"
+    );
+    const firstView = await getPortalQuote("portal-key-12345678901234567890");
+    expect(firstResult).toMatchObject({ status: "viewed", storage: "local" });
+    expect(firstView.status).toBe("viewed");
+    expect(firstView.lifecycle.viewedAtISO).toBe("2026-03-20T12:00:00.000Z");
+
+    vi.setSystemTime(new Date("2026-03-20T12:05:00.000Z"));
+    const repeatedResult = await updatePortalQuoteStatus(
+      "portal-key-12345678901234567890",
+      "viewed"
+    );
+    const repeatedView = await getPortalQuote("portal-key-12345678901234567890");
+    expect(repeatedResult.storage).toBe("unchanged");
+    expect(repeatedView.lifecycle.viewedAtISO).toBe(firstView.lifecycle.viewedAtISO);
+  });
+
   test("stores a customer change request without accepting or booking the quote", async () => {
     seedQuotes([makeQuote()]);
 
