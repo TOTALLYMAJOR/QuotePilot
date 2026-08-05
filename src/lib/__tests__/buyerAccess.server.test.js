@@ -20,13 +20,16 @@ const {
   buildBuyerAccessStripePlan,
   buyerAccessOrderIdForRequest,
   buyerAccessProviderStateForEvent,
+  buyerAccessProviderStateForInvoice,
   buyerAccessRateLimitDocumentId,
   buyerAccessStatusResponse,
   buyerAccessStatusTokenMatches,
   hashBuyerAccessSecret,
+  hasBuyerAccessReissuableVoidEvidence,
   isBuyerAccessInvoice,
   normalizeBuyerAccessHostedInvoiceUrl,
   normalizeBuyerAccessRequest,
+  normalizeBuyerAccessRepairRequest,
   normalizeBuyerAccessStatusRequest,
   planBuyerAccessCreationReservation,
   planBuyerAccessRateLimit,
@@ -589,7 +592,7 @@ describe("buyer access invoice server contract", () => {
       amount_due: 0,
       amount_paid: 0,
       amount_remaining: 0,
-      total: 0,
+      total: 100,
       payment_intent: null,
       hosted_invoice_url: null
     };
@@ -617,6 +620,20 @@ describe("buyer access invoice server contract", () => {
       providerState: "expired",
       stripeMode: "test"
     }).providerState).toBe("expired");
+    for (const unsafeInvoice of [
+      { ...voidInvoice, amount_paid: 1 },
+      { ...voidInvoice, total: 99 },
+      { ...uncollectibleInvoice, amount_paid: 1 },
+      { ...uncollectibleInvoice, total: 99 }
+    ]) {
+      expect(() => assertBuyerAccessInvoiceBinding({
+        eventLivemode: false,
+        invoice: unsafeInvoice,
+        order,
+        providerState: unsafeInvoice.status === "void" ? "void" : "expired",
+        stripeMode: "test"
+      })).toThrow(BuyerAccessError);
+    }
     expect(planBuyerAccessTransition({
       currentStatus: "invoice_open",
       providerState: "void"
@@ -625,6 +642,53 @@ describe("buyer access invoice server contract", () => {
       currentStatus: "invoice_open",
       providerState: "expired"
     })).toMatchObject({ apply: true, status: "expired", accessGranted: false });
+  });
+
+  test("requires exact platform repair intent and accepts only provider-closed void evidence", () => {
+    const confirmationToken = `VOID BUYER INVOICE ${order.orderId}`;
+    expect(normalizeBuyerAccessRepairRequest({
+      orderId: order.orderId.toUpperCase(),
+      confirmationToken
+    })).toEqual({ orderId: order.orderId, confirmationToken });
+    expect(() => normalizeBuyerAccessRepairRequest({
+      orderId: order.orderId,
+      confirmationToken: `VOID ${order.orderId}`
+    })).toThrow(/confirmationToken mismatch/i);
+    expect(() => normalizeBuyerAccessRepairRequest({
+      orderId: order.orderId,
+      confirmationToken,
+      stripeInvoiceId: order.stripeInvoiceId
+    })).toThrow(/server-owned/i);
+
+    expect(buyerAccessProviderStateForInvoice({ status: "open" })).toBe("open");
+    expect(buyerAccessProviderStateForInvoice({ status: "paid" })).toBe("paid");
+    expect(buyerAccessProviderStateForInvoice({ status: "uncollectible" })).toBe("expired");
+    expect(buyerAccessProviderStateForInvoice({ status: "void" })).toBe("void");
+    expect(buyerAccessProviderStateForInvoice({ status: "draft" })).toBe("");
+
+    const signedVoid = {
+      ...order,
+      status: "void",
+      lastProviderState: "void",
+      signedVoidObserved: true,
+      lastStripeEventType: "invoice.voided",
+      lastStripeEventId: "evt_buyer_void_1"
+    };
+    expect(hasBuyerAccessReissuableVoidEvidence(signedVoid)).toBe(true);
+    expect(hasBuyerAccessReissuableVoidEvidence({
+      ...signedVoid,
+      signedVoidObserved: false,
+      operatorVoidObserved: true,
+      operatorVoidAuditEventId: "stripe-buyer-repair-123e4567-e89b-42d3-a456-426614174000",
+      lastProviderObservationSource: "admin_reconciliation"
+    })).toBe(true);
+    expect(hasBuyerAccessReissuableVoidEvidence({
+      ...signedVoid,
+      signedVoidObserved: false,
+      operatorVoidObserved: true,
+      operatorVoidAuditEventId: "forged-audit",
+      lastProviderObservationSource: "admin_reconciliation"
+    })).toBe(false);
   });
 
   test("keeps access closed until verified sign-in and never downgrades fulfillment", () => {
