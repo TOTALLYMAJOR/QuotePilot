@@ -414,9 +414,10 @@ ids. Once per public status request, the callable atomically consumes a
 including well-formed unknown-order and wrong-token attempts, and fails closed
 when its secret or Firestore limiter is unavailable. Any subsequent fulfillment
 reads remain inside that bounded request. Each rate record includes an
-`expiresAt` Firestore Timestamp;
-the trusted deployer must enable the matching TTL policy on
-`buyerAccessRateLimits.expiresAt` before opening the server gate.
+`expiresAt` Firestore Timestamp; the tracked `firestore.indexes.json` declares
+the matching TTL policy on `buyerAccessRateLimits.expiresAt`. The trusted
+deployer must promote that Firestore configuration and verify the provider
+reports TTL enabled before opening the server gate.
 Invoice creation first reserves the request-scoped order identity in the same
 durable limiter before any Auth, invitation, or order lookup. An exact retry
 continues to consume the per-network budget but does not charge the normalized

@@ -33,7 +33,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   independently disabled Functions gate, exact hostname/action verification,
   durable rate limits, and deterministic idempotency remain server-owned. A
   dedicated Secret Manager key now HMACs network/email rate-document identities,
-  all rate records carry Firestore Timestamp expiry, and creation atomically
+  all rate records carry Firestore Timestamp expiry, the deployable Firestore
+  configuration declares TTL for `buyerAccessRateLimits.expiresAt` with a
+  regression check that prevents its silent removal, and creation atomically
   reserves a request-scoped order before any identity/order lookup. Exact retry
   still consumes network capacity while avoiding duplicate email charge during
   the 24-hour reservation; a fresh post-window request can replace only a

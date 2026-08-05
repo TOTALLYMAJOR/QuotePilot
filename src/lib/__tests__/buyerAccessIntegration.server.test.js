@@ -9,6 +9,10 @@ const BUYER_ACCESS_SOURCE = fs.readFileSync(
   new URL("../../../functions/buyerAccess.js", import.meta.url),
   "utf8"
 );
+const FIRESTORE_INDEXES = JSON.parse(fs.readFileSync(
+  new URL("../../../firestore.indexes.json", import.meta.url),
+  "utf8"
+));
 
 function sourceBetween(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -34,6 +38,19 @@ function exportedFunctionSource(name) {
 }
 
 describe("buyer access Invoice endpoint isolation", () => {
+  test("declares the buyer rate-limit expiry TTL in deployable Firestore configuration", () => {
+    const buyerRateLimitOverrides = FIRESTORE_INDEXES.fieldOverrides.filter(
+      (field) => field.collectionGroup === "buyerAccessRateLimits"
+        && field.fieldPath === "expiresAt"
+    );
+    expect(buyerRateLimitOverrides).toEqual([{
+      collectionGroup: "buyerAccessRateLimits",
+      fieldPath: "expiresAt",
+      ttl: true,
+      indexes: []
+    }]);
+  });
+
   test("binds least-privilege secrets to public create and dedicated webhook endpoints", () => {
     const create = sourceBetween(
       FUNCTIONS_INDEX_SOURCE,
