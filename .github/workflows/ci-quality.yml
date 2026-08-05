@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 env:
   VITE_FIREBASE_API_KEY: ci-test-browser-key
