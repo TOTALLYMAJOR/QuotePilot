@@ -35,6 +35,16 @@ function toList(input) {
   return Array.isArray(input) ? input.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
 }
 
+// Mirrors proposalExport.js's resolvePortalLink, kept local (rather than
+// imported) because proposalExport.js already imports from this file and a
+// reverse import would create a cycle.
+function resolvePortalLink(quote, basePortalUrl = "") {
+  const portalKey = String(quote?.portalKey || "").trim();
+  const base = String(basePortalUrl || "").trim();
+  if (!portalKey || !base) return "";
+  return `${base}?portal=${encodeURIComponent(portalKey)}`;
+}
+
 export function normalizeCrewMembers(input) {
   const source = Array.isArray(input) && input.length ? input : DEFAULT_BRANDING.crewMembers;
   return source
@@ -179,7 +189,7 @@ export function buildProposalPayload(quote) {
   };
 }
 
-export function buildQuoteEmailPayload(quote) {
+export function buildQuoteEmailPayload(quote, { basePortalUrl = "", includePortalLink = false } = {}) {
   const proposal = buildProposalPayload(quote);
   const customerName = proposal.customer.name || "there";
   const eventDate = proposal.event.date || "your event date";
@@ -190,6 +200,7 @@ export function buildQuoteEmailPayload(quote) {
   const total = currency(proposal.totals.total);
   const deposit = currency(proposal.totals.deposit);
   const subject = `${brandName ? `${brandName} ` : ""}Quote ${proposal.quoteNumber} - ${eventDate}`;
+  const portalLink = includePortalLink === true ? resolvePortalLink(quote, basePortalUrl) : "";
   const lines = [
     `Hi ${customerName},`,
     "",
@@ -200,6 +211,7 @@ export function buildQuoteEmailPayload(quote) {
       ? `Deposit payment link: ${proposal.payment.depositLink}`
       : "Reply to this email if you need a payment link.",
     proposal.expiresOn !== "-" ? `This quote is valid through ${proposal.expiresOn}.` : "",
+    portalLink ? `Review and accept your quote: ${portalLink}` : "",
     "",
     "Please reply with any questions or requested adjustments.",
     "",

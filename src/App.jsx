@@ -2139,26 +2139,38 @@ export default function App() {
               />
             )}
             {!catalog.loading && step === 5 && (
-              <div className="grid two-col">
-                <label className="field">
-                  <span>Payment method</span>
-                  <select
-                    value={form.payMethod}
-                    onChange={(e) => {
-                      handleSelectionTouched("payMethod");
-                      setForm((f) => ({ ...f, payMethod: e.target.value }));
-                    }}
-                  >
-                    <option value="card">Pay by Card</option>
-                    <option value="ach">Pay by ACH/Check</option>
-                  </select>
-                </label>
-                <article className="summary-total">
-                  <p><strong>Final total:</strong> {currency(totals.total)}</p>
-                  <p><strong>Deposit due:</strong> {currency(totals.deposit)}</p>
-                  <p className="muted">Saving will keep a version snapshot for edits and lifecycle changes.</p>
+              <>
+                <article className="quote-recap-card">
+                  <h3>Review before you save</h3>
+                  <p><strong>Client:</strong> {form.name || "-"}</p>
+                  <p><strong>Event:</strong> {form.eventName || "-"}{form.date ? ` · ${form.date}` : ""}</p>
+                  <p><strong>Guests:</strong> {totals.guests}</p>
+                  <p><strong>Total:</strong> {currency(totals.total)}</p>
+                  <p><strong>Deposit:</strong> {currency(totals.deposit)}</p>
+                  <p><strong>Quote validity:</strong> {Math.max(1, Number(catalog.settings?.quoteValidityDays || 30))} days</p>
+                  <p className="muted">Saving creates a draft. You'll send it to the customer from the next screen.</p>
                 </article>
-              </div>
+                <div className="grid two-col">
+                  <label className="field">
+                    <span>Payment method</span>
+                    <select
+                      value={form.payMethod}
+                      onChange={(e) => {
+                        handleSelectionTouched("payMethod");
+                        setForm((f) => ({ ...f, payMethod: e.target.value }));
+                      }}
+                    >
+                      <option value="card">Pay by Card</option>
+                      <option value="ach">Pay by ACH/Check</option>
+                    </select>
+                  </label>
+                  <article className="summary-total">
+                    <p><strong>Final total:</strong> {currency(totals.total)}</p>
+                    <p><strong>Deposit due:</strong> {currency(totals.deposit)}</p>
+                    <p className="muted">Saving will keep a version snapshot for edits and lifecycle changes.</p>
+                  </article>
+                </div>
+              </>
             )}
           </div>
 
@@ -2285,6 +2297,11 @@ export default function App() {
             onEditQuote={(quote) => {
               requestWorkflowAttentionRefresh({ force: true });
               handleEditQuote(quote);
+            }}
+            onOpenIntegrations={() => {
+              setHistoryTarget({ quoteId: "", reason: "" });
+              setHistoryOpen(false);
+              setIntegrationsOpen(true);
             }}
             canDeleteQuotes={authSession.isAdmin}
             onToast={pushToast}
