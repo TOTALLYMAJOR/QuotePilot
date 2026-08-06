@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { firebaseReady, storage } from "../lib/firebase";
+import { STARTER_CATALOG_PACKS } from "../data/starterCatalogPacks";
 import {
   createCategory,
   createEventType,
@@ -49,6 +50,7 @@ const RULE_KIND_META = [
 ];
 
 const ADMIN_TABS = [
+  { id: "starter", label: "Starter Packs" },
   { id: "packages", label: "Packages" },
   { id: "addons", label: "Addons" },
   { id: "rentals", label: "Rentals" },
@@ -113,6 +115,12 @@ function buildJsonDrafts(catalog) {
   };
 }
 
+function initialCatalogAdminTab(catalog) {
+  if (catalog?.settings?.starterCatalogPack?.id) return "menu";
+  if (catalog?.settings?.pricingSetupConfirmed !== true) return "starter";
+  return "packages";
+}
+
 function catalogDraftFingerprint(draft, jsonDrafts) {
   return JSON.stringify({ draft, jsonDrafts });
 }
@@ -144,13 +152,15 @@ export default function AdminCatalogModal({
   organizationId = "",
   onClose,
   onSave,
+  onApplyStarterPack,
+  onCatalogMutation,
   saving,
   selectedEventType: selectedEventTypeProp = "",
   onEventTypeChange,
   onToast
 }) {
   const [draft, setDraft] = useState(catalog);
-  const [activeTab, setActiveTab] = useState("packages");
+  const [activeTab, setActiveTab] = useState(() => initialCatalogAdminTab(catalog));
   const [status, setStatus] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [jsonDrafts, setJsonDrafts] = useState(() => buildJsonDrafts(catalog));
@@ -177,6 +187,8 @@ export default function AdminCatalogModal({
   const [menuItemBaselines, setMenuItemBaselines] = useState({});
   const [menuItemDirty, setMenuItemDirty] = useState({});
   const [menuItemSavingId, setMenuItemSavingId] = useState("");
+  const [packActionId, setPackActionId] = useState("");
+  const [manualSetupEnabled, setManualSetupEnabled] = useState(false);
   const scopedOrganizationId = String(organizationId || "").trim();
 
   const pushToast = (message, tone = "info") => {
@@ -234,7 +246,7 @@ export default function AdminCatalogModal({
       setSavedFingerprint(catalogDraftFingerprint(nextDraft, nextJsonDrafts));
       setStatus("");
       setUploadingLogo(false);
-      setActiveTab("packages");
+      setActiveTab(initialCatalogAdminTab(catalog));
       setSelectedEventType(String(selectedEventTypeProp || "").trim());
       setSelectedCategory("");
       setMenuEventTypes([]);
@@ -243,6 +255,8 @@ export default function AdminCatalogModal({
       setMenuItemBaselines({});
       setMenuItemDirty({});
       setMenuItemSavingId("");
+      setPackActionId("");
+      setManualSetupEnabled(false);
       setMenuLoading(false);
       setMenuActionLoading(false);
       setNewEventTypeName("");
@@ -251,7 +265,7 @@ export default function AdminCatalogModal({
       setCategoryEditName("");
       setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
     }
-  }, [open, scopedOrganizationId]);
+  }, [open, scopedOrganizationId, catalog?.settings?.starterCatalogPack?.appliedCatalogRevision]);
 
   useEffect(() => {
     if (!open) return;
@@ -333,6 +347,46 @@ export default function AdminCatalogModal({
   }, [open, selectedCategory, menuCategories]);
 
   if (!open) return null;
+
+  const stagedPack = draft?.settings?.starterCatalogPack || {};
+  const pricingReviewRequired = Boolean(stagedPack.id)
+    && draft?.settings?.pricingSetupConfirmed !== true;
+
+  const handleApplyStarterPack = async (pack) => {
+    if (typeof onApplyStarterPack !== "function") {
+      setStatus("Starter pack application is unavailable.");
+      return;
+    }
+    const replacing = Boolean(stagedPack.id);
+    if (replacing && hasUnsavedChanges) {
+      setStatus("Save or discard local catalog changes before replacing a staged pack.");
+      return;
+    }
+    if (replacing && stagedPack.id !== pack.id) {
+      const confirmed = window.confirm(
+        `Replace the staged ${stagedPack.name || stagedPack.id} pack with ${pack.name}? `
+        + "Replacement is allowed only when no generated record or suggested pricing setting has been edited."
+      );
+      if (!confirmed) return;
+    }
+    setPackActionId(pack.id);
+    setStatus("");
+    const result = await onApplyStarterPack({
+      packId: pack.id,
+      packVersion: pack.version,
+      replaceStagedPack: replacing
+    });
+    setPackActionId("");
+    if (!result?.ok) {
+      setStatus(result?.error || "Failed to apply starter catalog pack.");
+      pushToast(result?.error || "Failed to apply starter catalog pack.", "error");
+      return;
+    }
+    const message = `${pack.name} staged. Review every suggested amount before confirming pricing.`;
+    setActiveTab("menu");
+    setStatus(message);
+    pushToast(message, "success");
+  };
 
   const patchArrayItem = (key, index, field, value) => {
     setDraft((prev) => {
@@ -530,6 +584,7 @@ export default function AdminCatalogModal({
     setMenuActionLoading(true);
     try {
       const created = await createEventType({ name, organizationId: scopedOrganizationId });
+      onCatalogMutation?.(created);
       setNewEventTypeName("");
       await refreshEventTypes(created.id);
       await refreshEventMenuData(created.id);
@@ -563,6 +618,7 @@ export default function AdminCatalogModal({
         name,
         organizationId: scopedOrganizationId
       });
+      onCatalogMutation?.(created);
       setNewCategoryName("");
       await refreshEventMenuData(selectedEventType);
       setSelectedCategory(created.id);
@@ -589,7 +645,8 @@ export default function AdminCatalogModal({
 
     setMenuActionLoading(true);
     try {
-      await updateEventType(selectedEventType, { name, organizationId: scopedOrganizationId });
+      const updated = await updateEventType(selectedEventType, { name, organizationId: scopedOrganizationId });
+      onCatalogMutation?.(updated);
       await refreshEventTypes(selectedEventType);
       setStatus("Event type updated.");
       pushToast("Event type updated.", "success");
@@ -614,11 +671,12 @@ export default function AdminCatalogModal({
 
     setMenuActionLoading(true);
     try {
-      await updateCategory(selectedCategory, {
+      const updated = await updateCategory(selectedCategory, {
         name,
         eventTypeId: selectedEventType,
         organizationId: scopedOrganizationId
       });
+      onCatalogMutation?.(updated);
       await refreshEventMenuData(selectedEventType);
       setStatus("Category updated.");
       pushToast("Category updated.", "success");
@@ -642,7 +700,7 @@ export default function AdminCatalogModal({
     }
     setMenuActionLoading(true);
     try {
-      await createMenuItem({
+      const created = await createMenuItem({
         eventTypeId: selectedEventType,
         categoryId: selectedCategory,
         name,
@@ -651,6 +709,7 @@ export default function AdminCatalogModal({
         active: newItemDraft.active !== false,
         organizationId: scopedOrganizationId
       });
+      onCatalogMutation?.(created);
       setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
       await refreshEventMenuData(selectedEventType);
       setStatus("Menu item added.");
@@ -695,12 +754,13 @@ export default function AdminCatalogModal({
         pricingType,
         active: item.active !== false
       };
-      await updateMenuItem(item.id, {
+      const updated = await updateMenuItem(item.id, {
         ...nextPayload,
         eventTypeId: selectedEventType,
         categoryId: selectedCategory || item.categoryId,
         organizationId: scopedOrganizationId
       });
+      onCatalogMutation?.(updated);
       setMenuItems((prev) =>
         prev.map((entry) =>
           entry.id === itemId
@@ -761,7 +821,8 @@ export default function AdminCatalogModal({
   const handleDeleteManagedMenuItem = async (id) => {
     setMenuActionLoading(true);
     try {
-      await deleteMenuItem(id, { organizationId: scopedOrganizationId });
+      const deleted = await deleteMenuItem(id, { organizationId: scopedOrganizationId });
+      onCatalogMutation?.(deleted);
       setStatus("Menu item deleted.");
       pushToast("Menu item deleted.", "success");
       await refreshEventMenuData(selectedEventType);
@@ -876,6 +937,17 @@ export default function AdminCatalogModal({
       : "Not included in order (read only).";
   };
   const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
+  const hasCatalogContent = Boolean(
+    stagedPack.id
+    || draft?.packages?.length
+    || draft?.addons?.length
+    || draft?.rentals?.length
+    || menuEventTypes.length
+  );
+  const starterChoiceOnly = !hasCatalogContent && !manualSetupEnabled;
+  const visibleAdminTabs = starterChoiceOnly
+    ? ADMIN_TABS.filter((tab) => tab.id === "starter")
+    : ADMIN_TABS;
   const handleClose = () => {
     if (hasUnsavedChanges && !window.confirm("Discard unsaved catalog and branding changes?")) {
       return;
@@ -892,15 +964,17 @@ export default function AdminCatalogModal({
             <span className={hasUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
               {saving ? "Saving…" : hasUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "No pending changes"}
             </span>
-            <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
-              {saving ? "Saving..." : "Save changes"}
-            </button>
+            {!starterChoiceOnly && (
+              <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
+                {saving ? "Saving..." : "Save catalog changes"}
+              </button>
+            )}
             <button type="button" className="ghost" onClick={handleClose}>Close</button>
           </div>
         </div>
 
         <div className="admin-tabs" role="tablist" aria-label="Catalog admin sections">
-          {ADMIN_TABS.map((tab) => (
+          {visibleAdminTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -911,6 +985,86 @@ export default function AdminCatalogModal({
             </button>
           ))}
         </div>
+
+        {pricingReviewRequired && (
+          <div className="starter-pack-review-banner" role="status">
+            <strong>{stagedPack.name || "Starter pack"} is a draft.</strong>
+            <span> Suggested prices are not active until an admin reviews the complete catalog and confirms pricing.</span>
+          </div>
+        )}
+
+        {stagedPack.id && (
+          <div className="starter-pack-populated-banner" role="status">
+            <div>
+              <strong>Your {stagedPack.name || "starter"} catalog is populated.</strong>
+              <span> Menu, packages, add-ons, rentals, and staffing are ready to review.</span>
+            </div>
+            <button type="button" className="ghost" onClick={() => setActiveTab("menu")}>View populated menu</button>
+          </div>
+        )}
+
+        {activeTab === "starter" && (
+          <section className="admin-section">
+            <div className="admin-section-head"><h3>What kind of catering do you do most?</h3></div>
+            <div className="admin-section-body">
+              <div className="starter-pack-intro">
+                <p>Choose the closest fit. We will immediately fill your menu, packages, add-ons, rentals, and staffing setup.</p>
+                <p className="source-note">Everything remains editable. Suggested prices stay locked from quoting until you review and confirm them.</p>
+              </div>
+              <div className="starter-pack-grid">
+                {STARTER_CATALOG_PACKS.map((pack) => {
+                  const selected = stagedPack.id === pack.id && Number(stagedPack.version) === pack.version;
+                  return (
+                    <article className={`starter-pack-card ${selected ? "selected" : ""}`} key={`${pack.id}-${pack.version}`}>
+                      <div>
+                        <span className="eyebrow">Starter catalog</span>
+                        <h4>{pack.name}</h4>
+                        <p className="starter-pack-fit"><strong>Best for:</strong> {pack.bestFor}</p>
+                        <p>{pack.outcome}</p>
+                      </div>
+                      <div className="starter-pack-includes" aria-label={`${pack.name} contents`}>
+                        <span>{pack.counts.menuItems} menu items</span>
+                        <span>{pack.counts.packages} packages</span>
+                        <span>{pack.counts.addons} add-ons</span>
+                        <span>{pack.counts.rentals} rentals</span>
+                      </div>
+                      <button
+                        type="button"
+                        className={selected ? "ghost" : "cta"}
+                        onClick={() => handleApplyStarterPack(pack)}
+                        disabled={saving || Boolean(packActionId) || selected || draft?.settings?.pricingSetupConfirmed === true}
+                      >
+                        {packActionId === pack.id
+                          ? "Populating your catalog..."
+                          : selected
+                            ? "Catalog populated"
+                            : stagedPack.id
+                              ? `Switch to ${pack.name}`
+                              : `Use ${pack.name}`}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+              {draft?.settings?.pricingSetupConfirmed === true && (
+                <p className="warning-note">Starter packs are available only during initial unconfirmed catalog setup.</p>
+              )}
+              {starterChoiceOnly && (
+                <div className="starter-pack-manual-path">
+                  <span>None of these fit?</span>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      setManualSetupEnabled(true);
+                      setActiveTab("packages");
+                    }}
+                  >Build my catalog manually</button>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {activeTab === "packages" && (
           <Section title="Packages" onAdd={() => addRow("packages")}>
@@ -1762,9 +1916,11 @@ export default function AdminCatalogModal({
           <span className="source-note">
             {status || (hasUnsavedChanges ? "Your changes are not saved yet." : "Settings are up to date.")}
           </span>
-          <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
-            {saving ? "Saving..." : "Save changes"}
-          </button>
+          {!starterChoiceOnly && (
+            <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
+              {saving ? "Saving..." : "Save catalog changes"}
+            </button>
+          )}
         </div>
       </div>
     </div>

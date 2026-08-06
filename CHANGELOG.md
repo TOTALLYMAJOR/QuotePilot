@@ -6,6 +6,26 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-05
+
+### Added
+
+- Owner-onboarding starter catalog packs for Wedding & events, Corporate
+  drop-off, BBQ / Southern, and Church & community. Packs populate the existing
+  Catalog Admin setup gate with versioned menu, package, add-on, rental, and
+  staffing drafts while leaving pricing unconfirmed until owner review.
+- Blank catalog setup now presents only clearly described industry choices,
+  populates immediately from the selected pack without a second save step, and
+  opens the resulting menu for review; manual build-from-scratch remains one
+  explicit secondary path instead of a row of empty configuration tabs.
+- Server-authoritative starter-pack apply, safe staged replacement, and pricing
+  confirmation transactions with catalog revision preconditions, generated vs
+  modified record hashing, actor/timestamp/revision confirmation evidence,
+  historical manifest lookup, complete catalog validation, and integer
+  minor-unit money storage.
+- Dry-run-first `seed:menu:firestore -- --pack <pack-id>` support for applying
+  the same versioned starter manifests through the existing tenant seed tool.
+
 ### Fixed
 
 - Firebase Functions production packaging now declares the Firebase App and
@@ -19,7 +39,6 @@ This changelog is backfilled from git history and will be maintained going forwa
   paid status is visible; the browser return itself never marks a deposit paid.
 
 ### Added
-
 - Tenant-scoped Workflow Attention queue for active quotes, with a post-idle
   header count, due/overdue follow-ups, pending approvals, new and acknowledged
   customer change requests, request-ID-bound current handling records, and

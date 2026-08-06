@@ -398,6 +398,8 @@ export const DEFAULT_SETTINGS = {
   pricingSettingsVersion: 0,
   pricingSettingsUpdatedAtISO: "",
   pricingSetupConfirmed: true,
+  catalogRevision: 0,
+  pricingConfirmation: null,
   featureFlags: { ...DEFAULT_FEATURE_FLAGS },
   guidedSellingEnabled: true,
   staffingLaborEnabled: true,
@@ -418,6 +420,11 @@ function toNumber(value, fallback = 0, min = Number.NEGATIVE_INFINITY, max = Num
   const n = Number(value);
   if (Number.isNaN(n)) return fallback;
   return Math.min(max, Math.max(min, n));
+}
+
+function fromMinorUnits(value, fallback = 0) {
+  const minor = Number(value);
+  return Number.isSafeInteger(minor) ? minor / 100 : fallback;
 }
 
 function normalizeId(value, fallback) {
@@ -550,7 +557,9 @@ function normalizeBartenderRateTypes(input, fallbackRate = DEFAULT_SETTINGS.bart
     .map((item, idx) => ({
       id: normalizeId(item?.id, `bartender-rate-${idx + 1}`),
       name: toText(item?.name, `Bartender Type ${idx + 1}`),
-      rate: toNumber(item?.rate, fallbackRate, 0)
+      rate: Object.prototype.hasOwnProperty.call(item || {}, "rateMinor")
+        ? fromMinorUnits(item.rateMinor, fallbackRate)
+        : toNumber(item?.rate, fallbackRate, 0)
     }))
     .filter((item) => {
       if (!item.id || seen.has(item.id)) return false;
@@ -571,8 +580,12 @@ function normalizeStaffingRateTypes(input, {
     .map((item, idx) => ({
       id: normalizeId(item?.id, `staffing-rate-${idx + 1}`),
       name: toText(item?.name, `Staffing Type ${idx + 1}`),
-      serverRate: toNumber(item?.serverRate, fallbackServerRate, 0),
-      chefRate: toNumber(item?.chefRate, fallbackChefRate, 0)
+      serverRate: Object.prototype.hasOwnProperty.call(item || {}, "serverRateMinor")
+        ? fromMinorUnits(item.serverRateMinor, fallbackServerRate)
+        : toNumber(item?.serverRate, fallbackServerRate, 0),
+      chefRate: Object.prototype.hasOwnProperty.call(item || {}, "chefRateMinor")
+        ? fromMinorUnits(item.chefRateMinor, fallbackChefRate)
+        : toNumber(item?.chefRate, fallbackChefRate, 0)
     }))
     .filter((item) => {
       if (!item.id || seen.has(item.id)) return false;
@@ -600,7 +613,9 @@ function normalizeMenuSections(input) {
         return {
           id,
           name,
-          price: toNumber(item?.price, 0, 0),
+          price: Object.prototype.hasOwnProperty.call(item || {}, "priceMinor")
+            ? fromMinorUnits(item.priceMinor, 0)
+            : toNumber(item?.price, 0, 0),
           pricingType,
           type: pricingType,
           active: item?.active !== false
@@ -783,6 +798,12 @@ export function normalizeCatalog(raw) {
     if (hasOwnSetting(inputSettings, key)) return inputSettings[key];
     return pricingSetupConfirmed ? confirmedFallback : unconfirmedFallback;
   };
+  const pricingMoneyValue = (legacyKey, minorKey, confirmedFallback, unconfirmedFallback) => {
+    if (hasOwnSetting(inputSettings, minorKey)) {
+      return fromMinorUnits(inputSettings[minorKey], unconfirmedFallback);
+    }
+    return pricingValue(legacyKey, confirmedFallback, unconfirmedFallback);
+  };
   const hasEmptyServiceFeeTiers = Array.isArray(inputSettings.serviceFeeTiers)
     && inputSettings.serviceFeeTiers.length === 0;
   const hasEmptyTaxRegions = Array.isArray(inputSettings.taxRegions)
@@ -798,14 +819,18 @@ export function normalizeCatalog(raw) {
   const packages = (raw.packages || DEFAULT_PACKAGES).map((p) => ({
     id: p.id,
     name: p.name,
-    ppp: Number(p.ppp || 0)
+    ppp: Object.prototype.hasOwnProperty.call(p || {}, "pppMinor")
+      ? fromMinorUnits(p.pppMinor, 0)
+      : Number(p.ppp || 0)
   }));
   const addons = (raw.addons || DEFAULT_ADDONS).map((a) => ({
     id: a.id,
     name: a.name,
     pricingType: normalizePricingType(a.pricingType || a.type, "per_person"),
     type: normalizePricingType(a.pricingType || a.type, "per_person"),
-    price: Number(a.price || 0),
+    price: Object.prototype.hasOwnProperty.call(a || {}, "priceMinor")
+      ? fromMinorUnits(a.priceMinor, 0)
+      : Number(a.price || 0),
     staffRole: inferAddonStaffRole(a),
     active: a.active !== false
   }));
@@ -813,7 +838,9 @@ export function normalizeCatalog(raw) {
     normalizeRental({
       id: r.id,
       name: r.name,
-      price: Number(r.price || 0),
+      price: Object.prototype.hasOwnProperty.call(r || {}, "priceMinor")
+        ? fromMinorUnits(r.priceMinor, 0)
+        : Number(r.price || 0),
       qtyPerGuests: Number(r.qtyPerGuests || 1),
       pricingType: normalizePricingType(r.pricingType || r.type, "per_item"),
       type: normalizePricingType(r.pricingType || r.type, "per_item"),
@@ -854,8 +881,9 @@ export function normalizeCatalog(raw) {
     }]
   ));
   const bartenderRate = toNumber(
-    pricingValue(
+    pricingMoneyValue(
       "bartenderRate",
+      "bartenderRateMinor",
       hasEmptyBartenderRateTypes ? 0 : DEFAULT_SETTINGS.bartenderRate,
       0
     ),
@@ -863,8 +891,9 @@ export function normalizeCatalog(raw) {
     0
   );
   const serverRate = toNumber(
-    pricingValue(
+    pricingMoneyValue(
       "serverRate",
+      "serverRateMinor",
       hasEmptyStaffingRateTypes ? 0 : DEFAULT_SETTINGS.serverRate,
       0
     ),
@@ -872,8 +901,9 @@ export function normalizeCatalog(raw) {
     0
   );
   const chefRate = toNumber(
-    pricingValue(
+    pricingMoneyValue(
       "chefRate",
+      "chefRateMinor",
       hasEmptyStaffingRateTypes ? 0 : DEFAULT_SETTINGS.chefRate,
       0
     ),
@@ -971,12 +1001,17 @@ export function normalizeCatalog(raw) {
     settings: {
       ...rawSettings,
       perMileRate: toNumber(
-        pricingValue("perMileRate", DEFAULT_SETTINGS.perMileRate, 0),
+        pricingMoneyValue("perMileRate", "perMileRateMinor", DEFAULT_SETTINGS.perMileRate, 0),
         0,
         0
       ),
       longDistancePerMileRate: toNumber(
-        pricingValue("longDistancePerMileRate", DEFAULT_SETTINGS.longDistancePerMileRate, 0),
+        pricingMoneyValue(
+          "longDistancePerMileRate",
+          "longDistancePerMileRateMinor",
+          DEFAULT_SETTINGS.longDistancePerMileRate,
+          0
+        ),
         0,
         0
       ),

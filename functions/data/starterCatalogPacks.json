@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "commonSettings": {
+    "perMileRateMinor": 70,
+    "longDistancePerMileRateMinor": 110,
+    "deliveryThresholdMiles": 30,
+    "serviceFeePct": 0.2,
+    "serviceFeeTiers": [
+      { "id": "tier-small", "minGuests": 0, "maxGuests": 99, "pct": 0.2 },
+      { "id": "tier-mid", "minGuests": 100, "maxGuests": 249, "pct": 0.18 },
+      { "id": "tier-large", "minGuests": 250, "maxGuests": 9999, "pct": 0.16 }
+    ],
+    "taxRate": 0.1,
+    "taxRegions": [
+      { "id": "local", "name": "Local", "rate": 0.1 },
+      { "id": "reduced", "name": "Reduced District", "rate": 0.085 },
+      { "id": "out_of_state", "name": "Out of State", "rate": 0 }
+    ],
+    "defaultTaxRegion": "local",
+    "depositPct": 0.3,
+    "depositNotice": "30% deposit is required to lock in your date.",
+    "quoteValidityDays": 30,
+    "staffingChargeMode": "per_hour",
+    "staffingLaborEnabled": true,
+    "seasonalProfiles": [
+      {
+        "id": "standard",
+        "name": "Standard pricing",
+        "startMonth": 1,
+        "startDay": 1,
+        "endMonth": 12,
+        "endDay": 31,
+        "packageMultiplier": 1,
+        "addonMultiplier": 1,
+        "rentalMultiplier": 1
+      }
+    ],
+    "defaultSeasonProfile": "standard"
+  },
+  "packs": [
+    {
+      "id": "wedding-events",
+      "version": 1,
+      "name": "Wedding & events",
+      "description": "Reception-ready packages, service upgrades, rentals, and a polished event menu.",
+      "packages": [
+        { "id": "celebration", "name": "Celebration", "pppMinor": 2800 },
+        { "id": "signature", "name": "Signature", "pppMinor": 3800 },
+        { "id": "premier", "name": "Premier", "pppMinor": 5200 }
+      ],
+      "addons": [
+        { "id": "cocktail-hour", "name": "Cocktail Hour Bites", "pricingType": "per_person", "priceMinor": 700 },
+        { "id": "dessert-station", "name": "Dessert Station", "pricingType": "per_person", "priceMinor": 600 },
+        { "id": "late-night-snack", "name": "Late-night Snack", "pricingType": "per_person", "priceMinor": 500 },
+        { "id": "coffee-station", "name": "Coffee Station", "pricingType": "per_event", "priceMinor": 12500 }
+      ],
+      "rentals": [
+        { "id": "linens", "name": "Table Linens", "pricingType": "per_item", "priceMinor": 1200, "qtyPerGuests": 8 },
+        { "id": "place-settings", "name": "Place Settings", "pricingType": "per_person", "priceMinor": 600, "qtyPerGuests": 1 },
+        { "id": "chafers", "name": "Chafing Sets", "pricingType": "per_item", "priceMinor": 1800, "qtyPerGuests": 40 }
+      ],
+      "settings": {
+        "bartenderRateMinor": 3500,
+        "bartenderRateTypes": [
+          { "id": "standard", "name": "Standard Bartender", "rateMinor": 3500 },
+          { "id": "premium", "name": "Lead Bartender", "rateMinor": 4500 }
+        ],
+        "defaultBartenderRateType": "standard",
+        "serverRateMinor": 2800,
+        "chefRateMinor": 3800,
+        "staffingRateTypes": [
+          { "id": "standard", "name": "Standard Event Team", "serverRateMinor": 2800, "chefRateMinor": 3800 },
+          { "id": "senior", "name": "Senior Event Team", "serverRateMinor": 3400, "chefRateMinor": 4600 }
+        ],
+        "defaultStaffingRateType": "standard"
+      },
+      "eventTypes": [
+        {
+          "id": "wedding-events",
+          "name": "Wedding & Events",
+          "sections": [
+            { "id": "passed-bites", "name": "Passed Bites", "items": ["Cocktail Meatballs", "Assorted Sliders", "Shrimp Kabobs", "Veggie Croissants"] },
+            { "id": "entrees", "name": "Entrées", "items": ["Roasted Chicken", "Grilled Salmon", "Braised Beef", "Vegetable Alfredo"] },
+            { "id": "sides", "name": "Sides", "items": ["Garlic Mashed Potatoes", "Rice Pilaf", "Green Beans", "Roasted Asparagus"] },
+            { "id": "salads", "name": "Salads", "items": ["Classic Caesar", "Garden Salad", "Strawberry Fields"] },
+            { "id": "desserts", "name": "Desserts", "items": ["Bread Pudding", "Assorted Cakes", "Assorted Cobblers"] },
+            { "id": "beverages", "name": "Beverages", "items": ["Assorted Lemonade", "Assorted Teas", "Coffee", "Still/Sparkling Water"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "corporate-drop-off",
+      "version": 1,
+      "name": "Corporate drop-off",
+      "description": "Fast office ordering with breakfast, lunch, beverage, and meeting-service options.",
+      "packages": [
+        { "id": "drop-off-essentials", "name": "Drop-off Essentials", "pppMinor": 1600 },
+        { "id": "executive-lunch", "name": "Executive Lunch", "pppMinor": 2200 },
+        { "id": "full-service-corporate", "name": "Full-service Corporate", "pppMinor": 3000 }
+      ],
+      "addons": [
+        { "id": "breakfast-upgrade", "name": "Breakfast Upgrade", "pricingType": "per_person", "priceMinor": 500 },
+        { "id": "dessert-tray", "name": "Dessert Tray", "pricingType": "per_person", "priceMinor": 300 },
+        { "id": "beverage-bundle", "name": "Beverage Bundle", "pricingType": "per_person", "priceMinor": 200 },
+        { "id": "coffee-service", "name": "Coffee Service", "pricingType": "per_event", "priceMinor": 8500 }
+      ],
+      "rentals": [
+        { "id": "chafers", "name": "Chafing Sets", "pricingType": "per_item", "priceMinor": 1200, "qtyPerGuests": 40 },
+        { "id": "beverage-dispensers", "name": "Beverage Dispensers", "pricingType": "per_item", "priceMinor": 1800, "qtyPerGuests": 50 },
+        { "id": "linens", "name": "Table Linens", "pricingType": "per_item", "priceMinor": 1000, "qtyPerGuests": 8 }
+      ],
+      "settings": {
+        "bartenderRateMinor": 3200,
+        "bartenderRateTypes": [
+          { "id": "standard", "name": "Standard Bartender", "rateMinor": 3200 },
+          { "id": "premium", "name": "Lead Bartender", "rateMinor": 4000 }
+        ],
+        "defaultBartenderRateType": "standard",
+        "serverRateMinor": 2400,
+        "chefRateMinor": 3200,
+        "staffingRateTypes": [
+          { "id": "standard", "name": "Standard Corporate Team", "serverRateMinor": 2400, "chefRateMinor": 3200 },
+          { "id": "senior", "name": "Lead Corporate Team", "serverRateMinor": 2900, "chefRateMinor": 3800 }
+        ],
+        "defaultStaffingRateType": "standard"
+      },
+      "eventTypes": [
+        {
+          "id": "corporate-drop-off",
+          "name": "Corporate Drop-off",
+          "sections": [
+            { "id": "breakfast", "name": "Breakfast", "items": ["Scrambled Eggs", "Breakfast Potatoes", "Assorted Pastries", "Fresh Fruit"] },
+            { "id": "sandwiches-wraps", "name": "Sandwiches & Wraps", "items": ["Turkey Club", "Chicken Caesar Wrap", "Veggie Wrap"] },
+            { "id": "entrees", "name": "Entrées", "items": ["Herb Roasted Chicken", "Braised Beef Tips", "Baked Pasta", "Grilled Vegetables"] },
+            { "id": "sides", "name": "Sides", "items": ["Rice Pilaf", "Green Beans", "Pasta Salad", "Garden Salad"] },
+            { "id": "desserts", "name": "Desserts", "items": ["Assorted Brownies", "Assorted Cookies", "Fresh Fruit Tray"] },
+            { "id": "beverages", "name": "Beverages", "items": ["Coffee", "Assorted Teas", "Assorted Lemonade", "Bottled Water"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bbq-southern",
+      "version": 1,
+      "name": "BBQ / Southern",
+      "description": "Smokehouse packages with familiar Southern sides, desserts, and buffet equipment.",
+      "packages": [
+        { "id": "backyard", "name": "Backyard", "pppMinor": 1800 },
+        { "id": "smokehouse", "name": "Smokehouse", "pppMinor": 2500 },
+        { "id": "southern-feast", "name": "Southern Feast", "pppMinor": 3300 }
+      ],
+      "addons": [
+        { "id": "smoked-sausage", "name": "Smoked Sausage", "pricingType": "per_person", "priceMinor": 400 },
+        { "id": "extra-meat", "name": "Extra Meat Selection", "pricingType": "per_person", "priceMinor": 700 },
+        { "id": "dessert", "name": "Southern Dessert", "pricingType": "per_person", "priceMinor": 400 },
+        { "id": "beverage-service", "name": "Tea & Lemonade Service", "pricingType": "per_person", "priceMinor": 200 }
+      ],
+      "rentals": [
+        { "id": "chafers", "name": "Chafing Sets", "pricingType": "per_item", "priceMinor": 1200, "qtyPerGuests": 40 },
+        { "id": "serving-sets", "name": "Serving Utensil Sets", "pricingType": "per_item", "priceMinor": 800, "qtyPerGuests": 40 },
+        { "id": "picnic-linens", "name": "Picnic Table Linens", "pricingType": "per_item", "priceMinor": 800, "qtyPerGuests": 8 }
+      ],
+      "settings": {
+        "bartenderRateMinor": 3000,
+        "bartenderRateTypes": [
+          { "id": "standard", "name": "Standard Bartender", "rateMinor": 3000 },
+          { "id": "premium", "name": "Lead Bartender", "rateMinor": 3800 }
+        ],
+        "defaultBartenderRateType": "standard",
+        "serverRateMinor": 2400,
+        "chefRateMinor": 3400,
+        "staffingRateTypes": [
+          { "id": "standard", "name": "Standard BBQ Team", "serverRateMinor": 2400, "chefRateMinor": 3400 },
+          { "id": "senior", "name": "Lead BBQ Team", "serverRateMinor": 2900, "chefRateMinor": 4200 }
+        ],
+        "defaultStaffingRateType": "standard"
+      },
+      "eventTypes": [
+        {
+          "id": "bbq-southern",
+          "name": "BBQ / Southern",
+          "sections": [
+            { "id": "smokehouse-meats", "name": "Smokehouse Meats", "items": ["Smoked Brisket", "Pulled Pork", "Smoked Chicken", "Beef/Pork Ribs"] },
+            { "id": "southern-sides", "name": "Southern Sides", "items": ["Mac & Cheese", "Baked Beans", "Collards", "Potato Salad"] },
+            { "id": "salads", "name": "Salads", "items": ["Coleslaw", "Garden Salad"] },
+            { "id": "breads", "name": "Breads", "items": ["Cornbread Muffins", "Hawaiian Rolls"] },
+            { "id": "desserts", "name": "Desserts", "items": ["Banana Pudding", "Assorted Cobblers", "Assorted Brownies"] },
+            { "id": "beverages", "name": "Beverages", "items": ["Sweet Tea", "Assorted Lemonade", "Bottled Water"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "church-community",
+      "version": 1,
+      "name": "Church & community",
+      "description": "Approachable group meals for fellowship events, community gatherings, and celebrations.",
+      "packages": [
+        { "id": "fellowship", "name": "Fellowship", "pppMinor": 1400 },
+        { "id": "community-table", "name": "Community Table", "pppMinor": 1800 },
+        { "id": "celebration", "name": "Celebration", "pppMinor": 2400 }
+      ],
+      "addons": [
+        { "id": "dessert", "name": "Dessert Selection", "pricingType": "per_person", "priceMinor": 300 },
+        { "id": "beverage-service", "name": "Beverage Service", "pricingType": "per_person", "priceMinor": 150 },
+        { "id": "boxed-to-go", "name": "Boxed To-go Service", "pricingType": "per_person", "priceMinor": 200 },
+        { "id": "setup-cleanup", "name": "Setup & Cleanup", "pricingType": "per_event", "priceMinor": 12500 }
+      ],
+      "rentals": [
+        { "id": "chafers", "name": "Chafing Sets", "pricingType": "per_item", "priceMinor": 1200, "qtyPerGuests": 40 },
+        { "id": "beverage-dispensers", "name": "Beverage Dispensers", "pricingType": "per_item", "priceMinor": 1800, "qtyPerGuests": 50 },
+        { "id": "linens", "name": "Table Linens", "pricingType": "per_item", "priceMinor": 800, "qtyPerGuests": 8 }
+      ],
+      "settings": {
+        "bartenderRateMinor": 3000,
+        "bartenderRateTypes": [
+          { "id": "standard", "name": "Standard Bartender", "rateMinor": 3000 },
+          { "id": "premium", "name": "Lead Bartender", "rateMinor": 3800 }
+        ],
+        "defaultBartenderRateType": "standard",
+        "serverRateMinor": 2200,
+        "chefRateMinor": 3000,
+        "staffingRateTypes": [
+          { "id": "standard", "name": "Standard Community Team", "serverRateMinor": 2200, "chefRateMinor": 3000 },
+          { "id": "senior", "name": "Lead Community Team", "serverRateMinor": 2600, "chefRateMinor": 3600 }
+        ],
+        "defaultStaffingRateType": "standard"
+      },
+      "eventTypes": [
+        {
+          "id": "church-community",
+          "name": "Church & Community",
+          "sections": [
+            { "id": "mains", "name": "Mains", "items": ["Roasted Chicken", "Baked Ham", "Meatloaf", "Baked Pasta"] },
+            { "id": "sides", "name": "Sides", "items": ["Mashed Potatoes", "Green Beans", "Rice Pilaf", "Mac & Cheese"] },
+            { "id": "salads", "name": "Salads", "items": ["Garden Salad", "Potato Salad", "Coleslaw"] },
+            { "id": "breads", "name": "Breads", "items": ["Yeast Rolls", "Cornbread Muffins"] },
+            { "id": "desserts", "name": "Desserts", "items": ["Banana Pudding", "Assorted Cakes", "Assorted Cobblers"] },
+            { "id": "beverages", "name": "Beverages", "items": ["Assorted Teas", "Assorted Lemonade", "Fruit Punch", "Bottled Water"] }
+          ]
+        }
+      ]
+    }
+  ]
+}

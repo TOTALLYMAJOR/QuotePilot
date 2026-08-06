@@ -1542,6 +1542,26 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       plan: deleteField(),
       featureFlags: deleteField()
     }));
+    await assertFails(updateDoc(settingsRef, {
+      pricingSetupConfirmed: true,
+      pricingConfirmation: {
+        actorUid: "admin-org-a",
+        actorEmail: "admin-a@example.com",
+        confirmedAtISO: "2026-08-05T00:00:00.000Z",
+        confirmedCatalogRevision: 1
+      }
+    }));
+    await assertFails(updateDoc(settingsRef, {
+      pricingConfirmation: {
+        actorUid: "admin-org-a",
+        confirmedCatalogRevision: 1
+      }
+    }));
+    await assertSucceeds(updateDoc(settingsRef, {
+      pricingSetupConfirmed: false,
+      pricingConfirmation: null,
+      catalogRevision: 1
+    }));
     await assertFails(deleteDoc(settingsRef));
     await assertSucceeds(updateDoc(settingsRef, {
       brandName: "Admin-Managed Brand"

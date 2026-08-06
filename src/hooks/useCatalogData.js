@@ -16,6 +16,10 @@ import {
 } from "../lib/organizationService";
 import { getEventTypes, getMenuCategories, getMenuItems } from "../lib/menuService";
 import { recordDiagnosticError } from "../lib/sessionDiagnostics";
+import {
+  applyStarterCatalogPack,
+  confirmCatalogPricing
+} from "../lib/catalogStarterPackService";
 
 const LOCAL_KEY = "quoteWizard.catalog";
 const EDITABLE_SETTINGS_KEYS = Object.freeze(Object.keys(DEFAULT_SETTINGS));
@@ -152,7 +156,7 @@ async function loadFromFirebaseByOrganization(organizationId = "") {
 function packageWriteShape(item = {}) {
   return {
     name: String(item.name || ""),
-    ppp: Number(item.ppp || 0)
+    pppMinor: Math.round(Number(item.ppp || 0) * 100)
   };
 }
 
@@ -162,7 +166,7 @@ function addonWriteShape(item = {}) {
     name: String(item.name || ""),
     pricingType,
     type: pricingType,
-    price: Number(item.price || 0),
+    priceMinor: Math.round(Number(item.price || 0) * 100),
     staffRole: normalizeAddonStaffRole(item.staffRole),
     active: item.active !== false
   };
@@ -172,7 +176,7 @@ function rentalWriteShape(item = {}) {
   const pricingType = normalizePricingType(item.pricingType || item.type || "per_item");
   return {
     name: String(item.name || ""),
-    price: Number(item.price || 0),
+    priceMinor: Math.round(Number(item.price || 0) * 100),
     qtyPerGuests: Number(item.qtyPerGuests || 1),
     pricingType,
     type: pricingType,
@@ -214,10 +218,35 @@ function mapCatalogItemsById(items = [], label = "catalog record") {
   return mapped;
 }
 
+const MONEY_SETTING_KEYS = Object.freeze({
+  perMileRate: "perMileRateMinor",
+  longDistancePerMileRate: "longDistancePerMileRateMinor",
+  bartenderRate: "bartenderRateMinor",
+  serverRate: "serverRateMinor",
+  chefRate: "chefRateMinor"
+});
+
 function buildSettingsPatch(nextSettings = {}, baselineSettings = {}) {
   return EDITABLE_SETTINGS_KEYS.reduce((patch, key) => {
     if (!valuesMatch(nextSettings[key], baselineSettings[key])) {
-      patch[key] = nextSettings[key];
+      if (MONEY_SETTING_KEYS[key]) {
+        patch[MONEY_SETTING_KEYS[key]] = Math.round(Number(nextSettings[key] || 0) * 100);
+      } else if (key === "bartenderRateTypes") {
+        patch[key] = (nextSettings[key] || []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          rateMinor: Math.round(Number(item.rate || 0) * 100)
+        }));
+      } else if (key === "staffingRateTypes") {
+        patch[key] = (nextSettings[key] || []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          serverRateMinor: Math.round(Number(item.serverRate || 0) * 100),
+          chefRateMinor: Math.round(Number(item.chefRate || 0) * 100)
+        }));
+      } else {
+        patch[key] = nextSettings[key];
+      }
     }
     return patch;
   }, {});
@@ -285,6 +314,7 @@ async function saveToFirebase(
   catalog,
   baselineCatalog,
   serverFingerprints,
+  expectedCatalogRevision,
   organizationId = ""
 ) {
   const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
@@ -310,8 +340,7 @@ async function saveToFirebase(
     ref: doc(collectionRefs[change.key], change.id)
   }));
   const settingsPatch = buildSettingsPatch(catalog.settings, baselineCatalog.settings);
-  const settingsChanged = Object.keys(settingsPatch).length > 0;
-  const transactionReadCount = operations.length + (settingsChanged ? 1 : 0);
+  const transactionReadCount = operations.length + 1;
   if (transactionReadCount > 450) {
     throw new Error("This edit changes too many catalog records at once. Split it into smaller saves.");
   }
@@ -321,18 +350,21 @@ async function saveToFirebase(
     const operationSnapshots = await Promise.all(
       operations.map((operation) => transaction.get(operation.ref))
     );
-    let settingsSnap = null;
-    if (settingsChanged) {
-      settingsSnap = await transaction.get(settingsRef);
-      if (!settingsSnap.exists()) {
-        throw new Error("Catalog settings were removed. Reload before saving.");
-      }
-      if (
-        !serverFingerprints?.settings
-        || fingerprint(settingsSnap.data()) !== serverFingerprints.settings
-      ) {
-        throw new Error("Pricing, brand, or entitlement settings changed elsewhere. Reload before saving.");
-      }
+    const settingsSnap = await transaction.get(settingsRef);
+    if (!settingsSnap.exists()) {
+      throw new Error("Catalog settings were removed. Reload before saving.");
+    }
+    if (
+      !serverFingerprints?.settings
+      || fingerprint(settingsSnap.data()) !== serverFingerprints.settings
+    ) {
+      throw new Error("Pricing, brand, or entitlement settings changed elsewhere. Reload before saving.");
+    }
+    const currentCatalogRevision = Math.max(0, Number(settingsSnap.data()?.catalogRevision || 0));
+    if (currentCatalogRevision !== expectedCatalogRevision) {
+      throw new Error(
+        `Catalog revision changed from ${expectedCatalogRevision} to ${currentCatalogRevision}. Reload before saving.`
+      );
     }
 
     operations.forEach((operation, index) => {
@@ -370,10 +402,15 @@ async function saveToFirebase(
           : {})
       }, { merge: true });
     });
-    if (settingsChanged) {
-      transaction.set(settingsRef, settingsPatch, { merge: true });
-    }
+    transaction.set(settingsRef, {
+      ...settingsPatch,
+      catalogRevision: currentCatalogRevision + 1,
+      pricingSetupConfirmed: false,
+      pricingConfirmation: null,
+      updatedAtISO: changedAtISO
+    }, { merge: true });
   });
+  return expectedCatalogRevision + 1;
 }
 
 export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
@@ -510,6 +547,28 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     setReloadVersion((version) => version + 1);
   }, []);
 
+  const acceptCatalogMutation = useCallback(({ catalogSettings } = {}) => {
+    if (!catalogSettings || typeof catalogSettings !== "object") return;
+    setState((prev) => {
+      const normalized = normalizeCatalog({
+        packages: prev.packages,
+        addons: prev.addons,
+        rentals: prev.rentals,
+        settings: catalogSettings
+      });
+      return {
+        ...prev,
+        settings: normalized.settings,
+        serverFingerprints: prev.serverFingerprints
+          ? {
+              ...prev.serverFingerprints,
+              settings: fingerprint(catalogSettings)
+            }
+          : prev.serverFingerprints
+      };
+    });
+  }, []);
+
   const saveCatalog = useCallback(async (nextCatalog) => {
     if (!enabled) {
       return { ok: false, error: "Sign in as staff to edit catalog." };
@@ -534,41 +593,42 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         error: "Add at least one specifically named package with a price above $0 before saving the catalog."
       };
     }
-    if (normalized.settings?.pricingSetupConfirmed !== true) {
+    const wantsPricingConfirmation = normalized.settings?.pricingSetupConfirmed === true;
+    const hasStagedPack = Boolean(normalized.settings?.starterCatalogPack?.id);
+    if (!wantsPricingConfirmation && !hasStagedPack) {
       return {
         ok: false,
         error: "Review the Pricing tab and confirm this organization's fee, tax, deposit, travel, and staffing settings before saving."
       };
     }
-    const baseVersion = Math.max(
-      0,
-      Number(state.settings?.pricingSettingsVersion || 0),
-      Number(normalized.settings?.pricingSettingsVersion || 0)
-    );
-    const settingsVersion = baseVersion > 0 ? baseVersion + 1 : 1;
-    const settingsUpdatedAtISO = new Date().toISOString();
-    const normalizedWithPricingVersion = normalizeCatalog({
+    const normalizedForPersistence = normalizeCatalog({
       ...normalized,
       settings: {
         ...normalized.settings,
-        pricingSettingsVersion: settingsVersion,
-        pricingSettingsUpdatedAtISO: settingsUpdatedAtISO
+        pricingSetupConfirmed: firebaseReady ? false : wantsPricingConfirmation
       }
     });
     setState((prev) => ({ ...prev, saving: true, error: "" }));
 
     try {
-      let persistedCatalog = normalizedWithPricingVersion;
+      let persistedCatalog = normalizedForPersistence;
       let persistedSource = firebaseReady ? "firebase-org" : "local-cache";
       let persistedFingerprints = state.serverFingerprints;
       let persistedEventTypes = state.eventTypes;
       if (firebaseReady) {
-        await saveToFirebase(normalizedWithPricingVersion, {
+        const expectedCatalogRevision = Math.max(0, Number(state.settings?.catalogRevision || 0));
+        const savedCatalogRevision = await saveToFirebase(normalizedForPersistence, {
           packages: state.packages,
           addons: state.addons,
           rentals: state.rentals,
           settings: state.settings
-        }, state.serverFingerprints, resolvedOrganizationId);
+        }, state.serverFingerprints, expectedCatalogRevision, resolvedOrganizationId);
+        if (wantsPricingConfirmation) {
+          await confirmCatalogPricing({
+            organizationId: resolvedOrganizationId,
+            expectedCatalogRevision: savedCatalogRevision
+          });
+        }
         const [reloaded, eventTypes] = await Promise.all([
           loadFromFirebaseByOrganization(resolvedOrganizationId),
           getEventTypes({ organizationId: resolvedOrganizationId })
@@ -615,6 +675,49 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     state.settings
   ]);
 
+  const stageStarterPack = useCallback(async ({
+    packId = "",
+    packVersion,
+    replaceStagedPack = false
+  } = {}) => {
+    if (!enabled || !firebaseReady) {
+      return { ok: false, error: "Firebase catalog access is required to apply a starter pack." };
+    }
+    const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
+    if (!resolvedOrganizationId) {
+      return { ok: false, error: "organizationId is required for starter packs." };
+    }
+    setState((prev) => ({ ...prev, saving: true, error: "" }));
+    try {
+      const result = await applyStarterCatalogPack({
+        organizationId: resolvedOrganizationId,
+        packId,
+        packVersion,
+        replaceStagedPack,
+        expectedCatalogRevision: Math.max(0, Number(state.settings?.catalogRevision || 0))
+      });
+      const [reloaded, eventTypes] = await Promise.all([
+        loadFromFirebaseByOrganization(resolvedOrganizationId),
+        getEventTypes({ organizationId: resolvedOrganizationId })
+      ]);
+      setState((prev) => ({
+        ...prev,
+        saving: false,
+        source: reloaded.source,
+        requiresFirebase: false,
+        serverFingerprints: reloaded.serverFingerprints,
+        eventTypes,
+        ...reloaded.catalog
+      }));
+      return { ...result, ok: true };
+    } catch (err) {
+      recordDiagnosticError(err, { surface: "catalog", action: "stage-starter-pack" });
+      const error = err?.message || "Failed to apply starter catalog pack.";
+      setState((prev) => ({ ...prev, saving: false, error }));
+      return { ok: false, error };
+    }
+  }, [enabled, organizationId, state.settings?.catalogRevision]);
+
   const loadMenuByEvent = useCallback(async (eventTypeId) => {
     const nextEventTypeId = String(eventTypeId || "").trim();
     if (!nextEventTypeId) {
@@ -631,7 +734,9 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
   return {
     ...state,
     reload,
+    acceptCatalogMutation,
     saveCatalog,
+    stageStarterPack,
     loadMenuByEvent
   };
 }

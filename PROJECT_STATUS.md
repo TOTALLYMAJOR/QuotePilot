@@ -73,6 +73,15 @@ Last updated: August 5, 2026
   handling remain unproved until provider/hosted acceptance is captured.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
 - Current branch tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
+- `v0.2.3` release-candidate starter catalog delivery: the existing post-login blank-catalog
+  gate now offers four one-click industry drafts in Catalog Admin. Versioned
+  manifests populate tenant-scoped catalog and menu records with suggested
+  minor-unit prices, provenance hashes, and unconfirmed pricing. Server
+  transactions enforce revision preconditions for apply, untouched staged
+  replacement, and confirmation; replacement detects custom records,
+  pack-record divergence, and pricing-setting edits, while confirmation checks
+  the complete catalog and records actor, timestamp, and catalog revision. This
+  is implemented and locally covered but is not yet deployed or hosted-accepted.
 - Production provisioning hardening includes verified-email,
   role-document, and allowlist-backed platform authority; explicit plan/create
   confirmation; atomic collision-safe creation; seven-day owner invitations;

@@ -197,6 +197,23 @@ npm run seed:menu:firestore -- \
   --organization <organization-id>
 ```
 
+To preview one of the same starter packs shown during owner catalog setup, add
+`--pack` (and optionally an exact historical `--pack-version`):
+```bash
+npm run seed:menu:firestore -- \
+  --project <firebase-project-id> \
+  --organization <organization-id> \
+  --pack wedding-events \
+  --pack-version 1
+```
+
+The available pack ids are `wedding-events`, `corporate-drop-off`,
+`bbq-southern`, and `church-community`. Add `--replace-staged-pack` only when
+replacing an unconfirmed staged pack; the transaction refuses replacement if
+any generated record or pack-controlled pricing setting has been edited.
+Published manifest versions are append-only while referenced by a staged
+organization; add a new version instead of editing or removing an existing one.
+
 Apply requires both `--apply` and an exact project-and-tenant confirmation:
 ```bash
 npm run seed:menu:firestore -- \
@@ -308,11 +325,18 @@ Pending email invitations expire after seven days, and the exact invited email
 must be verified before organization bootstrap can consume the invitation.
 New tenants begin with a blank catalog so an unreviewed zero-price placeholder
 cannot reach a customer quote. The owner workspace remains in catalog setup
-mode until an organization admin saves at least one named package priced above
-zero, creates at least one event type, and explicitly confirms the tenant's
-pricing setup. Catalog saves compare the loaded server state and patch only
-locally changed records; a concurrent edit or reused identifier is rejected
-instead of overwritten. Firebase quote creation and duplication use trusted
+mode until an organization admin either builds a catalog or stages one of the
+four industry starter packs, reviews at least one named package priced above
+zero plus an event type, and explicitly confirms the tenant's pricing setup.
+Pack prices are suggestions and never activate the quote workspace on apply.
+Apply, safe pre-confirmation replacement, catalog saves, and pricing
+confirmation all use catalog revision preconditions. Pack-generated records
+carry immutable baseline hashes so custom records and owner-modified pack
+records are distinguishable; replacement never overwrites either owner-edited
+records or owner-edited pricing settings. Final confirmation revalidates the
+complete catalog on the server and records the admin actor, time, and confirmed
+catalog revision. Monetary amounts are persisted in integer minor units, with
+lossless legacy values migrated during server confirmation. Firebase quote creation and duplication use trusted
 callables that re-price from current tenant data and create the draft quote,
 portal snapshot, and first version atomically; direct Firestore quote creation
 is denied. Client totals, pricing snapshots, owner/record identities, and

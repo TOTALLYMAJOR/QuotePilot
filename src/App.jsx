@@ -1771,11 +1771,11 @@ export default function App() {
               Quote creation stays locked until this organization has customer-specific products and reviewed pricing.
             </p>
             <p className="source-note">
-              New tenants start blank so another customer’s products or unreviewed placeholder pricing can never enter a quote.
+              New tenants start blank. Open Catalog Admin to stage an industry starter pack or build a catalog manually; every suggested price still requires your review.
             </p>
             <ul className="source-note">
-              <li>Packages: add a specifically named package priced above $0.</li>
-              <li>Menu: add at least one event type; new event types start without seeded menu records.</li>
+              <li>Starter Packs: populate a complete Wedding, Corporate, BBQ, or Church & community draft in one click.</li>
+              <li>Packages and Menu: review a specifically named package above $0 and at least one event type.</li>
               <li>Pricing: review every fee, tax, deposit, travel, staffing, tier, and seasonal value, then approve the pricing setup.</li>
             </ul>
             <div className="auth-actions">
@@ -1800,6 +1800,8 @@ export default function App() {
               organizationId={authSession.organizationId}
               onClose={() => setAdminOpen(false)}
               onSave={saveCatalogDuringSetup}
+              onApplyStarterPack={catalog.stageStarterPack}
+              onCatalogMutation={catalog.acceptCatalogMutation}
               saving={catalog.saving}
               selectedEventType={globalEventTypeId}
               onEventTypeChange={setGlobalEventTypeId}
@@ -2082,6 +2084,8 @@ export default function App() {
             organizationId={authSession.organizationId}
             onClose={() => setAdminOpen(false)}
             onSave={catalog.saveCatalog}
+            onApplyStarterPack={catalog.stageStarterPack}
+            onCatalogMutation={catalog.acceptCatalogMutation}
             saving={catalog.saving}
             selectedEventType={globalEventTypeId}
             onEventTypeChange={setGlobalEventTypeId}

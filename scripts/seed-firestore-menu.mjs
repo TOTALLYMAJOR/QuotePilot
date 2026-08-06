@@ -2,6 +2,7 @@
 
 import path from "node:path";
 import process from "node:process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { loadFirebaseAdmin } from "./firebase-admin-modular.mjs";
 import {
@@ -13,14 +14,22 @@ import {
   DEFAULT_SETTINGS
 } from "../src/data/mockCatalog.js";
 
+const require = createRequire(import.meta.url);
+const {
+  applyStarterCatalogPack,
+  buildStarterCatalogPackDocuments
+} = require("../functions/starterCatalogPacks.js");
+
 const MAX_BATCH_WRITES = 450;
 const VALUE_FLAGS = new Set([
   "--project",
   "--organization",
   "--org",
+  "--pack",
+  "--pack-version",
   "--confirm"
 ]);
-const BOOLEAN_FLAGS = new Set(["--dry-run", "--apply"]);
+const BOOLEAN_FLAGS = new Set(["--dry-run", "--apply", "--replace-staged-pack"]);
 
 function slugify(value, fallback = "item") {
   const raw = String(value || fallback).trim().toLowerCase();
@@ -62,7 +71,7 @@ function normalizeSectionItems(section) {
           name: name || `Item ${index + 1}`,
           pricingType: "per_event",
           type: "per_event",
-          price: 0,
+          priceMinor: 0,
           active: true
         };
       }
@@ -73,7 +82,7 @@ function normalizeSectionItems(section) {
         name: name || `Item ${index + 1}`,
         pricingType,
         type: pricingType,
-        price: Number(item?.price || 0),
+        priceMinor: Math.round(Number(item?.price || 0) * 100),
         active: item?.active !== false
       };
     })
@@ -125,7 +134,7 @@ function buildSeedDocs(nowISO) {
             name: item.name,
             pricingType: item.pricingType,
             type: item.type,
-            price: Number(item.price || 0),
+            priceMinor: Number(item.priceMinor || 0),
             active: item.active !== false,
             source: "seed-script",
             createdAtISO: nowISO
@@ -143,7 +152,7 @@ function buildCatalogDocs(nowISO) {
     id: slugify(item?.id || item?.name, "package"),
     data: {
       name: String(item?.name || "").trim() || "Package",
-      ppp: Number(item?.ppp || 0),
+      pppMinor: Math.round(Number(item?.ppp || 0) * 100),
       source: "seed-script",
       createdAtISO: nowISO
     }
@@ -157,7 +166,7 @@ function buildCatalogDocs(nowISO) {
         name: String(item?.name || "").trim() || "Addon",
         pricingType,
         type: pricingType,
-        price: Number(item?.price || 0),
+        priceMinor: Math.round(Number(item?.price || 0) * 100),
         active: item?.active !== false,
         source: "seed-script",
         createdAtISO: nowISO
@@ -171,7 +180,7 @@ function buildCatalogDocs(nowISO) {
       id: slugify(item?.id || item?.name, "rental"),
       data: {
         name: String(item?.name || "").trim() || "Rental",
-        price: Number(item?.price || 0),
+        priceMinor: Math.round(Number(item?.price || 0) * 100),
         qtyPerGuests: Number(item?.qtyPerGuests || 1),
         pricingType,
         type: pricingType,
@@ -182,8 +191,32 @@ function buildCatalogDocs(nowISO) {
     };
   });
 
+  const {
+    perMileRate,
+    longDistancePerMileRate,
+    bartenderRate,
+    serverRate,
+    chefRate,
+    bartenderRateTypes,
+    staffingRateTypes,
+    ...settingsWithoutLegacyMoney
+  } = DEFAULT_SETTINGS;
   const settingsData = {
-    ...DEFAULT_SETTINGS,
+    ...settingsWithoutLegacyMoney,
+    perMileRateMinor: Math.round(Number(perMileRate || 0) * 100),
+    longDistancePerMileRateMinor: Math.round(Number(longDistancePerMileRate || 0) * 100),
+    bartenderRateMinor: Math.round(Number(bartenderRate || 0) * 100),
+    serverRateMinor: Math.round(Number(serverRate || 0) * 100),
+    chefRateMinor: Math.round(Number(chefRate || 0) * 100),
+    bartenderRateTypes: (bartenderRateTypes || []).map(({ rate, ...entry }) => ({
+      ...entry,
+      rateMinor: Math.round(Number(rate || 0) * 100)
+    })),
+    staffingRateTypes: (staffingRateTypes || []).map(({ serverRate: rowServerRate, chefRate: rowChefRate, ...entry }) => ({
+      ...entry,
+      serverRateMinor: Math.round(Number(rowServerRate || 0) * 100),
+      chefRateMinor: Math.round(Number(rowChefRate || 0) * 100)
+    })),
     source: "seed-script",
     createdAtISO: nowISO,
     updatedAtISO: nowISO
@@ -205,6 +238,7 @@ export function parseSeedArgs(argv) {
   const args = Array.isArray(argv) ? argv : [];
   const values = new Map();
   const modes = new Set();
+  const flags = new Set();
   const seen = new Set();
 
   for (let i = 0; i < args.length; i += 1) {
@@ -215,7 +249,8 @@ export function parseSeedArgs(argv) {
         throw new Error(`Duplicate argument: ${token}`);
       }
       seen.add(token);
-      modes.add(token);
+      if (token === "--dry-run" || token === "--apply") modes.add(token);
+      else flags.add(token);
       continue;
     }
     if (VALUE_FLAGS.has(token)) {
@@ -247,6 +282,19 @@ export function parseSeedArgs(argv) {
   }
 
   const apply = modes.has("--apply");
+  const packId = slugify(values.get("--pack"), "");
+  const rawPackVersion = String(values.get("--pack-version") || "").trim();
+  const packVersion = rawPackVersion ? Number(rawPackVersion) : null;
+  const replaceStagedPack = flags.has("--replace-staged-pack");
+  if (rawPackVersion && (!Number.isSafeInteger(packVersion) || packVersion <= 0)) {
+    throw new Error("--pack-version must be a positive integer.");
+  }
+  if (packVersion && !packId) {
+    throw new Error("--pack-version requires --pack.");
+  }
+  if (replaceStagedPack && !packId) {
+    throw new Error("--replace-staged-pack requires --pack.");
+  }
   const confirmation = String(values.get("--confirm") || "").trim();
   const expectedConfirmation = `SEED ${projectId} ${organizationId}`;
   if (!apply && confirmation) {
@@ -261,6 +309,9 @@ export function parseSeedArgs(argv) {
     organizationId,
     dryRun: !apply,
     apply,
+    packId,
+    packVersion,
+    replaceStagedPack,
     expectedConfirmation
   };
 }
@@ -428,7 +479,14 @@ async function seedSettingsDoc({ db, docPath, data, dryRun }) {
 }
 
 async function main() {
-  const { projectId, organizationId, dryRun } = parseSeedArgs(process.argv.slice(2));
+  const {
+    projectId,
+    organizationId,
+    dryRun,
+    packId,
+    packVersion,
+    replaceStagedPack
+  } = parseSeedArgs(process.argv.slice(2));
   const admin = loadFirebaseAdmin();
 
   if (!admin.getApps().length) {
@@ -453,6 +511,46 @@ async function main() {
     || (organizationStatus && organizationStatus !== "active")
   ) {
     throw new Error(`Organization ${organizationId} is inactive or archived; refusing to seed it.`);
+  }
+  if (packId) {
+    const plan = buildStarterCatalogPackDocuments(packId, { packVersion, nowISO });
+    const settingsRef = db.doc(`organizations/${organizationId}/settings/config`);
+    const settingsSnapshot = await settingsRef.get();
+    if (!settingsSnapshot.exists) {
+      throw new Error(`Organization ${organizationId} has no settings/config document; refusing pack application.`);
+    }
+    const expectedCatalogRevision = Math.max(
+      0,
+      Number(settingsSnapshot.data()?.catalogRevision || 0)
+    );
+    if (dryRun) {
+      console.log("Dry run completed. No writes were attempted.");
+      console.log(`Project: ${projectId}`);
+      console.log(`Organization: ${organizationId}`);
+      console.log(`Starter pack: ${plan.pack.manifestKey} (${plan.pack.name})`);
+      console.log(`Expected catalog revision: ${expectedCatalogRevision}`);
+      console.log(`Planned records: ${plan.totalRecords}`);
+      console.log("Apply will recheck blank/staged state, divergence, pricing settings, and revision in one transaction.");
+      return;
+    }
+    const result = await applyStarterCatalogPack({
+      db,
+      organizationId,
+      packId,
+      packVersion,
+      replaceStagedPack,
+      expectedCatalogRevision,
+      actorUid: "seed-firestore-menu",
+      serverTimestamp: admin.FieldValue.serverTimestamp,
+      deleteField: admin.FieldValue.delete,
+      nowISO
+    });
+    console.log("Starter pack apply completed.");
+    console.log(`Project: ${projectId}`);
+    console.log(`Organization: ${organizationId}`);
+    console.log(`Starter pack: ${result.pack.manifestKey} (${result.pack.name})`);
+    console.log(`Catalog revision: ${result.catalogRevision}`);
+    return;
   }
   const paths = {
     eventTypes: `${basePath}/eventTypes`,

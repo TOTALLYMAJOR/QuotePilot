@@ -1,13 +1,4 @@
-import {
-  addDoc,
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  updateDoc,
-  writeBatch,
-  where
-} from "firebase/firestore";
+import { doc, getDocs, query, runTransaction, where } from "firebase/firestore";
 import { db, firebaseReady } from "./firebase";
 import {
   getActiveOrganizationId,
@@ -62,6 +53,42 @@ function normalizePriceType(value) {
 function normalizeActive(value, fallback = true) {
   if (typeof value === "boolean") return value;
   return fallback;
+}
+
+function toMinorUnits(value) {
+  return Math.round(asNumber(value, 0) * 100);
+}
+
+function fromStoredMoney(data = {}, minorKey = "priceMinor", legacyKey = "price") {
+  if (Object.prototype.hasOwnProperty.call(data, minorKey)) {
+    const minor = Number(data[minorKey]);
+    return Number.isSafeInteger(minor) ? minor / 100 : 0;
+  }
+  return asNumber(data[legacyKey], 0);
+}
+
+async function commitCatalogMutation(organizationId, updatedAtISO, applyWrites) {
+  const settingsRef = orgDocRef("settings", "config", organizationId);
+  return runTransaction(db, async (transaction) => {
+    const settingsSnapshot = await transaction.get(settingsRef);
+    if (!settingsSnapshot.exists()) {
+      throw new Error("Catalog settings are missing. Reload before editing the menu.");
+    }
+    const currentSettings = settingsSnapshot.data() || {};
+    const currentRevision = Math.max(0, Number(currentSettings.catalogRevision || 0));
+    const settingsPatch = {
+      catalogRevision: currentRevision + 1,
+      pricingSetupConfirmed: false,
+      pricingConfirmation: null,
+      updatedAtISO
+    };
+    applyWrites(transaction);
+    transaction.set(settingsRef, settingsPatch, { merge: true });
+    return {
+      catalogRevision: currentRevision + 1,
+      catalogSettings: { ...currentSettings, ...settingsPatch }
+    };
+  });
 }
 
 function mapDocs(snapshot) {
@@ -155,7 +182,7 @@ export async function getMenuItems(eventTypeId, { includeInactive = false, organ
       eventTypeId: asText(item.eventTypeId),
       categoryId: asText(item.categoryId),
       name: asText(item.name, "Untitled Item"),
-      price: asNumber(item.price, 0),
+      price: fromStoredMoney(item),
       pricingType,
       type: pricingType,
       active: normalizeActive(item.active, true)
@@ -175,13 +202,14 @@ export async function getMenuItems(eventTypeId, { includeInactive = false, organ
 
 export async function createMenuItem(data = {}) {
   ensureReady();
-  const targetCollectionRef = resolveWritableCollectionRef("menuItems", data.organizationId, "createMenuItem");
+  const organizationId = resolveScopedOrganizationId(data.organizationId);
+  const targetCollectionRef = resolveWritableCollectionRef("menuItems", organizationId, "createMenuItem");
   const pricingType = normalizePriceType(data.pricingType || data.type);
   const payload = {
     eventTypeId: asText(data.eventTypeId),
     categoryId: asText(data.categoryId),
     name: asText(data.name, "New Menu Item"),
-    price: asNumber(data.price, 0),
+    priceMinor: toMinorUnits(data.price),
     pricingType,
     type: pricingType,
     active: normalizeActive(data.active, true),
@@ -193,10 +221,15 @@ export async function createMenuItem(data = {}) {
   if (!payload.categoryId) {
     throw new Error("categoryId is required.");
   }
-  const ref = await addDoc(targetCollectionRef, payload);
+  const ref = doc(targetCollectionRef);
+  const catalogMutation = await commitCatalogMutation(organizationId, payload.createdAtISO, (transaction) => {
+    transaction.set(ref, payload);
+  });
   return {
     id: ref.id,
-    ...payload
+    ...payload,
+    price: asNumber(data.price, 0),
+    ...catalogMutation
   };
 }
 
@@ -212,7 +245,7 @@ export async function updateMenuItem(id, data = {}) {
     payload.name = asText(data.name, "New Menu Item");
   }
   if (Object.prototype.hasOwnProperty.call(data, "price")) {
-    payload.price = asNumber(data.price, 0);
+    payload.priceMinor = toMinorUnits(data.price);
   }
   if (Object.prototype.hasOwnProperty.call(data, "categoryId")) {
     payload.categoryId = asText(data.categoryId);
@@ -235,10 +268,16 @@ export async function updateMenuItem(id, data = {}) {
   }
   payload.updatedAtISO = new Date().toISOString();
 
-  await updateDoc(resolveWritableDocRef("menuItems", itemId, data.organizationId, "updateMenuItem"), payload);
+  const organizationId = resolveScopedOrganizationId(data.organizationId);
+  const ref = resolveWritableDocRef("menuItems", itemId, organizationId, "updateMenuItem");
+  const catalogMutation = await commitCatalogMutation(organizationId, payload.updatedAtISO, (transaction) => {
+    transaction.update(ref, payload);
+  });
   return {
     id: itemId,
-    ...payload
+    ...payload,
+    ...(Object.prototype.hasOwnProperty.call(data, "price") ? { price: asNumber(data.price, 0) } : {}),
+    ...catalogMutation
   };
 }
 
@@ -248,13 +287,19 @@ export async function deleteMenuItem(id, { organizationId = "" } = {}) {
   if (!itemId) {
     throw new Error("Menu item id is required.");
   }
-  await deleteDoc(resolveWritableDocRef("menuItems", itemId, organizationId, "deleteMenuItem"));
-  return { ok: true, id: itemId };
+  const resolvedOrganizationId = resolveScopedOrganizationId(organizationId);
+  const updatedAtISO = new Date().toISOString();
+  const ref = resolveWritableDocRef("menuItems", itemId, resolvedOrganizationId, "deleteMenuItem");
+  const catalogMutation = await commitCatalogMutation(resolvedOrganizationId, updatedAtISO, (transaction) => {
+    transaction.delete(ref);
+  });
+  return { ok: true, id: itemId, ...catalogMutation };
 }
 
 export async function createCategory(data = {}) {
   ensureReady();
-  const targetCollectionRef = resolveWritableCollectionRef("menuCategories", data.organizationId, "createCategory");
+  const organizationId = resolveScopedOrganizationId(data.organizationId);
+  const targetCollectionRef = resolveWritableCollectionRef("menuCategories", organizationId, "createCategory");
   const payload = {
     eventTypeId: asText(data.eventTypeId),
     name: asText(data.name, "New Category"),
@@ -263,10 +308,14 @@ export async function createCategory(data = {}) {
   if (!payload.eventTypeId) {
     throw new Error("eventTypeId is required.");
   }
-  const ref = await addDoc(targetCollectionRef, payload);
+  const ref = doc(targetCollectionRef);
+  const catalogMutation = await commitCatalogMutation(organizationId, payload.createdAtISO, (transaction) => {
+    transaction.set(ref, payload);
+  });
   return {
     id: ref.id,
-    ...payload
+    ...payload,
+    ...catalogMutation
   };
 }
 
@@ -286,18 +335,24 @@ export async function updateCategory(id, data = {}) {
   }
   payload.updatedAtISO = new Date().toISOString();
 
-  await updateDoc(resolveWritableDocRef("menuCategories", categoryId, data.organizationId, "updateCategory"), payload);
+  const organizationId = resolveScopedOrganizationId(data.organizationId);
+  const ref = resolveWritableDocRef("menuCategories", categoryId, organizationId, "updateCategory");
+  const catalogMutation = await commitCatalogMutation(organizationId, payload.updatedAtISO, (transaction) => {
+    transaction.update(ref, payload);
+  });
   return {
     id: categoryId,
-    ...payload
+    ...payload,
+    ...catalogMutation
   };
 }
 
 export async function createEventType(data = {}) {
   ensureReady();
-  const targetCollectionRef = resolveWritableCollectionRef("eventTypes", data.organizationId, "createEventType");
-  const categoryCollectionRef = resolveWritableCollectionRef("menuCategories", data.organizationId, "createEventType");
-  const itemCollectionRef = resolveWritableCollectionRef("menuItems", data.organizationId, "createEventType");
+  const organizationId = resolveScopedOrganizationId(data.organizationId);
+  const targetCollectionRef = resolveWritableCollectionRef("eventTypes", organizationId, "createEventType");
+  const categoryCollectionRef = resolveWritableCollectionRef("menuCategories", organizationId, "createEventType");
+  const itemCollectionRef = resolveWritableCollectionRef("menuItems", organizationId, "createEventType");
 
   const createdAtISO = new Date().toISOString();
   const eventTypeRef = doc(targetCollectionRef);
@@ -311,28 +366,30 @@ export async function createEventType(data = {}) {
     createdAtISO
   };
 
-  const batch = writeBatch(db);
-  batch.set(eventTypeRef, payload);
-  canonicalSeed.categories.forEach((entry) => {
-    batch.set(doc(categoryCollectionRef, entry.id), {
-      ...entry,
-      source: "canonical-menu-seed",
-      createdAtISO
+  const catalogMutation = await commitCatalogMutation(organizationId, createdAtISO, (transaction) => {
+    transaction.set(eventTypeRef, payload);
+    canonicalSeed.categories.forEach((entry) => {
+      transaction.set(doc(categoryCollectionRef, entry.id), {
+        ...entry,
+        source: "canonical-menu-seed",
+        createdAtISO
+      });
+    });
+    canonicalSeed.items.forEach((entry) => {
+      const { price, ...entryWithoutLegacyPrice } = entry;
+      transaction.set(doc(itemCollectionRef, entry.id), {
+        ...entryWithoutLegacyPrice,
+        priceMinor: toMinorUnits(price),
+        source: "canonical-menu-seed",
+        createdAtISO
+      });
     });
   });
-  canonicalSeed.items.forEach((entry) => {
-    batch.set(doc(itemCollectionRef, entry.id), {
-      ...entry,
-      source: "canonical-menu-seed",
-      createdAtISO
-    });
-  });
-
-  await batch.commit();
 
   return {
     id: eventTypeId,
     ...payload,
+    ...catalogMutation,
     seeded: {
       categories: canonicalSeed.categories.length,
       items: canonicalSeed.items.length
@@ -353,9 +410,14 @@ export async function updateEventType(id, data = {}) {
   }
   payload.updatedAtISO = new Date().toISOString();
 
-  await updateDoc(resolveWritableDocRef("eventTypes", eventTypeId, data.organizationId, "updateEventType"), payload);
+  const organizationId = resolveScopedOrganizationId(data.organizationId);
+  const ref = resolveWritableDocRef("eventTypes", eventTypeId, organizationId, "updateEventType");
+  const catalogMutation = await commitCatalogMutation(organizationId, payload.updatedAtISO, (transaction) => {
+    transaction.update(ref, payload);
+  });
   return {
     id: eventTypeId,
-    ...payload
+    ...payload,
+    ...catalogMutation
   };
 }
