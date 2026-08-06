@@ -97,7 +97,7 @@ Do not use it as the main pattern when:
 
 Completed work produced these reusable outputs:
 
-- Business/brand name: **MBMapps**.
+- Business/brand name: **MBMApps**.
 - Product/software name: **QuotePilot**.
 - Product category: a **web app** for quote creation, customer proposals, and quote-to-booking operations.
 - Core workflow: `Lead -> Draft Quote -> Sent Proposal -> Revision -> Approved -> Paid/Booked -> Ready for Ops -> Completed`.

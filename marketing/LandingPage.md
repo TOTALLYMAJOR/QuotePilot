@@ -9,7 +9,7 @@ Create the public QuotePilot landing page for catering owners, sales teams, and 
 Use the hospitality-first composition of the approved Magic Patterns reference as a design specification:
 
 - Reference: https://project-cosmic-jellyfish-840.magicpatterns.app/
-- Brand: QuotePilot by MBMapps
+- Brand: QuotePilot by MBMApps
 - Primary route: `/`
 - Prospect CTA: `https://mbmapps.com/contact`
 - Staff CTA: `/app`
@@ -62,7 +62,7 @@ Keep these facts distinct everywhere:
 
 Avoid guaranteed outcome claims, an unverified free-signup offer, and claims that portal delivery or provider integrations are production-operational for every customer.
 
-Use QuotePilot and MBMapps branding only. Do not use QuoteFlow, Tony Catering, or Toni Catering as customer-facing names.
+Use QuotePilot and MBMApps branding only. Do not use QuoteFlow, Tony Catering, or Toni Catering as customer-facing names.
 
 ## Real Assets
 

@@ -29,7 +29,7 @@ function runMaterializer(overrides = {}, { existing = "", args = [] } = {}) {
     APP_BASE_DOMAIN: "mbmapps.com",
     AUTH_PLATFORM_ADMIN_EMAILS: "operator@mbmapps.com",
     NOTIFICATIONS_EMAIL_PROVIDER: "none",
-    EMAIL_FROM_NAME: "QuotePilot by MBMapps",
+    EMAIL_FROM_NAME: "QuotePilot by MBMApps",
     EMAIL_FROM_EMAIL: "onboarding@quotepilot.mbmapps.com",
     NOTIFICATIONS_SMS_PROVIDER: "none",
     STRIPE_MODE: "live",

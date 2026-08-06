@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PRODUCT_COMPANY, PRODUCT_FULL_NAME } from "../lib/productIdentity";
 import customerDecisionImage from "../assets/marketing/quotepilot/customer-decision.png";
 import eventProductionImage from "../assets/marketing/quotepilot/event-production.png";
 import quoteBuilderImage from "../assets/marketing/quotepilot/quote-builder.png";
@@ -393,9 +394,9 @@ export default function SystemMarketingPage() {
       <a className="marketing-skip" href="#marketing-main">Skip to content</a>
       <div className="marketing-noise" aria-hidden="true" />
       <header className="marketing-header">
-        <a className="marketing-brand" href="#top" aria-label="QuotePilot home">
+        <a className="marketing-brand" href="#top" aria-label={`${PRODUCT_FULL_NAME} home`}>
           <BrandMark />
-          <span><b>QUOTEPILOT</b><small>BY MBMAPPS</small></span>
+          <span><b>QUOTEPILOT</b><small>by {PRODUCT_COMPANY}</small></span>
         </a>
         <nav aria-label="Marketing navigation">
           <a href="#system">System</a>
@@ -538,10 +539,10 @@ export default function SystemMarketingPage() {
       </main>
 
       <footer className="marketing-footer">
-        <div className="marketing-brand"><BrandMark /><span><b>QUOTEPILOT</b><small>BY MBMAPPS</small></span></div>
+        <div className="marketing-brand" aria-label={PRODUCT_FULL_NAME}><BrandMark /><span><b>QUOTEPILOT</b><small>by {PRODUCT_COMPANY}</small></span></div>
         <p>Quote, proposal, payment state, and event readiness, connected with their boundaries intact.</p>
         <div><a href="#system">System</a><a href="#workflow">Workflow</a><a href="/app">Staff app</a></div>
-        <small>© {new Date().getFullYear()} MBMapps. QuotePilot.</small>
+        <small>© {new Date().getFullYear()} {PRODUCT_COMPANY}. QuotePilot.</small>
       </footer>
 
       <FeatureDrawer

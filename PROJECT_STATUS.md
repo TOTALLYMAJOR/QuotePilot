@@ -10,7 +10,20 @@ Last updated: August 6, 2026
   `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
   Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`)
   and was released with the same tagged source revision.
-- Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
+- Current branch product identity: public, authentication, workspace, customer
+  portal, proposal, install metadata, integration, and onboarding surfaces use
+  the exact `QuotePilot by MBMApps` identity. The workspace header now labels
+  the tenant business separately, preserving customer-specific proposal and
+  portal branding. The legacy `tonicatering` Firebase project, hosting site,
+  environment filename, deployment confirmations, and service URLs remain
+  unchanged infrastructure identifiers.
+- Branding candidate validation: the full maintainer gate passes with 336 unit
+  tests and 39 intentional skips, production build, environment/secret checks,
+  documentation governance, and bundle budget. Local browser verification
+  covers `/`, `/system`, authenticated and signed-out `/app`, the customer
+  portal route, Catalog Admin save-through branding, and a 390px workspace
+  without horizontal overflow. This is local candidate evidence, not a hosted
+  deployment claim.
 - Build and local validation: the current delivery-evidence head passes the
   full release lane with 334 unit tests passed and 39 intentionally skipped,
   production build, environment/secret checks, documentation governance, and
