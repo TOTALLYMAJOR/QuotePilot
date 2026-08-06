@@ -894,6 +894,25 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Portal conversations are callable-owned. Neither a bearer portal token
+    // nor a signed-in browser may read or write canonical message, retry,
+    // counter, or rate-limit records directly.
+    match /organizations/{orgId}/quotes/{quoteId}/portalConversationMessages/{messageId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/quotes/{quoteId}/portalConversationRequests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/quotes/{quoteId}/portalConversationRateLimits/{rateId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/quotes/{quoteId}/portalConversationState/{stateId} {
+      allow read, write: if false;
+    }
+
     // Legacy global collections are retired. All business data must be org-scoped.
     match /catalogPackages/{docId} {
       allow read, write: if false;

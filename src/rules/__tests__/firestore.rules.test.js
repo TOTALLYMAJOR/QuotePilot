@@ -1309,6 +1309,58 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(deleteDoc(adminReceipt));
   });
 
+  test("quote conversations are callable-only even for same-org staff and an active bearer portal", async () => {
+    const collections = [
+      ["portalConversationMessages", "message-1"],
+      ["portalConversationRequests", "request-1"],
+      ["portalConversationRateLimits", "actor-1"],
+      ["portalConversationState", "current"]
+    ];
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      for (const [collectionName, documentId] of collections) {
+        await setDoc(
+          doc(db, "organizations", "org-a", "quotes", "q1", collectionName, documentId),
+          {
+            organizationId: "org-a",
+            quoteId: "q1",
+            actorType: "staff",
+            actorName: "Rules Staff",
+            body: "Server-owned conversation data"
+          }
+        );
+      }
+    });
+
+    await assertSucceeds(getDoc(portalSnapshotRefFor(VALID_PORTAL_KEY)));
+    for (const [collectionName, documentId] of collections) {
+      const adminDb = testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true
+      }).firestore();
+      const salesDb = testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true
+      }).firestore();
+      const publicDb = testEnv.unauthenticatedContext().firestore();
+      const path = [
+        "organizations",
+        "org-a",
+        "quotes",
+        "q1",
+        collectionName,
+        documentId
+      ];
+      const adminRef = doc(adminDb, ...path);
+      await assertFails(getDoc(adminRef));
+      await assertFails(getDoc(doc(salesDb, ...path)));
+      await assertFails(getDoc(doc(publicDb, ...path)));
+      await assertFails(setDoc(adminRef, { body: "Browser-forged message" }));
+      await assertFails(updateDoc(adminRef, { body: "Browser-edited message" }));
+      await assertFails(deleteDoc(adminRef));
+    }
+  });
+
   test("product analytics events are callable-owned and cannot expose raw staff activity", async () => {
     const eventId = "analytics-event-0001";
     await testEnv.withSecurityRulesDisabled(async (context) => {

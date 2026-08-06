@@ -8,6 +8,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- A quote-scoped staff/customer conversation for provider-accepted current
+  portals. Callable-only reads and sends derive actor identity and timestamps
+  on the server, bind every request to the tenant, quote, portal issuance, and
+  current delivery evidence, preserve canonical history across safe token
+  rotation, and provide bounded, idempotent retry with explicit loading,
+  success, failure, refresh, and declined-read-only states.
 - Real email/password sign-in, invite-aware account guidance, and password-reset
   request handling, with Firebase Auth emulator coverage at the OOB issuance
   boundary rather than an inbox-delivery claim.

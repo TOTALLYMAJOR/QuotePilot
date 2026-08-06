@@ -103,6 +103,14 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   - Copy a customer portal link only after the current saved revision has
     provider-acceptance evidence for its exact current valid issuance; draft,
     rotated-but-unsent, and legacy portals without that evidence fail closed.
+  - Open `Conversation` for a provider-accepted current portal. The panel loads
+    the quote's canonical message history and supports `Refresh conversation`,
+    `Send message`, and same-request `Retry message` recovery. Messages are
+    limited to 1,200 characters. A declined quote keeps its history visible but
+    removes the composer; an expired, deleted, rotated, or otherwise inactive
+    portal cannot be used. When a portal is safely rotated and delivered again,
+    its new link sees the existing quote conversation while the old link stays
+    invalid.
   - Admin only: submit customer email to the configured provider, copy a
     verified Stripe payment link, send an approved Stripe deposit request,
     send or reconcile an approved final-balance request for an eligible booked
@@ -556,6 +564,12 @@ Complete every item before calling the new tenant operational:
 
 ## Customer Portal
 - Customers can open portal links and review event details, selected package/menu/add-ons/rentals, itemized pricing, total, deposit, and payment state. An eligible booked contract also shows its separate final-balance amount and provider-owned status.
+- Customers with the exact current provider-accepted link can open the quote
+  conversation, review staff messages, refresh, and send a reply. A failed send
+  retains the draft and exposes `Retry message`; reusing that retry does not
+  create a duplicate. QuotePilot supplies the sender name and time from trusted
+  server context rather than accepting them from the browser. Declined quotes
+  expose history as read-only.
 - Portal decisions support `Accept`, `Request Changes`, and `Decline`; change requests require a customer note.
 - To accept, the customer selects `Accept`, types their full legal name, checks
   the electronic-signature statement, and chooses `Sign and Accept Proposal`.

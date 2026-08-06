@@ -8,7 +8,9 @@ import {
 } from "../lib/quoteStore";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import { getPortalRecoveryContact } from "../lib/portalRecoveryClient";
+import { portalConversationAvailable } from "../lib/portalConversationClient";
 import ProductBrandLockup from "./ProductBrandLockup";
+import QuoteConversationPanel from "./QuoteConversationPanel";
 
 const PAYMENT_CONFIRMATION_POLL_INTERVAL_MS = 1500;
 const PAYMENT_CONFIRMATION_MAX_ATTEMPTS = 10;
@@ -862,6 +864,13 @@ export default function CustomerPortalView({
                 <span>Your note</span>
                 <p>{quote.portalDecision.message}</p>
               </section>
+            )}
+
+            {portalConversationAvailable() && (
+              <QuoteConversationPanel
+                title="Conversation with your catering team"
+                access={{ accessMode: "portal", portalKey: quote.portalKey }}
+              />
             )}
           </div>
         )}
