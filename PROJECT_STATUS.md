@@ -1,13 +1,13 @@
 # Project Status
 
-Last updated: August 5, 2026
+Last updated: August 6, 2026
 
 ## Operational Health
-- Runtime: release `v0.2.1` is live from merged `main` commit
-  `e1301ccb798144ebce49be2da26a63a9491f31c3`. Main CI run `31026299454`
+- Runtime: release `v0.2.3` is live from merged `main` commit
+  `d2747c693e4d15d0efc66cb3bbd76b03f31009f4`. Main CI run `31059404835`
   passed every required lane. The public custom domain
   (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment
-  `dpl_67bWx2DWepw74yN9bUvUjZFPm1TQ`, which is provider-reported `READY`.
+  `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
   Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`)
   and was released with the same tagged source revision.
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
@@ -22,9 +22,9 @@ Last updated: August 5, 2026
   ms. Both the browser application and Functions production dependency trees
   report zero known vulnerabilities under `npm audit --omit=dev`. This is
   local/emulator evidence, not hosted tenant or provider acceptance.
-- Functions runtime readiness: all 27 production Functions now run on Node.js
+- Functions runtime readiness: all 29 production Functions now run on Node.js
   22 with Firebase Admin 14 modular app, Auth, and Firestore APIs. The clean
-  cloud install and each function update completed successfully from `v0.2.1`;
+  cloud install and each function update completed successfully from `v0.2.3`;
   the local authoritative and provisioning matrices also pass.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best
@@ -73,15 +73,52 @@ Last updated: August 5, 2026
   handling remain unproved until provider/hosted acceptance is captured.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
 - Current branch tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
-- `v0.2.3` release-candidate starter catalog delivery: the existing post-login blank-catalog
+- Production `v0.2.3` starter catalog delivery: the existing post-login blank-catalog
   gate now offers four one-click industry drafts in Catalog Admin. Versioned
   manifests populate tenant-scoped catalog and menu records with suggested
   minor-unit prices, provenance hashes, and unconfirmed pricing. Server
   transactions enforce revision preconditions for apply, untouched staged
   replacement, and confirmation; replacement detects custom records,
   pack-record divergence, and pricing-setting edits, while confirmation checks
-  the complete catalog and records actor, timestamp, and catalog revision. This
-  is implemented and locally covered but is not yet deployed or hosted-accepted.
+  the complete catalog and records actor, timestamp, and catalog revision. The
+  frontend, rules, and both starter-catalog callables are deployed from the
+  tagged release. Public `/app` routing and unauthenticated callable rejection
+  were verified; signed-in owner acceptance is still pending.
+- Local-only UX audit closure candidate: customer artifacts, workspace
+  navigation, menu/history states, portal recovery/payment-return UX, and
+  accessibility coverage are implemented on this branch. These changes have
+  not been merged, pushed, deployed, or exercised against production providers
+  or data. Hosted portal recovery/callable behavior and authenticated human
+  accessibility acceptance remain pending after review and release. Local
+  validation passes 355 unit tests with 39 intentionally skipped, 42 default
+  browser tests with 2 intentionally gated cases skipped, production build,
+  environment/secret checks, documentation governance, bundle budget, and the
+  local Lighthouse gate. Firestore rules pass 38/38; Firebase browser lanes
+  pass the Auth reset/sign-in/catalog case and the authoritative pricing and
+  delivery-boundary case.
+
+### Local UX Audit Acceptance Ledger
+
+`Pass` means evidence from this unmerged checkout only; `Partial` names a
+verified seam that does not close the entire layer. `N/A` means that layer does
+not apply to the criterion; `Pending` is deliberately not inferred from a lower
+evidence layer.
+
+| Audit | Criterion | Local | Emulator | Hosted | Provider | Human |
+|---|---|---|---|---|---|---|
+| 1 | Reachable seven-field validation and focus | Pass | N/A | Pending | N/A | Pending |
+| 2 | Customer-safe PDF and plain-language staffing | Pass | N/A | Pending | N/A | Pending |
+| 3 | Consistent service-charge label and projection | Pass | N/A | Pending | N/A | Pending |
+| 4 | Contrast and 44px targets | Pass | N/A | Pending | N/A | Pending |
+| 5 | Login semantics and password reset | Pass | Pass: Auth OOB issued | Pending | Pending | Pending |
+| 6 | Menu loading, empty, error, and retry states | Pass | N/A | Pending | N/A | Pending |
+| 7 | Searchable, counted, consistently dated Quotes | Pass | N/A | Pending | N/A | Pending |
+| 8 | Type floor, line height, and swap font loading | Pass | N/A | Pending | N/A | Pending |
+| 9 | Compact workspace and canonical dirty reset | Pass | N/A | Pending | N/A | Pending |
+| 10 | Responsive task-based navigation and menus | Pass | N/A | Pending | N/A | Pending |
+| 11 | Truthful save and delivery handoff | Pass | Pass: disabled delivery fails closed | Pending | Pending | Pending |
+| 12 | Branded portal and safe recovery contact | Pass | Partial: callable loaded | Pending | N/A | Pending |
+| 13 | Acceptance, payment-return, and viewed closure | Pass | Pass: payment/delivery boundary | Pending | Pending | Pending |
 - Production provisioning hardening includes verified-email,
   role-document, and allowlist-backed platform authority; explicit plan/create
   confirmation; atomic collision-safe creation; seven-day owner invitations;
@@ -176,13 +213,13 @@ Last updated: August 5, 2026
 - Production fail-safe integration mode:
   `NOTIFICATIONS_SMS_PROVIDER=none` in the ignored project-scoped Functions
   environment.
-- Latest Vercel production operation: `v0.2.1` deployment
-  `dpl_67bWx2DWepw74yN9bUvUjZFPm1TQ`, including the canonical SPA rewrite and
+- Latest Vercel production operation: `v0.2.3` deployment
+  `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, including the canonical SPA rewrite and
   provider-verified aliases for `quotepilot.mbmapps.com`.
 - Last known good coordinated Firebase deploy:
-  - release/commit: `v0.2.1` / `e1301ccb798144ebce49be2da26a63a9491f31c3`
-  - CI run: `CI Quality` #31026299454 (August 5, 2026 UTC)
-  - result: Firestore rules/indexes, all 27 Functions, and Hosting completed successfully
+  - release/commit: `v0.2.3` / `d2747c693e4d15d0efc66cb3bbd76b03f31009f4`
+  - CI run: `CI Quality` #31059404835 (August 5, 2026 UTC)
+  - result: Firestore rules/indexes, all 29 Functions, and Hosting completed successfully
 
 ## Active Risks
 - Firebase `functions.config()` compatibility remains temporary and must be
@@ -236,7 +273,7 @@ Last updated: August 5, 2026
 ## Current Focus (Near-Term)
 1. Sign in as an allowlisted platform admin, create and activate a disposable
    second organization, then run the hosted owner/quote/portal tenant acceptance
-   checklist against the live `v0.2.1` frontend and backend.
+   checklist against the live `v0.2.3` frontend and backend.
 2. Verify the intended Resend sender domain in the Resend dashboard and authoritative DNS; only then configure `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and recipient proof from one controlled test.
 3. Run hosted portal decision smoke checks for current-issuance evidence,
    active, expired, deleted, rotated,
