@@ -94,6 +94,12 @@ Last updated: August 6, 2026
   server-derived quote, proposal, and portal snapshots, and authoritative
   pricing prevents a selected inclusion from being charged twice. This is
   source/local evidence and is not yet deployed or owner-accepted.
+- Current source customer continuity: authoritative quote creation and editing
+  project the latest quote/customer reference into the organization customer
+  record in the same server transaction. Existing normalized-email records are
+  reused, blank optional quote fields do not erase richer imported data, and
+  Firestore rules prevent browser-forged projection history. Deployment and
+  hosted acceptance remain pending.
 - Production `v0.2.3` starter catalog delivery: the existing post-login blank-catalog
   gate now offers four one-click industry drafts in Catalog Admin. Versioned
   manifests populate tenant-scoped catalog and menu records with suggested

@@ -612,6 +612,84 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(getDoc(customerRef));
   });
 
+  test("customer projections are server-owned while admin import records remain reversible", async () => {
+    const adminProjectedRef = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "customers",
+      "email-projected"
+    );
+    const salesProjectedRef = orgScopedRefFor(
+      "sales-org-a",
+      "sales-a@example.com",
+      "org-a",
+      "customers",
+      "email-projected"
+    );
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "organizations", "org-a", "customers", "email-projected"), {
+        customerId: "email-projected",
+        organizationId: "org-a",
+        name: "Projected Customer",
+        email: "projected@example.com",
+        recordSource: "trusted_quote_projection",
+        lastQuoteId: "q1"
+      });
+    });
+
+    await assertSucceeds(getDoc(adminProjectedRef));
+    await assertSucceeds(getDoc(salesProjectedRef));
+    await assertFails(updateDoc(adminProjectedRef, { lastQuoteId: "forged" }));
+    await assertFails(deleteDoc(adminProjectedRef));
+
+    const adminImportRef = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "customers",
+      "imported-customer"
+    );
+    const salesImportRef = orgScopedRefFor(
+      "sales-org-a",
+      "sales-a@example.com",
+      "org-a",
+      "customers",
+      "sales-import"
+    );
+    const importRecord = {
+      organizationId: "org-a",
+      name: "Imported Customer",
+      email: "imported@example.com",
+      importSource: "import_studio",
+      importBatchId: "batch-a"
+    };
+    await assertFails(setDoc(salesImportRef, importRecord));
+    await assertFails(setDoc(adminImportRef, {
+      ...importRecord,
+      lastQuoteId: "forged"
+    }));
+    await assertSucceeds(setDoc(adminImportRef, importRecord));
+    await assertFails(updateDoc(adminImportRef, { name: "Browser edit" }));
+    await assertSucceeds(deleteDoc(adminImportRef));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "organizations", "org-a", "customers", "projected-import"), {
+        ...importRecord,
+        lastQuoteId: "q1",
+        lastProjectedAtISO: "2026-03-20T00:00:00.000Z"
+      });
+    });
+    const projectedImportRef = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "customers",
+      "projected-import"
+    );
+    await assertFails(deleteDoc(projectedImportRef));
+  });
+
   test("org-a admin can write own org paths but cannot write org-b quotes/catalog/menu/settings", async () => {
     const ownOrgQuoteRef = quoteRefFor("admin-org-a", "admin-a@example.com", "org-a", "q-admin-own");
     await assertFails(setDoc(ownOrgQuoteRef, buildQuotePayload("admin-org-a", "org-a")));
