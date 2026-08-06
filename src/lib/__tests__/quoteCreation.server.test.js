@@ -314,6 +314,7 @@ describe("trusted server quote creation documents", () => {
       catalogSource: "firebase-org",
       settings: {
         quoteValidityDays: 45,
+        organizationName: "Trusted Organization",
         brandName: "Trusted Caterer",
         businessEmail: "events@example.com",
         acceptanceEmail: "accept@example.com",
@@ -355,6 +356,7 @@ describe("trusted server quote creation documents", () => {
     expect(documents.quote.expiresAtISO).toBe("2026-09-10T12:00:00.000Z");
     expect(documents.quote.quoteMeta).not.toHaveProperty("crmWebhookUrl");
     expect(documents.quote.quoteMeta).not.toHaveProperty("crmBridgeAuthToken");
+    expect(documents.quote.quoteMeta.organizationName).toBe("Trusted Organization");
 
     expect(documents.portal).toMatchObject({
       quoteId: "quote-a",
@@ -362,6 +364,14 @@ describe("trusted server quote creation documents", () => {
       status: "draft",
       total: 1647,
       deposit: 494.1,
+      totals: {
+        serviceFeePctApplied: 0.08
+      },
+      quoteMeta: {
+        organizationName: "Trusted Organization",
+        brandName: "Trusted Caterer",
+        businessEmail: "events@example.com"
+      },
       lifecycle: {
         draftAtISO: "2026-07-27T12:00:00.000Z"
       }

@@ -33,9 +33,12 @@ async function signInAsStaff(page) {
   await expect(quoteButton).toBeVisible({ timeout: 45_000 });
 }
 
-test("firebase auth + firestore rules flow loads the organization catalog", async ({ page }) => {
+test("firebase auth and firestore rules load the organization catalog", async ({ page }) => {
   await signInAsStaff(page);
-  await expect(page.getByText(`Signed in as ${STAFF_EMAIL} · admin`)).toBeVisible();
+  await page.getByRole("button", { name: "Account" }).click();
+  const accountMenu = page.getByRole("menu", { name: "Account" });
+  await expect(accountMenu).toContainText(STAFF_EMAIL);
+  await expect(accountMenu).toContainText("admin");
   await expect(page.getByLabel(/Event type/i).locator("option")).toHaveCount(5);
 });
 

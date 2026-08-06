@@ -193,6 +193,34 @@ describe("wizard visual snapshots", () => {
     expect(normalizeMarkup(markup)).toMatchInlineSnapshot(`"<div class="grid two-col"><div class="menu-library"><h4>Customized Cuisine Menu</h4><p class="source-note">Select menu items to include in this quote proposal.</p><div class="menu-grid"><section class="menu-category"><div class="menu-category-head"><strong>Mains</strong><small>1/2</small></div><div class="checklist"><label class="checkrow checkrow-quantity"><input type="checkbox" checked=""/><span>Smoked Ribs</span><small>$6.00/person</small></label><label class="checkrow checkrow-quantity"><input type="checkbox"/><span>Herb Chicken</span><small>$5.00/person</small></label></div></section><section class="menu-category"><div class="menu-category-head"><strong>Sides</strong><small>1/1</small></div><div class="checklist"><label class="checkrow checkrow-quantity"><input type="checkbox" checked=""/><span>Garlic Mashed Potatoes</span><small>$110.00</small></label></div></section></div></div></div>"`);
   });
 
+  test("step menu exposes distinct loading, error, and role-aware empty states", () => {
+    const common = {
+      form: snapshotForm,
+      setForm: () => {},
+      catalog: snapshotCatalog,
+      menuSections: [],
+      eventTypeLabel: "Wedding",
+      onRetry: () => {},
+      onOpenCatalogMenu: () => {}
+    };
+    const loadingMarkup = renderToStaticMarkup(<StepMenu {...common} menuLoading />);
+    expect(loadingMarkup).toContain('aria-busy="true"');
+    expect(loadingMarkup.match(/menu-skeleton-row/g)).toHaveLength(3);
+
+    const errorMarkup = renderToStaticMarkup(<StepMenu {...common} menuError="offline" />);
+    expect(errorMarkup).toContain('role="alert"');
+    expect(errorMarkup).toContain("Retry");
+    expect(errorMarkup).toContain("Wedding");
+
+    const adminEmptyMarkup = renderToStaticMarkup(<StepMenu {...common} isAdmin />);
+    expect(adminEmptyMarkup).toContain("No menu items are configured for Wedding yet.");
+    expect(adminEmptyMarkup).toContain("Add menu items");
+
+    const salesEmptyMarkup = renderToStaticMarkup(<StepMenu {...common} isAdmin={false} />);
+    expect(salesEmptyMarkup).toContain("Ask your admin to add menu items.");
+    expect(salesEmptyMarkup).not.toContain("Add menu items");
+  });
+
   test("step review proposal sheet snapshot", () => {
     const totals = calculateQuote(snapshotForm, snapshotCatalog, snapshotCatalog.settings);
     const markup = renderToStaticMarkup(

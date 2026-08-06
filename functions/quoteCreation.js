@@ -380,6 +380,7 @@ function buildQuoteMeta(settings, form, pricing) {
   const rules = isRecord(pricing.rulesSnapshot) ? pricing.rulesSnapshot : {};
   const provider = text(settings.crmProvider, 40).toLowerCase();
   return {
+    organizationName: text(settings.organizationName, 160),
     quotePreparedBy: text(settings.quotePreparedBy, 160),
     brandName: text(settings.brandName, 160),
     brandTagline: text(settings.brandTagline, 240),
@@ -494,6 +495,9 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
       labor: numberInRange(totals.labor, 0, 0, 1_000_000_000),
       travel: numberInRange(totals.travel, 0, 0, 1_000_000_000),
       serviceFee: numberInRange(totals.serviceFee, 0, 0, 1_000_000_000),
+      ...(Object.prototype.hasOwnProperty.call(totals, "serviceFeePctApplied")
+        ? { serviceFeePctApplied: numberInRange(totals.serviceFeePctApplied, 0, 0, 100) }
+        : {}),
       tax: numberInRange(totals.tax, 0, 0, 1_000_000_000),
       total: numberInRange(totals.total, 0, 0, 1_000_000_000),
       deposit: numberInRange(totals.deposit, 0, 0, 1_000_000_000)
@@ -505,7 +509,14 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
       menuItems: menuItemNames.slice(0, MAX_SELECTION_ITEMS).map((item) => text(item, 200)).filter(Boolean)
     },
     quoteMeta: {
-      brandName: text(quoteMeta.brandName, 160)
+      organizationName: text(quoteMeta.organizationName, 160),
+      brandName: text(quoteMeta.brandName, 160),
+      brandLogoUrl: text(quoteMeta.brandLogoUrl, 1_000),
+      brandPrimaryColor: text(quoteMeta.brandPrimaryColor, 32),
+      brandAccentColor: text(quoteMeta.brandAccentColor, 32),
+      brandDarkAccentColor: text(quoteMeta.brandDarkAccentColor, 32),
+      businessPhone: text(quoteMeta.businessPhone, 40),
+      businessEmail: email(quoteMeta.businessEmail)
     },
     status: text(quote?.status, 32).toLowerCase() || "draft",
     expiresAtISO: normalizeISO(quote?.expiresAtISO, portalExpiresAtISO),

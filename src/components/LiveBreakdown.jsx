@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { currency } from "../lib/quoteCalculator";
+import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import { detectBreakdownValueChanges } from "../lib/wizardUi";
 
 function usePrefersReducedMotion() {
@@ -467,7 +467,7 @@ export default function LiveBreakdown({
           />
           <BreakdownMoneyRow
             rowKey="serviceFee"
-            label={`Service charge (${Math.round(totals.serviceFeePctApplied * 1000) / 10}%)`}
+            label={serviceChargeLabel(totals.serviceFeePctApplied)}
             value={displayValues.serviceFee}
             changed={Boolean(rowEffects.serviceFee)}
             delta={rowEffects.serviceFee?.delta || 0}

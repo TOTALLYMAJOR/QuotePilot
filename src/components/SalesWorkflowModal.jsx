@@ -556,7 +556,7 @@ export default function SalesWorkflowModal({
       >
         <div className="modal-head">
           <div>
-            <h2 id="sales-workflow-title">Sales Workflow</h2>
+            <h2 id="sales-workflow-title">Workflow</h2>
             <p className="source-note">Source: {state.source || "-"}</p>
           </div>
           <div className="right-actions">
@@ -1063,7 +1063,7 @@ export default function SalesWorkflowModal({
             )) && (
               <div className="right-actions approval-queue-actions">
                 <button type="button" className="cta" onClick={handleOpenQuoteHistory}>
-                  Open Quote History
+                  Open Quotes
                 </button>
               </div>
             )}

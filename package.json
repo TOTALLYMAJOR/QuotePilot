@@ -51,10 +51,12 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@firebase/rules-unit-testing": "^4.0.1",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.54.2",
     "@vitejs/plugin-react": "^5.2.0",
+    "pdf-parse": "^1.1.1",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
   },
