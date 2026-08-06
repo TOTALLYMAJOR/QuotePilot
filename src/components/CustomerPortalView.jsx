@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import {
   getPortalQuote,
@@ -287,6 +287,9 @@ export default function CustomerPortalView({
     attempt: 0
   });
   const [recovery, setRecovery] = useState({ loading: false, contact: null });
+  const [manualEntry, setManualEntry] = useState(!initialPortalKey);
+  const portalKeyInputRef = useRef(null);
+  const recoveryRequestRef = useRef(0);
   const [state, setState] = useState({
     loading: false,
     busy: false,
@@ -329,12 +332,18 @@ export default function CustomerPortalView({
   const finalBalanceUi = getCustomerFinalBalanceUi(quote);
 
   const loadRecoveryContact = async (key) => {
+    const requestId = recoveryRequestRef.current + 1;
+    recoveryRequestRef.current = requestId;
     setRecovery({ loading: true, contact: null });
     try {
       const contact = await getPortalRecoveryContact(key);
-      setRecovery({ loading: false, contact });
+      if (recoveryRequestRef.current === requestId) {
+        setRecovery({ loading: false, contact });
+      }
     } catch {
-      setRecovery({ loading: false, contact: null });
+      if (recoveryRequestRef.current === requestId) {
+        setRecovery({ loading: false, contact: null });
+      }
     }
   };
 
@@ -342,8 +351,11 @@ export default function CustomerPortalView({
     const key = String(nextPortalKey || "").trim();
     if (!key) {
       setState((prev) => ({ ...prev, error: "Enter your quote link key." }));
+      window.requestAnimationFrame(() => portalKeyInputRef.current?.focus());
       return;
     }
+    recoveryRequestRef.current += 1;
+    setRecovery({ loading: false, contact: null });
     setState((prev) => ({ ...prev, loading: true, error: "", status: "" }));
     try {
       let quote = await getPortalQuote(key);
@@ -371,6 +383,7 @@ export default function CustomerPortalView({
         void loadRecoveryContact(key);
       }
     } catch (err) {
+      setManualEntry(true);
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -379,10 +392,22 @@ export default function CustomerPortalView({
           ? "This proposal link is no longer available."
           : formatError(err)
       }));
-      if (key === String(initialPortalKey || "").trim()) {
-        void loadRecoveryContact(key);
-      }
+      void loadRecoveryContact(key);
     }
+  };
+
+  const tryAnotherPortalKey = () => {
+    setManualEntry(true);
+    setPortalKey("");
+    recoveryRequestRef.current += 1;
+    setRecovery({ loading: false, contact: null });
+    setState((prev) => ({
+      ...prev,
+      loading: false,
+      error: "",
+      status: "Paste the current quote key to try again."
+    }));
+    window.requestAnimationFrame(() => portalKeyInputRef.current?.focus());
   };
 
   const submitDecision = async () => {
@@ -434,6 +459,7 @@ export default function CustomerPortalView({
   };
 
   useEffect(() => {
+    setManualEntry(!initialPortalKey);
     if (initialPortalKey) load(initialPortalKey);
   }, [initialPortalKey]);
 
@@ -599,9 +625,10 @@ export default function CustomerPortalView({
           )}
         </div>
 
-        {!quote && !initialPortalKey && (
+        {!quote && manualEntry && (
           <div className="portal-entry">
             <input
+              ref={portalKeyInputRef}
               type="text"
               value={portalKey}
               onChange={(event) => setPortalKey(event.target.value)}
@@ -642,6 +669,9 @@ export default function CustomerPortalView({
                       Call {businessPhone}
                     </a>
                   )}
+                  <button type="button" className="ghost" onClick={tryAnotherPortalKey}>
+                    Try another key
+                  </button>
                 </div>
               </>
             )}

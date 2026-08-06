@@ -264,6 +264,36 @@ test("a signed-void status can start a fresh same-tab test request", async ({ pa
   expect(await page.evaluate((key) => sessionStorage.getItem(key), STATUS_STORAGE_KEY)).toBeNull();
 });
 
+test("an expired invoice can clear its bound status and start a fresh request", async ({ page }) => {
+  await page.addInitScript(({ orderId, statusStorageKey, statusToken }) => {
+    sessionStorage.setItem(statusStorageKey, JSON.stringify({ orderId, statusToken }));
+    window.__quotePilotE2eFunctions = {
+      getBuyerAccessInvoiceStatus: async ({ orderId: requestedOrderId }) => ({
+        orderId: requestedOrderId,
+        status: "expired",
+        activationEmailSent: false,
+        workspaceReady: false,
+        appUrl: null,
+        hostedInvoiceUrl: null
+      })
+    };
+  }, {
+    orderId: ORDER_ID,
+    statusStorageKey: STATUS_STORAGE_KEY,
+    statusToken: STATUS_TOKEN
+  });
+
+  await page.goto("/start");
+
+  await expect(page.getByRole("heading", { name: "This invoice has expired" })).toBeVisible();
+  await expect(page.getByText(/24-hour email window/i)).toBeVisible();
+  await page.getByRole("button", { name: "Start a new test request" }).click();
+
+  await expect(page.getByRole("heading", { name: "Create a $1 Stripe test invoice" }))
+    .toBeVisible();
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), STATUS_STORAGE_KEY)).toBeNull();
+});
+
 test("status identities in the URL are ignored and never claim payment or access", async ({ page }) => {
   await page.goto(`/start?order=${ORDER_ID}`);
   await expect(page.getByText("Invoice status details in the URL were ignored.", { exact: true })).toBeVisible();

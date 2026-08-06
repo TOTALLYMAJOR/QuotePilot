@@ -18,6 +18,7 @@ import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
 import { buildProposalReadiness, buildWorkflowAttentionSummary } from "./lib/quoteWorkflow";
+import { recommendationWouldChangeForm } from "./lib/recommendationState";
 import { PRODUCT_NAME } from "./lib/productIdentity";
 import {
   applyEventTypeTemplateDefaults,
@@ -1383,8 +1384,10 @@ export default function App() {
 
   const applyRecommendation = (item, { userOriginated = true } = {}) => {
     if (!item) return;
-    if (userOriginated) {
+    if (userOriginated || recommendationWouldChangeForm(form, item)) {
       setQuoteDirty(true);
+    }
+    if (userOriginated) {
       if (item.kind === "package") handleSelectionTouched("pkg");
     }
     // Route addon/rental recommendations through handleSelectionTouched (not
@@ -1943,8 +1946,7 @@ export default function App() {
     setPortalMode(false);
     setPortalKey("");
     requestWorkflowAttentionRefresh({ force: true });
-    const nextUrl = `${window.location.pathname}${window.location.hash}`;
-    window.history.replaceState({}, "", nextUrl);
+    window.history.replaceState({}, "", "/app");
   };
 
   const saveCatalogDuringSetup = async (nextCatalog) => {
