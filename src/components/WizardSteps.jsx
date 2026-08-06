@@ -706,7 +706,8 @@ export function StepServices({
   onSelectionTouched,
   templateNotice = null,
   onClearTemplateDefaults,
-  onDismissTemplateNotice
+  onDismissTemplateNotice,
+  onAddonSelection
 }) {
   const guidedSellingEnabled =
     guidedSellingEnabledProp !== undefined
@@ -752,6 +753,9 @@ export function StepServices({
       ? addonSupportsQuantity(item, pricingType)
       : pricingType === "per_item";
     if (typeof onSelectionTouched === "function") onSelectionTouched(key, id);
+    if (key === "addons" && typeof onAddonSelection === "function") {
+      onAddonSelection(id, checked);
+    }
     setForm((f) => {
       const set = new Set(Array.isArray(f[key]) ? f[key] : []);
       const quantityMap = { ...(f[quantityKey] || {}) };

@@ -105,6 +105,11 @@ const {
   planProposalAcceptance
 } = require("./proposalAcceptance");
 const {
+  ProductAnalyticsError,
+  sanitizeAnalyticsBatch,
+  summarizeAnalyticsEvents
+} = require("./productAnalytics");
+const {
   StarterCatalogPackError,
   applyStarterCatalogPack: applyStarterCatalogPackInternal,
   confirmCatalogPricing: confirmCatalogPricingInternal
@@ -186,6 +191,7 @@ const QUOTES_COLLECTION = "quotes";
 const QUOTE_APPROVAL_EXECUTIONS_COLLECTION = "quoteApprovalExecutions";
 const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
 const PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION = "proposalAcceptanceReceipts";
+const PRODUCT_ANALYTICS_COLLECTION = "productAnalyticsEvents";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
@@ -6056,6 +6062,68 @@ exports.acceptQuoteProposal = functions.region(REGION).https.onCall(async (data,
       "Proposal acceptance could not be recorded. Reload the proposal and try again."
     );
   }
+});
+
+exports.recordProductAnalyticsEvents = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  const receivedAtISO = new Date().toISOString();
+  let events;
+  try {
+    events = sanitizeAnalyticsBatch(data?.events, {
+      organizationId: staff.organizationId,
+      receivedAtISO
+    });
+  } catch (err) {
+    if (err instanceof ProductAnalyticsError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+
+  const collection = db.collection(ORGANIZATIONS_COLLECTION)
+    .doc(staff.organizationId)
+    .collection(PRODUCT_ANALYTICS_COLLECTION);
+  const result = await db.runTransaction(async (transaction) => {
+    const refs = events.map((event) => collection.doc(event.eventId));
+    const snapshots = await transaction.getAll(...refs);
+    let accepted = 0;
+    snapshots.forEach((snapshot, index) => {
+      if (snapshot.exists) return;
+      const event = events[index];
+      transaction.set(snapshot.ref, {
+        ...event,
+        actorUid: staff.uid,
+        actorRole: staff.role,
+        createdAt: FieldValue.serverTimestamp()
+      });
+      accepted += 1;
+    });
+    return { accepted, deduplicated: events.length - accepted };
+  });
+  return { ok: true, ...result };
+});
+
+exports.getProductAnalyticsSummary = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  const requestedDays = Math.round(Number(data?.days || 30));
+  const days = Math.min(90, Math.max(7, Number.isFinite(requestedDays) ? requestedDays : 30));
+  const cutoffISO = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const snapshot = await db.collection(ORGANIZATIONS_COLLECTION)
+    .doc(staff.organizationId)
+    .collection(PRODUCT_ANALYTICS_COLLECTION)
+    .where("receivedAtISO", ">=", cutoffISO)
+    .orderBy("receivedAtISO", "desc")
+    .limit(2500)
+    .get();
+  return {
+    ok: true,
+    source: "firebase",
+    days,
+    sampledEvents: snapshot.size,
+    ...summarizeAnalyticsEvents(snapshot.docs.map((doc) => doc.data()))
+  };
 });
 
 exports.calculateQuotePricing = functions.region(REGION).https.onCall(async (data, context) => {
