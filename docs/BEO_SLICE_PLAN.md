@@ -3,8 +3,8 @@
 Source: not from the 2026-08-05 UX audit. This is a new differentiation feature
 (kitchen-facing Banquet Event Order export) proposed and designed in a
 2026-08-06 planning conversation, kept in its own doc so it isn't misread as
-audit-sourced work. One commit. Implement with the `slice-implementer` agent:
-"Implement slice E of docs/BEO_SLICE_PLAN.md".
+audit-sourced work. One commit per slice. Implement with the `slice-implementer`
+agent: "Implement slice <E|F> of docs/BEO_SLICE_PLAN.md".
 
 ## Ground rules (same as UX_BATCH_2_PLAN.md)
 
@@ -161,3 +161,134 @@ existing button class from the same row-actions group — check first.
 `buildKitchenCheckpoints` (moved logic, previously untested) and
 `buildBeoPayload` (new). No e2e coverage required — this is a staff-only,
 non-wizard, non-portal surface with no existing e2e lane touching it.
+
+---
+
+## Slice F — BEO maturity: revision stamping, day-of contacts, allergen callout, sign-off (implemented after slice E)
+
+Goal: close the gap between the v1 kitchen sheet and how professional BEOs are
+actually used on event day. Four themes, all derivable from data the quote
+already carries — this slice adds NO new persisted fields and does not touch
+`quoteStore.js`, `functions/`, or `firestore.rules`.
+
+Verified data facts (checked against current code — do not re-derive):
+- `quote.versionMeta` is normalized by `normalizeVersionMetadata` in
+  `src/lib/pricingContracts.js` (~line 583): `{ versionNumber, createdAt,
+  createdBy: {uid,email,role}, reason }`. `quote.latestVersionNumber` also
+  exists (number, 0 when absent). Legacy quotes may have neither.
+- `quote.customer` carries `name`, `phone` (see `buildProposalPayload`'s
+  customer block in `proposalPayload.js`). `quote.quoteMeta.businessPhone`
+  exists (same file, meta block).
+- There is NO notes/special-instructions field anywhere on a quote — do not
+  invent one. The printed sheet gets blank ruled lines instead.
+- `src/lib/beoExport.js` currently renders NO page footer (unlike
+  `proposalExport.js`, which has `appendFooterToAllPages`).
+
+### Changes
+
+Files: `src/lib/beoPayload.js`, `src/lib/beoExport.js`,
+`src/lib/__tests__/beoPayload.test.js`. No component changes — the existing
+"Kitchen sheet" button and `handleExportBeo` call path are unchanged.
+
+1. **Revision block in `buildBeoPayload`** — add a `version` field:
+   `{ number, createdAtISO, createdOn }` where `number` is
+   `quote.versionMeta?.versionNumber` when present, else
+   `quote.latestVersionNumber` when > 0, else `0` (meaning "unversioned
+   legacy"); `createdAtISO` is `quote.versionMeta?.createdAt ||
+   quote.updatedAtISO || quote.createdAtISO || ""` (same fallback chain as
+   `resolvePdfCreationDate` in `proposalExport.js`); `createdOn` is its
+   `YYYY-MM-DD` slice or `"-"`. Keep `buildBeoPayload` pure — no `new Date()`
+   inside the payload module.
+
+2. **Contacts block in `buildBeoPayload`** — add a `contacts` field:
+   `{ clientName, clientPhone, businessPhone }` from `quote.customer?.name`,
+   `quote.customer?.phone`, `quote.quoteMeta?.businessPhone` (cleaned text).
+
+3. **Revision stamping in `beoExport.js`**:
+   - Header line under the title: when `version.number > 0`, append
+     `· Rev {number} ({createdOn})` to the existing org/quote/event line
+     region (exact placement: a new line under the date line is fine).
+   - Page footer on EVERY page (mirror `proposalExport.js`'s
+     `appendFooterToAllPages` shape as a local function — do not import it):
+     left side `Quote {quoteNumber} · Rev {number}` (omit the Rev part when
+     number is 0), right side `Page {n} of {total}`, and centered or on the
+     left after the quote number: `Discard earlier revisions.` printed ONLY
+     when `version.number > 1` (a rev-1 sheet has nothing to supersede).
+     Use a thin top rule above the footer like the proposal PDF does.
+   - Add a "Generated" line in the header area using `new Date()` AT EXPORT
+     TIME in `beoExport.js` (not in the payload): `Generated {YYYY-MM-DD
+     HH:mm}` local time. This is a freshness cue for printed sheets; it lives
+     only in the renderer so the payload stays deterministic/testable.
+   - Filename: insert `rev{number}` segment before `kitchen-beo` when
+     number > 0 (e.g. `Q-1042-2026-09-12-rev3-kitchen-beo.pdf`) so stale
+     files are distinguishable on disk.
+
+4. **Day-of contacts section in `beoExport.js`** — new section rendered
+   between "Staffing" and "Kitchen Timeline", labeled "Day-of Contacts":
+   rows for Client (`clientName`, with `clientPhone` appended after a
+   `·` when present), Staff Lead (reuse `staffing.staffLead`, "Unassigned"
+   fallback as elsewhere), Venue (existing `event.venue` +
+   `event.venueAddress` on one wrapped row), and Office (`businessPhone`,
+   row omitted entirely when empty).
+
+5. **Allergen/dietary callout in `beoExport.js`** — when
+   `event.dietaryRestrictions` is non-empty, render a bordered box
+   immediately after the header block (before "Event & Timing"): 1pt black
+   border, label `DIETARY / ALLERGENS` bold, then the restriction text
+   wrapped inside the box. The existing "Dietary Restrictions" row in
+   Event & Timing stays as-is (redundancy is acceptable on a safety-critical
+   line; do not remove the row). When empty, no box — layout must not
+   reserve dead space.
+
+6. **Sign-off + day-of notes at the end of `beoExport.js`** — after the
+   Production Checklist section:
+   - Section "Sign-off": two ruled signature lines (a horizontal line with a
+     small caption under each): `Prepared by / date` and `Chef sign-off /
+     date`. Draw with `doc.line(...)`, caption font size 8, muted gray
+     (80,80,80).
+   - Section "Day-of Notes": four blank ruled lines full content width,
+     spaced ~22pt apart, for handwritten annotations. No data behind them by
+     design (verified: no notes field exists to print).
+
+### Acceptance criteria
+
+- A quote with `versionMeta.versionNumber` 3 produces a sheet whose header
+  shows `Rev 3`, whose every page footer shows `Quote {n} · Rev 3 · Page x of
+  y` plus `Discard earlier revisions.`, and whose filename contains `rev3`.
+- A legacy quote with no version fields renders with no `Rev` text anywhere,
+  no discard warning, and the old filename shape — not `Rev 0`.
+- Dietary text present → boxed callout appears before Event & Timing; absent
+  → no box and no gap.
+- Contacts section shows client name/phone, staff lead, venue, office phone;
+  office row absent when `businessPhone` is empty.
+- Sign-off lines and four ruled note lines render at the end; multi-page
+  documents get the footer on every page (verify with a quote whose checklist
+  + menu push past one page, or by temporarily lowering page height in a
+  scratch check — do not commit scratch changes).
+- `buildBeoPayload` remains a pure function (no Date.now/new Date inside it).
+
+### Tests
+
+Extend `src/lib/__tests__/beoPayload.test.js`: version block derivation
+(versionMeta present, latestVersionNumber fallback, legacy → number 0;
+createdAt fallback chain), contacts block (all present / businessPhone
+empty). Rendering (`beoExport.js`) stays untested like `proposalExport.js` —
+this repo has no jsPDF test harness; do not add one. `npx vitest run` fully
+green (364+ at time of writing).
+
+---
+
+## Deferred (tier 2) — needs new data capture, NOT in slice F
+
+Recorded so the next planning pass starts here. Each of these requires
+touching write paths (`quoteStore.js`, `functions/`, rules) or catalog
+schema, i.e. a human decision first:
+
+- Persisted kitchen/special-instructions notes field on the quote (wizard +
+  BEO + portal-invisible).
+- Per-checkpoint owner assignment (who owns "Line check") — new booking
+  subfield + schedule-board UI.
+- Course/station grouping and per-item prep quantities — needs catalog item
+  metadata (menu items are flat name lists on the quote today) and a
+  catalog join at export time.
+- Equipment/rental quantities on the sheet — same catalog-join dependency.
