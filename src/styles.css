@@ -809,6 +809,32 @@ thead th {
   font-size: 1.08rem;
 }
 
+.quote-recap-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.5rem 1.2rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(201, 153, 74, 0.4);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 246, 228, 0.55);
+}
+
+.quote-recap-card h3 {
+  grid-column: 1 / -1;
+  margin: 0 0 0.1rem;
+  font-family: var(--font-display);
+  color: var(--tone-ink-2);
+}
+
+.quote-recap-card p {
+  margin: 0;
+}
+
+.quote-recap-card .muted {
+  grid-column: 1 / -1;
+}
+
 .quote-sheet {
   border: 1px solid #5b5b5b;
   background: linear-gradient(180deg, #ececec 0%, #dddddd 100%);
@@ -2216,7 +2242,7 @@ hr {
   font-family: var(--font-display);
 }
 
-.saved-quote-handoff p:last-child {
+.saved-quote-handoff-description {
   margin-top: 0.3rem;
   color: #52645c;
   font-size: 0.86rem;
@@ -2229,6 +2255,25 @@ hr {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.portal-link-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.portal-link-row label {
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  color: #52645c;
+}
+
+.portal-link-row input {
+  flex: 1 1 160px;
+  min-width: 0;
 }
 
 .history-row-target {
