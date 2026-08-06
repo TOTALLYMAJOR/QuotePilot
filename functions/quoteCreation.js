@@ -1,5 +1,7 @@
 "use strict";
 
+const { createHash } = require("node:crypto");
+
 const QUOTE_VERSION_ID = "v0001";
 const QUOTE_VALIDITY_DAYS_DEFAULT = 30;
 const QUOTE_VALIDITY_DAYS_MAX = 365;
@@ -52,6 +54,86 @@ function sanitizeStoredStripePaymentLink(value) {
 
 function email(value) {
   return text(value, 254).toLowerCase();
+}
+
+function customerProjectionDocumentId(value) {
+  const normalizedEmail = email(value);
+  if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    throw new QuoteCreationError(
+      "invalid-argument",
+      "A valid customer email is required for customer projection."
+    );
+  }
+  return `email_${createHash("sha256").update(normalizedEmail).digest("hex")}`;
+}
+
+function buildCustomerProjection({
+  organizationId,
+  quoteId,
+  quoteNumber,
+  customer = {},
+  event = {},
+  nowISO,
+  existingCustomer = null,
+  existingCustomerId = ""
+} = {}) {
+  const orgId = sanitizeIdentifier(organizationId);
+  const id = sanitizeIdentifier(quoteId);
+  const number = text(quoteNumber, 80);
+  const projectedAtISO = normalizeISO(nowISO, "");
+  const customerEmail = email(customer?.email);
+  const customerName = text(customer?.name, 160);
+  const existing = isRecord(existingCustomer) ? existingCustomer : null;
+  const deterministicId = customerProjectionDocumentId(customerEmail);
+  const customerId = sanitizeIdentifier(existingCustomerId, 500) || deterministicId;
+
+  if (!orgId || !id || !number || !projectedAtISO || !customerName) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Trusted customer projection identity is incomplete."
+    );
+  }
+  if (existing) {
+    const existingOrgId = sanitizeIdentifier(existing.organizationId);
+    const existingEmail = email(existing.email);
+    if ((existingOrgId && existingOrgId !== orgId) || (existingEmail && existingEmail !== customerEmail)) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "Existing customer projection does not match this quote."
+      );
+    }
+  }
+
+  const optionalCustomerFields = {
+    phone: text(customer?.phone, 40),
+    company: text(customer?.organization ?? customer?.company, 160)
+  };
+  const patch = {
+    customerId,
+    organizationId: orgId,
+    name: customerName,
+    email: customerEmail,
+    lastQuoteId: id,
+    lastQuoteNumber: number,
+    lastEventName: text(event?.name, 160),
+    lastEventDate: text(event?.date, 10),
+    lastProjectedAtISO: projectedAtISO,
+    updatedAtISO: projectedAtISO,
+    ...Object.fromEntries(
+      Object.entries(optionalCustomerFields).filter(([, value]) => Boolean(value))
+    )
+  };
+  if (!existing) {
+    patch.recordSource = "trusted_quote_projection";
+    patch.createdFromQuoteId = id;
+    patch.createdAtISO = projectedAtISO;
+  }
+
+  return {
+    customerId,
+    isNew: !existing,
+    patch
+  };
 }
 
 function numberInRange(value, fallback = 0, min = 0, max = Number.MAX_SAFE_INTEGER) {
@@ -1519,12 +1601,14 @@ module.exports = {
   QUOTE_VERSION_ID,
   QuoteCreationError,
   buildCanonicalPortalSnapshot,
+  buildCustomerProjection,
   buildDuplicateQuoteForm,
   buildPortalRotationDocuments,
   buildQuoteReopenDocuments,
   buildServerQuoteNumber,
   buildTrustedQuoteCreationDocuments,
   buildTrustedQuoteEditDocuments,
+  customerProjectionDocumentId,
   sanitizeQuoteCreationRequest,
   sanitizeStoredStripePaymentLink
 };

@@ -12,6 +12,7 @@ const {
 const {
   QuoteCreationError,
   buildCanonicalPortalSnapshot,
+  buildCustomerProjection,
   buildDuplicateQuoteForm,
   buildPortalRotationDocuments,
   buildQuoteReopenDocuments,
@@ -6197,6 +6198,12 @@ exports.getPortalRecoveryContact = functions.region(REGION).https.onCall(async (
   };
 });
 
+function selectCustomerProjectionDocument(snapshot) {
+  const docs = Array.isArray(snapshot?.docs) ? [...snapshot.docs] : [];
+  docs.sort((left, right) => String(left?.id || "").localeCompare(String(right?.id || "")));
+  return docs[0] || null;
+}
+
 async function createTrustedQuoteDraftInternal({
   organizationId,
   staff,
@@ -6272,12 +6279,20 @@ async function createTrustedQuoteDraftInternal({
   });
   const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
   const versionRef = quoteRef.collection("versions").doc(documents.version.versionId);
+  const customerCollectionRef = db
+    .collection(ORGANIZATIONS_COLLECTION)
+    .doc(organizationId)
+    .collection("customers");
+  const customerQuery = customerCollectionRef
+    .where("email", "==", documents.quote.customer.email)
+    .limit(25);
 
   await db.runTransaction(async (tx) => {
-    const [quoteSnap, portalSnap, versionSnap] = await Promise.all([
+    const [quoteSnap, portalSnap, versionSnap, customerSnapshot] = await Promise.all([
       tx.get(quoteRef),
       tx.get(portalRef),
-      tx.get(versionRef)
+      tx.get(versionRef),
+      tx.get(customerQuery)
     ]);
     if (quoteSnap.exists || portalSnap.exists || versionSnap.exists) {
       throw new QuoteCreationError(
@@ -6285,6 +6300,18 @@ async function createTrustedQuoteDraftInternal({
         "A generated quote identity collided. Retry quote creation."
       );
     }
+    const existingCustomerDoc = selectCustomerProjectionDocument(customerSnapshot);
+    const customerProjection = buildCustomerProjection({
+      organizationId,
+      quoteId: quoteRef.id,
+      quoteNumber,
+      customer: documents.quote.customer,
+      event: documents.quote.event,
+      nowISO,
+      existingCustomer: existingCustomerDoc?.data() || null,
+      existingCustomerId: existingCustomerDoc?.id || ""
+    });
+    const customerRef = customerCollectionRef.doc(customerProjection.customerId);
 
     tx.create(quoteRef, {
       ...documents.quote,
@@ -6300,6 +6327,13 @@ async function createTrustedQuoteDraftInternal({
       ...documents.version,
       createdAt: FieldValue.serverTimestamp()
     });
+    tx.set(customerRef, {
+      ...customerProjection.patch,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(customerProjection.isNew
+        ? { createdAt: FieldValue.serverTimestamp() }
+        : {})
+    }, { merge: true });
   });
 
   return {
@@ -6390,9 +6424,17 @@ async function updateTrustedQuoteDraftInternal({
     const versionRef = quoteRef
       .collection("versions")
       .doc(documents.version.versionId);
-    const [portalSnap, versionSnap] = await Promise.all([
+    const customerCollectionRef = db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .doc(organizationId)
+      .collection("customers");
+    const customerQuery = customerCollectionRef
+      .where("email", "==", documents.quotePatch.customer.email)
+      .limit(25);
+    const [portalSnap, versionSnap, customerSnapshot] = await Promise.all([
       tx.get(portalRef),
-      tx.get(versionRef)
+      tx.get(versionRef),
+      tx.get(customerQuery)
     ]);
     if (versionSnap.exists) {
       throw new QuoteCreationError(
@@ -6413,6 +6455,18 @@ async function updateTrustedQuoteDraftInternal({
         );
       }
     }
+    const existingCustomerDoc = selectCustomerProjectionDocument(customerSnapshot);
+    const customerProjection = buildCustomerProjection({
+      organizationId,
+      quoteId,
+      quoteNumber: documents.quotePatch.quoteNumber,
+      customer: documents.quotePatch.customer,
+      event: documents.quotePatch.event,
+      nowISO,
+      existingCustomer: existingCustomerDoc?.data() || null,
+      existingCustomerId: existingCustomerDoc?.id || ""
+    });
+    const customerRef = customerCollectionRef.doc(customerProjection.customerId);
 
     tx.update(quoteRef, {
       ...documents.quotePatch,
@@ -6429,6 +6483,13 @@ async function updateTrustedQuoteDraftInternal({
       ...documents.version,
       createdAt: FieldValue.serverTimestamp()
     });
+    tx.set(customerRef, {
+      ...customerProjection.patch,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(customerProjection.isNew
+        ? { createdAt: FieldValue.serverTimestamp() }
+        : {})
+    }, { merge: true });
     return documents.result;
   });
 

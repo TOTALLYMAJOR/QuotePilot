@@ -357,6 +357,11 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - Rows labeled `Need attention` are not imported. Correct the source file or change the mapping, then review again.
 - Import creates ready records only, skips existing duplicate emails/names, sends no outbound messages, and saves an organization-scoped receipt.
 - `Undo this import` removes only unchanged documents whose `importBatchId` matches that receipt. Records edited after import are protected from rollback, and pre-existing records are never deleted by the batch.
+- Saving or editing a quote also projects its customer into the matching
+  organization record inside the trusted server transaction. An existing
+  normalized email is reused; blank quote fields do not erase imported phone,
+  company, notes, or other richer data. Browser code cannot write projected
+  quote history.
 - Active quotes, payments, contracts, bookings, and staff accounts are outside the first Import Studio release and must not be represented as imported operational history.
 
 ## Public $1 Invoice-First Buyer Access

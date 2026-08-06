@@ -78,6 +78,17 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   const quoteId = await handoff.getAttribute("data-quote-id");
   expect(quoteId).toBeTruthy();
 
+  const customerProjection = await page.evaluate(async () => {
+    const store = await import("/src/lib/quoteStore.js");
+    return store.getCustomerRecordByEmail("client@example.com", "e2e-org");
+  });
+  expect(customerProjection).toMatchObject({
+    organizationId: "e2e-org",
+    email: "client@example.com",
+    lastQuoteId: quoteId,
+    recordSource: "trusted_quote_projection"
+  });
+
   const rejectedDelivery = await page.evaluate(async (savedQuoteId) => {
     const store = await import("/src/lib/quoteStore.js");
     const commerce = await import("/src/lib/commerceOps.js");

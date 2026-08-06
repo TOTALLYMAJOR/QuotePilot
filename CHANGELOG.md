@@ -66,6 +66,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   pricing, Turnstile abuse controls, durable rate limits, exact-request retry,
   signed invoice lifecycle handling, audited terminal-unpaid recovery, paid
   workspace preparation, and verified-email invitation activation.
+- Trusted customer projection during server-authoritative quote create and edit:
+  matching organization customer records are updated in the same transaction,
+  imported notes and nonblank optional details are preserved, duplicate emails
+  reuse the existing record, and browser writes cannot forge projected history.
 
 ### Changed
 
