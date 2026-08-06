@@ -3,16 +3,16 @@
 Last updated: August 5, 2026
 
 ## Operational Health
-- Runtime: release `v0.2.1` is live from merged `main` commit
-  `e1301ccb798144ebce49be2da26a63a9491f31c3`. Main CI run `31026299454`
+- Runtime: release `v0.2.3` is live from merged `main` commit
+  `d2747c693e4d15d0efc66cb3bbd76b03f31009f4`. Main CI run `31059404835`
   passed every required lane. The public custom domain
   (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment
-  `dpl_67bWx2DWepw74yN9bUvUjZFPm1TQ`, which is provider-reported `READY`.
+  `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
   Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`)
   and was released with the same tagged source revision.
 - Current branch product identity: install metadata, runtime defaults, proposals, integration messages, and onboarding links use QuotePilot/MBMapps branding; the legacy Firebase project ID and hosting origin remain unchanged infrastructure identifiers.
 - Build and local validation: the current delivery-evidence head passes the
-  full release lane with 318 unit tests passed and 39 intentionally skipped,
+  full release lane with 334 unit tests passed and 39 intentionally skipped,
   production build, environment/secret checks, documentation governance, and
   bundle budget. Firestore rules pass 38/38; the default Playwright suite passes
   31 tests with 2 intentionally gated provisioning-role cases skipped; the
@@ -22,9 +22,9 @@ Last updated: August 5, 2026
   ms. Both the browser application and Functions production dependency trees
   report zero known vulnerabilities under `npm audit --omit=dev`. This is
   local/emulator evidence, not hosted tenant or provider acceptance.
-- Functions runtime readiness: all 27 production Functions now run on Node.js
+- Functions runtime readiness: all 29 production Functions now run on Node.js
   22 with Firebase Admin 14 modular app, Auth, and Firestore APIs. The clean
-  cloud install and each function update completed successfully from `v0.2.1`;
+  cloud install and each function update completed successfully from `v0.2.3`;
   the local authoritative and provisioning matrices also pass.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current branch workflow delivery: proposal readiness, Good/Better/Best
@@ -73,15 +73,18 @@ Last updated: August 5, 2026
   handling remain unproved until provider/hosted acceptance is captured.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
 - Current branch tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
-- `v0.2.3` release-candidate starter catalog delivery: the existing post-login blank-catalog
+- Production `v0.2.3` starter catalog delivery: the existing post-login blank-catalog
   gate now offers four one-click industry drafts in Catalog Admin. Versioned
   manifests populate tenant-scoped catalog and menu records with suggested
   minor-unit prices, provenance hashes, and unconfirmed pricing. Server
   transactions enforce revision preconditions for apply, untouched staged
   replacement, and confirmation; replacement detects custom records,
   pack-record divergence, and pricing-setting edits, while confirmation checks
-  the complete catalog and records actor, timestamp, and catalog revision. This
-  is implemented and locally covered but is not yet deployed or hosted-accepted.
+  the complete catalog and records actor, timestamp, and catalog revision. The
+  frontend, Firestore rules, and both catalog callables are deployed; `/app`
+  returns HTTP 200 and unauthenticated callable probes fail closed with HTTP 401.
+  A signed-in owner pack application and pricing confirmation remain pending
+  tenant acceptance rather than being inferred from route reachability.
 - Production provisioning hardening includes verified-email,
   role-document, and allowlist-backed platform authority; explicit plan/create
   confirmation; atomic collision-safe creation; seven-day owner invitations;
