@@ -227,6 +227,33 @@ export function resolveLaborRates(form, settings) {
   };
 }
 
+function stableIdSet(value) {
+  return new Set((Array.isArray(value) ? value : [])
+    .map((id) => String(id || "").trim())
+    .filter(Boolean));
+}
+
+export function resolvePackageInclusions(selectedPkg = {}, catalog = {}, menuCatalog = [], selection = {}) {
+  const resolve = (ids, items, selectedIds) => {
+    const byId = new Map((Array.isArray(items) ? items : []).map((item) => [item.id, item]));
+    const selected = stableIdSet(selectedIds);
+    return [...stableIdSet(ids)].filter((id) => selected.has(id)).map((id) => {
+      const item = byId.get(id);
+      return {
+        id,
+        name: String(item?.name || id).trim(),
+        active: item ? item.active !== false : false,
+        includedInPackage: true
+      };
+    });
+  };
+  return {
+    menuItems: resolve(selectedPkg?.includedMenuItemIds, menuCatalog, selection.menuItems),
+    addons: resolve(selectedPkg?.includedAddonIds, catalog?.addons, selection.addons),
+    rentals: resolve(selectedPkg?.includedRentalIds, catalog?.rentals, selection.rentals)
+  };
+}
+
 export function calculateQuote(form, catalog, settings) {
   const guests = Math.min(400, Number(form.guests || 0));
   const hours = Number(form.hours || 0);
@@ -259,6 +286,14 @@ export function calculateQuote(form, catalog, settings) {
   const menuCatalog = Array.isArray(settings?.menuSections)
     ? settings.menuSections.flatMap((section) => section.items || [])
     : [];
+  const packageInclusions = resolvePackageInclusions(selectedPkg, catalog, menuCatalog, {
+    menuItems: form.menuItems,
+    addons: form.addons,
+    rentals: form.rentals
+  });
+  const includedAddonIds = stableIdSet(selectedPkg?.includedAddonIds);
+  const includedRentalIds = stableIdSet(selectedPkg?.includedRentalIds);
+  const includedMenuItemIds = stableIdSet(selectedPkg?.includedMenuItemIds);
 
   if (guests <= 0) {
     const baseServers = staffingLaborEnabled ? serversInput : 0;
@@ -315,6 +350,7 @@ export function calculateQuote(form, catalog, settings) {
       packageMultiplier,
       addonMultiplier,
       rentalMultiplier,
+      packageInclusions,
       addonQuantityMap,
       rentalQuantityMap,
       menuItemQuantityMap,
@@ -328,6 +364,7 @@ export function calculateQuote(form, catalog, settings) {
   const addonSummary = catalog.addons
     .filter((item) => selectedAddonIds.has(item.id) && item.active !== false)
     .reduce((acc, item) => {
+      if (includedAddonIds.has(item.id)) return acc;
       const price = Number(item.price || 0);
       const pricingType = normalizePricingType(item.pricingType || item.type);
       const quantityEnabled = addonSupportsQuantity(item, pricingType);
@@ -352,6 +389,7 @@ export function calculateQuote(form, catalog, settings) {
   const rentals = catalog.rentals
     .filter((item) => selectedRentalIds.has(item.id) && item.active !== false)
     .reduce((sum, item) => {
+      if (includedRentalIds.has(item.id)) return sum;
       const price = Number(item.price || 0);
       const pricingType = normalizePricingType(item.pricingType || item.type || "per_item");
       if (pricingType === "per_person") {
@@ -368,6 +406,7 @@ export function calculateQuote(form, catalog, settings) {
   const menu = menuCatalog
     .filter((item) => selectedMenuIds.has(item.id) && item.active !== false)
     .reduce((sum, item) => {
+      if (includedMenuItemIds.has(item.id)) return sum;
       const price = Number(item.price || 0);
       const pricingType = normalizePricingType(item.pricingType || item.type);
       if (pricingType === "per_person") {
@@ -457,6 +496,7 @@ export function calculateQuote(form, catalog, settings) {
     packageMultiplier,
     addonMultiplier,
     rentalMultiplier,
+    packageInclusions,
     addonQuantityMap,
     rentalQuantityMap,
     menuItemQuantityMap,

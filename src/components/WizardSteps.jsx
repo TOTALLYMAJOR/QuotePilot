@@ -546,9 +546,15 @@ export function StepMenu({
   isAdmin = false,
   onRetry,
   onOpenCatalogMenu,
-  onSelectionTouched
+  onSelectionTouched,
+  packageIncludedMenuItemIds = []
 }) {
   const resolvedMenuSections = Array.isArray(menuSections) ? menuSections : [];
+  const includedMenuItemIds = new Set(
+    (Array.isArray(packageIncludedMenuItemIds) ? packageIncludedMenuItemIds : [])
+      .map((id) => String(id || "").trim())
+      .filter(Boolean)
+  );
   const resolvePricingType = (item) => {
     const raw = String(item?.pricingType || item?.type || "").trim().toLowerCase();
     if (raw === "per_person" || raw === "per_item" || raw === "per_event") return raw;
@@ -672,7 +678,7 @@ export function StepMenu({
                         onChange={(e) => toggleMenuItem(item, e.target.checked)}
                       />
                       <span>{item.name}</span>
-                      <small>{pricingLabel(item)}</small>
+                      <small>{includedMenuItemIds.has(item.id) ? "Included at no added charge — select to add" : pricingLabel(item)}</small>
                       {resolvePricingType(item) === "per_item" && form.menuItems.includes(item.id) && (
                         <input
                           className="qty-input"
@@ -716,6 +722,23 @@ export function StepServices({
       : catalog.settings?.guidedSellingEnabled !== false;
   const aiAssistEnabled = aiAssistEnabledProp !== false;
   const aiAutopilotEnabled = aiAssistEnabled && aiAutopilotEnabledProp === true;
+  const selectedPackage = catalog.packages.find((item) => item.id === form.pkg) || catalog.packages[0] || {};
+  const includedAddonIds = new Set(selectedPackage.includedAddonIds || []);
+  const includedRentalIds = new Set(selectedPackage.includedRentalIds || []);
+  const menuItemsById = new Map(
+    (catalog.settings?.menuSections || []).flatMap((section) => section.items || [])
+      .map((item) => [item.id, item])
+  );
+  const packageInclusionLabels = [
+    ...(selectedPackage.includedMenuItemIds || []).map((id) => menuItemsById.get(id)?.name || id),
+    ...(selectedPackage.includedAddonIds || []).map((id) => catalog.addons.find((item) => item.id === id)?.name || id),
+    ...(selectedPackage.includedRentalIds || []).map((id) => catalog.rentals.find((item) => item.id === id)?.name || id)
+  ];
+  const packageInclusionCount = (pkg) => [
+    ...(pkg?.includedMenuItemIds || []),
+    ...(pkg?.includedAddonIds || []),
+    ...(pkg?.includedRentalIds || [])
+  ].length;
   const resolvePricingType = (item, fallback = "per_event") => {
     const raw = String(item?.pricingType || item?.type || "").trim().toLowerCase();
     if (raw === "per_person" || raw === "per_item" || raw === "per_event") return raw;
@@ -804,9 +827,20 @@ export function StepServices({
             setForm((f) => ({ ...f, pkg: e.target.value }));
           }}
         >
-          {catalog.packages.map((p) => <option key={p.id} value={p.id}>{p.name} - {currency(p.ppp)}/person</option>)}
+          {catalog.packages.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} - {currency(p.ppp)}/person{packageInclusionCount(p) ? ` · ${packageInclusionCount(p)} select-to-add choices included` : ""}
+            </option>
+          ))}
         </select>
       </Field>
+      {packageInclusionLabels.length > 0 && (
+        <div className="package-inclusion-summary" role="status">
+          <strong>Available at no added charge with {selectedPackage.name || "this package"}</strong>
+          <ul>{packageInclusionLabels.map((label, index) => <li key={`${label}-${index}`}>{label}</li>)}</ul>
+          <small>Included at no added charge — select to add. Unselected items will not appear in the quote.</small>
+        </div>
+      )}
       <Field label="Travel (round trip miles)">
         <input
           type="number"
@@ -835,7 +869,7 @@ export function StepServices({
                   onChange={(e) => toggle("addons", "addonQuantities", item, e.target.checked, 1)}
                 />
                 <span>{item.name}</span>
-                <small>{pricingLabel(item, "per_person")}</small>
+                <small>{includedAddonIds.has(item.id) ? "Included at no added charge — select to add" : pricingLabel(item, "per_person")}</small>
                 {quantityEnabled && selected && (
                   <input
                     className="qty-input"
@@ -869,7 +903,7 @@ export function StepServices({
                   onChange={(e) => toggle("rentals", "rentalQuantities", item, e.target.checked, fallbackQty)}
                 />
                 <span>{item.name}</span>
-                <small>{pricingLabel(item, "per_item")}</small>
+                <small>{includedRentalIds.has(item.id) ? "Included at no added charge — select to add" : pricingLabel(item, "per_item")}</small>
                 {pricingType === "per_item" && selected && (
                   <input
                     className="qty-input"

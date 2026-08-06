@@ -87,7 +87,10 @@ describe("catalog record save planning", () => {
         nextItem: next.packages[0],
         writeData: {
           name: "Package A Plus",
-          pppMinor: 2900
+          pppMinor: 2900,
+          includedMenuItemIds: [],
+          includedAddonIds: [],
+          includedRentalIds: []
         },
         expectedFingerprint: "package-a-fingerprint"
       }

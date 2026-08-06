@@ -109,10 +109,22 @@ function stagedCatalog(packId = "wedding-events", revision = 1) {
 }
 
 describe("starter catalog pack manifests", () => {
+  test("keeps the historically staged v1 manifest hashes immutable", () => {
+    expect(buildStarterCatalogPackDocuments("wedding-events", { packVersion: 1 }).pack.manifestHash)
+      .toBe("2241d1f15cf2069796e171382d45fd78bcf29e94b4246b9b2796a1f8855d954b");
+    expect(buildStarterCatalogPackDocuments("corporate-drop-off", { packVersion: 1 }).pack.manifestHash)
+      .toBe("d9f4c2774c2b615b918077666db2b4914790c65a5f173a840367c9f707267b5c");
+    expect(buildStarterCatalogPackDocuments("bbq-southern", { packVersion: 1 }).pack.manifestHash)
+      .toBe("f30196093c9edd4deed9c511cf6ea8372e27e53f5dc09f5ba87e5905f13a65e2");
+    expect(buildStarterCatalogPackDocuments("church-community", { packVersion: 1 }).pack.manifestHash)
+      .toBe("b8b0bd079274e2785e92394c9018a40dded05a22b31195dde834a47bdec4b720");
+  });
+
   test("keeps exact versioned manifests addressable while exposing one latest summary per pack", () => {
     const keys = manifests.packs.map((pack) => manifestKey(pack.id, pack.version));
     expect(new Set(keys).size).toBe(keys.length);
     expect(getStarterCatalogPackSummaries()).toHaveLength(4);
+    expect(getStarterCatalogPackSummaries().every((pack) => pack.version === 2)).toBe(true);
     manifests.packs.forEach((pack) => {
       expect(findStarterCatalogPack(pack.id, pack.version)).toMatchObject({
         id: pack.id,
@@ -138,21 +150,39 @@ describe("starter catalog pack manifests", () => {
   });
 
   test("distinguishes generated, modified, and custom records by immutable baseline hash", () => {
-    const plan = buildStarterCatalogPackDocuments("wedding-events");
+    const plan = buildStarterCatalogPackDocuments("wedding-events", { packVersion: 2 });
     const generated = plan.collections.catalogPackages[0].data;
-    expect(classifyPackRecord("catalogPackages", generated, "wedding-events", 1)).toBe("generated");
+    expect(classifyPackRecord("catalogPackages", generated, "wedding-events", 2)).toBe("generated");
     expect(classifyPackRecord(
       "catalogPackages",
       { ...generated, pppMinor: generated.pppMinor + 100 },
       "wedding-events",
-      1
+      2
+    )).toBe("modified");
+    expect(classifyPackRecord(
+      "catalogPackages",
+      {
+        ...generated,
+        includedMenuItemIds: [...generated.includedMenuItemIds, "owner-added-menu-item"]
+      },
+      "wedding-events",
+      2
     )).toBe("modified");
     expect(classifyPackRecord(
       "catalogPackages",
       { name: "Owner special", pppMinor: 2500 },
       "wedding-events",
-      1
+      2
     )).toBe("custom");
+  });
+
+  test("rejects a package inclusion that is not in the complete authoritative catalog", () => {
+    const plan = buildStarterCatalogPackDocuments("wedding-events", { packVersion: 2 });
+    plan.collections.catalogPackages[0].data.includedMenuItemIds = ["missing-menu-item"];
+    expect(() => validateCatalogForConfirmation({
+      settings: plan.settings,
+      collections: plan.collections
+    })).toThrow(/includes unavailable menu item missing-menu-item/i);
   });
 });
 

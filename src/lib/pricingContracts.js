@@ -112,7 +112,8 @@ function normalizeSelectedItems(input, fallbackPricingMode) {
           name: id,
           pricingMode: fallbackPricingMode,
           unitPrice: 0,
-          quantity: 1
+          quantity: 1,
+          includedInPackage: false
         };
       }
       const id = toText(item?.id);
@@ -123,7 +124,8 @@ function normalizeSelectedItems(input, fallbackPricingMode) {
         name: toText(item.name, id),
         pricingMode,
         unitPrice: toNumber(item.unitPrice, toNumber(item.price, 0)),
-        quantity: Math.max(1, toInt(item.quantity, 1))
+        quantity: Math.max(1, toInt(item.quantity, 1)),
+        includedInPackage: item.includedInPackage === true
       };
     })
     .filter(Boolean);
@@ -199,7 +201,21 @@ export function normalizePricingInput(payload = {}) {
         name: toText(packageInput.name, toText(packageInput.id)),
         pricingMode: normalizePricingMode(packageInput.pricingMode || packageInput.pricingType || packageInput.type, "per_person"),
         unitPrice: toNumber(packageInput.unitPrice, toNumber(packageInput.price, 0)),
-        quantity: Math.max(1, toInt(packageInput.quantity, 1))
+        quantity: Math.max(1, toInt(packageInput.quantity, 1)),
+        inclusions: {
+          menuItems: normalizeSelectedItems(
+            packageInput.inclusions?.menuItems || selection.packageInclusions?.menuItems,
+            "per_event"
+          ),
+          addons: normalizeSelectedItems(
+            packageInput.inclusions?.addons || selection.packageInclusions?.addons,
+            "per_person"
+          ),
+          rentals: normalizeSelectedItems(
+            packageInput.inclusions?.rentals || selection.packageInclusions?.rentals,
+            "per_item"
+          )
+        }
       },
       addons: normalizeSelectedItems(selection.addons || source.addons, "per_person"),
       rentals: normalizeSelectedItems(selection.rentals || source.rentals, "per_item"),
@@ -347,6 +363,7 @@ export function buildPricingSnapshotFromClientTotals({
       ...selection,
       packageId: selection.packageId || form.pkg,
       packageName: selection.packageName || totals.selectedPkg?.name || "",
+      packageInclusions: selection.packageInclusions || totals.packageInclusions,
       addons: Array.isArray(selection.addons) ? selection.addons : form.addons,
       rentals: Array.isArray(selection.rentals) ? selection.rentals : form.rentals,
       menuItems: Array.isArray(selection.menuItems) ? selection.menuItems : form.menuItems,

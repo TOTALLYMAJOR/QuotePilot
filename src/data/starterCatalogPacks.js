@@ -12,7 +12,22 @@ function countMenu(pack) {
 }
 
 const latestById = new Map();
-starterCatalogPackData.packs.forEach((pack) => {
+const summarizedPacks = [
+  ...(starterCatalogPackData.packs || []),
+  ...(starterCatalogPackData.packageInclusionVersions || []).map((version) => {
+    const base = (starterCatalogPackData.packs || []).find((pack) => (
+      pack.id === version.id && Number(pack.version) === Number(version.baseVersion)
+    ));
+    if (!base) return null;
+    return {
+      ...base,
+      version: Number(version.version || 0),
+      packageInclusions: version.packages || {}
+    };
+  }).filter(Boolean)
+];
+
+summarizedPacks.forEach((pack) => {
   const current = latestById.get(pack.id);
   if (!current || Number(pack.version || 0) > Number(current.version || 0)) {
     latestById.set(pack.id, pack);
@@ -55,7 +70,14 @@ export const STARTER_CATALOG_PACKS = Object.freeze(
         rentals: (pack.rentals || []).length,
         eventTypes: (pack.eventTypes || []).length,
         menuSections: menu.sections,
-        menuItems: menu.items
+        menuItems: menu.items,
+        packageInclusions: Object.values(pack.packageInclusions || {}).reduce(
+          (sum, inclusion) => sum
+            + (inclusion.includedMenuItemIds || []).length
+            + (inclusion.includedAddonIds || []).length
+            + (inclusion.includedRentalIds || []).length,
+          0
+        )
       })
     });
   })

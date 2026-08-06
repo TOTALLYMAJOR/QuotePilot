@@ -32,7 +32,17 @@ describe("pricingContracts", () => {
         bartenders: 2
       },
       selection: {
-        package: { id: "classic", name: "Classic", pricingType: "per_person", price: 24 },
+        package: {
+          id: "classic",
+          name: "Classic",
+          pricingType: "per_person",
+          price: 24,
+          inclusions: {
+            menuItems: [{ id: "included-side", name: "Included Side", includedInPackage: true }],
+            addons: [],
+            rentals: []
+          }
+        },
         addons: [{ id: "dessert", name: "Dessert", pricingType: "per_person", price: 4 }],
         rentals: [{ id: "linens", name: "Linens", pricingType: "per_item", price: 75, quantity: 6 }],
         menuItems: [{ id: "ribs", name: "Smoked Ribs", pricingType: "per_event", price: 300 }],
@@ -57,6 +67,9 @@ describe("pricingContracts", () => {
 
     expect(second).toEqual(first);
     expect(first.selection.package.pricingMode).toBe("per_person");
+    expect(first.selection.package.inclusions.menuItems).toEqual([
+      expect.objectContaining({ id: "included-side", name: "Included Side", includedInPackage: true })
+    ]);
     expect(first.selection.addons[0].pricingMode).toBe("per_person");
     expect(first.selection.rentals[0].pricingMode).toBe("per_item");
     expect(first.selection.menuItems[0].pricingMode).toBe("per_event");

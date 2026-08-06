@@ -470,6 +470,12 @@ export async function exportQuoteProposal(quote, {
 
   section("Selections");
   row("Package", proposal.selection.packageName || proposal.selection.packageId);
+  const packageInclusions = [
+    ...(proposal.selection.packageInclusions?.menuItems || []),
+    ...(proposal.selection.packageInclusions?.addons || []),
+    ...(proposal.selection.packageInclusions?.rentals || [])
+  ];
+  row("Package Includes", packageInclusions.join(", ") || "-");
   row(
     "Menu Selections",
     (proposal.selection.menuItemNames.length ? proposal.selection.menuItemNames : proposal.selection.menuItems).join(", ") || "-"

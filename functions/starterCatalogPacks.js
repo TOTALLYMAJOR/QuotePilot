@@ -3,6 +3,12 @@ const starterCatalogPackData = require("./data/starterCatalogPacks.json");
 
 const PACK_SOURCE = "starter-catalog-pack";
 const MAX_TRANSACTION_WRITES = 450;
+const MAX_PACKAGE_INCLUSIONS_PER_TYPE = 100;
+const PACKAGE_INCLUSION_KEYS = Object.freeze([
+  "includedMenuItemIds",
+  "includedAddonIds",
+  "includedRentalIds"
+]);
 const COLLECTION_NAMES = Object.freeze([
   "catalogPackages",
   "catalogAddons",
@@ -147,9 +153,58 @@ function manifestKey(packId, packVersion) {
   return `${slug(packId, "")}@${Number(packVersion || 0)}`;
 }
 
+function materializeStarterCatalogPacks() {
+  const manifests = (starterCatalogPackData.packs || []).map((pack) => ({ ...pack }));
+  const byKey = new Map(manifests.map((pack) => [manifestKey(pack.id, pack.version), pack]));
+  const inclusionVersions = [...(starterCatalogPackData.packageInclusionVersions || [])]
+    .sort((left, right) => Number(left.version || 0) - Number(right.version || 0));
+
+  inclusionVersions.forEach((version) => {
+    const base = byKey.get(manifestKey(version.id, version.baseVersion));
+    if (!base) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `Starter pack base manifest ${manifestKey(version.id, version.baseVersion)} is unavailable.`
+      );
+    }
+    const inclusionByPackage = version.packages || {};
+    const next = {
+      ...base,
+      version: Number(version.version || 0),
+      packages: (base.packages || []).map((item) => {
+        const inclusion = inclusionByPackage[item.id];
+        if (!inclusion) {
+          throw new StarterCatalogPackError(
+            "failed-precondition",
+            `Starter pack ${manifestKey(version.id, version.version)} is missing inclusions for package ${item.id}.`
+          );
+        }
+        return {
+          ...item,
+          includedMenuItemIds: [...(inclusion.includedMenuItemIds || [])],
+          includedAddonIds: [...(inclusion.includedAddonIds || [])],
+          includedRentalIds: [...(inclusion.includedRentalIds || [])]
+        };
+      })
+    };
+    const key = manifestKey(next.id, next.version);
+    if (!next.version || byKey.has(key)) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `Starter pack manifest ${key} is duplicated or invalid.`
+      );
+    }
+    manifests.push(next);
+    byKey.set(key, next);
+  });
+  return manifests;
+}
+
+const STARTER_CATALOG_PACK_MANIFESTS = Object.freeze(materializeStarterCatalogPacks());
+
 function findStarterCatalogPack(packId = "", packVersion = null) {
   const normalizedPackId = slug(packId, "");
-  const candidates = starterCatalogPackData.packs
+  const candidates = STARTER_CATALOG_PACK_MANIFESTS
     .filter((pack) => pack.id === normalizedPackId)
     .sort((left, right) => Number(right.version || 0) - Number(left.version || 0));
   if (packVersion === null || packVersion === undefined || packVersion === "") {
@@ -160,7 +215,7 @@ function findStarterCatalogPack(packId = "", packVersion = null) {
 
 function getStarterCatalogPackSummaries() {
   const latestById = new Map();
-  starterCatalogPackData.packs.forEach((pack) => {
+  STARTER_CATALOG_PACK_MANIFESTS.forEach((pack) => {
     const current = latestById.get(pack.id);
     if (!current || Number(pack.version || 0) > Number(current.version || 0)) {
       latestById.set(pack.id, pack);
@@ -190,7 +245,15 @@ function getStarterCatalogPackSummaries() {
 
 function recordBusinessData(collectionName, data = {}) {
   if (collectionName === "catalogPackages") {
-    return { name: text(data.name), pppMinor: Number(data.pppMinor) };
+    const businessData = { name: text(data.name), pppMinor: Number(data.pppMinor) };
+    if (PACKAGE_INCLUSION_KEYS.some((key) => Object.prototype.hasOwnProperty.call(data, key))) {
+      PACKAGE_INCLUSION_KEYS.forEach((key) => {
+        businessData[key] = Array.isArray(data[key])
+          ? data[key].map((value) => text(value))
+          : data[key];
+      });
+    }
+    return businessData;
   }
   if (collectionName === "catalogAddons") {
     const pricingType = normalizePricingType(data.pricingType || data.type, "per_person");
@@ -424,6 +487,53 @@ function isPackOwned(data = {}) {
   return data?.source === PACK_SOURCE;
 }
 
+function validatePackageInclusionIds(packageEntry, {
+  addonById = new Map(),
+  rentalById = new Map(),
+  menuItemById = new Map()
+} = {}) {
+  const packageData = packageEntry?.data || {};
+  const referenceMaps = {
+    includedMenuItemIds: { records: menuItemById, label: "menu item" },
+    includedAddonIds: { records: addonById, label: "add-on" },
+    includedRentalIds: { records: rentalById, label: "rental" }
+  };
+  const result = {};
+
+  PACKAGE_INCLUSION_KEYS.forEach((key) => {
+    if (!Object.prototype.hasOwnProperty.call(packageData, key)) {
+      result[key] = [];
+      return;
+    }
+    if (!Array.isArray(packageData[key]) || packageData[key].length > MAX_PACKAGE_INCLUSIONS_PER_TYPE) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `Package ${packageEntry.id} ${key} must be an array of at most ${MAX_PACKAGE_INCLUSIONS_PER_TYPE} stable ids.`
+      );
+    }
+    const seen = new Set();
+    const normalized = packageData[key].map((value) => text(value));
+    normalized.forEach((id) => {
+      if (!id || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(id) || seen.has(id)) {
+        throw new StarterCatalogPackError(
+          "failed-precondition",
+          `Package ${packageEntry.id} has an invalid or duplicate ${referenceMaps[key].label} inclusion.`
+        );
+      }
+      seen.add(id);
+      const referenced = referenceMaps[key].records.get(id);
+      if (!referenced || referenced.data?.active === false) {
+        throw new StarterCatalogPackError(
+          "failed-precondition",
+          `Package ${packageEntry.id} includes unavailable ${referenceMaps[key].label} ${id}.`
+        );
+      }
+    });
+    result[key] = normalized;
+  });
+  return result;
+}
+
 function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}) {
   const packages = collections.catalogPackages || [];
   const addons = collections.catalogAddons || [];
@@ -446,6 +556,9 @@ function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}
 
   const eventTypeIds = new Set(eventTypes.map((entry) => entry.id));
   const categoriesById = new Map(categories.map((entry) => [entry.id, entry.data || {}]));
+  const addonById = new Map(addons.map((entry) => [entry.id, entry]));
+  const rentalById = new Map(rentals.map((entry) => [entry.id, entry]));
+  const menuItemById = new Map(menuItems.map((entry) => [entry.id, entry]));
   packages.forEach((entry) => {
     if (!text(entry.data?.name) || text(entry.data?.name).toLowerCase() === "new package") {
       throw new StarterCatalogPackError("failed-precondition", `Package ${entry.id} needs a customer-facing name.`);
@@ -454,6 +567,7 @@ function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}
       positive: true,
       requireMinor: isPackOwned(entry.data)
     });
+    validatePackageInclusionIds(entry, { addonById, rentalById, menuItemById });
   });
   [...addons, ...rentals, ...menuItems].forEach((entry) => {
     if (!text(entry.data?.name)) {
@@ -1139,6 +1253,8 @@ async function confirmCatalogPricing({
 module.exports = {
   COLLECTION_NAMES,
   MAX_TRANSACTION_WRITES,
+  MAX_PACKAGE_INCLUSIONS_PER_TYPE,
+  PACKAGE_INCLUSION_KEYS,
   PACK_PRICING_SETTING_KEYS,
   PACK_SOURCE,
   StarterCatalogPackError,
@@ -1152,5 +1268,6 @@ module.exports = {
   hashValue,
   manifestKey,
   recordBusinessData,
+  validatePackageInclusionIds,
   validateCatalogForConfirmation
 };

@@ -45,23 +45,64 @@ function buildPricing(overrides = {}) {
           name: "Classic",
           pricingMode: "per_person",
           unitPrice: 20,
-          quantity: 1
+          quantity: 1,
+          inclusions: {
+            menuItems: [
+              { id: "included-side", name: "Included Side", pricingMode: "per_event", unitPrice: 0 },
+              { id: "unselected-side", name: "Unselected Side", pricingMode: "per_event", unitPrice: 0 }
+            ],
+            addons: [
+              { id: "included-drink", name: "Included Drink", pricingMode: "per_person", unitPrice: 0 },
+              { id: "unselected-drink", name: "Unselected Drink", pricingMode: "per_person", unitPrice: 0 }
+            ],
+            rentals: [
+              { id: "included-chafer", name: "Included Chafer", pricingMode: "per_item", unitPrice: 0 },
+              { id: "unselected-chafer", name: "Unselected Chafer", pricingMode: "per_item", unitPrice: 0 }
+            ]
+          }
         },
-        addons: [{
-          id: "dessert",
-          name: "Dessert",
-          pricingMode: "per_person",
-          unitPrice: 3,
-          quantity: 1
+        addons: [
+          {
+            id: "dessert",
+            name: "Dessert",
+            pricingMode: "per_person",
+            unitPrice: 3,
+            quantity: 1
+          },
+          {
+            id: "included-drink",
+            name: "Included Drink",
+            pricingMode: "per_person",
+            unitPrice: 0,
+            quantity: 1,
+            includedInPackage: true
+          }
+        ],
+        rentals: [{
+          id: "included-chafer",
+          name: "Included Chafer",
+          pricingMode: "per_item",
+          unitPrice: 0,
+          quantity: 1,
+          includedInPackage: true
         }],
-        rentals: [],
-        menuItems: [{
-          id: "salad",
-          name: "Salad",
-          pricingMode: "per_event",
-          unitPrice: 50,
-          quantity: 1
-        }],
+        menuItems: [
+          {
+            id: "salad",
+            name: "Salad",
+            pricingMode: "per_event",
+            unitPrice: 50,
+            quantity: 1
+          },
+          {
+            id: "included-side",
+            name: "Included Side",
+            pricingMode: "per_event",
+            unitPrice: 0,
+            quantity: 1,
+            includedInPackage: true
+          }
+        ],
         quantities: {
           addonQuantities: {},
           rentalQuantities: {},
@@ -385,6 +426,17 @@ describe("trusted server quote creation documents", () => {
       }
     });
     expect(documents.quote.portalExpiresAtISO).toBe("2026-08-26T12:00:00.000Z");
+    expect(documents.quote.selection.packageInclusions).toMatchObject({
+      menuItems: [{ id: "included-side", name: "Included Side", price: 0, includedInPackage: true }],
+      addons: [{ id: "included-drink", name: "Included Drink", price: 0, includedInPackage: true }],
+      rentals: [{ id: "included-chafer", name: "Included Chafer", price: 0, includedInPackage: true }]
+    });
+    expect(documents.quote.selection.packageInclusions.menuItems)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "unselected-side" })]));
+    expect(documents.quote.selection.packageInclusions.addons)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "unselected-drink" })]));
+    expect(documents.quote.selection.packageInclusions.rentals)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "unselected-chafer" })]));
     expect(documents.quote.expiresAtISO).toBe("2026-09-10T12:00:00.000Z");
     expect(documents.quote.quoteMeta).not.toHaveProperty("crmWebhookUrl");
     expect(documents.quote.quoteMeta).not.toHaveProperty("crmBridgeAuthToken");
@@ -403,6 +455,13 @@ describe("trusted server quote creation documents", () => {
         organizationName: "Trusted Organization",
         brandName: "Trusted Caterer",
         businessEmail: "events@example.com"
+      },
+      selection: {
+        packageInclusions: {
+          menuItems: ["Included Side"],
+          addons: ["Included Drink"],
+          rentals: ["Included Chafer"]
+        }
       },
       lifecycle: {
         draftAtISO: "2026-07-27T12:00:00.000Z"

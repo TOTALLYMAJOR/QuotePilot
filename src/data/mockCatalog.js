@@ -1,7 +1,7 @@
 export const DEFAULT_PACKAGES = [
-  { id: "classic", name: "Classic", ppp: 18 },
-  { id: "premium", name: "Premium", ppp: 24 },
-  { id: "deluxe", name: "Deluxe", ppp: 32 }
+  { id: "classic", name: "Classic", ppp: 18, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] },
+  { id: "premium", name: "Premium", ppp: 24, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] },
+  { id: "deluxe", name: "Deluxe", ppp: 32, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] }
 ];
 
 export const DEFAULT_ADDONS = [
@@ -454,6 +454,18 @@ function normalizeAddonStaffRole(value, fallback = "") {
   return "";
 }
 
+function normalizeStableIdList(value) {
+  const seen = new Set();
+  return (Array.isArray(value) ? value : [])
+    .map((item) => String(item || "").trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    })
+    .slice(0, 100);
+}
+
 function inferAddonStaffRole(addon = {}) {
   const hasExplicitField = Object.prototype.hasOwnProperty.call(addon, "staffRole");
   const explicitRole = normalizeAddonStaffRole(addon?.staffRole);
@@ -821,7 +833,10 @@ export function normalizeCatalog(raw) {
     name: p.name,
     ppp: Object.prototype.hasOwnProperty.call(p || {}, "pppMinor")
       ? fromMinorUnits(p.pppMinor, 0)
-      : Number(p.ppp || 0)
+      : Number(p.ppp || 0),
+    includedMenuItemIds: normalizeStableIdList(p.includedMenuItemIds),
+    includedAddonIds: normalizeStableIdList(p.includedAddonIds),
+    includedRentalIds: normalizeStableIdList(p.includedRentalIds)
   }));
   const addons = (raw.addons || DEFAULT_ADDONS).map((a) => ({
     id: a.id,
@@ -1136,7 +1151,21 @@ export function normalizeCatalog(raw) {
 
 export function toStorageCatalog(catalog) {
   return {
-    packages: catalog.packages.map(({ id, name, ppp }) => ({ id, name, ppp })),
+    packages: catalog.packages.map(({
+      id,
+      name,
+      ppp,
+      includedMenuItemIds,
+      includedAddonIds,
+      includedRentalIds
+    }) => ({
+      id,
+      name,
+      ppp,
+      includedMenuItemIds: normalizeStableIdList(includedMenuItemIds),
+      includedAddonIds: normalizeStableIdList(includedAddonIds),
+      includedRentalIds: normalizeStableIdList(includedRentalIds)
+    })),
     addons: catalog.addons.map(({ id, name, type, pricingType, price, staffRole, active }) => ({
       id,
       name,

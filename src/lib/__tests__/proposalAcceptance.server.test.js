@@ -42,6 +42,11 @@ function fixtures() {
     },
     selection: {
       packageName: "Classic",
+      packageInclusions: {
+        menuItems: [{ id: "included-side", name: "Included Side" }],
+        addons: [{ id: "included-drink", name: "Included Drink" }],
+        rentals: []
+      },
       addonSnapshots: [{ name: "Dessert" }],
       rentalSnapshots: [{ name: "Linens" }],
       menuItemNames: ["Chicken", "Green Beans"]
@@ -83,6 +88,11 @@ function fixtures() {
     deposit: 2043.72,
     selection: {
       packageName: "Classic",
+      packageInclusions: {
+        menuItems: ["Included Side"],
+        addons: ["Included Drink"],
+        rentals: []
+      },
       addons: ["Dessert"],
       rentals: ["Linens"],
       menuItems: ["Chicken", "Green Beans"]
@@ -155,6 +165,16 @@ describe("server proposal acceptance planning", () => {
     });
     expect(result.acceptanceReceipt.snapshotSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(result.receiptDocument.proposalSnapshot.totalsMinor.total).toBe(681239);
+    expect(result.receiptDocument.proposalSnapshot).toMatchObject({
+      schemaVersion: 2,
+      selection: {
+        packageInclusions: {
+          menuItems: ["Included Side"],
+          addons: ["Included Drink"],
+          rentals: []
+        }
+      }
+    });
     expect(result.receiptDocument.portalKeyHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
@@ -163,6 +183,14 @@ describe("server proposal acceptance planning", () => {
     expect(Number.isInteger(plan().receiptDocument.proposalSnapshot.totalsMinor.serviceFee)).toBe(true);
     expect(() => moneyToMinor(Number.NaN, "amount")).toThrow(ProposalAcceptanceError);
     expect(() => moneyToMinor(-1, "amount")).toThrow(/invalid/i);
+  });
+
+  test("fails closed when the public package inclusions diverge from the quote revision", () => {
+    const { quote, portal } = fixtures();
+    portal.selection.packageInclusions.addons = ["Different Included Drink"];
+    expect(() => plan({ quote, portal })).toThrowError(
+      expect.objectContaining({ code: "aborted" })
+    );
   });
 
   test("fails closed for stale revisions, stale portal issuance, and expired links", () => {

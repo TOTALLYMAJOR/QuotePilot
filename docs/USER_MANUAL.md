@@ -320,6 +320,11 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   - Price
   - `pricingType`
   - `active` toggle
+- In `Packages`, mark menu items, add-ons, and rentals that the package price
+  can cover. This does not add them to a quote automatically. In the quote
+  builder, covered choices say `Included at no added charge — select to add`;
+  unselected choices do not appear in the customer scope, while selected
+  choices appear at $0 and are not charged a second time.
 - Save overall catalog changes with `Save Catalog`.
 - For a new blank tenant, open `Starter Packs` and apply Wedding & events,
   Corporate drop-off, BBQ / Southern, or Church & community. This stages a

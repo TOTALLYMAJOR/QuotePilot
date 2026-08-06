@@ -290,7 +290,8 @@ function quoteHasMenuSelection(quote) {
     selection.menuItems,
     selection.menuItemsSnapshot,
     selection.menuItemNames,
-    selection.menuItemDetails
+    selection.menuItemDetails,
+    selection.packageInclusions?.menuItems
   ].some((items) => (
     Array.isArray(items)
     && items.some((item) => String(
@@ -828,6 +829,16 @@ function buildPortalSnapshot(quoteId, quote) {
     },
     selection: {
       packageName: quote.selection?.packageName || "",
+      packageInclusions: Object.fromEntries(
+        ["menuItems", "addons", "rentals"].map((key) => [
+          key,
+          (Array.isArray(quote.selection?.packageInclusions?.[key])
+            ? quote.selection.packageInclusions[key]
+            : [])
+            .map((item) => String(item?.name || item || "").trim())
+            .filter(Boolean)
+        ])
+      ),
       addons: (Array.isArray(quote.selection?.addonSnapshots) ? quote.selection.addonSnapshots : [])
         .map((item) => String(item?.name || "").trim())
         .filter(Boolean),
@@ -1242,6 +1253,34 @@ function resolveItemSnapshots(ids = [], catalogItems = [], quantityMap = {}, { g
       quantity
     };
   });
+}
+
+function resolvePackageInclusionSnapshots(totals = {}, selection = {}) {
+  const source = totals?.packageInclusions && typeof totals.packageInclusions === "object"
+    ? totals.packageInclusions
+    : {};
+  const normalize = (value, fallbackPricingType, selectedIds) => {
+    const selected = new Set((Array.isArray(selectedIds) ? selectedIds : [])
+      .map((id) => String(id || "").trim())
+      .filter(Boolean));
+    return (Array.isArray(value) ? value : [])
+    .slice(0, 100)
+    .map((item) => ({
+      id: String(item?.id || "").trim(),
+      name: String(item?.name || item?.id || "").trim(),
+      price: 0,
+      pricingType: normalizePricingType(item?.pricingType || item?.type, fallbackPricingType),
+      type: normalizePricingType(item?.pricingType || item?.type, fallbackPricingType),
+      quantity: 1,
+      includedInPackage: true
+    }))
+    .filter((item) => item.id && item.name && selected.has(item.id));
+  };
+  return {
+    menuItems: normalize(source.menuItems, "per_event", selection.menuItems),
+    addons: normalize(source.addons, "per_person", selection.addons),
+    rentals: normalize(source.rentals, "per_item", selection.rentals)
+  };
 }
 
 export function getAllowedStatusTransitions(status) {
@@ -2729,6 +2768,11 @@ export async function submitQuote({
     guests,
     defaultPricingType: "per_item"
   });
+  const packageInclusions = resolvePackageInclusionSnapshots(totals, {
+    menuItems,
+    addons: form.addons,
+    rentals: form.rentals
+  });
   const crmProvider = resolveCrmProvider(settings?.crmProvider || "webhook", "webhook");
   const featureFlags = settings?.featureFlags && typeof settings.featureFlags === "object"
     ? { ...settings.featureFlags }
@@ -2747,6 +2791,7 @@ export async function submitQuote({
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
+      packageInclusions,
       addons: form.addons,
       rentals: form.rentals,
       menuItems,
@@ -2816,6 +2861,7 @@ export async function submitQuote({
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
+      packageInclusions,
       addons: form.addons,
       rentals: form.rentals,
       addonQuantities,
@@ -3124,6 +3170,11 @@ export async function updateQuote({
     guests,
     defaultPricingType: "per_item"
   });
+  const packageInclusions = resolvePackageInclusionSnapshots(totals, {
+    menuItems,
+    addons: form.addons,
+    rentals: form.rentals
+  });
   const crmProvider = resolveCrmProvider(settings?.crmProvider || "webhook", "webhook");
   const featureFlags = settings?.featureFlags && typeof settings.featureFlags === "object"
     ? { ...settings.featureFlags }
@@ -3170,6 +3221,7 @@ export async function updateQuote({
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
+      packageInclusions,
       addons: form.addons,
       rentals: form.rentals,
       menuItems,
@@ -3240,6 +3292,7 @@ export async function updateQuote({
     selection: {
       packageId: form.pkg,
       packageName: totals.selectedPkg?.name || "",
+      packageInclusions,
       addons: form.addons,
       rentals: form.rentals,
       addonQuantities,

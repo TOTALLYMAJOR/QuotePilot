@@ -504,7 +504,14 @@ export default function AdminCatalogModal({
     const id = `${key}-${Date.now()}`;
     const template =
       key === "packages"
-        ? { id, name: "", ppp: 0 }
+        ? {
+            id,
+            name: "",
+            ppp: 0,
+            includedMenuItemIds: [],
+            includedAddonIds: [],
+            includedRentalIds: []
+          }
       : key === "addons"
           ? {
               id,
@@ -522,6 +529,21 @@ export default function AdminCatalogModal({
 
   const removeRow = (key, index) => {
     setDraft((prev) => ({ ...prev, [key]: prev[key].filter((_, i) => i !== index) }));
+  };
+
+  const togglePackageInclusion = (packageIndex, field, itemId, checked) => {
+    const id = String(itemId || "").trim();
+    if (!id) return;
+    setDraft((prev) => {
+      const packages = [...(prev.packages || [])];
+      const current = { ...(packages[packageIndex] || {}) };
+      const ids = new Set(Array.isArray(current[field]) ? current[field] : []);
+      if (checked) ids.add(id);
+      else ids.delete(id);
+      current[field] = [...ids];
+      packages[packageIndex] = current;
+      return { ...prev, packages };
+    });
   };
 
   const patchNumericSetting = (field, value) => {
@@ -1211,8 +1233,21 @@ export default function AdminCatalogModal({
         {activeTab === "packages" && (
           <Section title="Packages" onAdd={() => addRow("packages")}>
           <p className="source-note">
-            Add a customer-specific package name and its per-person price. Generic placeholder names and $0 packages cannot complete setup.
+            Choose which catalog items the package price can cover. These items are not added to a quote automatically: the quote builder must select each one, and selected inclusions are charged $0.
           </p>
+          <label className="admin-package-menu-filter">
+            Menu event type for package inclusions
+            <select
+              value={selectedEventType}
+              onChange={(event) => setManagedEventType(event.target.value)}
+              disabled={menuLoading}
+            >
+              <option value="">Choose event type</option>
+              {menuEventTypes.map((eventType) => (
+                <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
+              ))}
+            </select>
+          </label>
           <div className="admin-row admin-row-headings" aria-hidden="true">
             <span>Package ID</span>
             <span>Display Name</span>
@@ -1220,23 +1255,48 @@ export default function AdminCatalogModal({
             <span>Actions</span>
           </div>
           {draft.packages.map((item, i) => (
-            <div className="admin-row" key={item.id}>
-              <input aria-label={`Package ${i + 1} ID`} value={item.id} disabled />
-              <input
-                aria-label={`Package ${i + 1} name`}
-                placeholder="Customer package name"
-                value={item.name}
-                onChange={(e) => patchArrayItem("packages", i, "name", e.target.value)}
-              />
-              <input
-                aria-label={`Package ${i + 1} price per person`}
-                type="number"
-                min="0"
-                step="0.01"
-                value={item.ppp}
-                onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))}
-              />
-              <button type="button" className="ghost" onClick={() => removeRow("packages", i)}>Delete</button>
+            <div className="admin-package-editor" key={item.id}>
+              <div className="admin-row">
+                <input aria-label={`Package ${i + 1} ID`} value={item.id} disabled />
+                <input
+                  aria-label={`Package ${i + 1} name`}
+                  placeholder="Customer package name"
+                  value={item.name}
+                  onChange={(e) => patchArrayItem("packages", i, "name", e.target.value)}
+                />
+                <input
+                  aria-label={`Package ${i + 1} price per person`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={item.ppp}
+                  onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))}
+                />
+                <button type="button" className="ghost" onClick={() => removeRow("packages", i)}>Delete</button>
+              </div>
+              <div className="package-inclusion-editor" aria-label={`${item.name || `Package ${i + 1}`} inclusions`}>
+                {[
+                  ["includedMenuItemIds", "Menu items", menuItems],
+                  ["includedAddonIds", "Add-ons", draft.addons || []],
+                  ["includedRentalIds", "Rentals", draft.rentals || []]
+                ].map(([field, label, options]) => (
+                  <fieldset key={field}>
+                    <legend>{label} available at no added charge</legend>
+                    {options.length === 0 ? (
+                      <small>{field === "includedMenuItemIds" ? "Choose an event type with menu items." : `No ${label.toLowerCase()} available.`}</small>
+                    ) : options.map((option) => (
+                      <label key={option.id} className="admin-inline-toggle">
+                        <input
+                          type="checkbox"
+                          checked={(item[field] || []).includes(option.id)}
+                          onChange={(event) => togglePackageInclusion(i, field, option.id, event.target.checked)}
+                        />
+                        <span>{option.name}{option.active === false ? " (inactive)" : ""}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                ))}
+              </div>
             </div>
           ))}
           </Section>
