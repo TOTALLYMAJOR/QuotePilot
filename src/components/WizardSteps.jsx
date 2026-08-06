@@ -625,7 +625,8 @@ export function StepServices({
   guidedSellingEnabled: guidedSellingEnabledProp,
   aiAssistEnabled: aiAssistEnabledProp,
   aiAutopilotEnabled: aiAutopilotEnabledProp,
-  onSelectionTouched
+  onSelectionTouched,
+  onAddonSelection
 }) {
   const guidedSellingEnabled =
     guidedSellingEnabledProp !== undefined
@@ -671,6 +672,9 @@ export function StepServices({
       ? addonSupportsQuantity(item, pricingType)
       : pricingType === "per_item";
     if (typeof onSelectionTouched === "function") onSelectionTouched(key);
+    if (key === "addons" && typeof onAddonSelection === "function") {
+      onAddonSelection(id, checked);
+    }
     setForm((f) => {
       const set = new Set(Array.isArray(f[key]) ? f[key] : []);
       const quantityMap = { ...(f[quantityKey] || {}) };

@@ -8,6 +8,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- First-party, tenant-scoped quote-wizard analytics for anonymous funnel
+  completion and add-on selection/removal trends. Events use allow-listed
+  non-customer dimensions, deterministic retry IDs, callable-only writes, and
+  a 30-day summary in the existing reporting dashboard.
 - Server-authoritative electronic proposal acceptance with typed signer name,
   versioned consent text, server timestamp, exact delivery-revision and portal
   issuance preconditions, integer minor-unit totals, a SHA-256 signed proposal
@@ -18,6 +22,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Security
 
+- Raw product analytics records cannot be read or written from the browser;
+  same-tenant staff receive only a server-derived summary, and analytics
+  failures never block quote creation or dashboard quote reporting.
 - Direct browser writes can no longer create an accepted proposal. The
   acceptance callable independently validates the active organization, portal
   expiry, matching quote/portal content, provider-accepted delivery evidence,

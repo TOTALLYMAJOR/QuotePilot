@@ -1205,6 +1205,42 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(deleteDoc(adminReceipt));
   });
 
+  test("product analytics events are callable-owned and cannot expose raw staff activity", async () => {
+    const eventId = "analytics-event-0001";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "organizations", "org-a", "productAnalyticsEvents", eventId),
+        {
+          organizationId: "org-a",
+          eventId,
+          eventName: "wizard_started",
+          sessionId: "session-1234567890",
+          sequence: 1
+        }
+      );
+    });
+    const adminEvent = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "productAnalyticsEvents",
+      eventId
+    );
+    const salesEvent = orgScopedRefFor(
+      "sales-org-a",
+      "sales-a@example.com",
+      "org-a",
+      "productAnalyticsEvents",
+      eventId
+    );
+
+    await assertFails(getDoc(adminEvent));
+    await assertFails(getDoc(salesEvent));
+    await assertFails(setDoc(adminEvent, { eventName: "quote_saved" }));
+    await assertFails(updateDoc(adminEvent, { eventName: "quote_saved" }));
+    await assertFails(deleteDoc(adminEvent));
+  });
+
   test("Stripe payment references and provider audit fields remain server-owned", async () => {
     const depositLink = "https://checkout.stripe.com/c/pay/cs_test_server";
     const stripeSessionId = "cs_test_server";

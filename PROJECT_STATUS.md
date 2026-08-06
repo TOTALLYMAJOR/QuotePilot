@@ -130,6 +130,13 @@ Last updated: August 6, 2026
   browser acceptance is denied; request changes and declines retain their
   existing atomic portal path. This is local branch/emulator evidence only and
   is not deployed or hosted-accepted.
+- Current branch product analytics: the quote wizard records only anonymous
+  session, step, mode, and add-on identifiers through same-tenant staff
+  callables. Deterministic event identities make retries idempotent, raw events
+  remain browser-inaccessible, and the existing Dashboard shows a 30-day
+  funnel plus add-on selection/removal trends. Analytics storage or summary
+  failures do not block quote work or the dashboard's quote metrics. This is
+  local branch evidence only and is not deployed or production-accepted.
 - Production approval authority: Firebase-backed approval request
   creation and admin resolution use same-tenant callable transactions with
   server-owned actor identity/timestamps and duplicate/replay rejection.

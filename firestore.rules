@@ -847,6 +847,10 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /organizations/{orgId}/productAnalyticsEvents/{eventId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/quotes/{quoteId} {
       allow create: if false;
       allow read: if isOrgStaff(orgId) || quoteBelongsToUser(resource.data, orgId);

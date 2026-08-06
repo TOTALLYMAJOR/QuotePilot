@@ -171,6 +171,18 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   direct approval-array, contract-evidence, and execution-audit writes are
   denied.
 
+## Reporting Dashboard
+- Open `Dashboard` to review quote pipeline, status, deposit, and monthly won
+  revenue metrics.
+- `Quote wizard funnel` shows anonymous staff sessions that reached each step
+  and the share that saved a draft during the last 30 days. A session is not a
+  customer or unique person count.
+- `Add-on selection trends` counts selection and removal actions by the current
+  catalog name. These analytics do not store customer names, emails, quote
+  values, or proposal content.
+- Analytics delivery is non-blocking. If its server summary is unavailable,
+  quote creation continues and the dashboard still loads its quote metrics.
+
 ## Event Schedule and Production Checklist
 - Open `Schedule` to review accepted and booked events by month or week, inspect conflicts, and assign a staff lead.
 - Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.

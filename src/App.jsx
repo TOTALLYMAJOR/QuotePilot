@@ -33,6 +33,10 @@ import {
   updateQuote
 } from "./lib/quoteStore";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
+import {
+  beginWizardAnalyticsSession,
+  recordProductAnalyticsEvent
+} from "./lib/productAnalytics";
 
 const AdminCatalogModal = lazy(() => import("./components/AdminCatalogModal"));
 const EventScheduleModal = lazy(() => import("./components/EventScheduleModal"));
@@ -609,6 +613,10 @@ export default function App() {
     markFieldsTouched([field]);
   };
 
+  const handleAddonSelection = (addonId, selected) => {
+    recordProductAnalyticsEvent(selected ? "addon_selected" : "addon_removed", { addonId });
+  };
+
   const stepperModel = useMemo(
     () => buildStepperModel({ currentStep: step, stepStatus }),
     [step, stepStatus]
@@ -665,6 +673,12 @@ export default function App() {
     setActiveOrganizationId(authSession.organizationId);
     setQuoteStoreOrganizationId(authSession.organizationId);
   }, [authSession.organizationId, setOrganizationId]);
+
+  useEffect(() => {
+    const organizationId = String(authSession.organizationId || "").trim();
+    if (!organizationId || !authSession.isStaff || catalog.loading) return;
+    beginWizardAnalyticsSession({ organizationId, mode: editingQuote.id ? "edit" : "create" });
+  }, [authSession.isStaff, authSession.organizationId, catalog.loading, editingQuote.id]);
 
   useEffect(() => {
     const organizationId = String(authSession.organizationId || "").trim();
@@ -1118,6 +1132,9 @@ export default function App() {
     if (item.kind === "package") markFieldsTouched(["pkg"]);
     if (item.kind === "addon") markFieldsTouched(["addons"]);
     if (item.kind === "rental") markFieldsTouched(["rentals"]);
+    if (item.kind === "addon" && !(form.addons || []).includes(item.id)) {
+      handleAddonSelection(item.id, true);
+    }
 
     setForm((prev) => {
       if (item.kind === "package") {
@@ -1179,6 +1196,7 @@ export default function App() {
       return;
     }
     setShowStepValidation(false);
+    recordProductAnalyticsEvent("wizard_step_completed", { step });
     setStep((current) => Math.min(5, current + 1));
   };
 
@@ -1338,6 +1356,7 @@ export default function App() {
         isEditingQuote ? "updateQuote" : "submitQuote"
       );
       if (isEditingQuote) {
+        recordProductAnalyticsEvent("quote_saved");
         setSubmitState({
           saving: false,
           message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`
@@ -1349,6 +1368,7 @@ export default function App() {
       }
 
       const savedDraftMessage = `Quote ${result.quoteNumber} saved as a draft in ${result.storage}. It has not been sent to the customer.`;
+      recordProductAnalyticsEvent("quote_saved");
       setSubmitState({
         saving: false,
         message: `${savedDraftMessage}${pricingAdjustmentNote}`
@@ -1509,6 +1529,11 @@ export default function App() {
     setHistoryTarget({ quoteId: "", reason: "" });
     setHistoryOpen(false);
     setStep(1);
+    beginWizardAnalyticsSession({
+      organizationId: authSession.organizationId,
+      mode: "edit",
+      force: true
+    });
     setSubmitState({
       saving: false,
       message: `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
@@ -1527,6 +1552,11 @@ export default function App() {
     setShowStepValidation(false);
     setSubmitState((prev) => ({ ...prev, message: "" }));
     setStep(1);
+    beginWizardAnalyticsSession({
+      organizationId: authSession.organizationId,
+      mode: "create",
+      force: true
+    });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -1977,6 +2007,7 @@ export default function App() {
                 aiAutopilotEnabled={aiAutopilotEnabled}
                 onApplyRecommendation={applyRecommendation}
                 onSelectionTouched={handleSelectionTouched}
+                onAddonSelection={handleAddonSelection}
               />
             )}
             {!catalog.loading && step === 4 && (
@@ -2210,6 +2241,7 @@ export default function App() {
             open={dashboardOpen}
             onClose={() => setDashboardOpen(false)}
             organizationId={authSession.organizationId}
+            addons={catalog.addons}
           />
         )}
       </Suspense>
