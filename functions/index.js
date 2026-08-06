@@ -122,6 +122,7 @@ const {
   BUYER_ACCESS_STATUS_RATE_LIMIT,
   BUYER_ACCESS_STATUS_RATE_WINDOW_MS,
   BUYER_ACCESS_STRIPE_API_VERSION,
+  CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET,
   BuyerAccessError,
   assertBuyerAccessInvoiceBinding,
   assertBuyerAccessRuntime,
@@ -9462,11 +9463,16 @@ function throwBuyerAccessHttpsError(err) {
 }
 
 function getTrustedBuyerAccessRequestIp(context) {
-  return normalizeText(
+  const trustedRequestIp = normalizeText(
     context?.rawRequest?.ip
       || context?.rawRequest?.socket?.remoteAddress
       || ""
   ).slice(0, 128);
+  if (trustedRequestIp) return trustedRequestIp;
+  // The callable emulator does not consistently expose its loopback socket on
+  // context.rawRequest. Keep local rate limiting deterministic without adding
+  // a forwarded-header trust path or weakening deployed fail-closed behavior.
+  return process.env.FUNCTIONS_EMULATOR === "true" ? "127.0.0.1" : "";
 }
 
 function getBuyerAccessRateLimitSecret() {
@@ -9701,6 +9707,8 @@ async function verifyBuyerAccessTurnstile({ requestIp, token } = {}) {
       allowedHostnames: normalizeBuyerAccessTurnstileHostnames(
         readConfig("buyer_access_turnstile_hostnames")
       ),
+      allowOfficialLocalTestResult:
+        secret === CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET,
       result
     });
   } catch (err) {
@@ -10560,8 +10568,15 @@ function getBuyerAccessApplicationUrl() {
     "buyer_access_app_base_url"
   );
   const parsed = new URL(appUrl);
+  const isLoopbackEmulatorUrl = (
+    process.env.FUNCTIONS_EMULATOR === "true"
+    && parsed.protocol === "http:"
+    && ["localhost", "127.0.0.1"].includes(parsed.hostname)
+    && (parsed.pathname.replace(/\/+$/, "") || "/") === "/app"
+    && !parsed.search
+  );
   if (
-    parsed.protocol !== "https:"
+    (parsed.protocol !== "https:" && !isLoopbackEmulatorUrl)
     || parsed.username
     || parsed.password
     || parsed.hash
@@ -11158,6 +11173,8 @@ exports.buyerAccessStripeWebhook = functions
       res.status(400).send("Webhook verification failed.");
       return;
     }
+    // The event payload shape is payment evidence. Local tooling must adapt to
+    // this pinned contract before signing instead of relaxing it here.
     if (normalizeText(event?.api_version) !== BUYER_ACCESS_STRIPE_API_VERSION) {
       functions.logger.warn("Buyer access Stripe webhook API version was rejected", {
         eventId: normalizeText(event?.id),

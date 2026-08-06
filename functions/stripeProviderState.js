@@ -32,7 +32,7 @@ function assertStripeSecretKeyMode(secretKey, expectedMode) {
   const mode = normalizeStripeMode(expectedMode);
   const allowedPrefixes = mode === "live"
     ? ["sk_live_", "rk_live_"]
-    : ["sk_test_", "rk_test_"];
+    : ["sk_test_", "rk_test_", "rkcs_test_"];
   if (!allowedPrefixes.some((prefix) => key.startsWith(prefix))) {
     throw new StripeProviderStateError(
       `Stripe ${mode} mode requires a matching secret or restricted key.`

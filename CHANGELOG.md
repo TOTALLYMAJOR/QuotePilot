@@ -6,6 +6,23 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Fixed
+
+- Local buyer-invoice testing can now consume Cloudflare's published always-pass
+  Turnstile result. The exception requires the exact published test credential
+  and a loopback-only hostname allowlist; production hostname and action checks
+  remain strict.
+- Firebase's callable emulator now supplies a deterministic loopback identity
+  when it omits the trusted request socket. Deployed buyer-invoice Functions
+  still fail closed when neither trusted request-IP source is present.
+- Buyer activation may use the exact loopback `/app` route over HTTP only inside
+  the Functions emulator. Every deployed or non-loopback application URL still
+  requires HTTPS.
+- Local Stripe coding sandboxes can now authenticate the test-only invoice rail
+  with Stripe's `rkcs_test_` restricted-key prefix. Live mode continues to
+  accept only live secret or restricted keys, so the local compatibility path
+  cannot authorize a production payment rail.
+
 ### Added
 
 - Generic Resend and quote-payment Stripe credentials now use strict Firebase
