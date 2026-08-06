@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 5, 2026
+Last updated: August 6, 2026
 
 ## Operational Health
 - Runtime: release `v0.2.3` is live from merged `main` commit
@@ -120,6 +120,16 @@ Last updated: August 5, 2026
   consume that exact approval. Customer acceptance does not prove payment or
   booking, and production checklist completion does not prove inventory
   availability.
+- Current branch proposal acceptance hardening: customer acceptance has moved
+  from a rules-permitted browser batch to a server-authoritative transaction.
+  The callable requires typed signer identity and versioned consent, revalidates
+  the active organization, portal expiry, current delivery revision/issuance,
+  complete proposal content, matching quote/portal projection, and integer
+  minor-unit totals, then writes matching quote/portal evidence plus a
+  server-write-only tenant receipt with a SHA-256 proposal snapshot. Direct
+  browser acceptance is denied; request changes and declines retain their
+  existing atomic portal path. This is local branch/emulator evidence only and
+  is not deployed or hosted-accepted.
 - Production approval authority: Firebase-backed approval request
   creation and admin resolution use same-tenant callable transactions with
   server-owned actor identity/timestamps and duplicate/replay rejection.
@@ -203,6 +213,11 @@ Last updated: August 5, 2026
   first slice.
 - The customer decision frontend, `portalDecision` Firestore rules, and
   enriched portal snapshot support are deployed but not hosted-smoke-verified.
+- The electronic acceptance callable, typed-signature UI, immutable receipt,
+  and browser-write denial are implemented and locally validated on the current
+  branch but are not deployed. Production acceptance must wait for a coordinated
+  frontend, Functions, and Firestore rules release plus a signed-out hosted
+  acceptance test against an exact delivered revision.
 - Approval request creation, admin resolution, and action-specific execution
   linkage are deployed server-authoritatively; hosted authenticated acceptance
   remains pending.

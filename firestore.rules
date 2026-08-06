@@ -84,7 +84,7 @@ service cloud.firestore {
         "portalDecision"
       ])
       && resource.data.status in ["sent", "viewed"]
-      && request.resource.data.status in ["viewed", "accepted", "declined"]
+      && request.resource.data.status in ["viewed", "declined"]
       && validPortalDecisionPatch()
       && validPortalLifecyclePatch()
       && request.resource.data.portalKey == resource.data.portalKey;
@@ -111,7 +111,6 @@ service cloud.firestore {
             "submittedAtISO"
           ])
           && request.resource.data.portalDecision.decision in [
-            "accepted",
             "declined",
             "changes_requested"
           ]
@@ -166,12 +165,6 @@ service cloud.firestore {
             && nextLifecycle.viewedAtISO == request.resource.data.updatedAtISO
           )
           || (
-            request.resource.data.status == "accepted"
-            && lifecycleDiff.affectedKeys().hasOnly(["acceptedAtISO"])
-            && lifecycleDiff.affectedKeys().hasAll(["acceptedAtISO"])
-            && nextLifecycle.acceptedAtISO == request.resource.data.updatedAtISO
-          )
-          || (
             request.resource.data.status == "declined"
             && lifecycleDiff.affectedKeys().hasOnly(["declinedAtISO"])
             && lifecycleDiff.affectedKeys().hasAll(["declinedAtISO"])
@@ -184,6 +177,7 @@ service cloud.firestore {
       let previousLifecycle = resource.data.get("lifecycle", {});
       let nextLifecycle = request.resource.data.get("lifecycle", {});
       return request.resource.data.get("portalDecision", {}) == resource.data.get("portalDecision", {})
+        && request.resource.data.get("acceptanceReceipt", null) == resource.data.get("acceptanceReceipt", null)
         && nextLifecycle.get("acceptedAtISO", "") == previousLifecycle.get("acceptedAtISO", "")
         && nextLifecycle.get("declinedAtISO", "") == previousLifecycle.get("declinedAtISO", "");
     }
@@ -874,6 +868,11 @@ service cloud.firestore {
     // reading or mutating these records directly.
     match /buyerAccessOrders/{orderId} {
       allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/proposalAcceptanceReceipts/{receiptId} {
+      allow read: if isOrgStaff(orgId);
+      allow write: if false;
     }
 
     match /organizations/{orgId}/quotes/{quoteId} {

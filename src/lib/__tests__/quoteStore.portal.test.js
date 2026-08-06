@@ -281,7 +281,9 @@ describe("quoteStore portal token policy", () => {
     seedQuotes([makeQuote({ status: "draft" })]);
     await expect(updatePortalDecision({
       portalKey: "portal-key-12345678901234567890",
-      decision: "accepted"
+      decision: "accepted",
+      signerName: "Portal Client",
+      consentVersion: "proposal-acceptance-v1"
     })).rejects.toThrow(/has not been sent/i);
 
     seedQuotes([
@@ -301,6 +303,33 @@ describe("quoteStore portal token policy", () => {
       portalKey: "portal-key-12345678901234567890",
       decision: "declined"
     })).rejects.toThrow(/decision is final/i);
+  });
+
+  test("records local acceptance with signer, consent, revision, and integer minor units", async () => {
+    seedQuotes([makeQuote({
+      activeVersionId: "v0003",
+      totals: { total: 7200.25, deposit: 2160.08 }
+    })]);
+
+    const result = await updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "accepted",
+      signerName: "Portal Client",
+      consentVersion: "proposal-acceptance-v1",
+      expectedRevisionId: "v0003",
+      expectedPortalIssuedAtISO: "2026-03-10T12:00:00.000Z"
+    });
+
+    expect(result.acceptanceReceipt).toMatchObject({
+      signerName: "Portal Client",
+      consentVersion: "proposal-acceptance-v1",
+      quoteRevisionId: "v0003",
+      totalMinor: 720025,
+      depositMinor: 216008
+    });
+    const refreshed = await getPortalQuote("portal-key-12345678901234567890");
+    expect(refreshed.status).toBe("accepted");
+    expect(refreshed.acceptanceReceipt.receiptId).toBe(result.acceptanceReceipt.receiptId);
   });
 
   test("blocks expired portal tokens", async () => {

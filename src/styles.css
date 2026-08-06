@@ -4252,6 +4252,23 @@ hr {
   font-size: 0.76rem;
 }
 
+.portal-signature-fields {
+  max-width: 760px;
+  margin-top: 0.75rem;
+  border: 1px solid #cfd7d2;
+  border-radius: 8px;
+  background: #f8faf8;
+  padding: 0.8rem;
+}
+
+.portal-signature-fields .field {
+  max-width: 420px;
+}
+
+.portal-signature-fields .source-note {
+  margin: 0.55rem 0 0;
+}
+
 .portal-accept-confirmation input {
   width: auto;
 }
@@ -4309,6 +4326,17 @@ hr {
   flex: 0 0 auto;
   margin: 0;
   text-decoration: none;
+}
+
+.portal-signature-receipt {
+  border-top: 1px solid #d5d8d2;
+}
+
+.portal-signature-receipt small {
+  display: block;
+  margin-top: 0.25rem;
+  color: #68716d;
+  overflow-wrap: anywhere;
 }
 
 .schedule-production-checklist {

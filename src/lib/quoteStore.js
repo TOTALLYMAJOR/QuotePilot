@@ -60,6 +60,8 @@ const SERVER_SCOPED_PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
   "send_final_balance_request"
 ]);
+const ACCEPT_QUOTE_PROPOSAL_CALLABLE = "acceptQuoteProposal";
+export const PROPOSAL_ACCEPTANCE_CONSENT_VERSION = "proposal-acceptance-v1";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
@@ -713,6 +715,13 @@ function buildPortalSnapshot(quoteId, quote) {
     createdAtISO
   );
   const portalBooking = hydrateBooking(quote.booking);
+  const quoteDelivery = quote?.workflow?.quoteDelivery || {};
+  const deliveryRevisionId = String(
+    quoteDelivery.revisionId
+      || quote.activeVersionId
+      || quote.versionMeta?.versionId
+      || `local@${quote.updatedAtISO || createdAtISO}`
+  ).trim();
   return {
     quoteId,
     organizationId: String(quote.organizationId || "").trim(),
@@ -782,6 +791,17 @@ function buildPortalSnapshot(quoteId, quote) {
       confirmedAtISO: portalBooking.confirmedAtISO
     },
     portalDecision: normalizePortalDecision(quote.portalDecision),
+    acceptanceReceipt: quote.acceptanceReceipt && typeof quote.acceptanceReceipt === "object"
+      ? { ...quote.acceptanceReceipt }
+      : null,
+    deliveryEvidence: {
+      revisionId: deliveryRevisionId,
+      state: String(quoteDelivery.state || "local").trim(),
+      portalActivationState: String(quoteDelivery.portalActivationState || "active").trim(),
+      portalKey: String(quoteDelivery.portalKey || quote.portalKey || "").trim(),
+      portalIssuedAtISO: normalizeISO(quoteDelivery.portalIssuedAtISO || portalIssuedAtISO, portalIssuedAtISO),
+      providerAcceptedAtISO: String(quoteDelivery.providerAcceptedAtISO || "").trim()
+    },
     lifecycle: {
       ...(quote.lifecycle || {})
     },
@@ -4128,7 +4148,11 @@ export async function getPortalQuote(portalKey) {
 export async function updatePortalDecision({
   portalKey,
   decision,
-  message = ""
+  message = "",
+  signerName = "",
+  consentVersion = "",
+  expectedRevisionId = "",
+  expectedPortalIssuedAtISO = ""
 } = {}) {
   const key = String(portalKey || "").trim();
   if (!key) {
@@ -4142,6 +4166,16 @@ export async function updatePortalDecision({
   const normalizedMessage = String(message || "").trim().slice(0, MAX_PORTAL_DECISION_MESSAGE_LENGTH);
   if (normalizedDecision === "changes_requested" && !normalizedMessage) {
     throw new Error("Add a note describing the requested changes.");
+  }
+  const normalizedSignerName = String(signerName || "").trim().replace(/\s+/g, " ").slice(0, 160);
+  if (normalizedDecision === "accepted" && normalizedSignerName.length < 2) {
+    throw new Error("Enter the signer’s full legal name.");
+  }
+  if (
+    normalizedDecision === "accepted"
+    && String(consentVersion || "").trim() !== PROPOSAL_ACCEPTANCE_CONSENT_VERSION
+  ) {
+    throw new Error("Confirm the electronic-signature statement before accepting.");
   }
 
   const nowISO = isoNow();
@@ -4157,6 +4191,27 @@ export async function updatePortalDecision({
   const portalDecisionPatch = normalizedDecision === "viewed" ? {} : { portalDecision };
 
   if (firebaseReady) {
+    if (normalizedDecision === "accepted") {
+      const normalizedRevisionId = String(expectedRevisionId || "").trim();
+      const normalizedPortalIssuedAtISO = String(expectedPortalIssuedAtISO || "").trim();
+      if (!normalizedRevisionId || !normalizedPortalIssuedAtISO) {
+        throw new Error("Reload the current proposal before signing.");
+      }
+      const call = httpsCallable(cloudFunctions, ACCEPT_QUOTE_PROPOSAL_CALLABLE);
+      const response = await call({
+        portalKey: key,
+        signerName: normalizedSignerName,
+        consentVersion: PROPOSAL_ACCEPTANCE_CONSENT_VERSION,
+        expectedRevisionId: normalizedRevisionId,
+        expectedPortalIssuedAtISO: normalizedPortalIssuedAtISO,
+        message: normalizedMessage
+      });
+      const result = response?.data || {};
+      if (result?.ok !== true || result?.status !== "accepted" || !result?.acceptanceReceipt?.receiptId) {
+        throw new Error("Proposal acceptance did not return a valid receipt.");
+      }
+      return result;
+    }
     const portalRef = portalDocRef(key);
     const portalSnap = await getDoc(portalRef);
     if (!portalSnap.exists()) {
@@ -4218,6 +4273,38 @@ export async function updatePortalDecision({
         : "This customer decision is final and can no longer be changed from the portal."
     );
   }
+  const localReceiptId = normalizedDecision === "accepted" ? `acceptance-${buildPortalKey()}` : "";
+  const localRevisionId = String(
+    expectedRevisionId
+      || localTarget.workflow?.quoteDelivery?.revisionId
+      || localTarget.activeVersionId
+      || localTarget.versionMeta?.versionId
+      || `local@${localTarget.updatedAtISO || localTarget.createdAtISO || nowISO}`
+  ).trim();
+  const localPortalIssuedAtISO = normalizeISO(
+    expectedPortalIssuedAtISO || localTarget.portalIssuedAtISO,
+    nowISO
+  );
+  const localAcceptanceReceipt = normalizedDecision === "accepted"
+    ? {
+        receiptId: localReceiptId,
+        signerName: normalizedSignerName,
+        actor: { type: "customer_portal", uid: "", email: "" },
+        consentVersion: PROPOSAL_ACCEPTANCE_CONSENT_VERSION,
+        consentText: "I agree to this proposal and consent to use my typed name as my electronic signature.",
+        acceptedAtISO: nowISO,
+        quoteRevisionId: localRevisionId,
+        portalIssuedAtISO: localPortalIssuedAtISO,
+        quoteNumber: String(localTarget.quoteNumber || "").trim(),
+        currency: "USD",
+        totalMinor: Math.round(Number(localTarget.totals?.total || 0) * 100),
+        depositMinor: Math.round(Number(localTarget.totals?.deposit || 0) * 100),
+        snapshotSha256: ""
+      }
+    : null;
+  if (normalizedDecision === "accepted") {
+    portalDecision.requestId = localReceiptId;
+  }
   const next = existing.map((quote) => {
     if (quote.portalKey !== key) return quote;
     return {
@@ -4225,11 +4312,18 @@ export async function updatePortalDecision({
       status: nextStatus,
       updatedAtISO: nowISO,
       lifecycle: lifecycleObject(nextStatus, nowISO, quote.lifecycle),
-      ...(normalizedDecision === "viewed" ? {} : { portalDecision })
+      ...(normalizedDecision === "viewed" ? {} : { portalDecision }),
+      ...(localAcceptanceReceipt ? { acceptanceReceipt: localAcceptanceReceipt } : {})
     };
   });
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
-  return { ok: true, storage: "local", status: nextStatus, portalDecision };
+  return {
+    ok: true,
+    storage: "local",
+    status: nextStatus,
+    portalDecision,
+    ...(localAcceptanceReceipt ? { acceptanceReceipt: localAcceptanceReceipt } : {})
+  };
 }
 
 export async function updatePortalQuoteStatus(portalKey, status) {
