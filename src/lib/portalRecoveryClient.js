@@ -18,7 +18,10 @@ function normalizeContact(value) {
     logoUrl: cleanText(value.logoUrl, 1_000),
     brandPrimaryColor: cleanText(value.brandPrimaryColor, 32),
     brandAccentColor: cleanText(value.brandAccentColor, 32),
-    brandDarkAccentColor: cleanText(value.brandDarkAccentColor, 32)
+    brandDarkAccentColor: cleanText(value.brandDarkAccentColor, 32),
+    brandBackgroundStart: cleanText(value.brandBackgroundStart, 32),
+    brandBackgroundMid: cleanText(value.brandBackgroundMid, 32),
+    brandBackgroundEnd: cleanText(value.brandBackgroundEnd, 32)
   };
   return Object.values(contact).some(Boolean) ? contact : null;
 }
@@ -37,7 +40,10 @@ function localRecoveryContact(portalKey) {
     logoUrl: meta.brandLogoUrl,
     brandPrimaryColor: meta.brandPrimaryColor,
     brandAccentColor: meta.brandAccentColor,
-    brandDarkAccentColor: meta.brandDarkAccentColor
+    brandDarkAccentColor: meta.brandDarkAccentColor,
+    brandBackgroundStart: meta.brandBackgroundStart,
+    brandBackgroundMid: meta.brandBackgroundMid,
+    brandBackgroundEnd: meta.brandBackgroundEnd
   });
 }
 

@@ -117,6 +117,13 @@ Last updated: August 6, 2026
   credentials for any explicitly enabled provider. The workflow remains gated
   by `ENABLE_FUNCTIONS_DEPLOY=false` by default.
 - Current source tenant identity fix: explicit blank tenant logo/contact/address/crew values no longer fall back to the legacy customer profile, and Catalog Admin branding edits retain their draft through parent rerenders with persistent save/discard affordances.
+- Current source portal themes: Catalog Admin offers four named, contrast-safe
+  presets that update only the existing tenant color fields, show an immediate
+  preview, and persist through the existing revision-preconditioned catalog
+  save. New authoritative and local quote snapshots carry the full six-color
+  palette plus the existing logo reference into the customer portal; legacy
+  snapshots continue through safe visual fallbacks. This is source/local
+  evidence only and is not deployed or hosted-accepted.
 - Current source tenant authorization hardening: Firestore denies unverified
   email authority and conflicting claim/role organization scopes, permits
   tenant-domain mapping changes only for same-organization admins, and keeps

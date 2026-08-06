@@ -91,6 +91,15 @@ function buildPortalRecoveryContact({ portal = {}, organization = {}, settings =
     ),
     brandDarkAccentColor: cleanColor(
       settings.brandDarkAccentColor || portal?.quoteMeta?.brandDarkAccentColor
+    ),
+    brandBackgroundStart: cleanColor(
+      settings.brandBackgroundStart || portal?.quoteMeta?.brandBackgroundStart
+    ),
+    brandBackgroundMid: cleanColor(
+      settings.brandBackgroundMid || portal?.quoteMeta?.brandBackgroundMid
+    ),
+    brandBackgroundEnd: cleanColor(
+      settings.brandBackgroundEnd || portal?.quoteMeta?.brandBackgroundEnd
     )
   };
 }

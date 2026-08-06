@@ -3,6 +3,12 @@ import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage
 import { firebaseReady, storage } from "../lib/firebase";
 import { STARTER_CATALOG_PACKS } from "../data/starterCatalogPacks";
 import {
+  applyPortalThemePreset,
+  buildPortalThemeStyle,
+  findPortalThemePreset,
+  PORTAL_THEME_PRESETS
+} from "../data/portalThemePresets";
+import {
   createCategory,
   createEventType,
   createMenuItem,
@@ -544,6 +550,14 @@ export default function AdminCatalogModal({
     }));
   };
 
+  const selectPortalTheme = (preset) => {
+    setDraft((prev) => ({
+      ...prev,
+      settings: applyPortalThemePreset(prev.settings, preset.id)
+    }));
+    setStatus(`${preset.name} selected. Review the preview, then save catalog changes.`);
+  };
+
   const patchToggleSetting = (field, checked) => {
     setDraft((prev) => ({
       ...prev,
@@ -1042,6 +1056,8 @@ export default function AdminCatalogModal({
       : "Not included in order (read only).";
   };
   const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
+  const selectedPortalTheme = findPortalThemePreset(draft?.settings);
+  const portalThemePreviewStyle = buildPortalThemeStyle(draft?.settings);
   const hasCatalogContent = Boolean(
     stagedPack.id
     || draft?.packages?.length
@@ -1834,6 +1850,48 @@ export default function AdminCatalogModal({
           <p className="source-note">
             These details identify your catering business on proposals and the customer portal. They do not replace the QuotePilot by MBMApps product identity.
           </p>
+          <div className="portal-theme-config">
+            <div>
+              <p className="portal-theme-label">Choose a customer portal look</p>
+              <div className="portal-theme-preset-grid" role="group" aria-label="Customer portal theme presets">
+                {PORTAL_THEME_PRESETS.map((preset) => {
+                  const selected = selectedPortalTheme?.id === preset.id;
+                  return (
+                    <button
+                      type="button"
+                      key={preset.id}
+                      className={`portal-theme-preset ${selected ? "active" : ""}`}
+                      onClick={() => selectPortalTheme(preset)}
+                      aria-pressed={selected}
+                      aria-label={`Use ${preset.name}. ${preset.description}`}
+                    >
+                      <span className="portal-theme-swatches" aria-hidden="true">
+                        <i style={{ background: preset.colors.brandPrimaryColor }} />
+                        <i style={{ background: preset.colors.brandAccentColor }} />
+                        <i style={{ background: preset.colors.brandBackgroundStart }} />
+                      </span>
+                      <strong>{preset.name}</strong>
+                      <span>{preset.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div
+              className="portal-theme-preview"
+              style={portalThemePreviewStyle}
+              aria-live="polite"
+              aria-label={`Customer portal preview: ${selectedPortalTheme?.name || "Custom colors"}`}
+            >
+              <div className="portal-theme-preview-card">
+                <span>Customer portal preview</span>
+                <strong>
+                  Your proposal from {String(draft.settings.brandName || "your business").trim() || "your business"}
+                </strong>
+                <small>{selectedPortalTheme?.name || "Custom colors"}</small>
+              </div>
+            </div>
+          </div>
           <div className="admin-grid-settings">
             <label>
               Business name

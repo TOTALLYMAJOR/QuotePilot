@@ -8,6 +8,7 @@ import {
 } from "../lib/quoteStore";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import { getPortalRecoveryContact } from "../lib/portalRecoveryClient";
+import { buildPortalThemeStyle } from "../data/portalThemePresets";
 import ProductBrandLockup from "./ProductBrandLockup";
 
 const PAYMENT_CONFIRMATION_POLL_INTERVAL_MS = 1500;
@@ -35,11 +36,6 @@ function humanizeValue(value) {
   return normalized
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function safeColor(value) {
-  const normalized = String(value || "").trim();
-  return /^#[0-9a-f]{6}$/i.test(normalized) ? normalized : "";
 }
 
 function safeLogoUrl(value) {
@@ -311,12 +307,14 @@ export default function CustomerPortalView({
   const businessEmail = safeEmail(quoteMeta.businessEmail || recoveryContact.email);
   const businessPhone = safePhone(quoteMeta.businessPhone || recoveryContact.phone);
   const brandLogoUrl = safeLogoUrl(quoteMeta.brandLogoUrl || recoveryContact.logoUrl);
-  const brandPrimaryColor = safeColor(quoteMeta.brandPrimaryColor || recoveryContact.brandPrimaryColor);
-  const brandDarkAccentColor = safeColor(quoteMeta.brandDarkAccentColor || recoveryContact.brandDarkAccentColor);
-  const portalTheme = {
-    ...(brandPrimaryColor ? { "--portal-brand": brandPrimaryColor } : {}),
-    ...(brandDarkAccentColor ? { "--portal-brand-dark": brandDarkAccentColor } : {})
-  };
+  const portalTheme = buildPortalThemeStyle({
+    brandPrimaryColor: quoteMeta.brandPrimaryColor || recoveryContact.brandPrimaryColor,
+    brandAccentColor: quoteMeta.brandAccentColor || recoveryContact.brandAccentColor,
+    brandDarkAccentColor: quoteMeta.brandDarkAccentColor || recoveryContact.brandDarkAccentColor,
+    brandBackgroundStart: quoteMeta.brandBackgroundStart || recoveryContact.brandBackgroundStart,
+    brandBackgroundMid: quoteMeta.brandBackgroundMid || recoveryContact.brandBackgroundMid,
+    brandBackgroundEnd: quoteMeta.brandBackgroundEnd || recoveryContact.brandBackgroundEnd
+  });
   const portalTitle = brandName ? `Your proposal from ${brandName}` : "Your proposal";
   const eventLabel = `${quote?.eventName || "Event"} on ${fmtDate(quote?.eventDate)}`;
   const receipt = decisionReceipt(quote);
@@ -578,8 +576,8 @@ export default function CustomerPortalView({
   ].filter(([, items]) => items?.length > 0);
 
   return (
-    <main className="portal-shell container">
-      <section className="panel portal-card" style={portalTheme}>
+    <main className="portal-shell" style={portalTheme}>
+      <section className="panel portal-card">
         <div className="portal-head">
           <div className="portal-brand-heading">
             {brandLogoUrl && <img src={brandLogoUrl} alt={`${brandName || "Caterer"} logo`} />}

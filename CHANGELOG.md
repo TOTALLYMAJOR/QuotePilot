@@ -61,6 +61,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   pricing, Turnstile abuse controls, durable rate limits, exact-request retry,
   signed invoice lifecycle handling, audited terminal-unpaid recovery, paid
   workspace preparation, and verified-email invitation activation.
+- Four named customer-portal theme presets in Catalog Admin: Midnight Amber,
+  Warm Linen, Garden Sage, and Coastal Blue. Selecting a preset immediately
+  updates an accessible preview and the existing tenant brand color fields;
+  the normal revision-guarded catalog save remains the persistence boundary.
 
 ### Changed
 
@@ -79,6 +83,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Portal snapshots add optional organization branding/contact fields and the
   applied service-charge percentage. Legacy snapshots remain valid and show a
   rate-free `Service charge` label when no percentage was stored.
+- New quote and recovery projections snapshot all six existing tenant brand
+  colors alongside the existing logo reference, so a saved proposal keeps its
+  customer portal appearance without changing pricing or delivery authority.
 - Customer PDFs use tenant or neutral metadata and plain-language staffing and
   service-charge labels while retaining pricing internals only in persisted
   staff data. Real PDF extraction rejects internal ids, rate lists, abbreviated
