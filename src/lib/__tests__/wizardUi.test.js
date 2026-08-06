@@ -123,6 +123,7 @@ describe("wizardUi", () => {
     expect(resolveFirstValidPackageId([
       { id: "", name: "Missing id", ppp: 20 },
       { id: "draft", name: "Draft", ppp: 0 },
+      { id: "retired", name: "Retired", ppp: 22, active: false },
       { id: "corporate-essential", name: "Corporate Essential", ppp: 24 },
       { id: "wedding-signature", name: "Wedding Signature", ppp: 38 }
     ], "classic")).toBe("corporate-essential");
@@ -130,6 +131,27 @@ describe("wizardUi", () => {
       { id: "corporate-essential", name: "Corporate Essential", ppp: 24 },
       { id: "wedding-signature", name: "Wedding Signature", ppp: 38 }
     ], "wedding-signature")).toBe("wedding-signature");
+  });
+
+  test("event templates do not apply inactive catalog choices", () => {
+    const { nextForm } = applyEventTypeTemplateDefaults({
+      form: { ...INITIAL_FORM, addons: [], rentals: [] },
+      template: {
+        pkg: "retired",
+        addons: ["retired-addon", "coffee"],
+        rentals: ["retired-rental", "linens"]
+      },
+      catalog: {
+        packages: [{ id: "retired", active: false }],
+        addons: [{ id: "retired-addon", active: false }, { id: "coffee", active: true }],
+        rentals: [{ id: "retired-rental", active: false }, { id: "linens", active: true }]
+      },
+      initialForm: INITIAL_FORM
+    });
+
+    expect(nextForm.pkg).toBe("");
+    expect(nextForm.addons).toEqual(["coffee"]);
+    expect(nextForm.rentals).toEqual(["linens"]);
   });
 
   test("applyEventTypeTemplateDefaults only fills untouched/default fields", () => {
@@ -159,6 +181,7 @@ describe("wizardUi", () => {
       form,
       template,
       catalog: {
+        packages: [{ id: "premium", active: true }],
         addons: [{ id: "coffee" }],
         rentals: [{ id: "linens" }]
       },

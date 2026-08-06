@@ -26,7 +26,7 @@ function resolvePricingType(target) {
 }
 
 function buildAddonRecommendation({ rule, catalog, form, guests, addonMultiplier }) {
-  const target = catalog.addons.find((item) => item.id === rule.targetId);
+  const target = catalog.addons.find((item) => item.id === rule.targetId && item?.active !== false);
   if (!target || hasSelection(form, "addons", target.id)) return null;
   const pricingType = resolvePricingType(target);
   const estimate = (
@@ -45,7 +45,7 @@ function buildAddonRecommendation({ rule, catalog, form, guests, addonMultiplier
 }
 
 function buildRentalRecommendation({ rule, catalog, form, guests, rentalMultiplier }) {
-  const target = catalog.rentals.find((item) => item.id === rule.targetId);
+  const target = catalog.rentals.find((item) => item.id === rule.targetId && item?.active !== false);
   if (!target || hasSelection(form, "rentals", target.id)) return null;
   const pricingType = resolvePricingType(target);
   const qty = pricingType === "per_person"
@@ -65,7 +65,9 @@ function buildRentalRecommendation({ rule, catalog, form, guests, rentalMultipli
 }
 
 function buildPackageRecommendation({ rule, catalog, form, guests, packageMultiplier }) {
-  const sortedPackages = [...catalog.packages].sort((a, b) => Number(a.ppp || 0) - Number(b.ppp || 0));
+  const sortedPackages = [...catalog.packages]
+    .filter((item) => item?.active !== false)
+    .sort((a, b) => Number(a.ppp || 0) - Number(b.ppp || 0));
   const currentIndex = sortedPackages.findIndex((item) => item.id === form.pkg);
   if (currentIndex < 0) return null;
   const current = sortedPackages[currentIndex];

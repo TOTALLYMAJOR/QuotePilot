@@ -76,6 +76,93 @@ const FEATURE_FLAG_META = [
   { id: "aiAutopilot", label: "AI Autopilot (Auto Apply)" }
 ];
 
+const PACKAGE_INCLUSION_FIELD_BY_COLLECTION = Object.freeze({
+  addons: "includedAddonIds",
+  rentals: "includedRentalIds"
+});
+const UPSELL_KIND_BY_COLLECTION = Object.freeze({
+  packages: "package",
+  addons: "addon",
+  rentals: "rental"
+});
+
+export function removeCatalogRowWithInclusions(catalog = {}, key, index) {
+  const rows = Array.isArray(catalog?.[key]) ? catalog[key] : [];
+  const removedId = String(rows[index]?.id || "").trim();
+  const next = { ...catalog, [key]: rows.filter((_, rowIndex) => rowIndex !== index) };
+  if (!removedId) return next;
+  const inclusionField = PACKAGE_INCLUSION_FIELD_BY_COLLECTION[key];
+  const upsellKind = UPSELL_KIND_BY_COLLECTION[key];
+  const settings = catalog.settings || {};
+  const eventTemplates = (Array.isArray(settings.eventTemplates) ? settings.eventTemplates : []).flatMap((template) => {
+    if (key === "packages") {
+      return String(template.pkg || "").trim() === removedId ? [] : [{ ...template }];
+    }
+    if (key === "addons") {
+      return [{
+        ...template,
+        addons: (Array.isArray(template.addons) ? template.addons : []).filter((id) => id !== removedId)
+      }];
+    }
+    if (key === "rentals") {
+      return [{
+        ...template,
+        rentals: (Array.isArray(template.rentals) ? template.rentals : []).filter((id) => id !== removedId)
+      }];
+    }
+    return [{ ...template }];
+  });
+  return {
+    ...next,
+    packages: inclusionField
+      ? (Array.isArray(catalog.packages) ? catalog.packages : []).map((pkg) => ({
+          ...pkg,
+          [inclusionField]: (Array.isArray(pkg[inclusionField]) ? pkg[inclusionField] : [])
+            .filter((id) => id !== removedId)
+        }))
+      : next.packages,
+    settings: {
+      ...settings,
+      eventTemplates,
+      upsellRules: (Array.isArray(settings.upsellRules) ? settings.upsellRules : []).filter((rule) => !(
+        rule.kind === upsellKind && String(rule.targetId || "").trim() === removedId
+      ))
+    }
+  };
+}
+
+export function packageMenuItemReferences(packages = [], menuItemId = "") {
+  const id = String(menuItemId || "").trim();
+  if (!id) return [];
+  return (Array.isArray(packages) ? packages : []).filter((pkg) => (
+    Array.isArray(pkg?.includedMenuItemIds) && pkg.includedMenuItemIds.includes(id)
+  ));
+}
+
+export function eventTemplateMenuItemReferences(eventTemplates = [], menuItemId = "") {
+  const id = String(menuItemId || "").trim();
+  if (!id) return [];
+  return (Array.isArray(eventTemplates) ? eventTemplates : []).filter((template) => (
+    Array.isArray(template?.menuItems) && template.menuItems.includes(id)
+  ));
+}
+
+export function parseEventTemplateDrafts(value = "[]") {
+  const parsed = JSON.parse(String(value || "[]"));
+  if (!Array.isArray(parsed)) throw new Error("Must be a JSON array.");
+  parsed.forEach((template, index) => {
+    if (!template || typeof template !== "object" || Array.isArray(template)) {
+      throw new Error(`Event template ${index + 1} must be an object.`);
+    }
+    ["addons", "rentals", "menuItems"].forEach((field) => {
+      if (template[field] !== undefined && !Array.isArray(template[field])) {
+        throw new Error(`Event template ${index + 1} ${field} must be an array.`);
+      }
+    });
+  });
+  return parsed;
+}
+
 function normalizePricingType(value, fallback = "per_event") {
   const raw = String(value || fallback).trim().toLowerCase();
   if (raw === "per_person" || raw === "per_item" || raw === "per_event") return raw;
@@ -107,7 +194,9 @@ function buildJsonDrafts(catalog) {
 
 function initialCatalogAdminTab(catalog) {
   if (catalog?.settings?.starterCatalogPack?.id) return "menu";
-  if (catalog?.settings?.pricingSetupConfirmed !== true) return "starter";
+  if (catalog?.settings?.pricingSetupConfirmed !== true) {
+    return (catalog?.packages || []).length > 0 ? "pricing" : "starter";
+  }
   return "packages";
 }
 
@@ -516,7 +605,8 @@ export default function AdminCatalogModal({
             ppp: 0,
             includedMenuItemIds: [],
             includedAddonIds: [],
-            includedRentalIds: []
+            includedRentalIds: [],
+            active: true
           }
       : key === "addons"
           ? {
@@ -534,7 +624,26 @@ export default function AdminCatalogModal({
   };
 
   const removeRow = (key, index) => {
-    setDraft((prev) => ({ ...prev, [key]: prev[key].filter((_, i) => i !== index) }));
+    let eventTemplates;
+    try {
+      eventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);
+    } catch (err) {
+      setActiveTab("pricing");
+      setStatus(`Fix Event Templates JSON before deleting catalog records: ${err.message}`);
+      return;
+    }
+    const removed = draft?.[key]?.[index];
+    const next = removeCatalogRowWithInclusions({
+      ...draft,
+      settings: { ...draft.settings, eventTemplates }
+    }, key, index);
+    setDraft(next);
+    setJsonDrafts((prev) => ({
+      ...prev,
+      eventTemplates: JSON.stringify(next.settings?.eventTemplates || [], null, 2)
+    }));
+    const label = String(removed?.name || removed?.id || "Catalog record").trim();
+    setStatus(`${label} removed. Dependent package inclusions, recommendation rules, and event-template defaults were removed too. Save catalog changes to persist.`);
   };
 
   const togglePackageInclusion = (packageIndex, field, itemId, checked) => {
@@ -616,10 +725,10 @@ export default function AdminCatalogModal({
         current.kind = value;
         current.targetId =
           value === "rental"
-            ? prev.rentals?.[0]?.id || ""
+            ? prev.rentals?.find((item) => item?.active !== false)?.id || ""
             : value === "package"
               ? ""
-              : prev.addons?.[0]?.id || "";
+              : prev.addons?.find((item) => item?.active !== false)?.id || "";
         current.name = current.name || defaultRuleName(value);
       } else {
         current[field] = value;
@@ -637,12 +746,21 @@ export default function AdminCatalogModal({
   };
 
   const addUpsellRule = () => {
-    const fallbackAddon = draft.addons?.[0]?.id || "";
+    const fallbackAddon = draft.addons?.find((item) => item?.active !== false)?.id || "";
+    const fallbackRental = draft.rentals?.find((item) => item?.active !== false)?.id || "";
+    const activePackages = (draft.packages || []).filter((item) => item?.active !== false);
+    if (!fallbackAddon && !fallbackRental && activePackages.length < 2) {
+      const message = "Add active catalog choices before creating a recommendation rule.";
+      setStatus(message);
+      pushToast(message, "error");
+      return;
+    }
+    const kind = fallbackAddon ? "addon" : fallbackRental ? "rental" : "package";
     const nextRule = {
       id: `upsell-rule-${Date.now()}`,
       name: "New recommendation rule",
-      kind: "addon",
-      targetId: fallbackAddon,
+      kind,
+      targetId: fallbackAddon || fallbackRental || activePackages[1]?.id || "",
       enabled: true,
       minGuests: 0,
       minHours: 0,
@@ -668,14 +786,25 @@ export default function AdminCatalogModal({
     }));
   };
 
-  const getUpsellTargetOptions = (kind) => {
+  const getUpsellTargetOptions = (kind, selectedTargetId = "") => {
+    const selectedId = String(selectedTargetId || "").trim();
+    const optionFor = (item, label) => ({
+      value: item.id,
+      label: `${label}${item.active === false ? " (inactive — choose another target)" : ""}`
+    });
     if (kind === "rental") {
-      return (draft.rentals || []).map((item) => ({ value: item.id, label: item.name }));
+      return (draft.rentals || [])
+        .filter((item) => item?.active !== false || item.id === selectedId)
+        .map((item) => optionFor(item, item.name));
     }
     if (kind === "package") {
-      return (draft.packages || []).map((item) => ({ value: item.id, label: `${item.name} (${item.ppp}/person)` }));
+      return (draft.packages || [])
+        .filter((item) => item?.active !== false || item.id === selectedId)
+        .map((item) => optionFor(item, `${item.name} (${item.ppp}/person)`));
     }
-    return (draft.addons || []).map((item) => ({ value: item.id, label: item.name }));
+    return (draft.addons || [])
+      .filter((item) => item?.active !== false || item.id === selectedId)
+      .map((item) => optionFor(item, item.name));
   };
 
   const patchJsonDraft = (field, value) => {
@@ -958,6 +1087,45 @@ export default function AdminCatalogModal({
   };
 
   const handleDeleteManagedMenuItem = async (id) => {
+    let draftEventTemplates;
+    try {
+      draftEventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);
+    } catch (err) {
+      const message = `Fix Event Templates JSON before deleting menu items: ${err.message}`;
+      setActiveTab("pricing");
+      setStatus(message);
+      pushToast(message, "error");
+      return;
+    }
+    const packageReferences = [
+      ...packageMenuItemReferences(catalog.packages, id),
+      ...packageMenuItemReferences(draft.packages, id)
+    ].filter((pkg, index, all) => all.findIndex((item) => item.id === pkg.id) === index);
+    const templateReferences = [
+      ...eventTemplateMenuItemReferences(catalog.settings?.eventTemplates, id),
+      ...eventTemplateMenuItemReferences(draftEventTemplates, id)
+    ].filter((template, index, all) => (
+      all.findIndex((item) => item.id === template.id) === index
+    ));
+    if (packageReferences.length > 0 || templateReferences.length > 0) {
+      const packageNames = packageReferences
+        .map((pkg) => String(pkg.name || pkg.id || "package").trim())
+        .filter(Boolean)
+        .join(", ");
+      const templateNames = templateReferences
+        .map((template) => String(template.name || template.id || "event template").trim())
+        .filter(Boolean)
+        .join(", ");
+      const dependencies = [
+        packageNames ? `packages: ${packageNames}` : "",
+        templateNames ? `event templates: ${templateNames}` : ""
+      ].filter(Boolean).join("; ");
+      const message = `Remove this menu item from ${dependencies}, save those catalog changes, then reopen Catalog Admin to delete it.`;
+      setActiveTab(packageReferences.length > 0 ? "packages" : "pricing");
+      setStatus(message);
+      pushToast(message, "error");
+      return;
+    }
     setMenuActionLoading(true);
     try {
       const deleted = await deleteMenuItem(id, { organizationId: scopedOrganizationId });
@@ -1018,7 +1186,7 @@ export default function AdminCatalogModal({
     try {
       const serviceFeeTiers = parseJsonArray("serviceFeeTiers", "Service Fee Tiers JSON");
       const taxRegions = parseJsonArray("taxRegions", "Tax Regions JSON");
-      const eventTemplates = parseJsonArray("eventTemplates", "Event Templates JSON");
+      const eventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);
       const seasonalProfiles = parseJsonArray("seasonalProfiles", "Seasonal Profiles JSON");
       const brandCrew = parseJsonArray("brandCrew", "Brand Crew JSON");
       const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
@@ -1268,6 +1436,7 @@ export default function AdminCatalogModal({
             <span>Package ID</span>
             <span>Display Name</span>
             <span>Price Per Person</span>
+            <span>Active</span>
             <span>Actions</span>
           </div>
           {draft.packages.map((item, i) => (
@@ -1288,6 +1457,15 @@ export default function AdminCatalogModal({
                   value={item.ppp}
                   onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))}
                 />
+                <label className="admin-inline-toggle">
+                  <span>Active</span>
+                  <input
+                    type="checkbox"
+                    aria-label={`Package ${i + 1} active`}
+                    checked={item.active !== false}
+                    onChange={(e) => patchArrayItem("packages", i, "active", e.target.checked)}
+                  />
+                </label>
                 <button type="button" className="ghost" onClick={() => removeRow("packages", i)}>Delete</button>
               </div>
               <div className="package-inclusion-editor" aria-label={`${item.name || `Package ${i + 1}`} inclusions`}>
@@ -1731,7 +1909,7 @@ export default function AdminCatalogModal({
           <div className="rule-config-list">
             {(draft.settings?.upsellRules || []).map((rule, ruleIndex) => {
               const kind = String(rule.kind || "addon");
-              const targets = getUpsellTargetOptions(kind);
+              const targets = getUpsellTargetOptions(kind, rule.targetId);
               return (
                 <article className="rule-config-card" key={rule.id || `rule-${ruleIndex}`}>
                   <div className="rule-config-head">

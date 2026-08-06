@@ -836,7 +836,8 @@ export function normalizeCatalog(raw) {
       : Number(p.ppp || 0),
     includedMenuItemIds: normalizeStableIdList(p.includedMenuItemIds),
     includedAddonIds: normalizeStableIdList(p.includedAddonIds),
-    includedRentalIds: normalizeStableIdList(p.includedRentalIds)
+    includedRentalIds: normalizeStableIdList(p.includedRentalIds),
+    active: p.active !== false
   }));
   const addons = (raw.addons || DEFAULT_ADDONS).map((a) => ({
     id: a.id,
@@ -1157,14 +1158,16 @@ export function toStorageCatalog(catalog) {
       ppp,
       includedMenuItemIds,
       includedAddonIds,
-      includedRentalIds
+      includedRentalIds,
+      active
     }) => ({
       id,
       name,
       ppp,
       includedMenuItemIds: normalizeStableIdList(includedMenuItemIds),
       includedAddonIds: normalizeStableIdList(includedAddonIds),
-      includedRentalIds: normalizeStableIdList(includedRentalIds)
+      includedRentalIds: normalizeStableIdList(includedRentalIds),
+      active: active !== false
     })),
     addons: catalog.addons.map(({ id, name, type, pricingType, price, staffRole, active }) => ({
       id,

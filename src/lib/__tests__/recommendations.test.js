@@ -103,4 +103,28 @@ describe("buildUpsellRecommendations", () => {
     expect(results.map((item) => item.kind)).toEqual(["addon", "rental", "package"]);
     expect(results.map((item) => item.id)).toEqual(["dessert", "linens", "premium"]);
   });
+
+  test("never recommends inactive catalog records", () => {
+    const results = buildUpsellRecommendations({
+      form: recommendationForm,
+      catalog: {
+        packages: recommendationCatalog.packages.map((item) => (
+          item.id === "premium" ? { ...item, active: false } : item
+        )),
+        addons: recommendationCatalog.addons.map((item) => ({ ...item, active: false })),
+        rentals: recommendationCatalog.rentals.map((item) => ({ ...item, active: false }))
+      },
+      totals: recommendationTotals,
+      settings: {
+        guidedSellingEnabled: true,
+        upsellRules: [
+          { id: "addon", kind: "addon", targetId: "dessert", enabled: true },
+          { id: "rental", kind: "rental", targetId: "linens", enabled: true },
+          { id: "package", kind: "package", targetId: "premium", enabled: true }
+        ]
+      }
+    });
+
+    expect(results).toEqual([]);
+  });
 });

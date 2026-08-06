@@ -90,7 +90,8 @@ describe("catalog record save planning", () => {
           pppMinor: 2900,
           includedMenuItemIds: [],
           includedAddonIds: [],
-          includedRentalIds: []
+          includedRentalIds: [],
+          active: true
         },
         expectedFingerprint: "package-a-fingerprint"
       }
@@ -196,6 +197,25 @@ describe("catalog record save planning", () => {
         staffRole: "bartender"
       },
       expectedFingerprint: "legacy-addon-fingerprint"
+    });
+  });
+
+  test("persists package activation changes as catalog record mutations", () => {
+    const baseline = catalog({
+      packages: [{ id: "package-a", name: "Package A", ppp: 25, active: true }]
+    });
+    const next = catalog({
+      packages: [{ ...baseline.packages[0], active: false }]
+    });
+
+    expect(buildCatalogRecordChanges({
+      catalog: next,
+      baselineCatalog: baseline,
+      serverFingerprints: { packages: { "package-a": "package-a-fingerprint" } }
+    })[0]).toMatchObject({
+      id: "package-a",
+      writeData: { active: false },
+      expectedFingerprint: "package-a-fingerprint"
     });
   });
 

@@ -76,7 +76,8 @@ function templateQuantityValue(value, itemId) {
 
 export function resolveFirstValidPackageId(packages = [], currentPackageId = "") {
   const validPackages = (Array.isArray(packages) ? packages : []).filter((item) => (
-    String(item?.id || "").trim()
+    item?.active !== false
+    && String(item?.id || "").trim()
     && String(item?.name || "").trim()
     && Number.isFinite(Number(item?.ppp))
     && Number(item.ppp) > 0
@@ -317,8 +318,15 @@ export function findTemplateForEventType({ eventTypeId = "", templates = [], eve
 }
 
 function pickTemplateSelections(template, catalog = {}) {
-  const addonIds = new Set((Array.isArray(catalog.addons) ? catalog.addons : []).map((item) => String(item.id)));
-  const rentalIds = new Set((Array.isArray(catalog.rentals) ? catalog.rentals : []).map((item) => String(item.id)));
+  const addonIds = new Set((Array.isArray(catalog.addons) ? catalog.addons : [])
+    .filter((item) => item?.active !== false)
+    .map((item) => String(item.id)));
+  const rentalIds = new Set((Array.isArray(catalog.rentals) ? catalog.rentals : [])
+    .filter((item) => item?.active !== false)
+    .map((item) => String(item.id)));
+  const packageIds = new Set((Array.isArray(catalog.packages) ? catalog.packages : [])
+    .filter((item) => item?.active !== false)
+    .map((item) => String(item.id)));
 
   const templateAddons = (Array.isArray(template?.addons) ? template.addons : []).filter((id) => addonIds.has(String(id)));
   const templateRentals = (Array.isArray(template?.rentals) ? template.rentals : []).filter((id) => rentalIds.has(String(id)));
@@ -327,7 +335,8 @@ function pickTemplateSelections(template, catalog = {}) {
   return {
     templateAddons,
     templateRentals,
-    templateMenuItems
+    templateMenuItems,
+    templatePackageId: packageIds.has(String(template?.pkg || "")) ? String(template.pkg) : ""
   };
 }
 
@@ -363,7 +372,12 @@ export function applyEventTypeTemplateDefaults({
     };
   }
 
-  const { templateAddons, templateRentals, templateMenuItems } = pickTemplateSelections(template, catalog);
+  const {
+    templateAddons,
+    templateRentals,
+    templateMenuItems,
+    templatePackageId
+  } = pickTemplateSelections(template, catalog);
   const nextForm = { ...form };
   const appliedFields = [];
 
@@ -376,7 +390,7 @@ export function applyEventTypeTemplateDefaults({
 
   maybeApply("hours", normalizeEventHours(template.hours));
   maybeApply("style", String(template.style || ""));
-  maybeApply("pkg", String(template.pkg || ""));
+  maybeApply("pkg", templatePackageId);
   maybeApply("taxRegion", String(template.taxRegion || ""));
   maybeApply("seasonProfileId", String(template.seasonProfileId || ""));
   maybeApply("milesRT", Number(template.milesRT || 0));

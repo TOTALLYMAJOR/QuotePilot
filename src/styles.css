@@ -3195,6 +3195,11 @@ hr {
   padding: 0.55rem;
 }
 
+.schedule-event-card:focus {
+  outline: 3px solid #6f430e;
+  outline-offset: 3px;
+}
+
 .schedule-event-card.booked {
   border-color: #bb7e39;
   background: #fff2df;
