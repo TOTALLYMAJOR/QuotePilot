@@ -86,4 +86,31 @@ describe("Firestore tenant seed command safety", () => {
       "SEED demo-seed-project safe-tenant"
     ])).toThrow(/only with --apply/i);
   });
+
+  test("accepts an exact versioned starter pack and keeps dry-run as the default", () => {
+    expect(parseSeedArgs([
+      ...scope,
+      "--pack",
+      "wedding-events",
+      "--pack-version",
+      "1"
+    ])).toMatchObject({
+      dryRun: true,
+      packId: "wedding-events",
+      packVersion: 1,
+      replaceStagedPack: false
+    });
+  });
+
+  test("requires pack scope for version and replacement flags", () => {
+    expect(() => parseSeedArgs([
+      ...scope,
+      "--pack-version",
+      "1"
+    ])).toThrow(/requires --pack/i);
+    expect(() => parseSeedArgs([
+      ...scope,
+      "--replace-staged-pack"
+    ])).toThrow(/requires --pack/i);
+  });
 });

@@ -9,7 +9,8 @@ const mockState = vi.hoisted(() => ({
   getDocs: vi.fn(),
   query: vi.fn(),
   updateDoc: vi.fn(),
-  writeBatch: vi.fn(),
+  runTransaction: vi.fn(),
+  transaction: null,
   where: vi.fn(),
   getActiveOrganizationId: vi.fn(),
   getOrganizationCollectionRef: vi.fn(),
@@ -30,7 +31,7 @@ vi.mock("firebase/firestore", () => ({
   getDocs: mockState.getDocs,
   query: mockState.query,
   updateDoc: mockState.updateDoc,
-  writeBatch: mockState.writeBatch,
+  runTransaction: mockState.runTransaction,
   where: mockState.where
 }));
 
@@ -59,17 +60,28 @@ describe("menuService write fallback behavior", () => {
     mockState.normalizeOrganizationId.mockImplementation((value) => normalizeLikeService(value));
     mockState.collection.mockImplementation((...args) => ({ refType: "legacy", args }));
     mockState.getOrganizationCollectionRef.mockImplementation((name, orgId) => ({ refType: "scoped", name, orgId }));
+    mockState.getOrganizationSubDocRef.mockImplementation((name, id, orgId) => ({
+      refType: "scoped-doc",
+      name,
+      id,
+      orgId
+    }));
     mockState.doc.mockImplementation((collectionRef, id) => ({
       refType: "doc",
       collectionRef,
       id: id || "event-type-seeded"
     }));
     mockState.addDoc.mockResolvedValue({ id: "menu-item-1" });
-    mockState.writeBatch.mockReturnValue({
+    mockState.transaction = {
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({ catalogRevision: 0, pricingSetupConfirmed: false })
+      }),
       set: vi.fn(),
+      update: vi.fn(),
       delete: vi.fn(),
-      commit: vi.fn().mockResolvedValue(undefined)
-    });
+    };
+    mockState.runTransaction.mockImplementation(async (_db, callback) => callback(mockState.transaction));
   });
 
   test("createMenuItem throws when org context is missing, even if legacy fallback is enabled", async () => {
@@ -129,13 +141,6 @@ describe("menuService write fallback behavior", () => {
   });
 
   test("createEventType starts blank unless canonical seeding is explicitly requested", async () => {
-    const batch = {
-      set: vi.fn(),
-      delete: vi.fn(),
-      commit: vi.fn().mockResolvedValue(undefined)
-    };
-    mockState.writeBatch.mockReturnValue(batch);
-
     const created = await createEventType({
       name: "New Event Type",
       organizationId: "Org 123"
@@ -146,18 +151,11 @@ describe("menuService write fallback behavior", () => {
       categories: 0,
       items: 0
     });
-    expect(batch.set).toHaveBeenCalledTimes(1);
-    expect(batch.commit).toHaveBeenCalledTimes(1);
+    expect(mockState.transaction.set).toHaveBeenCalledTimes(2);
+    expect(mockState.runTransaction).toHaveBeenCalledTimes(1);
   });
 
   test("createEventType can seed the canonical menu only through an explicit opt-in", async () => {
-    const batch = {
-      set: vi.fn(),
-      delete: vi.fn(),
-      commit: vi.fn().mockResolvedValue(undefined)
-    };
-    mockState.writeBatch.mockReturnValue(batch);
-
     const created = await createEventType({
       name: "New Event Type",
       organizationId: "Org 123",
@@ -168,7 +166,7 @@ describe("menuService write fallback behavior", () => {
       categories: 10,
       items: 93
     });
-    expect(batch.set).toHaveBeenCalledTimes(104);
-    expect(batch.commit).toHaveBeenCalledTimes(1);
+    expect(mockState.transaction.set).toHaveBeenCalledTimes(105);
+    expect(mockState.runTransaction).toHaveBeenCalledTimes(1);
   });
 });

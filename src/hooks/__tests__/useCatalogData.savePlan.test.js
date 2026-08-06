@@ -83,7 +83,7 @@ describe("catalog record save planning", () => {
         nextItem: next.packages[0],
         writeData: {
           name: "Package A Plus",
-          ppp: 29
+          pppMinor: 2900
         },
         expectedFingerprint: "package-a-fingerprint"
       }
@@ -141,7 +141,7 @@ describe("catalog record save planning", () => {
       key: "rentals",
       writeData: {
         name: "New Rental",
-        price: 12,
+        priceMinor: 1200,
         qtyPerGuests: 8,
         pricingType: "per_item",
         type: "per_item",
@@ -185,7 +185,7 @@ describe("catalog record save planning", () => {
     })[0]).toMatchObject({
       id: "bartender",
       writeData: {
-        price: 35,
+        priceMinor: 3500,
         staffRole: "bartender"
       },
       expectedFingerprint: "legacy-addon-fingerprint"

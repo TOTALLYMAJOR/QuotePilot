@@ -178,7 +178,12 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Admin Catalog Operations
 - Open `Admin Catalog` (admin users only).
+- A blank organization starts on one guided screen with four clearly described
+  industry packs. Empty Packages, Addons, Rentals, Menu, and Pricing tabs stay
+  hidden until a pack is populated or the admin explicitly chooses
+  `Build my catalog manually`.
 - Use tabbed sections:
+  - Starter Packs
   - Packages
   - Addons
   - Rentals
@@ -195,6 +200,18 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   - `pricingType`
   - `active` toggle
 - Save overall catalog changes with `Save Catalog`.
+- For a new blank tenant, open `Starter Packs` and apply Wedding & events,
+  Corporate drop-off, BBQ / Southern, or Church & community. This stages a
+  complete draft immediately and opens the populated menu; there is no second
+  save step for pack application. It does not unlock quote creation.
+- Review package, add-on, rental, menu, travel, fee, tax, deposit, and staffing
+  values. Suggested prices become active only after an admin checks pricing
+  confirmation and saves. The server rechecks the complete catalog and the
+  loaded catalog revision before recording who confirmed it and when.
+- You may replace an untouched staged pack before confirmation. Once any
+  generated record or suggested pricing setting is edited, replacement is
+  blocked so the owner change cannot be overwritten; continue editing that
+  catalog or remove the custom work manually instead.
 - `Optional Modules` behavior depends on entitlement mode:
   - Standard mode: all module toggles are editable by admins.
   - Order-enforced mode: all module toggles are read-only; modules not paid for are locked off.
@@ -263,11 +280,11 @@ Backend source of truth:
    then return to `/app`; organization bootstrap does not consume an unverified
    or expired invitation.
 7. A new tenant starts with a blank catalog and neutral zero-valued fee, tax,
-   deposit, travel, and staffing settings. Configure or import reviewed
-   customer pricing before building or sharing a quote. The owner sees a
+   deposit, travel, and staffing settings. Configure, import, or stage an
+   industry starter pack before building or sharing a quote. The owner sees a
    catalog-setup screen, and the quote workspace stays locked until an admin
-   adds a specifically named package above $0, creates at least one event type,
-   and checks the pricing review approval in `Admin Catalog` → `Pricing`.
+   reviews a specifically named package above $0, verifies at least one event
+   type, and checks the pricing approval in `Admin Catalog` → `Pricing`.
 8. Catalog save is conflict-safe: only locally changed records/settings are
    patched. If another session changed or deleted the same record, or reused a
    new record id, QuotePilot rejects the save and asks for a reload instead of

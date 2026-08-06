@@ -56,6 +56,11 @@ const {
   planContractConversion
 } = require("./contractWorkflow");
 const {
+  StarterCatalogPackError,
+  applyStarterCatalogPack: applyStarterCatalogPackInternal,
+  confirmCatalogPricing: confirmCatalogPricingInternal
+} = require("./starterCatalogPacks");
+const {
   QuoteDeliveryError,
   assertNoConflictingQuoteExecution,
   assertQuoteDeliveryPortalActivation,
@@ -549,7 +554,9 @@ function buildNeutralSettingsPatch({
       }
     ],
     defaultSeasonProfile: "standard",
-    pricingSetupConfirmed: false
+    pricingSetupConfirmed: false,
+    catalogRevision: 0,
+    pricingConfirmation: null
   };
 }
 
@@ -3898,6 +3905,58 @@ exports.purgeDeletedQuotesForOrganization = functions.region(REGION).https.onCal
     hasMore: deletedSnap.size === limit,
     completedAtISO: new Date().toISOString()
   };
+});
+
+function toStarterCatalogHttpsError(error, fallbackMessage) {
+  if (error instanceof StarterCatalogPackError) {
+    return new functions.https.HttpsError(error.code, error.message, error.details);
+  }
+  functions.logger.error(fallbackMessage, {
+    error: normalizeText(error?.message)
+  });
+  return new functions.https.HttpsError("internal", fallbackMessage);
+}
+
+exports.applyStarterCatalogPack = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await applyStarterCatalogPackInternal({
+      db,
+      organizationId: staff.organizationId,
+      packId: data?.packId,
+      packVersion: data?.packVersion,
+      replaceStagedPack: data?.replaceStagedPack === true,
+      expectedCatalogRevision: Number(data?.expectedCatalogRevision),
+      actorUid: staff.uid,
+      serverTimestamp: FieldValue.serverTimestamp,
+      deleteField: FieldValue.delete
+    });
+  } catch (error) {
+    throw toStarterCatalogHttpsError(error, "Failed to apply starter catalog pack.");
+  }
+});
+
+exports.confirmCatalogPricing = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await confirmCatalogPricingInternal({
+      db,
+      organizationId: staff.organizationId,
+      expectedCatalogRevision: Number(data?.expectedCatalogRevision),
+      actorUid: staff.uid,
+      actorEmail: staff.email,
+      serverTimestamp: FieldValue.serverTimestamp,
+      deleteField: FieldValue.delete
+    });
+  } catch (error) {
+    throw toStarterCatalogHttpsError(error, "Failed to confirm catalog pricing.");
+  }
 });
 
 exports.calculateQuotePricing = functions.region(REGION).https.onCall(async (data, context) => {

@@ -110,6 +110,17 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function fromMinorUnits(value, fallback = 0) {
+  const minor = Number(value);
+  return Number.isSafeInteger(minor) ? minor / 100 : fallback;
+}
+
+function moneyValue(source = {}, minorKey, legacyKey, fallback = 0) {
+  return Object.prototype.hasOwnProperty.call(source || {}, minorKey)
+    ? fromMinorUnits(source[minorKey], fallback)
+    : toNumber(source?.[legacyKey], fallback);
+}
+
 function toInt(value, fallback = 0) {
   return Math.round(toNumber(value, fallback));
 }
@@ -507,7 +518,7 @@ function normalizeCatalogPackage(item = {}) {
   return {
     id: toText(item.id),
     name: toText(item.name, toText(item.id)),
-    ppp: toNumber(item.ppp, 0),
+    ppp: moneyValue(item, "pppMinor", "ppp", 0),
     active: item.active !== false
   };
 }
@@ -517,7 +528,7 @@ function normalizeCatalogAddon(item = {}) {
   return {
     id: toText(item.id),
     name: toText(item.name, toText(item.id)),
-    price: toNumber(item.price, 0),
+    price: moneyValue(item, "priceMinor", "price", 0),
     pricingType,
     type: pricingType,
     staffRole: resolveAddonStaffRole(item),
@@ -530,7 +541,7 @@ function normalizeCatalogRental(item = {}) {
   return {
     id: toText(item.id),
     name: toText(item.name, toText(item.id)),
-    price: toNumber(item.price, 0),
+    price: moneyValue(item, "priceMinor", "price", 0),
     qtyPerGuests: Math.max(1, toNumber(item.qtyPerGuests, 1)),
     pricingType,
     type: pricingType,
@@ -565,7 +576,7 @@ function normalizeMenuSections(sections = []) {
         return {
           id,
           name,
-          price: toNumber(item?.price, 0),
+          price: moneyValue(item, "priceMinor", "price", 0),
           pricingType,
           type: pricingType,
           active: item?.active !== false
@@ -628,7 +639,7 @@ function normalizeBartenderRateTypes(rateTypes, fallbackRate = 30) {
   return source.map((item, idx) => ({
     id: toCatalogId(item?.id, `bartender-rate-${idx + 1}`),
     name: toText(item?.name, `Bartender Type ${idx + 1}`),
-    rate: Math.max(0, toNumber(item?.rate, fallbackRate))
+    rate: Math.max(0, moneyValue(item, "rateMinor", "rate", fallbackRate))
   }));
 }
 
@@ -637,8 +648,8 @@ function normalizeStaffingRateTypes(rateTypes, fallbackServerRate = 22, fallback
   return source.map((item, idx) => ({
     id: toCatalogId(item?.id, `staffing-rate-${idx + 1}`),
     name: toText(item?.name, `Staffing Type ${idx + 1}`),
-    serverRate: Math.max(0, toNumber(item?.serverRate, fallbackServerRate)),
-    chefRate: Math.max(0, toNumber(item?.chefRate, fallbackChefRate))
+    serverRate: Math.max(0, moneyValue(item, "serverRateMinor", "serverRate", fallbackServerRate)),
+    chefRate: Math.max(0, moneyValue(item, "chefRateMinor", "chefRate", fallbackChefRate))
   }));
 }
 
@@ -655,22 +666,27 @@ function normalizePricingSettings(settings = {}) {
     hasEmptyTaxRegions ? 0 : DEFAULT_PRICING_SETTINGS.taxRate
   ));
   const bartenderRate = Math.max(0, toNumber(
-    source.bartenderRate,
+    moneyValue(source, "bartenderRateMinor", "bartenderRate", hasEmptyBartenderRateTypes ? 0 : DEFAULT_PRICING_SETTINGS.bartenderRate),
     hasEmptyBartenderRateTypes ? 0 : DEFAULT_PRICING_SETTINGS.bartenderRate
   ));
   const serverRate = Math.max(0, toNumber(
-    source.serverRate,
+    moneyValue(source, "serverRateMinor", "serverRate", hasEmptyStaffingRateTypes ? 0 : DEFAULT_PRICING_SETTINGS.serverRate),
     hasEmptyStaffingRateTypes ? 0 : DEFAULT_PRICING_SETTINGS.serverRate
   ));
   const chefRate = Math.max(0, toNumber(
-    source.chefRate,
+    moneyValue(source, "chefRateMinor", "chefRate", hasEmptyStaffingRateTypes ? 0 : DEFAULT_PRICING_SETTINGS.chefRate),
     hasEmptyStaffingRateTypes ? 0 : DEFAULT_PRICING_SETTINGS.chefRate
   ));
 
   const normalized = {
     pricingSetupConfirmed: source.pricingSetupConfirmed === true,
-    perMileRate: Math.max(0, toNumber(source.perMileRate, DEFAULT_PRICING_SETTINGS.perMileRate)),
-    longDistancePerMileRate: Math.max(0, toNumber(source.longDistancePerMileRate, DEFAULT_PRICING_SETTINGS.longDistancePerMileRate)),
+    perMileRate: Math.max(0, moneyValue(source, "perMileRateMinor", "perMileRate", DEFAULT_PRICING_SETTINGS.perMileRate)),
+    longDistancePerMileRate: Math.max(0, moneyValue(
+      source,
+      "longDistancePerMileRateMinor",
+      "longDistancePerMileRate",
+      DEFAULT_PRICING_SETTINGS.longDistancePerMileRate
+    )),
     deliveryThresholdMiles: Math.max(0, toNumber(source.deliveryThresholdMiles, DEFAULT_PRICING_SETTINGS.deliveryThresholdMiles)),
     bartenderRate,
     serverRate,
