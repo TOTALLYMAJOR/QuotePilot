@@ -108,6 +108,31 @@ function StepperNumberInput({
   );
 }
 
+// Discloses what an auto-applied event template set (audit #17), rendered
+// under the step-1 event type field and again at the top of step 3.
+function TemplateDefaultsBanner({ notice, onClearDefaults, onDismiss }) {
+  if (!notice) return null;
+
+  return (
+    <div className="template-defaults-banner" role="status">
+      <p>{notice.summary}</p>
+      <div className="template-defaults-banner-actions">
+        <button type="button" className="ghost compact" onClick={onClearDefaults}>
+          Clear defaults
+        </button>
+        <button
+          type="button"
+          className="template-defaults-dismiss"
+          onClick={onDismiss}
+          aria-label="Dismiss defaults notice"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function StepEvent({
   form,
   setForm,
@@ -120,7 +145,10 @@ export function StepEvent({
   onFieldBlur,
   touchedFields = {},
   fieldErrors = {},
-  showValidation = false
+  showValidation = false,
+  templateNotice = null,
+  onClearTemplateDefaults,
+  onDismissTemplateNotice
 }) {
   const templates = Array.isArray(settings?.eventTemplates) ? settings.eventTemplates : [];
   const taxRegions = Array.isArray(settings?.taxRegions) ? settings.taxRegions : [];
@@ -192,6 +220,11 @@ export function StepEvent({
               ))}
             </select>
           </Field>
+          <TemplateDefaultsBanner
+            notice={templateNotice}
+            onClearDefaults={onClearTemplateDefaults}
+            onDismiss={onDismissTemplateNotice}
+          />
           <Field label="Event date" error={getError("date")} required>
             <input
               type="date"
@@ -625,7 +658,10 @@ export function StepServices({
   guidedSellingEnabled: guidedSellingEnabledProp,
   aiAssistEnabled: aiAssistEnabledProp,
   aiAutopilotEnabled: aiAutopilotEnabledProp,
-  onSelectionTouched
+  onSelectionTouched,
+  templateNotice = null,
+  onClearTemplateDefaults,
+  onDismissTemplateNotice
 }) {
   const guidedSellingEnabled =
     guidedSellingEnabledProp !== undefined
@@ -670,7 +706,7 @@ export function StepServices({
     const quantityEnabled = key === "addons"
       ? addonSupportsQuantity(item, pricingType)
       : pricingType === "per_item";
-    if (typeof onSelectionTouched === "function") onSelectionTouched(key);
+    if (typeof onSelectionTouched === "function") onSelectionTouched(key, id);
     setForm((f) => {
       const set = new Set(Array.isArray(f[key]) ? f[key] : []);
       const quantityMap = { ...(f[quantityKey] || {}) };
@@ -693,7 +729,7 @@ export function StepServices({
 
   const patchQuantity = (quantityKey, id, value, touchedFieldName) => {
     const quantity = Math.max(1, Math.round(Number(value || 1)));
-    if (typeof onSelectionTouched === "function") onSelectionTouched(touchedFieldName);
+    if (typeof onSelectionTouched === "function") onSelectionTouched(touchedFieldName, id);
     setForm((f) => ({
       ...f,
       [quantityKey]: {
@@ -705,6 +741,11 @@ export function StepServices({
 
   return (
     <div className="grid two-col">
+      <TemplateDefaultsBanner
+        notice={templateNotice}
+        onClearDefaults={onClearTemplateDefaults}
+        onDismiss={onDismissTemplateNotice}
+      />
       <Field label="Package tier">
         <select
           value={form.pkg}

@@ -1621,7 +1621,7 @@ function buildQuoteDeliveryEmailPayload({ quote, quoteId, portalLink } = {}) {
   const paymentLink = storedPaymentLink
     ? parseStoredPaymentLinkOrThrow(storedPaymentLink)
     : "";
-  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "QuotePilot";
+  const brandName = normalizeText(quote?.quoteMeta?.brandName);
   const lines = [
     `Hi ${customerName},`,
     "",
@@ -1635,7 +1635,7 @@ function buildQuoteDeliveryEmailPayload({ quote, quoteId, portalLink } = {}) {
   ];
   return {
     toEmail: customerEmail,
-    subject: `${brandName} Quote ${quoteNumber} - ${eventDate}`,
+    subject: `${brandName ? `${brandName} ` : ""}Quote ${quoteNumber} - ${eventDate}`,
     text: lines.join("\n"),
     html: `
       <p>Hi ${escapeHtml(customerName)},</p>
@@ -5782,7 +5782,7 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
     const customerName = normalizeText(claimedQuote.customer?.name) || "there";
     const eventName = normalizeText(claimedQuote.event?.name) || "your event";
     const deposit = currencyLabel(claimedQuote.totals?.deposit);
-    const brandName = normalizeText(claimedQuote?.quoteMeta?.brandName) || "QuotePilot";
+    const brandName = normalizeText(claimedQuote?.quoteMeta?.brandName);
     const lines = [
       `Hi ${customerName},`,
       "",
@@ -5794,7 +5794,7 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
     ].filter(Boolean);
     const email = await sendCustomerEmail({
       toEmail: customerEmail,
-      subject: `${brandName} Deposit Request - ${quoteNumber}`,
+      subject: `${brandName ? `${brandName} ` : ""}Deposit Request - ${quoteNumber}`,
       text: lines.join("\n"),
       html: `
         <p>Hi ${escapeHtml(customerName)},</p>

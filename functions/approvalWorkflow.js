@@ -2,7 +2,8 @@ const APPROVAL_ACTIONS = new Set([
   "send_payment_request",
   "convert_to_contract",
   "rotate_portal_link",
-  "delete_quote"
+  "delete_quote",
+  "send_quote_email"
 ]);
 const APPROVAL_RESOLUTION_STATES = new Set(["approved", "rejected"]);
 const APPROVAL_EXECUTION_STATES = new Set([
