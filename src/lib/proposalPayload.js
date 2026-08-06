@@ -57,7 +57,8 @@ export function normalizeCrewMembers(input) {
 }
 
 export function resolveBranding(meta = {}) {
-  const brandName = cleanText(meta.brandName, DEFAULT_BRANDING.name);
+  const organizationName = cleanText(meta.organizationName, DEFAULT_BRANDING.name);
+  const brandName = cleanText(meta.brandName, organizationName);
   const brandTagline = cleanText(meta.brandTagline, DEFAULT_BRANDING.tagline);
   return {
     brandName,
@@ -161,7 +162,9 @@ export function buildProposalPayload(quote) {
       tax: toNumber(quote.totals?.tax, 0),
       total: toNumber(quote.totals?.total, 0),
       deposit: toNumber(quote.totals?.deposit, 0),
-      serviceFeePctApplied: toNumber(quote.totals?.serviceFeePctApplied, 0),
+      serviceFeePctApplied: Object.prototype.hasOwnProperty.call(quote.totals || {}, "serviceFeePctApplied")
+        ? toNumber(quote.totals?.serviceFeePctApplied, 0)
+        : null,
       taxRateApplied: toNumber(quote.totals?.taxRateApplied, 0),
       taxRegionId: cleanText(quote.totals?.taxRegionId),
       taxRegionName: cleanText(quote.totals?.taxRegionName),
@@ -172,6 +175,7 @@ export function buildProposalPayload(quote) {
       rentalMultiplier: toNumber(quote.totals?.rentalMultiplier, 1)
     },
     meta: {
+      organizationName: cleanText(meta.organizationName),
       quotePreparedBy: cleanText(meta.quotePreparedBy),
       acceptanceEmail: cleanText(meta.acceptanceEmail, cleanText(meta.businessEmail)),
       businessEmail: cleanText(meta.businessEmail),

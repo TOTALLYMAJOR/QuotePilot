@@ -724,6 +724,12 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
       return [];
     }
 
+    const adapter = globalThis.__quotePilotE2eFunctions?.loadMenuByEvent;
+    if (typeof adapter === "function") {
+      const sections = await adapter({ eventTypeId: nextEventTypeId, organizationId });
+      return Array.isArray(sections) ? sections : [];
+    }
+
     const [categories, items] = await Promise.all([
       getMenuCategories(nextEventTypeId, { organizationId }),
       getMenuItems(nextEventTypeId, { organizationId })

@@ -32,12 +32,17 @@ const RESUMABLE_PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_final_balance_request"
 ]);
 
-function fmtDate(iso) {
+export function formatQuoteHistoryDate(iso) {
   if (!iso) return "-";
-  const dt = new Date(iso);
+  const raw = String(iso).trim();
+  const dt = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(`${raw}T12:00:00`)
+    : new Date(raw);
   if (Number.isNaN(dt.getTime())) return "-";
-  return dt.toLocaleString();
+  return dt.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
+
+const fmtDate = formatQuoteHistoryDate;
 
 function canConvertToContract(quote) {
   const status = String(quote?.status || "");
@@ -107,6 +112,35 @@ function statusBucket(status) {
 function statusBucketLabel(status) {
   const bucket = statusBucket(status);
   return bucket.charAt(0).toUpperCase() + bucket.slice(1);
+}
+
+export function filterQuoteHistoryQuotes(quotes, {
+  query = "",
+  eventTypeFilter = "all",
+  statusFilter = "all"
+} = {}) {
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  return (Array.isArray(quotes) ? quotes : []).filter((quote) => {
+    const statusMatch = statusFilter === "all"
+      || statusBucket(quote.status || "draft") === statusFilter;
+    if (!statusMatch) return false;
+
+    const quoteEventType = String(quote.eventTypeId || quote.selection?.eventTypeId || "").trim();
+    if (eventTypeFilter !== "all" && quoteEventType !== eventTypeFilter) return false;
+    if (!normalizedQuery) return true;
+
+    return [
+      quote.customerNameKey,
+      quote.customer?.name,
+      quote.customer?.email,
+      quote.quoteNumber,
+      quote.event?.name
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery);
+  });
 }
 
 function isPortalExpired(quote) {
@@ -421,15 +455,9 @@ export default function QuoteHistoryModal({
     const targetingSavedQuote = Boolean(
       requestedFocusQuoteId && targetLoadPendingRef.current
     );
-    const requestedEventType = targetingSavedQuote || eventTypeFilter === "all"
-      ? ""
-      : eventTypeFilter;
-    const requestedCustomerName = targetingSavedQuote ? "" : query;
     setState((prev) => ({ ...prev, loading: true, error: "", feedback: "" }));
     try {
       const result = await getQuoteHistory({
-        eventTypeId: requestedEventType,
-        customerName: requestedCustomerName,
         organizationId: requestedOrganizationId,
         persistExpiredStatuses: normalizeHistoryRole(currentUserRole) === "admin"
       });
@@ -483,11 +511,9 @@ export default function QuoteHistoryModal({
 
   useEffect(() => {
     if (!open) return;
-    const timer = setTimeout(() => {
-      load();
-    }, query.trim() ? 220 : 0);
+    const timer = setTimeout(() => load(), 0);
     return () => clearTimeout(timer);
-  }, [open, eventTypeFilter, query, focusQuoteId, organizationId]);
+  }, [open, focusQuoteId, organizationId]);
 
   useEffect(() => {
     const canCheck = normalizeHistoryRole(currentUserRole) === "admin";
@@ -567,27 +593,27 @@ export default function QuoteHistoryModal({
     (eventTypes || []).map((item) => [String(item.id), item.name])
   );
 
-  const filteredQuotes = state.quotes.filter((quote) => {
-    const statusMatch = statusFilter === "all" || statusBucket(quote.status || "draft") === statusFilter;
-    if (!statusMatch) return false;
-
-    const quoteEventType = String(quote.eventTypeId || quote.selection?.eventTypeId || "").trim();
-    const eventTypeMatch = eventTypeFilter === "all" || quoteEventType === eventTypeFilter;
-    if (!eventTypeMatch) return false;
-
-    if (!normalizedCustomerQuery) return true;
-    const customerHaystack = [
-      quote.customerNameKey,
-      quote.customer?.name
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return customerHaystack.includes(normalizedCustomerQuery);
+  const filteredQuotes = filterQuoteHistoryQuotes(state.quotes, {
+    query,
+    eventTypeFilter,
+    statusFilter
   });
+  const hasActiveFilters = Boolean(
+    normalizedCustomerQuery
+    || eventTypeFilter !== "all"
+    || statusFilter !== "all"
+  );
+  const clearFilters = () => {
+    setQuery("");
+    setEventTypeFilter("all");
+    setStatusFilter("all");
+  };
   const focusedQuote = focusQuoteId
     ? state.quotes.find((quote) => quote.id === focusQuoteId) || null
     : null;
+  const focusedQuoteIsVisible = Boolean(
+    focusedQuote && filteredQuotes.some((quote) => quote.id === focusedQuote.id)
+  );
   const focusedQuoteStatus = String(focusedQuote?.status || "draft").trim().toLowerCase();
   const focusedQuoteIsDraft = focusedQuoteStatus === "draft";
   let focusedQuoteRevisionId = "";
@@ -689,7 +715,7 @@ export default function QuoteHistoryModal({
       const quote = state.quotes.find((item) => item.id === quoteId);
       const approvalRequest = getExecutableApprovalRequest(quote, "delete_quote");
       if (state.source === "firebase" && !approvalRequest) {
-        throw new Error("Approve a quote-deletion request in Sales Workflow first.");
+        throw new Error("Approve a quote-deletion request in Workflow first.");
       }
       await deleteQuote(quoteId, {
         organizationId,
@@ -793,7 +819,7 @@ export default function QuoteHistoryModal({
     try {
       const approvalRequest = getExecutableApprovalRequest(quote, "convert_to_contract");
       if (state.source === "firebase" && !approvalRequest) {
-        throw new Error("Approve a contract-conversion request in Sales Workflow first.");
+        throw new Error("Approve a contract-conversion request in Workflow first.");
       }
       const result = await convertQuoteToContract({
         quoteId: quote.id,
@@ -975,7 +1001,7 @@ export default function QuoteHistoryModal({
     try {
       const approvalRequest = getExecutableApprovalRequest(quote, "rotate_portal_link");
       if (state.source === "firebase" && !approvalRequest) {
-        throw new Error("Approve a portal-rotation request in Sales Workflow first.");
+        throw new Error("Approve a portal-rotation request in Workflow first.");
       }
       const result = await rotateQuotePortalKey({
         quoteId: quote.id,
@@ -1116,7 +1142,7 @@ export default function QuoteHistoryModal({
     try {
       const approvalRequest = getExecutableApprovalRequest(quote, "send_payment_request");
       if (!approvalRequest) {
-        throw new Error("Approve a payment-request action in Sales Workflow first.");
+        throw new Error("Approve a payment-request action in Workflow first.");
       }
       const status = String(quote.status || "").trim().toLowerCase();
       if (!["accepted", "booked"].includes(status)) {
@@ -1258,7 +1284,7 @@ export default function QuoteHistoryModal({
           approvalRequests: [...(existing.workflow?.approvalRequests || []), result.request]
         }
       }));
-      const feedback = "Approval requested. An admin will see it in Sales Workflow.";
+      const feedback = "Approval requested. An admin will see it in Workflow.";
       setState((prev) => ({ ...prev, feedback }));
       pushToast(feedback, "success");
     } catch (err) {
@@ -1272,7 +1298,7 @@ export default function QuoteHistoryModal({
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="quote-history-title">
       <div className="modal-card history-card" ref={dialogRef} tabIndex={-1}>
         <div className="modal-head">
-          <h2 id="quote-history-title">Quote History</h2>
+          <h2 id="quote-history-title">Quotes</h2>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
@@ -1310,7 +1336,7 @@ export default function QuoteHistoryModal({
         )}
         {state.error && <p className="error-note" role="alert">{state.error}</p>}
         {state.feedback && <p className="source-note" role="status" aria-live="polite">{state.feedback}</p>}
-        {focusedQuote && (
+        {focusedQuoteIsVisible && (
           <section
             className="saved-quote-handoff"
             ref={savedQuoteHandoffRef}
@@ -1471,7 +1497,7 @@ export default function QuoteHistoryModal({
         <div className="history-controls">
           <input
             type="text"
-            placeholder="Search customer name"
+            placeholder="Search customer, quote #, or event"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -1487,9 +1513,12 @@ export default function QuoteHistoryModal({
             <option value="submitted">Submitted</option>
             <option value="archived">Archived</option>
           </select>
+          <p className="history-result-count" role="status">
+            Showing {filteredQuotes.length} of {state.quotes.length} quotes
+          </p>
         </div>
 
-        <div className="history-table-wrap">
+        <div className="history-table-wrap" aria-busy={state.loading}>
           <table>
             <thead>
               <tr>
@@ -1510,9 +1539,34 @@ export default function QuoteHistoryModal({
               </tr>
             </thead>
             <tbody>
-              {!state.loading && filteredQuotes.length === 0 && (
+              {state.loading && [1, 2, 3].map((row) => (
+                <tr className="history-skeleton-row" key={`history-skeleton-${row}`} aria-hidden="true">
+                  {Array.from({ length: 14 }, (_, column) => (
+                    <td key={column}><span /></td>
+                  ))}
+                </tr>
+              ))}
+              {!state.loading && state.quotes.length === 0 && (
                 <tr>
                   <td colSpan="14">No quotes saved yet.</td>
+                </tr>
+              )}
+              {!state.loading && state.quotes.length > 0 && filteredQuotes.length === 0 && (
+                <tr>
+                  <td colSpan="14">
+                    <div className="history-empty-filtered">
+                      <span>
+                        {normalizedCustomerQuery
+                          ? `No quotes match '${query.trim()}'.`
+                          : "No quotes match these filters."}
+                      </span>
+                      {hasActiveFilters && (
+                        <button type="button" className="ghost compact" onClick={clearFilters}>
+                          Clear filters
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               )}
               {filteredQuotes.map((quote) => {
@@ -1615,7 +1669,7 @@ export default function QuoteHistoryModal({
                     <td>{quote.quoteNumber || "-"}</td>
                     <td>{quote.customer?.name || quote.customer?.email || "-"}</td>
                     <td>{quoteEventTypeLabel}</td>
-                    <td>{quote.event?.date || "-"}</td>
+                    <td>{fmtDate(quote.event?.date)}</td>
                     <td>{quote.event?.guests ?? "-"}</td>
                     <td>{currency(quote.totals?.total || 0)}</td>
                     <td>{currency(quote.totals?.deposit || 0)}</td>
@@ -1694,7 +1748,7 @@ export default function QuoteHistoryModal({
                             className="cta compact"
                             onClick={() => handleConvertToContract(quote)}
                             disabled={deliveryUnresolved || convertingId === quote.id || (approvalRequired && !contractApproval)}
-                            title={approvalRequired && !contractApproval ? "Approve contract conversion in Sales Workflow first." : ""}
+                            title={approvalRequired && !contractApproval ? "Approve contract conversion in Workflow first." : ""}
                           >
                             {convertingId === quote.id ? "Converting..." : "Convert"}
                           </button>
@@ -1810,7 +1864,7 @@ export default function QuoteHistoryModal({
                             onClick={() => handleSendPaymentRequestEmail(quote)}
                             disabled={deliveryUnresolved || sendingPaymentEmailId === quote.id || !paymentRequestApproval || !portalShareable}
                             title={!paymentRequestApproval
-                              ? "Approve the payment request in Sales Workflow first."
+                              ? "Approve the payment request in Workflow first."
                               : !portalShareable
                                 ? "Payment email requires an active customer portal for the current provider-accepted issuance."
                                 : paymentRequestInProgress
@@ -1854,7 +1908,7 @@ export default function QuoteHistoryModal({
                             className="ghost compact"
                             onClick={() => handleRotatePortalLink(quote)}
                             disabled={deliveryUnresolved || rotatingPortalId === quote.id || (approvalRequired && !portalRotationApproval)}
-                            title={approvalRequired && !portalRotationApproval ? "Approve portal rotation in Sales Workflow first." : ""}
+                            title={approvalRequired && !portalRotationApproval ? "Approve portal rotation in Workflow first." : ""}
                           >
                             {rotatingPortalId === quote.id ? "Rotating..." : "Rotate Portal"}
                           </button>
@@ -1895,7 +1949,7 @@ export default function QuoteHistoryModal({
                             className="ghost compact"
                             onClick={() => requestDeleteQuote(quote)}
                             disabled={deliveryUnresolved || updatingId === quote.id || (approvalRequired && !deleteApproval)}
-                            title={approvalRequired && !deleteApproval ? "Approve quote deletion in Sales Workflow first." : ""}
+                            title={approvalRequired && !deleteApproval ? "Approve quote deletion in Workflow first." : ""}
                           >
                             {updatingId === quote.id ? "Deleting..." : "Delete"}
                           </button>

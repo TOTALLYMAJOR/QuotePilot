@@ -1,6 +1,10 @@
+import { createRequire } from "node:module";
 import { describe, expect, test } from "vitest";
 import { exportQuoteProposal } from "../proposalExport";
 import { proposalPayloadFixtureQuote } from "./fixtures/proposalPayloadFixture";
+
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 function versionedDraft() {
   return {
@@ -78,5 +82,56 @@ describe("customer proposal PDF export", () => {
     });
     const allowedText = Buffer.from(allowed.base64, "base64").toString("latin1");
     expect(allowedText).toContain("https://quotepilot.example/app?portal=");
+  });
+
+  test("real PDF extraction contains tenant branding and excludes pricing internals", async () => {
+    const quote = {
+      ...versionedDraft(),
+      quoteMeta: {
+        ...versionedDraft().quoteMeta,
+        brandName: "",
+        organizationName: "Northstar Catering",
+        pricingSettingsVersion: 91
+      },
+      selection: {
+        ...versionedDraft().selection,
+        taxRegion: "internal-tax-region-id",
+        seasonProfileId: "peak-season-token",
+        staffingRateTypeId: "staff-rate-secret",
+        bartenderRateTypeId: "bar-rate-secret",
+        serverRateMixCsv: "31,33,35",
+        chefRateMixCsv: "41,43"
+      },
+      totals: {
+        ...versionedDraft().totals,
+        taxRegionId: "internal-tax-region-id",
+        seasonProfileId: "peak-season-token",
+        staffingRateTypeId: "staff-rate-secret",
+        bartenderRateTypeId: "bar-rate-secret",
+        serverRatesApplied: [31, 33, 35],
+        chefRatesApplied: [41, 43]
+      }
+    };
+    const attachment = await exportQuoteProposal(quote, {
+      output: "base64",
+      compact: true
+    });
+    const extracted = await pdfParse(Buffer.from(attachment.base64, "base64"));
+
+    expect(extracted.text).toContain("Northstar Catering");
+    expect(extracted.text).toContain("Staffing team");
+    for (const forbidden of [
+      "internal-tax-region-id",
+      "peak-season-token",
+      "staff-rate-secret",
+      "bar-rate-secret",
+      "31,33,35",
+      "41,43",
+      "QuotePilot"
+    ]) {
+      expect(extracted.text).not.toContain(forbidden);
+    }
+    expect(String(extracted.info?.Creator || "")).not.toContain("QuotePilot");
+    expect(String(extracted.info?.Author || "")).not.toContain("QuotePilot");
   });
 });

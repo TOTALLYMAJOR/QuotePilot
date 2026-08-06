@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { currency } from "./quoteCalculator";
+import { currency, serviceChargeLabel } from "./quoteCalculator";
 import { sanitizeStripePaymentLink } from "./paymentLink";
 import { buildProposalPayload } from "./proposalPayload";
 
@@ -369,9 +369,11 @@ export async function exportQuoteProposal(quote, {
 
   doc.setProperties({
     title: `${text(proposal.quoteNumber)} Proposal`,
-    subject: `${text(proposal.branding.brandName)} Catering Proposal`,
-    author: text(meta.quotePreparedBy || proposal.branding.brandName),
-    creator: "QuotePilot",
+    subject: proposal.branding.brandName
+      ? `${text(proposal.branding.brandName)} Catering Proposal`
+      : "Catering Proposal",
+    author: text(meta.quotePreparedBy || proposal.branding.brandName || "The catering team"),
+    creator: text(proposal.branding.brandName || "Catering proposal generator"),
     keywords: "proposal, catering, quote"
   });
 
@@ -537,7 +539,7 @@ export async function exportQuoteProposal(quote, {
   
   // Service fee and Tax
   row(
-    `Service charge (${Math.round(Number(proposal.totals.serviceFeePctApplied || 0) * 1000) / 10}%)`,
+    serviceChargeLabel(proposal.totals.serviceFeePctApplied),
     currency(proposal.totals.serviceFee || 0)
   );
   row(

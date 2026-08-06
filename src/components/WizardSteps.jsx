@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { currency } from "../lib/quoteCalculator";
+import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 
 function joinClassNames(...parts) {
   return parts.filter(Boolean).join(" ");
@@ -540,6 +540,11 @@ export function StepMenu({
   setForm,
   menuSections,
   menuLoading = false,
+  menuError = "",
+  eventTypeLabel = "",
+  isAdmin = false,
+  onRetry,
+  onOpenCatalogMenu,
   onSelectionTouched
 }) {
   const resolvedMenuSections = Array.isArray(menuSections) ? menuSections : [];
@@ -593,12 +598,58 @@ export function StepMenu({
     }));
   };
 
+  if (menuLoading) {
+    return (
+      <div className="menu-library menu-state" aria-busy="true" role="status">
+        <h4>Customized Cuisine Menu</h4>
+        <span className="sr-only">Loading menu for {eventTypeLabel || "the selected event type"}.</span>
+        <div className="menu-skeleton" aria-hidden="true">
+          {[1, 2, 3].map((row) => (
+            <div className="menu-skeleton-row" key={row}>
+              <span />
+              <span />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (menuError) {
+    return (
+      <div className="menu-library menu-state" role="alert">
+        <h4>Menu unavailable</h4>
+        <p>We couldn't load the menu for {eventTypeLabel || "this event type"}.</p>
+        <button type="button" className="ghost" onClick={onRetry}>Retry</button>
+      </div>
+    );
+  }
+
+  if (resolvedMenuSections.length === 0) {
+    return (
+      <div className="menu-library menu-state">
+        <h4>Customized Cuisine Menu</h4>
+        {eventTypeLabel ? (
+          <>
+            <p>No menu items are configured for {eventTypeLabel} yet.</p>
+            {isAdmin ? (
+              <button type="button" className="ghost" onClick={onOpenCatalogMenu}>Add menu items</button>
+            ) : (
+              <p className="source-note">Ask your admin to add menu items.</p>
+            )}
+          </>
+        ) : (
+          <p className="source-note">Choose an event type to load its menu.</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="grid two-col">
       {resolvedMenuSections.length > 0 && (
         <div className="menu-library">
           <h4>Customized Cuisine Menu</h4>
-          {menuLoading && <p className="source-note">Loading menu for selected event type...</p>}
           <p className="source-note">Select menu items to include in this quote proposal.</p>
           <div className="menu-grid">
             {resolvedMenuSections.map((section) => (
@@ -637,12 +688,6 @@ export function StepMenu({
               </section>
             ))}
           </div>
-        </div>
-      )}
-      {resolvedMenuSections.length === 0 && !menuLoading && (
-        <div className="menu-library">
-          <h4>Customized Cuisine Menu</h4>
-          <p className="source-note">Select an event type to load menu categories and items.</p>
         </div>
       )}
     </div>
@@ -958,7 +1003,7 @@ export function StepReview({ form, totals, settings, readiness = null }) {
               <strong>{staffTeamLabel}</strong>
             </div>
           )}
-          <div className="quote-charge"><span>Service charge ({Math.round(Number(totals.serviceFeePctApplied || 0) * 1000) / 10}%)</span><strong>{currency(totals.serviceFee)}</strong></div>
+          <div className="quote-charge"><span>{serviceChargeLabel(totals.serviceFeePctApplied)}</span><strong>{currency(totals.serviceFee)}</strong></div>
           {(totals.addons > 0 || totals.rentals > 0 || totals.menu > 0) && (
             <div className="quote-charge quote-charge-wide">
               <span>Add-ons/Rentals/Menu</span>
