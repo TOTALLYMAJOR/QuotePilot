@@ -72,7 +72,7 @@ For intentional functions deploy windows only:
   - `APP_BASE_URL=https://quotepilot.mbmapps.com/app`
   - `APP_BASE_DOMAIN=mbmapps.com`
   - `NOTIFICATIONS_EMAIL_PROVIDER=none` until Resend is verified
-  - `EMAIL_FROM_NAME=QuotePilot by MBMapps`
+  - `EMAIL_FROM_NAME=QuotePilot by MBMApps`
   - `EMAIL_FROM_EMAIL=onboarding@quotepilot.mbmapps.com`
   - `NOTIFICATIONS_SMS_PROVIDER=none` until Twilio is approved
   - provider sender/owner values only when the matching provider is enabled
@@ -116,7 +116,7 @@ Keep the production fail-safe state during custom-domain setup:
 NOTIFICATIONS_SMS_PROVIDER=none
 NOTIFICATIONS_EMAIL_PROVIDER=none
 APP_BASE_URL=https://quotepilot.mbmapps.com/app
-EMAIL_FROM_NAME=QuotePilot by MBMapps
+EMAIL_FROM_NAME=QuotePilot by MBMApps
 AUTH_PLATFORM_ADMIN_EMAILS=<approved-platform-operator-email>
 ```
 
@@ -133,7 +133,7 @@ archive/delete operations.
 ### Resend activation gate
 
 The intended sender is
-`QuotePilot by MBMapps <onboarding@quotepilot.mbmapps.com>`. Do not activate or
+`QuotePilot by MBMApps <onboarding@quotepilot.mbmapps.com>`. Do not activate or
 represent that sender as operational until the `quotepilot.mbmapps.com` sender
 domain is verified in the Resend dashboard and the required DNS records are
 confirmed at the authoritative DNS provider.
@@ -142,7 +142,7 @@ Only after verification, set the ignored Functions environment file to:
 
 ```dotenv
 NOTIFICATIONS_EMAIL_PROVIDER=resend
-EMAIL_FROM_NAME=QuotePilot by MBMapps
+EMAIL_FROM_NAME=QuotePilot by MBMApps
 EMAIL_FROM_EMAIL=onboarding@quotepilot.mbmapps.com
 RESEND_API_KEY=<buyer-owned-resend-api-key>
 APP_BASE_URL=https://quotepilot.mbmapps.com/app

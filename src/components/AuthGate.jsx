@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { registerWithEmail, signInWithEmail, signInWithGoogle } from "../lib/authClient";
+import ProductBrandLockup from "./ProductBrandLockup";
 
 function friendlyError(err) {
   const text = String(err?.message || "Authentication failed.");
@@ -48,6 +49,7 @@ export default function AuthGate({ sessionError = "" }) {
   return (
     <main className="auth-shell container">
       <section className="panel auth-card">
+        <ProductBrandLockup className="auth-product-brand" />
         <h1>Staff Sign In</h1>
         <p className="muted">Use email/password or Google to access the quote workspace.</p>
         {sessionError && <p className="error-note">{sessionError}</p>}

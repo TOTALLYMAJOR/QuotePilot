@@ -13,7 +13,7 @@ Last updated: August 3, 2026
   trusted quote create/readback/version proof, signed-out portal acceptance,
   staff decision verification, and exact cleanup/tombstone proof.
 - Verify `quotepilot.mbmapps.com` in Resend and authoritative DNS before
-  activating `QuotePilot by MBMapps <onboarding@quotepilot.mbmapps.com>`;
+  activating `QuotePilot by MBMApps <onboarding@quotepilot.mbmapps.com>`;
   capture provider accepted, delivered-event, and recipient-inbox proof.
 
 ## P0 - Multi-Tenant Hardening (Post Rollout)

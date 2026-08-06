@@ -6,6 +6,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Changed
+
+- Standardized the customer-facing product identity to `QuotePilot by MBMApps`
+  across public marketing, sign-in and workspace states, the authenticated app
+  header, portal attribution, proposal metadata/footer, install metadata,
+  onboarding sender configuration, and operator documentation.
+- Separated the fixed QuotePilot product lockup from tenant-controlled business
+  branding in the workspace header and Catalog Admin. Tenant names, logos,
+  colors, and taglines remain available for customer proposals and portals,
+  while legacy `tonicatering` Firebase project/site identifiers remain
+  infrastructure-only and are explicitly labeled as such in operator guidance.
+
 ## [0.2.3] - 2026-08-05
 
 ### Added

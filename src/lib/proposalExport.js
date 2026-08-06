@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import { currency } from "./quoteCalculator";
 import { sanitizeStripePaymentLink } from "./paymentLink";
 import { buildProposalPayload } from "./proposalPayload";
+import { PRODUCT_FULL_NAME } from "./productIdentity";
 
 const BRAND_ASSET_CACHE = new Map();
 const IMAGE_LOG_PREFIX = "[proposalExport:image]";
@@ -264,6 +265,8 @@ function appendFooterToAllPages({
       pageHeight - 22
     );
     doc.text(`Page ${page} of ${pageCount}`, right, pageHeight - 22, { align: "right" });
+    doc.setFontSize(7);
+    doc.text(`Created with ${PRODUCT_FULL_NAME}`, right, pageHeight - 10, { align: "right" });
   }
 }
 
@@ -371,7 +374,7 @@ export async function exportQuoteProposal(quote, {
     title: `${text(proposal.quoteNumber)} Proposal`,
     subject: `${text(proposal.branding.brandName)} Catering Proposal`,
     author: text(meta.quotePreparedBy || proposal.branding.brandName),
-    creator: "QuotePilot",
+    creator: PRODUCT_FULL_NAME,
     keywords: "proposal, catering, quote"
   });
 

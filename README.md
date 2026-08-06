@@ -1,4 +1,4 @@
-# QuotePilot by MBMapps
+# QuotePilot by MBMApps
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -113,7 +113,7 @@ When the controlled GitHub deploy enables Functions, CI runs
 `scripts/materialize-functions-env.mjs` before deployment. The script fails
 closed unless it receives the canonical QuotePilot `/app` URL and domain, a
 non-placeholder platform-admin allowlist, the approved
-`QuotePilot by MBMapps <onboarding@quotepilot.mbmapps.com>` sender identity,
+`QuotePilot by MBMApps <onboarding@quotepilot.mbmapps.com>` sender identity,
 Stripe server secrets, and any credentials required by an explicitly enabled
 email or SMS provider. It writes the project-specific Functions environment
 file with restricted permissions and does not print secret values. The approved

@@ -5,6 +5,7 @@ import eventProductionImage from "../assets/marketing/quotepilot/event-productio
 import quoteBuilderImage from "../assets/marketing/quotepilot/quote-builder.png";
 import salesWorkflowImage from "../assets/marketing/quotepilot/sales-workflow.png";
 import scenarioCompareImage from "../assets/marketing/quotepilot/scenario-compare.png";
+import { PRODUCT_COMPANY, PRODUCT_FULL_NAME } from "../lib/productIdentity";
 import "../landing.css";
 
 const outcomeStrip = [
@@ -66,11 +67,11 @@ const operations = [
 
 function BrandLockup() {
   return (
-    <span className="qp-landing-brand-lockup">
+    <span className="qp-landing-brand-lockup" aria-label={PRODUCT_FULL_NAME}>
       <img src="/brand/quotepilot-mark.svg" alt="" width="44" height="44" />
       <span>
         <strong>QuotePilot</strong>
-        <small>by MBMapps</small>
+        <small>by {PRODUCT_COMPANY}</small>
       </span>
     </span>
   );
@@ -372,7 +373,7 @@ export default function MarketingPage() {
           <a href="/app">Staff login</a>
           <a href="https://mbmapps.com/contact">Contact</a>
         </nav>
-        <small>© 2026 MBMapps. QuotePilot.</small>
+        <small>© 2026 {PRODUCT_COMPANY}. QuotePilot.</small>
       </footer>
     </div>
   );

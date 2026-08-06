@@ -6,6 +6,7 @@ import {
   updatePortalQuoteStatus
 } from "../lib/quoteStore";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
+import ProductBrandLockup from "./ProductBrandLockup";
 
 const PAYMENT_CONFIRMATION_POLL_INTERVAL_MS = 1500;
 const PAYMENT_CONFIRMATION_MAX_ATTEMPTS = 10;
@@ -466,6 +467,7 @@ export default function CustomerPortalView({
           </div>
         )}
       </section>
+      <ProductBrandLockup compact className="portal-product-brand" />
       <p className="portal-staff-entry">
         <button type="button" className="ghost" onClick={onBackToStaff}>Staff sign in</button>
       </p>

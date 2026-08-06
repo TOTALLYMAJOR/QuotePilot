@@ -69,8 +69,8 @@ if (!["none", "resend"].includes(emailProvider)) {
 }
 
 const emailFromName = required("EMAIL_FROM_NAME");
-if (emailFromName !== "QuotePilot by MBMapps") {
-  throw new Error("EMAIL_FROM_NAME must use the approved QuotePilot by MBMapps brand.");
+if (emailFromName !== "QuotePilot by MBMApps") {
+  throw new Error("EMAIL_FROM_NAME must use the approved QuotePilot by MBMApps brand.");
 }
 
 const emailFromEmail = required("EMAIL_FROM_EMAIL").toLowerCase();
