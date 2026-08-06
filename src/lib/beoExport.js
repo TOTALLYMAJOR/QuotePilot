@@ -33,6 +33,38 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
+// Export-time-only freshness cue (uses new Date() deliberately - this lives in
+// the renderer, not the payload, so buildBeoPayload stays pure/testable).
+function formatGeneratedTimestamp(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  const mm = pad(date.getMonth() + 1);
+  const dd = pad(date.getDate());
+  const hh = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+}
+
+// Mirrors proposalExport.js's appendFooterToAllPages shape, kept local (not
+// imported - that function closes over proposalExport.js's own doc/palette
+// state). Plain black-on-white, no palette theming, per this doc's style.
+function appendFooterToAllPages({ doc, beo, left, right, pageHeight }) {
+  const pageCount = doc.getNumberOfPages();
+  const revSuffix = beo.version.number > 0 ? ` · Rev ${beo.version.number}` : "";
+  const discardWarning = beo.version.number > 1 ? " · Discard earlier revisions." : "";
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(1);
+    doc.line(left, pageHeight - 34, right, pageHeight - 34);
+    doc.setTextColor(80, 80, 80);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Quote ${text(beo.quoteNumber)}${revSuffix}${discardWarning}`, left, pageHeight - 22);
+    doc.text(`Page ${page} of ${pageCount}`, right, pageHeight - 22, { align: "right" });
+  }
+}
+
 export async function exportKitchenBeo(quote, { output = "save" } = {}) {
   if (!quote) {
     throw new Error("Missing quote data for kitchen BEO export.");
@@ -109,13 +141,47 @@ export async function exportKitchenBeo(quote, { output = "save" } = {}) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text(
-    [beo.organizationName, `Quote #${text(beo.quoteNumber)}`, beo.event.name].filter(Boolean).join(" · ") || "-",
+    [
+      beo.organizationName,
+      `Quote #${text(beo.quoteNumber)}`,
+      beo.event.name,
+      beo.version.number > 0 ? `Rev ${beo.version.number} (${beo.version.createdOn})` : ""
+    ].filter(Boolean).join(" · ") || "-",
     left,
     y
   );
   y += 14;
   doc.text(beo.event.date || "-", left, y);
+  y += 14;
+  doc.setTextColor(80, 80, 80);
+  doc.setFontSize(8);
+  doc.text(`Generated ${formatGeneratedTimestamp(new Date())}`, left, y);
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
   y += 18;
+
+  // Safety-critical callout - bordered so it can't be missed on a quick scan.
+  // No box (and no reserved space) when there's nothing to warn about.
+  if (beo.event.dietaryRestrictions) {
+    const boxPadding = 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const wrapped = doc.splitTextToSize(beo.event.dietaryRestrictions, maxWidth - boxPadding * 2);
+    const boxHeight = 22 + (11 * wrapped.length) + boxPadding;
+    ensureSpace(boxHeight + 12);
+    const boxTop = y;
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(1);
+    doc.rect(left, boxTop, maxWidth, boxHeight);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("DIETARY / ALLERGENS", left + boxPadding, boxTop + 14);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(wrapped, left + boxPadding, boxTop + 28);
+    y = boxTop + boxHeight + 14;
+  }
 
   section("Event & Timing");
   row("Event Name", beo.event.name || "-");
@@ -136,6 +202,14 @@ export async function exportKitchenBeo(quote, { output = "save" } = {}) {
   ].filter(Boolean).join(" · ");
   row("Team", staffCounts || "-");
   row("Staff Lead", beo.staffing.staffLead || "Unassigned");
+
+  section("Day-of Contacts");
+  row("Client", [beo.contacts.clientName, beo.contacts.clientPhone].filter(Boolean).join(" · ") || "-");
+  row("Staff Lead", beo.staffing.staffLead || "Unassigned");
+  row("Venue", [beo.event.venue, beo.event.venueAddress].filter(Boolean).join(" · ") || "-");
+  if (beo.contacts.businessPhone) {
+    row("Office", beo.contacts.businessPhone);
+  }
 
   section("Kitchen Timeline");
   if (beo.checkpoints.length) {
@@ -169,9 +243,37 @@ export async function exportKitchenBeo(quote, { output = "save" } = {}) {
     });
   });
 
+  section("Sign-off");
+  ensureSpace(50);
+  const signOffLineY = y + 24;
+  const signOffHalfWidth = (maxWidth - 24) / 2;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(1);
+  doc.line(left, signOffLineY, left + signOffHalfWidth, signOffLineY);
+  doc.line(right - signOffHalfWidth, signOffLineY, right, signOffLineY);
+  doc.setTextColor(80, 80, 80);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.text("Prepared by / date", left, signOffLineY + 12);
+  doc.text("Chef sign-off / date", right - signOffHalfWidth, signOffLineY + 12);
+  doc.setTextColor(0, 0, 0);
+  y = signOffLineY + 24;
+
+  section("Day-of Notes");
+  for (let noteLine = 0; noteLine < 4; noteLine += 1) {
+    ensureSpace(22);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(1);
+    doc.line(left, y, right, y);
+    y += 22;
+  }
+
+  appendFooterToAllPages({ doc, beo, left, right, pageHeight });
+
   const filename = [
     text(beo.quoteNumber || "quote"),
     text(beo.event.date || ""),
+    beo.version.number > 0 ? `rev${beo.version.number}` : "",
     "kitchen-beo"
   ]
     .filter(Boolean)

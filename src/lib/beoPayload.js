@@ -50,6 +50,26 @@ function buildProductionChecklistByPhase(quote) {
   return groups;
 }
 
+// Derives the revision stamp shown in the header/footer. versionMeta only
+// exists on quotes that have gone through a version save; legacy quotes fall
+// back to latestVersionNumber, then to 0 ("unversioned legacy"). createdOn is
+// a plain string slice (not a Date parse) so this stays new-Date()-free.
+function buildVersionBlock(quote) {
+  const versionMetaNumber = quote.versionMeta?.versionNumber;
+  const hasVersionMetaNumber = versionMetaNumber !== undefined && versionMetaNumber !== null;
+  const latestVersionNumber = toNumber(quote.latestVersionNumber, 0);
+  const number = hasVersionMetaNumber
+    ? toNumber(versionMetaNumber, 0)
+    : (latestVersionNumber > 0 ? latestVersionNumber : 0);
+
+  const createdAtISO = cleanText(
+    quote.versionMeta?.createdAt || quote.updatedAtISO || quote.createdAtISO
+  );
+  const createdOn = createdAtISO.length >= 10 ? createdAtISO.slice(0, 10) : "-";
+
+  return { number, createdAtISO, createdOn };
+}
+
 export function buildBeoPayload(quote) {
   if (!quote) {
     throw new Error("Missing quote data for BEO payload.");
@@ -58,6 +78,12 @@ export function buildBeoPayload(quote) {
   return {
     quoteNumber: cleanText(quote.quoteNumber),
     organizationName: cleanText(quote.quoteMeta?.organizationName),
+    version: buildVersionBlock(quote),
+    contacts: {
+      clientName: cleanText(quote.customer?.name),
+      clientPhone: cleanText(quote.customer?.phone),
+      businessPhone: cleanText(quote.quoteMeta?.businessPhone)
+    },
     event: {
       name: cleanText(quote.event?.name),
       date: cleanText(quote.event?.date),

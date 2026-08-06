@@ -90,4 +90,87 @@ describe("BEO payload", () => {
   test("throws without a quote", () => {
     expect(() => buildBeoPayload(null)).toThrow(/Missing quote data/);
   });
+
+  describe("version block", () => {
+    test("reports unversioned legacy (number 0) when versionMeta and latestVersionNumber are both absent", () => {
+      const payload = buildBeoPayload(proposalPayloadFixtureQuote);
+
+      expect(payload.version).toEqual({
+        number: 0,
+        createdAtISO: "2026-03-10T15:30:00.000Z",
+        createdOn: "2026-03-10"
+      });
+    });
+
+    test("uses versionMeta.versionNumber and versionMeta.createdAt when versionMeta is present", () => {
+      const payload = buildBeoPayload({
+        ...proposalPayloadFixtureQuote,
+        versionMeta: {
+          versionNumber: 3,
+          createdAt: "2026-04-15T09:00:00.000Z",
+          createdBy: { uid: "u1", email: "sales@acme.test", role: "sales" },
+          reason: "price update"
+        }
+      });
+
+      expect(payload.version).toEqual({
+        number: 3,
+        createdAtISO: "2026-04-15T09:00:00.000Z",
+        createdOn: "2026-04-15"
+      });
+    });
+
+    test("falls back to latestVersionNumber when versionMeta is absent", () => {
+      const payload = buildBeoPayload({
+        ...proposalPayloadFixtureQuote,
+        latestVersionNumber: 2
+      });
+
+      expect(payload.version.number).toBe(2);
+    });
+
+    test("falls back through updatedAtISO before createdAtISO for the version date", () => {
+      const payload = buildBeoPayload({
+        ...proposalPayloadFixtureQuote,
+        updatedAtISO: "2026-05-01T12:00:00.000Z"
+      });
+
+      expect(payload.version.createdAtISO).toBe("2026-05-01T12:00:00.000Z");
+      expect(payload.version.createdOn).toBe("2026-05-01");
+    });
+
+    test("reports createdOn as - when no date fields are present at all", () => {
+      const payload = buildBeoPayload({
+        ...proposalPayloadFixtureQuote,
+        createdAtISO: ""
+      });
+
+      expect(payload.version.createdAtISO).toBe("");
+      expect(payload.version.createdOn).toBe("-");
+    });
+  });
+
+  describe("contacts block", () => {
+    test("derives client name/phone and business phone from customer and quoteMeta", () => {
+      const payload = buildBeoPayload(proposalPayloadFixtureQuote);
+
+      expect(payload.contacts).toEqual({
+        clientName: "Jordan Lee",
+        clientPhone: "205-555-0162",
+        businessPhone: "(205) 593-2004"
+      });
+    });
+
+    test("leaves businessPhone blank when quoteMeta.businessPhone is empty", () => {
+      const payload = buildBeoPayload({
+        ...proposalPayloadFixtureQuote,
+        quoteMeta: {
+          ...proposalPayloadFixtureQuote.quoteMeta,
+          businessPhone: ""
+        }
+      });
+
+      expect(payload.contacts.businessPhone).toBe("");
+    });
+  });
 });
