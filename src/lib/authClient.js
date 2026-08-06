@@ -2,6 +2,7 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut
@@ -42,6 +43,16 @@ export async function registerWithEmail({ email, password }) {
     email: normalizedEmail,
     verificationSent: true
   };
+}
+
+export async function sendPasswordReset(email) {
+  ensureAuth();
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw new Error("Email is required.");
+  }
+  await sendPasswordResetEmail(auth, normalizedEmail);
+  return { email: normalizedEmail };
 }
 
 export async function signInWithGoogle() {
