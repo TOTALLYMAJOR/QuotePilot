@@ -5,12 +5,14 @@ const require = createRequire(import.meta.url);
 const {
   QuoteCreationError,
   buildCanonicalPortalSnapshot,
+  buildCustomerProjection,
   buildDuplicateQuoteForm,
   buildPortalRotationDocuments,
   buildQuoteReopenDocuments,
   buildServerQuoteNumber,
   buildTrustedQuoteCreationDocuments,
   buildTrustedQuoteEditDocuments,
+  customerProjectionDocumentId,
   sanitizeQuoteCreationRequest,
   sanitizeStoredStripePaymentLink
 } = require("../../../functions/quoteCreation.js");
@@ -169,6 +171,107 @@ function buildForm(overrides = {}) {
 }
 
 describe("trusted server quote creation documents", () => {
+  test("builds a deterministic, tenant-scoped customer projection from trusted quote data", () => {
+    const projection = buildCustomerProjection({
+      organizationId: "org-a",
+      quoteId: "quote-a",
+      quoteNumber: "Q-260727-1200-ABCDEF12",
+      customer: {
+        name: "  Ada Lovelace  ",
+        email: "ADA@Example.com",
+        phone: "205-555-0100",
+        organization: "Analytical Events"
+      },
+      event: {
+        name: "Launch Dinner",
+        date: "2026-09-12"
+      },
+      nowISO: "2026-07-27T12:00:00.000Z"
+    });
+
+    expect(projection).toEqual({
+      customerId: customerProjectionDocumentId("ada@example.com"),
+      isNew: true,
+      patch: {
+        customerId: customerProjectionDocumentId("ada@example.com"),
+        organizationId: "org-a",
+        name: "Ada Lovelace",
+        email: "ada@example.com",
+        phone: "205-555-0100",
+        company: "Analytical Events",
+        lastQuoteId: "quote-a",
+        lastQuoteNumber: "Q-260727-1200-ABCDEF12",
+        lastEventName: "Launch Dinner",
+        lastEventDate: "2026-09-12",
+        lastProjectedAtISO: "2026-07-27T12:00:00.000Z",
+        updatedAtISO: "2026-07-27T12:00:00.000Z",
+        recordSource: "trusted_quote_projection",
+        createdFromQuoteId: "quote-a",
+        createdAtISO: "2026-07-27T12:00:00.000Z"
+      }
+    });
+    expect(customerProjectionDocumentId("ADA@example.com"))
+      .toBe(customerProjectionDocumentId("ada@example.com"));
+  });
+
+  test("merges into an existing matching customer without erasing richer optional data", () => {
+    const projection = buildCustomerProjection({
+      organizationId: "org-a",
+      quoteId: "quote-b",
+      quoteNumber: "Q-260728-1200-ABCDEF12",
+      customer: {
+        name: "Ada Lovelace",
+        email: "ada@example.com",
+        phone: "",
+        organization: ""
+      },
+      event: {
+        name: "Follow-up Dinner",
+        date: "2026-10-12"
+      },
+      nowISO: "2026-07-28T12:00:00.000Z",
+      existingCustomerId: "imported-customer-a",
+      existingCustomer: {
+        organizationId: "org-a",
+        email: "ada@example.com",
+        phone: "205-555-0100",
+        company: "Analytical Events",
+        notes: "Keep this imported note."
+      }
+    });
+
+    expect(projection.customerId).toBe("imported-customer-a");
+    expect(projection.isNew).toBe(false);
+    expect(projection.patch).not.toHaveProperty("phone");
+    expect(projection.patch).not.toHaveProperty("company");
+    expect(projection.patch).not.toHaveProperty("createdAtISO");
+    expect(projection.patch).toMatchObject({
+      lastQuoteId: "quote-b",
+      lastQuoteNumber: "Q-260728-1200-ABCDEF12"
+    });
+  });
+
+  test("rejects customer projections that cross tenant or customer identity", () => {
+    const base = {
+      organizationId: "org-a",
+      quoteId: "quote-a",
+      quoteNumber: "Q-260727-1200-ABCDEF12",
+      customer: { name: "Ada", email: "ada@example.com" },
+      event: {},
+      nowISO: "2026-07-27T12:00:00.000Z",
+      existingCustomerId: "customer-a"
+    };
+
+    expect(() => buildCustomerProjection({
+      ...base,
+      existingCustomer: { organizationId: "org-b", email: "ada@example.com" }
+    })).toThrow(/does not match/i);
+    expect(() => buildCustomerProjection({
+      ...base,
+      existingCustomer: { organizationId: "org-a", email: "grace@example.com" }
+    })).toThrow(/does not match/i);
+  });
+
   test("keeps only approved Stripe-host payment links in public portal snapshots", () => {
     expect(sanitizeStoredStripePaymentLink(
       "https://checkout.stripe.com/c/pay/cs_test_123?prefilled_email=client%40example.com"

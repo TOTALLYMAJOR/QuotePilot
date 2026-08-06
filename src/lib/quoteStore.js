@@ -243,6 +243,24 @@ function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+export async function getCustomerRecordByEmail(customerEmail, organizationId = undefined) {
+  const normalizedCustomerEmail = normalizeEmail(customerEmail);
+  if (!normalizedCustomerEmail) return null;
+  if (!firebaseReady || !db) return null;
+
+  const resolvedOrganizationId = requireReadOrganizationId(
+    organizationId,
+    "customer record read"
+  );
+  const snapshot = await getDocs(query(
+    getOrganizationCollectionRef("customers", resolvedOrganizationId),
+    where("email", "==", normalizedCustomerEmail)
+  ));
+  const matches = [...snapshot.docs].sort((left, right) => left.id.localeCompare(right.id));
+  const selected = matches[0];
+  return selected ? { id: selected.id, ...selected.data() } : null;
+}
+
 function normalizeVenueKey(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }

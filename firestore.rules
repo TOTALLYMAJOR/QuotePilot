@@ -838,7 +838,30 @@ service cloud.firestore {
 
     match /organizations/{orgId}/customers/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow write: if isOrgStaff(orgId);
+      allow create: if isOrgAdmin(orgId)
+        && request.resource.data.organizationId == orgId
+        && request.resource.data.importSource == "import_studio"
+        && request.resource.data.importBatchId is string
+        && request.resource.data.importBatchId.size() > 0
+        && !request.resource.data.keys().hasAny([
+          "customerId",
+          "recordSource",
+          "createdFromQuoteId",
+          "lastQuoteId",
+          "lastQuoteNumber",
+          "lastEventName",
+          "lastEventDate",
+          "lastProjectedAtISO"
+        ]);
+      allow update: if false;
+      allow delete: if isOrgAdmin(orgId)
+        && resource.data.organizationId == orgId
+        && resource.data.importSource == "import_studio"
+        && !resource.data.keys().hasAny([
+          "recordSource",
+          "lastQuoteId",
+          "lastProjectedAtISO"
+        ]);
     }
 
     match /organizations/{orgId}/importBatches/{batchId} {
