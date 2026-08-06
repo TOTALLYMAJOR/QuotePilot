@@ -137,6 +137,13 @@ Last updated: August 6, 2026
   funnel plus add-on selection/removal trends. Analytics storage or summary
   failures do not block quote work or the dashboard's quote metrics. This is
   local branch evidence only and is not deployed or production-accepted.
+- Current branch operations audit: organization admins can review server-
+  derived delivery retry/review counts, a seven-day trend over recorded
+  integration outcomes, current admin/sales role counts, and recent role-
+  stamped sensitive actions in Integrations Ops. Retry candidates do not claim
+  that a resend occurred, and operator sync notes are not promoted to server
+  connector evidence. This is local source/unit evidence only and is not
+  deployed or hosted-accepted.
 - Production approval authority: Firebase-backed approval request
   creation and admin resolution use same-tenant callable transactions with
   server-owned actor identity/timestamps and duplicate/replay rejection.

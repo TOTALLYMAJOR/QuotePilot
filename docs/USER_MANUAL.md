@@ -268,6 +268,20 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - Analytics delivery is non-blocking. If its server summary is unavailable,
   quote creation continues and the dashboard still loads its quote metrics.
 
+## Operations Audit
+- Organization admins can open `Integrations` and use `Operations Audit` to
+  review quote-delivery retry candidates, outcomes requiring provider review,
+  and the last seven days of recorded integration success/error activity.
+- The role totals reflect current authoritative admin and sales assignments.
+  The action table is limited to server-owned approval execution, delivery
+  reconciliation, and catalog pricing-confirmation evidence, including the
+  role stamped when that server action was executed where available.
+- A `Retry available` count is a work queue, not evidence that QuotePilot sent
+  or resent a message. Check the quote's exact delivery state before acting.
+- Integration success/error trends summarize operator-recorded audit entries
+  until a server-authorized connector is enabled; they do not prove that a CRM
+  or accounting provider accepted or applied a change.
+
 ## Event Schedule and Production Checklist
 - Open `Schedule` to review accepted and booked events by month or week, inspect conflicts, and assign a staff lead.
 - Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.

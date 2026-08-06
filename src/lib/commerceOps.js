@@ -153,6 +153,13 @@ export async function reconcileFinalBalanceCheckout({ quoteId } = {}) {
   return response;
 }
 
+export async function getOperationsAuditSnapshot({ organizationId = "" } = {}) {
+  ensureFunctionsReady();
+  const call = httpsCallable(cloudFunctions, "getOperationsAuditSnapshot");
+  const result = await call({ organizationId });
+  return result.data || {};
+}
+
 export async function sendIntegrationTestSms({ message = "" } = {}) {
   ensureFunctionsReady();
   const call = httpsCallable(cloudFunctions, "sendIntegrationTestSms");

@@ -3,6 +3,7 @@ import {
   buildBuyerAccessRepairConfirmationToken,
   getIntegrationSetupStatus,
   repairBuyerAccessInvoice,
+  getOperationsAuditSnapshot,
   sendIntegrationTestSms
 } from "../lib/commerceOps";
 import {
@@ -231,6 +232,7 @@ export default function IntegrationOpsModal({
     source: "",
     quotes: []
   });
+  const [auditState, setAuditState] = useState({ loading: false, error: "", snapshot: null });
   const [feedback, setFeedback] = useState("");
   const [search, setSearch] = useState("");
   const [providerFilter, setProviderFilter] = useState("all");
@@ -287,8 +289,16 @@ export default function IntegrationOpsModal({
 
   const load = async () => {
     setState((prev) => ({ ...prev, loading: true, error: "" }));
+    if (canManageProviders) setAuditState((prev) => ({ ...prev, loading: true, error: "" }));
     try {
-      const result = await getQuoteHistory({ organizationId });
+      const [result, auditResult] = await Promise.all([
+        getQuoteHistory({ organizationId }),
+        canManageProviders
+          ? getOperationsAuditSnapshot({ organizationId })
+            .then((snapshot) => ({ snapshot, error: "" }))
+            .catch((err) => ({ snapshot: null, error: err?.message || "Operations audit is unavailable." }))
+          : Promise.resolve({ snapshot: null, error: "" })
+      ]);
       setState({
         loading: false,
         error: "",
@@ -299,12 +309,18 @@ export default function IntegrationOpsModal({
         ...prev,
         quoteId: prev.quoteId || result.quotes[0]?.id || ""
       }));
+      if (canManageProviders) {
+        setAuditState({ loading: false, error: auditResult.error, snapshot: auditResult.snapshot });
+      }
     } catch (err) {
       setState((prev) => ({
         ...prev,
         loading: false,
         error: err?.message || "Failed to load integration data."
       }));
+      if (canManageProviders) {
+        setAuditState((prev) => ({ ...prev, loading: false }));
+      }
     }
   };
 
@@ -960,6 +976,58 @@ export default function IntegrationOpsModal({
         {!provisioningOnly && <p className="source-note">Source: {state.source || "-"}</p>}
         {state.error && <p className="error-note">{state.error}</p>}
         {feedback && <p className="source-note">{feedback}</p>}
+
+        {!provisioningOnly && canManageProviders && <section className="admin-section operations-audit-panel">
+          <div className="admin-section-head">
+            <div>
+              <h3>Operations Audit</h3>
+              <p className="source-note">Server-derived delivery health, recorded sync trend, and role-stamped sensitive actions.</p>
+            </div>
+            {auditState.loading && <span>Loading...</span>}
+          </div>
+          {auditState.error && <p className="warning-note">{auditState.error}</p>}
+          {auditState.snapshot && (
+            <>
+              <div className="dashboard-grid">
+                <div className="metric-card"><span>Delivery accepted</span><strong>{auditState.snapshot.delivery?.providerAccepted || 0}</strong></div>
+                <div className="metric-card"><span>Retry available</span><strong>{auditState.snapshot.delivery?.retryAvailable || 0}</strong></div>
+                <div className="metric-card"><span>Review required</span><strong>{auditState.snapshot.delivery?.reviewRequired || 0}</strong></div>
+                <div className="metric-card"><span>7-day sync success</span><strong>{Number(auditState.snapshot.sync?.successRate || 0).toFixed(1)}%</strong></div>
+                <div className="metric-card"><span>Admins</span><strong>{auditState.snapshot.roles?.admin || 0}</strong></div>
+                <div className="metric-card"><span>Sales staff</span><strong>{auditState.snapshot.roles?.sales || 0}</strong></div>
+              </div>
+              <div className="status-strip" aria-label="Seven-day integration health trend">
+                {(auditState.snapshot.sync?.trend || []).map((row) => (
+                  <span key={row.day}>{row.day.slice(5)}: {row.success} ok / {row.error} error</span>
+                ))}
+              </div>
+              <div className="history-table-wrap">
+                <table>
+                  <thead><tr><th>When</th><th>Action</th><th>State</th><th>Quote</th><th>Actor role</th><th>Actor</th><th>Authority</th></tr></thead>
+                  <tbody>
+                    {(auditState.snapshot.actions || []).map((row) => (
+                      <tr key={row.id}>
+                        <td>{formatDateTime(row.occurredAtISO)}</td>
+                        <td>{row.action}</td>
+                        <td>{row.state || "-"}</td>
+                        <td>{row.quoteNumber || row.quoteId || "-"}</td>
+                        <td>{row.actorRole || "-"}</td>
+                        <td>{row.actorEmail || "-"}</td>
+                        <td>{row.authority}</td>
+                      </tr>
+                    ))}
+                    {!(auditState.snapshot.actions || []).length && (
+                      <tr><td colSpan="7">No server-owned sensitive actions recorded yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="source-note">
+                Retry counts are operational candidates, not proof that a resend occurred. Recorded sync events are operator audit entries until a server connector is enabled.
+              </p>
+            </>
+          )}
+        </section>}
 
         {!provisioningOnly && canManageProviders && <section className="admin-section">
           <div className="admin-section-head">

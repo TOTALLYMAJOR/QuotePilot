@@ -109,6 +109,7 @@ const {
   sanitizeAnalyticsBatch,
   summarizeAnalyticsEvents
 } = require("./productAnalytics");
+const { buildOperationsAuditSnapshot } = require("./operationsAudit");
 const {
   StarterCatalogPackError,
   applyStarterCatalogPack: applyStarterCatalogPackInternal,
@@ -6123,6 +6124,32 @@ exports.getProductAnalyticsSummary = functions.region(REGION).https.onCall(async
     days,
     sampledEvents: snapshot.size,
     ...summarizeAnalyticsEvents(snapshot.docs.map((doc) => doc.data()))
+  };
+});
+
+exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, { expectedOrganizationId: organizationId }));
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(staff.organizationId);
+  const [quotesSnap, executionsSnap, rolesSnap, settingsSnap] = await Promise.all([
+    organizationRef.collection(QUOTES_COLLECTION).limit(500).get(),
+    organizationRef.collection(QUOTE_APPROVAL_EXECUTIONS_COLLECTION).limit(200).get(),
+    db.collection(ROLES_COLLECTION).where("organizationId", "==", staff.organizationId).limit(200).get(),
+    organizationRef.collection("settings").doc("config").get()
+  ]);
+  return {
+    ok: true,
+    source: "firebase",
+    organizationId: staff.organizationId,
+    sampledQuotes: quotesSnap.size,
+    sampledExecutions: executionsSnap.size,
+    ...buildOperationsAuditSnapshot({
+      quotes: quotesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      executions: executionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      roles: rolesSnap.docs.map((doc) => ({ uid: doc.id, ...doc.data() })),
+      settings: settingsSnap.exists ? settingsSnap.data() : {},
+      nowISO: new Date().toISOString()
+    })
   };
 });
 
