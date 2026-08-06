@@ -9,6 +9,14 @@ const BUYER_ACCESS_AMOUNT_CENTS = 100;
 const BUYER_ACCESS_CURRENCY = "usd";
 const BUYER_ACCESS_STRIPE_API_VERSION = "2024-06-20";
 const BUYER_ACCESS_TURNSTILE_ACTION = "buyer_access_invoice";
+// Cloudflare publishes this credential for local automated testing. It is not
+// a deployable secret and must never relax validation for a public hostname.
+const CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET =
+  "1x0000000000000000000000000000000AA";
+const BUYER_ACCESS_LOCAL_TURNSTILE_HOSTNAMES = Object.freeze([
+  "localhost",
+  "127.0.0.1"
+]);
 const BUYER_ACCESS_STATUS_RATE_LIMIT = 60;
 const BUYER_ACCESS_STATUS_RATE_WINDOW_MS = 5 * 60 * 1000;
 const BUYER_ACCESS_REPAIR_ACTION = "VOID BUYER INVOICE";
@@ -816,15 +824,34 @@ function normalizeBuyerAccessTurnstileHostnames(value) {
   return [...new Set(hostnames)];
 }
 
-function assertBuyerAccessTurnstileResult({ allowedHostnames, result } = {}) {
+function assertBuyerAccessTurnstileResult({
+  allowedHostnames,
+  allowOfficialLocalTestResult = false,
+  result
+} = {}) {
   const hostnames = Array.isArray(allowedHostnames)
     ? normalizeBuyerAccessTurnstileHostnames(allowedHostnames.join(","))
     : normalizeBuyerAccessTurnstileHostnames(allowedHostnames);
   const hostname = text(result?.hostname).toLowerCase().replace(/\.+$/, "");
+  const action = text(result?.action);
+  const isOfficialLocalTestResult = (
+    allowOfficialLocalTestResult === true
+    && hostnames.every((allowedHostname) => (
+      BUYER_ACCESS_LOCAL_TURNSTILE_HOSTNAMES.includes(allowedHostname)
+    ))
+    && result?.success === true
+    && !action
+    && hostname === "example.com"
+  );
   if (
     result?.success !== true
-    || text(result?.action) !== BUYER_ACCESS_TURNSTILE_ACTION
-    || !hostnames.includes(hostname)
+    || (
+      !isOfficialLocalTestResult
+      && (
+        action !== BUYER_ACCESS_TURNSTILE_ACTION
+        || !hostnames.includes(hostname)
+      )
+    )
   ) {
     throw new BuyerAccessError(
       "Buyer access verification failed. Refresh and try again.",
@@ -832,7 +859,7 @@ function assertBuyerAccessTurnstileResult({ allowedHostnames, result } = {}) {
     );
   }
   return {
-    action: BUYER_ACCESS_TURNSTILE_ACTION,
+    action,
     hostname,
     challengeTimestamp: text(result?.challenge_ts)
   };
@@ -850,6 +877,7 @@ module.exports = {
   BUYER_ACCESS_STATUS_RATE_WINDOW_MS,
   BUYER_ACCESS_STRIPE_API_VERSION,
   BUYER_ACCESS_TURNSTILE_ACTION,
+  CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET,
   BuyerAccessError,
   assertBuyerAccessInvoiceBinding,
   assertBuyerAccessRuntime,

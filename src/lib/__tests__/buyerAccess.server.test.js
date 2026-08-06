@@ -11,6 +11,7 @@ const {
   BUYER_ACCESS_STATUS_RATE_WINDOW_MS,
   BUYER_ACCESS_STRIPE_API_VERSION,
   BUYER_ACCESS_TURNSTILE_ACTION,
+  CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET,
   BuyerAccessError,
   assertBuyerAccessInvoiceBinding,
   assertBuyerAccessRuntime,
@@ -481,6 +482,34 @@ describe("buyer access invoice server contract", () => {
         result
       })).toThrow(/verification failed/i);
     }
+  });
+
+  test("accepts Cloudflare's published pass result only for an explicit loopback test", () => {
+    expect(CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET)
+      .toBe("1x0000000000000000000000000000000AA");
+    const officialTestResult = {
+      success: true,
+      action: null,
+      hostname: "example.com"
+    };
+    expect(assertBuyerAccessTurnstileResult({
+      allowedHostnames: ["localhost", "127.0.0.1"],
+      allowOfficialLocalTestResult: true,
+      result: officialTestResult
+    })).toEqual({
+      action: "",
+      hostname: "example.com",
+      challengeTimestamp: ""
+    });
+    expect(() => assertBuyerAccessTurnstileResult({
+      allowedHostnames: ["localhost", "127.0.0.1"],
+      result: officialTestResult
+    })).toThrow(/verification failed/i);
+    expect(() => assertBuyerAccessTurnstileResult({
+      allowedHostnames: ["quotepilot.mbmapps.com"],
+      allowOfficialLocalTestResult: true,
+      result: officialTestResult
+    })).toThrow(/verification failed/i);
   });
 
   test("recognizes only buyer Invoice objects and the four signed event states", () => {

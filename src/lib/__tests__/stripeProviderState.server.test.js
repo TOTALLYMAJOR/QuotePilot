@@ -16,6 +16,7 @@ describe("Stripe provider state", () => {
   test("requires explicit matching key and object modes", () => {
     expect(normalizeStripeMode(" LIVE ")).toBe("live");
     expect(assertStripeSecretKeyMode("rk_live_fixture", "live")).toBe(true);
+    expect(assertStripeSecretKeyMode("rkcs_test_fixture", "test")).toBe(true);
     expect(assertStripeObjectMode({
       expectedMode: "test",
       eventLivemode: false,
@@ -23,6 +24,7 @@ describe("Stripe provider state", () => {
     })).toEqual({ mode: "test", livemode: false });
     expect(() => normalizeStripeMode("")).toThrow(StripeProviderStateError);
     expect(() => assertStripeSecretKeyMode("sk_test_fixture", "live")).toThrow(/matching/i);
+    expect(() => assertStripeSecretKeyMode("rkcs_test_fixture", "live")).toThrow(/matching/i);
     expect(() => assertStripeObjectMode({
       expectedMode: "live",
       eventLivemode: false,

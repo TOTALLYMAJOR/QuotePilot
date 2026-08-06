@@ -213,6 +213,19 @@ describe("buyer access Invoice endpoint isolation", () => {
     expect(reservationSource).not.toContain("assertPublicBuyerIdentityAvailable");
   });
 
+  test("allows only the exact loopback app route to use HTTP in the Functions emulator", () => {
+    const appUrl = sourceBetween(
+      FUNCTIONS_INDEX_SOURCE,
+      "function getBuyerAccessApplicationUrl",
+      "async function finalizeBuyerAccessActivation"
+    );
+    expect(appUrl).toContain('process.env.FUNCTIONS_EMULATOR === "true"');
+    expect(appUrl).toContain('parsed.protocol === "http:"');
+    expect(appUrl).toContain('["localhost", "127.0.0.1"].includes(parsed.hostname)');
+    expect(appUrl).toContain('=== "/app"');
+    expect(appUrl).toContain('(parsed.protocol !== "https:" && !isLoopbackEmulatorUrl)');
+  });
+
   test("uses trusted request IP seams and secret-keyed rolling-window rate documents", () => {
     const trustedIp = sourceBetween(
       FUNCTIONS_INDEX_SOURCE,
@@ -221,6 +234,8 @@ describe("buyer access Invoice endpoint isolation", () => {
     );
     expect(trustedIp).toContain("context?.rawRequest?.ip");
     expect(trustedIp).toContain("context?.rawRequest?.socket?.remoteAddress");
+    expect(trustedIp).toContain('process.env.FUNCTIONS_EMULATOR === "true"');
+    expect(trustedIp).toContain('? "127.0.0.1" : ""');
     expect(trustedIp.toLowerCase()).not.toContain("x-forwarded-for");
 
     const rateLimitConfig = sourceBetween(
