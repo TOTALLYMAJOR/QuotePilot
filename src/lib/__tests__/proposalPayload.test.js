@@ -143,6 +143,31 @@ describe("proposal payload snapshots", () => {
     expect(email.body).not.toContain("QuotePilot");
   });
 
+  test("includes the acceptance portal link when the caller marks the quote portal-shareable", () => {
+    const email = buildQuoteEmailPayload(
+      { ...proposalPayloadFixtureQuote, portalKey: "fixture-portal-key-1234567890" },
+      { basePortalUrl: "https://app.example.test", includePortalLink: true }
+    );
+
+    expect(email.body).toContain(
+      "Review and accept your quote: https://app.example.test?portal=fixture-portal-key-1234567890"
+    );
+  });
+
+  test("omits the portal link unless the caller marks the quote portal-shareable", () => {
+    const stillShareable = buildQuoteEmailPayload(
+      { ...proposalPayloadFixtureQuote, portalKey: "fixture-portal-key-1234567890" },
+      { basePortalUrl: "https://app.example.test", includePortalLink: false }
+    );
+    const noBaseUrl = buildQuoteEmailPayload(
+      { ...proposalPayloadFixtureQuote, portalKey: "fixture-portal-key-1234567890" },
+      { includePortalLink: true }
+    );
+
+    expect(stillShareable.body).not.toContain("Review and accept your quote");
+    expect(noBaseUrl.body).not.toContain("Review and accept your quote");
+  });
+
   test("removes unapproved stored payment links from customer-facing artifacts", () => {
     const unsafeQuote = {
       ...proposalPayloadFixtureQuote,

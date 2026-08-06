@@ -69,6 +69,14 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(handoff.getByRole("button", { name: "Download draft PDF" })).toBeVisible();
   await expect(handoff.getByRole("button", { name: "Copy customer portal link" })).toHaveCount(0);
   await expect(handoff.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
+  await expect(handoff.getByRole("button", { name: "Set up email in Integrations" })).toHaveCount(0);
+  await expect(handoff).toContainText(/Customer portal sharing requires an active delivered status/i);
+  const requestApprovalButton = handoff.getByRole("button", { name: "Request approval to send" });
+  await expect(requestApprovalButton).toBeVisible();
+  await requestApprovalButton.click();
+  await expect(dialog.getByText(
+    /Approval requested\. An admin will see it in Sales Workflow\./i
+  )).toBeVisible();
 
   const row = dialog.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })

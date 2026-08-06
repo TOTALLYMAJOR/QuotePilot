@@ -12,15 +12,16 @@ import {
 import { currency } from "../lib/quoteCalculator";
 import { getEventTypes } from "../lib/menuService";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
+import { buildQuoteEmailPayload } from "../lib/proposalPayload";
 import {
   BOOKING_CONFIRMATION_STATUSES,
-  buildQuoteEmailTemplate,
   convertQuoteToContract,
   deleteQuote,
   duplicateQuote,
   getAllowedStatusTransitions,
   getQuoteHistory,
   reopenQuote,
+  requestQuoteApproval,
   rotateQuotePortalKey,
   updateQuoteBookingConfirmation,
   updateQuoteStatus
@@ -258,6 +259,7 @@ export default function QuoteHistoryModal({
   focusQuoteId = "",
   focusReason = "",
   onEditQuote,
+  onOpenIntegrations,
   canDeleteQuotes = false,
   onToast
 }) {
@@ -291,6 +293,7 @@ export default function QuoteHistoryModal({
   const [reconcilingFinalBalanceId, setReconcilingFinalBalanceId] = useState("");
   const [reopeningQuoteId, setReopeningQuoteId] = useState("");
   const [rotatingPortalId, setRotatingPortalId] = useState("");
+  const [requestingApprovalId, setRequestingApprovalId] = useState("");
   const [pendingDeleteQuote, setPendingDeleteQuote] = useState(null);
   const [deliveryReview, setDeliveryReview] = useState(null);
   const [resolvingDeliveryId, setResolvingDeliveryId] = useState("");
@@ -614,6 +617,13 @@ export default function QuoteHistoryModal({
   const focusedHandoffPrimaryIsPdf = focusedQuoteIsDraft
     && !focusedQuoteCanSend
     && !focusedDelivery.reviewRequired;
+  // Email delivery readiness is only meaningful for firebase-backed quotes
+  // (see the readiness banner above, which uses the same gate), so a
+  // non-firebase source never offers the "go configure it" shortcut.
+  const focusedQuoteEmailUnconfigured = permissions.canSendQuoteEmail
+    && state.source === "firebase"
+    && emailSetup.checked
+    && !emailSetup.configured;
 
   const applyQuoteLocally = (quoteId, updater) => {
     setState((prev) => ({
@@ -856,7 +866,12 @@ export default function QuoteHistoryModal({
       if (!navigator.clipboard) {
         throw new Error("Clipboard unavailable in this browser.");
       }
-      const template = buildQuoteEmailTemplate(quote);
+      const template = buildQuoteEmailPayload(quote, {
+        basePortalUrl,
+        includePortalLink: isCustomerPortalShareable(quote, {
+          requireDeliveryEvidence: state.source === "firebase"
+        })
+      });
       const mailText = `Subject: ${template.subject}\n\n${template.body}`;
       await navigator.clipboard.writeText(mailText);
       const feedback = String(quote.status || "draft").toLowerCase() === "draft"
@@ -1219,6 +1234,40 @@ export default function QuoteHistoryModal({
     onEditQuote(quote);
   };
 
+  const handleOpenIntegrations = () => {
+    if (typeof onOpenIntegrations !== "function") return;
+    onOpenIntegrations();
+  };
+
+  const handleRequestSendApproval = async (quote) => {
+    if (!quote?.id) return;
+    setRequestingApprovalId(quote.id);
+    setState((prev) => ({ ...prev, error: "", feedback: "" }));
+    try {
+      const result = await requestQuoteApproval({
+        quoteId: quote.id,
+        action: "send_quote_email",
+        note: "",
+        actorEmail: currentUserEmail,
+        actorRole: currentUserRole
+      });
+      applyQuoteLocally(quote.id, (existing) => ({
+        ...existing,
+        workflow: {
+          ...(existing.workflow || {}),
+          approvalRequests: [...(existing.workflow?.approvalRequests || []), result.request]
+        }
+      }));
+      const feedback = "Approval requested. An admin will see it in Sales Workflow.";
+      setState((prev) => ({ ...prev, feedback }));
+      pushToast(feedback, "success");
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: err?.message || "Failed to request approval." }));
+    } finally {
+      setRequestingApprovalId("");
+    }
+  };
+
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="quote-history-title">
       <div className="modal-card history-card" ref={dialogRef} tabIndex={-1}>
@@ -1287,7 +1336,7 @@ export default function QuoteHistoryModal({
               <h3 id="saved-quote-handoff-title">
                 {focusedQuote.quoteNumber || focusedQuote.id}
               </h3>
-              <p id="saved-quote-handoff-description">
+              <p id="saved-quote-handoff-description" className="saved-quote-handoff-description">
                 {focusedDelivery.reviewRequired
                   ? "Check the provider outcome, then record whether the email was accepted or was not sent. Quote-changing actions remain locked until review is complete."
                   : focusedDelivery.activeLease
@@ -1302,6 +1351,33 @@ export default function QuoteHistoryModal({
                     : `Saved as a draft. It has not been sent to ${focusedQuote.customer?.email || "the customer"}.`
                   : `Current quote status is ${focusedQuoteStatus}.`}
               </p>
+              {!focusedQuoteCanSend && (
+                focusedQuoteCanUsePortal ? (
+                  <div className="portal-link-row">
+                    <label htmlFor="saved-quote-handoff-portal-link">Customer portal link</label>
+                    <input
+                      id="saved-quote-handoff-portal-link"
+                      type="text"
+                      readOnly
+                      value={resolveQuotePortalLink(focusedQuote)}
+                      onFocus={(event) => event.target.select()}
+                    />
+                    <button
+                      type="button"
+                      className="ghost compact"
+                      onClick={() => handleCopyPortalLink(focusedQuote)}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                ) : (
+                  <p className="source-note">
+                    {state.source === "firebase"
+                      ? "Customer portal sharing requires provider acceptance for this revision and a valid future expiry."
+                      : "Customer portal sharing requires an active delivered status and valid future expiry."}
+                  </p>
+                )
+              )}
             </div>
             <div className="saved-quote-handoff-actions">
               {focusedDelivery.reviewRequired
@@ -1371,6 +1447,22 @@ export default function QuoteHistoryModal({
                   aria-busy={exportingPdfId === focusedQuote.id}
                 >
                   {exportingPdfId === focusedQuote.id ? "Generating PDF..." : "Download PDF"}
+                </button>
+              )}
+              {!focusedQuoteCanSend && focusedQuoteEmailUnconfigured && (
+                <button type="button" className="ghost" onClick={handleOpenIntegrations}>
+                  Set up email in Integrations
+                </button>
+              )}
+              {!focusedQuoteCanSend && permissions.role === "sales" && (
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => handleRequestSendApproval(focusedQuote)}
+                  disabled={requestingApprovalId === focusedQuote.id}
+                  aria-busy={requestingApprovalId === focusedQuote.id}
+                >
+                  {requestingApprovalId === focusedQuote.id ? "Requesting approval..." : "Request approval to send"}
                 </button>
               )}
             </div>

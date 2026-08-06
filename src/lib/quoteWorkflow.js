@@ -12,7 +12,8 @@ const APPROVAL_ACTION_DEFINITIONS = [
   { id: "send_final_balance_request", label: "Send final balance request" },
   { id: "convert_to_contract", label: "Convert to contract" },
   { id: "rotate_portal_link", label: "Rotate portal link" },
-  { id: "delete_quote", label: "Delete quote" }
+  { id: "delete_quote", label: "Delete quote" },
+  { id: "send_quote_email", label: "Send quote email" }
 ];
 
 const PRODUCTION_CHECKLIST_DEFINITIONS = [

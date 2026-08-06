@@ -3,7 +3,8 @@ const APPROVAL_ACTIONS = new Set([
   "send_final_balance_request",
   "convert_to_contract",
   "rotate_portal_link",
-  "delete_quote"
+  "delete_quote",
+  "send_quote_email"
 ]);
 const SCOPED_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
