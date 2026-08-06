@@ -135,6 +135,22 @@ const {
   resolveQuoteDeliveryRevisionId
 } = require("./quoteDelivery");
 const {
+  PORTAL_CONVERSATION_RATE_LIMIT,
+  PORTAL_CONVERSATION_RATE_WINDOW_MS,
+  PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT,
+  PortalConversationError,
+  assertPortalConversationActivation,
+  assertPortalConversationTotal,
+  buildPortalConversationActor,
+  buildPortalConversationMessage,
+  buildPortalConversationRateKey,
+  buildPortalConversationRequestKey,
+  normalizePortalConversationRequest,
+  planPortalConversationRate,
+  projectPortalConversationMessage,
+  sha256: portalConversationSha256
+} = require("./portalConversation");
+const {
   BUYER_ACCESS_AMOUNT_CENTS,
   BUYER_ACCESS_CURRENCY,
   BUYER_ACCESS_FLOW,
@@ -198,6 +214,10 @@ const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
 const PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION = "proposalAcceptanceReceipts";
 const PRODUCT_ANALYTICS_COLLECTION = "productAnalyticsEvents";
 const PORTAL_COLLECTION = "customerPortalQuotes";
+const PORTAL_CONVERSATION_MESSAGES_COLLECTION = "portalConversationMessages";
+const PORTAL_CONVERSATION_REQUESTS_COLLECTION = "portalConversationRequests";
+const PORTAL_CONVERSATION_RATE_LIMITS_COLLECTION = "portalConversationRateLimits";
+const PORTAL_CONVERSATION_STATE_COLLECTION = "portalConversationState";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
 const BUYER_ACCESS_ORDERS_COLLECTION = "buyerAccessOrders";
@@ -6203,6 +6223,349 @@ function selectCustomerProjectionDocument(snapshot) {
   docs.sort((left, right) => String(left?.id || "").localeCompare(String(right?.id || "")));
   return docs[0] || null;
 }
+
+function normalizePortalConversationQuoteId(value) {
+  const id = normalizeText(value);
+  return /^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/.test(id) ? id : "";
+}
+
+function portalConversationRefs(organizationId, quoteId) {
+  const quoteRef = getQuoteDocRef(quoteId, organizationId);
+  return {
+    quoteRef,
+    messagesRef: quoteRef.collection(PORTAL_CONVERSATION_MESSAGES_COLLECTION),
+    requestsRef: quoteRef.collection(PORTAL_CONVERSATION_REQUESTS_COLLECTION),
+    rateLimitsRef: quoteRef.collection(PORTAL_CONVERSATION_RATE_LIMITS_COLLECTION),
+    stateRef: quoteRef.collection(PORTAL_CONVERSATION_STATE_COLLECTION).doc("current")
+  };
+}
+
+function throwPortalConversationFailure(err, operation, binding = {}) {
+  if (err instanceof PortalConversationError || err instanceof QuoteDeliveryError) {
+    throw new functions.https.HttpsError(err.code, err.message);
+  }
+  if (err instanceof functions.https.HttpsError) throw err;
+  functions.logger.error(`${operation} failed`, {
+    organizationId: normalizeOrganizationId(binding?.organizationId),
+    quoteId: normalizeText(binding?.quoteId),
+    error: normalizeText(err?.message)
+  });
+  throw new functions.https.HttpsError("internal", "Quote conversation is temporarily unavailable.");
+}
+
+async function resolvePortalConversationBinding(input, context) {
+  if (input.accessMode === "staff") {
+    const staff = await assertStaff(context, {
+      expectedOrganizationId: input.organizationId
+    });
+    if (
+      normalizeOrganizationId(staff.organizationId) !== input.organizationId
+      || normalizeOrganizationId(staff.principalOrganizationId) !== input.organizationId
+    ) {
+      throw new PortalConversationError(
+        "permission-denied",
+        "Quote conversation requires same-organization staff authority."
+      );
+    }
+    const quoteRef = getQuoteDocRef(input.quoteId, input.organizationId);
+    const quoteSnap = await quoteRef.get();
+    if (!quoteSnap.exists) {
+      throw new PortalConversationError("not-found", "Quote conversation was not found.");
+    }
+    const portalKey = normalizeText(quoteSnap.data()?.portalKey);
+    if (!/^[A-Za-z0-9_-]{20,128}$/.test(portalKey)) {
+      throw new PortalConversationError(
+        "failed-precondition",
+        "Deliver the current quote portal before opening its conversation."
+      );
+    }
+    return {
+      accessMode: input.accessMode,
+      organizationId: input.organizationId,
+      quoteId: input.quoteId,
+      portalKey,
+      staff,
+      authToken: context?.auth?.token || {}
+    };
+  }
+
+  const portalSnap = await db.collection(PORTAL_COLLECTION).doc(input.portalKey).get();
+  if (!portalSnap.exists) {
+    throw new PortalConversationError("not-found", "Quote conversation was not found.");
+  }
+  const portal = portalSnap.data() || {};
+  const organizationId = normalizeOrganizationId(portal.organizationId);
+  const quoteId = normalizePortalConversationQuoteId(portal.quoteId);
+  if (!organizationId || !quoteId || normalizeText(portal.portalKey) !== input.portalKey) {
+    throw new PortalConversationError("permission-denied", "Quote conversation access is invalid.");
+  }
+  return {
+    accessMode: input.accessMode,
+    organizationId,
+    quoteId,
+    portalKey: input.portalKey,
+    staff: null,
+    authToken: {}
+  };
+}
+
+async function readBoundPortalConversationScope({
+  binding,
+  transaction = null,
+  nowISO,
+  operation = "read"
+} = {}) {
+  const refs = portalConversationRefs(binding.organizationId, binding.quoteId);
+  const portalRef = db.collection(PORTAL_COLLECTION).doc(binding.portalKey);
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(binding.organizationId);
+  const tombstoneRef = db.collection(ORGANIZATION_TOMBSTONES_COLLECTION).doc(binding.organizationId);
+  const read = (ref) => transaction ? transaction.get(ref) : ref.get();
+  const [quoteSnap, portalSnap, organizationSnap, tombstoneSnap] = await Promise.all([
+    read(refs.quoteRef),
+    read(portalRef),
+    read(organizationRef),
+    read(tombstoneRef)
+  ]);
+  if (!quoteSnap.exists || !portalSnap.exists || !organizationSnap.exists) {
+    throw new PortalConversationError("not-found", "Quote conversation was not found.");
+  }
+  const quote = quoteSnap.data() || {};
+  const portalSnapshot = portalSnap.data() || {};
+  const activation = assertPortalConversationActivation({
+    quote,
+    quoteId: binding.quoteId,
+    organizationId: binding.organizationId,
+    portalSnapshot,
+    requestedPortalKey: binding.accessMode === "portal" ? binding.portalKey : "",
+    organizationActive: isOrganizationRecordActive(organizationSnap.data() || {}),
+    organizationTombstoned: tombstoneSnap.exists,
+    operation,
+    nowISO,
+    assertPortalActivation: assertQuoteDeliveryPortalActivation
+  });
+  const actor = buildPortalConversationActor({
+    accessMode: binding.accessMode,
+    staff: binding.staff,
+    authToken: binding.authToken,
+    quote,
+    portalSnapshot
+  });
+  return {
+    refs,
+    quote,
+    portalSnapshot,
+    activation,
+    actor,
+    readOnly: normalizeText(quote.status).toLowerCase() === "declined"
+  };
+}
+
+function portalConversationResponse(scope, messages, extras = {}) {
+  return {
+    ok: true,
+    organizationId: scope.activation.organizationId,
+    quoteId: scope.activation.quoteId,
+    portalIssuedAtISO: scope.activation.portalIssuedAtISO,
+    readOnly: scope.readOnly,
+    readOnlyReason: scope.readOnly
+      ? "This proposal was declined. The conversation remains available to read, but new messages are closed."
+      : "",
+    messages,
+    limits: {
+      messageBodyCharacters: 1200,
+      totalMessages: PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT,
+      messagesPerWindow: PORTAL_CONVERSATION_RATE_LIMIT,
+      rateWindowSeconds: Math.round(PORTAL_CONVERSATION_RATE_WINDOW_MS / 1000)
+    },
+    ...extras
+  };
+}
+
+exports.getQuotePortalConversation = functions.region(REGION).https.onCall(async (data, context) => {
+  let binding = {};
+  try {
+    const input = normalizePortalConversationRequest(data);
+    binding = await resolvePortalConversationBinding(input, context);
+    const nowISO = new Date().toISOString();
+    const firstScope = await readBoundPortalConversationScope({ binding, nowISO });
+    const messagesSnap = await firstScope.refs.messagesRef
+      .orderBy("createdAtMs", "asc")
+      .limit(PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT)
+      .get();
+    const messages = messagesSnap.docs
+      .map((snapshot) => projectPortalConversationMessage(snapshot.data() || {}))
+      .filter(Boolean);
+
+    // A final authorization read prevents a token rotated while the message
+    // query was in flight from receiving any quote-scoped history.
+    const finalScope = await readBoundPortalConversationScope({ binding, nowISO });
+    if (
+      finalScope.activation.portalIssuedAtISO !== firstScope.activation.portalIssuedAtISO
+      || finalScope.activation.revisionId !== firstScope.activation.revisionId
+    ) {
+      throw new PortalConversationError(
+        "aborted",
+        "The customer portal changed while the conversation loaded. Open the current link and try again."
+      );
+    }
+    return portalConversationResponse(finalScope, messages);
+  } catch (err) {
+    return throwPortalConversationFailure(err, "getQuotePortalConversation", binding);
+  }
+});
+
+exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCall(async (data, context) => {
+  let binding = {};
+  try {
+    const input = normalizePortalConversationRequest(data, { requireBody: true });
+    binding = await resolvePortalConversationBinding(input, context);
+    const nowMs = Date.now();
+    const nowISO = new Date(nowMs).toISOString();
+    const generatedMessageId = `message_${randomUUID().replace(/-/g, "")}`;
+    const result = await db.runTransaction(async (tx) => {
+      const scope = await readBoundPortalConversationScope({
+        binding,
+        transaction: tx,
+        nowISO,
+        operation: "send"
+      });
+      const actorRateKey = buildPortalConversationRateKey({
+        accessMode: binding.accessMode,
+        organizationId: binding.organizationId,
+        quoteId: binding.quoteId,
+        staffUid: binding.staff?.uid
+      });
+      const requestKey = buildPortalConversationRequestKey({
+        actorRateKey,
+        clientRequestId: input.clientRequestId
+      });
+      const requestRef = scope.refs.requestsRef.doc(requestKey);
+      const rateRef = scope.refs.rateLimitsRef.doc(actorRateKey);
+      const generatedMessageRef = scope.refs.messagesRef.doc(generatedMessageId);
+      const [requestSnap, stateSnap, rateSnap, generatedMessageSnap] = await Promise.all([
+        tx.get(requestRef),
+        tx.get(scope.refs.stateRef),
+        tx.get(rateRef),
+        tx.get(generatedMessageRef)
+      ]);
+      const portalKeySha256 = portalConversationSha256(scope.activation.portalKey);
+      const bodySha256 = portalConversationSha256(input.body);
+
+      if (requestSnap.exists) {
+        const request = requestSnap.data() || {};
+        if (
+          normalizeText(request.organizationId) !== binding.organizationId
+          || normalizeText(request.quoteId) !== binding.quoteId
+          || normalizeText(request.actorRateKey) !== actorRateKey
+          || normalizeText(request.bodySha256) !== bodySha256
+          || normalizeText(request.portalKeySha256) !== portalKeySha256
+          || normalizeText(request.portalIssuedAtISO) !== scope.activation.portalIssuedAtISO
+        ) {
+          throw new PortalConversationError(
+            "already-exists",
+            "This retry id was already used for a different message or portal issuance."
+          );
+        }
+        const priorMessageId = normalizePortalConversationQuoteId(request.messageId);
+        if (!priorMessageId) {
+          throw new PortalConversationError(
+            "failed-precondition",
+            "The prior message receipt is incomplete. Reload the conversation before retrying."
+          );
+        }
+        const priorMessageSnap = await tx.get(scope.refs.messagesRef.doc(priorMessageId));
+        const priorMessage = priorMessageSnap.exists
+          ? projectPortalConversationMessage(priorMessageSnap.data() || {})
+          : null;
+        if (!priorMessage) {
+          throw new PortalConversationError(
+            "failed-precondition",
+            "The prior message is unavailable. Reload the conversation before retrying."
+          );
+        }
+        return portalConversationResponse(scope, [priorMessage], {
+          message: priorMessage,
+          idempotent: true
+        });
+      }
+
+      if (generatedMessageSnap.exists) {
+        throw new PortalConversationError("aborted", "Message identity collided. Retry this message.");
+      }
+      const state = stateSnap.exists ? stateSnap.data() || {} : {};
+      if (stateSnap.exists && (
+        normalizeText(state.organizationId) !== binding.organizationId
+        || normalizeText(state.quoteId) !== binding.quoteId
+      )) {
+        throw new PortalConversationError("failed-precondition", "Conversation state binding is invalid.");
+      }
+      const nextMessageCount = assertPortalConversationTotal(state.messageCount || 0);
+      const rate = rateSnap.exists ? rateSnap.data() || {} : {};
+      if (rateSnap.exists && (
+        normalizeText(rate.organizationId) !== binding.organizationId
+        || normalizeText(rate.quoteId) !== binding.quoteId
+        || normalizeText(rate.actorRateKey) !== actorRateKey
+      )) {
+        throw new PortalConversationError("failed-precondition", "Conversation rate binding is invalid.");
+      }
+      const recentSendAtMs = planPortalConversationRate({
+        recentSendAtMs: rate.recentSendAtMs,
+        nowMs
+      });
+      const messageRecord = buildPortalConversationMessage({
+        messageId: generatedMessageId,
+        organizationId: binding.organizationId,
+        quoteId: binding.quoteId,
+        activation: scope.activation,
+        actor: scope.actor,
+        body: input.body,
+        nowISO,
+        nowMs
+      });
+      const message = projectPortalConversationMessage(messageRecord);
+
+      tx.create(generatedMessageRef, {
+        ...messageRecord,
+        createdAt: Timestamp.fromMillis(nowMs)
+      });
+      tx.create(requestRef, {
+        requestKey,
+        organizationId: binding.organizationId,
+        quoteId: binding.quoteId,
+        actorRateKey,
+        bodySha256,
+        portalKeySha256,
+        portalIssuedAtISO: scope.activation.portalIssuedAtISO,
+        messageId: generatedMessageId,
+        createdAtISO: nowISO,
+        createdAt: Timestamp.fromMillis(nowMs)
+      });
+      tx.set(rateRef, {
+        organizationId: binding.organizationId,
+        quoteId: binding.quoteId,
+        actorRateKey,
+        recentSendAtMs,
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.set(scope.refs.stateRef, {
+        organizationId: binding.organizationId,
+        quoteId: binding.quoteId,
+        messageCount: nextMessageCount,
+        latestMessageId: generatedMessageId,
+        latestMessageAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      return portalConversationResponse(scope, [message], {
+        message,
+        idempotent: false
+      });
+    });
+    return result;
+  } catch (err) {
+    return throwPortalConversationFailure(err, "sendQuotePortalConversationMessage", binding);
+  }
+});
 
 async function createTrustedQuoteDraftInternal({
   organizationId,
