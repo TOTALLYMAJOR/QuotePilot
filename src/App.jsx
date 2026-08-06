@@ -335,6 +335,66 @@ function buildTotalsFromPricingSnapshot(pricingSnapshot = {}, fallbackTotals = {
   };
 }
 
+function resolveCatalogItemName(items, id) {
+  const normalizedId = String(id || "").trim();
+  if (!normalizedId) return "";
+  const match = (Array.isArray(items) ? items : []).find(
+    (item) => String(item?.id || "").trim() === normalizedId
+  );
+  return String(match?.name || "").trim();
+}
+
+// Builds the human-readable disclosure for an event-template auto-selection
+// (audit #17). Only fields the template actually set (per the caller's
+// applied/eligible flags) are surfaced; ids that fail to resolve to a
+// catalog name are dropped from both the copy and the clearable id list so
+// "Clear defaults" never touches something it didn't disclose.
+function buildTemplateDefaultsNotice({
+  template,
+  catalog,
+  addonIds = [],
+  rentalIds = [],
+  pkgApplied = false,
+  milesRTApplied = false,
+  milesRTValue = 0,
+  hoursApplied = false,
+  hoursValue = 0
+}) {
+  if (!template) return null;
+  const templateName = String(template.name || template.id || "").trim();
+  if (!templateName) return null;
+
+  const pkgName = pkgApplied ? resolveCatalogItemName(catalog?.packages, template.pkg) : "";
+  const resolvedAddons = addonIds
+    .map((id) => ({ id, name: resolveCatalogItemName(catalog?.addons, id) }))
+    .filter((entry) => entry.name);
+  const resolvedRentals = rentalIds
+    .map((id) => ({ id, name: resolveCatalogItemName(catalog?.rentals, id) }))
+    .filter((entry) => entry.name);
+  const milesApplied = Boolean(milesRTApplied && Number(milesRTValue) > 0);
+  const milesLabel = milesApplied ? `${Number(milesRTValue)} travel miles` : "";
+
+  const parts = [
+    pkgName ? `${pkgName} package` : "",
+    resolvedAddons.map((entry) => entry.name).join(", "),
+    resolvedRentals.map((entry) => entry.name).join(", "),
+    milesLabel
+  ].filter(Boolean);
+
+  if (!parts.length) return null;
+
+  return {
+    templateId: String(template.id || "").trim(),
+    templateName,
+    summary: `${templateName} defaults applied: ${parts.join(" · ")} — adjust in Add-ons / Rentals.`,
+    addonIds: resolvedAddons.map((entry) => entry.id),
+    rentalIds: resolvedRentals.map((entry) => entry.id),
+    milesRTApplied: milesApplied,
+    hoursApplied: Boolean(hoursApplied && Number(hoursValue) > 0),
+    hours: Number(hoursValue) || 0
+  };
+}
+
 export default function App() {
   const wizardRef = useRef(null);
   const stepperRef = useRef(null);
@@ -572,6 +632,7 @@ export default function App() {
     currentStep: 1,
     stepValidation: buildStepValidation(INITIAL_FORM)
   }));
+  const [templateDefaultsNotice, setTemplateDefaultsNotice] = useState(null);
 
   const pushToast = (message, tone = "info") => {
     const id = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -606,8 +667,25 @@ export default function App() {
     markFieldsTouched([field]);
   };
 
-  const handleSelectionTouched = (field) => {
+  const handleSelectionTouched = (field, itemId) => {
     markFieldsTouched([field]);
+    // An id the user edits (toggled, re-added, or requantified) after a
+    // template applied it stops counting as template-sourced, so "Clear
+    // defaults" leaves user-made selections alone (audit #17).
+    setTemplateDefaultsNotice((current) => {
+      if (!current) return current;
+      if (field === "milesRT") {
+        return current.milesRTApplied ? { ...current, milesRTApplied: false } : current;
+      }
+      if (!itemId) return current;
+      if (field === "addons" && current.addonIds.includes(itemId)) {
+        return { ...current, addonIds: current.addonIds.filter((id) => id !== itemId) };
+      }
+      if (field === "rentals" && current.rentalIds.includes(itemId)) {
+        return { ...current, rentalIds: current.rentalIds.filter((id) => id !== itemId) };
+      }
+      return current;
+    });
   };
 
   const stepperModel = useMemo(
@@ -1019,6 +1097,7 @@ export default function App() {
   const applyEventTemplate = (templateId) => {
     if (templateId === "custom") {
       setForm((prev) => ({ ...prev, eventTemplateId: "custom" }));
+      setTemplateDefaultsNotice(null);
       return;
     }
 
@@ -1026,6 +1105,7 @@ export default function App() {
     const template = templates.find((item) => item.id === templateId);
     if (!template) {
       setForm((prev) => ({ ...prev, eventTemplateId: "custom" }));
+      setTemplateDefaultsNotice(null);
       return;
     }
 
@@ -1084,6 +1164,21 @@ export default function App() {
           ? prev.chefRateOverride
           : Number(template.chefRateOverride)
     }));
+
+    // Explicit template selection always overwrites pkg/addons/rentals/miles
+    // wholesale (see setForm above), so disclose everything the template
+    // defines rather than re-deriving eligibility.
+    setTemplateDefaultsNotice(buildTemplateDefaultsNotice({
+      template,
+      catalog,
+      addonIds: templateAddons,
+      rentalIds: templateRentals,
+      pkgApplied: Boolean(String(template.pkg || "").trim()),
+      milesRTApplied: Number(template.milesRT || 0) > 0,
+      milesRTValue: Number(template.milesRT || 0),
+      hoursApplied: Number(template.hours || 0) > 0,
+      hoursValue: Number(template.hours || 0)
+    }));
   };
 
   const handleEventTypeChange = (eventTypeId) => {
@@ -1097,28 +1192,76 @@ export default function App() {
       eventTypes: catalog.eventTypes
     });
 
-    setForm((prev) => {
-      const baseForm = {
-        ...prev,
-        eventTypeId: nextEventTypeId,
-        eventTemplateId: "custom"
-      };
-      const { nextForm } = applyEventTypeTemplateDefaults({
-        form: baseForm,
-        template: matchedTemplate,
-        catalog,
-        touchedFields,
-        initialForm: INITIAL_FORM
-      });
-      return nextForm;
+    const baseForm = {
+      ...form,
+      eventTypeId: nextEventTypeId,
+      eventTemplateId: "custom"
+    };
+    const { nextForm, appliedFields } = applyEventTypeTemplateDefaults({
+      form: baseForm,
+      template: matchedTemplate,
+      catalog,
+      touchedFields,
+      initialForm: INITIAL_FORM
     });
+    setForm(nextForm);
+
+    // Only the fields applyEventTypeTemplateDefaults actually filled in are
+    // disclosed here — fields the caller already customized are left out,
+    // matching the "never touches user-made selections" rule (audit #17).
+    setTemplateDefaultsNotice(buildTemplateDefaultsNotice({
+      template: matchedTemplate,
+      catalog,
+      addonIds: appliedFields.includes("addons") ? (nextForm.addons || []) : [],
+      rentalIds: appliedFields.includes("rentals") ? (nextForm.rentals || []) : [],
+      pkgApplied: appliedFields.includes("pkg"),
+      milesRTApplied: appliedFields.includes("milesRT"),
+      milesRTValue: Number(matchedTemplate?.milesRT || 0),
+      hoursApplied: appliedFields.includes("hours"),
+      hoursValue: Number(matchedTemplate?.hours || 0)
+    }));
+  };
+
+  const clearTemplateDefaults = () => {
+    if (!templateDefaultsNotice) return;
+    const ownedAddonIds = new Set(templateDefaultsNotice.addonIds);
+    const ownedRentalIds = new Set(templateDefaultsNotice.rentalIds);
+    const resetMilesRT = templateDefaultsNotice.milesRTApplied;
+    setForm((prev) => {
+      const nextAddonQuantities = { ...(prev.addonQuantities || {}) };
+      ownedAddonIds.forEach((id) => {
+        delete nextAddonQuantities[id];
+      });
+      const nextRentalQuantities = { ...(prev.rentalQuantities || {}) };
+      ownedRentalIds.forEach((id) => {
+        delete nextRentalQuantities[id];
+      });
+      return {
+        ...prev,
+        addons: (prev.addons || []).filter((id) => !ownedAddonIds.has(id)),
+        addonQuantities: nextAddonQuantities,
+        rentals: (prev.rentals || []).filter((id) => !ownedRentalIds.has(id)),
+        rentalQuantities: nextRentalQuantities,
+        milesRT: resetMilesRT ? 0 : prev.milesRT
+      };
+    });
+    setTemplateDefaultsNotice(null);
+  };
+
+  const dismissTemplateDefaultsNotice = () => {
+    setTemplateDefaultsNotice(null);
   };
 
   const applyRecommendation = (item) => {
     if (!item) return;
     if (item.kind === "package") markFieldsTouched(["pkg"]);
-    if (item.kind === "addon") markFieldsTouched(["addons"]);
-    if (item.kind === "rental") markFieldsTouched(["rentals"]);
+    // Route addon/rental recommendations through handleSelectionTouched (not
+    // a bare markFieldsTouched) so an applied id that happens to match a
+    // template-sourced one is released from templateDefaultsNotice — "Clear
+    // defaults" must never strip a selection the user just deliberately
+    // applied here (audit #17).
+    if (item.kind === "addon") handleSelectionTouched("addons", item.id);
+    if (item.kind === "rental") handleSelectionTouched("rentals", item.id);
 
     setForm((prev) => {
       if (item.kind === "package") {
@@ -1507,6 +1650,7 @@ export default function App() {
     });
     setTouchedFields({});
     setShowStepValidation(false);
+    setTemplateDefaultsNotice(null);
     setHistoryTarget({ quoteId: "", reason: "" });
     setHistoryOpen(false);
     setStep(1);
@@ -1527,6 +1671,7 @@ export default function App() {
     setTouchedFields({});
     setShowStepValidation(false);
     setSubmitState((prev) => ({ ...prev, message: "" }));
+    setTemplateDefaultsNotice(null);
     setStep(1);
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1951,6 +2096,9 @@ export default function App() {
                 touchedFields={touchedFields}
                 fieldErrors={step1Validation.fieldErrors}
                 showValidation={showStepValidation}
+                templateNotice={templateDefaultsNotice}
+                onClearTemplateDefaults={clearTemplateDefaults}
+                onDismissTemplateNotice={dismissTemplateDefaultsNotice}
               />
             )}
             {!catalog.loading && step === 1 && showStepValidation && !step1CanAdvance && (
@@ -1978,6 +2126,9 @@ export default function App() {
                 aiAutopilotEnabled={aiAutopilotEnabled}
                 onApplyRecommendation={applyRecommendation}
                 onSelectionTouched={handleSelectionTouched}
+                templateNotice={templateDefaultsNotice}
+                onClearTemplateDefaults={clearTemplateDefaults}
+                onDismissTemplateNotice={dismissTemplateDefaultsNotice}
               />
             )}
             {!catalog.loading && step === 4 && (
