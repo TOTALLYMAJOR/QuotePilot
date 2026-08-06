@@ -44,6 +44,138 @@ async function ensureUser({ auth, email, password }) {
   return created.uid;
 }
 
+async function seedPortalConversationFixture({ db, organizationId, uid, email }) {
+  const quoteId = "conversation-e2e-quote";
+  const portalKey = "conversation-e2e-portal-token-1234567890";
+  const portalIssuedAtISO = "2026-08-06T17:00:00.000Z";
+  const portalExpiresAtISO = "2099-12-31T23:59:59.000Z";
+  const revisionId = `v0001@${portalIssuedAtISO}`;
+  const providerAcceptedAtISO = "2026-08-06T17:05:00.000Z";
+  const deliveryEvidence = {
+    revisionId,
+    state: "provider_accepted",
+    portalActivationState: "active",
+    portalKey,
+    portalIssuedAtISO,
+    providerAcceptedAtISO
+  };
+  const quote = {
+    id: quoteId,
+    organizationId,
+    ownerUid: uid,
+    ownerEmail: email,
+    quoteNumber: "QP-CONVERSATION-E2E",
+    activeVersionId: "v0001",
+    latestVersionNumber: 1,
+    status: "sent",
+    portalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
+    expiresAtISO: portalExpiresAtISO,
+    customerNameKey: "portal conversation customer",
+    customerEmailKey: "portal-conversation@example.com",
+    customer: {
+      name: "Portal Conversation Customer",
+      email: "portal-conversation@example.com"
+    },
+    eventTypeId: "wedding",
+    event: {
+      name: "Conversation Reception",
+      date: "2027-06-12",
+      time: "18:00",
+      hours: 5,
+      guests: 80,
+      style: "buffet",
+      venue: "Conversation Hall",
+      venueAddress: "100 Quote Way",
+      dietaryRestrictions: ""
+    },
+    selection: {
+      eventTypeId: "wedding",
+      packageName: "Signature",
+      menuItems: ["menu-item-1"],
+      menuItemNames: ["Smoked Chicken"]
+    },
+    totals: {
+      base: 2000,
+      addons: 0,
+      rentals: 0,
+      menu: 0,
+      labor: 0,
+      travel: 0,
+      serviceFee: 0,
+      tax: 0,
+      total: 2000,
+      deposit: 600
+    },
+    payment: { depositStatus: "unpaid", depositLink: "" },
+    booking: {},
+    portalDecision: {},
+    quoteMeta: {
+      organizationName: "E2E Organization",
+      brandName: "E2E Organization",
+      businessEmail: email
+    },
+    workflow: {
+      quoteDelivery: {
+        ...deliveryEvidence,
+        provider: "resend",
+        providerMessageId: "conversation-e2e-provider-message"
+      }
+    },
+    lifecycle: { sentAtISO: providerAcceptedAtISO },
+    createdAtISO: portalIssuedAtISO,
+    updatedAtISO: providerAcceptedAtISO,
+    createdAt: admin.FieldValue.serverTimestamp(),
+    updatedAt: admin.FieldValue.serverTimestamp()
+  };
+  const portal = {
+    quoteId,
+    organizationId,
+    portalKey,
+    portalIssuedAtISO,
+    portalExpiresAtISO,
+    portalExpiresAtMs: Date.parse(portalExpiresAtISO),
+    quoteNumber: quote.quoteNumber,
+    customerName: quote.customer.name,
+    customerEmail: quote.customer.email,
+    eventName: quote.event.name,
+    eventDate: quote.event.date,
+    eventTime: quote.event.time,
+    eventHours: quote.event.hours,
+    eventGuests: quote.event.guests,
+    eventStyle: quote.event.style,
+    venue: quote.event.venue,
+    venueAddress: quote.event.venueAddress,
+    dietaryRestrictions: "",
+    total: quote.totals.total,
+    deposit: quote.totals.deposit,
+    totals: quote.totals,
+    selection: {
+      packageName: quote.selection.packageName,
+      addons: [],
+      rentals: [],
+      menuItems: quote.selection.menuItemNames
+    },
+    quoteMeta: quote.quoteMeta,
+    status: quote.status,
+    expiresAtISO: quote.expiresAtISO,
+    payment: quote.payment,
+    booking: quote.booking,
+    portalDecision: {},
+    deliveryEvidence,
+    lifecycle: quote.lifecycle,
+    createdAtISO: quote.createdAtISO,
+    updatedAtISO: quote.updatedAtISO,
+    createdAt: admin.FieldValue.serverTimestamp(),
+    updatedAt: admin.FieldValue.serverTimestamp()
+  };
+  await Promise.all([
+    db.doc(`organizations/${organizationId}/quotes/${quoteId}`).set(quote),
+    db.doc(`customerPortalQuotes/${portalKey}`).set(portal)
+  ]);
+}
+
 async function main() {
   const projectId = readArg("--project", process.env.E2E_FIREBASE_PROJECT_ID || "demo-e2e");
   const organizationId = slugify(readArg("--organization", process.env.E2E_FIREBASE_ORG_ID || "e2e-org"));
@@ -83,6 +215,8 @@ async function main() {
     updatedAt: now,
     createdAt: now
   }, { merge: true });
+
+  await seedPortalConversationFixture({ db, organizationId, uid, email });
 
   console.log(`Seeded e2e auth user: ${email} (${uid}) in org ${organizationId}`);
 }

@@ -4637,6 +4637,148 @@ hr {
   font-size: 0.78rem;
 }
 
+.quote-conversation-launch,
+.quote-conversation {
+  margin-top: 0.9rem;
+  border: 1px solid #c5d2cc;
+  border-radius: 10px;
+  background: #f8fbf9;
+  padding: 0.9rem;
+}
+
+.quote-conversation-launch,
+.quote-conversation-head,
+.quote-conversation-compose-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.quote-conversation-launch h3,
+.quote-conversation-launch p,
+.quote-conversation-head h3,
+.quote-conversation-head p {
+  margin: 0;
+}
+
+.quote-conversation-launch h3,
+.quote-conversation-head h3 {
+  color: #263c32;
+}
+
+.quote-conversation-launch p {
+  margin-top: 0.2rem;
+  color: #5c6963;
+  font-size: 0.8rem;
+}
+
+.quote-conversation-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.quote-conversation-messages {
+  max-height: 320px;
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.55rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.quote-conversation-message {
+  border: 1px solid #d6dfda;
+  border-left: 4px solid #8d9c95;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.65rem 0.75rem;
+}
+
+.quote-conversation-message.actor-staff {
+  border-left-color: var(--portal-brand, #2f7658);
+  background: #f0f8f4;
+}
+
+.quote-conversation-message header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  color: #53625b;
+  font-size: 0.72rem;
+}
+
+.quote-conversation-message header strong {
+  color: #2c4037;
+  font-size: 0.8rem;
+}
+
+.quote-conversation-message header time {
+  margin-left: auto;
+}
+
+.quote-conversation-message p {
+  margin: 0.35rem 0 0;
+  color: #37463f;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.quote-conversation-compose {
+  margin-top: 0.75rem;
+  border-top: 1px solid #d6dfda;
+  padding-top: 0.75rem;
+}
+
+.quote-conversation-compose textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.quote-conversation-compose-footer {
+  margin-top: 0.45rem;
+}
+
+.quote-conversation-compose-footer small {
+  color: #67746e;
+}
+
+.quote-conversation-recovery {
+  margin-top: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.quote-conversation-recovery .error-note {
+  margin: 0;
+}
+
+.quote-conversation-modal {
+  position: sticky;
+  left: 0;
+  bottom: 0;
+  z-index: 5;
+  display: block;
+  margin-top: 0.85rem;
+  border-top: 1px solid rgba(213, 177, 109, 0.72);
+  background: rgba(255, 249, 239, 0.98);
+  padding: 0.2rem 0 0.65rem;
+  backdrop-filter: blur(12px);
+}
+
+.quote-conversation-modal .quote-conversation {
+  max-width: 880px;
+  margin-inline: auto;
+}
+
 .portal-next-steps {
   margin-top: 0.9rem;
   padding: 1rem;
@@ -5313,9 +5455,21 @@ hr {
   }
 
   .portal-head,
-  .portal-next-steps {
+  .portal-next-steps,
+  .quote-conversation-launch,
+  .quote-conversation-head,
+  .quote-conversation-recovery {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .quote-conversation-message header time {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .quote-conversation-head-actions {
+    justify-content: flex-start;
   }
 
   .portal-brand-contact {

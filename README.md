@@ -213,8 +213,9 @@ instruction if that browser is unavailable.
   - Firebase emulator browser lane for real Auth, organization bootstrap, and
     Firestore rules coverage.
   - Starts `auth`, `firestore`, and `functions` emulators, seeds
-    org/menu/userRole fixtures, signs in via UI, and validates the
-    organization-scoped catalog loaded through the application.
+    org/menu/userRole fixtures plus an exact provider-accepted quote portal,
+    signs in via UI, validates the organization-scoped catalog, and exercises
+    canonical quote conversation exchange across staff and customer views.
   - Uses the isolated `firebase.e2e.json` configuration and dedicated high
     ports. A port conflict fails the lane; the runner does not terminate another
     local process.

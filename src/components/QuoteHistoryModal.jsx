@@ -14,6 +14,7 @@ import { getEventTypes } from "../lib/menuService";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import { buildQuoteEmailPayload } from "../lib/proposalPayload";
 import { getApprovalRequestExecutionEligibility } from "../lib/quoteWorkflow";
+import { portalConversationAvailable } from "../lib/portalConversationClient";
 import {
   BOOKING_CONFIRMATION_STATUSES,
   convertQuoteToContract,
@@ -26,6 +27,7 @@ import {
   updateQuoteBookingConfirmation,
   updateQuoteStatus
 } from "../lib/quoteStore";
+import QuoteConversationPanel from "./QuoteConversationPanel";
 
 const RESUMABLE_PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
@@ -350,6 +352,7 @@ export default function QuoteHistoryModal({
   const [pendingDeleteQuote, setPendingDeleteQuote] = useState(null);
   const [deliveryReview, setDeliveryReview] = useState(null);
   const [resolvingDeliveryId, setResolvingDeliveryId] = useState("");
+  const [conversationQuote, setConversationQuote] = useState(null);
   const [deliveryClockMs, setDeliveryClockMs] = useState(() => Date.now());
   const dialogRef = useRef(null);
   const savedQuoteHandoffRef = useRef(null);
@@ -370,6 +373,7 @@ export default function QuoteHistoryModal({
   useEffect(() => {
     if (open) return;
     setDeliveryReview(null);
+    setConversationQuote(null);
     deliveryReviewReturnFocusRef.current = null;
   }, [open]);
 
@@ -1983,6 +1987,17 @@ export default function QuoteHistoryModal({
                         )}
                         {permissions.canCopyArtifacts && (
                           <>
+                            {state.source === "firebase"
+                              && portalConversationAvailable()
+                              && portalShareable && (
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                onClick={() => setConversationQuote(quote)}
+                              >
+                                Conversation
+                              </button>
+                            )}
                             <button type="button" className="ghost compact" onClick={() => handleCopyEmail(quote)}>Copy Email</button>
                             <button
                               type="button"
@@ -2074,6 +2089,21 @@ export default function QuoteHistoryModal({
               </button>
             </div>
           </div>
+        )}
+
+        {conversationQuote && (
+          <aside className="quote-conversation-modal">
+            <QuoteConversationPanel
+              defaultOpen
+              title={`Conversation for ${conversationQuote.quoteNumber || conversationQuote.id}`}
+              access={{
+                accessMode: "staff",
+                organizationId,
+                quoteId: conversationQuote.id
+              }}
+              onClose={() => setConversationQuote(null)}
+            />
+          </aside>
         )}
         {deliveryReview && (
           <section

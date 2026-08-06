@@ -7,6 +7,8 @@ const FIREBASE_PROJECT_ID = process.env.E2E_FIREBASE_PROJECT_ID || "demo-e2e";
 const AUTH_EMULATOR_PORT = process.env.E2E_FIREBASE_AUTH_EMULATOR_PORT || "9399";
 const APP_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || "4174"}`;
 const PASSWORD_RESET_CONFIRMATION = "If an account exists for that email, password-reset instructions have been sent.";
+const CONVERSATION_QUOTE_NUMBER = "QP-CONVERSATION-E2E";
+const CONVERSATION_PORTAL_KEY = "conversation-e2e-portal-token-1234567890";
 
 async function getPasswordResetCodes(request) {
   const response = await request.get(
@@ -40,6 +42,46 @@ test("firebase auth and firestore rules load the organization catalog", async ({
   await expect(accountMenu).toContainText(STAFF_EMAIL);
   await expect(accountMenu).toContainText("admin");
   await expect(page.getByLabel(/Event type/i).locator("option")).toHaveCount(5);
+});
+
+test("staff and the exact customer portal share one quote-scoped conversation", async ({ page }) => {
+  await signInAsStaff(page);
+  await page.getByRole("button", { name: "Quotes", exact: true }).click();
+  const quotesDialog = page.getByRole("dialog", { name: "Quotes" });
+  const quoteRow = quotesDialog.locator(`tr[data-quote-id="conversation-e2e-quote"]`);
+  await expect(quoteRow).toContainText(CONVERSATION_QUOTE_NUMBER);
+  await quoteRow.getByRole("button", { name: "Conversation" }).click();
+  const staffConversation = quotesDialog.locator(".quote-conversation-modal .quote-conversation");
+  await expect(staffConversation.getByText(/No messages yet/i)).toBeVisible();
+  await staffConversation.getByLabel("Message").fill("Staff confirms load-in begins at 4:30 PM.");
+  await staffConversation.getByRole("button", { name: "Send message" }).click();
+  await expect(staffConversation.getByRole("status")).toContainText("Message sent");
+  await expect(staffConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
+  await staffConversation.getByRole("button", { name: "Close conversation" }).click();
+  await quotesDialog.getByRole("button", { name: "Close" }).click();
+
+  await page.goto(`/app?portal=${CONVERSATION_PORTAL_KEY}`);
+  await expect(page.getByRole("heading", { name: /Your proposal from E2E Organization/i }))
+    .toBeVisible({ timeout: 45_000 });
+  await page.getByRole("button", { name: "Open conversation" }).click();
+  const customerConversation = page.locator(".quote-conversation");
+  await expect(customerConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
+  await customerConversation.getByLabel("Message").fill("Thank you. The venue door will be open.");
+  await customerConversation.getByRole("button", { name: "Send message" }).click();
+  await expect(customerConversation.getByRole("status")).toContainText("Message sent");
+
+  await customerConversation.getByRole("button", { name: "Close conversation" }).click();
+  await page.getByRole("button", { name: "Staff sign in" }).click();
+  await expect(page.getByRole("button", { name: "Quotes", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Quotes", exact: true }).click();
+  const reopenedDialog = page.getByRole("dialog", { name: "Quotes" });
+  const reopenedRow = reopenedDialog.locator(`tr[data-quote-id="conversation-e2e-quote"]`);
+  await reopenedRow.getByRole("button", { name: "Conversation" }).click();
+  const reopenedConversation = reopenedDialog.locator(".quote-conversation-modal .quote-conversation");
+  await expect(reopenedConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
+  await expect(reopenedConversation).toContainText("Thank you. The venue door will be open.");
+  await reopenedConversation.getByRole("button", { name: "Refresh conversation" }).click();
+  await expect(reopenedConversation.getByRole("status")).toContainText("Conversation refreshed");
 });
 
 test("email-password staff can complete account recovery with the same on-screen confirmation", async ({ page, request }) => {

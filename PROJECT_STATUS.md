@@ -79,6 +79,18 @@ Last updated: August 6, 2026
   actions; new-quote resets preserve canonical defaults without treating
   automatic values as unsaved user work. These are source/local interaction
   guarantees and are not yet hosted human-acceptance evidence.
+- Current source quote conversation: same-tenant staff and the customer holding
+  the exact current provider-accepted portal can load and exchange messages
+  attached to the canonical quote. The server owns actor identity, display
+  name, message ID, and timestamp; enforces a 1,200-character limit, total and
+  rolling-window bounds, and client-request idempotency; and revalidates the
+  quote, portal issuance, tenant, deletion, expiry, and delivery activation on
+  every operation. Sent, viewed, accepted, and booked conversations remain
+  writable, declined conversations are visibly read-only, and rotation makes
+  the old token unusable while retaining history for a newly delivered current
+  issuance. Direct browser access to conversation records is denied. Focused
+  unit/rules/emulator evidence is local only; this conversation source is not
+  part of live `v0.2.3` and has no hosted staff/customer acceptance.
 - Current source Kitchen BEO: staff can export an internal Kitchen sheet from a
   saved quote with event timing, staffing, kitchen checkpoints, selections,
   production-checklist state, revision and generation stamps, day-of contacts,
