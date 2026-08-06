@@ -32,6 +32,7 @@ import {
   APPROVAL_ACTION_IDS,
   APPROVAL_STATES,
   FOLLOW_UP_STAGE_IDS,
+  getApprovalActionEligibility,
   PRODUCTION_CHECKLIST_IDS
 } from "./quoteWorkflow";
 
@@ -51,7 +52,6 @@ const QUOTE_DELIVERY_MUTATION_LOCK_STATES = new Set([
   "outcome_unknown"
 ]);
 const HARD_DELETE_QUOTE_CALLABLE = "hardDeleteQuote";
-const PURGE_DELETED_QUOTES_CALLABLE = "purgeDeletedQuotesForOrganization";
 const UPDATE_QUOTE_DRAFT_CALLABLE = "updateQuoteDraft";
 const REQUEST_QUOTE_APPROVAL_CALLABLE = "requestQuoteApproval";
 const RESOLVE_QUOTE_APPROVAL_CALLABLE = "resolveQuoteApprovalRequest";
@@ -270,6 +270,33 @@ function normalizeQuantityMap(input) {
     acc[id] = Math.max(1, Math.round(toNumber(value, 1)));
     return acc;
   }, {});
+}
+
+function requireMenuSelection(form) {
+  const selectedMenuItems = Array.isArray(form?.menuItems)
+    ? form.menuItems.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  if (selectedMenuItems.length < 1) {
+    throw new Error("Select at least one menu item before saving the quote.");
+  }
+  return selectedMenuItems;
+}
+
+function quoteHasMenuSelection(quote) {
+  const selection = quote?.selection && typeof quote.selection === "object"
+    ? quote.selection
+    : {};
+  return [
+    selection.menuItems,
+    selection.menuItemsSnapshot,
+    selection.menuItemNames,
+    selection.menuItemDetails
+  ].some((items) => (
+    Array.isArray(items)
+    && items.some((item) => String(
+      typeof item === "object" ? item?.id || item?.name || "" : item || ""
+    ).trim())
+  ));
 }
 
 function resolveSnapshotQuantity(quantityMap, itemId, fallback = 1) {
@@ -521,6 +548,47 @@ function normalizeApprovalRequests(input) {
     })
     .filter(Boolean)
     .slice(-50);
+}
+
+function completeLocalApprovalExecution({
+  workflow = {},
+  approvalRequestId = "",
+  action = "",
+  actorEmail = "",
+  completedAtISO = "",
+  reference = ""
+} = {}) {
+  const requestId = String(approvalRequestId || "").trim();
+  if (!requestId) {
+    return { workflow, request: null };
+  }
+  const requests = normalizeApprovalRequests(workflow?.approvalRequests);
+  const target = requests.find((request) => request.id === requestId);
+  if (
+    !target
+    || target.action !== action
+    || target.state !== "approved"
+    || !["", "awaiting_execution"].includes(target.executionState)
+  ) {
+    throw new Error("The selected approval no longer authorizes this action.");
+  }
+  const request = {
+    ...target,
+    executionState: "succeeded",
+    executionStartedAtISO: completedAtISO,
+    executionCompletedAtISO: completedAtISO,
+    executedByEmail: normalizeEmail(actorEmail),
+    executionOperationId: requestId,
+    executionReference: String(reference || "").trim().slice(0, 500),
+    executionError: ""
+  };
+  return {
+    request,
+    workflow: {
+      ...(workflow || {}),
+      approvalRequests: requests.map((item) => (item.id === requestId ? request : item))
+    }
+  };
 }
 
 function normalizePortalDecision(input) {
@@ -1281,7 +1349,14 @@ function buildBlockingAvailabilityError(availability) {
 function ensureConvertibleQuote(quote) {
   const status = normalizeStatus(quote?.status);
   const hasContract = Boolean(String(quote?.booking?.contractNumber || "").trim());
-  if (status === "accepted") return;
+  if (status === "accepted") {
+    if (!quoteHasMenuSelection(quote)) {
+      throw new Error(
+        "This accepted quote has no menu selection. Create and send a corrected replacement quote with at least one menu item before converting it to a contract."
+      );
+    }
+    return;
+  }
   if (status === "booked" && !hasContract) return;
   if (status === "booked" && hasContract) {
     throw new Error("This quote is already converted to a contract.");
@@ -1774,6 +1849,14 @@ export async function convertQuoteToContract({
     availabilityCheckedAtISO: nowISO,
     availabilitySummary: buildAvailabilitySummary(availability)
   };
+  const approvalExecution = completeLocalApprovalExecution({
+    workflow: quote.workflow,
+    approvalRequestId,
+    action: "convert_to_contract",
+    actorEmail: actor,
+    completedAtISO: nowISO,
+    reference: contractNumber
+  });
 
   await saveQuoteVersion(id);
 
@@ -1787,6 +1870,7 @@ export async function convertQuoteToContract({
       status: "booked",
       booking: nextBooking,
       lifecycle: nextLifecycle,
+      workflow: approvalExecution.workflow,
       updatedAtISO: nowISO
     };
   });
@@ -1801,7 +1885,8 @@ export async function convertQuoteToContract({
     booking: nextBooking,
     lifecycle: nextLifecycle,
     contractNumber,
-    availability
+    availability,
+    approvalRequest: approvalExecution.request
   };
 }
 
@@ -2413,6 +2498,10 @@ export async function requestQuoteApproval({
     throw new Error("Authenticated email is required for approval audit fallback.");
   }
   const quote = await readQuoteById(id);
+  const eligibility = getApprovalActionEligibility(quote, normalizedAction);
+  if (!eligibility.eligible) {
+    throw new Error(eligibility.reason || "This approval action is unavailable for the quote.");
+  }
   const current = normalizeApprovalRequests(quote.workflow?.approvalRequests);
   if (current.some((item) => (
     item.action === normalizedAction
@@ -2549,6 +2638,14 @@ export async function resolveQuoteApprovalRequest({
   if (target.state !== "pending") {
     throw new Error("Approval request is already resolved.");
   }
+  if (nextState === "approved") {
+    const eligibility = getApprovalActionEligibility(quote, target.action, {
+      ignoreRequestId: target.id
+    });
+    if (!eligibility.eligible) {
+      throw new Error(eligibility.reason || "This approval action is no longer available.");
+    }
+  }
   const nowISO = isoNow();
   const nextRequests = current.map((item) => (
     item.id === approvalRequestId
@@ -2598,6 +2695,7 @@ export async function submitQuote({
   ownerEmail = "",
   organizationId = undefined
 }) {
+  const selectedMenuItems = requireMenuSelection(form);
   const nowISO = isoNow();
   const quoteNumber = buildQuoteNumber();
   const portalKey = buildPortalKey();
@@ -2616,7 +2714,7 @@ export async function submitQuote({
     portalIssuedAtISO,
     nowISO
   );
-  const menuItems = Array.isArray(form.menuItems) ? form.menuItems : [];
+  const menuItems = selectedMenuItems;
   const guests = Number(form.guests || 0);
   const menuItemQuantities = normalizeQuantityMap(form.menuItemQuantities);
   const addonQuantities = normalizeQuantityMap(form.addonQuantities);
@@ -2957,6 +3055,7 @@ export async function updateQuote({
   if (!id) {
     throw new Error("Quote id is required.");
   }
+  const selectedMenuItems = requireMenuSelection(form);
 
   if (firebaseReady) {
     const writeOrganizationId = requireWriteOrganizationId(
@@ -3010,7 +3109,7 @@ export async function updateQuote({
   const eventTypeId = String(form.eventTypeId || "").trim();
   const validityDays = Math.max(1, Number(settings?.quoteValidityDays || DEFAULT_VALIDITY_DAYS));
   const expiresAtISO = addDaysISO(nowISO, validityDays);
-  const menuItems = Array.isArray(form.menuItems) ? form.menuItems : [];
+  const menuItems = selectedMenuItems;
   const guests = Number(form.guests || 0);
   const menuItemQuantities = normalizeQuantityMap(form.menuItemQuantities);
   const addonQuantities = normalizeQuantityMap(form.addonQuantities);
@@ -3364,7 +3463,7 @@ export async function rotateQuotePortalKey({
   const nowISO = isoNow();
   const nextPortalKey = buildPortalKey();
   const portalIssuedAtISO = nowISO;
-  const portalExpiresAtISO = normalizeStatus(quote.status) === "booked"
+  const portalExpiresAtISO = ["accepted", "booked"].includes(normalizeStatus(quote.status))
     ? addDaysISO(portalIssuedAtISO, PORTAL_TOKEN_VALIDITY_DAYS)
     : resolvePortalExpiresAtISO(
       {
@@ -3375,6 +3474,14 @@ export async function rotateQuotePortalKey({
       nowISO
     );
   const normalizedActorEmail = normalizeEmail(actorEmail);
+  const approvalExecution = completeLocalApprovalExecution({
+    workflow: quote.workflow,
+    approvalRequestId,
+    action: "rotate_portal_link",
+    actorEmail: normalizedActorEmail,
+    completedAtISO: nowISO,
+    reference: nextPortalKey
+  });
 
   await saveQuoteVersion(id, {
     reason: "portal_key_rotate",
@@ -3392,6 +3499,7 @@ export async function rotateQuotePortalKey({
       portalIssuedAtISO,
       portalExpiresAtISO,
       updatedAtISO: nowISO,
+      workflow: approvalExecution.workflow,
       quoteMeta: {
         ...(item.quoteMeta || {}),
         ...(normalizedActorEmail ? { portalRotatedByEmail: normalizedActorEmail } : {})
@@ -3408,7 +3516,8 @@ export async function rotateQuotePortalKey({
     storage: "local",
     portalKey: nextPortalKey,
     portalIssuedAtISO,
-    portalExpiresAtISO
+    portalExpiresAtISO,
+    approvalRequest: approvalExecution.request
   };
 }
 
@@ -4047,57 +4156,6 @@ export async function deleteQuote(id, {
   };
 }
 
-export async function purgeDeletedQuotesForOrganization({
-  organizationId = "",
-  limit = 100
-} = {}) {
-  const normalizedLimit = Math.max(1, Math.min(300, Math.round(toNumber(limit, 100))));
-
-  if (firebaseReady) {
-    const scopedOrganizationId = requireWriteOrganizationId(
-      organizationId,
-      "purge deleted quotes"
-    );
-    ensureCallableReady("purge deleted quotes");
-    const call = httpsCallable(cloudFunctions, PURGE_DELETED_QUOTES_CALLABLE);
-    const result = await call({
-      organizationId: scopedOrganizationId,
-      limit: normalizedLimit
-    });
-    return result?.data || { ok: false };
-  }
-
-  const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
-  const deletedIds = new Set(
-    existing
-      .filter((quote) => normalizeStatus(quote?.status) === "deleted")
-      .map((quote) => String(quote?.id || "").trim())
-      .filter(Boolean)
-  );
-  if (!deletedIds.size) {
-    return {
-      ok: true,
-      storage: "local",
-      deletedQuotes: 0,
-      hasMore: false
-    };
-  }
-
-  const nextQuotes = existing.filter((quote) => !deletedIds.has(String(quote?.id || "").trim()));
-  localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(nextQuotes));
-
-  const history = JSON.parse(localStorage.getItem(LOCAL_QUOTE_HISTORY_KEY) || "[]");
-  const nextHistory = history.filter((item) => !deletedIds.has(String(item?.quoteId || "").trim()));
-  localStorage.setItem(LOCAL_QUOTE_HISTORY_KEY, JSON.stringify(nextHistory));
-
-  return {
-    ok: true,
-    storage: "local",
-    deletedQuotes: deletedIds.size,
-    hasMore: false
-  };
-}
-
 export async function getPortalQuote(portalKey) {
   const key = String(portalKey || "").trim();
   if (!key) {
@@ -4271,6 +4329,11 @@ export async function updatePortalDecision({
       currentStatus === "draft"
         ? "This proposal has not been sent and cannot be accepted yet."
         : "This customer decision is final and can no longer be changed from the portal."
+    );
+  }
+  if (normalizedDecision === "accepted" && !quoteHasMenuSelection(localTarget)) {
+    throw new Error(
+      "This proposal has no menu selection and cannot be signed. Ask staff to create and send a corrected quote."
     );
   }
   const localReceiptId = normalizedDecision === "accepted" ? `acceptance-${buildPortalKey()}` : "";

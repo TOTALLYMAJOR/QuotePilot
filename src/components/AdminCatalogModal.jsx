@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { firebaseReady, storage } from "../lib/firebase";
 import { STARTER_CATALOG_PACKS } from "../data/starterCatalogPacks";
@@ -58,13 +58,6 @@ const ADMIN_TABS = [
   { id: "pricing", label: "Pricing" }
 ];
 
-const CRM_PROVIDER_OPTIONS = [
-  { value: "webhook", label: "Webhook" },
-  { value: "webhook_bridge", label: "Webhook Bridge" },
-  { value: "hubspot", label: "HubSpot Bridge" },
-  { value: "salesforce", label: "Salesforce Bridge" }
-];
-
 const FEATURE_FLAG_META = [
   { id: "customerPortal", label: "Customer Portal" },
   { id: "eventSchedule", label: "Event Schedule" },
@@ -72,7 +65,6 @@ const FEATURE_FLAG_META = [
   { id: "diagnostics", label: "Diagnostics" },
   { id: "reportingDashboard", label: "Reporting Dashboard" },
   { id: "quoteCompare", label: "Quote Compare" },
-  { id: "crmSync", label: "CRM Sync" },
   { id: "guidedSelling", label: "Guided Selling" },
   { id: "aiAssist", label: "AI Assist (Suggestions)" },
   { id: "aiAutopilot", label: "AI Autopilot (Auto Apply)" }
@@ -88,14 +80,6 @@ function normalizeStaffingChargeMode(value, fallback = "per_hour") {
   const raw = String(value || fallback).trim().toLowerCase();
   if (raw === "per_event_per_staff") return "per_event_per_staff";
   return "per_hour";
-}
-
-function normalizeCrmProvider(value, fallback = "webhook") {
-  const raw = String(value || fallback).trim().toLowerCase();
-  if (raw === "crm") return "webhook";
-  if (raw === "webhook-bridge") return "webhook_bridge";
-  if (raw === "webhook" || raw === "webhook_bridge" || raw === "hubspot" || raw === "salesforce") return raw;
-  return fallback;
 }
 
 function defaultRuleName(kind) {
@@ -119,6 +103,36 @@ function initialCatalogAdminTab(catalog) {
   if (catalog?.settings?.starterCatalogPack?.id) return "menu";
   if (catalog?.settings?.pricingSetupConfirmed !== true) return "starter";
   return "packages";
+}
+
+function resolveCatalogAdminTab(catalog, requestedTab = "") {
+  const requested = String(requestedTab || "").trim();
+  if (catalog?.settings?.pricingSetupConfirmed === true && requested === "starter") {
+    return "packages";
+  }
+  return requested || initialCatalogAdminTab(catalog);
+}
+
+export function blurManagedMenuItemOnEnter(event) {
+  if (event?.key !== "Enter") return false;
+  event.preventDefault();
+  event.currentTarget?.blur?.();
+  return true;
+}
+
+export function resolveManagedEventTypeId(eventTypes = [], preferredId = "") {
+  const preferred = String(preferredId || "").trim();
+  if (preferred && eventTypes.some((item) => String(item?.id || "").trim() === preferred)) {
+    return preferred;
+  }
+  return String(eventTypes[0]?.id || "").trim();
+}
+
+export function hasNoMenuInventory(inventory = []) {
+  return (Array.isArray(inventory) ? inventory : []).every(({ categories, items }) => (
+    (Array.isArray(categories) ? categories : []).length === 0
+    && (Array.isArray(items) ? items : []).length === 0
+  ));
 }
 
 function catalogDraftFingerprint(draft, jsonDrafts) {
@@ -154,6 +168,7 @@ export default function AdminCatalogModal({
   onSave,
   onApplyStarterPack,
   onCatalogMutation,
+  onReload,
   saving,
   initialTab = "",
   selectedEventType: selectedEventTypeProp = "",
@@ -161,7 +176,7 @@ export default function AdminCatalogModal({
   onToast
 }) {
   const [draft, setDraft] = useState(catalog);
-  const [activeTab, setActiveTab] = useState(() => initialCatalogAdminTab(catalog));
+  const [activeTab, setActiveTab] = useState(() => resolveCatalogAdminTab(catalog, initialTab));
   const [status, setStatus] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [jsonDrafts, setJsonDrafts] = useState(() => buildJsonDrafts(catalog));
@@ -188,9 +203,18 @@ export default function AdminCatalogModal({
   const [menuItemBaselines, setMenuItemBaselines] = useState({});
   const [menuItemDirty, setMenuItemDirty] = useState({});
   const [menuItemSavingId, setMenuItemSavingId] = useState("");
+  const menuItemSaveInFlightRef = useRef(new Set());
   const [packActionId, setPackActionId] = useState("");
+  const [catalogRefreshRequired, setCatalogRefreshRequired] = useState(false);
   const [manualSetupEnabled, setManualSetupEnabled] = useState(false);
+  const [confirmedMenuRecoveryAvailable, setConfirmedMenuRecoveryAvailable] = useState(false);
+  const [confirmedMenuRecoveryChecked, setConfirmedMenuRecoveryChecked] = useState(false);
   const scopedOrganizationId = String(organizationId || "").trim();
+  const authoritativeVersion = Math.max(0, Number(catalog?.authoritativeVersion || 0));
+  const starterPackRevision = Math.max(
+    0,
+    Number(catalog?.settings?.starterCatalogPack?.appliedCatalogRevision || 0)
+  );
 
   const pushToast = (message, tone = "info") => {
     if (typeof onToast === "function") {
@@ -245,9 +269,9 @@ export default function AdminCatalogModal({
       setDraft(nextDraft);
       setJsonDrafts(nextJsonDrafts);
       setSavedFingerprint(catalogDraftFingerprint(nextDraft, nextJsonDrafts));
-      setStatus("");
+      setStatus(String(catalog?.error || ""));
       setUploadingLogo(false);
-      setActiveTab(initialTab || initialCatalogAdminTab(catalog));
+      setActiveTab(resolveCatalogAdminTab(catalog, initialTab));
       setSelectedEventType(String(selectedEventTypeProp || "").trim());
       setSelectedCategory("");
       setMenuEventTypes([]);
@@ -256,8 +280,12 @@ export default function AdminCatalogModal({
       setMenuItemBaselines({});
       setMenuItemDirty({});
       setMenuItemSavingId("");
+      menuItemSaveInFlightRef.current.clear();
       setPackActionId("");
+      setCatalogRefreshRequired(false);
       setManualSetupEnabled(false);
+      setConfirmedMenuRecoveryAvailable(false);
+      setConfirmedMenuRecoveryChecked(false);
       setMenuLoading(false);
       setMenuActionLoading(false);
       setNewEventTypeName("");
@@ -270,7 +298,8 @@ export default function AdminCatalogModal({
     open,
     scopedOrganizationId,
     initialTab,
-    catalog?.settings?.starterCatalogPack?.appliedCatalogRevision
+    authoritativeVersion,
+    starterPackRevision
   ]);
 
   useEffect(() => {
@@ -283,7 +312,7 @@ export default function AdminCatalogModal({
         const eventTypes = await getEventTypes({ organizationId: scopedOrganizationId });
         if (!alive) return;
         setMenuEventTypes(eventTypes);
-        setManagedEventType(selectedEventTypeProp || eventTypes[0]?.id || "");
+        setManagedEventType(resolveManagedEventTypeId(eventTypes, selectedEventTypeProp));
       } catch (err) {
         if (!alive) return;
         setStatus(err?.message || "Failed to load menu event types.");
@@ -297,7 +326,56 @@ export default function AdminCatalogModal({
     return () => {
       alive = false;
     };
-  }, [open, scopedOrganizationId, selectedEventTypeProp]);
+  }, [open, scopedOrganizationId, selectedEventTypeProp, authoritativeVersion, starterPackRevision]);
+
+  useEffect(() => {
+    if (
+      !open
+      || !firebaseReady
+      || catalog?.settings?.pricingSetupConfirmed !== true
+    ) {
+      setConfirmedMenuRecoveryAvailable(false);
+      setConfirmedMenuRecoveryChecked(true);
+      return undefined;
+    }
+
+    let alive = true;
+    setConfirmedMenuRecoveryChecked(false);
+    async function inspectConfirmedMenuInventory() {
+      try {
+        const eventTypes = await getEventTypes({ organizationId: scopedOrganizationId });
+        const inventory = await Promise.all((eventTypes || []).map(async (eventType) => {
+          const eventTypeId = String(eventType?.id || "").trim();
+          if (!eventTypeId) return { categories: [], items: [] };
+          const [categories, items] = await Promise.all([
+            getMenuCategories(eventTypeId, { organizationId: scopedOrganizationId }),
+            getMenuItems(eventTypeId, {
+              includeInactive: true,
+              organizationId: scopedOrganizationId
+            })
+          ]);
+          return { categories, items };
+        }));
+        if (!alive) return;
+        setConfirmedMenuRecoveryAvailable(hasNoMenuInventory(inventory));
+      } catch {
+        if (!alive) return;
+        setConfirmedMenuRecoveryAvailable(false);
+      } finally {
+        if (alive) setConfirmedMenuRecoveryChecked(true);
+      }
+    }
+    inspectConfirmedMenuInventory();
+    return () => {
+      alive = false;
+    };
+  }, [
+    open,
+    scopedOrganizationId,
+    authoritativeVersion,
+    starterPackRevision,
+    catalog?.settings?.pricingSetupConfirmed
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -338,7 +416,13 @@ export default function AdminCatalogModal({
     return () => {
       alive = false;
     };
-  }, [open, scopedOrganizationId, selectedEventType]);
+  }, [
+    open,
+    scopedOrganizationId,
+    selectedEventType,
+    authoritativeVersion,
+    starterPackRevision
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -355,6 +439,10 @@ export default function AdminCatalogModal({
   if (!open) return null;
 
   const stagedPack = draft?.settings?.starterCatalogPack || {};
+  const recoveryReplacementBlocked = stagedPack.replacementBlocked === true;
+  const confirmedMissingMenuRecovery = confirmedMenuRecoveryChecked
+    && confirmedMenuRecoveryAvailable
+    && draft?.settings?.pricingSetupConfirmed === true;
   const pricingReviewRequired = Boolean(stagedPack.id)
     && draft?.settings?.pricingSetupConfirmed !== true;
 
@@ -363,12 +451,18 @@ export default function AdminCatalogModal({
       setStatus("Starter pack application is unavailable.");
       return;
     }
-    const replacing = Boolean(stagedPack.id);
+    const replacing = Boolean(stagedPack.id) || confirmedMissingMenuRecovery;
     if (replacing && hasUnsavedChanges) {
       setStatus("Save or discard local catalog changes before replacing a staged pack.");
       return;
     }
-    if (replacing && stagedPack.id !== pack.id) {
+    if (confirmedMissingMenuRecovery) {
+      const confirmed = window.confirm(
+        `Add the ${pack.name} starter catalog to repair this empty confirmed menu? `
+        + "Existing catalog records and pricing settings will be preserved. Pricing confirmation will reopen because the catalog revision changes."
+      );
+      if (!confirmed) return;
+    } else if (replacing && stagedPack.id !== pack.id) {
       const confirmed = window.confirm(
         `Replace the staged ${stagedPack.name || stagedPack.id} pack with ${pack.name}? `
         + "Replacement is allowed only when no generated record or suggested pricing setting has been edited."
@@ -384,11 +478,15 @@ export default function AdminCatalogModal({
     });
     setPackActionId("");
     if (!result?.ok) {
+      setCatalogRefreshRequired(result?.refreshRequired === true);
       setStatus(result?.error || "Failed to apply starter catalog pack.");
       pushToast(result?.error || "Failed to apply starter catalog pack.", "error");
       return;
     }
-    const message = `${pack.name} staged. Review every suggested amount before confirming pricing.`;
+    setCatalogRefreshRequired(false);
+    const message = confirmedMissingMenuRecovery
+      ? `${pack.name} added without replacing existing records or pricing settings. Review the recovered catalog and confirm pricing again.`
+      : `${pack.name} staged. Review every suggested amount before confirming pricing.`;
     setActiveTab("menu");
     setStatus(message);
     pushToast(message, "success");
@@ -552,11 +650,10 @@ export default function AdminCatalogModal({
     const items = await getEventTypes({ organizationId: scopedOrganizationId });
     setMenuEventTypes(items);
     const currentId = String(selectedEventType || "").trim();
-    const nextId =
-      (preferredId && items.some((item) => item.id === preferredId) && preferredId) ||
-      (currentId && items.some((item) => item.id === currentId) && currentId) ||
-      items[0]?.id ||
-      "";
+    const nextId = resolveManagedEventTypeId(
+      items,
+      preferredId || currentId
+    );
     setManagedEventType(nextId);
     return items;
   };
@@ -750,7 +847,8 @@ export default function AdminCatalogModal({
 
   const handleUpdateManagedMenuItem = async (item) => {
     const itemId = String(item?.id || "").trim();
-    if (!itemId) return;
+    if (!itemId || menuItemSaveInFlightRef.current.has(itemId)) return;
+    menuItemSaveInFlightRef.current.add(itemId);
     setMenuItemSavingId(itemId);
     try {
       const pricingType = normalizePricingType(item.pricingType || item.type, "per_event");
@@ -806,6 +904,7 @@ export default function AdminCatalogModal({
       });
       pushToast(err?.message || "Failed to update menu item.", "error");
     } finally {
+      menuItemSaveInFlightRef.current.delete(itemId);
       setMenuItemSavingId("");
     }
   };
@@ -818,10 +917,8 @@ export default function AdminCatalogModal({
   };
 
   const handleManagedMenuItemKeyDown = (event, itemId) => {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    event.currentTarget.blur();
-    handleManagedMenuItemBlur(itemId);
+    if (!itemId) return;
+    blurManagedMenuItemOnEnter(event);
   };
 
   const handleDeleteManagedMenuItem = async (id) => {
@@ -911,12 +1008,14 @@ export default function AdminCatalogModal({
 
       const result = await onSave(nextDraft);
       if (result.ok) {
+        setCatalogRefreshRequired(false);
         setDraft(nextDraft);
         setSavedFingerprint(catalogDraftFingerprint(nextDraft, jsonDrafts));
         setStatus("Catalog saved.");
         pushToast("Catalog saved.", "success");
         return;
       }
+      setCatalogRefreshRequired(result?.refreshRequired === true);
       setStatus(result.error || "Save failed.");
       pushToast(result.error || "Save failed.", "error");
     } catch (err) {
@@ -953,7 +1052,19 @@ export default function AdminCatalogModal({
   const starterChoiceOnly = !hasCatalogContent && !manualSetupEnabled;
   const visibleAdminTabs = starterChoiceOnly
     ? ADMIN_TABS.filter((tab) => tab.id === "starter")
-    : ADMIN_TABS;
+    : ADMIN_TABS.filter(
+      (tab) => tab.id !== "starter"
+        || ((!recoveryReplacementBlocked && draft?.settings?.pricingSetupConfirmed !== true)
+          || confirmedMissingMenuRecovery)
+    );
+  const handleReload = () => {
+    if (typeof onReload !== "function") {
+      setStatus("Catalog refresh is unavailable. Close and reopen Catalog Admin.");
+      return;
+    }
+    setStatus("Refreshing the latest catalog from the server...");
+    onReload();
+  };
   const handleClose = () => {
     if (hasUnsavedChanges && !window.confirm("Discard unsaved catalog and branding changes?")) {
       return;
@@ -999,23 +1110,43 @@ export default function AdminCatalogModal({
           </div>
         )}
 
+        {confirmedMissingMenuRecovery && (
+          <div className="starter-pack-review-banner" role="alert">
+            <div>
+              <strong>This confirmed catalog has no menu.</strong>
+              <span> Choose a starter pack to add only missing catalog records. Existing records and pricing settings stay unchanged, and pricing must be confirmed again after recovery.</span>
+            </div>
+            <button type="button" className="cta" onClick={() => setActiveTab("starter")}>
+              Choose a recovery pack
+            </button>
+          </div>
+        )}
+
         {stagedPack.id && (
           <div className="starter-pack-populated-banner" role="status">
             <div>
               <strong>Your {stagedPack.name || "starter"} catalog is populated.</strong>
-              <span> Menu, packages, add-ons, rentals, and staffing are ready to review.</span>
+              <span>{recoveryReplacementBlocked
+                ? " Missing starter records were added without replacing your existing catalog or pricing settings. Continue review and confirm this catalog revision."
+                : " Menu, packages, add-ons, rentals, and staffing are ready to review."}</span>
             </div>
             <button type="button" className="ghost" onClick={() => setActiveTab("menu")}>View populated menu</button>
           </div>
         )}
 
         {activeTab === "starter" && (
+          draft?.settings?.pricingSetupConfirmed !== true || confirmedMissingMenuRecovery
+        ) && (
           <section className="admin-section">
             <div className="admin-section-head"><h3>What kind of catering do you do most?</h3></div>
             <div className="admin-section-body">
               <div className="starter-pack-intro">
-                <p>Choose the closest fit. We will immediately fill your menu, packages, add-ons, rentals, and staffing setup.</p>
-                <p className="source-note">Everything remains editable. Suggested prices stay locked from quoting until you review and confirm them.</p>
+                <p>{confirmedMissingMenuRecovery
+                  ? "Choose the closest fit to restore the missing menu and add any other missing starter records."
+                  : "Choose the closest fit. We will immediately fill your menu, packages, add-ons, rentals, and staffing setup."}</p>
+                <p className="source-note">{confirmedMissingMenuRecovery
+                  ? "This additive recovery does not replace existing records or pricing settings. It reopens pricing review for the new catalog revision."
+                  : "Everything remains editable. Suggested prices stay locked from quoting until you review and confirm them."}</p>
               </div>
               <div className="starter-pack-grid">
                 {STARTER_CATALOG_PACKS.map((pack) => {
@@ -1038,12 +1169,17 @@ export default function AdminCatalogModal({
                         type="button"
                         className={selected ? "ghost" : "cta"}
                         onClick={() => handleApplyStarterPack(pack)}
-                        disabled={saving || Boolean(packActionId) || selected || draft?.settings?.pricingSetupConfirmed === true}
+                        disabled={saving
+                          || Boolean(packActionId)
+                          || selected
+                          || (draft?.settings?.pricingSetupConfirmed === true && !confirmedMissingMenuRecovery)}
                       >
                         {packActionId === pack.id
                           ? "Populating your catalog..."
                           : selected
                             ? "Catalog populated"
+                            : confirmedMissingMenuRecovery
+                              ? `Recover with ${pack.name}`
                             : stagedPack.id
                               ? `Switch to ${pack.name}`
                               : `Use ${pack.name}`}
@@ -1052,7 +1188,7 @@ export default function AdminCatalogModal({
                   );
                 })}
               </div>
-              {draft?.settings?.pricingSetupConfirmed === true && (
+              {draft?.settings?.pricingSetupConfirmed === true && !confirmedMissingMenuRecovery && (
                 <p className="warning-note">Starter packs are available only during initial unconfirmed catalog setup.</p>
               )}
               {starterChoiceOnly && (
@@ -1687,84 +1823,10 @@ export default function AdminCatalogModal({
             </section>
 
             <section className="admin-section">
-          <div className="admin-section-head"><h3>Integrations</h3></div>
-          <div className="admin-grid-settings">
-            <label>
-              CRM provider
-              <select
-                value={normalizeCrmProvider(draft.settings.crmProvider || "webhook")}
-                onChange={(e) => patchTextSetting("crmProvider", normalizeCrmProvider(e.target.value, "webhook"))}
-              >
-                {CRM_PROVIDER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              CRM webhook URL
-              <input
-                type="url"
-                value={draft.settings.crmWebhookUrl || ""}
-                onChange={(e) => patchTextSetting("crmWebhookUrl", e.target.value)}
-              />
-            </label>
-            <label>
-              CRM webhook bridge URL
-              <input
-                type="url"
-                value={draft.settings.crmWebhookBridgeUrl || ""}
-                onChange={(e) => patchTextSetting("crmWebhookBridgeUrl", e.target.value)}
-              />
-            </label>
-            <label>
-              CRM HubSpot bridge URL
-              <input
-                type="url"
-                value={draft.settings.crmHubspotBridgeUrl || ""}
-                onChange={(e) => patchTextSetting("crmHubspotBridgeUrl", e.target.value)}
-              />
-            </label>
-            <label>
-              CRM Salesforce bridge URL
-              <input
-                type="url"
-                value={draft.settings.crmSalesforceBridgeUrl || ""}
-                onChange={(e) => patchTextSetting("crmSalesforceBridgeUrl", e.target.value)}
-              />
-            </label>
-            <label>
-              CRM bridge bearer token (optional)
-              <input
-                type="password"
-                value={draft.settings.crmBridgeAuthToken || ""}
-                onChange={(e) => patchTextSetting("crmBridgeAuthToken", e.target.value)}
-              />
-            </label>
-            <label>
-              <span>Enable CRM sync</span>
-              <input
-                type="checkbox"
-                checked={Boolean(draft.settings.crmEnabled)}
-                onChange={(e) => patchToggleSetting("crmEnabled", e.target.checked)}
-              />
-            </label>
-            <label>
-              <span>CRM auto-sync on sent</span>
-              <input
-                type="checkbox"
-                checked={Boolean(draft.settings.crmAutoSyncOnSent)}
-                onChange={(e) => patchToggleSetting("crmAutoSyncOnSent", e.target.checked)}
-              />
-            </label>
-            <label>
-              <span>CRM auto-sync on booked</span>
-              <input
-                type="checkbox"
-                checked={Boolean(draft.settings.crmAutoSyncOnBooked)}
-                onChange={(e) => patchToggleSetting("crmAutoSyncOnBooked", e.target.checked)}
-              />
-            </label>
-          </div>
+          <div className="admin-section-head"><h3>CRM integrations</h3></div>
+          <p className="source-note">
+            Outbound CRM delivery is not enabled in this release. QuotePilot does not accept endpoint or bearer-token settings here, and Integration Ops records audit events only until a server-authorized connector is installed.
+          </p>
             </section>
 
             <section className="admin-section">
@@ -1925,6 +1987,11 @@ export default function AdminCatalogModal({
           <span className="source-note">
             {status || (hasUnsavedChanges ? "Your changes are not saved yet." : "Settings are up to date.")}
           </span>
+          {catalogRefreshRequired && (
+            <button type="button" className="ghost" onClick={handleReload} disabled={saving}>
+              Refresh latest catalog
+            </button>
+          )}
           {!starterChoiceOnly && (
             <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
               {saving ? "Saving..." : "Save catalog changes"}

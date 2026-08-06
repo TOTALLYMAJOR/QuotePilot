@@ -1,4 +1,4 @@
-# QuotePilot by MBMapps
+# QuotePilot by MBMApps
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -26,9 +26,11 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 The app supports a 5-step quote wizard, dynamic event-type menus, pricing
 configuration, proposal export, customer portal updates, tenant-locked
 customer/catalog CSV imports, server-authoritative deposit and final-balance
-collection in the current source candidate, public invoice-first buyer
-onboarding on the existing `tonicatering` Firebase project, and operations workflows
-(history, scheduling, reporting, diagnostics).
+collection in the current source, public invoice-first buyer onboarding on the
+existing `tonicatering` Firebase project, staff Kitchen BEO export, and
+operations workflows (history, scheduling, reporting, diagnostics). Source
+availability does not establish production deployment or provider acceptance;
+see `PROJECT_STATUS.md` for current operational truth.
 
 Tenant safety mode:
 - Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
@@ -353,9 +355,9 @@ commercial records. The create-only private (`0600`) evidence destination is
 reserved before any database work and completed atomically with aggregate
 counts rather than portal tokens or customer data.
 
-## Stripe Deposit and Final-Balance Workflows (Source Candidate)
+## Stripe Deposit and Final-Balance Workflows
 
-The current source candidate implements deposit and final-balance collection as
+The current source implements deposit and final-balance collection as
 separate server-authoritative payment rails. An approved deposit request binds
 the organization, quote revision, current portal issuance, customer email,
 currency, and deposit amount. A final-balance request additionally requires a
@@ -405,7 +407,7 @@ for configuration and proof requirements.
 
 ## Public $1 Invoice-First Buyer Access (`tonicatering`)
 
-The `feature/paid-buyer-onboarding` source candidate adds a public acquisition
+The current source adds a public acquisition
 path at `/start` without creating a second Firebase environment. The buyer
 enters organization, owner, and invoice-email details and completes a fresh
 Turnstile challenge. QuotePilot does not collect a password or card details at
@@ -481,9 +483,9 @@ Pending, mismatched, unverified, expired, failed, replayed, and cross-account
 paths expose no `/app` access.
 
 Buyer records remain marked as controlled Stripe test-mode data and must be
-excluded from live revenue and live paid-customer classification. This branch
-is source-only until review, merge, semantic tag, exact-target UAT, trusted
-promotion, true Hosted Invoice Page evidence, signed invoice lifecycle
+excluded from live revenue and live paid-customer classification. This flow
+remains disabled and is not production-accepted until semantic tagging,
+exact-target UAT, trusted promotion, true Hosted Invoice Page evidence, signed invoice lifecycle
 evidence, any claimed activation-instructions provider acceptance, Firebase verification-
 email delivery and continue-URL evidence, and hosted negative-path acceptance
 are complete. No provider configuration or live sale is claimed. Refunds,
@@ -499,10 +501,10 @@ requirements.
 Provision a customer organization, enforce order-based feature entitlements
 (unpaid modules locked off), and generate a copy-ready onboarding message.
 
-Release status: this hardened workflow is implemented and locally validated in
-the current release candidate. It is not production-accepted. Do not assume the
-live `/app` exposes it until the reviewed frontend, Functions, and rules are
-deployed from one committed revision. See
+Release status: the hardened provisioning workflow is deployed from `v0.2.3`,
+but authenticated disposable-tenant owner activation and hosted acceptance are
+still pending. Do not infer tenant usability from deployment or `/app`
+reachability. See
 [PROJECT_STATUS.md](PROJECT_STATUS.md) for current operational truth.
 
 Recommended operator path:
@@ -646,8 +648,8 @@ Vercel project/team, exact release evidence, and the SHA-256/size/mode of every
 payload file. Provider/environment setup and the full operator sequence live in
 [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md).
 
-These two primary preparation workflows are a source candidate, not an
-operational production gate, and they do not mutate production. The legacy
+These two primary preparation workflows are implemented source controls, not
+an operational production gate, and they do not mutate production. The legacy
 primary deploy commands fail closed. Promotion remains blocked until protected
 environments and independent
 reviewers exist, provider staging/rollback evidence is machine-bound, Vercel

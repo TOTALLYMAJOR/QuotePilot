@@ -18,6 +18,9 @@ function acceptedQuote(overrides = {}) {
       guests: 120
     },
     booking: {},
+    selection: {
+      menuItems: ["seasonal-salad"]
+    },
     lifecycle: {
       acceptedAtISO: "2026-08-03T12:00:00.000Z"
     },
@@ -114,5 +117,18 @@ describe("server contract conversion planning", () => {
       nowISO: "2026-08-03T18:00:00.000Z",
       contractNumber: "C-260803-12345"
     })).toThrowError(expect.objectContaining({ code: "already-exists" }));
+  });
+
+  test("blocks contract conversion for a legacy accepted quote with no menu selection", () => {
+    expect(() => planContractConversion({
+      quoteId: "quote-target",
+      quote: acceptedQuote({ selection: { menuItems: [] } }),
+      actorEmail: "admin@example.com",
+      nowISO: "2026-08-03T18:00:00.000Z",
+      contractNumber: "C-260803-12345"
+    })).toThrowError(expect.objectContaining({
+      code: "failed-precondition",
+      message: expect.stringMatching(/no menu selection/i)
+    }));
   });
 });

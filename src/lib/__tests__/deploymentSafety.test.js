@@ -25,6 +25,7 @@ const UAT_WORKFLOW = path.join(
 const FIREBASE_STUB = path.join(ROOT, "scripts", "deploy-firebase-production.mjs");
 const VERCEL_STUB = path.join(ROOT, "scripts", "deploy-vercel-production.mjs");
 const CUSTOMER_DEPLOY_SCRIPT = path.join(ROOT, "scripts", "deploy-hosting-customer.mjs");
+const CI_LANE_CLASSIFIER = path.join(ROOT, "scripts", "ci-lane-classifier.mjs");
 
 describe("production mutation retirement", () => {
   test.each([
@@ -89,10 +90,19 @@ describe("production mutation retirement", () => {
     expect(functionsPackage.scripts.deploy).toBe(
       "node ../scripts/deploy-firebase-production.mjs"
     );
+    expect(rootPackage.scripts["release:uat:items"]).toBe(
+      "node ./scripts/release-uat-attestation.mjs --print-items"
+    );
   });
 });
 
 describe("customer-site mutation retirement", () => {
+  test("classifies the retired customer-site entrypoint as high risk", () => {
+    expect(fs.readFileSync(CI_LANE_CLASSIFIER, "utf8")).toContain(
+      '"scripts/deploy-hosting-customer.mjs"'
+    );
+  });
+
   test("keeps the customer-site command fail-closed without a provider runner", () => {
     const source = fs.readFileSync(CUSTOMER_DEPLOY_SCRIPT, "utf8");
     const result = spawnSync(process.execPath, [CUSTOMER_DEPLOY_SCRIPT, "--force"], {

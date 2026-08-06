@@ -4,13 +4,36 @@ import { describe, expect, test } from "vitest";
 const require = createRequire(import.meta.url);
 const {
   ApprovalWorkflowError,
+  assertApprovalActionRequestable,
   buildApprovalExecutionOutcome,
   buildApprovalExecutionStart,
   buildApprovalRequest,
-  buildApprovalResolution
+  buildApprovalResolution,
+  invalidatePaymentApprovalsForPortalRotation
 } = require("../../../functions/approvalWorkflow.js");
 
 describe("server approval workflow planning", () => {
+  test("validates action lifecycle independently from the client", () => {
+    const accepted = {
+      status: "accepted",
+      customer: { email: "customer@example.com" },
+      totals: { total: 1000, deposit: 250 },
+      payment: { depositStatus: "unpaid" }
+    };
+    expect(assertApprovalActionRequestable({
+      quote: accepted,
+      action: "send_payment_request"
+    })).toBe(true);
+    expect(() => assertApprovalActionRequestable({
+      quote: { ...accepted, status: "draft" },
+      action: "send_payment_request"
+    })).toThrowError(expect.objectContaining({ code: "failed-precondition" }));
+    expect(() => assertApprovalActionRequestable({
+      quote: accepted,
+      action: "send_quote_email"
+    })).toThrowError(expect.objectContaining({ code: "invalid-argument" }));
+  });
+
   test("builds pending requests from server-owned identity and time", () => {
     const result = buildApprovalRequest({
       workflow: {},
@@ -348,5 +371,86 @@ describe("server approval workflow planning", () => {
       nowISO: "2026-08-03T18:07:00.000Z",
       operationId: approvedRequest.id
     })).toThrowError(expect.objectContaining({ code: "failed-precondition" }));
+  });
+
+  test("invalidates portal-scoped payment approvals and permits a fresh request", () => {
+    const workflow = {
+      approvalRequests: [
+        {
+          id: "pending-deposit",
+          action: "send_payment_request",
+          state: "pending",
+          executionState: ""
+        },
+        {
+          id: "awaiting-balance",
+          action: "send_final_balance_request",
+          state: "approved",
+          executionState: "awaiting_execution"
+        },
+        {
+          id: "completed-deposit",
+          action: "send_payment_request",
+          state: "approved",
+          executionState: "succeeded"
+        }
+      ]
+    };
+    const invalidated = invalidatePaymentApprovalsForPortalRotation({
+      workflow,
+      actorEmail: "ADMIN@EXAMPLE.COM",
+      nowISO: "2026-08-06T15:00:00.000Z",
+      operationId: "portal-rotation-request"
+    });
+
+    expect(invalidated.invalidatedRequestIds).toEqual([
+      "pending-deposit",
+      "awaiting-balance"
+    ]);
+    expect(invalidated.approvalRequests[0]).toMatchObject({
+      state: "rejected",
+      resolvedAtISO: "2026-08-06T15:00:00.000Z",
+      resolvedByEmail: "admin@example.com"
+    });
+    expect(invalidated.approvalRequests[1]).toMatchObject({
+      executionState: "failed",
+      executionCompletedAtISO: "2026-08-06T15:00:00.000Z",
+      executedByEmail: "admin@example.com",
+      executionOperationId: "portal-rotation-request"
+    });
+    expect(invalidated.approvalRequests[2]).toEqual(workflow.approvalRequests[2]);
+
+    const fresh = buildApprovalRequest({
+      workflow: { approvalRequests: invalidated.approvalRequests },
+      action: "send_payment_request",
+      actorEmail: "admin@example.com",
+      nowISO: "2026-08-06T15:01:00.000Z",
+      requestId: "fresh-deposit-request",
+      actionScope: {
+        paymentKind: "deposit",
+        amountCents: 12500
+      },
+      actionScopeDigest: "a".repeat(64)
+    });
+    expect(fresh.request).toMatchObject({
+      id: "fresh-deposit-request",
+      state: "pending"
+    });
+  });
+
+  test("blocks portal rotation invalidation while a payment execution is in progress", () => {
+    expect(() => invalidatePaymentApprovalsForPortalRotation({
+      workflow: {
+        approvalRequests: [{
+          id: "deposit-in-progress",
+          action: "send_payment_request",
+          state: "approved",
+          executionState: "in_progress"
+        }]
+      },
+      actorEmail: "admin@example.com",
+      nowISO: "2026-08-06T15:00:00.000Z",
+      operationId: "portal-rotation-request"
+    })).toThrowError(expect.objectContaining({ code: "aborted" }));
   });
 });

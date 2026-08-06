@@ -437,6 +437,12 @@ function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}
   if (!eventTypes.length) {
     throw new StarterCatalogPackError("failed-precondition", "Add at least one event type before confirming pricing.");
   }
+  if (!categories.length) {
+    throw new StarterCatalogPackError("failed-precondition", "Add at least one menu category before confirming pricing.");
+  }
+  if (!menuItems.length) {
+    throw new StarterCatalogPackError("failed-precondition", "Add at least one menu item before confirming pricing.");
+  }
 
   const eventTypeIds = new Set(eventTypes.map((entry) => entry.id));
   const categoriesById = new Map(categories.map((entry) => [entry.id, entry.data || {}]));
@@ -487,7 +493,8 @@ function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}
     }
   });
 
-  const requireMinorSettings = Boolean(text(settings?.starterCatalogPack?.id));
+  const requireMinorSettings = Boolean(text(settings?.starterCatalogPack?.id))
+    && text(settings?.starterCatalogPack?.recoveryMode) !== "additive_missing_menu";
   [
     ["perMileRateMinor", "perMileRate"],
     ["longDistancePerMileRateMinor", "longDistancePerMileRate"],
@@ -894,7 +901,9 @@ async function applyStarterCatalogPack({
     }
     const currentSettings = settingsSnap.data() || {};
     const revision = assertExpectedRevision(currentSettings, expectedCatalogRevision);
-    if (currentSettings.pricingSetupConfirmed === true) {
+    const confirmedMissingMenuRecovery = currentSettings.pricingSetupConfirmed === true
+      && replaceStagedPack === true;
+    if (currentSettings.pricingSetupConfirmed === true && !confirmedMissingMenuRecovery) {
       throw new StarterCatalogPackError(
         "failed-precondition",
         "Starter packs can only be applied before pricing setup is confirmed."
@@ -907,6 +916,71 @@ async function applyStarterCatalogPack({
     const existingDocs = COLLECTION_NAMES.flatMap((collectionName) =>
       collections[collectionName].map((entry) => ({ ...entry, collectionName }))
     );
+
+    if (confirmedMissingMenuRecovery) {
+      if (collections.menuCategories.length > 0 || collections.menuItems.length > 0) {
+        throw new StarterCatalogPackError(
+          "failed-precondition",
+          "Confirmed-catalog recovery is available only when the organization has no menu categories or menu items."
+        );
+      }
+
+      const existingKeys = new Set(
+        existingDocs.map((entry) => `${entry.collectionName}/${entry.id}`)
+      );
+      const recoveryDocuments = COLLECTION_NAMES.flatMap((collectionName) => (
+        plan.collections[collectionName]
+          .filter((entry) => !existingKeys.has(`${collectionName}/${entry.id}`))
+          .map((entry) => ({ ...entry, collectionName }))
+      ));
+      const writeCount = recoveryDocuments.length + 1;
+      if (writeCount > MAX_TRANSACTION_WRITES) {
+        throw new StarterCatalogPackError(
+          "resource-exhausted",
+          "Starter pack recovery is too large for one safe transaction."
+        );
+      }
+
+      const nextRevision = revision + 1;
+      recoveryDocuments.forEach((entry) => {
+        transaction.set(collectionRefs[entry.collectionName].doc(entry.id), {
+          ...entry.data,
+          starterPackCatalogRevision: nextRevision,
+          ...(serverTimestamp ? { updatedAt: serverTimestamp() } : {})
+        });
+      });
+      transaction.set(settingsRef, {
+        catalogRevision: nextRevision,
+        pricingSetupConfirmed: false,
+        pricingConfirmation: null,
+        starterCatalogPack: {
+          ...plan.settings.starterCatalogPack,
+          appliedCatalogRevision: nextRevision,
+          recoveryMode: "additive_missing_menu",
+          replacementBlocked: true
+        },
+        updatedAtISO: nowISO,
+        ...(serverTimestamp ? { updatedAt: serverTimestamp() } : {})
+      }, { merge: true });
+
+      const createdCounts = COLLECTION_NAMES.reduce((counts, collectionName) => ({
+        ...counts,
+        [collectionName]: recoveryDocuments.filter(
+          (entry) => entry.collectionName === collectionName
+        ).length
+      }), {});
+      return {
+        ok: true,
+        recoveredMissingMenu: true,
+        replaced: false,
+        preservedExistingRecords: existingDocs.length,
+        organizationId: normalizedOrganizationId,
+        catalogRevision: nextRevision,
+        pack: plan.pack,
+        counts: createdCounts
+      };
+    }
+
     const classifications = existingDocs.map((entry) => ({
       ...entry,
       state: classifyPackRecord(entry.collectionName, entry.data, currentPackId, currentPackVersion)

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -103,9 +104,13 @@ function isAdcMissingError(error) {
   );
 }
 
-function readFirebaseCliAccessToken() {
+export function readFirebaseCliAccessToken({
+  execFileSyncImpl = execFileSync,
+  fsSyncImpl = fsSync,
+  env = process.env
+} = {}) {
   try {
-    execFileSync("npx", ["--yes", "firebase-tools", "projects:list", "--json"], {
+    execFileSyncImpl("npx", ["--yes", "firebase-tools", "projects:list", "--json"], {
       encoding: "utf8",
       stdio: ["ignore", "ignore", "ignore"]
     });
@@ -113,8 +118,8 @@ function readFirebaseCliAccessToken() {
     // A cached CLI token can still be usable when refreshing the project list fails.
   }
   try {
-    const configPath = path.join(process.env.HOME || "", ".config", "configstore", "firebase-tools.json");
-    const payload = JSON.parse(fsSync.readFileSync(configPath, "utf8"));
+    const configPath = path.join(env.HOME || "", ".config", "configstore", "firebase-tools.json");
+    const payload = JSON.parse(fsSyncImpl.readFileSync(configPath, "utf8"));
     return String(payload?.tokens?.access_token || "").trim();
   } catch {
     return "";

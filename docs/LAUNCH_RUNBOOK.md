@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: August 4, 2026
+Last updated: August 6, 2026
 
 ## Goal
 Prepare, promote, and verify QuotePilot safely with isolated credentials,
@@ -499,7 +499,7 @@ provider identifiers in evidence. After the exercise, disable the server gate. R
 cancellations, access revocation, support, tax/accounting, and live-mode launch
 remain separate operating gates.
 
-The current source candidate handles deposit and final-balance collection as
+The current source handles deposit and final-balance collection as
 separate payment rails. An exact approved deposit scope binds organization,
 quote revision, portal issuance, customer email, currency, and deposit amount.
 An exact final-balance scope is available only for a booked contract with a
@@ -584,17 +584,22 @@ Session.
 
 ### 6.1 Pre-Merge UAT (Required for Production-Triggering Merge)
 
-Pass all checks before merging a release-intent PR to `main`. Use the stable
-item ids and labels in `docs/release-uat-checklist.json`; changes to that file
-change its SHA-256 digest and invalidate older attestations.
+Pass all checks before merging a release-intent PR to `main`. For every
+production target intended by the release, use the stable item ids, labels, and
+v2 target applicability in `docs/release-uat-checklist.json`; changes to that
+file change its SHA-256 digest and invalidate older attestations. The broader
+source-acceptance list below also includes the portal backfill tool, which is a
+separate data operation and is deliberately absent from deployment-target UAT.
 
 For any release containing either Stripe collection rail, the applicable
 tracked `payment.*` items are mandatory, not optional spot checks. The exact
 target item set covers deposit dispatch, final-balance dispatch,
 signed-webhook/reconciliation behavior, cross-rail isolation, customer-safe
-projection, and customer/staff payment surfaces as applicable. Complete all
-items printed by `npm run release:uat:items` against the exact coordinated
-hosted candidate. Local unit, rules, or emulator success is source evidence;
+projection, and customer/staff payment surfaces as applicable. For each
+selected release target, run
+`npm run release:uat:items -- --target <profile>` and complete all and only the
+printed ids against the exact coordinated hosted candidate. Local unit, rules,
+or emulator success is source evidence;
 it does not satisfy hosted payment UAT or establish Stripe test/live provider
 acceptance. A target attestation also does not prove the SHA or identity of an
 unbound frontend/backend dependency, so retain a separate provider acceptance
@@ -748,12 +753,23 @@ After the reviewed PR merges:
 1. Record the full current `main` SHA. Wait for the `push`-event `CI Quality`
    run for that exact SHA and confirm all eight named jobs succeeded. Record its
    numeric run id; a PR merge-ref run is not accepted.
-2. Exercise the exact main SHA on an immutable non-production deployment and
-   record the provider deployment id. The source gate treats this as a human
-   attestation; independently confirm the provider maps that id to the exact
-   SHA.
-3. From the exact main checkout, run `npm run release:uat:digest`. Complete
-   every item id in `docs/release-uat-checklist.json` against that deployment.
+2. Exercise the exact main SHA on an immutable non-production deployment for
+   the intended target and record its provider deployment id. The source gate
+   still treats `staging_id` as a human-entered assertion; independently confirm
+   the provider maps that id to the exact SHA. A `firebase-all` pass needs a
+   provider-derived compound staging receipt that binds Hosting, Functions, and
+   Firestore rules to that SHA. Until provider-bound staging identity (including
+   that compound receipt) is implemented, do not treat this attestation as an
+   operational promotion gate.
+3. From the exact main checkout, print the checklist digest and the exact item
+   ids applicable to the intended target:
+   ```bash
+   npm run release:uat:digest
+   npm run release:uat:items -- --target <firebase-hosting|firebase-backend|firebase-all|vercel>
+   ```
+   Complete all and only those target-applicable items against the recorded
+   deployment. Portal projection backfill is not in any target set; retain its
+   separately authorized source/data-operation evidence instead.
 4. Dispatch `Release UAT Attestation` from `main` with:
    - `release_sha`: the full exact-main SHA,
    - `target`: `firebase-hosting`, `firebase-backend`, `firebase-all`, or
@@ -761,7 +777,8 @@ After the reviewed PR merges:
    - `rollback_sha`: the full target-specific last-known-good ancestor,
    - `staging_id`: the immutable provider deployment id,
    - `checklist_digest`: the printed 64-character digest,
-   - `checked_item_ids`: every checklist id exactly once, comma-separated,
+   - `checked_item_ids`: every id printed for that target exactly once,
+     comma-separated,
    - `confirmation`: `ATTEST UAT <full-release-sha>`.
 5. A reviewer other than the attester approves `production-uat`. Record the
    successful workflow run id. Reruns, bot actors, stale receipts, and a UAT run
@@ -793,6 +810,14 @@ include an approval timestamp or historical environment-policy snapshot, so a
 separately owned audit/webhook record is still required for stronger historical
 proof.
 
+Target applicability limits what one receipt claims. Hosting and Vercel items
+cover the built SPA plus observed compatibility with its test environment;
+backend items cover the prepared Functions/rules surface; `firebase-all` is the
+union of the Firebase Hosting and backend item sets, not a cross-provider
+profile. No receipt proves the SHA or provider identity of an unbound
+dependency, and the current human-entered `staging_id` limitation remains a
+release blocker.
+
 ## 7) Post-Launch Verification
 
 Before testing legacy customer records, run the customer portal projection
@@ -814,8 +839,8 @@ npm run portal:backfill -- \
 Resolve all reported identity or commercial-evidence conflicts before apply.
 Apply requires Firebase Admin ADC, a new evidence file, and the exact
 scope-bound confirmation shown in the README. Do not infer permission to apply
-from deployment or merge approval, and never copy portal tokens or customer
-data into release evidence.
+from deployment, merge, UAT, or release approval, and never copy portal tokens
+or customer data into release evidence.
 
 For a release containing public buyer onboarding, retain the provider-bound
 acceptance records from the invoice-first section and repeat the paid-invoice,

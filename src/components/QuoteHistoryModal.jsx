@@ -13,6 +13,7 @@ import { currency } from "../lib/quoteCalculator";
 import { getEventTypes } from "../lib/menuService";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import { buildQuoteEmailPayload } from "../lib/proposalPayload";
+import { getApprovalRequestExecutionEligibility } from "../lib/quoteWorkflow";
 import {
   BOOKING_CONFIRMATION_STATUSES,
   convertQuoteToContract,
@@ -21,7 +22,6 @@ import {
   getAllowedStatusTransitions,
   getQuoteHistory,
   reopenQuote,
-  requestQuoteApproval,
   rotateQuotePortalKey,
   updateQuoteBookingConfirmation,
   updateQuoteStatus
@@ -76,7 +76,7 @@ export function getFinalBalanceDisplayStatus(finalBalance = {}) {
   return ["unpaid", "sent"].includes(status) ? status : "unpaid";
 }
 
-export function getExecutableApprovalRequest(quote, action) {
+export function getExecutableApprovalRequest(quote, action, options = {}) {
   const requests = Array.isArray(quote?.workflow?.approvalRequests)
     ? quote.workflow.approvalRequests
     : [];
@@ -94,10 +94,14 @@ export function getExecutableApprovalRequest(quote, action) {
       && Number(request.actionScope.amountCents) > 0
       && /^[a-f0-9]{64}$/.test(String(request?.actionScopeDigest || "").trim().toLowerCase())
     );
-    return request?.action === action
+    const structurallyExecutable = request?.action === action
       && request?.state === "approved"
       && hasPaymentScope
       && (!executionState || executionState === "awaiting_execution" || canResumePaymentRequest);
+    return structurallyExecutable && (
+      options?.validateCurrentEligibility !== true
+      || getApprovalRequestExecutionEligibility(quote, request, options).eligible
+    );
   }) || null;
 }
 
@@ -278,7 +282,19 @@ export function getQuoteHistoryActionPermissions(role) {
 }
 
 export function canRotateQuotePortal(status) {
-  return ["draft", "sent", "viewed", "booked"].includes(
+  return ["draft", "sent", "viewed", "accepted", "booked"].includes(
+    String(status || "draft").trim().toLowerCase()
+  );
+}
+
+export function canDeliverQuoteEmailStatus(status) {
+  return ["draft", "sent", "viewed", "accepted", "booked"].includes(
+    String(status || "draft").trim().toLowerCase()
+  );
+}
+
+export function canEditQuoteStatus(status) {
+  return ["draft", "sent", "viewed"].includes(
     String(status || "draft").trim().toLowerCase()
   );
 }
@@ -292,9 +308,11 @@ export default function QuoteHistoryModal({
   currentUserEmail = "",
   currentUserRole = "customer",
   focusQuoteId = "",
+  focusAction = "",
   focusReason = "",
   onEditQuote,
   onOpenIntegrations,
+  integrationsAvailable = true,
   canDeleteQuotes = false,
   onToast
 }) {
@@ -329,7 +347,6 @@ export default function QuoteHistoryModal({
   const [reconcilingFinalBalanceId, setReconcilingFinalBalanceId] = useState("");
   const [reopeningQuoteId, setReopeningQuoteId] = useState("");
   const [rotatingPortalId, setRotatingPortalId] = useState("");
-  const [requestingApprovalId, setRequestingApprovalId] = useState("");
   const [pendingDeleteQuote, setPendingDeleteQuote] = useState(null);
   const [deliveryReview, setDeliveryReview] = useState(null);
   const [resolvingDeliveryId, setResolvingDeliveryId] = useState("");
@@ -441,13 +458,18 @@ export default function QuoteHistoryModal({
       setEventTypeFilter("all");
       setStatusFilter("all");
     }
-  }, [open, focusQuoteId, organizationId]);
+  }, [open, focusQuoteId, focusAction, organizationId]);
 
   const pushToast = (message, tone = "info") => {
     if (typeof onToast === "function") {
       onToast(message, tone);
     }
   };
+  const approvalExecutionOptions = ({ allowInProgressRecovery = false } = {}) => ({
+    validateCurrentEligibility: true,
+    requireActivePortal: state.source === "firebase",
+    allowInProgressRecovery
+  });
 
   const load = async () => {
     const generation = loadGenerationRef.current + 1;
@@ -560,18 +582,27 @@ export default function QuoteHistoryModal({
 
   useEffect(() => {
     if (!open || !focusQuoteId || state.loading) return;
-    if (focusedHandoffIdRef.current === focusQuoteId) return;
+    const focusKey = `${focusQuoteId}:${String(focusAction || "").trim()}`;
+    if (focusedHandoffIdRef.current === focusKey) return;
     if (loadedFocusQuoteIdRef.current !== focusQuoteId) return;
     if (!state.quotes.some((quote) => quote.id === focusQuoteId)) return;
     const frame = window.requestAnimationFrame(() => {
       const handoff = savedQuoteHandoffRef.current;
       if (!handoff || handoff.dataset.quoteId !== focusQuoteId) return;
-      handoff.focus({ preventScroll: true });
-      handoff.scrollIntoView({ block: "nearest" });
-      focusedHandoffIdRef.current = focusQuoteId;
+      const targetRow = Array.from(dialogRef.current?.querySelectorAll("tr[data-quote-id]") || [])
+        .find((row) => row.dataset.quoteId === focusQuoteId);
+      const normalizedAction = String(focusAction || "").trim();
+      const actionTarget = normalizedAction
+        ? Array.from(targetRow?.querySelectorAll("button[data-approval-action]") || [])
+          .find((button) => button.dataset.approvalAction === normalizedAction && !button.disabled)
+        : null;
+      const focusTarget = actionTarget || handoff;
+      focusTarget.focus({ preventScroll: true });
+      focusTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+      focusedHandoffIdRef.current = focusKey;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [open, focusQuoteId, state.loading, state.quotes]);
+  }, [open, focusQuoteId, focusAction, state.loading, state.quotes]);
 
   useEffect(() => {
     if (!deliveryReview) return undefined;
@@ -588,7 +619,7 @@ export default function QuoteHistoryModal({
   const authorityCopy = permissions.role === "admin"
     ? "Admin can change quote, payment, booking, portal, and contract state."
     : permissions.role === "sales"
-      ? "Sales can prepare proposal artifacts; admin approval is required to send email or change payment, booking, portal, and delete state."
+      ? "Sales can prepare proposal artifacts; admin authority is required to send provider email or change payment, booking, portal, and delete state."
       : "Customers can review portal content only; staff authority is required for quote history actions.";
   const normalizedCustomerQuery = query.trim().toLowerCase();
   const eventTypeNameById = new Map(
@@ -636,7 +667,7 @@ export default function QuoteHistoryModal({
   });
   const focusedQuoteDeliveryEligible = permissions.canSendQuoteEmail
     && state.source === "firebase"
-    && ["draft", "sent", "viewed"].includes(focusedQuoteStatus)
+    && canDeliverQuoteEmailStatus(focusedQuoteStatus)
     && Boolean(focusedQuoteRevisionId)
     && focusedDelivery.canAttempt;
   const focusedQuoteCanSend = focusedQuoteDeliveryEligible
@@ -715,7 +746,11 @@ export default function QuoteHistoryModal({
     setState((prev) => ({ ...prev, error: "" }));
     try {
       const quote = state.quotes.find((item) => item.id === quoteId);
-      const approvalRequest = getExecutableApprovalRequest(quote, "delete_quote");
+      const approvalRequest = getExecutableApprovalRequest(
+        quote,
+        "delete_quote",
+        approvalExecutionOptions()
+      );
       if (state.source === "firebase" && !approvalRequest) {
         throw new Error("Approve a quote-deletion request in Workflow first.");
       }
@@ -819,7 +854,11 @@ export default function QuoteHistoryModal({
     setConvertingId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
-      const approvalRequest = getExecutableApprovalRequest(quote, "convert_to_contract");
+      const approvalRequest = getExecutableApprovalRequest(
+        quote,
+        "convert_to_contract",
+        approvalExecutionOptions()
+      );
       if (state.source === "firebase" && !approvalRequest) {
         throw new Error("Approve a contract-conversion request in Workflow first.");
       }
@@ -1015,7 +1054,11 @@ export default function QuoteHistoryModal({
     setRotatingPortalId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
-      const approvalRequest = getExecutableApprovalRequest(quote, "rotate_portal_link");
+      const approvalRequest = getExecutableApprovalRequest(
+        quote,
+        "rotate_portal_link",
+        approvalExecutionOptions()
+      );
       if (state.source === "firebase" && !approvalRequest) {
         throw new Error("Approve a portal-rotation request in Workflow first.");
       }
@@ -1031,6 +1074,7 @@ export default function QuoteHistoryModal({
         portalExpiresAtISO: result.portalExpiresAtISO
       }));
       applyApprovalExecutionLocally(quote.id, result.approvalRequest);
+      await load();
       setState((prev) => ({
         ...prev,
         feedback: `Portal link rotated for ${quote.quoteNumber}.`
@@ -1156,15 +1200,22 @@ export default function QuoteHistoryModal({
     setSendingPaymentEmailId(quote.id);
     setState((prev) => ({ ...prev, error: "", feedback: "" }));
     try {
-      const approvalRequest = getExecutableApprovalRequest(quote, "send_payment_request");
+      const approvalRequest = getExecutableApprovalRequest(
+        quote,
+        "send_payment_request",
+        approvalExecutionOptions({ allowInProgressRecovery: true })
+      );
       if (!approvalRequest) {
         throw new Error("Approve a payment-request action in Workflow first.");
       }
+      const paymentRequestInProgress = String(approvalRequest.executionState || "")
+        .trim()
+        .toLowerCase() === "in_progress";
       const status = String(quote.status || "").trim().toLowerCase();
       if (!["accepted", "booked"].includes(status)) {
         throw new Error("Payment request email is only available after quote acceptance.");
       }
-      if (isPortalExpired(quote)) {
+      if (isPortalExpired(quote) && !paymentRequestInProgress) {
         throw new Error("Portal link expired. Rotate the portal link before sending payment requests.");
       }
 
@@ -1178,6 +1229,7 @@ export default function QuoteHistoryModal({
       setState((prev) => ({ ...prev, feedback: `Payment request sent to ${quote.customer?.email || "customer"}.` }));
       pushToast(`Payment request sent for ${quote.quoteNumber}.`, "success");
     } catch (err) {
+      await load();
       setState((prev) => ({ ...prev, error: err?.message || "Failed to send payment request." }));
     } finally {
       setSendingPaymentEmailId("");
@@ -1191,17 +1243,21 @@ export default function QuoteHistoryModal({
     try {
       const approvalRequest = getExecutableApprovalRequest(
         quote,
-        "send_final_balance_request"
+        "send_final_balance_request",
+        approvalExecutionOptions({ allowInProgressRecovery: true })
       );
       if (!approvalRequest) {
         throw new Error("Approve a final-balance request in Sales Workflow first.");
       }
-      if (!isFinalBalanceRequestEligible(quote)) {
+      const finalBalanceRequestInProgress = String(approvalRequest.executionState || "")
+        .trim()
+        .toLowerCase() === "in_progress";
+      if (!isFinalBalanceRequestEligible(quote) && !finalBalanceRequestInProgress) {
         throw new Error(
           "Final-balance collection requires a booked contract and a verified paid deposit."
         );
       }
-      if (isPortalExpired(quote)) {
+      if (isPortalExpired(quote) && !finalBalanceRequestInProgress) {
         throw new Error("Portal link expired. Restore customer portal access before sending the final balance.");
       }
 
@@ -1218,6 +1274,7 @@ export default function QuoteHistoryModal({
       }));
       pushToast(`Final-balance request sent for ${quote.quoteNumber}.`, "success");
     } catch (err) {
+      await load();
       setState((prev) => ({
         ...prev,
         error: err?.message || "Failed to send final-balance request."
@@ -1279,35 +1336,6 @@ export default function QuoteHistoryModal({
   const handleOpenIntegrations = () => {
     if (typeof onOpenIntegrations !== "function") return;
     onOpenIntegrations();
-  };
-
-  const handleRequestSendApproval = async (quote) => {
-    if (!quote?.id) return;
-    setRequestingApprovalId(quote.id);
-    setState((prev) => ({ ...prev, error: "", feedback: "" }));
-    try {
-      const result = await requestQuoteApproval({
-        quoteId: quote.id,
-        action: "send_quote_email",
-        note: "",
-        actorEmail: currentUserEmail,
-        actorRole: currentUserRole
-      });
-      applyQuoteLocally(quote.id, (existing) => ({
-        ...existing,
-        workflow: {
-          ...(existing.workflow || {}),
-          approvalRequests: [...(existing.workflow?.approvalRequests || []), result.request]
-        }
-      }));
-      const feedback = "Approval requested. An admin will see it in Workflow.";
-      setState((prev) => ({ ...prev, feedback }));
-      pushToast(feedback, "success");
-    } catch (err) {
-      setState((prev) => ({ ...prev, error: err?.message || "Failed to request approval." }));
-    } finally {
-      setRequestingApprovalId("");
-    }
   };
 
   return (
@@ -1491,21 +1519,16 @@ export default function QuoteHistoryModal({
                   {exportingPdfId === focusedQuote.id ? "Generating PDF..." : "Download PDF"}
                 </button>
               )}
-              {!focusedQuoteCanSend && focusedQuoteEmailUnconfigured && (
+              {!focusedQuoteCanSend && focusedQuoteEmailUnconfigured && integrationsAvailable && (
                 <button type="button" className="ghost" onClick={handleOpenIntegrations}>
                   Set up email in Integrations
                 </button>
               )}
+              {!focusedQuoteCanSend && focusedQuoteEmailUnconfigured && !integrationsAvailable && (
+                <span className="muted">Email provider setup is unavailable in this workspace.</span>
+              )}
               {!focusedQuoteCanSend && permissions.role === "sales" && (
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => handleRequestSendApproval(focusedQuote)}
-                  disabled={requestingApprovalId === focusedQuote.id}
-                  aria-busy={requestingApprovalId === focusedQuote.id}
-                >
-                  {requestingApprovalId === focusedQuote.id ? "Requesting approval..." : "Request approval to send"}
-                </button>
+                <span className="muted">Use Copy Email or Download PDF for an admin handoff.</span>
               )}
             </div>
           </section>
@@ -1602,25 +1625,39 @@ export default function QuoteHistoryModal({
                 const confirmationStatus = booking.confirmationStatus || "pending";
                 const canConvert = canConvertToContract(quote);
                 const canTrackConfirmation = quote.status === "booked" && Boolean(contractNumber);
-                const canSendPaymentRequest = ["accepted", "booked"].includes(
-                  String(quote.status || "").trim().toLowerCase()
-                );
                 const canRotatePortalForStatus = canRotateQuotePortal(normalizedQuoteStatus);
                 const approvalRequired = state.source === "firebase";
-                const contractApproval = getExecutableApprovalRequest(quote, "convert_to_contract");
-                const paymentRequestApproval = getExecutableApprovalRequest(quote, "send_payment_request");
+                const contractApproval = getExecutableApprovalRequest(
+                  quote,
+                  "convert_to_contract",
+                  approvalExecutionOptions()
+                );
+                const paymentRequestApproval = getExecutableApprovalRequest(
+                  quote,
+                  "send_payment_request",
+                  approvalExecutionOptions({ allowInProgressRecovery: true })
+                );
                 const paymentRequestInProgress = String(
                   paymentRequestApproval?.executionState || ""
                 ).trim().toLowerCase() === "in_progress";
                 const finalBalanceApproval = getExecutableApprovalRequest(
                   quote,
-                  "send_final_balance_request"
+                  "send_final_balance_request",
+                  approvalExecutionOptions({ allowInProgressRecovery: true })
                 );
                 const finalBalanceRequestInProgress = String(
                   finalBalanceApproval?.executionState || ""
                 ).trim().toLowerCase() === "in_progress";
-                const portalRotationApproval = getExecutableApprovalRequest(quote, "rotate_portal_link");
-                const deleteApproval = getExecutableApprovalRequest(quote, "delete_quote");
+                const portalRotationApproval = getExecutableApprovalRequest(
+                  quote,
+                  "rotate_portal_link",
+                  approvalExecutionOptions()
+                );
+                const deleteApproval = getExecutableApprovalRequest(
+                  quote,
+                  "delete_quote",
+                  approvalExecutionOptions()
+                );
                 const quoteEventTypeId = String(quote.eventTypeId || quote.selection?.eventTypeId || "");
                 const quoteEventTypeLabel = eventTypeNameById.get(quoteEventTypeId) || quoteEventTypeId || "-";
                 const quoteIsDraft = normalizedQuoteStatus === "draft";
@@ -1638,7 +1675,7 @@ export default function QuoteHistoryModal({
                 const deliveryRecorded = deliveryUi.recorded;
                 const deliveryUnresolved = deliveryUi.mutationLocked;
                 const canDeliverCurrentQuote = state.source === "firebase"
-                  && ["draft", "sent", "viewed", "booked"].includes(normalizedQuoteStatus)
+                  && canDeliverQuoteEmailStatus(normalizedQuoteStatus)
                   && Boolean(quoteRevisionId)
                   && deliveryUi.canAttempt
                   && emailSetup.checked
@@ -1761,6 +1798,7 @@ export default function QuoteHistoryModal({
                         {permissions.canConvertToContract && canConvert && (
                           <button
                             type="button"
+                            data-approval-action="convert_to_contract"
                             className="cta compact"
                             onClick={() => handleConvertToContract(quote)}
                             disabled={deliveryUnresolved || convertingId === quote.id || (approvalRequired && !contractApproval)}
@@ -1779,7 +1817,7 @@ export default function QuoteHistoryModal({
                             Confirm
                           </button>
                         )}
-                        {permissions.canEditQuote && (
+                        {permissions.canEditQuote && canEditQuoteStatus(normalizedQuoteStatus) && (
                           <button
                             type="button"
                             className="ghost compact"
@@ -1856,8 +1894,8 @@ export default function QuoteHistoryModal({
                                     ? "Configure a supported email provider in Integration Ops first."
                                 : !quoteRevisionId
                                   ? "Save this quote as a versioned draft before sending."
-                                  : !["draft", "sent", "viewed", "booked"].includes(normalizedQuoteStatus)
-                                    ? "Only draft, sent, viewed, or booked quotes can be delivered by quote email."
+                                : !canDeliverQuoteEmailStatus(normalizedQuoteStatus)
+                                    ? "Only draft, sent, viewed, accepted, or booked quotes can be delivered by quote email."
                                     : ""}
                           >
                             {sendingQuoteEmailId === quote.id
@@ -1883,43 +1921,46 @@ export default function QuoteHistoryModal({
                             Review Outcome
                           </button>
                         )}
-                        {permissions.canSendPaymentRequest && canSendPaymentRequest && (
+                        {permissions.canSendPaymentRequest && paymentRequestApproval && (
                           <button
                             type="button"
+                            data-approval-action="send_payment_request"
                             className="cta compact"
                             onClick={() => handleSendPaymentRequestEmail(quote)}
-                            disabled={deliveryUnresolved || sendingPaymentEmailId === quote.id || !paymentRequestApproval || !portalShareable}
-                            title={!paymentRequestApproval
-                              ? "Approve the payment request in Workflow first."
-                              : !portalShareable
+                            disabled={
+                              deliveryUnresolved
+                              || sendingPaymentEmailId === quote.id
+                              || (!portalShareable && !paymentRequestInProgress)
+                            }
+                            title={!portalShareable && !paymentRequestInProgress
                                 ? "Payment email requires an active customer portal for the current provider-accepted issuance."
-                                : paymentRequestInProgress
-                                  ? "Resume the interrupted payment request using its existing approval."
-                                  : ""}
+                              : paymentRequestInProgress
+                                ? "Resume the interrupted payment request using its existing approval."
+                                : ""}
                           >
                             {sendingPaymentEmailId === quote.id
                               ? paymentRequestInProgress ? "Resuming..." : "Sending..."
                               : paymentRequestInProgress ? "Resume Pay Request" : "Send Pay Request"}
                           </button>
                         )}
-                        {permissions.canSendFinalBalanceRequest && finalBalanceRequestEligible && (
+                        {permissions.canSendFinalBalanceRequest
+                          && finalBalanceApproval
+                          && (finalBalanceRequestEligible || finalBalanceRequestInProgress) && (
                           <button
                             type="button"
+                            data-approval-action="send_final_balance_request"
                             className="cta compact"
                             onClick={() => handleSendFinalBalanceRequestEmail(quote)}
                             disabled={
                               deliveryUnresolved
                               || sendingFinalBalanceEmailId === quote.id
-                              || !finalBalanceApproval
-                              || !portalShareable
+                              || (!portalShareable && !finalBalanceRequestInProgress)
                             }
-                            title={!finalBalanceApproval
-                              ? "Approve the final-balance request in Sales Workflow first."
-                              : !portalShareable
+                            title={!portalShareable && !finalBalanceRequestInProgress
                                 ? "Final-balance email requires an active customer portal for the current provider-accepted issuance."
-                                : finalBalanceRequestInProgress
-                                  ? "Resume the interrupted final-balance request using its existing approval."
-                                  : ""}
+                              : finalBalanceRequestInProgress
+                                ? "Resume the interrupted final-balance request using its existing approval."
+                                : ""}
                           >
                             {sendingFinalBalanceEmailId === quote.id
                               ? finalBalanceRequestInProgress ? "Resuming..." : "Sending..."
@@ -1931,6 +1972,7 @@ export default function QuoteHistoryModal({
                         {permissions.canRotatePortalLink && canRotatePortalForStatus && (
                           <button
                             type="button"
+                            data-approval-action="rotate_portal_link"
                             className="ghost compact"
                             onClick={() => handleRotatePortalLink(quote)}
                             disabled={deliveryUnresolved || rotatingPortalId === quote.id || (approvalRequired && !portalRotationApproval)}
@@ -1972,6 +2014,7 @@ export default function QuoteHistoryModal({
                         {permissions.canDeleteQuote && canDeleteQuotes ? (
                           <button
                             type="button"
+                            data-approval-action="delete_quote"
                             className="ghost compact"
                             onClick={() => requestDeleteQuote(quote)}
                             disabled={deliveryUnresolved || updatingId === quote.id || (approvalRequired && !deleteApproval)}

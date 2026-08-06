@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
+  canDeliverQuoteEmailStatus,
+  canEditQuoteStatus,
   canRotateQuotePortal,
   getFinalBalanceDisplayStatus,
   filterQuoteHistoryQuotes,
@@ -126,13 +128,31 @@ describe("quote history action permissions", () => {
     }
   });
 
-  test("portal rotation includes booked renewal but excludes other terminal states", () => {
+  test("portal rotation includes accepted and booked renewal but excludes closed states", () => {
     expect(canRotateQuotePortal("draft")).toBe(true);
     expect(canRotateQuotePortal("sent")).toBe(true);
     expect(canRotateQuotePortal("viewed")).toBe(true);
+    expect(canRotateQuotePortal("accepted")).toBe(true);
     expect(canRotateQuotePortal("booked")).toBe(true);
-    for (const status of ["accepted", "declined", "expired", "deleted"]) {
+    for (const status of ["declined", "expired", "deleted"]) {
       expect(canRotateQuotePortal(status)).toBe(false);
+    }
+  });
+
+  test("quote email delivery includes accepted portal renewals but excludes closed states", () => {
+    expect(canDeliverQuoteEmailStatus("accepted")).toBe(true);
+    expect(canDeliverQuoteEmailStatus("booked")).toBe(true);
+    for (const status of ["declined", "expired", "deleted"]) {
+      expect(canDeliverQuoteEmailStatus(status)).toBe(false);
+    }
+  });
+
+  test("editing is offered only while the server accepts draft updates", () => {
+    for (const status of ["draft", "sent", "viewed"]) {
+      expect(canEditQuoteStatus(status)).toBe(true);
+    }
+    for (const status of ["accepted", "booked", "declined", "expired", "deleted"]) {
+      expect(canEditQuoteStatus(status)).toBe(false);
     }
   });
 
@@ -220,6 +240,49 @@ describe("quote history action permissions", () => {
     };
 
     expect(getExecutableApprovalRequest(quote, "send_final_balance_request")).toBeNull();
+  });
+
+  test("hides an approved payment CTA when current portal revalidation fails", () => {
+    const issuedAtISO = "2026-08-06T14:00:00.000Z";
+    const quote = {
+      id: "quote-a",
+      organizationId: "org-a",
+      status: "accepted",
+      activeVersionId: "v0002",
+      portalKey: "portal-key-current-abcdefghijklmnopqrstuvwxyz",
+      portalIssuedAtISO: issuedAtISO,
+      portalExpiresAtISO: "2026-09-06T14:00:00.000Z",
+      customer: { email: "customer@example.com" },
+      totals: { total: 1000, deposit: 250 },
+      payment: { depositStatus: "unpaid" },
+      workflow: {
+        approvalRequests: [{
+          id: "stale-payment",
+          action: "send_payment_request",
+          state: "approved",
+          executionState: "awaiting_execution",
+          actionScope: {
+            version: 1,
+            kind: "stripe_checkout_deposit_request",
+            organizationId: "org-a",
+            quoteId: "quote-a",
+            quoteRevisionId: `v0002@${issuedAtISO}`,
+            portalKey: "portal-key-old-abcdefghijklmnopqrstuvwxyz",
+            portalIssuedAtISO: issuedAtISO,
+            portalExpiresAtISO: "2026-09-06T14:00:00.000Z",
+            customerEmail: "customer@example.com",
+            paymentKind: "deposit",
+            currency: "usd",
+            amountCents: 25000
+          },
+          actionScopeDigest: "a".repeat(64)
+        }]
+      }
+    };
+
+    expect(getExecutableApprovalRequest(quote, "send_payment_request", {
+      validateCurrentEligibility: true
+    })).toBeNull();
   });
 
   test("requires booked contract and provider-paid deposit evidence for final-balance controls", () => {

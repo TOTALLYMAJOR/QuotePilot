@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { describe, expect, test } from "vitest";
 import { exportQuoteProposal } from "../proposalExport";
+import { PRODUCT_FULL_NAME } from "../productIdentity";
 import { proposalPayloadFixtureQuote } from "./fixtures/proposalPayloadFixture";
 
 const require = createRequire(import.meta.url);
@@ -84,7 +85,7 @@ describe("customer proposal PDF export", () => {
     expect(allowedText).toContain("https://quotepilot.example/app?portal=");
   });
 
-  test("real PDF extraction contains tenant branding and excludes pricing internals", async () => {
+  test("real PDF extraction preserves tenant branding and exact product attribution without internals", async () => {
     const quote = {
       ...versionedDraft(),
       quoteMeta: {
@@ -120,18 +121,23 @@ describe("customer proposal PDF export", () => {
 
     expect(extracted.text).toContain("Northstar Catering");
     expect(extracted.text).toContain("Staffing team");
+    expect(extracted.text).toContain(`Created with ${PRODUCT_FULL_NAME}`);
     for (const forbidden of [
+      "quote-a",
+      "org-a",
+      "v0002",
+      "pricingSettingsVersion",
       "internal-tax-region-id",
       "peak-season-token",
       "staff-rate-secret",
       "bar-rate-secret",
       "31,33,35",
       "41,43",
-      "QuotePilot"
+      "Catering proposal generator"
     ]) {
       expect(extracted.text).not.toContain(forbidden);
     }
-    expect(String(extracted.info?.Creator || "")).not.toContain("QuotePilot");
-    expect(String(extracted.info?.Author || "")).not.toContain("QuotePilot");
+    expect(String(extracted.info?.Creator || "")).toBe(PRODUCT_FULL_NAME);
+    expect(String(extracted.info?.Author || "")).toBe("Alex Rivera");
   });
 });

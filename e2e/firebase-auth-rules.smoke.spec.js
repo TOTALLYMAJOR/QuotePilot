@@ -105,7 +105,7 @@ test("email-password staff can complete account recovery with the same on-screen
   await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
   await page.getByLabel(/^Password$/i).fill(RECOVERED_PASSWORD);
   await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
-  await expect(page.getByRole("button", { name: "Get Instant Quote" })).toBeVisible({
+  await expect(page.getByRole("button", { name: "New Quote" })).toBeVisible({
     timeout: 45_000
   });
 });

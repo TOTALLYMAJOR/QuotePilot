@@ -19,6 +19,13 @@ async function fillRequiredQuoteFields(page) {
 
 async function advanceToSave(page) {
   for (let step = 0; step < 6; step += 1) {
+    const firstMenuChoice = page.locator(
+      ".wizard-panel .menu-library input[type='checkbox']:not(:checked)"
+    ).first();
+    if (await firstMenuChoice.count()) {
+      await firstMenuChoice.check();
+    }
+
     const packageTier = page.getByLabel("Package tier");
     if (await packageTier.count()) {
       await packageTier.selectOption("premium");
@@ -77,12 +84,8 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(handoff.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
   await expect(handoff.getByRole("button", { name: "Set up email in Integrations" })).toHaveCount(0);
   await expect(handoff).toContainText(/Customer portal sharing requires an active delivered status/i);
-  const requestApprovalButton = handoff.getByRole("button", { name: "Request approval to send" });
-  await expect(requestApprovalButton).toBeVisible();
-  await requestApprovalButton.click();
-  await expect(dialog.getByText(
-    /Approval requested\. An admin will see it in Workflow\./i
-  )).toBeVisible();
+  await expect(handoff.getByRole("button", { name: "Request approval to send" })).toHaveCount(0);
+  await expect(handoff).toContainText(/Use Copy Email or Download PDF for an admin handoff/i);
 
   const row = dialog.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })

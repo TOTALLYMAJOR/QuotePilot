@@ -195,6 +195,8 @@ function assertCompleteProposalSnapshot(snapshot) {
     || snapshot.event.hours < 0
     || !Number.isInteger(snapshot?.event?.guests)
     || snapshot.event.guests < 1
+    || !Array.isArray(snapshot?.selection?.menuItems)
+    || snapshot.selection.menuItems.length < 1
   ) {
     throw new ProposalAcceptanceError(
       "failed-precondition",

@@ -154,3 +154,12 @@ export async function refreshCurrentUserVerification() {
   }
   return { emailVerified: user.emailVerified === true };
 }
+
+export async function refreshCurrentUserAccess() {
+  ensureAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sign in before refreshing workspace access.");
+  await user.reload();
+  await user.getIdToken(true);
+  return { refreshed: true, emailVerified: user.emailVerified === true };
+}

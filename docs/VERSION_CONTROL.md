@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: August 3, 2026
+Last updated: August 6, 2026
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -42,7 +42,10 @@ git checkout -b feature/<scope>-<topic>
   branches only. Release-critical changes require
   independent review; same-repository scripts are not an external attestation
   authority.
-- If branch protection is not enabled, `Mainline Safety Net (Auto-Revert Failed Pushes)` provides fallback protection by reverting failed `main` push heads after CI failure.
+- `Mainline Safety Net (Auto-Revert Failed Pushes)` is recovery defense that
+  reverts a failed current `main` push head. It does not substitute for branch
+  protection, independent review, or release evidence; production release is
+  blocked wherever those controls are unavailable.
 
 ## Branch Naming
 - `feature/<scope>-<topic>`
@@ -92,7 +95,9 @@ git checkout -b feature/<scope>-<topic>
      runs. Write-capable recovery remains isolated to the separately reviewed
      mainline safety-net workflow.
 4. Complete the pre-merge release-candidate UAT checklist from
-   `docs/LAUNCH_RUNBOOK.md` and record the immutable candidate deployment.
+   `docs/LAUNCH_RUNBOOK.md` for every intended production target and record the
+   immutable candidate deployment. Portal projection backfill is separate
+   source/data-operation acceptance, not deployment-target evidence.
 5. Set/confirm rollback target:
    - Preserve the current target-specific signed provider receipt, including
      deployment id, source SHA, artifact/configuration digests, and health
@@ -103,9 +108,10 @@ git checkout -b feature/<scope>-<topic>
 7. Wait for all eight hard-gate jobs in the exact `main` push `CI Quality` run.
 8. Exercise the exact main SHA on an immutable non-production deployment, then
    dispatch `Release UAT Attestation` with the release SHA, target, rollback
-   SHA, staging identifier, tracked checklist digest, all checklist item ids,
-   and exact confirmation. A reviewer other than the attester must approve the
-   `production-uat` environment gate.
+   SHA, staging identifier, tracked checklist digest, all and only checklist
+   item ids applicable to that target, and exact confirmation. Print the set
+   with `npm run release:uat:items -- --target <profile>`. A reviewer other than
+   the attester must approve the `production-uat` environment gate.
 9. Tag the same semantic version SHA:
 ```bash
 git tag v<major>.<minor>.<patch>
@@ -128,6 +134,10 @@ If Firebase and Vercel have different last-known-good SHAs, use separate
 target-specific UAT attestations and preparation runs. Allowed UAT/preparation profiles
 are `firebase-hosting`, `firebase-backend`, `firebase-all`, and `vercel`;
 there is no cross-provider `all` profile with an ambiguous rollback target.
+Checklist applicability limits each receipt to the selected payload surface and
+observed compatibility; it does not prove an unbound dependency's SHA or
+provider identity. A `firebase-all` staging receipt must bind Hosting,
+Functions, and Firestore rules together before that profile can be operational.
 
 ## Rollback Control
 If a regression appears in production, use the target-specific signed

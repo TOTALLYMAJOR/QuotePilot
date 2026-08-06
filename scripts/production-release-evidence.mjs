@@ -98,6 +98,22 @@ export const RELEASE_EVIDENCE_POLICY = Object.freeze({
   ])
 });
 
+const RELEASE_UAT_CHECKLIST_SCHEMA =
+  "com.mbmapps.quotepilot.release-uat-checklist/v2";
+const RELEASE_UAT_TARGETS = Object.freeze([
+  "firebase-hosting",
+  "firebase-backend",
+  "firebase-all",
+  "vercel"
+]);
+const RELEASE_UAT_CHECKLIST_KEYS = Object.freeze([
+  "items",
+  "maximumAttestationAgeHours",
+  "schema",
+  "version"
+]);
+const RELEASE_UAT_ITEM_KEYS = Object.freeze(["id", "label", "targets"]);
+
 function evidenceError(message) {
   return new Error(`Release evidence rejected: ${message}`);
 }
@@ -137,22 +153,87 @@ function readChecklist(root = ROOT) {
     throw evidenceError("the tracked release UAT checklist is missing or invalid JSON.");
   }
 
-  if (checklist?.schema !== "com.mbmapps.quotepilot.release-uat-checklist/v1") {
+  if (checklist?.schema !== RELEASE_UAT_CHECKLIST_SCHEMA) {
     throw evidenceError("the release UAT checklist schema is not supported.");
+  }
+  if (
+    !checklist
+    || typeof checklist !== "object"
+    || Array.isArray(checklist)
+    || JSON.stringify(Object.keys(checklist).sort())
+      !== JSON.stringify(RELEASE_UAT_CHECKLIST_KEYS)
+  ) {
+    throw evidenceError("the release UAT checklist fields do not match the v2 contract.");
+  }
+  if (
+    typeof checklist.version !== "string"
+    || checklist.version !== checklist.version.trim()
+    || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(checklist.version)
+  ) {
+    throw evidenceError("the release UAT checklist version is invalid.");
   }
   if (!Array.isArray(checklist.items) || checklist.items.length === 0) {
     throw evidenceError("the release UAT checklist has no required items.");
   }
-  const itemIds = checklist.items.map((item) => String(item?.id || "").trim());
+  const itemIdsByTarget = Object.fromEntries(
+    RELEASE_UAT_TARGETS.map((target) => [target, []])
+  );
+  const itemIds = [];
+  for (const item of checklist.items) {
+    if (
+      !item
+      || typeof item !== "object"
+      || Array.isArray(item)
+      || JSON.stringify(Object.keys(item).sort()) !== JSON.stringify(RELEASE_UAT_ITEM_KEYS)
+    ) {
+      throw evidenceError("a release UAT checklist item does not match the v2 contract.");
+    }
+    const itemId = typeof item.id === "string" ? item.id : "";
+    const label = typeof item.label === "string" ? item.label : "";
+    if (
+      itemId !== itemId.trim()
+      || !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(itemId)
+    ) {
+      throw evidenceError("the release UAT checklist contains invalid or duplicate item ids.");
+    }
+    if (!label || label !== label.trim() || label.length > 10_000) {
+      throw evidenceError(`release UAT checklist item ${itemId} has an invalid label.`);
+    }
+    if (
+      !Array.isArray(item.targets)
+      || item.targets.length === 0
+      || item.targets.some((target) => (
+        typeof target !== "string" || !RELEASE_UAT_TARGETS.includes(target)
+      ))
+      || new Set(item.targets).size !== item.targets.length
+    ) {
+      throw evidenceError(`release UAT checklist item ${itemId} has invalid target applicability.`);
+    }
+    const appliesToFirebaseHosting = item.targets.includes("firebase-hosting");
+    const appliesToFirebaseBackend = item.targets.includes("firebase-backend");
+    const appliesToFirebaseAll = item.targets.includes("firebase-all");
+    if (
+      appliesToFirebaseAll !== (appliesToFirebaseHosting || appliesToFirebaseBackend)
+    ) {
+      throw evidenceError(
+        `release UAT checklist item ${itemId} must keep firebase-all equal to its Firebase narrow-target applicability.`
+      );
+    }
+    itemIds.push(itemId);
+    for (const target of item.targets) itemIdsByTarget[target].push(itemId);
+  }
   if (
-    itemIds.some((itemId) => !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(itemId))
-    || new Set(itemIds).size !== itemIds.length
+    new Set(itemIds).size !== itemIds.length
   ) {
     throw evidenceError("the release UAT checklist contains invalid or duplicate item ids.");
   }
-  const maximumAttestationAgeHours = Number(checklist.maximumAttestationAgeHours);
+  if (RELEASE_UAT_TARGETS.some((target) => itemIdsByTarget[target].length === 0)) {
+    throw evidenceError("the release UAT checklist leaves a deployment target without required items.");
+  }
+  const maximumAttestationAgeHours = checklist.maximumAttestationAgeHours;
   if (
-    !Number.isInteger(maximumAttestationAgeHours)
+    typeof maximumAttestationAgeHours !== "number"
+    || !Number.isSafeInteger(maximumAttestationAgeHours)
     || maximumAttestationAgeHours < 1
     || maximumAttestationAgeHours > 168
   ) {
@@ -163,6 +244,12 @@ function readChecklist(root = ROOT) {
     raw,
     checklist,
     itemIds,
+    itemIdsByTarget: Object.freeze(Object.fromEntries(
+      RELEASE_UAT_TARGETS.map((target) => [
+        target,
+        Object.freeze([...itemIdsByTarget[target]])
+      ])
+    )),
     digest: crypto.createHash("sha256").update(raw).digest("hex"),
     maximumAttestationAgeHours
   };

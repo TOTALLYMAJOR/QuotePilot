@@ -1,5 +1,14 @@
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 
+export const MIN_EVENT_HOURS = 1;
+export const MAX_EVENT_HOURS = 12;
+
+const TEMPLATE_SELECTION_FIELDS = Object.freeze({
+  addons: "addonQuantities",
+  rentals: "rentalQuantities",
+  menuItems: "menuItemQuantities"
+});
+
 export const WIZARD_STEP_DEFINITIONS = [
   { label: "Event Basics", microcopy: "Choose your event basics" },
   { label: "Menu Selection", microcopy: "Build your menu" },
@@ -33,6 +42,184 @@ function equalArrayValues(a = [], b = []) {
   if (!Array.isArray(a) || !Array.isArray(b)) return false;
   if (a.length !== b.length) return false;
   return a.every((value, index) => value === b[index]);
+}
+
+function cloneTemplateValue(value) {
+  if (Array.isArray(value)) return [...value];
+  if (value && typeof value === "object") return { ...value };
+  return value;
+}
+
+function equalTemplateValues(a, b) {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return equalArrayValues(Array.isArray(a) ? a : [], Array.isArray(b) ? b : []);
+  }
+  if ((a && typeof a === "object") || (b && typeof b === "object")) {
+    const left = a && typeof a === "object" ? a : {};
+    const right = b && typeof b === "object" ? b : {};
+    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+    return [...keys].every((key) => left[key] === right[key]);
+  }
+  return a === b;
+}
+
+function normalizedSelectionIds(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function templateQuantityValue(value, itemId) {
+  if (!value || typeof value !== "object") return undefined;
+  return Object.prototype.hasOwnProperty.call(value, itemId) ? value[itemId] : undefined;
+}
+
+export function resolveFirstValidPackageId(packages = [], currentPackageId = "") {
+  const validPackages = (Array.isArray(packages) ? packages : []).filter((item) => (
+    String(item?.id || "").trim()
+    && String(item?.name || "").trim()
+    && Number.isFinite(Number(item?.ppp))
+    && Number(item.ppp) > 0
+  ));
+  const currentId = String(currentPackageId || "").trim();
+  if (currentId && validPackages.some((item) => String(item.id).trim() === currentId)) {
+    return currentId;
+  }
+  return String(validPackages[0]?.id || "").trim();
+}
+
+export function normalizeEventHours(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return MIN_EVENT_HOURS;
+  return Math.min(MAX_EVENT_HOURS, Math.max(MIN_EVENT_HOURS, parsed));
+}
+
+export function createTemplateDefaultsOwnership({
+  beforeForm = {},
+  afterForm = {},
+  appliedFields = []
+} = {}) {
+  const fields = {};
+  const selections = {};
+  const uniqueFields = [...new Set((Array.isArray(appliedFields) ? appliedFields : []).filter(Boolean))];
+
+  uniqueFields.forEach((field) => {
+    const quantityField = TEMPLATE_SELECTION_FIELDS[field];
+    if (quantityField) {
+      const before = normalizedSelectionIds(beforeForm[field]);
+      const applied = normalizedSelectionIds(afterForm[field]);
+      const beforeQuantities = { ...(beforeForm[quantityField] || {}) };
+      const appliedQuantities = { ...(afterForm[quantityField] || {}) };
+      const candidateIds = new Set([...before, ...applied]);
+      const changedIds = [...candidateIds].filter((itemId) => (
+        before.includes(itemId) !== applied.includes(itemId)
+        || templateQuantityValue(beforeQuantities, itemId) !== templateQuantityValue(appliedQuantities, itemId)
+      ));
+      if (changedIds.length) {
+        selections[field] = {
+          quantityField,
+          before,
+          applied,
+          beforeQuantities,
+          appliedQuantities,
+          changedIds,
+          releasedIds: [],
+          releasedAll: false
+        };
+      }
+      return;
+    }
+
+    if (Object.values(TEMPLATE_SELECTION_FIELDS).includes(field)) return;
+    if (equalTemplateValues(beforeForm[field], afterForm[field])) return;
+    fields[field] = {
+      before: cloneTemplateValue(beforeForm[field]),
+      applied: cloneTemplateValue(afterForm[field])
+    };
+  });
+
+  return { fields, selections };
+}
+
+export function hasTemplateDefaultsOwnership(ownership = {}) {
+  return Boolean(
+    Object.keys(ownership?.fields || {}).length
+    || Object.keys(ownership?.selections || {}).length
+  );
+}
+
+export function releaseTemplateDefaultsOwnership(ownership = {}, field = "", itemId = "") {
+  if (!hasTemplateDefaultsOwnership(ownership)) return ownership;
+  const normalizedField = String(field || "").trim();
+  const normalizedItemId = String(itemId || "").trim();
+  const selectionField = TEMPLATE_SELECTION_FIELDS[normalizedField]
+    ? normalizedField
+    : Object.entries(TEMPLATE_SELECTION_FIELDS).find(([, quantityField]) => quantityField === normalizedField)?.[0];
+  const next = {
+    fields: { ...(ownership.fields || {}) },
+    selections: { ...(ownership.selections || {}) }
+  };
+
+  if (selectionField && next.selections[selectionField]) {
+    const current = next.selections[selectionField];
+    next.selections[selectionField] = normalizedItemId
+      ? {
+          ...current,
+          releasedIds: [...new Set([...(current.releasedIds || []), normalizedItemId])]
+        }
+      : { ...current, releasedAll: true };
+    return next;
+  }
+
+  delete next.fields[normalizedField];
+  return next;
+}
+
+export function restoreTemplateOwnedDefaults({ form = {}, ownership = {} } = {}) {
+  const next = { ...form };
+
+  Object.entries(ownership?.fields || {}).forEach(([field, record]) => {
+    if (!equalTemplateValues(next[field], record?.applied)) return;
+    next[field] = cloneTemplateValue(record?.before);
+  });
+
+  Object.entries(ownership?.selections || {}).forEach(([field, record]) => {
+    if (record?.releasedAll) return;
+    const releasedIds = new Set(record?.releasedIds || []);
+    const beforeIds = new Set(normalizedSelectionIds(record?.before));
+    const appliedIds = new Set(normalizedSelectionIds(record?.applied));
+    const currentIds = normalizedSelectionIds(next[field]);
+    const currentSet = new Set(currentIds);
+    const quantityField = String(record?.quantityField || TEMPLATE_SELECTION_FIELDS[field] || "");
+    const currentQuantities = { ...(next[quantityField] || {}) };
+
+    (record?.changedIds || []).forEach((itemId) => {
+      if (releasedIds.has(itemId)) return;
+      const beforeHas = beforeIds.has(itemId);
+      const appliedHas = appliedIds.has(itemId);
+      const currentHas = currentSet.has(itemId);
+      const beforeQuantity = templateQuantityValue(record?.beforeQuantities, itemId);
+      const appliedQuantity = templateQuantityValue(record?.appliedQuantities, itemId);
+      const currentQuantity = templateQuantityValue(currentQuantities, itemId);
+      const membershipStillApplied = currentHas === appliedHas;
+      const quantityStillApplied = currentQuantity === appliedQuantity;
+
+      if (!membershipStillApplied || !quantityStillApplied) return;
+      if (beforeHas) currentSet.add(itemId);
+      else currentSet.delete(itemId);
+      if (beforeQuantity === undefined) delete currentQuantities[itemId];
+      else currentQuantities[itemId] = beforeQuantity;
+    });
+
+    const restoredIds = currentIds.filter((itemId) => currentSet.has(itemId));
+    normalizedSelectionIds(record?.before).forEach((itemId) => {
+      if (currentSet.has(itemId) && !restoredIds.includes(itemId)) restoredIds.push(itemId);
+    });
+    next[field] = restoredIds;
+    if (quantityField) next[quantityField] = currentQuantities;
+  });
+
+  return next;
 }
 
 export function isValidEmail(email) {
@@ -187,7 +374,7 @@ export function applyEventTypeTemplateDefaults({
     appliedFields.push(field);
   };
 
-  maybeApply("hours", Number(template.hours || 0));
+  maybeApply("hours", normalizeEventHours(template.hours));
   maybeApply("style", String(template.style || ""));
   maybeApply("pkg", String(template.pkg || ""));
   maybeApply("taxRegion", String(template.taxRegion || ""));

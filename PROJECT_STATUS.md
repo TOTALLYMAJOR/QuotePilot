@@ -10,37 +10,25 @@ Last updated: August 6, 2026
   `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
   Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`)
   and was released with the same tagged source revision.
-- Current branch product identity: public, authentication, workspace, customer
+- Current source product identity: public, authentication, workspace, customer
   portal, proposal, install metadata, integration, and onboarding surfaces use
   the exact `QuotePilot by MBMApps` identity. The workspace header now labels
   the tenant business separately, preserving customer-specific proposal and
   portal branding. The legacy `tonicatering` Firebase project, hosting site,
   environment filename, deployment confirmations, and service URLs remain
   unchanged infrastructure identifiers.
-- Branding candidate validation: the full maintainer gate passes with 336 unit
-  tests and 39 intentional skips, production build, environment/secret checks,
-  documentation governance, and bundle budget. Local browser verification
-  covers `/`, `/system`, authenticated and signed-out `/app`, the customer
-  portal route, Catalog Admin save-through branding, and a 390px workspace
-  without horizontal overflow. This is local candidate evidence, not a hosted
-  deployment claim.
-- Build and local validation: the current delivery-evidence head passes the
-  full release lane with 334 unit tests passed and 39 intentionally skipped,
-  production build, environment/secret checks, documentation governance, and
-  bundle budget. Firestore rules pass 38/38; the default Playwright suite passes
-  31 tests with 2 intentionally gated provisioning-role cases skipped; the
-  Firebase Auth/catalog and authoritative quote/delivery/portal browser lanes
-  each pass 1/1. The production Docker image builds successfully. Local
-  Lighthouse passes with performance 0.87, LCP 3,823 ms, CLS 0.001, and TBT 120
-  ms. Both the browser application and Functions production dependency trees
-  report zero known vulnerabilities under `npm audit --omit=dev`. This is
-  local/emulator evidence, not hosted tenant or provider acceptance.
+- Local validation: focused unit, browser, Firebase emulator, environment,
+  secret, documentation-governance, production-build, bundle, Docker, and
+  Lighthouse checks cover the convergence source. Exact final counts belong in
+  the merge evidence after all parallel slices settle; this statement is local
+  and emulator evidence only, not hosted tenant, provider, deployment, or human
+  acceptance.
 - Functions runtime readiness: all 29 production Functions now run on Node.js
   22 with Firebase Admin 14 modular app, Auth, and Firestore APIs. The clean
   cloud install and each function update completed successfully from `v0.2.3`;
   the local authoritative and provisioning matrices also pass.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
-- Current branch workflow delivery: proposal readiness, Good/Better/Best
+- Current source workflow delivery: proposal readiness, Good/Better/Best
   scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action
   approval requests, the customer decision center, and event production
   checklists are implemented and locally covered. A tenant-scoped Workflow
@@ -48,12 +36,12 @@ Last updated: August 6, 2026
   current customer change requests. Its post-idle header count preserves the
   lazy workspace boundary; request-ID-bound acknowledge/handled state is internal
   only and never edits customer decision evidence or sends email/SMS.
-- Current branch quote-entry simplification: Step 1 keeps attendance and role
+- Current source quote-entry simplification: Step 1 keeps attendance and role
   counts in the primary flow while placing five exceptional staffing-rate
   values in Advanced Pricing. Existing saved/template values trigger a visible
   review warning and survive collapse/reopen; 1440px, 390px, and 320px layout
   containment is locally covered without changing pricing or persistence code.
-- Current branch draft handoff: the final wizard action explicitly saves a
+- Current source draft handoff: the final wizard action explicitly saves a
   draft, Quote History focuses the exact saved quote with a role-safe next
   action, copying an email template preserves draft status, and draft portal
   links are neither rendered nor copyable as customer-ready artifacts. Firebase
@@ -84,8 +72,21 @@ Last updated: August 6, 2026
   provider-disabled emulator failure path are local evidence; successful
   provider acceptance, atomic hosted completion, inbox delivery, and bounce
   handling remain unproved until provider/hosted acceptance is captured.
+- Current source interaction recovery: blank-catalog owners receive an
+  executing starter-pack or manual-build path; catalog writes reconcile
+  uncertain outcomes against the authoritative revision; tenant, menu, booking,
+  and verification blockers expose retry, correction, schedule, or support
+  actions; new-quote resets preserve canonical defaults without treating
+  automatic values as unsaved user work. These are source/local interaction
+  guarantees and are not yet hosted human-acceptance evidence.
+- Current source Kitchen BEO: staff can export an internal Kitchen sheet from a
+  saved quote with event timing, staffing, kitchen checkpoints, selections,
+  production-checklist state, revision and generation stamps, day-of contacts,
+  allergen callouts, prepared-by and chef sign-off lines, and day-of notes. The
+  export is locally covered but is not part of the live v0.2.3 frontend and has
+  not received hosted kitchen-operator acceptance.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
-- Current branch tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
+- Current source tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
 - Production `v0.2.3` starter catalog delivery: the existing post-login blank-catalog
   gate now offers four one-click industry drafts in Catalog Admin. Versioned
   manifests populate tenant-scoped catalog and menu records with suggested
@@ -115,15 +116,15 @@ Last updated: August 6, 2026
   allowlist, approved QuotePilot sender identity, Stripe secrets, and
   credentials for any explicitly enabled provider. The workflow remains gated
   by `ENABLE_FUNCTIONS_DEPLOY=false` by default.
-- Current branch tenant identity fix: explicit blank tenant logo/contact/address/crew values no longer fall back to the legacy customer profile, and Catalog Admin branding edits retain their draft through parent rerenders with persistent save/discard affordances.
-- Current branch tenant authorization hardening: Firestore denies unverified
+- Current source tenant identity fix: explicit blank tenant logo/contact/address/crew values no longer fall back to the legacy customer profile, and Catalog Admin branding edits retain their draft through parent rerenders with persistent save/discard affordances.
+- Current source tenant authorization hardening: Firestore denies unverified
   email authority and conflicting claim/role organization scopes, permits
   tenant-domain mapping changes only for same-organization admins, and keeps
   commercial entitlements server-owned. Direct quote and portal deletion is
   denied, generic staff status writes cannot create `sent` or `viewed` evidence
   or rewrite an existing provider/customer lifecycle, and sales schedule writes
   are limited to non-evidentiary staff/checklist fields.
-- Current branch provider authorization hardening: outbound quote email, owner
+- Current source provider authorization hardening: outbound quote email, owner
   SMS, payment requests, checkout creation, provider status, and provider tests
   require the current authoritative admin role. Disabled providers reject and
   omit retained credentials. Browser CRM networking is disabled; admins can
@@ -133,7 +134,7 @@ Last updated: August 6, 2026
   consume that exact approval. Customer acceptance does not prove payment or
   booking, and production checklist completion does not prove inventory
   availability.
-- Current branch proposal acceptance hardening: customer acceptance has moved
+- Current source proposal acceptance hardening: customer acceptance has moved
   from a rules-permitted browser batch to a server-authoritative transaction.
   The callable requires typed signer identity and versioned consent, revalidates
   the active organization, portal expiry, current delivery revision/issuance,
@@ -141,16 +142,16 @@ Last updated: August 6, 2026
   minor-unit totals, then writes matching quote/portal evidence plus a
   server-write-only tenant receipt with a SHA-256 proposal snapshot. Direct
   browser acceptance is denied; request changes and declines retain their
-  existing atomic portal path. This is local branch/emulator evidence only and
+  existing atomic portal path. This is local source/emulator evidence only and
   is not deployed or hosted-accepted.
-- Current branch product analytics: the quote wizard records only anonymous
+- Current source product analytics: the quote wizard records only anonymous
   session, step, mode, and add-on identifiers through same-tenant staff
   callables. Deterministic event identities make retries idempotent, raw events
   remain browser-inaccessible, and the existing Dashboard shows a 30-day
   funnel plus add-on selection/removal trends. Analytics storage or summary
   failures do not block quote work or the dashboard's quote metrics. This is
-  local branch evidence only and is not deployed or production-accepted.
-- Current branch operations audit: organization admins can review server-
+  local source evidence only and is not deployed or production-accepted.
+- Current source operations audit: organization admins can review server-
   derived delivery retry/review counts, a seven-day trend over recorded
   integration outcomes, current admin/sales role counts, and recent role-
   stamped sensitive actions in Integrations Ops. Retry candidates do not claim
@@ -216,14 +217,6 @@ Last updated: August 6, 2026
 - Production fail-safe integration mode:
   `NOTIFICATIONS_SMS_PROVIDER=none` in the ignored project-scoped Functions
   environment.
-- Latest Vercel production operation: `v0.2.1` deployment
-  `dpl_67bWx2DWepw74yN9bUvUjZFPm1TQ`, including the canonical SPA rewrite and
-  provider-verified aliases for `quotepilot.mbmapps.com`.
-- Last known good coordinated Firebase deploy:
-  - release/commit: `v0.2.1` / `e1301ccb798144ebce49be2da26a63a9491f31c3`
-  - CI run: `CI Quality` #31026299454 (August 5, 2026 UTC)
-  - result: Firestore rules/indexes, all 27 Functions, and Hosting completed successfully
-
 ## Active Risks
 - Firebase `functions.config()` compatibility remains temporary and must be
   migrated to environment parameters before the March 2027 shutdown.
@@ -241,8 +234,8 @@ Last updated: August 6, 2026
 - The customer decision frontend, `portalDecision` Firestore rules, and
   enriched portal snapshot support are deployed but not hosted-smoke-verified.
 - The electronic acceptance callable, typed-signature UI, immutable receipt,
-  and browser-write denial are implemented and locally validated on the current
-  branch but are not deployed. Production acceptance must wait for a coordinated
+  and browser-write denial are implemented and locally validated in the current
+  source but are not deployed. Production acceptance must wait for a coordinated
   frontend, Functions, and Firestore rules release plus a signed-out hosted
   acceptance test against an exact delivered revision.
 - Approval request creation, admin resolution, and action-specific execution
@@ -281,7 +274,7 @@ Last updated: August 6, 2026
 ## Current Focus (Near-Term)
 1. Sign in as an allowlisted platform admin, create and activate a disposable
    second organization, then run the hosted owner/quote/portal tenant acceptance
-   checklist against the live `v0.2.1` frontend and backend.
+   checklist against the live `v0.2.3` frontend and backend.
 2. Verify the intended Resend sender domain in the Resend dashboard and authoritative DNS; only then configure `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and recipient proof from one controlled test.
 3. Run hosted portal decision smoke checks for current-issuance evidence,
    active, expired, deleted, rotated,

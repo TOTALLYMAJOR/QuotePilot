@@ -11,10 +11,17 @@ import {
   buildProposalReadiness,
   buildQuoteLifecycleTimeline,
   buildWorkflowAttentionSummary,
-  FOLLOW_UP_STAGES
+  FOLLOW_UP_STAGES,
+  getApprovalActionEligibility,
+  getApprovalRequestExecutionEligibility,
+  getRequestableApprovalActions
 } from "../lib/quoteWorkflow";
 
 const WORKFLOW_TABS = ["attention", "followups", "approvals"];
+const PROVIDER_APPROVAL_ACTIONS = new Set([
+  "send_payment_request",
+  "send_final_balance_request"
+]);
 
 function fmtDateTime(value) {
   if (!value) return "-";
@@ -305,8 +312,24 @@ export default function SalesWorkflowModal({
 
   const readiness = selectedQuote ? buildProposalReadiness(selectedQuote) : null;
   const timeline = selectedQuote ? buildQuoteLifecycleTimeline(selectedQuote) : [];
+  const requestableApprovalActions = useMemo(
+    () => getRequestableApprovalActions(selectedQuote || {}, {
+      requireActivePortal: state.source === "firebase"
+    }).filter((action) => (
+      state.source === "firebase" || !PROVIDER_APPROVAL_ACTIONS.has(action.id)
+    )),
+    [selectedQuote, state.source]
+  );
   const isAdmin = String(currentUserRole || "").toLowerCase() === "admin";
   const isStaff = ["admin", "sales"].includes(String(currentUserRole || "").toLowerCase());
+
+  useEffect(() => {
+    setApprovalAction((current) => (
+      requestableApprovalActions.some((item) => item.id === current)
+        ? current
+        : requestableApprovalActions[0]?.id || ""
+    ));
+  }, [requestableApprovalActions]);
 
   const selectTab = (tabId, { focus = false } = {}) => {
     tabInteractedRef.current = true;
@@ -370,6 +393,23 @@ export default function SalesWorkflowModal({
 
   const handleRequestApproval = async () => {
     if (!selectedQuote?.id || !isStaff || !approvalAction) return;
+    if (state.source !== "firebase" && PROVIDER_APPROVAL_ACTIONS.has(approvalAction)) {
+      setState((prev) => ({
+        ...prev,
+        error: "Payment approvals require Firebase-backed provider execution. Reload the hosted workspace and try again."
+      }));
+      return;
+    }
+    const eligibility = getApprovalActionEligibility(selectedQuote, approvalAction, {
+      requireActivePortal: state.source === "firebase"
+    });
+    if (!eligibility.eligible) {
+      setState((prev) => ({
+        ...prev,
+        error: eligibility.reason || "This action is no longer available for the selected quote."
+      }));
+      return;
+    }
     const actionScope = workflowScopeRef.current;
     const actionBusyKey = `request:${selectedQuote.id}`;
     setBusyKey(actionBusyKey);
@@ -471,9 +511,12 @@ export default function SalesWorkflowModal({
     onEditQuote?.(quote);
   };
 
-  const handleOpenQuoteHistory = () => {
+  const handleOpenQuoteHistory = (quote, request) => {
     skipReturnFocusRef.current = true;
-    onOpenQuoteHistory?.();
+    onOpenQuoteHistory?.({
+      quoteId: quote?.id || "",
+      action: request?.action || ""
+    });
   };
 
   const focusAttentionItem = (candidateIds = []) => {
@@ -908,12 +951,12 @@ export default function SalesWorkflowModal({
                     </div>
                   </section>
 
-                  {isStaff && (
+                  {isStaff && requestableApprovalActions.length > 0 && (
                     <section className="workflow-form-section">
                       <h4>Request sensitive action approval</h4>
                       <div className="workflow-approval-request">
                         <select value={approvalAction} onChange={(event) => setApprovalAction(event.target.value)}>
-                          {APPROVAL_ACTIONS.map((item) => (
+                          {requestableApprovalActions.map((item) => (
                             <option key={item.id} value={item.id}>{item.label}</option>
                           ))}
                         </select>
@@ -928,11 +971,17 @@ export default function SalesWorkflowModal({
                           type="button"
                           className="ghost compact"
                           onClick={handleRequestApproval}
-                          disabled={busyKey === `request:${selectedQuote.id}`}
+                          disabled={!approvalAction || busyKey === `request:${selectedQuote.id}`}
                         >
                           {busyKey === `request:${selectedQuote.id}` ? "Requesting..." : "Request"}
                         </button>
                       </div>
+                    </section>
+                  )}
+                  {isStaff && requestableApprovalActions.length === 0 && (
+                    <section className="workflow-form-section">
+                      <h4>Sensitive action approval</h4>
+                      <p className="muted">No approval-backed action is currently available for this quote.</p>
                     </section>
                   )}
 
@@ -974,6 +1023,14 @@ export default function SalesWorkflowModal({
               const resolvingApproval = busyKey === `resolve:${request.id}:approved`;
               const resolvingRejection = busyKey === `resolve:${request.id}:rejected`;
               const requestResolving = resolvingApproval || resolvingRejection;
+              const awaitingExecution = request.state === "approved"
+                && (!request.executionState || request.executionState === "awaiting_execution")
+                && APPROVAL_ACTIONS.some((action) => action.id === request.action);
+              const executionEligibility = awaitingExecution
+                ? getApprovalRequestExecutionEligibility(quote, request, {
+                  requireActivePortal: state.source === "firebase"
+                })
+                : null;
               return (
               <article
                 key={`${quote.id}-${request.id}`}
@@ -1052,21 +1109,26 @@ export default function SalesWorkflowModal({
                     )}
                     {request.executionReference && <span>{request.executionReference}</span>}
                     {request.executionError && <span>{request.executionError}</span>}
+                    {isAdmin && awaitingExecution && (
+                      executionEligibility?.eligible ? (
+                        <button
+                          type="button"
+                          className="cta compact"
+                          onClick={() => handleOpenQuoteHistory(quote, request)}
+                        >
+                          Execute in Quotes
+                        </button>
+                      ) : (
+                        <p className="muted approval-not-executable" role="status">
+                          No longer executable: {executionEligibility?.reason || "the quote changed after approval."}
+                        </p>
+                      )
+                    )}
                   </div>
                 )}
               </article>
               );
             })}
-            {isAdmin && approvalQueue.some((item) => (
-              item.request.state === "approved"
-              && (!["in_progress", "succeeded", "failed"].includes(item.request.executionState))
-            )) && (
-              <div className="right-actions approval-queue-actions">
-                <button type="button" className="cta" onClick={handleOpenQuoteHistory}>
-                  Open Quotes
-                </button>
-              </div>
-            )}
         </section>
       </div>
     </div>

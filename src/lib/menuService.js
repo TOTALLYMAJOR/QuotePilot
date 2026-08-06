@@ -6,7 +6,12 @@ import {
   getOrganizationSubDocRef,
   normalizeOrganizationId
 } from "./organizationService";
-import { DEFAULT_SETTINGS } from "../data/mockCatalog";
+import {
+  DEFAULT_ADDONS,
+  DEFAULT_PACKAGES,
+  DEFAULT_RENTALS,
+  DEFAULT_SETTINGS
+} from "../data/mockCatalog";
 import { buildCanonicalMenuForEventType } from "../data/canonicalMenuTemplate";
 
 const LOCAL_EVENT_TYPES = (() => {
@@ -26,6 +31,127 @@ const LOCAL_EVENT_TYPES = (() => {
   });
   return sortByName(items);
 })();
+const LOCAL_CATALOG_KEY = "quoteWizard.catalog";
+const LOCAL_MENU_KEY_PREFIX = "quoteWizard.menuCatalog";
+
+function localStorageApi() {
+  const storage = globalThis?.localStorage;
+  if (!storage) throw new Error("Local menu storage is unavailable in this browser.");
+  return storage;
+}
+
+function localMenuScope(organizationId = "") {
+  return resolveScopedOrganizationId(organizationId) || "local";
+}
+
+function localMenuKey(organizationId = "") {
+  return `${LOCAL_MENU_KEY_PREFIX}.${localMenuScope(organizationId)}`;
+}
+
+function buildLocalMenuSeed() {
+  const categories = [];
+  const items = [];
+  LOCAL_EVENT_TYPES.forEach((eventType) => {
+    const canonical = buildCanonicalMenuForEventType(eventType.id);
+    categories.push(...canonical.categories.map((entry) => ({
+      ...entry,
+      source: "canonical-menu-local-seed"
+    })));
+    items.push(...canonical.items.map((entry) => ({
+      ...entry,
+      priceMinor: toMinorUnits(entry.price),
+      source: "canonical-menu-local-seed"
+    })));
+  });
+  return {
+    revision: 0,
+    eventTypes: LOCAL_EVENT_TYPES.map((item) => ({ ...item })),
+    categories,
+    items
+  };
+}
+
+function readLocalMenuState(organizationId = "") {
+  const storage = localStorageApi();
+  const key = localMenuKey(organizationId);
+  const cached = storage.getItem(key);
+  if (!cached) {
+    const seeded = buildLocalMenuSeed();
+    storage.setItem(key, JSON.stringify(seeded));
+    return seeded;
+  }
+  try {
+    const parsed = JSON.parse(cached);
+    return {
+      revision: Math.max(0, Number(parsed?.revision || 0)),
+      eventTypes: Array.isArray(parsed?.eventTypes) ? parsed.eventTypes : [],
+      categories: Array.isArray(parsed?.categories) ? parsed.categories : [],
+      items: Array.isArray(parsed?.items) ? parsed.items : []
+    };
+  } catch {
+    const seeded = buildLocalMenuSeed();
+    storage.setItem(key, JSON.stringify(seeded));
+    return seeded;
+  }
+}
+
+function writeLocalMenuState(organizationId, state) {
+  localStorageApi().setItem(localMenuKey(organizationId), JSON.stringify(state));
+}
+
+function localId(prefix) {
+  const uuid = globalThis?.crypto?.randomUUID?.().replace(/-/g, "");
+  return `${prefix}-${uuid || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function updateLocalCatalogSettings(catalogRevision) {
+  const storage = localStorageApi();
+  let cached = null;
+  try {
+    cached = JSON.parse(storage.getItem(LOCAL_CATALOG_KEY) || "null");
+  } catch {
+    cached = null;
+  }
+  const source = cached && typeof cached === "object"
+    ? cached
+    : {
+        packages: DEFAULT_PACKAGES,
+        addons: DEFAULT_ADDONS,
+        rentals: DEFAULT_RENTALS,
+        settings: DEFAULT_SETTINGS
+      };
+  const catalogSettings = {
+    ...DEFAULT_SETTINGS,
+    ...(source.settings || {}),
+    catalogRevision,
+    pricingSetupConfirmed: false,
+    pricingConfirmation: null,
+    updatedAtISO: new Date().toISOString()
+  };
+  storage.setItem(LOCAL_CATALOG_KEY, JSON.stringify({
+    ...source,
+    settings: catalogSettings
+  }));
+  return catalogSettings;
+}
+
+function commitLocalMenuMutation(organizationId, mutate) {
+  const current = readLocalMenuState(organizationId);
+  const next = {
+    revision: current.revision,
+    eventTypes: current.eventTypes.map((item) => ({ ...item })),
+    categories: current.categories.map((item) => ({ ...item })),
+    items: current.items.map((item) => ({ ...item }))
+  };
+  const result = mutate(next) || {};
+  next.revision = current.revision + 1;
+  writeLocalMenuState(organizationId, next);
+  return {
+    ...result,
+    catalogRevision: next.revision,
+    catalogSettings: updateLocalCatalogSettings(next.revision)
+  };
+}
 
 function ensureReady() {
   if (!firebaseReady || !db) {
@@ -135,7 +261,12 @@ function resolveWritableDocRef(collectionName, docId, organizationId = "", actio
 }
 
 export async function getEventTypes({ organizationId = "" } = {}) {
-  if (!firebaseReady || !db) return [...LOCAL_EVENT_TYPES];
+  if (!firebaseReady || !db) {
+    return sortByName(readLocalMenuState(organizationId).eventTypes.map((item) => ({
+      ...item,
+      name: asText(item.name, "Untitled Event Type")
+    })));
+  }
   const resolvedOrgId = resolveScopedOrganizationId(organizationId);
   const mapEventType = (item) => ({
     ...item,
@@ -152,7 +283,16 @@ export async function getEventTypes({ organizationId = "" } = {}) {
 
 export async function getMenuCategories(eventTypeId, { organizationId = "" } = {}) {
   const nextEventTypeId = asText(eventTypeId);
-  if (!nextEventTypeId || !firebaseReady || !db) return [];
+  if (!nextEventTypeId) return [];
+  if (!firebaseReady || !db) {
+    return sortByName(readLocalMenuState(organizationId).categories
+      .filter((item) => asText(item.eventTypeId) === nextEventTypeId)
+      .map((item) => ({
+        ...item,
+        eventTypeId: nextEventTypeId,
+        name: asText(item.name, "Untitled Category")
+      })));
+  }
   const resolvedOrgId = resolveScopedOrganizationId(organizationId);
   const mapCategory = (item) => ({
     ...item,
@@ -172,7 +312,25 @@ export async function getMenuCategories(eventTypeId, { organizationId = "" } = {
 
 export async function getMenuItems(eventTypeId, { includeInactive = false, organizationId = "" } = {}) {
   const nextEventTypeId = asText(eventTypeId);
-  if (!nextEventTypeId || !firebaseReady || !db) return [];
+  if (!nextEventTypeId) return [];
+  if (!firebaseReady || !db) {
+    const mapped = readLocalMenuState(organizationId).items
+      .filter((item) => asText(item.eventTypeId) === nextEventTypeId)
+      .map((item) => {
+        const pricingType = normalizePriceType(item.pricingType || item.type);
+        return {
+          ...item,
+          eventTypeId: nextEventTypeId,
+          categoryId: asText(item.categoryId),
+          name: asText(item.name, "Untitled Item"),
+          price: fromStoredMoney(item),
+          pricingType,
+          type: pricingType,
+          active: normalizeActive(item.active, true)
+        };
+      });
+    return sortByName(includeInactive ? mapped : mapped.filter((item) => item.active !== false));
+  }
   const resolvedOrgId = resolveScopedOrganizationId(organizationId);
 
   const mapItem = (item) => {
@@ -201,9 +359,7 @@ export async function getMenuItems(eventTypeId, { includeInactive = false, organ
 }
 
 export async function createMenuItem(data = {}) {
-  ensureReady();
   const organizationId = resolveScopedOrganizationId(data.organizationId);
-  const targetCollectionRef = resolveWritableCollectionRef("menuItems", organizationId, "createMenuItem");
   const pricingType = normalizePriceType(data.pricingType || data.type);
   const payload = {
     eventTypeId: asText(data.eventTypeId),
@@ -221,6 +377,24 @@ export async function createMenuItem(data = {}) {
   if (!payload.categoryId) {
     throw new Error("categoryId is required.");
   }
+  if (!firebaseReady || !db) {
+    const id = localId("menu-item");
+    const mutation = commitLocalMenuMutation(data.organizationId, (state) => {
+      if (!state.eventTypes.some((item) => item.id === payload.eventTypeId)) {
+        throw new Error("Event type no longer exists. Refresh the menu and try again.");
+      }
+      if (!state.categories.some((item) => (
+        item.id === payload.categoryId && item.eventTypeId === payload.eventTypeId
+      ))) {
+        throw new Error("Category no longer exists. Refresh the menu and try again.");
+      }
+      state.items.push({ id, ...payload, source: "local-custom" });
+      return { id, ...payload, price: asNumber(data.price, 0) };
+    });
+    return mutation;
+  }
+  ensureReady();
+  const targetCollectionRef = resolveWritableCollectionRef("menuItems", organizationId, "createMenuItem");
   const ref = doc(targetCollectionRef);
   const catalogMutation = await commitCatalogMutation(organizationId, payload.createdAtISO, (transaction) => {
     transaction.set(ref, payload);
@@ -234,7 +408,6 @@ export async function createMenuItem(data = {}) {
 }
 
 export async function updateMenuItem(id, data = {}) {
-  ensureReady();
   const itemId = asText(id);
   if (!itemId) {
     throw new Error("Menu item id is required.");
@@ -268,6 +441,32 @@ export async function updateMenuItem(id, data = {}) {
   }
   payload.updatedAtISO = new Date().toISOString();
 
+  if (!firebaseReady || !db) {
+    return commitLocalMenuMutation(data.organizationId, (state) => {
+      const itemIndex = state.items.findIndex((item) => item.id === itemId);
+      if (itemIndex < 0) throw new Error("Menu item no longer exists. Refresh and try again.");
+      const current = state.items[itemIndex];
+      const next = { ...current, ...payload };
+      if (!state.eventTypes.some((item) => item.id === next.eventTypeId)) {
+        throw new Error("Event type no longer exists. Refresh and try again.");
+      }
+      if (!state.categories.some((item) => (
+        item.id === next.categoryId && item.eventTypeId === next.eventTypeId
+      ))) {
+        throw new Error("Category no longer exists. Refresh and try again.");
+      }
+      state.items[itemIndex] = next;
+      return {
+        id: itemId,
+        ...payload,
+        ...(Object.prototype.hasOwnProperty.call(data, "price")
+          ? { price: asNumber(data.price, 0) }
+          : {})
+      };
+    });
+  }
+  ensureReady();
+
   const organizationId = resolveScopedOrganizationId(data.organizationId);
   const ref = resolveWritableDocRef("menuItems", itemId, organizationId, "updateMenuItem");
   const catalogMutation = await commitCatalogMutation(organizationId, payload.updatedAtISO, (transaction) => {
@@ -282,11 +481,19 @@ export async function updateMenuItem(id, data = {}) {
 }
 
 export async function deleteMenuItem(id, { organizationId = "" } = {}) {
-  ensureReady();
   const itemId = asText(id);
   if (!itemId) {
     throw new Error("Menu item id is required.");
   }
+  if (!firebaseReady || !db) {
+    return commitLocalMenuMutation(organizationId, (state) => {
+      const itemIndex = state.items.findIndex((item) => item.id === itemId);
+      if (itemIndex < 0) throw new Error("Menu item no longer exists. Refresh and try again.");
+      state.items.splice(itemIndex, 1);
+      return { ok: true, id: itemId };
+    });
+  }
+  ensureReady();
   const resolvedOrganizationId = resolveScopedOrganizationId(organizationId);
   const updatedAtISO = new Date().toISOString();
   const ref = resolveWritableDocRef("menuItems", itemId, resolvedOrganizationId, "deleteMenuItem");
@@ -297,9 +504,7 @@ export async function deleteMenuItem(id, { organizationId = "" } = {}) {
 }
 
 export async function createCategory(data = {}) {
-  ensureReady();
   const organizationId = resolveScopedOrganizationId(data.organizationId);
-  const targetCollectionRef = resolveWritableCollectionRef("menuCategories", organizationId, "createCategory");
   const payload = {
     eventTypeId: asText(data.eventTypeId),
     name: asText(data.name, "New Category"),
@@ -308,6 +513,18 @@ export async function createCategory(data = {}) {
   if (!payload.eventTypeId) {
     throw new Error("eventTypeId is required.");
   }
+  if (!firebaseReady || !db) {
+    const id = localId("menu-category");
+    return commitLocalMenuMutation(data.organizationId, (state) => {
+      if (!state.eventTypes.some((item) => item.id === payload.eventTypeId)) {
+        throw new Error("Event type no longer exists. Refresh the menu and try again.");
+      }
+      state.categories.push({ id, ...payload, source: "local-custom" });
+      return { id, ...payload };
+    });
+  }
+  ensureReady();
+  const targetCollectionRef = resolveWritableCollectionRef("menuCategories", organizationId, "createCategory");
   const ref = doc(targetCollectionRef);
   const catalogMutation = await commitCatalogMutation(organizationId, payload.createdAtISO, (transaction) => {
     transaction.set(ref, payload);
@@ -320,7 +537,6 @@ export async function createCategory(data = {}) {
 }
 
 export async function updateCategory(id, data = {}) {
-  ensureReady();
   const categoryId = asText(id);
   if (!categoryId) {
     throw new Error("Category id is required.");
@@ -335,6 +551,28 @@ export async function updateCategory(id, data = {}) {
   }
   payload.updatedAtISO = new Date().toISOString();
 
+  if (!firebaseReady || !db) {
+    return commitLocalMenuMutation(data.organizationId, (state) => {
+      const categoryIndex = state.categories.findIndex((item) => item.id === categoryId);
+      if (categoryIndex < 0) throw new Error("Category no longer exists. Refresh and try again.");
+      const current = state.categories[categoryIndex];
+      const next = { ...current, ...payload };
+      if (!state.eventTypes.some((item) => item.id === next.eventTypeId)) {
+        throw new Error("Event type no longer exists. Refresh the menu and try again.");
+      }
+      state.categories[categoryIndex] = next;
+      if (next.eventTypeId !== current.eventTypeId) {
+        state.items = state.items.map((item) => (
+          item.categoryId === categoryId
+            ? { ...item, eventTypeId: next.eventTypeId, updatedAtISO: payload.updatedAtISO }
+            : item
+        ));
+      }
+      return { id: categoryId, ...payload };
+    });
+  }
+  ensureReady();
+
   const organizationId = resolveScopedOrganizationId(data.organizationId);
   const ref = resolveWritableDocRef("menuCategories", categoryId, organizationId, "updateCategory");
   const catalogMutation = await commitCatalogMutation(organizationId, payload.updatedAtISO, (transaction) => {
@@ -348,16 +586,47 @@ export async function updateCategory(id, data = {}) {
 }
 
 export async function createEventType(data = {}) {
-  ensureReady();
   const organizationId = resolveScopedOrganizationId(data.organizationId);
+  const createdAtISO = new Date().toISOString();
+  const seedCanonical = data.seedCanonical === true;
+  if (!firebaseReady || !db) {
+    const eventTypeId = localId("event-type");
+    const canonicalSeed = seedCanonical
+      ? buildCanonicalMenuForEventType(eventTypeId)
+      : { categories: [], items: [] };
+    const payload = {
+      name: asText(data.name, "New Event Type"),
+      createdAtISO
+    };
+    return commitLocalMenuMutation(data.organizationId, (state) => {
+      state.eventTypes.push({ id: eventTypeId, ...payload, source: "local-custom" });
+      state.categories.push(...canonicalSeed.categories.map((entry) => ({
+        ...entry,
+        source: "canonical-menu-local-seed",
+        createdAtISO
+      })));
+      state.items.push(...canonicalSeed.items.map((entry) => ({
+        ...entry,
+        priceMinor: toMinorUnits(entry.price),
+        source: "canonical-menu-local-seed",
+        createdAtISO
+      })));
+      return {
+        id: eventTypeId,
+        ...payload,
+        seeded: {
+          categories: canonicalSeed.categories.length,
+          items: canonicalSeed.items.length
+        }
+      };
+    });
+  }
+  ensureReady();
   const targetCollectionRef = resolveWritableCollectionRef("eventTypes", organizationId, "createEventType");
   const categoryCollectionRef = resolveWritableCollectionRef("menuCategories", organizationId, "createEventType");
   const itemCollectionRef = resolveWritableCollectionRef("menuItems", organizationId, "createEventType");
-
-  const createdAtISO = new Date().toISOString();
   const eventTypeRef = doc(targetCollectionRef);
   const eventTypeId = eventTypeRef.id;
-  const seedCanonical = data.seedCanonical === true;
   const canonicalSeed = seedCanonical
     ? buildCanonicalMenuForEventType(eventTypeId)
     : { categories: [], items: [] };
@@ -398,7 +667,6 @@ export async function createEventType(data = {}) {
 }
 
 export async function updateEventType(id, data = {}) {
-  ensureReady();
   const eventTypeId = asText(id);
   if (!eventTypeId) {
     throw new Error("Event type id is required.");
@@ -409,6 +677,19 @@ export async function updateEventType(id, data = {}) {
     payload.name = asText(data.name, "New Event Type");
   }
   payload.updatedAtISO = new Date().toISOString();
+
+  if (!firebaseReady || !db) {
+    return commitLocalMenuMutation(data.organizationId, (state) => {
+      const eventTypeIndex = state.eventTypes.findIndex((item) => item.id === eventTypeId);
+      if (eventTypeIndex < 0) throw new Error("Event type no longer exists. Refresh and try again.");
+      state.eventTypes[eventTypeIndex] = {
+        ...state.eventTypes[eventTypeIndex],
+        ...payload
+      };
+      return { id: eventTypeId, ...payload };
+    });
+  }
+  ensureReady();
 
   const organizationId = resolveScopedOrganizationId(data.organizationId);
   const ref = resolveWritableDocRef("eventTypes", eventTypeId, organizationId, "updateEventType");

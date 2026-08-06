@@ -310,6 +310,37 @@ export function buildCatalogRecordChanges({
   return changes;
 }
 
+export function isCatalogSaveReconciled({
+  savedCatalogRevision,
+  settings = {},
+  wantsPricingConfirmation = false
+} = {}) {
+  if (savedCatalogRevision === null || savedCatalogRevision === undefined) return false;
+  const savedRevision = Number(savedCatalogRevision);
+  if (!Number.isInteger(savedRevision) || savedRevision < 0) return false;
+  const currentRevision = Math.max(0, Number(settings?.catalogRevision || 0));
+  if (currentRevision !== savedRevision) return false;
+  if (!wantsPricingConfirmation) return true;
+  return settings?.pricingSetupConfirmed === true
+    && Number(settings?.pricingConfirmation?.confirmedCatalogRevision) === savedRevision;
+}
+
+export function isStarterPackApplyReconciled({
+  packId = "",
+  packVersion,
+  settings = {}
+} = {}) {
+  const stagedPack = settings?.starterCatalogPack || {};
+  const currentRevision = Math.max(0, Number(settings?.catalogRevision || 0));
+  const appliedRevision = Math.max(
+    -1,
+    Number(stagedPack?.appliedCatalogRevision ?? -1)
+  );
+  return String(stagedPack?.id || "").trim() === String(packId || "").trim()
+    && Number(stagedPack?.version) === Number(packVersion)
+    && appliedRevision === currentRevision;
+}
+
 async function saveToFirebase(
   catalog,
   baselineCatalog,
@@ -424,6 +455,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     error: "",
     requiresFirebase: enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK,
     serverFingerprints: null,
+    authoritativeVersion: 0,
     eventTypes: deriveEventTypesFromSettings(baseCatalog.settings),
     ...baseCatalog
   }));
@@ -466,6 +498,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
                 source: `${source}-empty`,
                 requiresFirebase: false,
                 serverFingerprints,
+                authoritativeVersion: prev.authoritativeVersion + 1,
                 eventTypes,
                 ...catalog
               }));
@@ -479,6 +512,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
             source,
             requiresFirebase: false,
             serverFingerprints,
+            authoritativeVersion: prev.authoritativeVersion + 1,
             eventTypes,
             ...catalog
           }));
@@ -609,6 +643,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
       }
     });
     setState((prev) => ({ ...prev, saving: true, error: "" }));
+    let savedCatalogRevision = null;
 
     try {
       let persistedCatalog = normalizedForPersistence;
@@ -617,7 +652,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
       let persistedEventTypes = state.eventTypes;
       if (firebaseReady) {
         const expectedCatalogRevision = Math.max(0, Number(state.settings?.catalogRevision || 0));
-        const savedCatalogRevision = await saveToFirebase(normalizedForPersistence, {
+        savedCatalogRevision = await saveToFirebase(normalizedForPersistence, {
           packages: state.packages,
           addons: state.addons,
           rentals: state.rentals,
@@ -629,14 +664,18 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
             expectedCatalogRevision: savedCatalogRevision
           });
         }
-        const [reloaded, eventTypes] = await Promise.all([
-          loadFromFirebaseByOrganization(resolvedOrganizationId),
-          getEventTypes({ organizationId: resolvedOrganizationId })
-        ]);
+        const reloaded = await loadFromFirebaseByOrganization(resolvedOrganizationId);
+        try {
+          persistedEventTypes = await getEventTypes({ organizationId: resolvedOrganizationId });
+        } catch (eventTypesError) {
+          recordDiagnosticError(eventTypesError, {
+            surface: "catalog",
+            action: "reload-event-types-after-save"
+          });
+        }
         persistedCatalog = reloaded.catalog;
         persistedSource = reloaded.source;
         persistedFingerprints = reloaded.serverFingerprints;
-        persistedEventTypes = eventTypes;
       }
 
       if (ALLOW_LOCAL_CATALOG_FALLBACK) {
@@ -648,6 +687,9 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         source: persistedSource,
         requiresFirebase: false,
         serverFingerprints: persistedFingerprints,
+        authoritativeVersion: firebaseReady
+          ? prev.authoritativeVersion + 1
+          : prev.authoritativeVersion,
         eventTypes: persistedEventTypes,
         ...persistedCatalog
       }));
@@ -657,12 +699,69 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         surface: "catalog",
         action: "save"
       });
+      const originalError = err?.message || "Failed to save catalog.";
+      if (firebaseReady && resolvedOrganizationId) {
+        try {
+          const reloaded = await loadFromFirebaseByOrganization(resolvedOrganizationId);
+          let eventTypes = state.eventTypes;
+          try {
+            eventTypes = await getEventTypes({ organizationId: resolvedOrganizationId });
+          } catch (eventTypesError) {
+            recordDiagnosticError(eventTypesError, {
+              surface: "catalog",
+              action: "reload-event-types-after-save-error"
+            });
+          }
+          const recoveredRevision = Math.max(
+            0,
+            Number(reloaded.catalog.settings?.catalogRevision || 0)
+          );
+          const reconciledSuccess = isCatalogSaveReconciled({
+            savedCatalogRevision,
+            settings: reloaded.catalog.settings,
+            wantsPricingConfirmation
+          });
+          const recoveryError = reconciledSuccess
+            ? ""
+            : savedCatalogRevision !== null && recoveredRevision === savedCatalogRevision
+              ? `Catalog changes are saved at revision ${savedCatalogRevision}, but pricing is not confirmed for that revision. Latest catalog state is loaded; review Pricing and retry.`
+              : `Catalog changed while the save was in progress. Latest catalog state is loaded; review it and retry. (${originalError})`;
+
+          setState((prev) => ({
+            ...prev,
+            saving: false,
+            source: reloaded.source,
+            requiresFirebase: false,
+            serverFingerprints: reloaded.serverFingerprints,
+            authoritativeVersion: prev.authoritativeVersion + 1,
+            eventTypes,
+            error: recoveryError,
+            ...reloaded.catalog
+          }));
+          if (reconciledSuccess) {
+            return { ok: true, reconciled: true };
+          }
+          return { ok: false, error: recoveryError, refreshed: true };
+        } catch (reloadError) {
+          recordDiagnosticError(reloadError, {
+            surface: "catalog",
+            action: "reload-after-save"
+          });
+          const recoveryError = `${originalError} Refresh the latest catalog before retrying.`;
+          setState((prev) => ({
+            ...prev,
+            saving: false,
+            error: recoveryError
+          }));
+          return { ok: false, error: recoveryError, refreshRequired: true };
+        }
+      }
       setState((prev) => ({
         ...prev,
         saving: false,
-        error: err?.message || "Failed to save catalog."
+        error: originalError
       }));
-      return { ok: false, error: err?.message || "Failed to save catalog." };
+      return { ok: false, error: originalError };
     }
   }, [
     enabled,
@@ -696,27 +795,75 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         replaceStagedPack,
         expectedCatalogRevision: Math.max(0, Number(state.settings?.catalogRevision || 0))
       });
-      const [reloaded, eventTypes] = await Promise.all([
-        loadFromFirebaseByOrganization(resolvedOrganizationId),
-        getEventTypes({ organizationId: resolvedOrganizationId })
-      ]);
+      const reloaded = await loadFromFirebaseByOrganization(resolvedOrganizationId);
+      let eventTypes = state.eventTypes;
+      try {
+        eventTypes = await getEventTypes({ organizationId: resolvedOrganizationId });
+      } catch (eventTypesError) {
+        recordDiagnosticError(eventTypesError, {
+          surface: "catalog",
+          action: "reload-event-types-after-starter-pack"
+        });
+      }
       setState((prev) => ({
         ...prev,
         saving: false,
         source: reloaded.source,
         requiresFirebase: false,
         serverFingerprints: reloaded.serverFingerprints,
+        authoritativeVersion: prev.authoritativeVersion + 1,
         eventTypes,
         ...reloaded.catalog
       }));
       return { ...result, ok: true };
     } catch (err) {
       recordDiagnosticError(err, { surface: "catalog", action: "stage-starter-pack" });
-      const error = err?.message || "Failed to apply starter catalog pack.";
-      setState((prev) => ({ ...prev, saving: false, error }));
-      return { ok: false, error };
+      const originalError = err?.message || "Failed to apply starter catalog pack.";
+      try {
+        const reloaded = await loadFromFirebaseByOrganization(resolvedOrganizationId);
+        let eventTypes = state.eventTypes;
+        try {
+          eventTypes = await getEventTypes({ organizationId: resolvedOrganizationId });
+        } catch (eventTypesError) {
+          recordDiagnosticError(eventTypesError, {
+            surface: "catalog",
+            action: "reload-event-types-after-starter-pack-error"
+          });
+        }
+        const reconciledSuccess = isStarterPackApplyReconciled({
+          packId,
+          packVersion,
+          settings: reloaded.catalog.settings
+        });
+        const recoveryError = reconciledSuccess
+          ? ""
+          : `Starter pack application did not complete against the expected revision. Latest catalog state is loaded; review it before retrying. (${originalError})`;
+        setState((prev) => ({
+          ...prev,
+          saving: false,
+          source: reloaded.source,
+          requiresFirebase: false,
+          serverFingerprints: reloaded.serverFingerprints,
+          authoritativeVersion: prev.authoritativeVersion + 1,
+          eventTypes,
+          error: recoveryError,
+          ...reloaded.catalog
+        }));
+        if (reconciledSuccess) {
+          return { ok: true, reconciled: true };
+        }
+        return { ok: false, error: recoveryError, refreshed: true };
+      } catch (reloadError) {
+        recordDiagnosticError(reloadError, {
+          surface: "catalog",
+          action: "reload-after-starter-pack"
+        });
+        const recoveryError = `${originalError} Refresh the latest catalog before retrying.`;
+        setState((prev) => ({ ...prev, saving: false, error: recoveryError }));
+        return { ok: false, error: recoveryError, refreshRequired: true };
+      }
     }
-  }, [enabled, organizationId, state.settings?.catalogRevision]);
+  }, [enabled, organizationId, state.eventTypes, state.settings?.catalogRevision]);
 
   const loadMenuByEvent = useCallback(async (eventTypeId) => {
     const nextEventTypeId = String(eventTypeId || "").trim();

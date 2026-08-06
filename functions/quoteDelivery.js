@@ -1,6 +1,6 @@
 const { createHash } = require("node:crypto");
 
-const QUOTE_DELIVERY_STATUSES = new Set(["draft", "sent", "viewed", "booked"]);
+const QUOTE_DELIVERY_STATUSES = new Set(["draft", "sent", "viewed", "accepted", "booked"]);
 const QUOTE_DELIVERY_TERMINAL_DECISIONS = new Set(["accepted", "declined"]);
 const QUOTE_DELIVERY_UNRESOLVED_STATES = new Set([
   "sending",
@@ -353,7 +353,7 @@ function claimQuoteDelivery({
   if (!QUOTE_DELIVERY_STATUSES.has(status)) {
     throw new QuoteDeliveryError(
       "failed-precondition",
-      "Only draft, sent, viewed, or booked quotes can be delivered by quote email."
+      "Only draft, sent, viewed, accepted, or booked quotes can be delivered by quote email."
     );
   }
   if (status === "booked") {

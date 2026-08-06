@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { doc, getDoc } from "firebase/firestore";
 import {
+  refreshCurrentUserAccess,
   refreshCurrentUserVerification,
   resendCurrentUserVerification,
   signOutCurrentUser
@@ -314,6 +315,9 @@ export function useAuthSession({ tenantContext = null } = {}) {
     refreshVerification: E2E_AUTH_BYPASS
       ? async () => ({ emailVerified: true })
       : refreshCurrentUserVerification,
+    refreshAccess: E2E_AUTH_BYPASS
+      ? async () => ({ refreshed: true, emailVerified: true })
+      : refreshCurrentUserAccess,
     signOut: E2E_AUTH_BYPASS
       ? async () => {
         clearTenantContextCache();

@@ -913,8 +913,12 @@ describe("server-authoritative quote delivery", () => {
     }), "2026-08-03T18:04:00.000Z")).toBe(true);
   });
 
-  test("rejects delivery for terminal commercial states", () => {
-    expect(() => acquire(draftQuote({ status: "accepted" }))).toThrowError(
+  test("allows an accepted portal renewal and still rejects closed commercial states", () => {
+    expect(acquire(draftQuote({ status: "accepted" }))).toMatchObject({
+      state: "acquired",
+      delivery: { state: "sending" }
+    });
+    expect(() => acquire(draftQuote({ status: "declined" }))).toThrowError(
       expect.objectContaining({ code: "failed-precondition" })
     );
   });

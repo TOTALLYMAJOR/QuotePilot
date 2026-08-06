@@ -86,6 +86,25 @@ function planContractConversion({
     );
   }
 
+  const selection = quote?.selection && typeof quote.selection === "object"
+    ? quote.selection
+    : {};
+  const hasMenuSelection = [
+    selection.menuItems,
+    selection.menuItemsSnapshot,
+    selection.menuItemNames,
+    selection.menuItemDetails
+  ].some((items) => (
+    Array.isArray(items)
+    && items.some((item) => text(typeof item === "object" ? item?.id || item?.name : item))
+  ));
+  if (!hasMenuSelection) {
+    throw new ContractWorkflowError(
+      "failed-precondition",
+      "This accepted quote has no menu selection. Create and send a corrected replacement quote with at least one menu item before converting it to a contract."
+    );
+  }
+
   const event = quote?.event && typeof quote.event === "object" ? quote.event : {};
   const eventDate = text(event.date);
   const normalizedVenue = venueKey(event.venue);

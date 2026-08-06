@@ -155,6 +155,12 @@ function sanitizeQuoteCreationRequest(data = {}) {
   const addons = sanitizeIdentifierList(rawForm.addons);
   const rentals = sanitizeIdentifierList(rawForm.rentals);
   const menuItems = sanitizeIdentifierList(rawForm.menuItems);
+  if (menuItems.length === 0) {
+    throw new QuoteCreationError(
+      "invalid-argument",
+      "Select at least one menu item before saving the quote."
+    );
+  }
   const payMethod = text(rawForm.payMethod, 16).toLowerCase();
 
   return {
@@ -869,6 +875,8 @@ function buildPortalRotationDocuments({
   const rotatedAtISO = normalizeISO(nowISO, "");
   const status = text(source.status, 32).toLowerCase() || "draft";
   const bookedPortalRenewal = status === "booked";
+  const acceptedPortalRenewal = status === "accepted";
+  const commercialPortalRenewal = acceptedPortalRenewal || bookedPortalRenewal;
 
   if (
     !id
@@ -889,7 +897,7 @@ function buildPortalRotationDocuments({
       "Admin role required to rotate portal links."
     );
   }
-  if (!["draft", "sent", "viewed", "booked"].includes(status)) {
+  if (!["draft", "sent", "viewed", "accepted", "booked"].includes(status)) {
     throw new QuoteCreationError(
       "failed-precondition",
       "Portal rotation is unavailable for this commercial state."
@@ -901,29 +909,17 @@ function buildPortalRotationDocuments({
       source?.booking?.contractConvertedAtISO,
       ""
     );
-    const depositStatus = text(source?.payment?.depositStatus, 32).toLowerCase();
-    const depositSessionId = text(source?.payment?.stripeSessionId, 200);
-    const depositConfirmedAtISO = normalizeISO(
-      source?.payment?.depositConfirmedAtISO,
-      ""
-    );
-    if (
-      !contractNumber
-      || !contractConvertedAtISO
-      || depositStatus !== "paid"
-      || !/^cs_[A-Za-z0-9_]+$/.test(depositSessionId)
-      || !depositConfirmedAtISO
-    ) {
+    if (!contractNumber || !contractConvertedAtISO) {
       throw new QuoteCreationError(
         "failed-precondition",
-        "Booked portal renewal requires an authoritative contract and provider-paid deposit."
+        "Booked portal renewal requires an authoritative contract."
       );
     }
   }
 
   const hardPortalExpiryISO = addDaysISO(rotatedAtISO, PORTAL_VALIDITY_DAYS_MAX);
   const quoteExpiryISO = normalizeISO(source.expiresAtISO, hardPortalExpiryISO);
-  const portalExpiresAtISO = bookedPortalRenewal
+  const portalExpiresAtISO = commercialPortalRenewal
     ? hardPortalExpiryISO
     : new Date(quoteExpiryISO).getTime() <= new Date(hardPortalExpiryISO).getTime()
       ? quoteExpiryISO
@@ -1050,6 +1046,12 @@ function buildTrustedQuoteCreationDocuments({
   const addonSnapshots = sanitizeSelectedItems(pricingSelection.addons, "per_person");
   const rentalSnapshots = sanitizeSelectedItems(pricingSelection.rentals, "per_item");
   const menuItemsSnapshot = sanitizeSelectedItems(pricingSelection.menuItems, "per_event");
+  if (menuItemsSnapshot.length === 0) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Server pricing must include at least one valid menu item before the quote can be saved."
+    );
+  }
   const quantities = isRecord(pricingSelection.quantities) ? pricingSelection.quantities : {};
   const labor = isRecord(inputs.labor) ? inputs.labor : {};
   const rules = isRecord(pricing.rulesSnapshot) ? pricing.rulesSnapshot : {};

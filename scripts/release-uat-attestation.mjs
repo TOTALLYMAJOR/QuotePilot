@@ -24,9 +24,30 @@ function requireFullSha(value, field) {
   return normalized;
 }
 
+function requireReleaseTarget(value) {
+  const target = String(value || "").trim();
+  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
+    throw attestationError(
+      "--target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
+    );
+  }
+  return target;
+}
+
+export function getReleaseUatItemIdsForTarget(targetValue, root = ROOT) {
+  const target = requireReleaseTarget(targetValue);
+  return getReleaseUatChecklist(root).itemIdsByTarget[target];
+}
+
 export function parseReleaseUatArgs(argv) {
   if (argv.length === 1 && argv[0] === "--print-digest") {
     return { printDigest: true };
+  }
+  if (argv[0] === "--print-items") {
+    if (argv.length !== 3 || argv[1] !== "--target" || !argv[2]) {
+      throw attestationError("--print-items requires --target and one deployment target.");
+    }
+    return { printItems: true, target: requireReleaseTarget(argv[2]) };
   }
   const allowed = new Set([
     "--release-sha",
@@ -65,12 +86,7 @@ export function buildReleaseUatReceipt(
   if (releaseSha === rollbackSha) {
     throw attestationError("the rollback SHA must differ from the release SHA.");
   }
-  const target = String(args.target || "");
-  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
-    throw attestationError(
-      "--target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
-    );
-  }
+  const target = requireReleaseTarget(args.target);
   const stagingId = String(args["staging-id"] || "");
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{2,79}$/.test(stagingId)) {
     throw attestationError("--staging-id is invalid.");
@@ -86,12 +102,17 @@ export function buildReleaseUatReceipt(
     .split(",")
     .map((itemId) => itemId.trim())
     .filter(Boolean);
+  const requiredItemIds = checklist.itemIdsByTarget[target];
   if (
-    checkedItemIds.length !== checklist.itemIds.length
+    !Array.isArray(requiredItemIds)
+    || requiredItemIds.length === 0
+    || checkedItemIds.length !== requiredItemIds.length
     || new Set(checkedItemIds).size !== checkedItemIds.length
-    || checklist.itemIds.some((itemId) => !checkedItemIds.includes(itemId))
+    || requiredItemIds.some((itemId) => !checkedItemIds.includes(itemId))
   ) {
-    throw attestationError("--checked-item-ids must contain every checklist item exactly once.");
+    throw attestationError(
+      `--checked-item-ids must contain every ${target} checklist item exactly once and no non-applicable items.`
+    );
   }
 
   if (
@@ -144,7 +165,7 @@ export function buildReleaseUatReceipt(
       schema: checklist.checklist.schema,
       version: checklist.checklist.version,
       digest: checklist.digest,
-      checkedItemIds: checklist.itemIds
+      checkedItemIds: requiredItemIds
     },
     github: {
       repository: env.GITHUB_REPOSITORY,
@@ -207,6 +228,10 @@ function main() {
   const args = parseReleaseUatArgs(process.argv.slice(2));
   if (args.printDigest) {
     process.stdout.write(`${getReleaseUatChecklist(ROOT).digest}\n`);
+    return;
+  }
+  if (args.printItems) {
+    process.stdout.write(`${getReleaseUatItemIdsForTarget(args.target, ROOT).join(",")}\n`);
     return;
   }
   const receipt = buildReleaseUatReceipt(args, { root: ROOT });

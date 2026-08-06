@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../firebase", () => ({
   db: null,
@@ -19,7 +19,17 @@ import {
 } from "../menuService";
 
 describe("menuService fallback behavior", () => {
-  test("returns local event type fallbacks when firebase is unavailable", async () => {
+  beforeEach(() => {
+    const values = new Map();
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn((key) => values.get(key) || null),
+      setItem: vi.fn((key, value) => values.set(key, String(value))),
+      removeItem: vi.fn((key) => values.delete(key)),
+      clear: vi.fn(() => values.clear())
+    });
+  });
+
+  test("returns persisted canonical menu fallbacks when firebase is unavailable", async () => {
     await expect(getEventTypes()).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: "birthday" }),
@@ -27,17 +37,40 @@ describe("menuService fallback behavior", () => {
         expect.objectContaining({ id: "corporate" })
       ])
     );
-    await expect(getMenuCategories("wedding")).resolves.toEqual([]);
-    await expect(getMenuItems("wedding")).resolves.toEqual([]);
+    await expect(getMenuCategories("wedding")).resolves.not.toHaveLength(0);
+    await expect(getMenuItems("wedding")).resolves.not.toHaveLength(0);
   });
 
-  test("throws on mutating methods when firebase is unavailable", async () => {
-    await expect(createEventType({ name: "Wedding" })).rejects.toThrow(/firebase is not configured/i);
-    await expect(createCategory({ eventTypeId: "a", name: "Mains" })).rejects.toThrow(/firebase is not configured/i);
-    await expect(createMenuItem({ eventTypeId: "a", categoryId: "b", name: "Ribs" })).rejects.toThrow(/firebase is not configured/i);
-    await expect(updateEventType("id-1", { name: "Updated" })).rejects.toThrow(/firebase is not configured/i);
-    await expect(updateCategory("id-1", { name: "Updated" })).rejects.toThrow(/firebase is not configured/i);
-    await expect(updateMenuItem("id-1", { name: "Updated" })).rejects.toThrow(/firebase is not configured/i);
-    await expect(deleteMenuItem("id-1")).rejects.toThrow(/firebase is not configured/i);
+  test("executes local event, category, and menu CRUD when firebase is unavailable", async () => {
+    const eventType = await createEventType({ name: "Community Supper", organizationId: "org-a" });
+    const category = await createCategory({
+      eventTypeId: eventType.id,
+      name: "Mains",
+      organizationId: "org-a"
+    });
+    const item = await createMenuItem({
+      eventTypeId: eventType.id,
+      categoryId: category.id,
+      name: "Ribs",
+      price: 6.25,
+      organizationId: "org-a"
+    });
+
+    await updateEventType(eventType.id, { name: "Updated Supper", organizationId: "org-a" });
+    await updateCategory(category.id, { name: "Entrees", organizationId: "org-a" });
+    await updateMenuItem(item.id, { name: "Smoked Ribs", price: 7.5, organizationId: "org-a" });
+
+    await expect(getEventTypes({ organizationId: "org-a" })).resolves.toContainEqual(
+      expect.objectContaining({ id: eventType.id, name: "Updated Supper" })
+    );
+    await expect(getMenuCategories(eventType.id, { organizationId: "org-a" })).resolves.toContainEqual(
+      expect.objectContaining({ id: category.id, name: "Entrees" })
+    );
+    await expect(getMenuItems(eventType.id, { organizationId: "org-a" })).resolves.toContainEqual(
+      expect.objectContaining({ id: item.id, name: "Smoked Ribs", price: 7.5 })
+    );
+
+    await deleteMenuItem(item.id, { organizationId: "org-a" });
+    await expect(getMenuItems(eventType.id, { organizationId: "org-a" })).resolves.toEqual([]);
   });
 });

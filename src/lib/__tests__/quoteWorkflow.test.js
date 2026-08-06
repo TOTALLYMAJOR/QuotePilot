@@ -6,7 +6,10 @@ import {
   buildProposalReadiness,
   buildQuoteLifecycleTimeline,
   buildQuoteScenarios,
-  buildWorkflowAttentionSummary
+  buildWorkflowAttentionSummary,
+  getApprovalActionEligibility,
+  getApprovalRequestExecutionEligibility,
+  getRequestableApprovalActions
 } from "../quoteWorkflow";
 
 function completeForm() {
@@ -53,6 +56,200 @@ describe("quote workflow helpers", () => {
     });
     expect(timeline.find((item) => item.id === "approval-requested-final-balance-approval"))
       .toMatchObject({ detail: "Send final balance request" });
+  });
+
+  test("offers only approval actions that can execute for the current quote", () => {
+    expect(APPROVAL_ACTIONS.some((action) => action.id === "send_quote_email")).toBe(false);
+
+    const accepted = {
+      id: "quote-a",
+      status: "accepted",
+      customer: { email: "customer@example.com" },
+      totals: { total: 1000, deposit: 250 },
+      payment: { depositStatus: "unpaid" },
+      workflow: { approvalRequests: [] }
+    };
+    expect(getRequestableApprovalActions(accepted).map((action) => action.id)).toEqual([
+      "send_payment_request",
+      "convert_to_contract",
+      "rotate_portal_link",
+      "delete_quote"
+    ]);
+
+    const withPendingPayment = {
+      ...accepted,
+      workflow: {
+        approvalRequests: [{
+          id: "payment-request",
+          action: "send_payment_request",
+          state: "pending"
+        }]
+      }
+    };
+    expect(getApprovalActionEligibility(withPendingPayment, "send_payment_request"))
+      .toMatchObject({ eligible: false, reason: expect.stringMatching(/already/i) });
+    expect(getRequestableApprovalActions(withPendingPayment).map((action) => action.id))
+      .not.toContain("send_payment_request");
+  });
+
+  test("requires contract conversion evidence before final-balance approval", () => {
+    const booked = {
+      status: "booked",
+      customer: { email: "customer@example.com" },
+      totals: { total: 1000, deposit: 250 },
+      booking: { contractNumber: "C-260806-12345" },
+      payment: {
+        depositStatus: "paid",
+        stripeSessionId: "cs_test_deposit_123",
+        depositConfirmedAtISO: "2026-08-06T14:00:00.000Z",
+        finalBalance: { status: "unpaid" }
+      },
+      workflow: { approvalRequests: [] }
+    };
+    expect(getApprovalActionEligibility(booked, "send_final_balance_request"))
+      .toMatchObject({ eligible: false, reason: expect.stringMatching(/converted contract/i) });
+    expect(getApprovalActionEligibility({
+      ...booked,
+      booking: {
+        ...booked.booking,
+        contractConvertedAtISO: "2026-08-06T13:00:00.000Z"
+      }
+    }, "send_final_balance_request")).toMatchObject({ eligible: true });
+    expect(getApprovalActionEligibility({
+      ...booked,
+      customer: { email: "not-an-email" },
+      booking: {
+        ...booked.booking,
+        contractConvertedAtISO: "2026-08-06T13:00:00.000Z"
+      }
+    }, "send_final_balance_request")).toMatchObject({
+      eligible: false,
+      reason: expect.stringMatching(/valid customer email/i)
+    });
+  });
+
+  test("makes an approved payment action stale when its portal scope changes", () => {
+    const issuedAtISO = "2026-08-06T14:00:00.000Z";
+    const quote = {
+      id: "quote-a",
+      organizationId: "org-a",
+      status: "accepted",
+      activeVersionId: "v0002",
+      portalKey: "portal-key-current-abcdefghijklmnopqrstuvwxyz",
+      portalIssuedAtISO: issuedAtISO,
+      portalExpiresAtISO: "2026-09-06T14:00:00.000Z",
+      customer: { email: "customer@example.com" },
+      totals: { total: 1000, deposit: 250 },
+      payment: { depositStatus: "unpaid" },
+      workflow: { approvalRequests: [] }
+    };
+    const request = {
+      id: "payment-request",
+      action: "send_payment_request",
+      state: "approved",
+      executionState: "awaiting_execution",
+      actionScope: {
+        version: 1,
+        kind: "stripe_checkout_deposit_request",
+        organizationId: "org-a",
+        quoteId: "quote-a",
+        quoteRevisionId: `v0002@${issuedAtISO}`,
+        portalKey: quote.portalKey,
+        portalIssuedAtISO: issuedAtISO,
+        portalExpiresAtISO: quote.portalExpiresAtISO,
+        customerEmail: "customer@example.com",
+        paymentKind: "deposit",
+        currency: "usd",
+        amountCents: 25000
+      },
+      actionScopeDigest: "a".repeat(64)
+    };
+    expect(getApprovalRequestExecutionEligibility(quote, request)).toEqual({
+      eligible: true,
+      reason: ""
+    });
+    expect(getApprovalRequestExecutionEligibility({
+      ...quote,
+      portalKey: "portal-key-rotated-abcdefghijklmnopqrstuvwxyz"
+    }, request)).toMatchObject({
+      eligible: false,
+      reason: expect.stringMatching(/older customer portal/i)
+    });
+  });
+
+  test("makes final-balance execution stale when contract or checkout generation changes", () => {
+    const issuedAtISO = "2026-08-06T14:00:00.000Z";
+    const convertedAtISO = "2026-08-06T13:00:00.000Z";
+    const quote = {
+      id: "quote-b",
+      organizationId: "org-a",
+      status: "booked",
+      activeVersionId: "v0003",
+      portalKey: "portal-key-final-abcdefghijklmnopqrstuvwxyz",
+      portalIssuedAtISO: issuedAtISO,
+      portalExpiresAtISO: "2026-09-06T14:00:00.000Z",
+      customer: { email: "customer@example.com" },
+      totals: { total: 1000, deposit: 250 },
+      booking: {
+        contractNumber: "C-260806-12345",
+        contractConvertedAtISO: convertedAtISO
+      },
+      payment: {
+        depositStatus: "paid",
+        stripeSessionId: "cs_test_deposit_123",
+        depositConfirmedAtISO: "2026-08-06T13:30:00.000Z",
+        finalBalance: {
+          status: "unpaid",
+          checkoutGeneration: 0,
+          stripeSessionId: "",
+          stripeCheckoutState: ""
+        }
+      },
+      workflow: { approvalRequests: [] }
+    };
+    const request = {
+      id: "final-balance-request",
+      action: "send_final_balance_request",
+      state: "approved",
+      executionState: "awaiting_execution",
+      actionScope: {
+        version: 1,
+        kind: "stripe_checkout_final_balance_request",
+        organizationId: "org-a",
+        quoteId: "quote-b",
+        quoteRevisionId: `v0003@${issuedAtISO}`,
+        portalKey: quote.portalKey,
+        portalIssuedAtISO: issuedAtISO,
+        portalExpiresAtISO: quote.portalExpiresAtISO,
+        customerEmail: "customer@example.com",
+        paymentKind: "final_balance",
+        currency: "usd",
+        amountCents: 75000,
+        depositStatus: "paid",
+        depositAmountCents: 25000,
+        depositStripeSessionId: "cs_test_deposit_123",
+        depositConfirmedAtISO: "2026-08-06T13:30:00.000Z",
+        contractNumber: "C-260806-12345",
+        contractConvertedAtISO: convertedAtISO,
+        checkoutGeneration: 1
+      },
+      actionScopeDigest: "b".repeat(64)
+    };
+
+    expect(getApprovalRequestExecutionEligibility(quote, request)).toMatchObject({
+      eligible: true
+    });
+    expect(getApprovalRequestExecutionEligibility({
+      ...quote,
+      booking: { ...quote.booking, contractNumber: "C-260806-99999" }
+    }, request)).toMatchObject({ eligible: false });
+    expect(getApprovalRequestExecutionEligibility({
+      ...quote,
+      payment: {
+        ...quote.payment,
+        finalBalance: { ...quote.payment.finalBalance, checkoutGeneration: 1 }
+      }
+    }, request)).toMatchObject({ eligible: false });
   });
 
   test("scores proposal readiness and identifies actionable gaps", () => {

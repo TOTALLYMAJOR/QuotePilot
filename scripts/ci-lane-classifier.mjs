@@ -20,6 +20,7 @@ const HIGH_RISK_EXACT = new Set([
   "scripts/ci-lane-classifier.mjs",
   "scripts/orchestration-lanes.sh",
   "scripts/deploy-firebase-production.mjs",
+  "scripts/deploy-hosting-customer.mjs",
   "scripts/deploy-vercel-production.mjs",
   "scripts/production-release-evidence.mjs",
   "scripts/prepare-production-artifact.mjs",
