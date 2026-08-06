@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { currency } from "../lib/quoteCalculator";
 import {
   getPortalQuote,
+  PROPOSAL_ACCEPTANCE_CONSENT_VERSION,
   updatePortalDecision,
   updatePortalQuoteStatus
 } from "../lib/quoteStore";
@@ -40,6 +41,19 @@ function fmtTime(value) {
   const dt = new Date(`2000-01-01T${value}`);
   if (Number.isNaN(dt.getTime())) return value;
   return dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function fmtDateTime(value) {
+  if (!value) return "-";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "-";
+  return dt.toLocaleString([], {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
 }
 
 function formatError(err) {
@@ -97,6 +111,7 @@ export default function CustomerPortalView({
   const [portalKey, setPortalKey] = useState(initialPortalKey);
   const [decisionDraft, setDecisionDraft] = useState("accepted");
   const [decisionMessage, setDecisionMessage] = useState("");
+  const [signerName, setSignerName] = useState("");
   const [acceptanceConfirmed, setAcceptanceConfirmed] = useState(false);
   const [paymentConfirmation, setPaymentConfirmation] = useState({
     state: initialPaymentReturn === "success" ? "checking" : "idle",
@@ -142,6 +157,7 @@ export default function CustomerPortalView({
       setPortalKey(key);
       setDecisionDraft(quote.portalDecision?.decision || "accepted");
       setDecisionMessage(quote.portalDecision?.message || "");
+      setSignerName(quote.acceptanceReceipt?.signerName || "");
       setAcceptanceConfirmed(false);
       setState((prev) => ({
         ...prev,
@@ -162,7 +178,11 @@ export default function CustomerPortalView({
   const submitDecision = async () => {
     if (!quote?.portalKey || decisionLocked) return;
     if (decisionDraft === "accepted" && !acceptanceConfirmed) {
-      setState((prev) => ({ ...prev, error: "Confirm that you reviewed the event details and total." }));
+      setState((prev) => ({ ...prev, error: "Confirm the electronic-signature statement before accepting." }));
+      return;
+    }
+    if (decisionDraft === "accepted" && signerName.trim().length < 2) {
+      setState((prev) => ({ ...prev, error: "Enter the signer’s full legal name." }));
       return;
     }
     if (decisionDraft === "changes_requested" && !decisionMessage.trim()) {
@@ -175,7 +195,13 @@ export default function CustomerPortalView({
       await updatePortalDecision({
         portalKey: quote.portalKey,
         decision: decisionDraft,
-        message: decisionMessage
+        message: decisionMessage,
+        signerName,
+        consentVersion: decisionDraft === "accepted"
+          ? PROPOSAL_ACCEPTANCE_CONSENT_VERSION
+          : "",
+        expectedRevisionId: quote.deliveryEvidence?.revisionId || "",
+        expectedPortalIssuedAtISO: quote.portalIssuedAtISO || ""
       });
       const refreshed = await getPortalQuote(quote.portalKey);
       setState((prev) => ({
@@ -440,20 +466,67 @@ export default function CustomerPortalView({
                   />
                 </label>
                 {decisionDraft === "accepted" && (
-                  <label className="portal-accept-confirmation">
-                    <input
-                      type="checkbox"
-                      checked={acceptanceConfirmed}
-                      onChange={(event) => setAcceptanceConfirmed(event.target.checked)}
-                    />
-                    <span>I reviewed the event details and proposal total.</span>
-                  </label>
+                  <div className="portal-signature-fields">
+                    <label className="field">
+                      <span>Full legal name</span>
+                      <input
+                        type="text"
+                        autoComplete="name"
+                        maxLength="160"
+                        value={signerName}
+                        onChange={(event) => setSignerName(event.target.value)}
+                        placeholder="Type your name to sign"
+                        required
+                      />
+                    </label>
+                    <label className="portal-accept-confirmation">
+                      <input
+                        type="checkbox"
+                        checked={acceptanceConfirmed}
+                        onChange={(event) => setAcceptanceConfirmed(event.target.checked)}
+                      />
+                      <span>
+                        I agree to this proposal and consent to use my typed name as my electronic signature.
+                      </span>
+                    </label>
+                    <p className="source-note">
+                      Acceptance records this proposal revision. Payment and booking confirmation remain separate.
+                    </p>
+                  </div>
                 )}
                 <div className="portal-decision-submit">
-                  <button type="button" className="cta" onClick={submitDecision} disabled={state.busy}>
-                    {state.busy ? "Submitting..." : "Submit Decision"}
+                  <button
+                    type="button"
+                    className="cta"
+                    onClick={submitDecision}
+                    disabled={
+                      state.busy
+                      || (decisionDraft === "accepted" && (
+                        !acceptanceConfirmed
+                        || signerName.trim().length < 2
+                      ))
+                    }
+                  >
+                    {state.busy
+                      ? "Submitting..."
+                      : decisionDraft === "accepted"
+                        ? "Sign and Accept Proposal"
+                        : "Submit Decision"}
                   </button>
                 </div>
+              </section>
+            )}
+
+            {quote.acceptanceReceipt && ["accepted", "booked"].includes(quote.status) && (
+              <section className="portal-decision-note-receipt portal-signature-receipt">
+                <span>Electronic acceptance receipt</span>
+                <p>
+                  Signed by <strong>{quote.acceptanceReceipt.signerName}</strong> on{" "}
+                  {fmtDateTime(quote.acceptanceReceipt.acceptedAtISO)}.
+                </p>
+                <small>
+                  Receipt {quote.acceptanceReceipt.receiptId} · Revision {quote.acceptanceReceipt.quoteRevisionId}
+                </small>
               </section>
             )}
 

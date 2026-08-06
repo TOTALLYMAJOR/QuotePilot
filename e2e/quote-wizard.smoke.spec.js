@@ -774,6 +774,62 @@ test("portal decision center records a customer change request", async ({ page }
   expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
 });
 
+test("portal acceptance requires typed consent and shows the signed revision receipt", async ({ page }) => {
+  const eventDate = futureDateISO(80);
+  await createQuoteToHistory(page, {
+    guests: 96,
+    eventName: "E2E Signed Proposal",
+    venue: "Signature Hall",
+    date: eventDate
+  });
+  await setQuoteStatus(quoteRows(page).first(), "sent");
+  const portalKey = await page.evaluate(() => {
+    const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
+    return quotes[0]?.portalKey || "";
+  });
+
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Customer Portal" }).click();
+  await page.getByPlaceholder("Paste your quote key").fill(portalKey);
+  await page.getByRole("button", { name: "Open Proposal" }).click();
+
+  const signButton = page.getByRole("button", { name: "Sign and Accept Proposal" });
+  await expect(signButton).toBeDisabled();
+  await page.getByLabel("Full legal name").fill("E2E Portal Customer");
+  await expect(signButton).toBeDisabled();
+  await page.getByLabel(/consent to use my typed name as my electronic signature/i).check();
+  await expect(signButton).toBeEnabled();
+  await signButton.click();
+
+  await expect(page.getByText("Proposal accepted", { exact: true })).toBeVisible();
+  await expect(page.getByText("Electronic acceptance receipt", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Signed by E2E Portal Customer/i)).toBeVisible();
+  await expect(page.getByText(/Payment and booking confirmation remain separate/i)).toBeVisible();
+
+  const storedReceipt = await page.evaluate((key) => {
+    const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
+    const quote = quotes.find((item) => item.portalKey === key);
+    return {
+      status: quote?.status,
+      decision: quote?.portalDecision?.decision,
+      receipt: quote?.acceptanceReceipt
+    };
+  }, portalKey);
+  expect(storedReceipt).toMatchObject({
+    status: "accepted",
+    decision: "accepted",
+    receipt: {
+      signerName: "E2E Portal Customer",
+      consentVersion: "proposal-acceptance-v1",
+      currency: "USD"
+    }
+  });
+  expect(storedReceipt.receipt.receiptId).toMatch(/^acceptance-[a-zA-Z0-9-]{20,}$/);
+  expect(Number.isInteger(storedReceipt.receipt.totalMinor)).toBe(true);
+  expect(Number.isInteger(storedReceipt.receipt.depositMinor)).toBe(true);
+  expect(storedReceipt.receipt.quoteRevisionId).toBeTruthy();
+});
+
 test("portal refreshes webhook-backed payment state after a Stripe success return", async ({ page }) => {
   const portalKey = "portal-payment-return-12345678901234567890";
   const nowISO = new Date().toISOString();

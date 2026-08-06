@@ -29,6 +29,7 @@
     "migrate:multi-tenant:dry-run:evidence": "node ./scripts/migrate-to-multi-tenant.mjs --dry-run --evidence-out ./artifacts/migration/multi-tenant-dry-run-evidence.json",
     "portal:backfill": "node ./scripts/backfill-portal-snapshots.mjs",
     "test:portal-backfill:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-portal-backfill emulators:exec --only firestore \"vitest run src/lib/__tests__/portalSnapshotBackfill.emulator.test.js\"",
+    "test:proposal-acceptance:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-proposal-acceptance emulators:exec --only firestore,functions \"node scripts/proposal-acceptance-emulator.mjs\"",
     "check:secrets": "node ./scripts/check-secret-assets.mjs",
     "check:docs:governance": "node ./scripts/check-doc-governance.mjs",
     "check:perf:bundle": "node ./scripts/check-bundle-budget.mjs",

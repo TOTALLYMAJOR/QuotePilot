@@ -171,6 +171,12 @@ instruction if that browser is unavailable.
   - Firebase emulator browser lane that also starts Functions emulator.
   - Requires authoritative pricing callable success and trusted quote creation
     in the save path (no client-only pricing fallback).
+- `npm run test:proposal-acceptance:emulator`
+  - Starts isolated Firestore and Functions emulators for the public proposal
+    acceptance boundary.
+  - Proves direct browser acceptance is denied, concurrent callable requests
+    converge on one immutable receipt, and signer/revision/hash evidence plus
+    integer minor-unit totals persist to both quote copies.
 - `scripts/provisioning-emulator-acceptance.mjs`
   - Full emulator-only platform/tenant lifecycle matrix run under Auth,
     Firestore, and Functions emulators.

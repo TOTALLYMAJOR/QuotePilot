@@ -6,6 +6,24 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Added
+
+- Server-authoritative electronic proposal acceptance with typed signer name,
+  versioned consent text, server timestamp, exact delivery-revision and portal
+  issuance preconditions, integer minor-unit totals, a SHA-256 signed proposal
+  snapshot, and an immutable tenant-scoped receipt record.
+- Customer-facing acceptance receipts now show signer, timestamp, receipt ID,
+  and signed revision while continuing to state that payment and booking are
+  separate outcomes.
+
+### Security
+
+- Direct browser writes can no longer create an accepted proposal. The
+  acceptance callable independently validates the active organization, portal
+  expiry, matching quote/portal content, provider-accepted delivery evidence,
+  complete proposal fields, signer consent, and current revision in one
+  transaction; stale tabs and forged receipt writes fail closed.
+
 ## [0.2.3] - 2026-08-05
 
 ### Added

@@ -1154,6 +1154,57 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(deleteDoc(adminRef));
   });
 
+  test("proposal acceptance receipts are tenant-readable and server-write-only", async () => {
+    const receiptId = "acceptance-12345678-1234-1234-1234-123456789012";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "organizations", "org-a", "proposalAcceptanceReceipts", receiptId),
+        {
+          organizationId: "org-a",
+          quoteId: "q1",
+          receiptId,
+          signerName: "Portal Client",
+          totalMinor: 720025
+        }
+      );
+    });
+    const adminReceipt = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "proposalAcceptanceReceipts",
+      receiptId
+    );
+    const salesReceipt = orgScopedRefFor(
+      "sales-org-a",
+      "sales-a@example.com",
+      "org-a",
+      "proposalAcceptanceReceipts",
+      receiptId
+    );
+    const customerReceipt = orgScopedRefFor(
+      "customer-org-a",
+      "customer-a@example.com",
+      "org-a",
+      "proposalAcceptanceReceipts",
+      receiptId
+    );
+    const foreignReceipt = orgScopedRefFor(
+      "sales-org-b",
+      "sales-b@example.com",
+      "org-a",
+      "proposalAcceptanceReceipts",
+      receiptId
+    );
+
+    await assertSucceeds(getDoc(adminReceipt));
+    await assertSucceeds(getDoc(salesReceipt));
+    await assertFails(getDoc(customerReceipt));
+    await assertFails(getDoc(foreignReceipt));
+    await assertFails(updateDoc(adminReceipt, { signerName: "Forged Signer" }));
+    await assertFails(deleteDoc(adminReceipt));
+  });
+
   test("Stripe payment references and provider audit fields remain server-owned", async () => {
     const depositLink = "https://checkout.stripe.com/c/pay/cs_test_server";
     const stripeSessionId = "cs_test_server";
@@ -1734,7 +1785,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         acceptedAtISO: "2026-03-21T02:45:00.000Z"
       }
     }));
-    await assertSucceeds(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+    await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
       status: "accepted",
       updatedAtISO: "2026-03-21T03:00:00.000Z",
       lifecycle: {
@@ -2071,7 +2122,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }));
   });
 
-  test("atomic portal acceptance supports newly provisioned organization records", async () => {
+  test("browser acceptance is denied for newly provisioned organization records", async () => {
     const organizationId = "provisioned-org";
     const quoteId = "provisioned-quote";
     const portalKey = "provisioned-portal-key-abcdefghijklmnopqrstuvwxyz";
@@ -2133,7 +2184,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     });
 
     const acceptedAtISO = "2026-03-21T01:00:00.000Z";
-    await assertSucceeds(updatePortalPair(portalKey, organizationId, quoteId, {
+    await assertFails(updatePortalPair(portalKey, organizationId, quoteId, {
       status: "accepted",
       updatedAtISO: acceptedAtISO,
       lifecycle: {

@@ -422,6 +422,27 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
   const payment = isRecord(quote?.payment) ? quote.payment : {};
   const booking = isRecord(quote?.booking) ? quote.booking : {};
   const portalDecision = isRecord(quote?.portalDecision) ? quote.portalDecision : {};
+  const acceptanceReceipt = isRecord(quote?.acceptanceReceipt)
+    ? {
+        receiptId: text(quote.acceptanceReceipt.receiptId, 160),
+        signerName: text(quote.acceptanceReceipt.signerName, 160),
+        actor: {
+          type: text(quote.acceptanceReceipt.actor?.type, 32),
+          uid: sanitizeIdentifier(quote.acceptanceReceipt.actor?.uid, 128),
+          email: email(quote.acceptanceReceipt.actor?.email)
+        },
+        consentVersion: text(quote.acceptanceReceipt.consentVersion, 80),
+        consentText: text(quote.acceptanceReceipt.consentText, 500),
+        acceptedAtISO: normalizeISO(quote.acceptanceReceipt.acceptedAtISO, ""),
+        quoteRevisionId: text(quote.acceptanceReceipt.quoteRevisionId, 160),
+        portalIssuedAtISO: normalizeISO(quote.acceptanceReceipt.portalIssuedAtISO, ""),
+        quoteNumber: text(quote.acceptanceReceipt.quoteNumber, 80),
+        currency: text(quote.acceptanceReceipt.currency, 8),
+        totalMinor: integerInRange(quote.acceptanceReceipt.totalMinor, 0, 0, Number.MAX_SAFE_INTEGER),
+        depositMinor: integerInRange(quote.acceptanceReceipt.depositMinor, 0, 0, Number.MAX_SAFE_INTEGER),
+        snapshotSha256: text(quote.acceptanceReceipt.snapshotSha256, 64)
+      }
+    : null;
   const lifecycle = isRecord(quote?.lifecycle) ? quote.lifecycle : {};
   const quoteDelivery = isRecord(quote?.workflow?.quoteDelivery)
     ? quote.workflow.quoteDelivery
@@ -519,6 +540,7 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
       confirmedAtISO: normalizeISO(booking.confirmedAtISO, "")
     },
     portalDecision: { ...portalDecision },
+    acceptanceReceipt,
     lifecycle: { ...lifecycle },
     deliveryEvidence,
     createdAtISO,

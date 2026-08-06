@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: August 3, 2026
+Last updated: August 6, 2026
 
 This matrix maps the master feature checklist to current implementation and source locations.
 
@@ -27,7 +27,7 @@ This matrix maps the master feature checklist to current implementation and sour
 | 9 | Admin panel tabbed UX + hierarchical menu management | Implemented | `src/components/AdminCatalogModal.jsx`, `src/styles.css` (`.admin-tabs`) |
 | 10 | Inline editing with blur/enter persistence | Implemented | `src/components/AdminCatalogModal.jsx` (`handleManagedMenuItemBlur`, `handleManagedMenuItemKeyDown`) |
 | 11 | Booking lifecycle (availability checks, contract conversion, confirmations, staff assignments) | Implemented (contract callable deploy pending) | `functions/contractWorkflow.js`, `functions/index.js` (`convertQuoteToContract`), `src/lib/quoteStore.js` (`checkEventAvailability`, `convertQuoteToContract`, `updateQuoteBookingConfirmation`, `updateQuoteBookingAssignment`), `src/components/EventScheduleModal.jsx`, `src/components/QuoteHistoryModal.jsx` |
-| 12 | Customer decision center (scope/pricing + accept/change request/decline + evidence-bound token lifecycle) | Implemented (branch; delivery-evidence rules deploy pending) | `src/components/CustomerPortalView.jsx`, `src/lib/quoteStore.js` (`getPortalQuote`, `updatePortalDecision`, `rotateQuotePortalKey`), `functions/quoteDelivery.js`, `functions/index.js`, `firestore.rules` (`customerPortalQuotes`) |
+| 12 | Customer decision center (scope/pricing + callable-owned electronic acceptance receipt + change request/decline + evidence-bound token lifecycle) | Implemented (branch; acceptance callable/rules deploy pending) | `src/components/CustomerPortalView.jsx`, `src/lib/quoteStore.js` (`getPortalQuote`, `updatePortalDecision`, `rotateQuotePortalKey`), `functions/proposalAcceptance.js`, `functions/quoteDelivery.js`, `functions/index.js` (`acceptQuoteProposal`), `firestore.rules` (`customerPortalQuotes`, `proposalAcceptanceReceipts`) |
 | 13 | Admin-only provider operations + scoped integration audit logging | Implemented (branch; provider activation pending) | `src/components/IntegrationOpsModal.jsx`, `src/lib/quoteStore.js` (`recordQuoteIntegrationSync`; browser CRM sends fail closed), `src/lib/commerceOps.js`, `functions/index.js` (admin-only provider callables) |
 | 14 | Reporting dashboard (pipeline, conversion, revenue metrics) | Implemented | `src/components/ReportingDashboardModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`) |
 | 15 | Event schedule board (month/week, conflicts, assignments, production checklist) | Implemented | `src/components/EventScheduleModal.jsx`, `src/lib/quoteStore.js` (`getQuoteHistory`, `updateQuoteBookingAssignment`, `updateQuoteProductionChecklist`) |
@@ -90,6 +90,12 @@ This matrix maps the master feature checklist to current implementation and sour
   without `deliveryEvidence` fail closed and must recover through an approved
   resend or truthful provider reconciliation; projection backfill never
   fabricates acceptance evidence.
+- Proposal acceptance is callable-owned and revision-preconditioned. The server
+  requires the displayed portal projection to match the complete saved quote,
+  records typed signer and versioned consent evidence, stores all receipt money
+  in integer USD minor units, hashes the signed proposal snapshot, and creates
+  a tenant-readable/server-write-only receipt. Firestore denies direct browser
+  acceptance; payment and booking remain separate states.
 - Menu backfill for `pricingType` + `active` is implemented in `scripts/seed-firestore-menu.mjs`.
 - Multi-tenant org scoping is authoritative for protected catalog and quote
   writes. Direct quote creation is denied in Firestore; trusted Functions

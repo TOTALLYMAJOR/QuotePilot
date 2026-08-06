@@ -142,15 +142,16 @@ async function createPrincipal({ email, role, organizationId, platformAdmin = fa
 }
 
 async function callFunction(name, idToken, data = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    Origin: "http://localhost:4174"
+  };
+  if (idToken) headers.Authorization = `Bearer ${idToken}`;
   const response = await fetch(
     `http://${functionsHost}/${projectId}/${region}/${name}`,
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        "Content-Type": "application/json",
-        Origin: "http://localhost:4174"
-      },
+      headers,
       body: JSON.stringify({ data })
     }
   );
@@ -814,21 +815,20 @@ try {
     "quotes",
     acceptanceQuoteId
   );
-  const acceptedAtISO = new Date().toISOString();
-  const acceptedDecision = {
-    decision: "accepted",
-    message: "",
-    requestId: "portal-decision-provisioning-acceptance-0001",
-    submittedAtISO: acceptedAtISO
-  };
-  const acceptedPatch = {
+  const forgedAcceptedAtISO = new Date().toISOString();
+  const forgedAcceptedPatch = {
     status: "accepted",
-    updatedAtISO: acceptedAtISO,
+    updatedAtISO: forgedAcceptedAtISO,
     lifecycle: {
       ...sentLifecycle,
-      acceptedAtISO
+      acceptedAtISO: forgedAcceptedAtISO
     },
-    portalDecision: acceptedDecision
+    portalDecision: {
+      decision: "accepted",
+      message: "",
+      requestId: "portal-decision-provisioning-acceptance-0001",
+      submittedAtISO: forgedAcceptedAtISO
+    }
   };
   const activePublicPortal = await getDoc(publicPortalRef);
   assert.equal(activePublicPortal.exists(), true);
@@ -838,18 +838,43 @@ try {
     trustedCreation.portalExpiresAtISO
   );
   const acceptanceBatch = writeBatch(publicSession.db);
-  acceptanceBatch.update(publicPortalRef, acceptedPatch);
-  acceptanceBatch.update(publicQuoteRef, acceptedPatch);
-  await acceptanceBatch.commit();
+  acceptanceBatch.update(publicPortalRef, forgedAcceptedPatch);
+  acceptanceBatch.update(publicQuoteRef, forgedAcceptedPatch);
+  await assert.rejects(() => acceptanceBatch.commit(), /permission|denied/i);
+
+  const acceptanceResult = await callFunction("acceptQuoteProposal", "", {
+    portalKey: acceptancePortalKey,
+    signerName: "Provisioning Customer",
+    consentVersion: "proposal-acceptance-v1",
+    expectedRevisionId: deliveryRevisionId,
+    expectedPortalIssuedAtISO: portalIssuedAtISO,
+    message: "Approved in emulator acceptance."
+  });
+  assert.equal(acceptanceResult.ok, true);
+  assert.equal(acceptanceResult.status, "accepted");
+  assert.equal(acceptanceResult.acceptanceReceipt?.signerName, "Provisioning Customer");
+  assert.equal(acceptanceResult.acceptanceReceipt?.quoteRevisionId, deliveryRevisionId);
+  assert.equal(Number.isInteger(acceptanceResult.acceptanceReceipt?.totalMinor), true);
+  assert.match(acceptanceResult.acceptanceReceipt?.snapshotSha256 || "", /^[a-f0-9]{64}$/);
 
   const [acceptedPortal, acceptedQuote] = await Promise.all([
     getDoc(publicPortalRef),
     getDoc(reopenedQuoteRef)
   ]);
   assert.equal(acceptedPortal.data()?.status, "accepted");
-  assert.deepEqual(acceptedPortal.data()?.portalDecision, acceptedDecision);
+  assert.deepEqual(acceptedPortal.data()?.portalDecision, acceptanceResult.portalDecision);
+  assert.deepEqual(acceptedPortal.data()?.acceptanceReceipt, acceptanceResult.acceptanceReceipt);
   assert.equal(acceptedQuote.data()?.status, "accepted");
-  assert.deepEqual(acceptedQuote.data()?.portalDecision, acceptedDecision);
+  assert.deepEqual(acceptedQuote.data()?.portalDecision, acceptanceResult.portalDecision);
+  assert.deepEqual(acceptedQuote.data()?.acceptanceReceipt, acceptanceResult.acceptanceReceipt);
+  const acceptanceReceipt = await db
+    .collection("organizations")
+    .doc(organizationId)
+    .collection("proposalAcceptanceReceipts")
+    .doc(acceptanceResult.acceptanceReceipt.receiptId)
+    .get();
+  assert.equal(acceptanceReceipt.exists, true);
+  assert.equal(acceptanceReceipt.data()?.totalMinor, acceptanceResult.acceptanceReceipt.totalMinor);
 } finally {
   await Promise.allSettled([
     closeClientSession(ownerSession),
@@ -1506,7 +1531,7 @@ console.log("- matching order resumed idempotently; concurrent dispatch, conflic
 console.log("- invited owner claimed the tenant, configured branding and a non-zero package, and reopened a saved quote");
 console.log("- unverified owner could not consume the admin invite; verified email was required");
 console.log("- pending owner invite received a bounded server-authored expiry");
-console.log("- unauthenticated portal client accepted the quote and persisted the decision to both quote copies");
+console.log("- direct browser acceptance was denied; the unauthenticated acceptance callable persisted signer, revision, and immutable receipt evidence");
 console.log("- entitlement-only update preserved branding, catalog, and invite");
 console.log("- approval requests, resolutions, and exact admin executions used server-owned identity, outcomes, idempotency, and replay protection");
 console.log("- archived tenant resume/update was blocked");
