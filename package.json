@@ -36,6 +36,7 @@
     "check:perf:bundle": "node ./scripts/check-bundle-budget.mjs",
     "check:perf:cwv": "bash ./scripts/run-lighthouse-cwv.sh",
     "release:uat:digest": "node ./scripts/release-uat-attestation.mjs --print-digest",
+    "release:uat:items": "node ./scripts/release-uat-attestation.mjs --print-items",
     "release:evidence:verify": "node ./scripts/production-release-evidence.mjs",
     "release:artifact:stage": "node ./scripts/stage-production-payload.mjs",
     "release:artifact:prepare": "node ./scripts/prepare-production-artifact.mjs",

@@ -45,6 +45,22 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Customer-facing acceptance receipts now show signer, timestamp, receipt ID,
   and signed revision while continuing to state that payment and booking are
   separate outcomes.
+- A staff-only Kitchen sheet export for saved quotes with event timing,
+  staffing, kitchen checkpoints, menu selections, production-checklist state,
+  revision and generation stamps, day-of contacts, allergen callouts, and
+  prepared-by and chef sign-off lines plus day-of notes.
+- Exact-SHA release evidence, versioned target-specific UAT, deterministic
+  credential-free Firebase/Vercel payload manifests, and rollback ancestry
+  checks for a separately authorized trusted deployer. Repository preparation
+  workflows do not receive provider mutation credentials or change production.
+- Separate server-authoritative Stripe deposit and final-balance collection
+  rails with exact approval scope, private-before-provider-acceptance link
+  handling, signed-event payment truth, replay-safe reconciliation, and
+  customer-safe projections that omit provider identifiers.
+- A disabled-by-default public Stripe test-invoice buyer path with fixed Starter
+  pricing, Turnstile abuse controls, durable rate limits, exact-request retry,
+  signed invoice lifecycle handling, audited terminal-unpaid recovery, paid
+  workspace preparation, and verified-email invitation activation.
 
 ### Changed
 
@@ -78,16 +94,73 @@ This changelog is backfilled from git history and will be maintained going forwa
   surfaces, and 44px primary, ghost, and quantity-stepper targets.
 - Bodoni Moda, Manrope, DM Mono, and Inter now load from preconnected,
   `display=swap` document stylesheet links instead of CSS `@import` rules.
+- Release-critical workflows use immutable action pins, reproducible workflow
+  linting, read-only repository permissions, and checkout steps that do not
+  persist the GitHub token before repository-controlled checks execute.
+- Target-scoped release UAT now exposes a read-only command that prints all and
+  only the checklist ids applicable to one selected profile. Operator guidance,
+  PR evidence, workflow input copy, and receipt validation use that exact set,
+  while release workflows share the current immutable action pins and the
+  retired customer-hosting deploy entrypoint remains classified as high risk.
+- Generic Resend and quote-payment Stripe credentials use least-privilege
+  Firebase Secret Manager bindings. The generic webhook receives only its
+  signing secret, and bounded old/new webhook-secret overlap supports rotation.
+- The legacy organization-wide deleted-quote purge fails closed and its browser
+  control is removed. Retained organizations use the existing exact-approved,
+  audited one-quote deletion path; separately governed tenant teardown remains
+  outside that operation.
 
 ### Fixed
 
+- Quote creation now requires at least one selected menu item in Step 2, local
+  persistence, authoritative server creation, proposal acceptance, and contract
+  conversion. Validation returns staff to the first menu choice, while a
+  revision-guarded additive recovery pack can repair a historically confirmed
+  catalog that has no menu without replacing existing records or pricing.
+- Local development catalog fallback now supports persistent event-type,
+  category, and menu-item create, edit, and delete operations. Menu prices are
+  stored in integer minor units and every mutation advances the catalog revision
+  and clears pricing confirmation for another owner review.
+- Portal rotation now reconciles both deposit and material final-balance payment
+  rails, tolerates a concurrent terminal Stripe expiration, invalidates stale
+  old-portal payment approvals, and keeps in-progress dispatches fail-closed.
+  Accepted quotes can deliver a newly rotated portal, stale approval actions are
+  visibly non-executable, and Workflow handoffs focus the exact Quotes action.
+- Sensitive-action requests are limited to operations with a real execution
+  path; stale duplicate approvals no longer hide recovery. Catalog and
+  integration surfaces also stop presenting editable CRM settings when no
+  outbound connector exists, and failed schedule checkpoint resets restore the
+  prior local values.
+- Catalog Admin now refreshes event types and menu records after an
+  authoritative starter-pack load, reconciles uncertain save/confirmation
+  responses against the exact server revision, offers a refresh recovery when
+  that read also fails, removes the disabled Starter Packs decision after
+  pricing confirmation, and prevents Enter-plus-blur menu edits from saving
+  twice.
 - New quote confirmation appears only for user-originated unsaved changes;
   automatic catalog/template defaults stay clean, and reset returns all quote,
   event, customer, pricing, and selection fields to the canonical initial state.
+- New quotes now store the same one-hour minimum shown by both duration
+  controls and select the first valid package from the loaded tenant catalog,
+  including after New quote resets. Template clearing tracks field and
+  item-level provenance so package, menu, staffing, travel, and pricing
+  defaults are restored without rolling back later user edits.
+- Tenant resolution, verified-but-pending staff access, unavailable catalogs,
+  and sales catalog-setup waits now expose executing retry or support paths.
+  Booking conflicts show the overlapping event details and route staff to the
+  schedule or directly back to date, time, duration, and venue correction.
 - Step 1 click and Enter validation expose all seven required-field errors,
   provide one summary, and move focus to the first invalid control.
 - The idempotent `sent` to `viewed` customer-visit transition and the rule that
   browser payment returns never establish `paid` remain intact.
+- Buyer-invoice emulator recovery now recognizes only Cloudflare's published
+  loopback test credential, deterministic callable-emulator request identity,
+  loopback HTTP activation, and Stripe test restricted-key fixtures without
+  weakening deployed hostname, HTTPS, request-source, or live-key checks.
+- Portal projection backfill dry runs can again use an authenticated Firebase
+  CLI cache when Application Default Credentials are unavailable; the token
+  reader now uses a defined synchronous filesystem dependency with focused
+  injection coverage and does not place the token in evidence.
 
 ### Security
 
@@ -125,125 +198,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
-- Local buyer-invoice testing can now consume Cloudflare's published always-pass
-  Turnstile result. The exception requires the exact published test credential
-  and a loopback-only hostname allowlist; production hostname and action checks
-  remain strict.
-- Firebase's callable emulator now supplies a deterministic loopback identity
-  when it omits the trusted request socket. Deployed buyer-invoice Functions
-  still fail closed when neither trusted request-IP source is present.
-- Buyer activation may use the exact loopback `/app` route over HTTP only inside
-  the Functions emulator. Every deployed or non-loopback application URL still
-  requires HTTPS.
-- Local Stripe coding sandboxes can now authenticate the test-only invoice rail
-  with Stripe's `rkcs_test_` restricted-key prefix. Live mode continues to
-  accept only live secret or restricted keys, so the local compatibility path
-  cannot authorize a production payment rail.
+- Firebase Functions production packaging now declares the Firebase App and
+  App Compat peers required by Firebase Admin's database compatibility layer,
+  preventing Node.js 22 cold-start failures after a clean cloud install.
+- Customer portal visits now record the first valid `sent` to `viewed`
+  transition atomically, preserving the original view timestamp on reload so
+  lifecycle timelines and reporting can reflect actual portal views.
+- Stripe checkout success returns now trigger bounded portal snapshot refreshes
+  and show a secure confirmation state until the signature-verified webhook's
+  paid status is visible; the browser return itself never marks a deposit paid.
 
 ### Added
-
-- Exact-SHA production release evidence verification for Firebase and Vercel,
-  including required CI jobs, versioned UAT attestation, rollback ancestry,
-  protected-environment policy, and the exact human-dispatched workflow run.
-- A versioned release UAT checklist, protected attestation workflow and receipt
-  artifact, plus a controlled Vercel production workflow.
-- Credential-free production payload staging with deterministic manifests,
-  fixed provider identities, path and secret-material rejection, and atomic
-  manifest creation for separately authorized deployment.
-- Generic Resend and quote-payment Stripe credentials now use strict Firebase
-  Secret Manager reads with least-privilege bindings across their complete
-  Function call graph. The generic Stripe webhook verifies signatures without
-  receiving the Stripe API key, both Stripe webhook rails accept a bounded
-  `new,old` signing-secret overlap for safe rotation, and the Functions dotenv
-  materializer rejects and omits `RESEND_API_KEY`, `STRIPE_SECRET_KEY`, and
-  `STRIPE_WEBHOOK_SECRET`. Operator guidance separates non-secret dotenv values,
-  ignored emulator-only `.secret.local` fixtures, and production Secret Manager
-  ownership. No credential rotation, provider mutation, deployment, or hosted
-  acceptance is claimed by this source change.
-- Public invoice-first buyer onboarding source for `/start` on the existing
-  `tonicatering` Firebase project. The public organization/owner/email form and
-  marketing CTA require a syntactically valid non-placeholder public Turnstile
-  site key; provider setup and human review remain separate evidence. The
-  independently disabled Functions gate, exact hostname/action verification,
-  durable rate limits, and deterministic idempotency remain server-owned. A
-  dedicated Secret Manager key now HMACs network/email rate-document identities,
-  all rate records carry Firestore Timestamp expiry, the deployable Firestore
-  configuration declares TTL for `buyerAccessRateLimits.expiresAt` with a
-  regression check that prevents its silent removal, and creation atomically
-  reserves a request-scoped order before any identity/order lookup. Exact retry
-  still consumes network capacity while avoiding duplicate email charge during
-  the 24-hour reservation; a fresh post-window request can replace only a
-  provider-verified void prior order, which is marked superseded against stale
-  events. Void authority may come from the exact signed webhook or the new
-  platform-admin recovery path after it verifies and, when necessary, voids the
-  exact terminal unpaid test Invoice at Stripe.
-  Open and payment-failed exact retries return the same Hosted Invoice Page;
-  a server-reported void can start a fresh same-tab test request while the
-  24-hour window remains server-enforced. The admin-only Buyer Invoice Recovery
-  surface now requires an exact order-bound confirmation, server-derived
-  provider identity, Stripe test-mode retrieval, absence of fulfillment
-  artifacts, and an audited irreversible void before replacement eligibility.
-  Paid, open, fulfilled, superseded, mismatched, or partially paid targets fail
-  closed, and a provider void cannot bypass the existing email window. Public
-  status polling atomically consumes one 60-request-per-five-minute network
-  lease per request before its first buyer-order read. Well-formed unknown-order
-  and wrong-token checks consume the same budget, while missing rate
-  configuration or an unavailable rate store fails closed. The
-  dedicated `createBuyerAccessInvoice` callable fixes Starter to $1 USD in
-  Stripe test mode, creates and finalizes a true invoice before payment, and
-  returns only its Stripe Hosted Invoice Page. The dedicated buyer API client
-  and webhook endpoint are pinned to Stripe API version `2024-06-20` without
-  changing the generic quote client. `buyerAccessStripeWebhook` accepts only
-  signed, replay-deduplicated `invoice.paid`, `invoice.payment_failed`,
-  `invoice.voided`, and `invoice.marked_uncollectible` events on this isolated
-  rail. A paid invoice prepares the organization, neutral settings, Starter
-  workspace plan entitlements, provisioning record, and pending invitation, but
-  creates no user membership, admin role, custom claims, or application access.
-  Once the token-bound status reports `provisioning` with `workspaceReady=true`,
-  `/start` stops automatic polling and offers `/app` as a manual registration or
-  sign-in path for the exact invoice email; this neither claims onboarding-email
-  acceptance nor grants access. `activation_sent` still requires durable
-  provider acceptance of the exact onboarding message, but that optional
-  message is not required to initiate the Firebase verification path. Only a
-  matching Firebase account with separately verified invoice email may consume
-  the invitation, and only `active` is access-ready. Controlled
-  test-mode markers remain mandatory for exclusion from live revenue and
-  paid-customer reporting. Generic builds
-  and the server gate default off, and no hosted/provider or live-sale result is
-  claimed by this source change.
-- Target-scoped release UAT coverage for public buyer onboarding, including
-  Turnstile host/action verification, rate limiting, retry idempotency, a true
-  Hosted Invoice Page, signed invoice lifecycle, paid workspace preparation,
-  pending invitation, proof-safe manual account setup at `workspaceReady=true`,
-  optional onboarding-email provider acceptance, separate Firebase verification-
-  email delivery and continue URL, no user role or access before verified claim,
-  cross-account/replay/failure denial, and proof that the
-  existing quote Stripe rail remains unchanged. Browser targets prove only
-  locked UI and instructions; backend targets own provider and fulfillment
-  evidence. The checklist records observations against an exact target only; it
-  does not prove an unbound dependency, provider setup, or live launch.
-- Firebase email/password account recovery on the staff sign-in screen, with
-  normalized reset requests, the same on-screen confirmation for unknown or
-  disabled account errors, a validated HTTPS `/app` return URL, action-specific
-  settings shared by registration and verification resends so buyer activation
-  emails carry the same build-owned, fail-closed `/app` continue URL,
-  loading state, accessible live status, focused helper coverage, and an
-  Auth-emulator browser assertion that completes the password change and signs
-  in with the replacement password. Full account-enumeration resistance still
-  depends on provider configuration and registration hardening.
-
-### Changed
-
-- Production deploy entry points now bind Firebase and Vercel execution to the
-  exact tagged `main` SHA and recheck release evidence immediately before any
-  provider mutation.
-- Release-critical workflows and actions are pinned and classified as high
-  risk so Firebase and browser-performance lanes remain hard gates.
-- Primary Firebase and Vercel workflows now prepare exact-SHA artifacts without
-  provider mutation credentials; production mutation remains isolated behind a
-  separately authorized deployer.
-- The quick lane now runs a pinned, checksum-verified GitHub workflow lint gate
-  across every tracked workflow before dependency installation.
 - Tenant-scoped Workflow Attention queue for active quotes, with a post-idle
   header count, due/overdue follow-ups, pending approvals, new and acknowledged
   customer change requests, request-ID-bound current handling records, and
@@ -261,43 +226,6 @@ This changelog is backfilled from git history and will be maintained going forwa
   conversion, portal-link rotation, and permanent quote deletion, including
   server-owned execution outcomes, durable org-scoped audit records, and
   idempotent replay behavior for completed operations.
-- Server-authoritative Stripe deposit handling for the approved payment-request
-  action. The approval is bound to the exact organization, quote revision,
-  portal issuance, customer email, currency, and deposit amount. The governed
-  operation durably registers a `prepared` Session without exposing its URL,
-  keeps QuotePilot's URL copy in a server-only dispatch record, and publishes
-  the payment link to the quote and portal only after email-provider acceptance
-  is durably recorded. Ambiguous checkout creation or email outcomes keep the
-  exact execution and actor resumable with the same Stripe/provider identities;
-  recorded provider acceptance resumes publication without sending again,
-  while a definite failure requires a new approval only after any unsent
-  checkout is safely neutralized. Direct standalone checkout creation fails
-  closed. Stripe runtime mode is explicit and must match the key plus provider
-  objects, all four supported Checkout Session lifecycle events are verified
-  and deduplicated, settled payment truth is monotonic, and admins have an
-  audited provider reconciliation path for the server-recorded Session.
-- Server-authoritative Stripe final-balance collection for booked contracts
-  with a verified provider-paid deposit. The exact approval binds the contract,
-  paid-deposit evidence, quote revision, current portal issuance, customer,
-  server-derived balance, currency, and checkout generation. A separate payment
-  ledger and `payment.finalBalance` projection keep deposit and balance truth
-  distinct while the guarded checkout, provider-email, signed-webhook, and
-  admin-reconciliation paths reuse the deposit rail's private-before-acceptance
-  publication boundary. Browser-supplied amounts, payment kinds, Sessions, and
-  links fail closed, customer portal data omits provider identifiers, late
-  provider settlement can recover a failed or expired observation, and an
-  accepted email whose Checkout expires during interrupted publication closes
-  cleanly for a fresh approval. Expired-portal recovery also preserves a
-  `sending` or ambiguous dispatch as provider-unknown, waits through a
-  conservative stale-attempt boundary before touching Stripe, resolves or
-  expires the exact Checkout without downgrading paid or refunded truth, and
-  closes the stale approval for reconciliation instead of resending or claiming
-  the email failed. A missing or mismatched expired portal is flagged and
-  skipped without blocking authoritative quote/ledger closure.
-  Eligible booked contracts can renew an expired
-  portal before final-balance collection. This remains an unmerged source
-  candidate without hosted or Stripe-provider proof; refund and dispute
-  workflows remain separate.
 - Server-authoritative contract conversion planning and callable execution,
   including conflict/capacity evidence and server-generated contract identity.
 - Focused approval workflow coverage across pure server planning, Firebase
@@ -360,36 +288,6 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
-- The versioned release UAT checklist now requires hosted password-recovery
-  completion plus target-applicable deposit, final-balance,
-  webhook/reconciliation, cross-rail isolation, customer-projection privacy,
-  and staff/customer payment-surface observations. Release-evidence tests pin
-  those critical item IDs and deployment profiles in a dedicated semantic map,
-  so changing only the generic expected target lists cannot silently weaken
-  them.
-- Product hardening and exact-SHA release controls are converged into one
-  sell-readiness candidate so approval, delivery, portal, onboarding, CI, UAT,
-  artifact, and rollback boundaries can be qualified on one immutable head.
-- The release UAT checklist now uses a fail-closed v2 applicability contract:
-  each item names the exact Firebase Hosting, Firebase backend/all, or Vercel
-  preparation profiles it covers, and attestation accepts all and only the ids
-  for the selected target. Server-side bulk-purge denial and invalid-issuance
-  handling are separate from their staff-UI and link-surface checks. Portal
-  projection backfill remains a separately reviewed source/data-operation
-  acceptance path and is not represented as evidence for a prepared payload;
-  production apply still requires its own explicit scope-bound authorization.
-- Release-critical workflows now use officially published immutable Node 24
-  Action pins: checkout v7.0.1, setup-node v7.0.0, and upload-artifact v7.0.1.
-- The required quick lane now runs a reproducible GitHub workflow lint gate:
-  it downloads only the exact actionlint v1.7.12 platform archive, verifies a
-  repository-pinned official SHA-256, disables host-tool version drift, and
-  checks every tracked workflow before dependency installation.
-- The legacy organization-wide deleted-quote purge is retired and fails closed.
-  Its browser client and operator control are removed; permanent deletion is
-  available within a retained organization only one quote at a time through the
-  existing exact approved `delete_quote` execution and organization-scoped
-  audit path. Separately governed platform-admin teardown of an archived
-  organization remains outside that per-quote claim.
 - The final quote action now says `Save draft`, opens Quote History on the exact
   saved quote, and states that customer delivery has not occurred. The targeted
   handoff offers a provider-send action only to Firebase admins with a complete,
@@ -621,9 +519,6 @@ This changelog is backfilled from git history and will be maintained going forwa
   Sales schedule updates remain limited to non-evidentiary staff lead,
   assignment time, kitchen checkpoint, and production checklist fields.
 - `CI Quality` workflow now uses classifier-driven lane orchestration, branch concurrency cancellation, hard-vs-advisory heavy lane behavior, and artifact retention windows for failure triage.
-- `CI Quality` now grants its GitHub token only read access to repository
-  contents and prevents all eight checkout steps from persisting that token in
-  local Git configuration before repository-controlled checks execute.
 - CI lane classifier now treats fallback-retirement-sensitive org/fallback modules (`src/lib/menuService.js`, `src/hooks/useCatalogData.js`, `src/lib/organizationService.js`, `src/context/OrganizationContext.jsx`) as high-risk, making Firebase heavy lanes required (non-advisory) on feature branches.
 - Production deploy automation now requires controlled manual dispatch after
   the main-branch quality gates and published release tag are complete.

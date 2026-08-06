@@ -12,8 +12,7 @@ const APPROVAL_ACTION_DEFINITIONS = [
   { id: "send_final_balance_request", label: "Send final balance request" },
   { id: "convert_to_contract", label: "Convert to contract" },
   { id: "rotate_portal_link", label: "Rotate portal link" },
-  { id: "delete_quote", label: "Delete quote" },
-  { id: "send_quote_email", label: "Send quote email" }
+  { id: "delete_quote", label: "Delete quote" }
 ];
 
 const PRODUCTION_CHECKLIST_DEFINITIONS = [
@@ -36,6 +35,305 @@ export const APPROVAL_ACTION_IDS = APPROVAL_ACTION_DEFINITIONS.map((item) => ite
 export const APPROVAL_STATES = ["pending", "approved", "rejected"];
 export const PRODUCTION_CHECKLIST_ITEMS = PRODUCTION_CHECKLIST_DEFINITIONS.map((item) => ({ ...item }));
 export const PRODUCTION_CHECKLIST_IDS = PRODUCTION_CHECKLIST_DEFINITIONS.map((item) => item.id);
+
+function hasUnfinishedApprovalRequest(quote, action, ignoreRequestId = "") {
+  const requests = Array.isArray(quote?.workflow?.approvalRequests)
+    ? quote.workflow.approvalRequests
+    : [];
+  return requests.some((request) => {
+    if (ignoreRequestId && text(request?.id) === ignoreRequestId) return false;
+    if (text(request?.action) !== action) return false;
+    const state = text(request?.state).toLowerCase();
+    const executionState = text(request?.executionState).toLowerCase();
+    return state === "pending"
+      || (state === "approved" && !["succeeded", "failed"].includes(executionState));
+  });
+}
+
+function safeMoneyCents(value) {
+  const cents = Math.round(Number(value) * 100);
+  return Number.isSafeInteger(cents) ? cents : 0;
+}
+
+const PAYMENT_APPROVAL_ACTIONS = new Set([
+  "send_payment_request",
+  "send_final_balance_request"
+]);
+
+function resolveApprovalQuoteRevisionId(quote = {}) {
+  const explicit = text(quote.activeVersionId || quote.versionMeta?.versionId).slice(0, 80);
+  const versionNumber = Number(quote.latestVersionNumber || quote.versionMeta?.versionNumber);
+  const contentRevisionId = explicit || (
+    Number.isSafeInteger(versionNumber) && versionNumber > 0
+      ? `v${String(versionNumber).padStart(4, "0")}`
+      : ""
+  );
+  if (!contentRevisionId) return "";
+  const portalIssuedAt = text(quote.portalIssuedAtISO);
+  const parsedPortalIssuedAt = portalIssuedAt ? new Date(portalIssuedAt) : null;
+  const portalIdentity = parsedPortalIssuedAt && !Number.isNaN(parsedPortalIssuedAt.getTime())
+    ? parsedPortalIssuedAt.toISOString()
+    : text(quote.portalKey).slice(0, 64);
+  return portalIdentity ? `${contentRevisionId}@${portalIdentity}` : contentRevisionId;
+}
+
+function hasCurrentApprovalPortal(quote = {}, nowMs = Date.now()) {
+  const portalKey = text(quote.portalKey);
+  const portalIssuedAtISO = text(quote.portalIssuedAtISO);
+  const portalExpiresAtISO = text(quote.portalExpiresAtISO || quote.expiresAtISO);
+  const expiryMs = Date.parse(portalExpiresAtISO);
+  const delivery = quote?.workflow?.quoteDelivery || {};
+  const revisionId = resolveApprovalQuoteRevisionId(quote);
+  return portalKey.length >= 20
+    && Boolean(portalIssuedAtISO)
+    && Number.isFinite(expiryMs)
+    && expiryMs > nowMs
+    && Boolean(revisionId)
+    && text(delivery.revisionId) === revisionId
+    && text(delivery.state).toLowerCase() === "provider_accepted"
+    && text(delivery.portalActivationState).toLowerCase() === "active"
+    && Boolean(text(delivery.providerMessageId))
+    && text(delivery.portalKey) === portalKey
+    && text(delivery.portalIssuedAtISO) === portalIssuedAtISO;
+}
+
+function expectedApprovalAmountCents(quote = {}, action = "") {
+  if (action === "send_final_balance_request") {
+    const storedAmountCents = Number(quote?.payment?.finalBalance?.amountCents);
+    if (Number.isSafeInteger(storedAmountCents) && storedAmountCents > 0) {
+      return storedAmountCents;
+    }
+    return safeMoneyCents(quote?.totals?.total) - safeMoneyCents(quote?.totals?.deposit);
+  }
+  return safeMoneyCents(quote?.totals?.deposit);
+}
+
+function normalizedApprovalISO(value) {
+  const candidate = text(value);
+  if (!candidate) return "";
+  const parsed = new Date(candidate);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
+function expectedFinalBalanceCheckoutGeneration(quote = {}, request = {}) {
+  const finalBalance = quote?.payment?.finalBalance || {};
+  const currentGeneration = Number(finalBalance.checkoutGeneration || 0);
+  if (!Number.isSafeInteger(currentGeneration) || currentGeneration < 0) return -1;
+  const currentSessionId = text(finalBalance.stripeSessionId);
+  const currentProviderState = text(finalBalance.stripeCheckoutState).toLowerCase();
+  const reusingPreparedCheckout = text(request?.executionState).toLowerCase() === "in_progress"
+    || (currentSessionId && !["failed", "expired"].includes(currentProviderState));
+  return reusingPreparedCheckout ? currentGeneration : currentGeneration + 1;
+}
+
+function paymentApprovalScopeMatchesQuote(quote = {}, request = {}) {
+  const action = text(request?.action);
+  if (!PAYMENT_APPROVAL_ACTIONS.has(action)) return true;
+  const scope = request?.actionScope;
+  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return false;
+  const expectedPaymentKind = action === "send_final_balance_request"
+    ? "final_balance"
+    : "deposit";
+  const expectedKind = action === "send_final_balance_request"
+    ? "stripe_checkout_final_balance_request"
+    : "stripe_checkout_deposit_request";
+  const expectedRevisionId = resolveApprovalQuoteRevisionId(quote);
+  const expectedAmountCents = expectedApprovalAmountCents(quote, action);
+  const commonScopeKeys = [
+    "version",
+    "kind",
+    "organizationId",
+    "quoteId",
+    "quoteRevisionId",
+    "portalKey",
+    "portalIssuedAtISO",
+    "portalExpiresAtISO",
+    "customerEmail",
+    "paymentKind",
+    "currency",
+    "amountCents"
+  ];
+  const expectedScopeKeys = action === "send_final_balance_request"
+    ? [
+      ...commonScopeKeys,
+      "depositStatus",
+      "depositAmountCents",
+      "depositStripeSessionId",
+      "depositConfirmedAtISO",
+      "contractNumber",
+      "contractConvertedAtISO",
+      "checkoutGeneration"
+    ]
+    : commonScopeKeys;
+  const scopeKeysMatch = JSON.stringify(Object.keys(scope).sort())
+    === JSON.stringify(expectedScopeKeys.sort());
+  const expectedPortalIssuedAtISO = normalizedApprovalISO(quote.portalIssuedAtISO);
+  const expectedPortalExpiresAtISO = normalizedApprovalISO(
+    quote.portalExpiresAtISO || quote.expiresAtISO
+  );
+  const commonScopeMatches = scopeKeysMatch
+    && Number(scope.version) === 1
+    && text(scope.kind) === expectedKind
+    && text(scope.organizationId).toLowerCase() === text(quote.organizationId).toLowerCase()
+    && text(scope.quoteId) === text(quote.id || quote.quoteId)
+    && text(scope.paymentKind).toLowerCase() === expectedPaymentKind
+    && text(scope.currency).toLowerCase() === "usd"
+    && Number(scope.amountCents) === expectedAmountCents
+    && expectedAmountCents > 0
+    && text(scope.portalKey) === text(quote.portalKey)
+    && Boolean(expectedPortalIssuedAtISO)
+    && normalizedApprovalISO(scope.portalIssuedAtISO) === expectedPortalIssuedAtISO
+    && Boolean(expectedPortalExpiresAtISO)
+    && normalizedApprovalISO(scope.portalExpiresAtISO) === expectedPortalExpiresAtISO
+    && text(scope.customerEmail).toLowerCase() === text(quote?.customer?.email).toLowerCase()
+    && Boolean(expectedRevisionId)
+    && text(scope.quoteRevisionId) === expectedRevisionId
+    && /^[a-f0-9]{64}$/.test(text(request?.actionScopeDigest).toLowerCase());
+  if (!commonScopeMatches || action !== "send_final_balance_request") {
+    return commonScopeMatches;
+  }
+
+  return text(scope.depositStatus).toLowerCase() === "paid"
+    && Number(scope.depositAmountCents) === safeMoneyCents(quote?.totals?.deposit)
+    && text(scope.depositStripeSessionId) === text(quote?.payment?.stripeSessionId)
+    && normalizedApprovalISO(scope.depositConfirmedAtISO)
+      === normalizedApprovalISO(quote?.payment?.depositConfirmedAtISO)
+    && text(scope.contractNumber) === text(quote?.booking?.contractNumber)
+    && normalizedApprovalISO(scope.contractConvertedAtISO)
+      === normalizedApprovalISO(quote?.booking?.contractConvertedAtISO)
+    && Number(scope.checkoutGeneration)
+      === expectedFinalBalanceCheckoutGeneration(quote, request);
+}
+
+export function getApprovalActionEligibility(quote = {}, action = "", options = {}) {
+  const normalizedAction = text(action);
+  const definition = APPROVAL_ACTION_DEFINITIONS.find((item) => item.id === normalizedAction);
+  if (!definition) return { eligible: false, reason: "This action is not supported." };
+
+  const status = text(quote?.status || "draft").toLowerCase();
+  if (status === "deleted" || text(quote?.deletedAtISO)) {
+    return { eligible: false, reason: "Deleted quotes cannot receive approval requests." };
+  }
+  if (hasUnfinishedApprovalRequest(quote, normalizedAction, text(options?.ignoreRequestId))) {
+    return {
+      eligible: false,
+      reason: "This action already has an unresolved or unexecuted approval request."
+    };
+  }
+
+  if (normalizedAction === "send_payment_request") {
+    const depositStatus = text(quote?.payment?.depositStatus || "unpaid").toLowerCase();
+    if (!["accepted", "booked"].includes(status)) {
+      return { eligible: false, reason: "Payment requests become available after customer acceptance." };
+    }
+    if (!hasEmail(quote?.customer?.email)) {
+      return { eligible: false, reason: "Add a valid customer email before requesting payment." };
+    }
+    if (safeMoneyCents(quote?.totals?.deposit) <= 0) {
+      return { eligible: false, reason: "A positive deposit is required before requesting payment." };
+    }
+    if (
+      !options?.allowSettledPayment
+      && (["paid", "refunded"].includes(depositStatus) || text(quote?.payment?.depositConfirmedAtISO))
+    ) {
+      return { eligible: false, reason: "The deposit is already settled." };
+    }
+    if (options?.requireActivePortal && !hasCurrentApprovalPortal(quote, options?.nowMs)) {
+      return { eligible: false, reason: "Deliver the current customer portal before requesting payment." };
+    }
+  }
+
+  if (normalizedAction === "send_final_balance_request") {
+    const amountCents = safeMoneyCents(quote?.totals?.total)
+      - safeMoneyCents(quote?.totals?.deposit);
+    const finalBalanceStatus = text(quote?.payment?.finalBalance?.status || "unpaid").toLowerCase();
+    if (
+      status !== "booked"
+      || !text(quote?.booking?.contractNumber)
+      || !text(quote?.booking?.contractConvertedAtISO)
+    ) {
+      return { eligible: false, reason: "Final balance requests require a converted contract." };
+    }
+    if (!hasEmail(quote?.customer?.email)) {
+      return { eligible: false, reason: "Add a valid customer email before requesting the balance." };
+    }
+    if (
+      text(quote?.payment?.depositStatus).toLowerCase() !== "paid"
+      || !/^cs_[A-Za-z0-9_]+$/.test(text(quote?.payment?.stripeSessionId))
+      || !text(quote?.payment?.depositConfirmedAtISO)
+    ) {
+      return { eligible: false, reason: "Confirm the Stripe-paid deposit before requesting the balance." };
+    }
+    if (!options?.allowSettledPayment && (amountCents <= 0 || finalBalanceStatus === "paid")) {
+      return { eligible: false, reason: "No final balance remains due." };
+    }
+    if (options?.requireActivePortal && !hasCurrentApprovalPortal(quote, options?.nowMs)) {
+      return { eligible: false, reason: "Deliver the current customer portal before requesting the balance." };
+    }
+  }
+
+  if (normalizedAction === "convert_to_contract") {
+    const hasContract = Boolean(text(quote?.booking?.contractNumber));
+    if (status !== "accepted" && !(status === "booked" && !hasContract)) {
+      return { eligible: false, reason: "Only an accepted quote without a contract can be converted." };
+    }
+  }
+
+  if (
+    normalizedAction === "rotate_portal_link"
+    && !["draft", "sent", "viewed", "accepted", "booked"].includes(status)
+  ) {
+    return { eligible: false, reason: "Portal renewal is unavailable for this quote status." };
+  }
+  if (
+    normalizedAction === "rotate_portal_link"
+    && status === "booked"
+    && (
+      !text(quote?.booking?.contractNumber)
+      || !text(quote?.booking?.contractConvertedAtISO)
+    )
+  ) {
+    return { eligible: false, reason: "Booked portal renewal requires an authoritative contract." };
+  }
+
+  return { eligible: true, reason: "" };
+}
+
+export function getApprovalRequestExecutionEligibility(quote = {}, request = {}, options = {}) {
+  const action = text(request?.action);
+  const executionState = text(request?.executionState).toLowerCase();
+  const isPaymentAction = PAYMENT_APPROVAL_ACTIONS.has(action);
+  const resumable = isPaymentAction
+    && executionState === "in_progress"
+    && options?.allowInProgressRecovery === true;
+  if (
+    text(request?.state).toLowerCase() !== "approved"
+    || (!resumable && executionState && executionState !== "awaiting_execution")
+  ) {
+    return { eligible: false, reason: "This approval is not awaiting execution." };
+  }
+
+  const eligibility = getApprovalActionEligibility(quote, action, {
+    ...options,
+    ignoreRequestId: text(request?.id),
+    requireActivePortal: resumable ? false : options?.requireActivePortal,
+    allowSettledPayment: resumable
+  });
+  if (!eligibility.eligible) return eligibility;
+  if (!paymentApprovalScopeMatchesQuote(quote, request)) {
+    return {
+      eligible: false,
+      reason: "This approval belongs to an older customer portal or commercial scope."
+    };
+  }
+  return { eligible: true, reason: "" };
+}
+
+export function getRequestableApprovalActions(quote = {}, options = {}) {
+  return APPROVAL_ACTIONS.filter((action) => (
+    getApprovalActionEligibility(quote, action.id, options).eligible
+  ));
+}
 
 const WORKFLOW_ATTENTION_STATUSES = new Set([
   "draft",

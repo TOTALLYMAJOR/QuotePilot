@@ -51,10 +51,12 @@ const {
 } = require("./paymentSafety");
 const {
   ApprovalWorkflowError,
+  assertApprovalActionRequestable,
   buildApprovalExecutionOutcome,
   buildApprovalExecutionStart,
   buildApprovalRequest,
-  buildApprovalResolution
+  buildApprovalResolution,
+  invalidatePaymentApprovalsForPortalRotation
 } = require("./approvalWorkflow");
 const {
   PaymentApprovalScopeError,
@@ -94,6 +96,7 @@ const {
   quotePaymentAmounts
 } = require("./finalBalancePayment");
 const { PaymentLedgerError } = require("./paymentLedger");
+const { portalRotationPaymentKinds } = require("./portalRotationPayment");
 const {
   ContractWorkflowError,
   planContractConversion
@@ -2068,7 +2071,7 @@ function derivePaymentRequestApprovalScope({
       "Payment requests can be approved only after quote acceptance."
     );
   }
-  if (!normalizeEmail(quote?.customer?.email)) {
+  if (!isValidEmail(quote?.customer?.email)) {
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Quote customer email is missing."
@@ -2130,7 +2133,7 @@ function deriveFinalBalanceRequestApprovalScope({
       "Final-balance requests require a booked quote with an authoritative contract."
     );
   }
-  if (!normalizeEmail(quote?.customer?.email)) {
+  if (!isValidEmail(quote?.customer?.email)) {
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Quote customer email is missing."
@@ -5831,40 +5834,10 @@ exports.purgeDeletedQuotesForOrganization = functions.region(REGION).https.onCal
     throw new functions.https.HttpsError("permission-denied", "Admin role required.");
   }
 
-  const requestedLimit = Number(data?.limit || 100);
-  const limit = Math.max(1, Math.min(300, Number.isFinite(requestedLimit) ? Math.round(requestedLimit) : 100));
-  const quotesRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).collection(QUOTES_COLLECTION);
-  const deletedSnap = await quotesRef.where("status", "==", "deleted").limit(limit).get();
-
-  let deletedQuotes = 0;
-  let portalSnapshotsDeleted = 0;
-  for (const docSnap of deletedSnap.docs) {
-    const quoteData = docSnap.data() || {};
-    const quoteOrganizationId = normalizeOrganizationId(quoteData.organizationId || organizationId);
-    if (quoteOrganizationId !== organizationId) {
-      continue;
-    }
-    const quoteId = docSnap.id;
-    const portalCleanup = await deletePortalSnapshotsForQuote({
-      quoteId,
-      organizationId,
-      fallbackPortalKey: quoteData?.portalKey
-    });
-    portalSnapshotsDeleted += portalCleanup.deleted;
-    await db.recursiveDelete(docSnap.ref);
-    deletedQuotes += 1;
-  }
-
-  return {
-    ok: true,
-    organizationId,
-    scanned: deletedSnap.size,
-    deletedQuotes,
-    portalSnapshotsDeleted,
-    limitApplied: limit,
-    hasMore: deletedSnap.size === limit,
-    completedAtISO: new Date().toISOString()
-  };
+  throw new functions.https.HttpsError(
+    "failed-precondition",
+    "Bulk quote purge is retired. Permanently delete one quote at a time with an exact approved delete_quote request."
+  );
 });
 
 function toStarterCatalogHttpsError(error, fallbackMessage) {
@@ -6649,6 +6622,7 @@ exports.requestQuoteApproval = functions.region(REGION).https.onCall(async (data
       }
 
       const approvalAction = normalizeText(data?.action);
+      assertApprovalActionRequestable({ quote, action: approvalAction });
       let paymentApprovalScope = {};
       if (new Set(["send_payment_request", "send_final_balance_request"]).has(approvalAction)) {
         const portalKey = normalizeText(quote.portalKey);
@@ -6759,6 +6733,12 @@ exports.resolveQuoteApprovalRequest = functions.region(REGION).https.onCall(asyn
         throw new ApprovalWorkflowError("not-found", "Approval request not found.");
       }
       const resolutionState = normalizeText(data?.state).toLowerCase();
+      if (resolutionState === "approved") {
+        assertApprovalActionRequestable({
+          quote,
+          action: normalizeText(targetRequest.action)
+        });
+      }
       if (
         resolutionState === "approved"
         && new Set(["send_payment_request", "send_final_balance_request"]).has(
@@ -7195,7 +7175,127 @@ exports.reopenQuote = functions.region(REGION).https.onCall(async (data, context
   }
 });
 
-exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data, context) => {
+async function resolveCheckoutRailBeforePortalRotation({
+  quoteId,
+  organizationId,
+  quote,
+  staff,
+  paymentKind = "deposit"
+} = {}) {
+  const flow = getPaymentRequestFlow(paymentKind);
+  const checkoutPayment = checkoutPaymentForQuote(quote, paymentKind);
+  const settled = ["paid", "refunded"].includes(
+    normalizeText(checkoutPayment.depositStatus).toLowerCase()
+  ) || Boolean(normalizeText(checkoutPayment.depositConfirmedAtISO));
+  if (settled) return { providerState: "settled", paymentKind };
+
+  let plan;
+  try {
+    plan = planDepositCheckout(checkoutPayment);
+  } catch (err) {
+    if (err instanceof PaymentSafetyError) {
+      throw new functions.https.HttpsError("failed-precondition", err.message);
+    }
+    throw err;
+  }
+  if (plan.action === "create") return { providerState: "clear", paymentKind };
+
+  const stripeSessionId = normalizeText(checkoutPayment.stripeSessionId);
+  if (!stripeSessionId) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      `The stored ${flow.label} checkout is incomplete and requires reconciliation.`
+    );
+  }
+
+  const stripe = getStripeClient();
+  let session = await stripe.checkout.sessions.retrieve(stripeSessionId, {
+    expand: ["payment_intent"]
+  });
+  assertStripeObjectMode({
+    expectedMode: getStripeMode(),
+    eventLivemode: session?.livemode,
+    sessionLivemode: session?.livemode
+  });
+  validateStripeCheckoutScope({
+    session,
+    quote: stripeScopeQuoteForPayment(quote, paymentKind),
+    quoteId,
+    organizationId
+  });
+  assertStripePaymentKindMetadata(session, paymentKind);
+
+  const sessionStatus = normalizeText(session?.status).toLowerCase();
+  const paymentStatus = normalizeText(session?.payment_status).toLowerCase();
+  if (sessionStatus === "open" && paymentStatus !== "paid") {
+    try {
+      await stripe.checkout.sessions.expire(stripeSessionId);
+      session = await stripe.checkout.sessions.retrieve(stripeSessionId, {
+        expand: ["payment_intent"]
+      });
+    } catch (expirationError) {
+      const observedAfterConflict = await stripe.checkout.sessions.retrieve(stripeSessionId, {
+        expand: ["payment_intent"]
+      });
+      const observedStatus = normalizeText(observedAfterConflict?.status).toLowerCase();
+      const observedPaymentStatus = normalizeText(observedAfterConflict?.payment_status).toLowerCase();
+      if (observedStatus === "open" && observedPaymentStatus !== "paid") {
+        throw expirationError;
+      }
+      session = observedAfterConflict;
+    }
+  }
+
+  const observation = mapStripeCheckoutReconciliation(session);
+  if (observation.actionable) {
+    const eventId = `portal-rotation-reconcile:${randomUUID()}`;
+    await patchPaymentState({
+      quoteId,
+      organizationId,
+      portalKey: normalizeText(quote.portalKey),
+      auditContext: {
+        host: staff.host,
+        eventType: "checkout.session.portal_rotation_reconciled",
+        organizationId,
+        source: "portal_rotation_reconciliation",
+        actorUid: staff.uid,
+        actorEmail: staff.email
+      },
+      stripeSession: session,
+      providerObservation: observation,
+      paymentKind,
+      webhookEvent: {
+        eventId,
+        eventType: "checkout.session.portal_rotation_reconciled",
+        requestHost: staff.host,
+        requestIp: ""
+      }
+    });
+  }
+  if (!["paid", "failed", "expired"].includes(observation.providerState)) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      `The ${flow.label} checkout is ${observation.providerState}; reconcile it before portal renewal.`
+    );
+  }
+  return { providerState: observation.providerState, paymentKind };
+}
+
+async function resolveCheckoutBeforePortalRotation(options = {}) {
+  const results = [];
+  for (const paymentKind of portalRotationPaymentKinds(options.quote)) {
+    results.push(await resolveCheckoutRailBeforePortalRotation({
+      ...options,
+      paymentKind
+    }));
+  }
+  return results;
+}
+
+exports.rotateQuotePortalKey = functions
+  .runWith({ secrets: [STRIPE_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
   const staff = await assertStaff(context, {
     expectedOrganizationId: requestedOrganizationId
@@ -7233,6 +7333,59 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
     const newPortalKey = randomUUID().replace(/-/g, "");
     const newPortalRef = db.collection(PORTAL_COLLECTION).doc(newPortalKey);
     const rotatedAtISO = new Date().toISOString();
+    const [preflightQuoteSnap, preflightExecutionSnap] = await Promise.all([
+      quoteRef.get(),
+      executionRef.get()
+    ]);
+    if (preflightExecutionSnap.exists) {
+      const existingExecution = preflightExecutionSnap.data() || {};
+      assertMatchingApprovalExecutionRecord(existingExecution, {
+        organizationId,
+        quoteId,
+        approvalRequestId,
+        action: "rotate_portal_link"
+      });
+      if (normalizeText(existingExecution.state).toLowerCase() === "succeeded") {
+        return {
+          ok: true,
+          organizationId,
+          quoteId,
+          storage: "firebase",
+          idempotent: true,
+          ...(existingExecution.result || {})
+        };
+      }
+      throw new ApprovalWorkflowError(
+        "aborted",
+        "Portal rotation is already in progress."
+      );
+    }
+    if (!preflightQuoteSnap.exists) {
+      throw new QuoteCreationError("not-found", "Quote not found.");
+    }
+    const preflightQuote = preflightQuoteSnap.data() || {};
+    if (normalizeOrganizationId(preflightQuote.organizationId) !== organizationId) {
+      throw new QuoteCreationError(
+        "permission-denied",
+        "Quote is outside your organization."
+      );
+    }
+    assertQuoteEditNotDispatching({ ...preflightQuote, id: quoteId }, rotatedAtISO);
+    assertNoInProgressPaymentDispatch(preflightQuote, "rotating the portal link");
+    buildApprovalExecutionStart({
+      workflow: preflightQuote.workflow,
+      requestId: approvalRequestId,
+      action: "rotate_portal_link",
+      actorEmail: staff.email,
+      nowISO: rotatedAtISO,
+      operationId: approvalRequestId
+    });
+    await resolveCheckoutBeforePortalRotation({
+      quoteId,
+      organizationId,
+      quote: preflightQuote,
+      staff
+    });
     const result = await db.runTransaction(async (tx) => {
       const [quoteSnap, executionSnap] = await Promise.all([
         tx.get(quoteRef),
@@ -7270,23 +7423,14 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
       assertQuoteEditNotDispatching({ ...quote, id: quoteId }, rotatedAtISO);
       assertNoInProgressPaymentDispatch(quote, "rotating the portal link");
       try {
-        if (normalizeText(quote.status).toLowerCase() === "booked") {
-          const ledger = projectQuotePaymentLedger(quote);
-          if (ledger.byKind.finalBalance.state !== "paid") {
-            const finalBalancePlan = planDepositCheckout(
-              normalizeFinalBalanceCheckoutPayment(quote.payment)
-            );
-            if (finalBalancePlan.action !== "create") {
-              throw new PaymentSafetyError(
-                "Resolve or expire the active final-balance checkout before renewing the portal link."
-              );
-            }
-          }
-        } else {
-          const paymentPlan = planDepositCheckout(quote.payment);
-          if (paymentPlan.action !== "create") {
+        for (const paymentKind of portalRotationPaymentKinds(quote)) {
+          const currentCheckout = checkoutPaymentForQuote(quote, paymentKind);
+          const settled = ["paid", "refunded"].includes(
+            normalizeText(currentCheckout.depositStatus).toLowerCase()
+          ) || Boolean(normalizeText(currentCheckout.depositConfirmedAtISO));
+          if (!settled && planDepositCheckout(currentCheckout).action !== "create") {
             throw new PaymentSafetyError(
-              "Resolve or expire the active Stripe checkout before rotating the portal link."
+              `The ${getPaymentRequestFlow(paymentKind).label} checkout changed during portal renewal. Retry after reconciliation.`
             );
           }
         }
@@ -7304,8 +7448,18 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
         staff,
         nowISO: rotatedAtISO
       });
-      const started = buildApprovalExecutionStart({
+      const invalidatedPaymentApprovals = invalidatePaymentApprovalsForPortalRotation({
         workflow: quote.workflow,
+        actorEmail: staff.email,
+        nowISO: rotatedAtISO,
+        operationId: approvalRequestId
+      });
+      const workflowAfterInvalidation = {
+        ...(quote.workflow || {}),
+        approvalRequests: invalidatedPaymentApprovals.approvalRequests
+      };
+      const started = buildApprovalExecutionStart({
+        workflow: workflowAfterInvalidation,
         requestId: approvalRequestId,
         action: "rotate_portal_link",
         actorEmail: staff.email,
@@ -7314,7 +7468,7 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
       });
       const completed = buildApprovalExecutionOutcome({
         workflow: {
-          ...(quote.workflow || {}),
+          ...workflowAfterInvalidation,
           approvalRequests: started.approvalRequests
         },
         requestId: approvalRequestId,
@@ -7326,12 +7480,13 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
         reference: documents.result.versionId
       });
       documents.quotePatch.workflow = {
-        ...(quote.workflow || {}),
+        ...workflowAfterInvalidation,
         approvalRequests: completed.approvalRequests
       };
       const response = {
         ...documents.result,
-        approvalRequest: completed.request
+        approvalRequest: completed.request,
+        invalidatedPaymentApprovalRequestIds: invalidatedPaymentApprovals.invalidatedRequestIds
       };
       const versionRef = quoteRef
         .collection("versions")
@@ -7389,6 +7544,13 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
       ...result
     };
   } catch (err) {
+    if (
+      err instanceof PaymentSafetyError
+      || err instanceof StripeProviderStateError
+      || err instanceof PaymentLedgerError
+    ) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
     return quoteCreationFailure(err, {
       operation: "rotateQuotePortalKey",
       staff,
@@ -7396,7 +7558,7 @@ exports.rotateQuotePortalKey = functions.region(REGION).https.onCall(async (data
       failureMessage: "Failed to rotate portal link."
     });
   }
-});
+  });
 
 exports.notifyOwnerNewQuote = functions.region(REGION).https.onCall(async (data, context) => {
   const staff = assertAdminStaff(await assertStaff(context));

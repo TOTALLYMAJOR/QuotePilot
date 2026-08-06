@@ -157,6 +157,118 @@ describe("starter catalog pack manifests", () => {
 });
 
 describe("starter catalog pack safety", () => {
+  test("repairs a confirmed catalog with no menu additively and reopens pricing review", async () => {
+    const store = new Map([
+      ["organizations/acme/settings/config", {
+        catalogRevision: 7,
+        pricingSetupConfirmed: true,
+        pricingConfirmation: {
+          actorUid: "owner-1",
+          actorEmail: "owner@example.com",
+          confirmedAtISO: "2026-08-05T13:00:00.000Z",
+          confirmedCatalogRevision: 7
+        },
+        serviceFeePct: 0.23,
+        depositPct: 0.42
+      }],
+      ["organizations/acme/catalogPackages/owner-package", {
+        name: "Owner package",
+        pppMinor: 3500
+      }],
+      ["organizations/acme/eventTypes/owner-event", {
+        name: "Owner event"
+      }]
+    ]);
+    const db = fakeDb(store);
+
+    const result = await applyStarterCatalogPack({
+      db,
+      organizationId: "acme",
+      packId: "wedding-events",
+      replaceStagedPack: true,
+      expectedCatalogRevision: 7,
+      actorUid: "owner-1",
+      nowISO: "2026-08-06T15:00:00.000Z"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      recoveredMissingMenu: true,
+      preservedExistingRecords: 2,
+      catalogRevision: 8
+    });
+    expect(db.store.get("organizations/acme/catalogPackages/owner-package")).toEqual({
+      name: "Owner package",
+      pppMinor: 3500
+    });
+    expect(db.store.get("organizations/acme/settings/config")).toMatchObject({
+      catalogRevision: 8,
+      pricingSetupConfirmed: false,
+      pricingConfirmation: null,
+      serviceFeePct: 0.23,
+      depositPct: 0.42,
+      starterCatalogPack: {
+        id: "wedding-events",
+        recoveryMode: "additive_missing_menu",
+        replacementBlocked: true,
+        appliedCatalogRevision: 8
+      }
+    });
+    expect(result.counts.menuCategories).toBeGreaterThan(0);
+    expect(result.counts.menuItems).toBeGreaterThan(0);
+  });
+
+  test("confirmed-catalog recovery refuses to run when any menu content exists", async () => {
+    const store = new Map([
+      ["organizations/acme/settings/config", {
+        catalogRevision: 3,
+        pricingSetupConfirmed: true
+      }],
+      ["organizations/acme/menuCategories/existing", {
+        name: "Existing",
+        eventTypeId: "owner-event"
+      }]
+    ]);
+    const db = fakeDb(store);
+
+    await expect(applyStarterCatalogPack({
+      db,
+      organizationId: "acme",
+      packId: "wedding-events",
+      replaceStagedPack: true,
+      expectedCatalogRevision: 3
+    })).rejects.toThrow(/no menu categories or menu items/i);
+    expect(db.store.get("organizations/acme/settings/config")).toMatchObject({
+      catalogRevision: 3,
+      pricingSetupConfirmed: true
+    });
+  });
+
+  test("confirmed-catalog recovery fails safely on a stale revision", async () => {
+    const store = new Map([
+      ["organizations/acme/settings/config", {
+        catalogRevision: 5,
+        pricingSetupConfirmed: true,
+        serviceFeePct: 0.2
+      }]
+    ]);
+    const db = fakeDb(store);
+
+    await expect(applyStarterCatalogPack({
+      db,
+      organizationId: "acme",
+      packId: "wedding-events",
+      replaceStagedPack: true,
+      expectedCatalogRevision: 4
+    })).rejects.toMatchObject({ code: "aborted" });
+    expect(db.store.size).toBe(1);
+    expect(db.store.get("organizations/acme/settings/config")).toEqual({
+      catalogRevision: 5,
+      pricingSetupConfirmed: true,
+      serviceFeePct: 0.2
+    });
+  });
+
   test("rejects stale apply revisions before replacing content", async () => {
     const { db } = stagedCatalog();
     await expect(applyStarterCatalogPack({
@@ -237,6 +349,21 @@ describe("starter catalog pack safety", () => {
     })).toThrow(/event type/i);
   });
 
+  test("server confirmation rejects catalogs with an event type but no menu", () => {
+    expect(() => validateCatalogForConfirmation({
+      settings: {},
+      collections: {
+        catalogPackages: [{
+          id: "owner-package",
+          data: { name: "Owner package", pppMinor: 2500 }
+        }],
+        eventTypes: [{ id: "owner-event", data: { name: "Owner event" } }],
+        menuCategories: [],
+        menuItems: []
+      }
+    })).toThrow(/menu category/i);
+  });
+
   test("server confirmation rejects a menu item assigned across event-type boundaries", () => {
     const { db } = stagedCatalog();
     const collections = {};
@@ -289,7 +416,21 @@ describe("starter catalog pack safety", () => {
           id: "bad-pack-record",
           data: { source: PACK_SOURCE, name: "Bad", ppp: 20 }
         }],
-        eventTypes: [{ id: "event", data: { name: "Event" } }]
+        eventTypes: [{ id: "event", data: { name: "Event" } }],
+        menuCategories: [{
+          id: "mains",
+          data: { name: "Mains", eventTypeId: "event" }
+        }],
+        menuItems: [{
+          id: "chicken",
+          data: {
+            name: "Chicken",
+            eventTypeId: "event",
+            categoryId: "mains",
+            priceMinor: 0,
+            pricingType: "per_event"
+          }
+        }]
       }
     })).toThrow(/pack-owned.*integer minor units/i);
   });

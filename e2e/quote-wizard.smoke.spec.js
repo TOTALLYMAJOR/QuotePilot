@@ -40,6 +40,12 @@ async function fillRequiredQuoteFields(page, {
 
 async function advanceToSaveButton(page, saveButtonLabel) {
   for (let step = 0; step < 6; step += 1) {
+    const firstMenuChoice = page.locator(
+      ".wizard-panel .menu-library input[type='checkbox']:not(:checked)"
+    ).first();
+    if (await firstMenuChoice.count()) {
+      await firstMenuChoice.check();
+    }
     const packageTier = page.getByLabel("Package tier");
     if (await packageTier.count()) {
       await packageTier.selectOption("premium");
@@ -497,6 +503,7 @@ test("mobile quote pricing stays visible through the workflow without covering c
   await expect(breakdown).toBeHidden();
   await fillRequiredQuoteFields(page, { guests: 72 });
   await page.getByRole("button", { name: "Next" }).click();
+  await page.locator(".menu-library input[type='checkbox']").first().check();
 
   await expect(mobileSummary).toBeVisible();
   await expect(mobileSummary).toBeInViewport();
@@ -599,6 +606,7 @@ test("good better best scenarios can be compared and applied", async ({ page }) 
     venue: "Scenario Hall"
   });
   await page.getByRole("button", { name: "Next" }).click();
+  await page.locator(".menu-library input[type='checkbox']").first().check();
   await page.getByRole("button", { name: "Compare Scenario" }).click();
 
   const dialog = page.getByRole("dialog");
@@ -778,26 +786,31 @@ test("sales workflow persists a follow-up plan", async ({ page }) => {
 
   const quoteLabel = (await workflow.locator(".workflow-detail-head .eyebrow").textContent())?.trim() || "";
   await workflow.getByRole("button", { name: "Request", exact: true }).click();
-  await expect(workflow.getByText(/Send payment request approval requested/i)).toBeVisible();
+  await expect(workflow.getByText(/Rotate portal link approval requested/i)).toBeVisible();
   await workflow.getByRole("tab", { name: "Attention (1)" }).click();
   await workflow.getByRole("button", { name: `Review approvals for ${quoteLabel}` }).click();
   const pendingApproval = workflow.locator(".approval-row[data-pending='true']");
   await expect(pendingApproval).toBeFocused();
-  await workflow.getByLabel(`Resolution note for Send payment request on ${quoteLabel}`).fill(
+  await workflow.getByLabel(`Resolution note for Rotate portal link on ${quoteLabel}`).fill(
     "Approved for the test workflow."
   );
   await workflow.getByRole("button", {
-    name: `Approve Send payment request for ${quoteLabel}`
+    name: `Approve Rotate portal link for ${quoteLabel}`
   }).click();
   await expect(pendingApproval).toHaveCount(0);
   const resolvedApproval = workflow.locator(".approval-row[data-pending='false']");
   await expect(resolvedApproval).toBeFocused();
 
-  await workflow.getByRole("button", { name: "Open Quotes" }).click();
+  await resolvedApproval.getByRole("button", { name: "Execute in Quotes" }).click();
   const history = page.getByRole("dialog", { name: "Quotes" });
-  await expect(history.locator(".history-card")).toBeFocused();
+  const executionRow = history.locator(`tr[data-quote-id]`).filter({ hasText: quoteLabel }).first();
+  await expect(executionRow).toBeVisible();
+  const rotatePortalButton = executionRow.getByRole("button", { name: "Rotate Portal" });
+  await expect(rotatePortalButton).toBeFocused();
+  await rotatePortalButton.click();
+  await expect(history.getByText(/Portal link rotated/i)).toBeVisible();
   await history.getByRole("button", { name: "Close" }).click();
-  await expect(page.getByRole("button", { name: "Quotes", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Workflow" })).toBeFocused();
   await page.getByRole("button", { name: "Workflow" }).click();
   await expect(page.getByRole("dialog").getByLabel("Due date")).toHaveValue(dueDate);
   await expect(page.getByRole("dialog").getByLabel("Note")).toHaveValue("Confirm final menu after tasting.");
@@ -973,7 +986,8 @@ test("portal acceptance requires typed consent and shows the signed revision rec
   });
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
-  await page.getByRole("button", { name: "Customer Portal" }).click();
+  await page.getByRole("button", { name: "Account" }).click();
+  await page.getByRole("menuitem", { name: "Customer Portal" }).click();
   await page.getByPlaceholder("Paste your quote key").fill(portalKey);
   await page.getByRole("button", { name: "Open Proposal" }).click();
 
@@ -985,10 +999,10 @@ test("portal acceptance requires typed consent and shows the signed revision rec
   await expect(signButton).toBeEnabled();
   await signButton.click();
 
-  await expect(page.getByText("Proposal accepted", { exact: true })).toBeVisible();
+  await expect(page.getByText("Thank you—we have your approval", { exact: true })).toBeVisible();
   await expect(page.getByText("Electronic acceptance receipt", { exact: true })).toBeVisible();
   await expect(page.getByText(/Signed by E2E Portal Customer/i)).toBeVisible();
-  await expect(page.getByText(/Payment and booking confirmation remain separate/i)).toBeVisible();
+  await expect(page.getByText(/A deposit payment does not by itself confirm the event/i)).toBeVisible();
 
   const storedReceipt = await page.evaluate((key) => {
     const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");
@@ -1212,7 +1226,7 @@ test("cancelled payment returns are consumed without changing stored payment evi
   }, { key: portalKey, createdAt: createdAtISO });
 
   await page.goto(`/app?portal=${encodeURIComponent(portalKey)}&payment=cancelled`);
-  await expect(page.getByRole("status")).toContainText(/Payment wasn’t completed/i);
+  await expect(page.getByRole("status")).toContainText(/without a verified payment confirmation/i);
   await expect(page.getByRole("link", { name: "Pay deposit" })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`portal=${portalKey}$`));
   expect(await page.evaluate(() => (

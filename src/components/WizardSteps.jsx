@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
+import { MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
 
 function joinClassNames(...parts) {
   return parts.filter(Boolean).join(" ");
@@ -247,22 +248,22 @@ export function StepEvent({
               <div className="hours-meta">
                 <input
                   type="number"
-                  min="1"
-                  max="12"
-                  value={Math.max(1, Number(form.hours || 1))}
+                  min={MIN_EVENT_HOURS}
+                  max={MAX_EVENT_HOURS}
+                  value={normalizeEventHours(form.hours)}
                   aria-label="Event hours"
-                  onChange={(e) => updateField("hours", Number(e.target.value || 0))}
+                  onChange={(e) => updateField("hours", normalizeEventHours(e.target.value))}
                   onBlur={() => markBlur("hours")}
                 />
-                <output>{Math.max(1, Number(form.hours || 1))} hrs</output>
+                <output>{normalizeEventHours(form.hours)} hrs</output>
               </div>
               <input
                 type="range"
-                min="1"
-                max="12"
-                value={Math.max(1, Number(form.hours || 1))}
+                min={MIN_EVENT_HOURS}
+                max={MAX_EVENT_HOURS}
+                value={normalizeEventHours(form.hours)}
                 aria-label="Event hours slider"
-                onChange={(e) => updateField("hours", Number(e.target.value || 1))}
+                onChange={(e) => updateField("hours", normalizeEventHours(e.target.value))}
               />
             </div>
           </Field>
@@ -565,7 +566,7 @@ export function StepMenu({
     const itemId = String(item?.id || "").trim();
     if (!itemId) return;
     const pricingType = resolvePricingType(item);
-    if (typeof onSelectionTouched === "function") onSelectionTouched("menuItems");
+    if (typeof onSelectionTouched === "function") onSelectionTouched("menuItems", itemId);
     setForm((f) => {
       const nextSelected = new Set(Array.isArray(f.menuItems) ? f.menuItems : []);
       const nextQuantities = { ...(f.menuItemQuantities || {}) };
@@ -588,7 +589,7 @@ export function StepMenu({
 
   const patchMenuQuantity = (itemId, value) => {
     const quantity = Math.max(1, Math.round(Number(value || 1)));
-    if (typeof onSelectionTouched === "function") onSelectionTouched("menuItems");
+    if (typeof onSelectionTouched === "function") onSelectionTouched("menuItems", itemId);
     setForm((f) => ({
       ...f,
       menuItemQuantities: {

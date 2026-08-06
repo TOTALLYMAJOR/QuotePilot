@@ -23,6 +23,7 @@ vi.mock("../firebase", () => ({
 }));
 
 import {
+  refreshCurrentUserAccess,
   registerWithEmail,
   requestPasswordReset,
   resendCurrentUserVerification
@@ -80,6 +81,28 @@ describe("Firebase email actions", () => {
       url: "http://127.0.0.1:4174/app",
       handleCodeInApp: false
     });
+  });
+
+  test("forces a fresh user record and token when refreshing verified workspace access", async () => {
+    const user = {
+      uid: "buyer-owner",
+      emailVerified: true,
+      reload: vi.fn().mockResolvedValue(undefined),
+      getIdToken: vi.fn().mockResolvedValue("fresh-token")
+    };
+    authMocks.auth.currentUser = user;
+
+    await expect(refreshCurrentUserAccess()).resolves.toEqual({
+      refreshed: true,
+      emailVerified: true
+    });
+
+    expect(user.reload).toHaveBeenCalledOnce();
+    expect(user.getIdToken).toHaveBeenCalledWith(true);
+  });
+
+  test("requires a signed-in user before refreshing workspace access", async () => {
+    await expect(refreshCurrentUserAccess()).rejects.toThrow(/sign in/i);
   });
 
   test("rejects an unsafe verification return before creating an account or sending email", async () => {

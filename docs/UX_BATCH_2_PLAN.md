@@ -1,15 +1,19 @@
 # UX Batch 2 — Slice Plan
 
+Status: completed in source by commits `2975cd1`, `ab93daa`, `38c6035`, and
+`46eebdd`. This file is a historical implementation record, not an active work
+order. Current operating guidance lives in `docs/USER_MANUAL.md`, feature state
+in `docs/FEATURE_MATRIX.md`, and release state in `PROJECT_STATUS.md`.
+
 Source: UX audit of 2026-08-05 (items #5, #17, #11, plus server-side branding completion).
-Each slice is one commit. Implement with the `slice-implementer` agent or a fresh Sonnet session:
-"Implement slice <A|B|C|D> of docs/UX_BATCH_2_PLAN.md".
 
-## Ground rules (read first, every slice)
+## Historical ground rules
 
-- Branch: work on the current branch. Do NOT commit — the human reviews the diff and commits.
+- These constraints governed the completed implementation; do not rerun the
+  slices from this document.
 - Precondition: the working tree from batch 1 (hero removal, PDF cleanup, portal branding, service-charge naming) must already be committed before starting slice A.
 - Never touch: `firestore.rules`, tenant-scoping logic, `quoteStore.js` status flow, anything under `scripts/`.
-- Baseline tests, every slice: `npx vitest run` must end fully green (319+ passed at time of writing).
+- Baseline tests had to remain green for every slice.
 - E2E when the slice says so: `bash scripts/run-playwright.sh test <spec files>` (boots its own dev servers; firebase-*.smoke specs are config-ignored, don't try to run them).
 - E2E specs assert exact UI strings. If you change a user-facing string, grep `e2e/` and `src/**/__tests__/` for the old string and update assertions to the new behavior.
 - The workspace CTA is "New Quote"; the portal H1 is "Your proposal" / "Your proposal from {brand}"; the service fee is labeled "Service charge (x%)" everywhere. Do not reintroduce old names.

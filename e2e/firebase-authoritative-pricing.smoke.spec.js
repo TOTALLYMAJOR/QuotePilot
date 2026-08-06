@@ -47,6 +47,14 @@ async function advanceToSave(page, saveLabel = "Save draft") {
 
     const nextButton = page.getByRole("button", { name: "Next" });
     if (!(await nextButton.count())) break;
+
+    const menuHeading = page.getByRole("heading", { name: "Customized Cuisine Menu" });
+    if (await menuHeading.isVisible()) {
+      const firstMenuItem = page.getByRole("checkbox").first();
+      await expect(firstMenuItem).toBeVisible();
+      await firstMenuItem.check();
+    }
+
     await nextButton.click();
   }
 

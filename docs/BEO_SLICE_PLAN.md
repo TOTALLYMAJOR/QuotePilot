@@ -1,21 +1,26 @@
 # BEO Slice Plan
 
+Status: completed in source by commits `3632021` (slice E) and `eb5791c`
+(slice F). This file is a historical implementation record, not an active work
+order. Current operating guidance lives in `docs/USER_MANUAL.md`, feature state
+in `docs/FEATURE_MATRIX.md`, and release state in `PROJECT_STATUS.md`.
+
 Source: not from the 2026-08-05 UX audit. This is a new differentiation feature
 (kitchen-facing Banquet Event Order export) proposed and designed in a
 2026-08-06 planning conversation, kept in its own doc so it isn't misread as
-audit-sourced work. One commit per slice. Implement with the `slice-implementer`
-agent: "Implement slice <E|F> of docs/BEO_SLICE_PLAN.md".
+audit-sourced work.
 
-## Ground rules (same as UX_BATCH_2_PLAN.md)
+## Historical ground rules
 
-- Branch: work on the current branch. Do NOT commit — the human reviews the diff and commits.
+- These constraints governed the completed implementation; do not rerun the
+  slices from this document.
 - Never touch: `firestore.rules`, tenant-scoping logic, `quoteStore.js` status flow, anything under `scripts/`.
-- Baseline tests: `npx vitest run` must end fully green (342+ passed at time of writing).
+- Baseline tests had to remain green.
 - E2E: not required for this slice (no user-facing wizard/portal strings change).
 
 ---
 
-## Slice E — Kitchen BEO (Banquet Event Order) export
+## Slice E — Kitchen BEO (Banquet Event Order) export (implemented)
 
 Goal: a staff-facing, printable/downloadable kitchen prep document per quote —
 distinct from the customer-facing proposal PDF (`src/lib/proposalExport.js`).

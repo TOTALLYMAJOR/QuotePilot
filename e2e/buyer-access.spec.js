@@ -290,7 +290,7 @@ test("buyer invoice intake stays contained on a narrow mobile viewport", async (
 test("customer portal query keeps precedence over the public buyer route", async ({ page }) => {
   await page.goto("/start?portal=e2e-buyer-route-precedence");
 
-  await expect(page.getByRole("heading", { name: "Proposal Decision Center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your proposal" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Test the one-dollar invoice flow." }))
     .toHaveCount(0);
 });

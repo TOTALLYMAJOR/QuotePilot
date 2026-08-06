@@ -54,6 +54,10 @@ function makeQuote(overrides = {}) {
       guests: 120,
       hours: 4
     },
+    selection: {
+      menuItems: ["seasonal-salad"],
+      menuItemNames: ["Seasonal Salad"]
+    },
     totals: {
       total: 8400,
       deposit: 2520
@@ -91,6 +95,10 @@ function makeQuote(overrides = {}) {
     event: {
       ...base.event,
       ...(overrides.event || {})
+    },
+    selection: {
+      ...base.selection,
+      ...(overrides.selection || {})
     },
     totals: {
       ...base.totals,

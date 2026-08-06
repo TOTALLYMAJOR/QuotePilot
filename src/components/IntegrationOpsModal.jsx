@@ -23,7 +23,6 @@ import {
 import { currency } from "../lib/quoteCalculator";
 import {
   getQuoteHistory,
-  purgeDeletedQuotesForOrganization,
   recordQuoteIntegrationSync
 } from "../lib/quoteStore";
 
@@ -262,7 +261,6 @@ export default function IntegrationOpsModal({
     error: "",
     result: null
   });
-  const [purgingDeletedQuotes, setPurgingDeletedQuotes] = useState(false);
   const [buyerRepairState, setBuyerRepairState] = useState({
     loading: false,
     error: "",
@@ -764,60 +762,6 @@ export default function IntegrationOpsModal({
     }
   };
 
-  const handlePurgeDeletedQuotes = async () => {
-    if (!canProvisionCustomer) {
-      setCleanupState((prev) => ({ ...prev, error: "Admin role is required for quote cleanup." }));
-      return;
-    }
-
-    const targetOrganizationId = normalizeOrganizationSlug(cleanupForm.organizationId);
-    if (!targetOrganizationId) {
-      setCleanupState((prev) => ({ ...prev, error: "Target organization id is required." }));
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Permanently purge legacy deleted quotes for "${targetOrganizationId}"? This cannot be undone.`
-    );
-    if (!confirmed) return;
-
-    setPurgingDeletedQuotes(true);
-    setCleanupState((prev) => ({ ...prev, error: "" }));
-    setFeedback("");
-    try {
-      const result = await purgeDeletedQuotesForOrganization({
-        organizationId: targetOrganizationId,
-        limit: 300
-      });
-      if (!result?.ok) {
-        throw new Error("Purge operation failed.");
-      }
-      const deletedQuotes = Math.max(0, Number(result.deletedQuotes || 0));
-      const hasMore = result.hasMore === true;
-      setCleanupState((prev) => ({
-        ...prev,
-        result: {
-          ...(result || {}),
-          action: "purge-deleted-quotes"
-        }
-      }));
-      setFeedback(
-        hasMore
-          ? `Purged ${deletedQuotes} deleted quote(s). More may remain; run purge again.`
-          : `Purged ${deletedQuotes} deleted quote(s).`
-      );
-      await load();
-    } catch (err) {
-      setCleanupState((prev) => ({
-        ...prev,
-        error: err?.message || "Failed to purge deleted quotes.",
-        result: null
-      }));
-    } finally {
-      setPurgingDeletedQuotes(false);
-    }
-  };
-
   useEffect(() => {
     setLastProvisioningResult(readLastProvisioningResult(currentUserUid));
   }, [currentUserUid]);
@@ -851,7 +795,6 @@ export default function IntegrationOpsModal({
         error: "",
         result: null
       });
-      setPurgingDeletedQuotes(false);
       setCleanupForm((prev) => {
         const targetOrganizationId = normalizeOrganizationSlug(prev.organizationId || organizationId);
         return {
@@ -892,13 +835,6 @@ export default function IntegrationOpsModal({
     () => state.quotes.find((quote) => quote.id === form.quoteId) || null,
     [state.quotes, form.quoteId]
   );
-
-  const providerEndpoints = useMemo(() => ([
-    { id: "webhook", label: "Webhook URL", value: String(settings.crmWebhookUrl || "").trim() },
-    { id: "webhook_bridge", label: "Webhook bridge URL", value: String(settings.crmWebhookBridgeUrl || "").trim() },
-    { id: "hubspot", label: "HubSpot bridge URL", value: String(settings.crmHubspotBridgeUrl || "").trim() },
-    { id: "salesforce", label: "Salesforce bridge URL", value: String(settings.crmSalesforceBridgeUrl || "").trim() }
-  ]), [settings.crmWebhookUrl, settings.crmWebhookBridgeUrl, settings.crmHubspotBridgeUrl, settings.crmSalesforceBridgeUrl]);
 
   const integrationStatus = setupState.status || {};
   const twilioStatus = integrationStatus.twilio || {};
@@ -1031,24 +967,17 @@ export default function IntegrationOpsModal({
 
         {!provisioningOnly && canManageProviders && <section className="admin-section">
           <div className="admin-section-head">
-            <h3>Provider Config</h3>
+            <h3>Integration Record Policy</h3>
           </div>
+          <p className="source-note">
+            CRM endpoints and tokens are not active configuration in this release. Legacy catalog values are ignored; the controls below this section record operator audit events and do not contact an external CRM.
+          </p>
           <div className="status-strip">
-            <span>
-              CRM: <strong>{settings.crmEnabled ? "enabled" : "disabled"}</strong>
-            </span>
-            <span>Provider: <strong>{settings.crmProvider || "webhook"}</strong></span>
-            <span>CRM module: <strong>{settings.featureFlags?.crmSync === false ? "disabled" : "enabled"}</strong></span>
+            <span>CRM connector: <strong>unavailable</strong></span>
+            <span>Outbound provider: <strong>none</strong></span>
+            <span>Mode: <strong>audit only</strong></span>
             <span>Retry limit: <strong>{Math.max(1, Number(settings.integrationRetryLimit || 3))}</strong></span>
             <span>Audit retention: <strong>{Math.max(10, Number(settings.integrationAuditRetention || 50))}</strong></span>
-          </div>
-          <div className="admin-grid-settings integration-form-grid">
-            {providerEndpoints.map((endpoint) => (
-              <label key={endpoint.id}>
-                {endpoint.label}
-                <input type="text" readOnly value={endpoint.value || "Not configured"} />
-              </label>
-            ))}
           </div>
         </section>}
 
@@ -1473,6 +1402,9 @@ export default function IntegrationOpsModal({
           <p className="warning-note">
             Use archive first. Hard delete is permanent and removes the organization workspace data.
           </p>
+          <p className="source-note">
+            Permanent quote deletion is available one quote at a time in Quote History and requires an exact approved deletion request.
+          </p>
           {!canProvisionCustomer && (
             <p className="warning-note">Cleanup controls are restricted to admin users.</p>
           )}
@@ -1542,14 +1474,6 @@ export default function IntegrationOpsModal({
                     }))}
                 >
                   Fill Delete Token
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={handlePurgeDeletedQuotes}
-                  disabled={cleanupState.loading || purgingDeletedQuotes}
-                >
-                  {purgingDeletedQuotes ? "Purging..." : "Purge Deleted Quotes"}
                 </button>
                 <button
                   type="button"

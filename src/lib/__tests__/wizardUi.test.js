@@ -2,15 +2,21 @@ import { describe, expect, test } from "vitest";
 import {
   applyEventTypeTemplateDefaults,
   buildStepStatus,
+  createTemplateDefaultsOwnership,
   detectBreakdownValueChanges,
   findTemplateForEventType,
+  MIN_EVENT_HOURS,
+  normalizeEventHours,
+  releaseTemplateDefaultsOwnership,
+  resolveFirstValidPackageId,
+  restoreTemplateOwnedDefaults,
   validateStep1
 } from "../wizardUi";
 
 const INITIAL_FORM = {
   date: "",
   time: "",
-  hours: 0,
+  hours: MIN_EVENT_HOURS,
   bartenders: 0,
   guests: 0,
   venue: "",
@@ -21,7 +27,7 @@ const INITIAL_FORM = {
   name: "",
   phone: "",
   email: "",
-  pkg: "classic",
+  pkg: "",
   addons: [],
   addonQuantities: {},
   rentals: [],
@@ -108,6 +114,24 @@ describe("wizardUi", () => {
     expect(findTemplateForEventType({ eventTypeId: "birthday-party", templates, eventTypes })?.id).toBe("birthday_template");
   });
 
+  test("new quote defaults use one billable hour and the first valid loaded package", () => {
+    expect(MIN_EVENT_HOURS).toBe(1);
+    expect(normalizeEventHours("")).toBe(1);
+    expect(normalizeEventHours(0)).toBe(1);
+    expect(normalizeEventHours(4)).toBe(4);
+    expect(normalizeEventHours(99)).toBe(12);
+    expect(resolveFirstValidPackageId([
+      { id: "", name: "Missing id", ppp: 20 },
+      { id: "draft", name: "Draft", ppp: 0 },
+      { id: "corporate-essential", name: "Corporate Essential", ppp: 24 },
+      { id: "wedding-signature", name: "Wedding Signature", ppp: 38 }
+    ], "classic")).toBe("corporate-essential");
+    expect(resolveFirstValidPackageId([
+      { id: "corporate-essential", name: "Corporate Essential", ppp: 24 },
+      { id: "wedding-signature", name: "Wedding Signature", ppp: 38 }
+    ], "wedding-signature")).toBe("wedding-signature");
+  });
+
   test("applyEventTypeTemplateDefaults only fills untouched/default fields", () => {
     const form = {
       ...INITIAL_FORM,
@@ -178,6 +202,87 @@ describe("wizardUi", () => {
     expect(appliedFields).not.toContain("style");
     expect(appliedFields).not.toContain("pkg");
     expect(appliedFields).not.toContain("payMethod");
+  });
+
+  test("clearing template defaults restores every untouched field and keeps later user edits", () => {
+    const beforeForm = {
+      ...INITIAL_FORM,
+      eventTemplateId: "custom",
+      hours: 1,
+      style: "Buffet",
+      pkg: "corporate-essential",
+      servers: 0,
+      chefs: 0,
+      bartenders: 0,
+      menuItems: ["house-salad"],
+      menuItemQuantities: { "house-salad": 2 },
+      addons: [],
+      addonQuantities: {},
+      rentals: [],
+      rentalQuantities: {}
+    };
+    const afterForm = {
+      ...beforeForm,
+      eventTemplateId: "wedding",
+      hours: 5,
+      style: "Plated",
+      pkg: "wedding-signature",
+      servers: 4,
+      chefs: 2,
+      bartenders: 1,
+      menuItems: ["canape"],
+      menuItemQuantities: { canape: 1 },
+      addons: ["coffee"],
+      addonQuantities: { coffee: 1 },
+      rentals: ["linens"],
+      rentalQuantities: { linens: 1 }
+    };
+    let ownership = createTemplateDefaultsOwnership({
+      beforeForm,
+      afterForm,
+      appliedFields: [
+        "eventTemplateId",
+        "hours",
+        "style",
+        "pkg",
+        "servers",
+        "chefs",
+        "bartenders",
+        "menuItems",
+        "addons",
+        "rentals"
+      ]
+    });
+    ownership = releaseTemplateDefaultsOwnership(ownership, "addons", "coffee");
+    ownership = releaseTemplateDefaultsOwnership(ownership, "pkg");
+
+    const restored = restoreTemplateOwnedDefaults({
+      form: {
+        ...afterForm,
+        hours: 6,
+        pkg: "wedding-premium",
+        menuItems: ["canape", "late-dessert"],
+        menuItemQuantities: { canape: 1, "late-dessert": 3 },
+        addonQuantities: { coffee: 2 }
+      },
+      ownership
+    });
+
+    expect(restored).toMatchObject({
+      eventTemplateId: "custom",
+      hours: 6,
+      style: "Buffet",
+      pkg: "wedding-premium",
+      servers: 0,
+      chefs: 0,
+      bartenders: 0,
+      menuItems: ["late-dessert", "house-salad"],
+      menuItemQuantities: { "late-dessert": 3, "house-salad": 2 },
+      addons: ["coffee"],
+      addonQuantities: { coffee: 2 },
+      rentals: [],
+      rentalQuantities: {}
+    });
   });
 
   test("detectBreakdownValueChanges returns deltas for changed keys", () => {

@@ -199,6 +199,23 @@ describe("server proposal acceptance planning", () => {
     );
   });
 
+  test("rejects a legacy delivered proposal with no menu selection", () => {
+    const { quote, portal } = fixtures();
+    expect(() => plan({
+      quote: {
+        ...quote,
+        selection: { ...quote.selection, menuItemNames: [] }
+      },
+      portal: {
+        ...portal,
+        selection: { ...portal.selection, menuItems: [] }
+      }
+    })).toThrowError(expect.objectContaining({
+      code: "failed-precondition",
+      message: expect.stringMatching(/incomplete.*cannot be signed/i)
+    }));
+  });
+
   test("recognizes only an exact server-recorded retry", () => {
     const accepted = plan();
     const quote = {

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { buildCatalogRecordChanges } from "../useCatalogData";
+import {
+  buildCatalogRecordChanges,
+  isCatalogSaveReconciled,
+  isStarterPackApplyReconciled
+} from "../useCatalogData";
 
 function catalog(overrides = {}) {
   return {
@@ -209,5 +213,74 @@ describe("catalog record save planning", () => {
       }),
       baselineCatalog: catalog()
     })).toThrow('Duplicate package id "duplicate"');
+  });
+});
+
+describe("catalog save reconciliation", () => {
+  test("accepts a server-confirmed response only for the exact saved revision", () => {
+    expect(isCatalogSaveReconciled({
+      savedCatalogRevision: 8,
+      wantsPricingConfirmation: true,
+      settings: {
+        catalogRevision: 8,
+        pricingSetupConfirmed: true,
+        pricingConfirmation: { confirmedCatalogRevision: 8 }
+      }
+    })).toBe(true);
+
+    expect(isCatalogSaveReconciled({
+      savedCatalogRevision: 8,
+      wantsPricingConfirmation: true,
+      settings: {
+        catalogRevision: 9,
+        pricingSetupConfirmed: true,
+        pricingConfirmation: { confirmedCatalogRevision: 8 }
+      }
+    })).toBe(false);
+  });
+
+  test("requires confirmation evidence when confirmation was requested", () => {
+    expect(isCatalogSaveReconciled({
+      savedCatalogRevision: 4,
+      wantsPricingConfirmation: true,
+      settings: {
+        catalogRevision: 4,
+        pricingSetupConfirmed: false,
+        pricingConfirmation: null
+      }
+    })).toBe(false);
+
+    expect(isCatalogSaveReconciled({
+      savedCatalogRevision: 4,
+      wantsPricingConfirmation: false,
+      settings: { catalogRevision: 4 }
+    })).toBe(true);
+  });
+
+  test("reconciles an uncertain starter-pack response only at its untouched applied revision", () => {
+    const settings = {
+      catalogRevision: 6,
+      starterCatalogPack: {
+        id: "wedding-events",
+        version: 1,
+        appliedCatalogRevision: 6
+      }
+    };
+
+    expect(isStarterPackApplyReconciled({
+      packId: "wedding-events",
+      packVersion: 1,
+      settings
+    })).toBe(true);
+    expect(isStarterPackApplyReconciled({
+      packId: "wedding-events",
+      packVersion: 1,
+      settings: { ...settings, catalogRevision: 7 }
+    })).toBe(false);
+    expect(isStarterPackApplyReconciled({
+      packId: "corporate-drop-off",
+      packVersion: 1,
+      settings
+    })).toBe(false);
   });
 });

@@ -562,11 +562,13 @@ export default function EventScheduleModal({
         checkpoints
       });
       setFeedback(successMessage);
+      return true;
     } catch (err) {
       setState((prev) => ({
         ...prev,
         error: err?.message || "Failed to save kitchen checkpoints."
       }));
+      return false;
     } finally {
       setSavingCheckpointId("");
     }
@@ -586,6 +588,9 @@ export default function EventScheduleModal({
   const handleResetCheckpoints = async (quoteId) => {
     const quote = state.quotes.find((item) => item.id === quoteId);
     if (!quote) return;
+    const previousOverrides = Array.isArray(quote.booking?.kitchenCheckpoints)
+      ? quote.booking.kitchenCheckpoints
+      : [];
     const defaults = buildKitchenCheckpoints({
       time: quote.event?.time,
       hours: quote.event?.hours,
@@ -606,7 +611,26 @@ export default function EventScheduleModal({
         };
       })
     }));
-    await persistKitchenCheckpoints(quoteId, nextOverrides, "Kitchen checkpoints reset to defaults.");
+    const saved = await persistKitchenCheckpoints(
+      quoteId,
+      nextOverrides,
+      "Kitchen checkpoints reset to defaults."
+    );
+    if (!saved) {
+      setState((prev) => ({
+        ...prev,
+        quotes: prev.quotes.map((item) => {
+          if (item.id !== quoteId) return item;
+          return {
+            ...item,
+            booking: {
+              ...(item.booking || {}),
+              kitchenCheckpoints: previousOverrides
+            }
+          };
+        })
+      }));
+    }
   };
 
   const handleProductionChecklistToggle = async (quoteId, checklistItemId, completed) => {

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: August 4, 2026
+Last updated: August 6, 2026
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -118,7 +118,7 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
     or bounce handling. Rotation invalidates prior portal activation evidence,
     so both Copy Portal and the portal link inside a PDF remain unavailable
     until a separate provider send accepts the new issuance.
-- In the current source candidate, `Send Pay Request` is available only for an
+- In the current source, `Send Pay Request` is available only for an
   accepted or booked quote with an exact approved action. That approval is
   bound to the organization, quote revision, current portal issuance, customer
   email, currency, and deposit amount. QuotePilot privately prepares or safely
@@ -129,7 +129,7 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   QuotePilot publishes the link to the quote and portal only after
   email-provider acceptance is durably recorded. If any bound value changes,
   request and approve a new action before sending.
-- On the final-balance source branch, `Send Balance Request` is a separate exact
+- In the current source, `Send Balance Request` is a separate exact
   approved action available only for a booked contract with a verified
   provider-paid deposit. QuotePilot derives the final balance from the
   authoritative quote total minus deposit; the browser cannot supply the
@@ -189,8 +189,8 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - This workflow is not production behavior until its matching frontend,
   Functions, and Firestore rules are deployed together and hosted Stripe
   test/live acceptance is recorded separately for deposit and final-balance
-  collection. This source branch is not `main`, and no hosted or
-  Stripe-provider acceptance has been recorded for either payment rail. Refund
+  collection. No hosted or Stripe-provider acceptance has been recorded for
+  either payment rail. Refund
   initiation/status and dispute handling remain manual or unimplemented
   outside the automated collection workflow.
 - While quote delivery is `sending`, or its provider outcome needs manual
@@ -247,14 +247,14 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   consume that exact approval once and display awaiting, in-progress,
   completed, or failed execution evidence. A failed provider action requires a
   new approval request.
-- In the current source candidate, Firebase-backed request and resolution
+- In the current source, Firebase-backed request and resolution
   records prefer trusted Functions using the authenticated staff identity and
   server timestamp. A narrowly scoped missing-endpoint fallback preserves the
   existing rule-authorized path during a Vercel-first rollout; other callable
   errors fail closed. Sensitive action execution has no browser-write fallback.
-  Once the matching Functions and Firestore rules are deployed together,
-  direct approval-array, contract-evidence, and execution-audit writes are
-  denied.
+  The deployed matching Functions and Firestore rules deny direct
+  approval-array, contract-evidence, and execution-audit writes; source changes
+  still require a coordinated release before they alter production behavior.
 
 ## Reporting Dashboard
 - Open `Dashboard` to review quote pipeline, status, deposit, and monthly won
@@ -286,6 +286,16 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - Open `Schedule` to review accepted and booked events by month or week, inspect conflicts, and assign a staff lead.
 - Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.
 - Checklist completion is an operational task record only. The app does not track inventory, so checklist state does not confirm stock counts or item availability.
+- From `Quotes`, staff can select `Kitchen sheet` on a saved quote to download
+  the internal Banquet Event Order. Before service, verify the quote revision
+  and generated timestamp, event and day-of contacts, staffing, checkpoint
+  times, menu selections, dietary/allergen callouts, and checklist state.
+- The Kitchen sheet includes blank prepared-by and chef sign-off lines plus
+  ruled day-of notes for event-day use. Downloading or signing the PDF does not
+  change the quote, record a digital acceptance, prove payment, confirm
+  inventory, or persist the handwritten sign-off back to QuotePilot. Use the
+  customer proposal and portal—not the Kitchen sheet—for customer commercial
+  review.
 
 ## Admin Catalog Operations
 - Open `Admin Catalog` (admin users only).
@@ -346,8 +356,8 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Public $1 Invoice-First Buyer Access
 
-This source candidate is a public Stripe test-invoice path on the existing
-`tonicatering` Firebase project. It remains unavailable until reviewed code,
+The current source includes a public Stripe test-invoice path on the existing
+`tonicatering` Firebase project. It remains unavailable until a tagged release,
 Turnstile, Stripe test credentials and webhook, Firebase verification delivery,
 and guarded hosted release acceptance are complete. It is not an approved live
 sales channel.
@@ -419,10 +429,10 @@ Use the admin provisioning workflow to create a customer organization, apply
 paid module entitlements, and prepare owner access. Provisioning success is not
 the same as completed owner onboarding or production acceptance.
 
-Release status: this runbook describes locally validated release-candidate
-behavior. The slice is not deployed or
-production-accepted. Use it for live tenant changes only after the frontend,
-Functions, and rules are deployed together from the reviewed commit. See
+Release status: this workflow is deployed from `v0.2.3`, but authenticated
+disposable-tenant owner activation and hosted acceptance are still pending.
+Use it for live tenant changes only through the documented platform-admin path,
+and do not infer tenant usability from deployment or route reachability. See
 [`PROJECT_STATUS.md`](../PROJECT_STATUS.md) for current operational truth.
 
 Backend source of truth:

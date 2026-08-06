@@ -1,12 +1,14 @@
 # Dev Tasks
 
-Last updated: August 3, 2026
+Last updated: August 6, 2026
 
-## P0 - Tenant Provisioning Release
-- Deploy the reviewed role-authoritative Firestore rules and
-  provisioning/repair/cleanup Functions from the merged `main` revision; the
-  `/app` frontend is live on Vercel, but the coordinated Firebase runtime slice
-  remains locked.
+## P0 - Production Acceptance and Tenant Provisioning
+- Prepare and promote the next tagged exact-`main` revision containing this
+  convergence across the frontend, Functions, and Firestore rules through the
+  governed release path. Capture hosted acceptance separately for electronic
+  proposal signing, interaction recovery, analytics, Operations Audit, and the
+  staff Kitchen BEO; do not treat merge, payload preparation, or route
+  reachability as deployment or human acceptance.
 - Run a disposable second-tenant acceptance: platform-admin create, exact owner
   email verification/invite activation, cross-tenant denial, neutral default
   inspection, reviewed package/event/pricing setup, conflict-safe catalog save,
@@ -15,20 +17,17 @@ Last updated: August 3, 2026
 - Verify `quotepilot.mbmapps.com` in Resend and authoritative DNS before
   activating `QuotePilot by MBMApps <onboarding@quotepilot.mbmapps.com>`;
   capture provider accepted, delivered-event, and recipient-inbox proof.
+- Keep public buyer onboarding and the deposit/final-balance rails disabled until
+  their exact target receives coordinated hosted Stripe test-mode, webhook,
+  reconciliation, cross-rail, negative-path, and customer-projection acceptance.
 
 ## P0 - Multi-Tenant Hardening (Post Rollout)
-- Completed execution track: org-scoped quote/catalog write paths now enforce cross-org denial with migration evidence attached.
-- Evidence captured (March 28, 2026):
-  - Cross-org denial emulator matrix log: `.cache/p0-denial-matrix/20260328T001230Z--firestore-rules-cross-org-denial.log`
-  - Portal expiry/deleted-state rule hardening emulator log: `.cache/p0-denial-matrix/20260328T022716Z--firestore-rules-portal-expiry-hardening.log`
-  - Migration dry-run log/json: `.cache/migration-dry-runs/20260328T001210Z--tonicatering--250--dry-run.log` and `.cache/migration-dry-runs/20260328T001210Z--tonicatering--250--dry-run.json`
-  - Portal expiry-ms dry-run log/json: `.cache/migration-dry-runs/20260328T022619Z--tonicatering--250--portal-ms-dry-run.log` and `.cache/migration-dry-runs/20260328T022619Z--tonicatering--250--portal-ms-dry-run.json`
-  - Migration apply log/json: `.cache/migration-runs/20260328T001919Z--tonicatering--250--apply.log` and `.cache/migration-runs/20260328T001919Z--tonicatering--250--apply.json`
-  - Portal expiry-ms apply log/json: `.cache/migration-runs/20260328T022640Z--tonicatering--250--portal-ms-apply.log` and `.cache/migration-runs/20260328T022640Z--tonicatering--250--portal-ms-apply.json`
-- Remaining P0 action: deploy hardened portal rules to production and run post-deploy smoke verification (active portal token succeeds; expired/deleted tokens are denied).
+- Run authenticated hosted cross-tenant and portal-path smoke verification
+  against the deployed hardened rules: active exact-issuance tokens succeed;
+  expired, deleted, legacy-no-evidence, mismatched, and foreign-tenant paths
+  fail closed.
 
 ## P0 - Security and Reliability
-- Review and merge the fail-closed exact-SHA release evidence source candidate.
 - Strengthen the existing `main` protection from zero required approvals to an
   independently enforceable review policy with code-owner, stale-review, and
   last-push controls. Add a non-admin collaborator or separately owned gate;

@@ -295,6 +295,38 @@ describe("trusted server quote creation documents", () => {
     expect(() => sanitizeQuoteCreationRequest({
       form: buildForm({ date: "2026-02-31" })
     })).toThrow(/event date is invalid/i);
+    expect(() => sanitizeQuoteCreationRequest({
+      form: buildForm({ menuItems: [] })
+    })).toThrowError(expect.objectContaining({
+      code: "invalid-argument",
+      message: expect.stringMatching(/at least one menu item/i)
+    }));
+  });
+
+  test("rejects authoritative pricing that does not resolve a selected menu item", () => {
+    const form = sanitizeQuoteCreationRequest({ form: buildForm() }).form;
+    const pricing = buildPricing();
+    pricing.inputs.selection.menuItems = [];
+
+    expect(() => buildTrustedQuoteCreationDocuments({
+      quoteId: "quote-a",
+      quoteNumber: "Q-260727-1200-ABCDEF12",
+      portalKey: "0123456789abcdef0123456789abcdef",
+      organizationId: "org-a",
+      staff: {
+        uid: "staff-a",
+        email: "staff@example.com",
+        role: "admin"
+      },
+      form,
+      pricing,
+      catalogSource: "firebase-org",
+      settings: {},
+      nowISO: "2026-07-27T12:00:00.000Z"
+    })).toThrowError(expect.objectContaining({
+      code: "failed-precondition",
+      message: expect.stringMatching(/server pricing.*menu item/i)
+    }));
   });
 
   test("builds one canonical draft, public snapshot, and v0001 from server proof", () => {
@@ -530,7 +562,7 @@ describe("trusted server quote creation documents", () => {
     });
   });
 
-  test("rejects non-admin, terminal, and expired pre-booking portal rotations", () => {
+  test("rejects non-admin, closed-state, and expired pre-acceptance portal rotations", () => {
     const quote = {
       organizationId: "org-a",
       portalKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -549,7 +581,7 @@ describe("trusted server quote creation documents", () => {
       },
       nowISO: "2026-07-28T12:00:00.000Z"
     })).toThrow(/admin role required/i);
-    for (const status of ["accepted", "declined", "expired", "deleted"]) {
+    for (const status of ["declined", "expired", "deleted"]) {
       expect(() => buildPortalRotationDocuments({
         quoteId: "quote-a",
         quote: {
@@ -579,6 +611,49 @@ describe("trusted server quote creation documents", () => {
       },
       nowISO: "2026-07-28T12:00:00.000Z"
     })).toThrow(/expiry must be extended/i);
+  });
+
+  test("renews an expired accepted portal without changing acceptance or payment truth", () => {
+    const quote = {
+      ...buildForm(),
+      organizationId: "org-a",
+      portalKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      portalIssuedAtISO: "2026-06-01T00:00:00.000Z",
+      portalExpiresAtISO: "2026-07-01T00:00:00.000Z",
+      expiresAtISO: "2026-07-01T00:00:00.000Z",
+      status: "accepted",
+      latestVersionNumber: 2,
+      acceptanceReceipt: {
+        receiptId: "receipt-a",
+        acceptedAtISO: "2026-06-02T12:00:00.000Z",
+        portalIssuedAtISO: "2026-06-01T00:00:00.000Z"
+      },
+      payment: { depositStatus: "unpaid" }
+    };
+    const rotation = buildPortalRotationDocuments({
+      quoteId: "quote-accepted",
+      quote,
+      newPortalKey: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      staff: {
+        uid: "admin-a",
+        email: "admin@example.com",
+        role: "admin"
+      },
+      nowISO: "2026-08-04T12:00:00.000Z"
+    });
+
+    expect(rotation.quotePatch).toMatchObject({
+      portalExpiresAtISO: "2026-09-03T12:00:00.000Z"
+    });
+    expect(rotation.portal).toMatchObject({
+      status: "accepted",
+      acceptanceReceipt: quote.acceptanceReceipt,
+      payment: { depositStatus: "unpaid" }
+    });
+    expect(rotation.version.snapshot).toMatchObject({
+      acceptanceReceipt: quote.acceptanceReceipt,
+      payment: quote.payment
+    });
   });
 
   test("renews an expired booked portal without changing contract or payment truth", () => {

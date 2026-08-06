@@ -148,7 +148,7 @@ h6 {
 .product-brand-copy small {
   margin: 0;
   color: rgba(255, 225, 161, 0.86);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0.08em;
@@ -197,7 +197,7 @@ h6 {
 
 .workspace-brand-copy small {
   color: rgba(255, 225, 161, 0.7);
-  font-size: 0.58rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.12em;
   line-height: 1;
@@ -1522,6 +1522,23 @@ hr {
   display: flex;
   gap: 0.6rem;
   flex-wrap: wrap;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.availability-recovery h4,
+.availability-recovery p {
+  margin-top: 0;
+}
+
+.availability-recovery ul {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
 }
 
 .auth-forgot {

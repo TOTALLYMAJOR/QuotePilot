@@ -705,11 +705,6 @@ export default function CustomerPortalView({
                     {paymentConfirmationMessage}
                   </p>
                 )}
-                {approvedPaymentLink && ["accepted", "booked"].includes(quote.status) && payment.depositStatus !== "paid" && (
-                  <a className="cta portal-pay-link" href={approvedPaymentLink} target="_blank" rel="noreferrer">
-                    Pay Deposit
-                  </a>
-                )}
                 {finalBalanceUi.visible && (
                   <div className="portal-payment-state">
                     <span>Final balance</span>

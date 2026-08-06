@@ -357,7 +357,7 @@ describe("quoteStore Firebase write safety", () => {
           hours: 4,
           addons: [],
           rentals: [],
-          menuItems: [],
+          menuItems: ["salad"],
           addonQuantities: {},
           rentalQuantities: {},
           menuItemQuantities: {},
@@ -393,7 +393,7 @@ describe("quoteStore Firebase write safety", () => {
         pkg: "classic",
         addons: [],
         rentals: [],
-        menuItems: [],
+        menuItems: ["salad"],
         addonQuantities: {},
         rentalQuantities: {},
         menuItemQuantities: {},
@@ -458,7 +458,7 @@ describe("quoteStore Firebase write safety", () => {
         pkg: "classic",
         addons: [],
         rentals: [],
-        menuItems: []
+        menuItems: ["salad"]
       },
       totals: {
         selectedPkg: {
@@ -519,6 +519,24 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.updateDoc).not.toHaveBeenCalled();
     expect(mockState.setDoc).not.toHaveBeenCalled();
     expect(mockState.runTransaction).not.toHaveBeenCalled();
+  });
+
+  test("submitQuote and updateQuote reject empty menu selections before calling Firebase", async () => {
+    await expect(submitQuote({
+      form: { menuItems: [] },
+      totals: {},
+      settings: {},
+      organizationId: "Org One"
+    })).rejects.toThrow(/at least one menu item/i);
+    await expect(updateQuote({
+      quoteId: "quote-1",
+      form: { menuItems: [] },
+      totals: {},
+      settings: {},
+      organizationId: "Org One"
+    })).rejects.toThrow(/at least one menu item/i);
+
+    expect(mockState.httpsCallable).not.toHaveBeenCalled();
   });
 
   test("saveQuoteVersion blocks Firebase read/write without org context", async () => {
@@ -831,6 +849,10 @@ describe("quoteStore Firebase write safety", () => {
         id: "quote-1",
         quoteNumber: "Q-1",
         organizationId: "org-one",
+        status: "accepted",
+        customer: { email: "customer@example.com" },
+        totals: { total: 1000, deposit: 250 },
+        payment: { depositStatus: "unpaid" },
         workflow: { approvalRequests: [pendingRequest] }
       })
     });

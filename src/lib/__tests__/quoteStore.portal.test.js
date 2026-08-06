@@ -55,6 +55,10 @@ function makeQuote(overrides = {}) {
       venue: "Portal Venue",
       guests: 90
     },
+    selection: {
+      menuItems: ["seasonal-salad"],
+      menuItemNames: ["Seasonal Salad"]
+    },
     totals: {
       total: 7200,
       deposit: 2160
@@ -95,6 +99,10 @@ function makeQuote(overrides = {}) {
     event: {
       ...base.event,
       ...(overrides.event || {})
+    },
+    selection: {
+      ...base.selection,
+      ...(overrides.selection || {})
     },
     totals: {
       ...base.totals,
@@ -330,6 +338,21 @@ describe("quoteStore portal token policy", () => {
     const refreshed = await getPortalQuote("portal-key-12345678901234567890");
     expect(refreshed.status).toBe("accepted");
     expect(refreshed.acceptanceReceipt.receiptId).toBe(result.acceptanceReceipt.receiptId);
+  });
+
+  test("rejects local acceptance for a legacy quote with no menu selection", async () => {
+    seedQuotes([makeQuote({
+      selection: { menuItems: [], menuItemNames: [] }
+    })]);
+
+    await expect(updatePortalDecision({
+      portalKey: "portal-key-12345678901234567890",
+      decision: "accepted",
+      signerName: "Portal Client",
+      consentVersion: "proposal-acceptance-v1",
+      expectedRevisionId: "v0001",
+      expectedPortalIssuedAtISO: "2026-03-10T12:00:00.000Z"
+    })).rejects.toThrow(/no menu selection.*cannot be signed/i);
   });
 
   test("blocks expired portal tokens", async () => {

@@ -3,8 +3,7 @@ const APPROVAL_ACTIONS = new Set([
   "send_final_balance_request",
   "convert_to_contract",
   "rotate_portal_link",
-  "delete_quote",
-  "send_quote_email"
+  "delete_quote"
 ]);
 const SCOPED_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
@@ -75,6 +74,199 @@ function approvalRequestsFromWorkflow(workflow) {
     );
   }
   return requests;
+}
+
+function moneyCents(value) {
+  const cents = Math.round(Number(value) * 100);
+  return Number.isSafeInteger(cents) ? cents : 0;
+}
+
+function assertApprovalActionRequestable({ quote = {}, action = "" } = {}) {
+  const normalizedAction = text(action);
+  const status = text(quote?.status || "draft").toLowerCase();
+  if (!APPROVAL_ACTIONS.has(normalizedAction)) {
+    throw new ApprovalWorkflowError("invalid-argument", "Invalid approval action.");
+  }
+  if (status === "deleted" || text(quote?.deletedAtISO)) {
+    throw new ApprovalWorkflowError(
+      "failed-precondition",
+      "Deleted quotes cannot receive approval requests."
+    );
+  }
+
+  if (normalizedAction === "send_payment_request") {
+    const depositStatus = text(quote?.payment?.depositStatus || "unpaid").toLowerCase();
+    if (!["accepted", "booked"].includes(status)) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Payment requests can be approved only after quote acceptance."
+      );
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email(quote?.customer?.email))) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Payment requests require a customer email."
+      );
+    }
+    if (moneyCents(quote?.totals?.deposit) <= 0) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Payment requests require a positive deposit."
+      );
+    }
+    if (["paid", "refunded"].includes(depositStatus) || text(quote?.payment?.depositConfirmedAtISO)) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "The deposit is already settled."
+      );
+    }
+  }
+
+  if (normalizedAction === "send_final_balance_request") {
+    const balanceCents = moneyCents(quote?.totals?.total) - moneyCents(quote?.totals?.deposit);
+    const finalBalanceStatus = text(quote?.payment?.finalBalance?.status || "unpaid").toLowerCase();
+    if (
+      status !== "booked"
+      || !text(quote?.booking?.contractNumber)
+      || !text(quote?.booking?.contractConvertedAtISO)
+    ) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Final-balance requests require a converted contract."
+      );
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email(quote?.customer?.email))) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Final-balance requests require a valid customer email."
+      );
+    }
+    if (
+      text(quote?.payment?.depositStatus).toLowerCase() !== "paid"
+      || !/^cs_[A-Za-z0-9_]+$/.test(text(quote?.payment?.stripeSessionId))
+      || !text(quote?.payment?.depositConfirmedAtISO)
+    ) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Final-balance requests require a confirmed Stripe-paid deposit."
+      );
+    }
+    if (balanceCents <= 0 || finalBalanceStatus === "paid") {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "No final balance remains due."
+      );
+    }
+  }
+
+  if (normalizedAction === "convert_to_contract") {
+    const hasContract = Boolean(text(quote?.booking?.contractNumber));
+    if (status !== "accepted" && !(status === "booked" && !hasContract)) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "Only an accepted quote without a contract can be converted."
+      );
+    }
+  }
+
+  if (
+    normalizedAction === "rotate_portal_link"
+    && !["draft", "sent", "viewed", "accepted", "booked"].includes(status)
+  ) {
+    throw new ApprovalWorkflowError(
+      "failed-precondition",
+      "Portal renewal is unavailable for this quote status."
+    );
+  }
+  if (
+    normalizedAction === "rotate_portal_link"
+    && status === "booked"
+    && (
+      !text(quote?.booking?.contractNumber)
+      || !text(quote?.booking?.contractConvertedAtISO)
+    )
+  ) {
+    throw new ApprovalWorkflowError(
+      "failed-precondition",
+      "Booked portal renewal requires an authoritative contract."
+    );
+  }
+
+  return true;
+}
+
+function invalidatePaymentApprovalsForPortalRotation({
+  workflow = {},
+  actorEmail = "",
+  nowISO = "",
+  operationId = ""
+} = {}) {
+  const normalizedActorEmail = email(actorEmail);
+  const normalizedNowISO = text(nowISO);
+  const normalizedOperationId = normalizeRequestId(operationId);
+  if (!normalizedActorEmail || !normalizedNowISO || !normalizedOperationId) {
+    throw new ApprovalWorkflowError(
+      "failed-precondition",
+      "Portal rotation approval invalidation requires server-owned identity, time, and operation id."
+    );
+  }
+
+  const current = approvalRequestsFromWorkflow(workflow);
+  const invalidatedRequestIds = [];
+  const approvalRequests = current.map((request) => {
+    const action = text(request?.action);
+    if (!SCOPED_APPROVAL_ACTIONS.has(action)) return request;
+
+    const state = text(request?.state).toLowerCase();
+    const executionState = text(request?.executionState).toLowerCase();
+    if (executionState === "in_progress") {
+      throw new ApprovalWorkflowError(
+        "aborted",
+        "Finish or reconcile the in-progress payment request before rotating the portal link."
+      );
+    }
+    if (state === "pending") {
+      invalidatedRequestIds.push(normalizeRequestId(request?.id));
+      return {
+        ...request,
+        state: "rejected",
+        resolvedAtISO: normalizedNowISO,
+        resolvedByEmail: normalizedActorEmail,
+        resolutionNote: "Invalidated because the customer portal was rotated before approval."
+      };
+    }
+    if (
+      state === "approved"
+      && (!executionState || executionState === "awaiting_execution")
+    ) {
+      invalidatedRequestIds.push(normalizeRequestId(request?.id));
+      return {
+        ...request,
+        ...executionFields({
+          state: "failed",
+          completedAtISO: normalizedNowISO,
+          actorEmail: normalizedActorEmail,
+          operationId: normalizedOperationId,
+          error: "Invalidated before execution because the customer portal was rotated."
+        })
+      };
+    }
+    if (
+      state === "approved"
+      && !new Set(["succeeded", "failed"]).has(executionState)
+    ) {
+      throw new ApprovalWorkflowError(
+        "failed-precondition",
+        "A payment approval has an invalid execution state and must be repaired before portal rotation."
+      );
+    }
+    return request;
+  });
+
+  return {
+    approvalRequests,
+    invalidatedRequestIds: invalidatedRequestIds.filter(Boolean)
+  };
 }
 
 function buildApprovalRequest({
@@ -440,8 +632,10 @@ module.exports = {
   APPROVAL_EXECUTION_STATES,
   APPROVAL_RESOLUTION_STATES,
   ApprovalWorkflowError,
+  assertApprovalActionRequestable,
   buildApprovalExecutionOutcome,
   buildApprovalExecutionStart,
   buildApprovalRequest,
-  buildApprovalResolution
+  buildApprovalResolution,
+  invalidatePaymentApprovalsForPortalRotation
 };

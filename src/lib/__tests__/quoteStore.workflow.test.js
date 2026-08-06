@@ -246,6 +246,10 @@ describe("quoteStore workflow persistence", () => {
   });
 
   test("keeps sensitive approval execution separate from admin resolution", async () => {
+    const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY));
+    existing[0].status = "accepted";
+    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(existing));
+
     const requested = await requestQuoteApproval({
       quoteId: "workflow-quote",
       action: "convert_to_contract",
@@ -275,7 +279,7 @@ describe("quoteStore workflow persistence", () => {
       state: "approved",
       resolvedByEmail: "admin@example.com"
     });
-    expect((await readQuote()).status).toBe("sent");
+    expect((await readQuote()).status).toBe("accepted");
   });
 
   test("hydrates final-balance defaults and preserves the exact governed scope", async () => {

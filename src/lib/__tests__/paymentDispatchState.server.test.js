@@ -642,6 +642,38 @@ describe("payment dispatch state", () => {
     );
   });
 
+  test("reconciles every material checkout before portal rotation and survives concurrent expiry", () => {
+    const resolverStart = FUNCTIONS_INDEX_SOURCE.indexOf(
+      "async function resolveCheckoutRailBeforePortalRotation"
+    );
+    const callableStart = FUNCTIONS_INDEX_SOURCE.indexOf("exports.rotateQuotePortalKey =");
+    const resolverSource = FUNCTIONS_INDEX_SOURCE.slice(resolverStart, callableStart);
+    const rotationSource = callableSource("rotateQuotePortalKey", "notifyOwnerNewQuote");
+
+    expect(resolverStart).toBeGreaterThan(-1);
+    expect(resolverSource).toContain("portalRotationPaymentKinds(options.quote)");
+    expect(resolverSource).toContain("await stripe.checkout.sessions.expire(stripeSessionId)");
+    expect(resolverSource).toContain("const observedAfterConflict = await stripe.checkout.sessions.retrieve");
+    expect(resolverSource.indexOf("observedAfterConflict")).toBeGreaterThan(
+      resolverSource.indexOf("catch (expirationError)")
+    );
+
+    const preflight = rotationSource.indexOf("buildApprovalExecutionStart({");
+    const providerReconciliation = rotationSource.indexOf(
+      "await resolveCheckoutBeforePortalRotation"
+    );
+    const transaction = rotationSource.indexOf("await db.runTransaction");
+    const invalidation = rotationSource.indexOf(
+      "invalidatePaymentApprovalsForPortalRotation"
+    );
+    const portalWrite = rotationSource.indexOf("tx.create(newPortalRef");
+    expect(preflight).toBeGreaterThan(-1);
+    expect(providerReconciliation).toBeGreaterThan(preflight);
+    expect(transaction).toBeGreaterThan(providerReconciliation);
+    expect(invalidation).toBeGreaterThan(transaction);
+    expect(portalWrite).toBeGreaterThan(invalidation);
+  });
+
   test.each([
     ["operation", { operationId: "another-approval" }],
     ["actor", { actorUid: "another-admin" }],

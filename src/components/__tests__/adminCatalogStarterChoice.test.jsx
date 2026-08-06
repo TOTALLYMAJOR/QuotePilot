@@ -20,7 +20,11 @@ vi.mock("../../lib/menuService", () => ({
   updateMenuItem: vi.fn()
 }));
 
-import AdminCatalogModal from "../AdminCatalogModal";
+import AdminCatalogModal, {
+  blurManagedMenuItemOnEnter,
+  hasNoMenuInventory,
+  resolveManagedEventTypeId
+} from "../AdminCatalogModal";
 
 function renderCatalog(catalog) {
   return renderToStaticMarkup(
@@ -74,5 +78,72 @@ describe("Admin Catalog starter choice", () => {
     expect(html).toContain(">Packages</button>");
     expect(html).toContain(">Menu</button>");
     expect(html).toContain("View populated menu");
+  });
+
+  test("a confirmed catalog keeps starter provenance without a disabled pack decision", () => {
+    const html = renderCatalog({
+      packages: [{ id: "celebration", name: "Celebration", ppp: 28 }],
+      addons: [],
+      rentals: [],
+      settings: {
+        pricingSetupConfirmed: true,
+        starterCatalogPack: {
+          id: "wedding-events",
+          version: 1,
+          name: "Wedding & events",
+          appliedCatalogRevision: 1
+        }
+      }
+    });
+
+    expect(html).toContain("Your Wedding &amp; events catalog is populated.");
+    expect(html).not.toContain(">Starter Packs</button>");
+    expect(html).not.toContain("What kind of catering do you do most?");
+    expect(html).not.toContain("Starter packs are available only during initial unconfirmed catalog setup.");
+  });
+
+  test("Enter delegates menu item persistence to the single blur path", () => {
+    const preventDefault = vi.fn();
+    const blur = vi.fn();
+
+    expect(blurManagedMenuItemOnEnter({
+      key: "Enter",
+      preventDefault,
+      currentTarget: { blur }
+    })).toBe(true);
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(blur).toHaveBeenCalledOnce();
+
+    expect(blurManagedMenuItemOnEnter({
+      key: "Tab",
+      preventDefault,
+      currentTarget: { blur }
+    })).toBe(false);
+    expect(blur).toHaveBeenCalledOnce();
+  });
+
+  test("a replaced pack falls back from a stale event selection to its first populated event", () => {
+    const eventTypes = [
+      { id: "wedding", name: "Wedding" },
+      { id: "reception", name: "Reception" }
+    ];
+
+    expect(resolveManagedEventTypeId(eventTypes, "old-corporate-event")).toBe("wedding");
+    expect(resolveManagedEventTypeId(eventTypes, "reception")).toBe("reception");
+    expect(resolveManagedEventTypeId([], "old-corporate-event")).toBe("");
+  });
+
+  test("confirmed-menu recovery is offered only when the complete menu inventory is empty", () => {
+    expect(hasNoMenuInventory([])).toBe(true);
+    expect(hasNoMenuInventory([
+      { categories: [], items: [] },
+      { categories: [], items: [] }
+    ])).toBe(true);
+    expect(hasNoMenuInventory([
+      { categories: [{ id: "mains" }], items: [] }
+    ])).toBe(false);
+    expect(hasNoMenuInventory([
+      { categories: [], items: [{ id: "chicken" }] }
+    ])).toBe(false);
   });
 });

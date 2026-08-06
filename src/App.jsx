@@ -24,7 +24,14 @@ import {
   buildStepperModel,
   buildStepStatus,
   buildStepValidation,
+  createTemplateDefaultsOwnership,
   findTemplateForEventType,
+  hasTemplateDefaultsOwnership,
+  MIN_EVENT_HOURS,
+  normalizeEventHours,
+  releaseTemplateDefaultsOwnership,
+  resolveFirstValidPackageId,
+  restoreTemplateOwnedDefaults,
   STEP1_REQUIRED_FIELDS
 } from "./lib/wizardUi";
 import {
@@ -35,6 +42,7 @@ import {
   updateQuote
 } from "./lib/quoteStore";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
+import { clearTenantContextCache } from "./lib/tenantDomainService";
 import {
   beginWizardAnalyticsSession,
   recordProductAnalyticsEvent
@@ -57,7 +65,7 @@ const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
 const INITIAL_FORM = {
   date: "",
   time: "",
-  hours: 0,
+  hours: MIN_EVENT_HOURS,
   servers: 0,
   chefs: 0,
   bartenders: 0,
@@ -71,7 +79,7 @@ const INITIAL_FORM = {
   name: "",
   phone: "",
   email: "",
-  pkg: "classic",
+  pkg: "",
   addons: [],
   addonQuantities: {},
   rentals: [],
@@ -359,54 +367,58 @@ function resolveCatalogItemName(items, id) {
   return String(match?.name || "").trim();
 }
 
-// Builds the human-readable disclosure for an event-template auto-selection
-// (audit #17). Only fields the template actually set (per the caller's
-// applied/eligible flags) are surfaced; ids that fail to resolve to a
-// catalog name are dropped from both the copy and the clearable id list so
-// "Clear defaults" never touches something it didn't disclose.
+// Builds the human-readable disclosure and carries exact field provenance for
+// every value the template changed. The provenance lets "Clear defaults"
+// restore the prior form without rolling back edits made after application.
 function buildTemplateDefaultsNotice({
   template,
   catalog,
-  addonIds = [],
-  rentalIds = [],
-  pkgApplied = false,
-  milesRTApplied = false,
-  milesRTValue = 0,
-  hoursApplied = false,
-  hoursValue = 0
+  ownership
 }) {
   if (!template) return null;
   const templateName = String(template.name || template.id || "").trim();
-  if (!templateName) return null;
+  if (!templateName || !hasTemplateDefaultsOwnership(ownership)) return null;
 
-  const pkgName = pkgApplied ? resolveCatalogItemName(catalog?.packages, template.pkg) : "";
-  const resolvedAddons = addonIds
-    .map((id) => ({ id, name: resolveCatalogItemName(catalog?.addons, id) }))
-    .filter((entry) => entry.name);
-  const resolvedRentals = rentalIds
-    .map((id) => ({ id, name: resolveCatalogItemName(catalog?.rentals, id) }))
-    .filter((entry) => entry.name);
-  const milesApplied = Boolean(milesRTApplied && Number(milesRTValue) > 0);
-  const milesLabel = milesApplied ? `${Number(milesRTValue)} travel miles` : "";
+  const ownedFields = new Set(Object.keys(ownership?.fields || {}));
+  const ownedSelections = ownership?.selections || {};
+  const packageId = String(ownership?.fields?.pkg?.applied || "").trim();
+  const packageName = resolveCatalogItemName(catalog?.packages, packageId);
+  const addonCount = ownedSelections.addons?.changedIds?.length || 0;
+  const rentalCount = ownedSelections.rentals?.changedIds?.length || 0;
+  const menuCount = ownedSelections.menuItems?.changedIds?.length || 0;
+  const ownsStaffing = [
+    "servers",
+    "chefs",
+    "bartenders",
+    "bartenderRateTypeId",
+    "staffingRateTypeId",
+    "bartenderRateOverride",
+    "serverRateOverride",
+    "serverRateMixCsv",
+    "chefRateMixCsv",
+    "chefRateOverride"
+  ].some((field) => ownedFields.has(field));
+  const ownsPricingChoices = ["taxRegion", "seasonProfileId", "payMethod"]
+    .some((field) => ownedFields.has(field));
 
   const parts = [
-    pkgName ? `${pkgName} package` : "",
-    resolvedAddons.map((entry) => entry.name).join(", "),
-    resolvedRentals.map((entry) => entry.name).join(", "),
-    milesLabel
+    ownedFields.has("pkg") ? `${packageName || "Package"} tier` : "",
+    ownedFields.has("hours") ? "event hours" : "",
+    ownedFields.has("style") ? "service style" : "",
+    ownedFields.has("eventTypeId") ? "event type" : "",
+    menuCount ? `${menuCount} menu selection${menuCount === 1 ? "" : "s"}` : "",
+    addonCount ? `${addonCount} add-on selection${addonCount === 1 ? "" : "s"}` : "",
+    rentalCount ? `${rentalCount} rental selection${rentalCount === 1 ? "" : "s"}` : "",
+    ownsStaffing ? "staffing" : "",
+    ownedFields.has("milesRT") ? "travel miles" : "",
+    ownsPricingChoices ? "pricing choices" : ""
   ].filter(Boolean);
-
-  if (!parts.length) return null;
 
   return {
     templateId: String(template.id || "").trim(),
     templateName,
-    summary: `${templateName} defaults applied: ${parts.join(" · ")} — adjust in Add-ons / Rentals.`,
-    addonIds: resolvedAddons.map((entry) => entry.id),
-    rentalIds: resolvedRentals.map((entry) => entry.id),
-    milesRTApplied: milesApplied,
-    hoursApplied: Boolean(hoursApplied && Number(hoursValue) > 0),
-    hours: Number(hoursValue) || 0
+    summary: `${templateName} defaults applied: ${parts.join(" · ")}. Adjust any field to keep your edit, or clear all untouched defaults.`,
+    ownership
   };
 }
 
@@ -415,11 +427,13 @@ export default function App() {
   const stepperRef = useRef(null);
   const mobilePricingToggleRef = useRef(null);
   const historyTriggerRef = useRef(null);
+  const workflowTriggerRef = useRef(null);
   const headerMenusRef = useRef(null);
   const operationsMenuTriggerRef = useRef(null);
   const accountMenuTriggerRef = useRef(null);
   const moreMenuTriggerRef = useRef(null);
   const saveQuoteButtonRef = useRef(null);
+  const menuSelectionValidationRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { organization, setOrganizationId } = useOrganization();
@@ -644,12 +658,14 @@ export default function App() {
     message: ""
   });
   const [availabilityNotice, setAvailabilityNotice] = useState("");
+  const [availabilityBlock, setAvailabilityBlock] = useState(null);
   const [editingQuote, setEditingQuote] = useState({ id: "", quoteNumber: "" });
   const [toasts, setToasts] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [quoteDirty, setQuoteDirty] = useState(false);
   const [touchedFields, setTouchedFields] = useState({});
   const [showStepValidation, setShowStepValidation] = useState(false);
+  const [menuSelectionValidationMessage, setMenuSelectionValidationMessage] = useState("");
   const [stepValidation, setStepValidation] = useState(() => buildStepValidation(INITIAL_FORM));
   const [stepStatus, setStepStatus] = useState(() => buildStepStatus({
     currentStep: 1,
@@ -706,8 +722,19 @@ export default function App() {
     });
   };
 
+  const releaseTemplateDefault = (field, itemId = "") => {
+    setTemplateDefaultsNotice((current) => {
+      if (!current?.ownership) return current;
+      const ownership = releaseTemplateDefaultsOwnership(current.ownership, field, itemId);
+      return hasTemplateDefaultsOwnership(ownership)
+        ? { ...current, ownership }
+        : null;
+    });
+  };
+
   const handleStep1FieldChange = (field, value) => {
     markFieldsTouched([field]);
+    releaseTemplateDefault(field);
     setQuoteDirty(true);
     setForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -718,24 +745,8 @@ export default function App() {
 
   const handleSelectionTouched = (field, itemId) => {
     markFieldsTouched([field]);
+    releaseTemplateDefault(field, itemId);
     setQuoteDirty(true);
-    // An id the user edits (toggled, re-added, or requantified) after a
-    // template applied it stops counting as template-sourced, so "Clear
-    // defaults" leaves user-made selections alone (audit #17).
-    setTemplateDefaultsNotice((current) => {
-      if (!current) return current;
-      if (field === "milesRT") {
-        return current.milesRTApplied ? { ...current, milesRTApplied: false } : current;
-      }
-      if (!itemId) return current;
-      if (field === "addons" && current.addonIds.includes(itemId)) {
-        return { ...current, addonIds: current.addonIds.filter((id) => id !== itemId) };
-      }
-      if (field === "rentals" && current.rentalIds.includes(itemId)) {
-        return { ...current, rentalIds: current.rentalIds.filter((id) => id !== itemId) };
-      }
-      return current;
-    });
   };
 
   const handleAddonSelection = (addonId, selected) => {
@@ -753,6 +764,54 @@ export default function App() {
     () => (Array.isArray(dynamicMenuSections) ? dynamicMenuSections : []),
     [dynamicMenuSections]
   );
+
+  const selectedMenuItemCount = (Array.isArray(form.menuItems) ? form.menuItems : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .length;
+
+  const menuSelectionGuidance = useCallback(() => {
+    const configuredItemCount = effectiveMenuSections.reduce(
+      (count, section) => count + (Array.isArray(section?.items) ? section.items.length : 0),
+      0
+    );
+    if (configuredItemCount > 0) {
+      return "Choose at least one menu item before continuing. The selected items will appear on the saved proposal.";
+    }
+    return authSession.isAdmin
+      ? "This event type has no menu items yet. Use Add menu items to populate the catalog, then select at least one item for this quote."
+      : "This event type has no menu items yet. Ask an organization admin to add menu items, then return here and select at least one.";
+  }, [authSession.isAdmin, effectiveMenuSections]);
+
+  const showMissingMenuSelection = useCallback(({ moveToMenuStep = false } = {}) => {
+    const message = menuSelectionGuidance();
+    setMenuSelectionValidationMessage(message);
+    setSubmitState((prev) => ({ ...prev, saving: false, message }));
+    if (moveToMenuStep) setStep(2);
+  }, [menuSelectionGuidance]);
+
+  useEffect(() => {
+    if (selectedMenuItemCount < 1 || !menuSelectionValidationMessage) return;
+    setMenuSelectionValidationMessage("");
+    setSubmitState((prev) => (
+      prev.message === menuSelectionValidationMessage
+        ? { ...prev, message: "" }
+        : prev
+    ));
+  }, [menuSelectionValidationMessage, selectedMenuItemCount]);
+
+  useEffect(() => {
+    if (step !== 2 || !menuSelectionValidationMessage) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const firstMenuChoice = document.querySelector(
+        ".wizard-panel .menu-library input[type='checkbox']"
+      );
+      const focusTarget = firstMenuChoice || menuSelectionValidationRef.current;
+      focusTarget?.scrollIntoView({ behavior: "smooth", block: "center" });
+      focusTarget?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [menuSelectionValidationMessage, step]);
 
   const effectiveSettings = useMemo(() => {
     const featureFlags = {
@@ -1088,9 +1147,14 @@ export default function App() {
     setForm((prev) => {
       let changed = false;
       const next = { ...prev };
+      const defaultPackageId = resolveFirstValidPackageId(catalog.packages, next.pkg);
       const defaultTaxRegion = catalog.settings?.defaultTaxRegion || catalog.settings?.taxRegions?.[0]?.id || "";
       const defaultSeasonProfile = catalog.settings?.defaultSeasonProfile || "auto";
 
+      if (next.pkg !== defaultPackageId) {
+        next.pkg = defaultPackageId;
+        changed = true;
+      }
       if (!next.taxRegion && defaultTaxRegion) {
         next.taxRegion = defaultTaxRegion;
         changed = true;
@@ -1105,7 +1169,7 @@ export default function App() {
       }
       return changed ? next : prev;
     });
-  }, [catalog.loading, catalog.settings]);
+  }, [catalog.loading, catalog.packages, catalog.settings]);
 
   useEffect(() => {
     if (!eventScheduleEnabled) setScheduleOpen(false);
@@ -1124,7 +1188,8 @@ export default function App() {
 
   useEffect(() => {
     setAvailabilityNotice("");
-  }, [form.date, form.venue]);
+    setAvailabilityBlock(null);
+  }, [form.date, form.venue, form.time, form.hours]);
 
   useEffect(() => {
     setDiagnosticsUserContext({
@@ -1179,63 +1244,82 @@ export default function App() {
       setGlobalEventTypeId(template.eventTypeId);
     }
 
-    setForm((prev) => ({
-      ...prev,
+    const nextForm = {
+      ...form,
       eventTemplateId: template.id,
-      eventTypeId: template.eventTypeId || prev.eventTypeId || "",
-      style: template.style || prev.style,
-      hours: Number(template.hours || prev.hours || 0),
-      servers: Number(template.servers ?? prev.servers ?? 0),
-      chefs: Number(template.chefs ?? prev.chefs ?? 0),
-      bartenders: Number(template.bartenders ?? prev.bartenders ?? 0),
-      pkg: template.pkg || prev.pkg,
+      eventTypeId: template.eventTypeId || form.eventTypeId || "",
+      style: template.style || form.style,
+      hours: normalizeEventHours(template.hours || form.hours),
+      servers: Number(template.servers ?? form.servers ?? 0),
+      chefs: Number(template.chefs ?? form.chefs ?? 0),
+      bartenders: Number(template.bartenders ?? form.bartenders ?? 0),
+      pkg: template.pkg || form.pkg,
       addons: templateAddons,
       addonQuantities: templateAddons.reduce((acc, id) => ({ ...acc, [id]: 1 }), {}),
       rentals: templateRentals,
       rentalQuantities: templateRentals.reduce((acc, id) => ({ ...acc, [id]: 1 }), {}),
       menuItems: templateMenuItems,
       menuItemQuantities: templateMenuItems.reduce((acc, id) => ({ ...acc, [id]: 1 }), {}),
-      milesRT: Number(template.milesRT || prev.milesRT || 0),
-      payMethod: template.payMethod || prev.payMethod,
-      taxRegion: template.taxRegion || prev.taxRegion || catalog.settings.defaultTaxRegion || "",
-      seasonProfileId: template.seasonProfileId || prev.seasonProfileId || "auto",
-      bartenderRateTypeId: template.bartenderRateTypeId || prev.bartenderRateTypeId || "",
-      staffingRateTypeId: template.staffingRateTypeId || prev.staffingRateTypeId || "",
+      milesRT: Number(template.milesRT || form.milesRT || 0),
+      payMethod: template.payMethod || form.payMethod,
+      taxRegion: template.taxRegion || form.taxRegion || catalog.settings.defaultTaxRegion || "",
+      seasonProfileId: template.seasonProfileId || form.seasonProfileId || "auto",
+      bartenderRateTypeId: template.bartenderRateTypeId || form.bartenderRateTypeId || "",
+      staffingRateTypeId: template.staffingRateTypeId || form.staffingRateTypeId || "",
       bartenderRateOverride:
         template.bartenderRateOverride === "" || template.bartenderRateOverride === null || template.bartenderRateOverride === undefined
-          ? prev.bartenderRateOverride
+          ? form.bartenderRateOverride
           : Number(template.bartenderRateOverride),
       serverRateOverride:
         template.serverRateOverride === "" || template.serverRateOverride === null || template.serverRateOverride === undefined
-          ? prev.serverRateOverride
+          ? form.serverRateOverride
           : Number(template.serverRateOverride),
       serverRateMixCsv:
         template.serverRateMixCsv === null || template.serverRateMixCsv === undefined
-          ? prev.serverRateMixCsv
+          ? form.serverRateMixCsv
           : String(template.serverRateMixCsv || ""),
       chefRateMixCsv:
         template.chefRateMixCsv === null || template.chefRateMixCsv === undefined
-          ? prev.chefRateMixCsv
+          ? form.chefRateMixCsv
           : String(template.chefRateMixCsv || ""),
       chefRateOverride:
         template.chefRateOverride === "" || template.chefRateOverride === null || template.chefRateOverride === undefined
-          ? prev.chefRateOverride
+          ? form.chefRateOverride
           : Number(template.chefRateOverride)
-    }));
-
-    // Explicit template selection always overwrites pkg/addons/rentals/miles
-    // wholesale (see setForm above), so disclose everything the template
-    // defines rather than re-deriving eligibility.
+    };
+    const ownership = createTemplateDefaultsOwnership({
+      beforeForm: form,
+      afterForm: nextForm,
+      appliedFields: [
+        "eventTemplateId",
+        "eventTypeId",
+        "style",
+        "hours",
+        "servers",
+        "chefs",
+        "bartenders",
+        "pkg",
+        "addons",
+        "rentals",
+        "menuItems",
+        "milesRT",
+        "payMethod",
+        "taxRegion",
+        "seasonProfileId",
+        "bartenderRateTypeId",
+        "staffingRateTypeId",
+        "bartenderRateOverride",
+        "serverRateOverride",
+        "serverRateMixCsv",
+        "chefRateMixCsv",
+        "chefRateOverride"
+      ]
+    });
+    setForm(nextForm);
     setTemplateDefaultsNotice(buildTemplateDefaultsNotice({
       template,
       catalog,
-      addonIds: templateAddons,
-      rentalIds: templateRentals,
-      pkgApplied: Boolean(String(template.pkg || "").trim()),
-      milesRTApplied: Number(template.milesRT || 0) > 0,
-      milesRTValue: Number(template.milesRT || 0),
-      hoursApplied: Number(template.hours || 0) > 0,
-      hoursValue: Number(template.hours || 0)
+      ownership
     }));
   };
 
@@ -1251,8 +1335,11 @@ export default function App() {
       eventTypes: catalog.eventTypes
     });
 
+    const formWithoutPriorTemplate = templateDefaultsNotice?.ownership
+      ? restoreTemplateOwnedDefaults({ form, ownership: templateDefaultsNotice.ownership })
+      : form;
     const baseForm = {
-      ...form,
+      ...formWithoutPriorTemplate,
       eventTypeId: nextEventTypeId,
       eventTemplateId: "custom"
     };
@@ -1263,6 +1350,11 @@ export default function App() {
       touchedFields,
       initialForm: INITIAL_FORM
     });
+    const ownership = createTemplateDefaultsOwnership({
+      beforeForm: baseForm,
+      afterForm: nextForm,
+      appliedFields
+    });
     setForm(nextForm);
 
     // Only the fields applyEventTypeTemplateDefaults actually filled in are
@@ -1271,40 +1363,17 @@ export default function App() {
     setTemplateDefaultsNotice(buildTemplateDefaultsNotice({
       template: matchedTemplate,
       catalog,
-      addonIds: appliedFields.includes("addons") ? (nextForm.addons || []) : [],
-      rentalIds: appliedFields.includes("rentals") ? (nextForm.rentals || []) : [],
-      pkgApplied: appliedFields.includes("pkg"),
-      milesRTApplied: appliedFields.includes("milesRT"),
-      milesRTValue: Number(matchedTemplate?.milesRT || 0),
-      hoursApplied: appliedFields.includes("hours"),
-      hoursValue: Number(matchedTemplate?.hours || 0)
+      ownership
     }));
   };
 
   const clearTemplateDefaults = () => {
-    if (!templateDefaultsNotice) return;
+    if (!templateDefaultsNotice?.ownership) return;
     setQuoteDirty(true);
-    const ownedAddonIds = new Set(templateDefaultsNotice.addonIds);
-    const ownedRentalIds = new Set(templateDefaultsNotice.rentalIds);
-    const resetMilesRT = templateDefaultsNotice.milesRTApplied;
-    setForm((prev) => {
-      const nextAddonQuantities = { ...(prev.addonQuantities || {}) };
-      ownedAddonIds.forEach((id) => {
-        delete nextAddonQuantities[id];
-      });
-      const nextRentalQuantities = { ...(prev.rentalQuantities || {}) };
-      ownedRentalIds.forEach((id) => {
-        delete nextRentalQuantities[id];
-      });
-      return {
-        ...prev,
-        addons: (prev.addons || []).filter((id) => !ownedAddonIds.has(id)),
-        addonQuantities: nextAddonQuantities,
-        rentals: (prev.rentals || []).filter((id) => !ownedRentalIds.has(id)),
-        rentalQuantities: nextRentalQuantities,
-        milesRT: resetMilesRT ? 0 : prev.milesRT
-      };
-    });
+    setForm((prev) => restoreTemplateOwnedDefaults({
+      form: prev,
+      ownership: templateDefaultsNotice.ownership
+    }));
     setTemplateDefaultsNotice(null);
   };
 
@@ -1316,7 +1385,7 @@ export default function App() {
     if (!item) return;
     if (userOriginated) {
       setQuoteDirty(true);
-      if (item.kind === "package") markFieldsTouched(["pkg"]);
+      if (item.kind === "package") handleSelectionTouched("pkg");
     }
     // Route addon/rental recommendations through handleSelectionTouched (not
     // a bare markFieldsTouched) so an applied id that happens to match a
@@ -1388,12 +1457,20 @@ export default function App() {
       });
       return;
     }
+    if (step === 2 && selectedMenuItemCount < 1) {
+      showMissingMenuSelection();
+      return;
+    }
     setShowStepValidation(false);
     recordProductAnalyticsEvent("wizard_step_completed", { step });
     setStep((current) => Math.min(5, current + 1));
   };
 
   const handleSubmitQuote = async () => {
+    if (selectedMenuItemCount < 1) {
+      showMissingMenuSelection({ moveToMenuStep: true });
+      return;
+    }
     const requiredError =
       totals.guests <= 0
         ? "Add guest count before saving a quote."
@@ -1435,23 +1512,32 @@ export default function App() {
         organizationId: authSession.organizationId
       });
       if (availability.hasBlockingConflict) {
-        const conflictRefs = availability.conflicts
-          .filter((item) => item.status === "booked")
+        const bookedConflicts = availability.conflicts
+          .filter((item) => item.status === "booked");
+        const conflictRefs = bookedConflicts
           .slice(0, 3)
           .map((item) => item.quoteNumber || item.id)
           .join(", ");
         const capacityNote = availability.capacityExceeded
           ? ` Capacity alert: projected load (${availability.sameVenueLoad}) exceeds configured threshold (${availability.capacityLimit}).`
           : "";
+        setAvailabilityBlock({
+          conflicts: bookedConflicts,
+          capacityExceeded: Boolean(availability.capacityExceeded),
+          sameVenueLoad: Number(availability.sameVenueLoad || 0),
+          capacityLimit: Number(availability.capacityLimit || 0)
+        });
         setSubmitState({
           saving: false,
           message:
             `Availability conflict: this date/venue is already booked.` +
             `${conflictRefs ? ` Existing booking(s): ${conflictRefs}.` : ""}` +
-            capacityNote
+            capacityNote +
+            " Open the schedule for context or edit the date, time, or venue to continue."
         });
         return;
       }
+      setAvailabilityBlock(null);
       const softConflicts = availability.conflicts.filter((item) => item.status === "accepted");
       const notes = [];
       if (softConflicts.length) {
@@ -1667,7 +1753,7 @@ export default function App() {
       ...prev,
       date: event.date || "",
       time: event.time || "",
-      hours: toNumber(event.hours, 0),
+      hours: normalizeEventHours(event.hours),
       bartenders: toNumber(event.bartenders, 0),
       guests: toNumber(event.guests, 0),
       venue: event.venue || "",
@@ -1681,7 +1767,7 @@ export default function App() {
       phone: customer.phone || "",
       email: customer.email || "",
       dietaryRestrictions: String(event.dietaryRestrictions || ""),
-      pkg: selection.packageId || prev.pkg,
+      pkg: resolveFirstValidPackageId(catalog.packages, selection.packageId || prev.pkg),
       addons: Array.isArray(selection.addons) ? selection.addons : [],
       addonQuantities,
       rentals: Array.isArray(selection.rentals) ? selection.rentals : [],
@@ -1723,6 +1809,8 @@ export default function App() {
     setTouchedFields({});
     setShowStepValidation(false);
     setTemplateDefaultsNotice(null);
+    setAvailabilityBlock(null);
+    setAvailabilityNotice("");
     setHistoryTarget({ quoteId: "", reason: "" });
     setHistoryOpen(false);
     setStep(1);
@@ -1739,17 +1827,36 @@ export default function App() {
     window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
   };
 
+  const handleCorrectAvailability = () => {
+    setStep(1);
+    setSubmitState((prev) => ({
+      ...prev,
+      saving: false,
+      message: "Update the event date, start time, duration, or venue, then save again to recheck availability."
+    }));
+    window.requestAnimationFrame(() => {
+      wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      wizardRef.current?.querySelector('input[type="date"]')?.focus({ preventScroll: true });
+    });
+  };
+
   const handleGetInstantQuote = () => {
     if (quoteDirty && !window.confirm("Start a new quote? Your unsaved changes will be discarded.")) {
       return;
     }
     setEditingQuote({ id: "", quoteNumber: "" });
     setQuoteDirty(false);
-    setForm(INITIAL_FORM);
+    setForm({
+      ...INITIAL_FORM,
+      pkg: resolveFirstValidPackageId(catalog.packages),
+      taxRegion: catalog.settings?.defaultTaxRegion || catalog.settings?.taxRegions?.[0]?.id || "",
+      seasonProfileId: catalog.settings?.defaultSeasonProfile || "auto"
+    });
     setGlobalEventTypeId("");
     setTouchedFields({});
     setShowStepValidation(false);
     setAvailabilityNotice("");
+    setAvailabilityBlock(null);
     setSubmitState((prev) => ({ ...prev, message: "" }));
     setTemplateDefaultsNotice(null);
     autopilotAppliedRef.current.clear();
@@ -1771,6 +1878,24 @@ export default function App() {
         action: "sign-out"
       });
       setSubmitState((prev) => ({ ...prev, message: err?.message || "Failed to sign out." }));
+    }
+  };
+
+  const handleRetryTenantResolution = () => {
+    clearTenantContextCache();
+    window.location.reload();
+  };
+
+  const handleRefreshAccess = async () => {
+    setSubmitState((prev) => ({ ...prev, message: "Refreshing your role and organization access..." }));
+    try {
+      await authSession.refreshAccess();
+      window.location.reload();
+    } catch (err) {
+      setSubmitState((prev) => ({
+        ...prev,
+        message: err?.message || "Unable to refresh access. Try again or ask your organization admin to confirm the invitation."
+      }));
     }
   };
 
@@ -1855,7 +1980,27 @@ export default function App() {
           <p className="muted">
             Host <strong>{tenantContext.hostname || "unknown"}</strong> is not active or is not mapped to a tenant.
           </p>
-          <p className="source-note">{tenantContext.error || "Contact support to provision this domain."}</p>
+          <p className="source-note">
+            {tenantContext.error || "This domain needs to be activated or mapped to a customer workspace."}
+          </p>
+          {submitState.message && <p className="warning-note">{submitState.message}</p>}
+          <div className="auth-actions">
+            <button type="button" className="cta" onClick={handleRetryTenantResolution}>
+              Retry Workspace
+            </button>
+            <a
+              className="ghost button-link"
+              href="https://mbmapps.com/contact"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Contact Support
+            </a>
+            <a className="ghost button-link" href="https://quotepilot.mbmapps.com/app">
+              Open QuotePilot App
+            </a>
+          </div>
+          <p className="source-note">When contacting support, include the hostname shown above.</p>
         </WorkspaceStatusCard>
       </main>
     );
@@ -1917,6 +2062,9 @@ export default function App() {
                 <button type="button" className="cta" onClick={handleRefreshVerification}>I Verified My Email</button>
                 <button type="button" className="ghost" onClick={handleResendVerification}>Resend Verification</button>
               </>
+            )}
+            {!needsEmailVerification && (
+              <button type="button" className="cta" onClick={handleRefreshAccess}>Refresh Access</button>
             )}
             {customerPortalEnabled && <button type="button" className="ghost" onClick={openPortalMode}>Open Customer Portal</button>}
             <button type="button" className={needsEmailVerification ? "ghost" : "cta"} onClick={handleSignOut}>Sign Out</button>
@@ -1985,6 +2133,8 @@ export default function App() {
           </p>
           <p className="source-note">{catalog.error || "Configure Firebase credentials and reload."}</p>
           <div className="auth-actions">
+            <button type="button" className="cta" onClick={catalog.reload}>Retry Catalog</button>
+            <button type="button" className="ghost" onClick={() => window.location.reload()}>Reload Workspace</button>
             <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
           </div>
         </WorkspaceStatusCard>
@@ -2016,10 +2166,15 @@ export default function App() {
                   Open Admin Catalog
                 </button>
               )}
+              {!authSession.isAdmin && (
+                <button type="button" className="cta" onClick={catalog.reload}>
+                  Refresh Catalog Setup
+                </button>
+              )}
               <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
             </div>
             {!authSession.isAdmin && (
-              <p className="warning-note">Ask an organization admin to configure and save the catalog.</p>
+              <p className="warning-note">Ask an organization admin to configure and save the catalog, then use Refresh Catalog Setup.</p>
             )}
           </WorkspaceStatusCard>
         </main>
@@ -2034,6 +2189,7 @@ export default function App() {
               onSave={saveCatalogDuringSetup}
               onApplyStarterPack={catalog.stageStarterPack}
               onCatalogMutation={catalog.acceptCatalogMutation}
+              onReload={catalog.reload}
               saving={catalog.saving}
               selectedEventType={globalEventTypeId}
               onEventTypeChange={setGlobalEventTypeId}
@@ -2107,6 +2263,7 @@ export default function App() {
             <button
               className="ghost workflow-attention-trigger"
               type="button"
+              ref={workflowTriggerRef}
               onClick={() => {
                 setOpenHeaderMenu("");
                 setSalesWorkflowOpen(true);
@@ -2277,24 +2434,36 @@ export default function App() {
               </p>
             )}
             {!catalog.loading && step === 2 && (
-              <StepMenu
-                form={form}
-                setForm={setForm}
-                menuSections={effectiveMenuSections}
-                menuLoading={dynamicMenuLoading}
-                menuError={dynamicMenuError}
-                eventTypeLabel={catalog.eventTypes?.find(
-                  (item) => String(item.id) === String(form.eventTypeId)
-                )?.name || form.eventTypeId}
-                isAdmin={authSession.isAdmin}
-                onRetry={() => setDynamicMenuRetryToken((value) => value + 1)}
-                onOpenCatalogMenu={() => {
-                  setGlobalEventTypeId(form.eventTypeId);
-                  setAdminInitialTab("menu");
-                  setAdminOpen(true);
-                }}
-                onSelectionTouched={handleSelectionTouched}
-              />
+              <>
+                <StepMenu
+                  form={form}
+                  setForm={setForm}
+                  menuSections={effectiveMenuSections}
+                  menuLoading={dynamicMenuLoading}
+                  menuError={dynamicMenuError}
+                  eventTypeLabel={catalog.eventTypes?.find(
+                    (item) => String(item.id) === String(form.eventTypeId)
+                  )?.name || form.eventTypeId}
+                  isAdmin={authSession.isAdmin}
+                  onRetry={() => setDynamicMenuRetryToken((value) => value + 1)}
+                  onOpenCatalogMenu={() => {
+                    setGlobalEventTypeId(form.eventTypeId);
+                    setAdminInitialTab("menu");
+                    setAdminOpen(true);
+                  }}
+                  onSelectionTouched={handleSelectionTouched}
+                />
+                {menuSelectionValidationMessage && (
+                  <p
+                    className="warning-note step-guidance"
+                    role="alert"
+                    tabIndex={-1}
+                    ref={menuSelectionValidationRef}
+                  >
+                    {menuSelectionValidationMessage}
+                  </p>
+                )}
+              </>
             )}
             {!catalog.loading && step === 3 && (
               <StepServices
@@ -2398,6 +2567,39 @@ export default function App() {
           )}
           {catalog.error && <p className="error-note">{catalog.error}</p>}
           {availabilityNotice && <p className="warning-note">{availabilityNotice}</p>}
+          {availabilityBlock && (
+            <article className="warning-note availability-recovery" role="alert">
+              <h4>Resolve the booking conflict</h4>
+              <p>These booked events overlap the current date and venue:</p>
+              <ul>
+                {availabilityBlock.conflicts.slice(0, 5).map((conflict) => (
+                  <li key={conflict.id || conflict.quoteNumber}>
+                    <strong>{conflict.quoteNumber || conflict.id || "Booked event"}</strong>
+                    {conflict.eventName ? ` · ${conflict.eventName}` : ""}
+                    {` · ${conflict.eventDate || form.date}`}
+                    {` at ${conflict.eventTime || "time not set"}`}
+                    {Number(conflict.eventHours || 0) > 0 ? ` for ${conflict.eventHours} hours` : ""}
+                    {conflict.venue ? ` · ${conflict.venue}` : ""}
+                  </li>
+                ))}
+              </ul>
+              {availabilityBlock.capacityExceeded && (
+                <p>
+                  Projected same-venue load is {availabilityBlock.sameVenueLoad} guests; the configured limit is {availabilityBlock.capacityLimit}.
+                </p>
+              )}
+              <div className="auth-actions">
+                <button type="button" className="cta" onClick={handleCorrectAvailability}>
+                  Edit Date, Time, or Venue
+                </button>
+                {eventScheduleEnabled && (
+                  <button type="button" className="ghost" onClick={() => setScheduleOpen(true)}>
+                    Open Event Schedule
+                  </button>
+                )}
+              </div>
+            </article>
+          )}
           {submitState.message && <p className="source-note">{submitState.message}</p>}
         </section>
 
@@ -2431,6 +2633,7 @@ export default function App() {
             onSave={catalog.saveCatalog}
             onApplyStarterPack={catalog.stageStarterPack}
             onCatalogMutation={catalog.acceptCatalogMutation}
+            onReload={catalog.reload}
             saving={catalog.saving}
             initialTab={adminInitialTab}
             selectedEventType={globalEventTypeId}
@@ -2462,13 +2665,15 @@ export default function App() {
           <QuoteHistoryModal
             open={historyOpen}
             onClose={() => {
-              const returnToSave = Boolean(historyTarget.quoteId);
+              const returnTarget = historyTarget.returnFocus === "workflow"
+                ? workflowTriggerRef.current
+                : historyTarget.quoteId
+                  ? saveQuoteButtonRef.current
+                  : historyTriggerRef.current;
               setHistoryOpen(false);
               setHistoryTarget({ quoteId: "", reason: "" });
               requestWorkflowAttentionRefresh({ force: true });
-              window.requestAnimationFrame(() => (
-                returnToSave ? saveQuoteButtonRef.current : historyTriggerRef.current
-              )?.focus());
+              window.requestAnimationFrame(() => returnTarget?.focus());
             }}
             basePortalUrl={`${window.location.origin}${window.location.pathname}`}
             organizationId={authSession.organizationId}
@@ -2476,6 +2681,7 @@ export default function App() {
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
             focusQuoteId={historyTarget.quoteId}
+            focusAction={historyTarget.action}
             focusReason={historyTarget.reason}
             onEditQuote={(quote) => {
               requestWorkflowAttentionRefresh({ force: true });
@@ -2486,6 +2692,7 @@ export default function App() {
               setHistoryOpen(false);
               setIntegrationsOpen(true);
             }}
+            integrationsAvailable={integrationsEnabled}
             canDeleteQuotes={authSession.isAdmin}
             onToast={pushToast}
           />
@@ -2495,9 +2702,15 @@ export default function App() {
           <SalesWorkflowModal
             open={salesWorkflowOpen}
             onClose={() => setSalesWorkflowOpen(false)}
-            onOpenQuoteHistory={() => {
+            onOpenQuoteHistory={({ quoteId = "", action = "" } = {}) => {
               setSalesWorkflowOpen(false);
-              setHistoryTarget({ quoteId: "", reason: "" });
+              const actionLabel = String(action || "approved action").replaceAll("_", " ");
+              setHistoryTarget({
+                quoteId,
+                action,
+                reason: `Execute approved ${actionLabel}`,
+                returnFocus: "workflow"
+              });
               setHistoryOpen(true);
             }}
             organizationId={authSession.organizationId}

@@ -23,6 +23,7 @@ import {
 } from "../../../scripts/production-release-evidence.mjs";
 import {
   buildReleaseUatReceipt,
+  getReleaseUatItemIdsForTarget,
   parseReleaseUatArgs,
   writeReleaseUatReceipt
 } from "../../../scripts/release-uat-attestation.mjs";
@@ -435,13 +436,17 @@ function makeGit({
 }
 
 function makeReceiptArgs(overrides = {}) {
+  const target = overrides.target || "vercel";
+  const checkedItemIds = Object.hasOwn(overrides, "checked-item-ids")
+    ? overrides["checked-item-ids"]
+    : (checklist.itemIdsByTarget[target] || []).join(",");
   return {
     "release-sha": RELEASE_SHA,
-    target: "vercel",
+    target,
     "rollback-sha": ROLLBACK_SHA,
     "staging-id": "dpl_immutable-123",
     "checklist-digest": checklist.digest,
-    "checked-item-ids": checklist.itemIds.join(","),
+    "checked-item-ids": checkedItemIds,
     confirmation: `ATTEST UAT ${RELEASE_SHA}`,
     output: "artifacts/release/uat-attestation.json",
     ...overrides
@@ -473,6 +478,20 @@ function writeChecklistFixture(contents) {
     typeof contents === "string" ? contents : JSON.stringify(contents)
   );
   return root;
+}
+
+function validChecklistFixture(overrides = {}) {
+  return {
+    schema: "com.mbmapps.quotepilot.release-uat-checklist/v2",
+    version: "fixture-v2",
+    maximumAttestationAgeHours: 24,
+    items: [{
+      id: "one",
+      label: "Required across every release target.",
+      targets: [...DEPLOYMENT_PROFILES]
+    }],
+    ...overrides
+  };
 }
 
 afterEach(() => {
@@ -678,12 +697,70 @@ describe("tracked UAT checklist", () => {
 
   test.each([
     ["not-json", /missing or invalid JSON/i],
-    [{ schema: "wrong", maximumAttestationAgeHours: 24, items: [{ id: "one" }] }, /schema is not supported/i],
-    [{ schema: "com.mbmapps.quotepilot.release-uat-checklist/v1", maximumAttestationAgeHours: 24, items: [] }, /no required items/i],
-    [{ schema: "com.mbmapps.quotepilot.release-uat-checklist/v1", maximumAttestationAgeHours: 24, items: [{ id: "Bad ID" }] }, /invalid or duplicate item ids/i],
-    [{ schema: "com.mbmapps.quotepilot.release-uat-checklist/v1", maximumAttestationAgeHours: 24, items: [{ id: "same" }, { id: "same" }] }, /invalid or duplicate item ids/i],
-    [{ schema: "com.mbmapps.quotepilot.release-uat-checklist/v1", maximumAttestationAgeHours: 0, items: [{ id: "one" }] }, /invalid attestation age limit/i],
-    [{ schema: "com.mbmapps.quotepilot.release-uat-checklist/v1", maximumAttestationAgeHours: 169, items: [{ id: "one" }] }, /invalid attestation age limit/i]
+    [{ ...validChecklistFixture(), schema: "wrong" }, /schema is not supported/i],
+    [{ ...validChecklistFixture(), schema: "com.mbmapps.quotepilot.release-uat-checklist/v1" }, /schema is not supported/i],
+    [validChecklistFixture({ items: [] }), /no required items/i],
+    [validChecklistFixture({ items: [{
+      id: "Bad ID",
+      label: "Bad id",
+      targets: [...DEPLOYMENT_PROFILES]
+    }] }), /invalid or duplicate item ids/i],
+    [validChecklistFixture({ items: [
+      { id: "same", label: "First", targets: [...DEPLOYMENT_PROFILES] },
+      { id: "same", label: "Second", targets: [...DEPLOYMENT_PROFILES] }
+    ] }), /invalid or duplicate item ids/i],
+    [validChecklistFixture({ maximumAttestationAgeHours: 0 }), /invalid attestation age limit/i],
+    [validChecklistFixture({ maximumAttestationAgeHours: 169 }), /invalid attestation age limit/i],
+    [validChecklistFixture({ maximumAttestationAgeHours: "24" }), /invalid attestation age limit/i],
+    [validChecklistFixture({ version: "" }), /version is invalid/i],
+    [validChecklistFixture({ version: 2 }), /version is invalid/i],
+    [validChecklistFixture({ items: [{
+      id: "one",
+      label: "",
+      targets: [...DEPLOYMENT_PROFILES]
+    }] }), /invalid label/i],
+    [validChecklistFixture({ items: [{
+      id: 1,
+      label: "Numeric ids are not canonical.",
+      targets: [...DEPLOYMENT_PROFILES]
+    }] }), /invalid or duplicate item ids/i],
+    [validChecklistFixture({ items: [{
+      id: "one",
+      label: 1,
+      targets: [...DEPLOYMENT_PROFILES]
+    }] }), /invalid label/i],
+    [validChecklistFixture({ items: [{
+      id: "one",
+      label: "Missing applicability",
+      targets: []
+    }] }), /invalid target applicability/i],
+    [validChecklistFixture({ items: [{
+      id: "one",
+      label: "Unknown target",
+      targets: [...DEPLOYMENT_PROFILES, "all"]
+    }] }), /invalid target applicability/i],
+    [validChecklistFixture({ items: [{
+      id: "one",
+      label: "Duplicate target",
+      targets: [...DEPLOYMENT_PROFILES, "vercel"]
+    }] }), /invalid target applicability/i],
+    [validChecklistFixture({ items: [{
+      id: "one",
+      label: "Firebase all was dropped",
+      targets: ["firebase-hosting", "vercel"]
+    }] }), /firebase-all equal to its Firebase narrow-target applicability/i],
+    [validChecklistFixture({ items: [{
+      id: "one",
+      label: "Firebase all has no narrow owner",
+      targets: ["firebase-all", "vercel"]
+    }] }), /firebase-all equal to its Firebase narrow-target applicability/i],
+    [validChecklistFixture({ unexpected: true }), /fields do not match the v2 contract/i],
+    [validChecklistFixture({ items: [{
+      id: "one",
+      label: "Unexpected item field",
+      targets: [...DEPLOYMENT_PROFILES],
+      optional: true
+    }] }), /item does not match the v2 contract/i]
   ])("rejects invalid checklist fixture %#", (contents, expected) => {
     expect(() => getReleaseUatChecklist(writeChecklistFixture(contents))).toThrow(expected);
   });
@@ -1374,18 +1451,28 @@ describe("release UAT attestation validator", () => {
     "--rollback-sha", ROLLBACK_SHA,
     "--staging-id", "dpl_immutable-123",
     "--checklist-digest", checklist.digest,
-    "--checked-item-ids", checklist.itemIds.join(","),
+    "--checked-item-ids", checklist.itemIdsByTarget.vercel.join(","),
     "--confirmation", `ATTEST UAT ${RELEASE_SHA}`,
     "--output", "artifacts/release/uat-attestation.json"
   ];
 
-  test("supports digest-only mode and parses a complete attestation", () => {
+  test("supports read-only checklist modes and parses a complete attestation", () => {
     expect(parseReleaseUatArgs(["--print-digest"])).toEqual({ printDigest: true });
+    expect(parseReleaseUatArgs(["--print-items", "--target", "firebase-backend"])).toEqual({
+      printItems: true,
+      target: "firebase-backend"
+    });
+    expect(getReleaseUatItemIdsForTarget("firebase-backend", process.cwd())).toEqual(
+      EXPECTED_UAT_ITEM_IDS_BY_TARGET["firebase-backend"]
+    );
     expect(parseReleaseUatArgs(validArgv)).toEqual(makeReceiptArgs());
   });
 
   test.each([
     [["--print-digest", "extra"], /unknown argument --print-digest/i],
+    [["--print-items"], /requires --target/i],
+    [["--print-items", "--target", "vercel", "extra"], /requires --target/i],
+    [["--print-items", "--target", "all"], /--target must be firebase-hosting/i],
     [[...validArgv, "--target", "all"], /duplicate argument --target/i],
     [["--release-sha", "--target"], /--release-sha requires a value/i],
     [validArgv.slice(0, -2), /--output is required/i]
@@ -1395,7 +1482,7 @@ describe("release UAT attestation validator", () => {
 
   test("builds an immutable receipt only for an exact first-attempt main dispatch", () => {
     const receipt = buildReleaseUatReceipt(makeReceiptArgs({
-      "checked-item-ids": [...checklist.itemIds].reverse().join(",")
+      "checked-item-ids": [...checklist.itemIdsByTarget.vercel].reverse().join(",")
     }), {
       env: makeReceiptEnv(),
       root: process.cwd(),
@@ -1412,7 +1499,7 @@ describe("release UAT attestation validator", () => {
         schema: checklist.checklist.schema,
         version: checklist.checklist.version,
         digest: checklist.digest,
-        checkedItemIds: checklist.itemIds
+        checkedItemIds: checklist.itemIdsByTarget.vercel
       },
       github: {
         repository: RELEASE_EVIDENCE_POLICY.repository.fullName,
@@ -1466,6 +1553,9 @@ describe("release UAT attestation validator", () => {
       });
 
       expect(receipt.target).toBe(profile);
+      expect(receipt.checklist.checkedItemIds).toEqual(
+        checklist.itemIdsByTarget[profile]
+      );
       expect(receipt.github.attesterAllowlistDigest).toBe(ATTESTER_ALLOWLIST_DIGEST);
     }
   );
@@ -1478,8 +1568,9 @@ describe("release UAT attestation validator", () => {
     [{ "staging-id": "x" }, {}, /--staging-id is invalid/i],
     [{ "checklist-digest": "d".repeat(64) }, {}, /does not match the tracked checklist/i],
     [{ confirmation: "ATTEST UAT wrong" }, {}, /--confirmation must equal/i],
-    [{ "checked-item-ids": checklist.itemIds.slice(1).join(",") }, {}, /must contain every checklist item exactly once/i],
-    [{ "checked-item-ids": [...checklist.itemIds, checklist.itemIds[0]].join(",") }, {}, /must contain every checklist item exactly once/i],
+    [{ "checked-item-ids": checklist.itemIdsByTarget.vercel.slice(1).join(",") }, {}, /every vercel checklist item exactly once/i],
+    [{ "checked-item-ids": [...checklist.itemIdsByTarget.vercel, checklist.itemIdsByTarget.vercel[0]].join(",") }, {}, /every vercel checklist item exactly once/i],
+    [{ "checked-item-ids": checklist.itemIds.join(",") }, {}, /no non-applicable items/i],
     [{}, { GITHUB_ACTIONS: "false" }, /manual dispatch on the exact main SHA/i],
     [{}, { GITHUB_EVENT_NAME: "push" }, /manual dispatch on the exact main SHA/i],
     [{}, { GITHUB_REF: "refs/heads/feature" }, /manual dispatch on the exact main SHA/i],
