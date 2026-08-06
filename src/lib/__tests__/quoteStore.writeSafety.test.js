@@ -127,6 +127,28 @@ describe("quoteStore Firebase write safety", () => {
     mockState.addDoc.mockResolvedValue({ id: "quote-1" });
     mockState.doc.mockImplementation((...args) => ({ refType: "doc", args }));
     mockState.httpsCallable.mockImplementation((_functions, name) => {
+      if (name === "acceptQuoteProposal") {
+        return vi.fn().mockResolvedValue({
+          data: {
+            ok: true,
+            organizationId: "org-one",
+            quoteId: "quote-1",
+            storage: "firebase",
+            status: "accepted",
+            portalDecision: {
+              decision: "accepted",
+              message: "",
+              requestId: "acceptance-12345678-1234-1234-1234-123456789012",
+              submittedAtISO: "2026-08-06T14:30:00.000Z"
+            },
+            acceptanceReceipt: {
+              receiptId: "acceptance-12345678-1234-1234-1234-123456789012",
+              signerName: "Jordan Client",
+              quoteRevisionId: "v0003@2026-08-05T18:00:00.000Z"
+            }
+          }
+        });
+      }
       if (name === "createQuoteDraft") {
         return vi.fn().mockResolvedValue({
           data: {
@@ -1204,31 +1226,15 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.transactionSet).not.toHaveBeenCalled();
   });
 
-  test("portal acceptance commits the public snapshot and tenant quote atomically", async () => {
-    const batchUpdate = vi.fn();
-    const batchCommit = vi.fn().mockResolvedValue(undefined);
-    mockState.writeBatch.mockReturnValue({
-      update: batchUpdate,
-      commit: batchCommit
-    });
-    mockState.getDoc.mockResolvedValue({
-      exists: () => true,
-      data: () => ({
-        portalKey: "portal-key-12345678901234567890",
-        quoteId: "quote-1",
-        organizationId: "org-one",
-        status: "sent",
-        portalExpiresAtMs: Date.now() + 86_400_000,
-        lifecycle: {
-          sentAtISO: "2026-03-27T12:00:00.000Z"
-        }
-      })
-    });
-
+  test("portal acceptance delegates signer consent and revision preconditions to the server", async () => {
     const result = await updatePortalDecision({
       portalKey: "portal-key-12345678901234567890",
       decision: "accepted",
-      message: ""
+      message: "",
+      signerName: "Jordan Client",
+      consentVersion: "proposal-acceptance-v1",
+      expectedRevisionId: "v0003@2026-08-05T18:00:00.000Z",
+      expectedPortalIssuedAtISO: "2026-08-05T18:00:00.000Z"
     });
 
     expect(result).toMatchObject({
@@ -1237,33 +1243,28 @@ describe("quoteStore Firebase write safety", () => {
       status: "accepted",
       portalDecision: {
         decision: "accepted"
+      },
+      acceptanceReceipt: {
+        signerName: "Jordan Client"
       }
     });
-    expect(mockState.writeBatch).toHaveBeenCalledWith(mockState.db);
-    expect(batchUpdate).toHaveBeenCalledTimes(2);
-    expect(batchCommit).toHaveBeenCalledTimes(1);
+    expect(mockState.httpsCallable).toHaveBeenCalledWith(
+      mockState.cloudFunctions,
+      "acceptQuoteProposal"
+    );
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
     expect(mockState.updateDoc).not.toHaveBeenCalled();
   });
 
-  test("portal acceptance fails closed when a legacy snapshot lacks its tenant quote reference", async () => {
-    mockState.getDoc.mockResolvedValue({
-      exists: () => true,
-      data: () => ({
-        portalKey: "portal-key-12345678901234567890",
-        organizationId: "org-one",
-        status: "sent",
-        portalExpiresAtMs: Date.now() + 86_400_000,
-        lifecycle: {
-          sentAtISO: "2026-03-27T12:00:00.000Z"
-        }
-      })
-    });
-
+  test("portal acceptance fails closed before calling the server when revision evidence is missing", async () => {
     await expect(updatePortalDecision({
       portalKey: "portal-key-12345678901234567890",
       decision: "accepted",
-      message: ""
-    })).rejects.toThrow(/administrator data repair/i);
+      message: "",
+      signerName: "Jordan Client",
+      consentVersion: "proposal-acceptance-v1"
+    })).rejects.toThrow(/reload the current proposal/i);
 
     expect(mockState.writeBatch).not.toHaveBeenCalled();
     expect(mockState.updateDoc).not.toHaveBeenCalled();

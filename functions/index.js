@@ -99,6 +99,12 @@ const {
   planContractConversion
 } = require("./contractWorkflow");
 const {
+  ACCEPTANCE_CONSENT_VERSION,
+  ProposalAcceptanceError,
+  matchesAcceptanceRetry,
+  planProposalAcceptance
+} = require("./proposalAcceptance");
+const {
   StarterCatalogPackError,
   applyStarterCatalogPack: applyStarterCatalogPackInternal,
   confirmCatalogPricing: confirmCatalogPricingInternal
@@ -179,6 +185,7 @@ const APPROVED_EMAIL_FROM_EMAIL = "onboarding@quotepilot.mbmapps.com";
 const QUOTES_COLLECTION = "quotes";
 const QUOTE_APPROVAL_EXECUTIONS_COLLECTION = "quoteApprovalExecutions";
 const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
+const PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION = "proposalAcceptanceReceipts";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
@@ -5902,6 +5909,152 @@ exports.confirmCatalogPricing = functions.region(REGION).https.onCall(async (dat
     });
   } catch (error) {
     throw toStarterCatalogHttpsError(error, "Failed to confirm catalog pricing.");
+  }
+});
+
+exports.acceptQuoteProposal = functions.region(REGION).https.onCall(async (data, context) => {
+  const portalKey = normalizeText(data?.portalKey);
+  const signerName = normalizeText(data?.signerName);
+  const consentVersion = normalizeText(data?.consentVersion);
+  const expectedRevisionId = normalizeText(data?.expectedRevisionId);
+  const expectedPortalIssuedAtISO = normalizeText(data?.expectedPortalIssuedAtISO);
+  const message = normalizeText(data?.message).slice(0, 1200);
+  if (!/^[A-Za-z0-9_-]{20,128}$/.test(portalKey)) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid proposal link is required.");
+  }
+  if (!signerName || !expectedRevisionId || !expectedPortalIssuedAtISO) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Signer name and the reviewed proposal revision are required."
+    );
+  }
+  if (consentVersion !== ACCEPTANCE_CONSENT_VERSION) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "The acceptance terms changed. Reload the proposal before signing."
+    );
+  }
+
+  try {
+    const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
+    const result = await db.runTransaction(async (tx) => {
+      const portalSnap = await tx.get(portalRef);
+      if (!portalSnap.exists) {
+        throw new ProposalAcceptanceError("not-found", "Quote link is invalid or expired.");
+      }
+      const portal = portalSnap.data() || {};
+      const organizationId = normalizeOrganizationId(portal.organizationId);
+      const quoteId = normalizeText(portal.quoteId);
+      if (!organizationId || !quoteId || normalizeText(portal.portalKey) !== portalKey) {
+        throw new ProposalAcceptanceError("permission-denied", "Proposal portal identity is invalid.");
+      }
+
+      const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+      const tombstoneRef = db.collection(ORGANIZATION_TOMBSTONES_COLLECTION).doc(organizationId);
+      const quoteRef = getQuoteDocRef(quoteId, organizationId);
+      const roleRef = context?.auth?.uid
+        ? db.collection(ROLES_COLLECTION).doc(context.auth.uid)
+        : null;
+      const reads = [
+        tx.get(organizationRef),
+        tx.get(tombstoneRef),
+        tx.get(quoteRef)
+      ];
+      if (roleRef) reads.push(tx.get(roleRef));
+      const [organizationSnap, tombstoneSnap, quoteSnap, roleSnap] = await Promise.all(reads);
+      if (!organizationSnap.exists || tombstoneSnap.exists || !isOrganizationRecordActive(organizationSnap.data())) {
+        throw new ProposalAcceptanceError("failed-precondition", "Quote link is invalid or expired.");
+      }
+      if (!quoteSnap.exists) {
+        throw new ProposalAcceptanceError("not-found", "Quote link is invalid or expired.");
+      }
+      if (roleSnap?.exists && STAFF_ROLES.has(normalizeRole(roleSnap.data()?.role))) {
+        throw new ProposalAcceptanceError(
+          "permission-denied",
+          "Staff accounts cannot sign through the customer proposal portal."
+        );
+      }
+      const quote = quoteSnap.data() || {};
+      if (matchesAcceptanceRetry({
+        quote,
+        portal,
+        signerName,
+        consentVersion,
+        expectedRevisionId,
+        expectedPortalIssuedAtISO
+      })) {
+        return {
+          organizationId,
+          quoteId,
+          status: "accepted",
+          portalDecision: quote.portalDecision,
+          acceptanceReceipt: quote.acceptanceReceipt,
+          idempotent: true
+        };
+      }
+
+      const acceptedAtISO = new Date().toISOString();
+      const receiptId = `acceptance-${randomUUID()}`;
+      const plan = planProposalAcceptance({
+        quoteId,
+        quote,
+        portal,
+        portalKey,
+        signerName,
+        consentVersion,
+        expectedRevisionId,
+        expectedPortalIssuedAtISO,
+        message,
+        acceptedAtISO,
+        receiptId,
+        actor: {
+          uid: context?.auth?.uid || "",
+          email: context?.auth?.token?.email || ""
+        }
+      });
+      const receiptRef = organizationRef
+        .collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION)
+        .doc(receiptId);
+      tx.update(quoteRef, {
+        ...plan.quotePatch,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.update(portalRef, {
+        ...plan.portalPatch,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.create(receiptRef, {
+        ...plan.receiptDocument,
+        createdAt: FieldValue.serverTimestamp()
+      });
+      return {
+        organizationId,
+        quoteId,
+        status: plan.status,
+        portalDecision: plan.portalDecision,
+        acceptanceReceipt: plan.acceptanceReceipt,
+        idempotent: false
+      };
+    });
+
+    return {
+      ok: true,
+      storage: "firebase",
+      ...result
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    if (error instanceof ProposalAcceptanceError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    functions.logger.error("Proposal acceptance failed", {
+      expectedRevisionId,
+      error: normalizeText(error?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Proposal acceptance could not be recorded. Reload the proposal and try again."
+    );
   }
 });
 

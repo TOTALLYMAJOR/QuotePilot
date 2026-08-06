@@ -521,14 +521,21 @@ Complete every item before calling the new tenant operational:
 ## Customer Portal
 - Customers can open portal links and review event details, selected package/menu/add-ons/rentals, itemized pricing, total, deposit, and payment state. An eligible booked contract also shows its separate final-balance amount and provider-owned status.
 - Portal decisions support `Accept`, `Request Changes`, and `Decline`; change requests require a customer note.
-- Proposal acceptance is recorded separately from payment and booking confirmation.
+- To accept, the customer selects `Accept`, types their full legal name, checks
+  the electronic-signature statement, and chooses `Sign and Accept Proposal`.
+  QuotePilot records the signer, server time, consent version, exact delivered
+  proposal revision, receipt ID, and signed proposal hash. A stale or changed
+  proposal must be reloaded before it can be signed.
+- Proposal acceptance is recorded separately from payment and booking
+  confirmation. The receipt does not represent payment or a confirmed booking.
 - Portal updates are reflected in staff quote history.
 - After returning from Stripe, the portal may refresh its payment display while
   the signed webhook is processed. The return URL itself never proves payment;
   only server-observed provider state or admin reconciliation may update it.
-- Portal decisions persist atomically to the public snapshot and organization
-  quote; a terminal accepted or declined decision is immutable from the public
-  portal.
+- Accepted proposals persist through a server transaction to the public
+  snapshot, organization quote, and immutable tenant receipt. Declines and
+  change requests continue to update the matching quote and portal atomically.
+  A terminal accepted or declined decision is immutable from the public portal.
 - Portal tokens are time-bound and expire automatically.
 - A portal is active only when its projection contains delivery evidence for
   the exact current valid issuance. Legacy projections without

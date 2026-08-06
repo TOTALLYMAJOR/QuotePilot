@@ -30,6 +30,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Playwright axe contrast coverage at desktop and mobile widths, computed 12px
   workspace type-floor checks, 44px target checks, and document font-loading
   assertions.
+- Server-authoritative electronic proposal acceptance with typed signer name,
+  versioned consent text, server timestamp, exact delivery-revision and portal
+  issuance preconditions, integer minor-unit totals, a SHA-256 signed proposal
+  snapshot, and an immutable tenant-scoped receipt record.
+- Customer-facing acceptance receipts now show signer, timestamp, receipt ID,
+  and signed revision while continuing to state that payment and booking are
+  separate outcomes.
 
 ### Changed
 
@@ -64,6 +71,14 @@ This changelog is backfilled from git history and will be maintained going forwa
   provide one summary, and move focus to the first invalid control.
 - The idempotent `sent` to `viewed` customer-visit transition and the rule that
   browser payment returns never establish `paid` remain intact.
+
+### Security
+
+- Direct browser writes can no longer create an accepted proposal. The
+  acceptance callable independently validates the active organization, portal
+  expiry, matching quote/portal content, provider-accepted delivery evidence,
+  complete proposal fields, signer consent, and current revision in one
+  transaction; stale tabs and forged receipt writes fail closed.
 
 ## [0.2.3] - 2026-08-05
 
