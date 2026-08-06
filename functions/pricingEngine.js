@@ -515,10 +515,17 @@ function normalizePricingInputPayload(data = {}, staff = {}) {
 }
 
 function normalizeCatalogPackage(item = {}) {
+  const stableIds = (value) => {
+    if (value === undefined) return [];
+    return Array.isArray(value) ? value.map((id) => toText(id)) : value;
+  };
   return {
     id: toText(item.id),
     name: toText(item.name, toText(item.id)),
     ppp: moneyValue(item, "pppMinor", "ppp", 0),
+    includedMenuItemIds: stableIds(item.includedMenuItemIds),
+    includedAddonIds: stableIds(item.includedAddonIds),
+    includedRentalIds: stableIds(item.includedRentalIds),
     active: item.active !== false
   };
 }
@@ -545,6 +552,20 @@ function normalizeCatalogRental(item = {}) {
     qtyPerGuests: Math.max(1, toNumber(item.qtyPerGuests, 1)),
     pricingType,
     type: pricingType,
+    active: item.active !== false
+  };
+}
+
+function normalizeCatalogMenuItem(item = {}) {
+  const pricingType = normalizePricingType(item.pricingType || item.type, "per_event");
+  return {
+    id: toText(item.id),
+    name: toText(item.name, toText(item.id)),
+    price: moneyValue(item, "priceMinor", "price", 0),
+    pricingType,
+    type: pricingType,
+    eventTypeId: toText(item.eventTypeId),
+    categoryId: toText(item.categoryId),
     active: item.active !== false
   };
 }
@@ -794,6 +815,7 @@ function normalizeCatalogBundle(bundle = {}) {
   const rawPackages = Array.isArray(bundle?.packages) ? bundle.packages : [];
   const rawAddons = Array.isArray(bundle?.addons) ? bundle.addons : [];
   const rawRentals = Array.isArray(bundle?.rentals) ? bundle.rentals : [];
+  const rawMenuItems = Array.isArray(bundle?.menuItems) ? bundle.menuItems : [];
 
   const packages = rawPackages
     .map((item) => normalizeCatalogPackage(item))
@@ -810,12 +832,18 @@ function normalizeCatalogBundle(bundle = {}) {
     .filter((item) => item.id)
     .sort((a, b) => a.id.localeCompare(b.id));
 
+  const menuItems = rawMenuItems
+    .map((item) => normalizeCatalogMenuItem(item))
+    .filter((item) => item.id)
+    .sort((a, b) => a.id.localeCompare(b.id));
+
   const settings = normalizePricingSettings(bundle?.settings);
 
   return {
     packages,
     addons,
     rentals,
+    menuItems,
     settings
   };
 }
@@ -826,10 +854,11 @@ async function readCatalogBundle(db, organizationsCollection, organizationId = "
     throw new PricingEngineError("invalid-argument", "organizationId is required for authoritative pricing.");
   }
 
-  const [pkgSnap, addSnap, rentSnap, settingsSnap] = await Promise.all([
+  const [pkgSnap, addSnap, rentSnap, menuItemSnap, settingsSnap] = await Promise.all([
     db.collection(organizationsCollection).doc(orgId).collection("catalogPackages").get(),
     db.collection(organizationsCollection).doc(orgId).collection("catalogAddons").get(),
     db.collection(organizationsCollection).doc(orgId).collection("catalogRentals").get(),
+    db.collection(organizationsCollection).doc(orgId).collection("menuItems").get(),
     db.collection(organizationsCollection).doc(orgId).collection("settings").doc("config").get()
   ]);
 
@@ -837,6 +866,7 @@ async function readCatalogBundle(db, organizationsCollection, organizationId = "
     packages: pkgSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
     addons: addSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
     rentals: rentSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
+    menuItems: menuItemSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
     settings: settingsSnap.exists ? settingsSnap.data() : {}
   });
 }
@@ -861,13 +891,14 @@ function buildCatalogMaps(catalog = {}) {
   return {
     packageById: new Map((catalog.packages || []).map((item) => [item.id, item])),
     addonById: new Map((catalog.addons || []).map((item) => [item.id, item])),
-    rentalById: new Map((catalog.rentals || []).map((item) => [item.id, item]))
+    rentalById: new Map((catalog.rentals || []).map((item) => [item.id, item])),
+    menuItemById: new Map((catalog.menuItems || []).map((item) => [item.id, item]))
   };
 }
 
-function flattenMenuItems(settings = {}) {
+function flattenMenuItems(settings = {}, authoritativeMenuItems = new Map()) {
   const sections = Array.isArray(settings?.menuSections) ? settings.menuSections : [];
-  const byId = new Map();
+  const byId = new Map(authoritativeMenuItems);
   sections.forEach((section) => {
     const items = Array.isArray(section?.items) ? section.items : [];
     items.forEach((item) => {
@@ -937,9 +968,52 @@ function calculatePriceWithMode({
   };
 }
 
+function resolveAuthoritativePackageInclusions(selectedPkg, maps, menuItemById) {
+  const resolve = (value, records, label, fallbackPricingMode) => {
+    if (!Array.isArray(value) || value.length > 100) {
+      throw new PricingEngineError(
+        "failed-precondition",
+        `Package ${selectedPkg.id} ${label} inclusions are invalid.`
+      );
+    }
+    const seen = new Set();
+    return value.map((rawId) => {
+      const id = toText(rawId);
+      if (!id || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(id) || seen.has(id)) {
+        throw new PricingEngineError(
+          "failed-precondition",
+          `Package ${selectedPkg.id} has an invalid or duplicate ${label} inclusion.`
+        );
+      }
+      seen.add(id);
+      const item = records.get(id);
+      if (!item || item.active === false) {
+        throw new PricingEngineError(
+          "failed-precondition",
+          `Package ${selectedPkg.id} includes unavailable ${label} ${id}.`
+        );
+      }
+      return {
+        id,
+        name: toText(item.name, id),
+        pricingMode: normalizePricingType(item.pricingType || item.type, fallbackPricingMode),
+        unitPrice: 0,
+        quantity: 1,
+        includedInPackage: true
+      };
+    });
+  };
+
+  return {
+    menuItems: resolve(selectedPkg.includedMenuItemIds, menuItemById, "menu item", "per_event"),
+    addons: resolve(selectedPkg.includedAddonIds, maps.addonById, "add-on", "per_person"),
+    rentals: resolve(selectedPkg.includedRentalIds, maps.rentalById, "rental", "per_item")
+  };
+}
+
 function calculateAuthoritativePricing(input, catalog, settings, catalogSource = "") {
   const maps = buildCatalogMaps(catalog);
-  const menuItemById = flattenMenuItems(settings);
+  const menuItemById = flattenMenuItems(settings, maps.menuItemById);
   const missingReferences = new Set();
 
   const guests = Math.min(400, Math.max(0, toNumber(input.event.guests, 0)));
@@ -956,8 +1030,23 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
   }
 
   if (!maps.packageById.has(input.selection.package.id)) {
-    missingReferences.add(`package:${input.selection.package.id}`);
+    throw new PricingEngineError(
+      "failed-precondition",
+      `Package ${input.selection.package.id} is unavailable in the authoritative catalog.`
+    );
   }
+  if (selectedPkg.active === false) {
+    throw new PricingEngineError("failed-precondition", `Package ${selectedPkg.id} is inactive.`);
+  }
+  const packageInclusions = resolveAuthoritativePackageInclusions(selectedPkg, maps, menuItemById);
+  const includedAddonIds = new Set(packageInclusions.addons.map((item) => item.id));
+  const includedRentalIds = new Set(packageInclusions.rentals.map((item) => item.id));
+  const includedMenuItemIds = new Set(packageInclusions.menuItems.map((item) => item.id));
+  const selectedPackageInclusions = {
+    addons: packageInclusions.addons.filter((item) => input.selection.addons.some((selected) => selected.id === item.id)),
+    rentals: packageInclusions.rentals.filter((item) => input.selection.rentals.some((selected) => selected.id === item.id)),
+    menuItems: packageInclusions.menuItems.filter((item) => input.selection.menuItems.some((selected) => selected.id === item.id))
+  };
 
   const serviceFeePctApplied = resolveServiceFeePct(guests, settings);
   const taxRegion = resolveTaxRegion({
@@ -1012,17 +1101,21 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
 
     input.selection.addons.forEach((itemRef) => {
       const found = maps.addonById.get(itemRef.id);
-      if (!found) {
-        missingReferences.add(`addon:${itemRef.id}`);
+      if (!found || found.active === false) {
+        throw new PricingEngineError(
+          "failed-precondition",
+          `Add-on ${itemRef.id} is unavailable in the authoritative catalog.`
+        );
       }
+      const includedInPackage = includedAddonIds.has(itemRef.id);
       const pricingMode = normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_person");
       const quantityEnabled = addonSupportsQuantity(found || itemRef, pricingMode);
       const effectivePricingMode = pricingMode === "per_event" && quantityEnabled ? "per_item" : pricingMode;
       const resolvedQuantity = quantityEnabled
         ? resolveLineQuantity(itemRef.id, addonQuantityMap, itemRef.quantity || 1)
         : 1;
-      const unitPrice = toNumber(found?.price, 0);
-      const active = found ? found.active !== false : false;
+      const unitPrice = includedInPackage ? 0 : toNumber(found?.price, 0);
+      const active = true;
       const result = active
         ? calculatePriceWithMode({
           pricingMode: effectivePricingMode,
@@ -1046,6 +1139,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         total: result.total,
         meta: {
           active,
+          includedInPackage,
+          packageId: includedInPackage ? selectedPkg.id : "",
           addonMultiplier
         }
       }));
@@ -1053,12 +1148,16 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
 
     input.selection.rentals.forEach((itemRef) => {
       const found = maps.rentalById.get(itemRef.id);
-      if (!found) {
-        missingReferences.add(`rental:${itemRef.id}`);
+      if (!found || found.active === false) {
+        throw new PricingEngineError(
+          "failed-precondition",
+          `Rental ${itemRef.id} is unavailable in the authoritative catalog.`
+        );
       }
+      const includedInPackage = includedRentalIds.has(itemRef.id);
       const pricingMode = normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_item");
-      const unitPrice = toNumber(found?.price, 0);
-      const active = found ? found.active !== false : false;
+      const unitPrice = includedInPackage ? 0 : toNumber(found?.price, 0);
+      const active = true;
       const defaultQty = pricingMode === "per_item"
         ? Math.max(1, Math.ceil(guests / Math.max(1, toNumber(found?.qtyPerGuests, 1))))
         : 1;
@@ -1086,6 +1185,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         total: result.total,
         meta: {
           active,
+          includedInPackage,
+          packageId: includedInPackage ? selectedPkg.id : "",
           qtyPerGuests: toNumber(found?.qtyPerGuests, 1),
           rentalMultiplier
         }
@@ -1094,12 +1195,16 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
 
     input.selection.menuItems.forEach((itemRef) => {
       const found = menuItemById.get(itemRef.id);
-      if (!found) {
-        missingReferences.add(`menu:${itemRef.id}`);
+      if (!found || found.active === false) {
+        throw new PricingEngineError(
+          "failed-precondition",
+          `Menu item ${itemRef.id} is unavailable in the authoritative catalog.`
+        );
       }
+      const includedInPackage = includedMenuItemIds.has(itemRef.id);
       const pricingMode = normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_event");
-      const unitPrice = toNumber(found?.price, 0);
-      const active = found ? found.active !== false : false;
+      const unitPrice = includedInPackage ? 0 : toNumber(found?.price, 0);
+      const active = true;
       const result = active
         ? calculatePriceWithMode({
           pricingMode,
@@ -1124,6 +1229,8 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         total: result.total,
         meta: {
           active,
+          includedInPackage,
+          packageId: includedInPackage ? selectedPkg.id : "",
           addonMultiplier
         }
       }));
@@ -1295,10 +1402,12 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
         name: selectedPkg.name,
         pricingMode: "per_person",
         unitPrice: toNumber(selectedPkg.ppp, 0),
-        quantity: 1
+        quantity: 1,
+        inclusions: selectedPackageInclusions
       },
       addons: input.selection.addons.map((itemRef) => {
         const found = maps.addonById.get(itemRef.id);
+        const includedInPackage = includedAddonIds.has(itemRef.id);
         const pricingMode = normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_person");
         const quantityEnabled = addonSupportsQuantity(found || itemRef, pricingMode);
         const effectivePricingMode = pricingMode === "per_event" && quantityEnabled ? "per_item" : pricingMode;
@@ -1306,14 +1415,16 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
           id: itemRef.id,
           name: toText(found?.name, itemRef.name || itemRef.id),
           pricingMode: effectivePricingMode,
-          unitPrice: toNumber(found?.price, 0),
+          unitPrice: includedInPackage ? 0 : toNumber(found?.price, 0),
           quantity: quantityEnabled
             ? resolveLineQuantity(itemRef.id, addonQuantityMap, itemRef.quantity || 1)
-            : 1
+            : 1,
+          includedInPackage
         };
       }),
       rentals: input.selection.rentals.map((itemRef) => {
         const found = maps.rentalById.get(itemRef.id);
+        const includedInPackage = includedRentalIds.has(itemRef.id);
         const pricingMode = normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_item");
         const defaultQty = pricingMode === "per_item"
           ? Math.max(1, Math.ceil(guests / Math.max(1, toNumber(found?.qtyPerGuests, 1))))
@@ -1322,18 +1433,21 @@ function calculateAuthoritativePricing(input, catalog, settings, catalogSource =
           id: itemRef.id,
           name: toText(found?.name, itemRef.name || itemRef.id),
           pricingMode,
-          unitPrice: toNumber(found?.price, 0),
-          quantity: resolveLineQuantity(itemRef.id, rentalQuantityMap, defaultQty)
+          unitPrice: includedInPackage ? 0 : toNumber(found?.price, 0),
+          quantity: resolveLineQuantity(itemRef.id, rentalQuantityMap, defaultQty),
+          includedInPackage
         };
       }),
       menuItems: input.selection.menuItems.map((itemRef) => {
         const found = menuItemById.get(itemRef.id);
+        const includedInPackage = includedMenuItemIds.has(itemRef.id);
         return {
           id: itemRef.id,
           name: toText(found?.name, itemRef.name || itemRef.id),
           pricingMode: normalizePricingType(found?.pricingType || itemRef.pricingMode, "per_event"),
-          unitPrice: toNumber(found?.price, 0),
-          quantity: resolveLineQuantity(itemRef.id, menuItemQuantityMap, itemRef.quantity || 1)
+          unitPrice: includedInPackage ? 0 : toNumber(found?.price, 0),
+          quantity: resolveLineQuantity(itemRef.id, menuItemQuantityMap, itemRef.quantity || 1),
+          includedInPackage
         };
       }),
       quantities: {
@@ -1489,7 +1603,8 @@ async function calculateQuotePricingAuthoritative({
     {
       packages: catalogBundle.packages,
       addons: catalogBundle.addons,
-      rentals: catalogBundle.rentals
+      rentals: catalogBundle.rentals,
+      menuItems: catalogBundle.menuItems
     },
     catalogBundle.settings,
     catalogBundle.source

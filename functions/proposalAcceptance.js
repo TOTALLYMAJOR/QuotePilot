@@ -47,6 +47,21 @@ function normalizeStringList(value, maxItems = 200) {
     .filter(Boolean);
 }
 
+function normalizeInclusionNames(value, maxItems = 200) {
+  return (Array.isArray(value) ? value : [])
+    .slice(0, maxItems)
+    .map((item) => text(item?.name || item, 200))
+    .filter(Boolean);
+}
+
+function packageInclusionSnapshot(value = {}) {
+  return {
+    menuItems: normalizeInclusionNames(value?.menuItems),
+    addons: normalizeInclusionNames(value?.addons),
+    rentals: normalizeInclusionNames(value?.rentals)
+  };
+}
+
 function assertCurrentDelivery({ quote, portal, portalKey, expectedRevisionId, expectedPortalIssuedAtISO }) {
   const delivery = quote?.workflow?.quoteDelivery || {};
   const evidence = portal?.deliveryEvidence || {};
@@ -81,7 +96,7 @@ function assertCurrentDelivery({ quote, portal, portalKey, expectedRevisionId, e
 function buildSignedProposalSnapshot({ quoteId, quote, portal, revisionId, portalIssuedAtISO }) {
   const totals = quote?.totals || {};
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     organizationId: text(quote?.organizationId, 128),
     quoteId: text(quoteId, 128),
     quoteNumber: text(quote?.quoteNumber, 80),
@@ -103,6 +118,7 @@ function buildSignedProposalSnapshot({ quoteId, quote, portal, revisionId, porta
     },
     selection: {
       packageName: text(quote?.selection?.packageName, 200),
+      packageInclusions: packageInclusionSnapshot(quote?.selection?.packageInclusions),
       addons: normalizeStringList(
         quote?.selection?.addonSnapshots?.map((item) => item?.name)
           || portal?.selection?.addons
@@ -134,7 +150,7 @@ function buildSignedProposalSnapshot({ quoteId, quote, portal, revisionId, porta
 function buildPortalProposalSnapshot({ quoteId, portal, revisionId, portalIssuedAtISO }) {
   const totals = portal?.totals || {};
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     organizationId: text(portal?.organizationId, 128),
     quoteId: text(quoteId, 128),
     quoteNumber: text(portal?.quoteNumber, 80),
@@ -156,6 +172,7 @@ function buildPortalProposalSnapshot({ quoteId, portal, revisionId, portalIssued
     },
     selection: {
       packageName: text(portal?.selection?.packageName, 200),
+      packageInclusions: packageInclusionSnapshot(portal?.selection?.packageInclusions),
       addons: normalizeStringList(portal?.selection?.addons),
       rentals: normalizeStringList(portal?.selection?.rentals),
       menuItems: normalizeStringList(portal?.selection?.menuItems)

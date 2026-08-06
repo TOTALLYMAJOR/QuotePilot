@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { StepEvent, StepMenu, StepReview } from "../WizardSteps";
+import { StepEvent, StepMenu, StepReview, StepServices } from "../WizardSteps";
 import { calculateQuote } from "../../lib/quoteCalculator";
 
 const snapshotCatalog = {
@@ -219,6 +219,39 @@ describe("wizard visual snapshots", () => {
     const salesEmptyMarkup = renderToStaticMarkup(<StepMenu {...common} isAdmin={false} />);
     expect(salesEmptyMarkup).toContain("Ask your admin to add menu items.");
     expect(salesEmptyMarkup).not.toContain("Add menu items");
+  });
+
+  test("package choices state that inclusions must be selected to appear", () => {
+    const catalog = {
+      ...snapshotCatalog,
+      packages: [{
+        ...snapshotCatalog.packages[1],
+        includedMenuItemIds: ["smoked-ribs"],
+        includedAddonIds: ["dessert"],
+        includedRentalIds: ["linens"]
+      }]
+    };
+    const menuMarkup = renderToStaticMarkup(
+      <StepMenu
+        form={snapshotForm}
+        setForm={() => {}}
+        menuSections={snapshotCatalog.settings.menuSections}
+        packageIncludedMenuItemIds={["smoked-ribs"]}
+      />
+    );
+    const serviceMarkup = renderToStaticMarkup(
+      <StepServices
+        form={snapshotForm}
+        setForm={() => {}}
+        catalog={catalog}
+        recommendations={[]}
+        onApplyRecommendation={() => {}}
+      />
+    );
+
+    expect(menuMarkup).toContain("Included at no added charge — select to add");
+    expect(serviceMarkup).toContain("Unselected items will not appear in the quote.");
+    expect(serviceMarkup).toContain("3 select-to-add choices included");
   });
 
   test("step review proposal sheet snapshot", () => {

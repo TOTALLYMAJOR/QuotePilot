@@ -87,6 +87,13 @@ Last updated: August 6, 2026
   not received hosted kitchen-operator acceptance.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
 - Current source tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
+- Current source starter-pack package scope: version 2 manifests add typed menu,
+  add-on, and rental inclusion references without changing the addressable
+  version 1 manifests. Inclusions remain explicit quote-builder choices labeled
+  `Included at no added charge — select to add`; only selected refs reach
+  server-derived quote, proposal, and portal snapshots, and authoritative
+  pricing prevents a selected inclusion from being charged twice. This is
+  source/local evidence and is not yet deployed or owner-accepted.
 - Production `v0.2.3` starter catalog delivery: the existing post-login blank-catalog
   gate now offers four one-click industry drafts in Catalog Admin. Versioned
   manifests populate tenant-scoped catalog and menu records with suggested

@@ -154,9 +154,16 @@ async function loadFromFirebaseByOrganization(organizationId = "") {
 }
 
 function packageWriteShape(item = {}) {
+  const stableIds = (value) => (Array.isArray(value) ? value : [])
+    .map((id) => String(id || "").trim())
+    .filter(Boolean)
+    .slice(0, 100);
   return {
     name: String(item.name || ""),
-    pppMinor: Math.round(Number(item.ppp || 0) * 100)
+    pppMinor: Math.round(Number(item.ppp || 0) * 100),
+    includedMenuItemIds: stableIds(item.includedMenuItemIds),
+    includedAddonIds: stableIds(item.includedAddonIds),
+    includedRentalIds: stableIds(item.includedRentalIds)
   };
 }
 

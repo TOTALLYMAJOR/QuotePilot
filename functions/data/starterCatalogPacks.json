@@ -1,5 +1,95 @@
 {
   "schemaVersion": 1,
+  "packageInclusionVersions": [
+    {
+      "id": "wedding-events",
+      "baseVersion": 1,
+      "version": 2,
+      "packages": {
+        "celebration": {
+          "includedMenuItemIds": ["wedding-events__entrees__roasted-chicken", "wedding-events__sides__garlic-mashed-potatoes", "wedding-events__salads__garden-salad"],
+          "includedAddonIds": [],
+          "includedRentalIds": []
+        },
+        "signature": {
+          "includedMenuItemIds": ["wedding-events__passed-bites__assorted-sliders", "wedding-events__entrees__grilled-salmon", "wedding-events__sides__roasted-asparagus", "wedding-events__salads__classic-caesar"],
+          "includedAddonIds": ["cocktail-hour"],
+          "includedRentalIds": ["linens"]
+        },
+        "premier": {
+          "includedMenuItemIds": ["wedding-events__passed-bites__shrimp-kabobs", "wedding-events__entrees__braised-beef", "wedding-events__sides__roasted-asparagus", "wedding-events__salads__strawberry-fields", "wedding-events__desserts__assorted-cakes"],
+          "includedAddonIds": ["cocktail-hour", "dessert-station"],
+          "includedRentalIds": ["linens", "place-settings"]
+        }
+      }
+    },
+    {
+      "id": "corporate-drop-off",
+      "baseVersion": 1,
+      "version": 2,
+      "packages": {
+        "drop-off-essentials": {
+          "includedMenuItemIds": ["corporate-drop-off__sandwiches-wraps__turkey-club", "corporate-drop-off__sides__pasta-salad"],
+          "includedAddonIds": [],
+          "includedRentalIds": []
+        },
+        "executive-lunch": {
+          "includedMenuItemIds": ["corporate-drop-off__entrees__herb-roasted-chicken", "corporate-drop-off__sides__rice-pilaf", "corporate-drop-off__desserts__assorted-cookies"],
+          "includedAddonIds": ["beverage-bundle"],
+          "includedRentalIds": ["chafers"]
+        },
+        "full-service-corporate": {
+          "includedMenuItemIds": ["corporate-drop-off__entrees__braised-beef-tips", "corporate-drop-off__sides__green-beans", "corporate-drop-off__desserts__assorted-brownies", "corporate-drop-off__beverages__coffee"],
+          "includedAddonIds": ["beverage-bundle", "coffee-service"],
+          "includedRentalIds": ["chafers", "linens"]
+        }
+      }
+    },
+    {
+      "id": "bbq-southern",
+      "baseVersion": 1,
+      "version": 2,
+      "packages": {
+        "backyard": {
+          "includedMenuItemIds": ["bbq-southern__smokehouse-meats__pulled-pork", "bbq-southern__southern-sides__baked-beans", "bbq-southern__breads__hawaiian-rolls"],
+          "includedAddonIds": [],
+          "includedRentalIds": []
+        },
+        "smokehouse": {
+          "includedMenuItemIds": ["bbq-southern__smokehouse-meats__smoked-brisket", "bbq-southern__southern-sides__mac-cheese", "bbq-southern__salads__coleslaw", "bbq-southern__breads__cornbread-muffins"],
+          "includedAddonIds": ["beverage-service"],
+          "includedRentalIds": ["chafers"]
+        },
+        "southern-feast": {
+          "includedMenuItemIds": ["bbq-southern__smokehouse-meats__smoked-brisket", "bbq-southern__smokehouse-meats__beef-pork-ribs", "bbq-southern__southern-sides__mac-cheese", "bbq-southern__southern-sides__collards", "bbq-southern__desserts__banana-pudding"],
+          "includedAddonIds": ["extra-meat", "dessert", "beverage-service"],
+          "includedRentalIds": ["chafers", "serving-sets"]
+        }
+      }
+    },
+    {
+      "id": "church-community",
+      "baseVersion": 1,
+      "version": 2,
+      "packages": {
+        "fellowship": {
+          "includedMenuItemIds": ["church-community__mains__roasted-chicken", "church-community__sides__green-beans", "church-community__breads__yeast-rolls"],
+          "includedAddonIds": [],
+          "includedRentalIds": []
+        },
+        "community-table": {
+          "includedMenuItemIds": ["church-community__mains__baked-ham", "church-community__sides__mashed-potatoes", "church-community__salads__garden-salad", "church-community__breads__yeast-rolls"],
+          "includedAddonIds": ["beverage-service"],
+          "includedRentalIds": ["chafers"]
+        },
+        "celebration": {
+          "includedMenuItemIds": ["church-community__mains__baked-ham", "church-community__mains__baked-pasta", "church-community__sides__mac-cheese", "church-community__salads__garden-salad", "church-community__desserts__assorted-cakes"],
+          "includedAddonIds": ["dessert", "beverage-service", "setup-cleanup"],
+          "includedRentalIds": ["chafers", "linens"]
+        }
+      }
+    }
+  ],
   "commonSettings": {
     "perMileRateMinor": 70,
     "longDistancePerMileRateMinor": 110,

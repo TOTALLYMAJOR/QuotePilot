@@ -218,4 +218,71 @@ describe("calculateQuote fixtures", () => {
     expect(perEvent.chefLabor).toBeCloseTo(150, 6);
     expect(perEvent.labor).toBeCloseTo(150, 6);
   });
+
+  test("does not charge selected package inclusions a second time", () => {
+    const catalog = {
+      packages: [{
+        id: "included-package",
+        name: "Included Package",
+        ppp: 10,
+        includedAddonIds: ["included-addon", "unselected-included-addon"],
+        includedRentalIds: ["included-rental"],
+        includedMenuItemIds: ["included-menu"]
+      }],
+      addons: [
+        { id: "included-addon", name: "Included add-on", price: 3, pricingType: "per_event" },
+        { id: "unselected-included-addon", name: "Unselected included add-on", price: 9, pricingType: "per_event" },
+        { id: "extra-addon", name: "Extra add-on", price: 4, pricingType: "per_event" }
+      ],
+      rentals: [
+        { id: "included-rental", name: "Included rental", price: 5, pricingType: "per_event" },
+        { id: "extra-rental", name: "Extra rental", price: 6, pricingType: "per_event" }
+      ]
+    };
+    const settings = {
+      ...quoteCalculationSettings,
+      menuSections: [{
+        id: "menu",
+        name: "Menu",
+        items: [
+          { id: "included-menu", name: "Included menu", price: 7, pricingType: "per_event" },
+          { id: "extra-menu", name: "Extra menu", price: 8, pricingType: "per_event" }
+        ]
+      }],
+      serviceFeePct: 0,
+      serviceFeeTiers: [],
+      taxRate: 0,
+      taxRegions: [],
+      depositPct: 0,
+      staffingLaborEnabled: false,
+      perMileRate: 0,
+      longDistancePerMileRate: 0,
+      deliveryThresholdMiles: 0
+    };
+    const totals = calculateQuote({
+      pkg: "included-package",
+      guests: 10,
+      hours: 0,
+      addons: ["included-addon", "extra-addon"],
+      rentals: ["included-rental", "extra-rental"],
+      menuItems: ["included-menu", "extra-menu"],
+      addonQuantities: {},
+      rentalQuantities: {},
+      menuItemQuantities: {}
+    }, catalog, settings);
+
+    expect(totals.base).toBe(100);
+    expect(totals.addons).toBe(4);
+    expect(totals.rentals).toBe(6);
+    expect(totals.menu).toBe(8);
+    expect(totals.total).toBe(118);
+    expect(totals.packageInclusions).toMatchObject({
+      addons: [{ id: "included-addon", includedInPackage: true }],
+      rentals: [{ id: "included-rental", includedInPackage: true }],
+      menuItems: [{ id: "included-menu", includedInPackage: true }]
+    });
+    expect(totals.packageInclusions.addons).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "unselected-included-addon" })])
+    );
+  });
 });

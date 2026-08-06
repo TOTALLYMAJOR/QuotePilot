@@ -2452,6 +2452,9 @@ export default function App() {
                     setAdminOpen(true);
                   }}
                   onSelectionTouched={handleSelectionTouched}
+                  packageIncludedMenuItemIds={
+                    catalog.packages.find((item) => item.id === form.pkg)?.includedMenuItemIds || []
+                  }
                 />
                 {menuSelectionValidationMessage && (
                   <p

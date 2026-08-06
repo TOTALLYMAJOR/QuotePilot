@@ -35,6 +35,12 @@ function toList(input) {
   return Array.isArray(input) ? input.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
 }
 
+function toInclusionNames(input) {
+  return (Array.isArray(input) ? input : [])
+    .map((item) => cleanText(item?.name || item))
+    .filter(Boolean);
+}
+
 // Mirrors proposalExport.js's resolvePortalLink, kept local (rather than
 // imported) because proposalExport.js already imports from this file and a
 // reverse import would create a cycle.
@@ -109,6 +115,11 @@ export function buildProposalPayload(quote) {
     selection: {
       packageId: cleanText(quote.selection?.packageId),
       packageName: cleanText(quote.selection?.packageName),
+      packageInclusions: {
+        menuItems: toInclusionNames(quote.selection?.packageInclusions?.menuItems),
+        addons: toInclusionNames(quote.selection?.packageInclusions?.addons),
+        rentals: toInclusionNames(quote.selection?.packageInclusions?.rentals)
+      },
       addons: toList(quote.selection?.addons),
       rentals: toList(quote.selection?.rentals),
       menuItems: toList(quote.selection?.menuItems),

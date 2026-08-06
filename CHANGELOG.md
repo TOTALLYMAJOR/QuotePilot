@@ -8,6 +8,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Versioned starter-pack package inclusions with stable menu, add-on, and
+  rental references. Quote builders explicitly select covered items at no
+  added charge; client previews and server-authoritative pricing prevent a
+  second charge, and quote, proposal, and portal snapshots retain only the
+  selected inclusions with authoritative catalog labels.
 - Real email/password sign-in, invite-aware account guidance, and password-reset
   request handling, with Firebase Auth emulator coverage at the OOB issuance
   boundary rather than an inbox-delivery claim.

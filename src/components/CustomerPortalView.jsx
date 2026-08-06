@@ -572,6 +572,11 @@ export default function CustomerPortalView({
     ["Service", humanizeValue(quote?.eventStyle)]
   ];
   const scopeRows = [
+    ["Package includes", [
+      ...(scope.packageInclusions?.menuItems || []),
+      ...(scope.packageInclusions?.addons || []),
+      ...(scope.packageInclusions?.rentals || [])
+    ]],
     ["Menu", scope.menuItems],
     ["Add-ons", scope.addons],
     ["Rentals", scope.rentals]

@@ -22,12 +22,14 @@ function buildPricingDb({
   settingsExists = true,
   packages = [{ id: "package-a", name: "Package A", ppp: 10 }],
   addons = [],
-  rentals = []
+  rentals = [],
+  menuItems = []
 } = {}) {
   const collections = {
     catalogPackages: collectionSnapshot(packages),
     catalogAddons: collectionSnapshot(addons),
-    catalogRentals: collectionSnapshot(rentals)
+    catalogRentals: collectionSnapshot(rentals),
+    menuItems: collectionSnapshot(menuItems)
   };
 
   return {
@@ -336,6 +338,95 @@ describe("server-authoritative pricing setup safety", () => {
           chefRate: 29
         }
       ]
+    });
+  });
+
+  test("uses authoritative package refs and never charges a selected inclusion twice", async () => {
+    const request = buildPricingRequest();
+    request.pricingInput.selection = {
+      package: {
+        id: "package-a",
+        inclusions: {
+          addons: [{ id: "spoofed-free-addon" }]
+        }
+      },
+      addons: ["included-addon", "extra-addon"],
+      rentals: ["included-rental", "extra-rental"],
+      menuItems: ["included-menu", "extra-menu"]
+    };
+    const result = await calculateQuotePricingAuthoritative({
+      db: buildPricingDb({
+        settings: {
+          pricingSetupConfirmed: true,
+          serviceFeeTiers: [],
+          taxRegions: [],
+          depositPct: 0,
+          seasonalProfiles: [],
+          bartenderRateTypes: [],
+          staffingRateTypes: [],
+          staffingLaborEnabled: false,
+          perMileRate: 0,
+          longDistancePerMileRate: 0,
+          deliveryThresholdMiles: 0
+        },
+        packages: [{
+          id: "package-a",
+          name: "Package A",
+          pppMinor: 1000,
+          includedAddonIds: ["included-addon", "unselected-included-addon"],
+          includedRentalIds: ["included-rental"],
+          includedMenuItemIds: ["included-menu"]
+        }],
+        addons: [
+          { id: "included-addon", name: "Included add-on", priceMinor: 300, pricingType: "per_event" },
+          { id: "unselected-included-addon", name: "Unselected included add-on", priceMinor: 900, pricingType: "per_event" },
+          { id: "extra-addon", name: "Extra add-on", priceMinor: 400, pricingType: "per_event" }
+        ],
+        rentals: [
+          { id: "included-rental", name: "Included rental", priceMinor: 500, pricingType: "per_event" },
+          { id: "extra-rental", name: "Extra rental", priceMinor: 600, pricingType: "per_event" }
+        ],
+        menuItems: [
+          { id: "included-menu", name: "Included menu", priceMinor: 700, pricingType: "per_event" },
+          { id: "extra-menu", name: "Extra menu", priceMinor: 800, pricingType: "per_event" }
+        ]
+      }),
+      data: request,
+      staff: pricingStaff
+    });
+
+    expect(result.pricing.grandTotal).toBe(118);
+    expect(result.pricing.inputs.selection.package.inclusions).toMatchObject({
+      addons: [{ id: "included-addon", unitPrice: 0, includedInPackage: true }],
+      rentals: [{ id: "included-rental", unitPrice: 0, includedInPackage: true }],
+      menuItems: [{ id: "included-menu", unitPrice: 0, includedInPackage: true }]
+    });
+    expect(result.pricing.inputs.selection.package.inclusions.addons)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "spoofed-free-addon" })]));
+    expect(result.pricing.inputs.selection.package.inclusions.addons)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "unselected-included-addon" })]));
+    expect(result.pricing.lineItems.filter((line) => line.meta?.includedInPackage))
+      .toHaveLength(3);
+  });
+
+  test("fails closed when an authoritative package inclusion is missing", async () => {
+    await expect(calculateQuotePricingAuthoritative({
+      db: buildPricingDb({
+        settings: { pricingSetupConfirmed: true },
+        packages: [{
+          id: "package-a",
+          name: "Package A",
+          pppMinor: 1000,
+          includedAddonIds: ["missing-addon"],
+          includedRentalIds: [],
+          includedMenuItemIds: []
+        }]
+      }),
+      data: buildPricingRequest(),
+      staff: pricingStaff
+    })).rejects.toMatchObject({
+      code: "failed-precondition",
+      message: expect.stringMatching(/includes unavailable add-on missing-addon/i)
     });
   });
 });

@@ -27,6 +27,11 @@ export const proposalPayloadFixtureQuote = {
   selection: {
     packageId: "deluxe",
     packageName: "Deluxe",
+    packageInclusions: {
+      menuItems: [{ id: "included-entree", name: "Chef-selected entrée" }],
+      addons: [{ id: "included-drink", name: "Tea service" }],
+      rentals: [{ id: "included-chafer", name: "Chafing set" }]
+    },
     addons: ["Dessert", "Coffee Station"],
     rentals: ["Linens"],
     menuItems: ["salad", "setup"],

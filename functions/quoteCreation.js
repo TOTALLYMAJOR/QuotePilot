@@ -299,7 +299,27 @@ function sanitizeSelectedItem(item = {}, fallbackMode = "per_event") {
     pricingType: new Set(["per_person", "per_item", "per_event"]).has(mode)
       ? mode
       : fallbackMode,
-    quantity: integerInRange(item?.quantity, 1, 1, 100_000)
+    quantity: integerInRange(item?.quantity, 1, 1, 100_000),
+    includedInPackage: item?.includedInPackage === true
+  };
+}
+
+function sanitizePackageInclusions(packageSelection = {}, selectedItems = {}) {
+  const source = isRecord(packageSelection?.inclusions) ? packageSelection.inclusions : {};
+  const normalize = (value, fallbackMode, selected) => {
+    const selectedIds = new Set(sanitizeSelectedItems(selected, fallbackMode).map((item) => item.id));
+    return sanitizeSelectedItems(value, fallbackMode)
+      .filter((item) => selectedIds.has(item.id))
+      .map((item) => ({
+        ...item,
+        price: 0,
+        includedInPackage: true
+      }));
+  };
+  return {
+    menuItems: normalize(source.menuItems, "per_event", selectedItems.menuItems),
+    addons: normalize(source.addons, "per_person", selectedItems.addons),
+    rentals: normalize(source.rentals, "per_item", selectedItems.rentals)
   };
 }
 
@@ -460,6 +480,11 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
   const addonSnapshots = Array.isArray(selection.addonSnapshots) ? selection.addonSnapshots : [];
   const rentalSnapshots = Array.isArray(selection.rentalSnapshots) ? selection.rentalSnapshots : [];
   const menuItemNames = Array.isArray(selection.menuItemNames) ? selection.menuItemNames : [];
+  const packageInclusions = isRecord(selection.packageInclusions) ? selection.packageInclusions : {};
+  const inclusionNames = (value) => (Array.isArray(value) ? value : [])
+    .slice(0, MAX_SELECTION_ITEMS)
+    .map((item) => text(item?.name || item, 200))
+    .filter(Boolean);
   const createdAtISO = normalizeISO(quote?.createdAtISO, "");
   const updatedAtISO = normalizeISO(quote?.updatedAtISO, createdAtISO);
   const portalExpiresAtISO = normalizeISO(quote?.portalExpiresAtISO, "");
@@ -531,6 +556,11 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
     },
     selection: {
       packageName: text(selection.packageName, 200),
+      packageInclusions: {
+        menuItems: inclusionNames(packageInclusions.menuItems),
+        addons: inclusionNames(packageInclusions.addons),
+        rentals: inclusionNames(packageInclusions.rentals)
+      },
       addons: addonSnapshots.slice(0, MAX_SELECTION_ITEMS).map((item) => text(item?.name, 200)).filter(Boolean),
       rentals: rentalSnapshots.slice(0, MAX_SELECTION_ITEMS).map((item) => text(item?.name, 200)).filter(Boolean),
       menuItems: menuItemNames.slice(0, MAX_SELECTION_ITEMS).map((item) => text(item, 200)).filter(Boolean)
@@ -1046,6 +1076,11 @@ function buildTrustedQuoteCreationDocuments({
   const addonSnapshots = sanitizeSelectedItems(pricingSelection.addons, "per_person");
   const rentalSnapshots = sanitizeSelectedItems(pricingSelection.rentals, "per_item");
   const menuItemsSnapshot = sanitizeSelectedItems(pricingSelection.menuItems, "per_event");
+  const packageInclusions = sanitizePackageInclusions(pricingSelection.package, {
+    addons: addonSnapshots,
+    rentals: rentalSnapshots,
+    menuItems: menuItemsSnapshot
+  });
   if (menuItemsSnapshot.length === 0) {
     throw new QuoteCreationError(
       "failed-precondition",
@@ -1120,6 +1155,7 @@ function buildTrustedQuoteCreationDocuments({
     selection: {
       packageId: packageSelection.id,
       packageName: packageSelection.name,
+      packageInclusions,
       addons: addonSnapshots.map((item) => item.id),
       rentals: rentalSnapshots.map((item) => item.id),
       addonQuantities: isRecord(quantities.addonQuantities) ? quantities.addonQuantities : {},

@@ -5,6 +5,11 @@ import { proposalPayloadFixtureQuote } from "./fixtures/proposalPayloadFixture";
 describe("proposal payload snapshots", () => {
   test("buildProposalPayload returns normalized branded payload", () => {
     const payload = buildProposalPayload(proposalPayloadFixtureQuote);
+    expect(payload.selection.packageInclusions).toEqual({
+      menuItems: ["Chef-selected entrée"],
+      addons: ["Tea service"],
+      rentals: ["Chafing set"]
+    });
 
     expect({
       quoteNumber: payload.quoteNumber,
