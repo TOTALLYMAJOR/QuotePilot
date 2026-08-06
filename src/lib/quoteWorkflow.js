@@ -496,3 +496,85 @@ export function buildProductionChecklist(quote = {}) {
     percent: items.length ? Math.round((completed / items.length) * 100) : 0
   };
 }
+
+export function parseTimeToMinutes(value) {
+  const text = String(value || "").trim();
+  if (!/^\d{1,2}:\d{2}$/.test(text)) return null;
+  const [hRaw, mRaw] = text.split(":");
+  const h = Number(hRaw);
+  const m = Number(mRaw);
+  if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return (h * 60) + m;
+}
+
+function formatClock(minutesInDay) {
+  const normalized = ((minutesInDay % 1440) + 1440) % 1440;
+  const hours24 = Math.floor(normalized / 60);
+  const mins = normalized % 60;
+  const suffix = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${String(mins).padStart(2, "0")} ${suffix}`;
+}
+
+export function formatCheckpointTime(totalMinutes) {
+  const dayOffset = Math.floor(totalMinutes / 1440);
+  const label = formatClock(totalMinutes);
+
+  if (dayOffset === -1) return `${label} (prev day)`;
+  if (dayOffset === 1) return `${label} (next day)`;
+  if (dayOffset < -1 || dayOffset > 1) return `${label} (${dayOffset > 0 ? `+${dayOffset}` : dayOffset} days)`;
+  return label;
+}
+
+export function formatMinutesToTimeInput(totalMinutes) {
+  const normalized = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
+  const hours = Math.floor(normalized / 60);
+  const mins = normalized % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+}
+
+export function defaultKitchenCheckpointOffsets(durationMinutes) {
+  return [
+    { id: "prep-start", label: "Prep kickoff", minuteOffset: -180 },
+    { id: "line-check", label: "Line check", minuteOffset: -120 },
+    { id: "pack-out", label: "Pack and load-out", minuteOffset: -60 },
+    { id: "onsite-setup", label: "On-site setup", minuteOffset: -30 },
+    { id: "service-start", label: "Service start", minuteOffset: 0 },
+    { id: "service-end", label: "Service wrap", minuteOffset: durationMinutes },
+    { id: "reset", label: "Kitchen reset", minuteOffset: durationMinutes + 45 }
+  ];
+}
+
+export function buildKitchenCheckpoints(event) {
+  const startMinutes = parseTimeToMinutes(event.time);
+  if (startMinutes === null) return [];
+
+  const durationMinutes = Math.max(60, Math.round(number(event.hours) * 60));
+  const defaults = defaultKitchenCheckpointOffsets(durationMinutes);
+  const overrides = Array.isArray(event.kitchenCheckpointOverrides) ? event.kitchenCheckpointOverrides : [];
+  const overrideById = new Map(
+    overrides
+      .map((item) => ({
+        id: String(item?.id || "").trim(),
+        label: String(item?.label || "").trim(),
+        minuteOffset: Number(item?.minuteOffset)
+      }))
+      .filter((item) => item.id && Number.isFinite(item.minuteOffset))
+      .map((item) => [item.id, item])
+  );
+
+  return defaults.map((item) => {
+    const override = overrideById.get(item.id);
+    const minuteOffset = override ? Math.round(override.minuteOffset) : item.minuteOffset;
+    const minute = startMinutes + minuteOffset;
+    const label = override?.label ? override.label.slice(0, 80) : item.label;
+    return {
+      id: item.id,
+      label,
+      minute,
+      minuteOffset,
+      timeLabel: formatCheckpointTime(minute),
+      timeValue: formatMinutesToTimeInput(minute)
+    };
+  });
+}

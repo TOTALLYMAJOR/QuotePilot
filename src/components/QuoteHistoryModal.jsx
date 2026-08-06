@@ -215,6 +215,7 @@ export function getQuoteHistoryActionPermissions(role) {
     canEditQuote: isStaff,
     canDuplicateQuote: isStaff,
     canExportProposal: isStaff,
+    canExportBeo: isStaff,
     canSendQuoteEmail: isAdmin,
     canCopyArtifacts: isStaff,
     canCopyPaymentLink: isAdmin,
@@ -276,6 +277,7 @@ export default function QuoteHistoryModal({
   const [creatingCheckoutId, setCreatingCheckoutId] = useState("");
   const [duplicatingId, setDuplicatingId] = useState("");
   const [exportingPdfId, setExportingPdfId] = useState("");
+  const [exportingBeoId, setExportingBeoId] = useState("");
   const [sendingQuoteEmailId, setSendingQuoteEmailId] = useState("");
   const [sendingPaymentEmailId, setSendingPaymentEmailId] = useState("");
   const [reopeningQuoteId, setReopeningQuoteId] = useState("");
@@ -924,6 +926,20 @@ export default function QuoteHistoryModal({
       setState((prev) => ({ ...prev, error: err?.message || "Failed to export proposal PDF." }));
     } finally {
       setExportingPdfId("");
+    }
+  };
+
+  const handleExportBeo = async (quote) => {
+    setExportingBeoId(quote.id);
+    try {
+      const { exportKitchenBeo } = await import("../lib/beoExport");
+      await exportKitchenBeo(quote, { output: "save" });
+      setState((prev) => ({ ...prev, feedback: `Downloaded kitchen sheet for ${quote.quoteNumber}.` }));
+      pushToast(`Downloaded kitchen sheet for ${quote.quoteNumber}.`, "success");
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: err?.message || "Failed to export kitchen sheet." }));
+    } finally {
+      setExportingBeoId("");
     }
   };
 
@@ -1704,6 +1720,16 @@ export default function QuoteHistoryModal({
                             disabled={exportingPdfId === quote.id}
                           >
                             {exportingPdfId === quote.id ? "Generating PDF..." : "PDF"}
+                          </button>
+                        )}
+                        {permissions.canExportBeo && (
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleExportBeo(quote)}
+                            disabled={exportingBeoId === quote.id}
+                          >
+                            {exportingBeoId === quote.id ? "Generating kitchen sheet..." : "Kitchen sheet"}
                           </button>
                         )}
                         {permissions.canSendQuoteEmail

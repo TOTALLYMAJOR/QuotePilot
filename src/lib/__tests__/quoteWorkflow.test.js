@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  buildKitchenCheckpoints,
   buildProductionChecklist,
   buildProposalReadiness,
   buildQuoteLifecycleTimeline,
@@ -320,6 +321,57 @@ describe("quote workflow helpers", () => {
     ], { todayISO: "2026-08-03" });
 
     expect(summary).toMatchObject({ quoteCount: 0, itemCount: 0 });
+  });
+
+  test("computes default kitchen checkpoint offsets and clock times from an event start time", () => {
+    const checkpoints = buildKitchenCheckpoints({ time: "18:00", hours: 5 });
+
+    expect(checkpoints.map((item) => [item.id, item.minuteOffset, item.timeValue])).toEqual([
+      ["prep-start", -180, "15:00"],
+      ["line-check", -120, "16:00"],
+      ["pack-out", -60, "17:00"],
+      ["onsite-setup", -30, "17:30"],
+      ["service-start", 0, "18:00"],
+      ["service-end", 300, "23:00"],
+      ["reset", 345, "23:45"]
+    ]);
+  });
+
+  test("returns no checkpoints when the event has no valid start time", () => {
+    expect(buildKitchenCheckpoints({ time: "", hours: 5 })).toEqual([]);
+    expect(buildKitchenCheckpoints({ time: "not-a-time", hours: 5 })).toEqual([]);
+  });
+
+  test("applies checkpoint overrides by id while leaving unlisted checkpoints at defaults", () => {
+    const checkpoints = buildKitchenCheckpoints({
+      time: "18:00",
+      hours: 5,
+      kitchenCheckpointOverrides: [
+        { id: "prep-start", label: "Custom prep", minuteOffset: -200 },
+        { id: "unknown-id", label: "Ignored", minuteOffset: 15 }
+      ]
+    });
+
+    expect(checkpoints).toHaveLength(7);
+    expect(checkpoints.find((item) => item.id === "prep-start")).toMatchObject({
+      label: "Custom prep",
+      minuteOffset: -200,
+      timeValue: "14:40"
+    });
+    expect(checkpoints.find((item) => item.id === "line-check")).toMatchObject({
+      label: "Line check",
+      minuteOffset: -120
+    });
+  });
+
+  test("scales service-end and reset offsets with event duration, with a 60-minute floor", () => {
+    const threeHourEvent = buildKitchenCheckpoints({ time: "12:00", hours: 3 });
+    expect(threeHourEvent.find((item) => item.id === "service-end")).toMatchObject({ minuteOffset: 180 });
+    expect(threeHourEvent.find((item) => item.id === "reset")).toMatchObject({ minuteOffset: 225 });
+
+    const shortEvent = buildKitchenCheckpoints({ time: "12:00", hours: 0.25 });
+    expect(shortEvent.find((item) => item.id === "service-end")).toMatchObject({ minuteOffset: 60 });
+    expect(shortEvent.find((item) => item.id === "reset")).toMatchObject({ minuteOffset: 105 });
   });
 
   test("surfaces malformed current change-request evidence as unhandleable attention", () => {

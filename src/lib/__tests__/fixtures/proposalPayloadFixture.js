@@ -43,6 +43,26 @@ export const proposalPayloadFixtureQuote = {
     depositLink: "https://checkout.stripe.com/c/pay/cs_test_q_2026_0042",
     depositStatus: "sent"
   },
+  booking: {
+    staffLead: "Jamie Chen",
+    kitchenCheckpoints: [
+      { id: "service-start", label: "Doors open", minuteOffset: -15 }
+    ],
+    productionChecklist: [
+      {
+        id: "event-brief",
+        completed: true,
+        completedAtISO: "2026-04-01T10:00:00.000Z",
+        completedByEmail: "ops@acme.test"
+      },
+      {
+        id: "menu-prep",
+        completed: true,
+        completedAtISO: "2026-04-05T09:00:00.000Z",
+        completedByEmail: "chef@acme.test"
+      }
+    ]
+  },
   totals: {
     base: 3888,
     addons: 463.5,
