@@ -141,6 +141,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   visible unsaved-work warning; inactive package choices persist and stay out
   of quote/template/recommendation decisions; dependency-aware deletion fails
   closed when advanced event-template JSON is malformed.
+- Browser interaction coverage now executes the staff Kitchen sheet action and
+  verifies that it produces a BEO PDF download from the saved quote row.
 - Quote creation now requires at least one selected menu item in Step 2, local
   persistence, authoritative server creation, proposal acceptance, and contract
   conversion. Validation returns staff to the first menu choice, while a
