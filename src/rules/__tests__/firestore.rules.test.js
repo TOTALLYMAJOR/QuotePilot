@@ -2109,7 +2109,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         acceptedAtISO: "2026-03-21T01:00:00.000Z"
       }
     }));
-    await assertSucceeds(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
+    await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
       status: "accepted",
       updatedAtISO: "2026-03-21T01:15:00.000Z",
       lifecycle: {
@@ -2235,4 +2235,5 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       }
     }));
   });
+
 });

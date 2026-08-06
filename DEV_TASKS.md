@@ -45,7 +45,6 @@ Last updated: August 3, 2026
   conflicts, then explicitly authorize the guarded apply so older active links
   receive the new decision-center event, selection, and pricing fields. The
   tool and emulator acceptance are complete; production execution is not.
-- Extend operations audit controls (retry dashboards, sync health trends, role-based action logs).
 
 ## P2 - Integrations
 - Add CRM adapters (HubSpot/Salesforce or webhook bridge).

@@ -12,6 +12,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   completion and add-on selection/removal trends. Events use allow-listed
   non-customer dimensions, deterministic retry IDs, callable-only writes, and
   a 30-day summary in the existing reporting dashboard.
+- Admin Operations Audit in Integrations Ops now summarizes delivery retry and
+  manual-review candidates, seven-day recorded sync health, current staff-role
+  counts, and recent server-owned approval, delivery-reconciliation, and
+  catalog-confirmation actions.
 - Server-authoritative electronic proposal acceptance with typed signer name,
   versioned consent text, server timestamp, exact delivery-revision and portal
   issuance preconditions, integer minor-unit totals, a SHA-256 signed proposal
@@ -25,6 +29,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Raw product analytics records cannot be read or written from the browser;
   same-tenant staff receive only a server-derived summary, and analytics
   failures never block quote creation or dashboard quote reporting.
+- Operations Audit is produced by an admin-only same-tenant callable. Its
+  sensitive-action rows are limited to server-owned evidence and remain
+  distinct from operator-recorded integration sync notes.
 - Direct browser writes can no longer create an accepted proposal. The
   acceptance callable independently validates the active organization, portal
   expiry, matching quote/portal content, provider-accepted delivery evidence,
