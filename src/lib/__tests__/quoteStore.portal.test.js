@@ -161,7 +161,12 @@ describe("quoteStore portal token policy", () => {
         brandLogoUrl: "https://cdn.example.test/logo.png",
         businessEmail: "events@northstar.test",
         businessPhone: "205-555-0100",
-        brandPrimaryColor: "#8d611a"
+        brandPrimaryColor: "#436b55",
+        brandAccentColor: "#a7c4a0",
+        brandDarkAccentColor: "#294536",
+        brandBackgroundStart: "#f4f7f1",
+        brandBackgroundMid: "#e1eadc",
+        brandBackgroundEnd: "#d5e1cf"
       }
     })]);
     const enriched = await getPortalQuote("portal-key-12345678901234567890");
@@ -169,7 +174,10 @@ describe("quoteStore portal token policy", () => {
     expect(enriched.quoteMeta).toMatchObject({
       organizationName: "Northstar Events",
       brandName: "Northstar Catering",
-      businessEmail: "events@northstar.test"
+      businessEmail: "events@northstar.test",
+      brandBackgroundStart: "#f4f7f1",
+      brandBackgroundMid: "#e1eadc",
+      brandBackgroundEnd: "#d5e1cf"
     });
 
     seedQuotes([makeQuote({ quoteMeta: {}, totals: { serviceFee: 612 } })]);

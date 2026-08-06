@@ -326,6 +326,13 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   unselected choices do not appear in the customer scope, while selected
   choices appear at $0 and are not charged a second time.
 - Save overall catalog changes with `Save Catalog`.
+- In `Pricing` → `Customer-facing business branding`, choose Midnight Amber,
+  Warm Linen, Garden Sage, or Coastal Blue. The preview changes immediately;
+  select `Save catalog changes` to persist the six existing brand colors for
+  future quotes. Editing an individual color afterward is treated as a custom
+  palette. A theme save uses the same catalog revision check as every other
+  settings save and does not replace package, fee, tax, deposit, travel, or
+  staffing values.
 - For a new blank tenant, open `Starter Packs` and apply Wedding & events,
   Corporate drop-off, BBQ / Southern, or Church & community. This stages a
   complete draft immediately and opens the populated menu; there is no second
