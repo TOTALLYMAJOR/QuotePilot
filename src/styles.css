@@ -112,61 +112,115 @@ h6 {
   padding: 0.68rem 0;
 }
 
-.brand-lockup {
+.product-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.product-brand-lockup > img {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.product-brand-lockup-compact > img {
+  width: 40px;
+  height: 40px;
+}
+
+.product-brand-copy {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.product-brand-copy strong {
+  color: #ffe5b3;
+  font-family: var(--font-display);
+  font-size: 1.07rem;
+  line-height: 1;
+}
+
+.product-brand-copy small {
+  margin: 0;
+  color: rgba(255, 225, 161, 0.86);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.workspace-header-identity {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
 }
 
-.brand-logo {
-  width: 56px;
-  height: 56px;
-  object-fit: contain;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.34);
-  padding: 0.3rem;
-  border: 1px solid rgba(240, 210, 154, 0.72);
+.workspace-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  padding-left: var(--space-3);
+  border-left: 1px solid rgba(232, 195, 118, 0.34);
 }
 
-.brand-logo-placeholder,
-.crew-chip-placeholder {
+.workspace-brand-logo {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
   display: inline-grid;
   place-items: center;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid rgba(240, 210, 154, 0.5);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.workspace-brand-logo-placeholder,
+.crew-chip-placeholder {
   color: #fff4d9;
   font-weight: 800;
   letter-spacing: 0.04em;
 }
 
-.brand-logo-placeholder {
-  flex: 0 0 56px;
-}
-
-.brand-copy {
+.workspace-brand-copy {
+  display: grid;
   min-width: 0;
 }
 
-.brand {
-  margin: 0;
-  color: #ffe5b3;
-  font-family: var(--font-display);
-  font-size: 1.07rem;
-  font-weight: 700;
+.workspace-brand-copy small {
+  color: rgba(255, 225, 161, 0.7);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   line-height: 1;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-transform: uppercase;
 }
 
-.brand-copy p {
-  margin: 0.2rem 0 0;
-  color: rgba(255, 225, 161, 0.88);
-  font-size: 0.79rem;
-  line-height: 1.2;
-  white-space: nowrap;
+.workspace-brand-copy strong,
+.workspace-brand-copy span {
+  max-width: 18rem;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-brand-copy strong {
+  color: #fff1d4;
+  font-size: 0.84rem;
+  line-height: 1.25;
+}
+
+.workspace-brand-copy span {
+  color: rgba(255, 225, 161, 0.78);
+  font-size: 0.68rem;
 }
 
 .brand-crew {
@@ -201,6 +255,8 @@ h6 {
 }
 
 .crew-chip-placeholder {
+  display: inline-grid;
+  place-items: center;
   width: 30px;
   height: 30px;
   border: 1px solid rgba(255, 232, 185, 0.76);
@@ -1429,6 +1485,22 @@ hr {
 .auth-card,
 .portal-card {
   width: min(680px, 100%);
+}
+
+.auth-product-brand {
+  width: fit-content;
+  margin-bottom: 1rem;
+  padding: 0.62rem 0.72rem;
+  border-radius: 12px;
+  background: #100d09;
+}
+
+.portal-product-brand {
+  width: fit-content;
+  margin: 1.2rem auto 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 999px;
+  background: #100d09;
 }
 
 .auth-card h1,
@@ -4858,11 +4930,22 @@ hr {
     gap: 0.5rem;
   }
 
-  .site-header .brand-logo,
-  .site-header .brand-logo-placeholder {
-    width: 44px;
-    height: 44px;
-    flex-basis: 44px;
+  .workspace-header-identity {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .workspace-brand {
+    max-width: 56%;
+  }
+
+  .workspace-brand-copy strong,
+  .workspace-brand-copy span {
+    max-width: 10rem;
+  }
+
+  .workspace-brand-copy span {
+    display: none;
   }
 
   .site-header .header-actions {

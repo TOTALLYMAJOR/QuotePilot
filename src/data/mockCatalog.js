@@ -365,7 +365,7 @@ export const DEFAULT_SETTINGS = {
   defaultStaffingRateType: "standard",
   quotePreparedBy: "Sales Team",
   brandName: "QuotePilot",
-  brandTagline: "Quote-to-event operations by MBMapps",
+  brandTagline: "Quote-to-event operations by MBMApps",
   brandLogoUrl: "",
   brandPrimaryColor: "#c99334",
   brandAccentColor: "#f0d29a",

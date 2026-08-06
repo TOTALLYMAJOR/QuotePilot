@@ -5,6 +5,7 @@ import {
   signInWithEmail,
   signInWithGoogle
 } from "../lib/authClient";
+import ProductBrandLockup from "./ProductBrandLockup";
 
 const PASSWORD_RESET_CONFIRMATION = "If an account exists for that email, password-reset instructions have been sent.";
 
@@ -78,6 +79,7 @@ export default function AuthGate({ sessionError = "" }) {
   return (
     <main className="auth-shell container">
       <section className="panel auth-card">
+        <ProductBrandLockup className="auth-product-brand" />
         <h1>Staff Sign In</h1>
         <p className="muted">Use email/password or Google to access the quote workspace.</p>
         {sessionError && <p className="error-note">{sessionError}</p>}

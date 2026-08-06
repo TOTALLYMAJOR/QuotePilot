@@ -133,7 +133,7 @@ channels, not in the prepare job:
   - `APP_BASE_URL=https://quotepilot.mbmapps.com/app`
   - `APP_BASE_DOMAIN=mbmapps.com`
   - `NOTIFICATIONS_EMAIL_PROVIDER=none` until Resend is verified
-  - `EMAIL_FROM_NAME=QuotePilot by MBMapps`
+  - `EMAIL_FROM_NAME=QuotePilot by MBMApps`
   - `EMAIL_FROM_EMAIL=onboarding@quotepilot.mbmapps.com`
   - `NOTIFICATIONS_SMS_PROVIDER=none` until Twilio is approved
   - `STRIPE_MODE=live` for an authorized production runtime; use `test` only in
@@ -201,7 +201,7 @@ BUYER_ACCESS_ENABLED=false
 BUYER_ACCESS_STRIPE_MODE=test
 BUYER_ACCESS_TURNSTILE_HOSTNAMES=quotepilot.mbmapps.com,tonicatering.web.app
 APP_BASE_URL=https://quotepilot.mbmapps.com/app
-EMAIL_FROM_NAME=QuotePilot by MBMapps
+EMAIL_FROM_NAME=QuotePilot by MBMApps
 AUTH_PLATFORM_ADMIN_EMAILS=<approved-platform-operator-email>
 ```
 
@@ -218,7 +218,7 @@ archive/delete operations.
 ### Resend activation gate
 
 The intended sender is
-`QuotePilot by MBMapps <onboarding@quotepilot.mbmapps.com>`. Do not activate or
+`QuotePilot by MBMApps <onboarding@quotepilot.mbmapps.com>`. Do not activate or
 represent that sender as operational until the `quotepilot.mbmapps.com` sender
 domain is verified in the Resend dashboard and the required DNS records are
 confirmed at the authoritative DNS provider.
@@ -227,7 +227,7 @@ Only after verification, set the trusted runtime configuration to:
 
 ```dotenv
 NOTIFICATIONS_EMAIL_PROVIDER=resend
-EMAIL_FROM_NAME=QuotePilot by MBMapps
+EMAIL_FROM_NAME=QuotePilot by MBMApps
 EMAIL_FROM_EMAIL=onboarding@quotepilot.mbmapps.com
 APP_BASE_URL=https://quotepilot.mbmapps.com/app
 ```

@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "./components/CustomerPortalView";
 import LiveBreakdown from "./components/LiveBreakdown";
+import ProductBrandLockup from "./components/ProductBrandLockup";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
@@ -17,6 +18,7 @@ import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
 import { buildProposalReadiness, buildWorkflowAttentionSummary } from "./lib/quoteWorkflow";
+import { PRODUCT_NAME } from "./lib/productIdentity";
 import {
   applyEventTypeTemplateDefaults,
   buildStepperModel,
@@ -175,6 +177,15 @@ function WorkspaceModalFallback() {
         <span>Loading this tool only when it is needed.</span>
       </div>
     </div>
+  );
+}
+
+function WorkspaceStatusCard({ children }) {
+  return (
+    <section className="panel auth-card">
+      <ProductBrandLockup className="auth-product-brand" />
+      {children}
+    </section>
   );
 }
 
@@ -968,9 +979,16 @@ export default function App() {
   );
   const isEditingQuote = Boolean(editingQuote.id);
   const organizationName = String(organization?.name || "").trim();
-  const brandName = String(catalog.settings?.brandName || "").trim() || organizationName || "Catering workspace";
-  const brandTagline = String(catalog.settings?.brandTagline || "").trim();
-  const brandLogoUrl = String(catalog.settings?.brandLogoUrl || "").trim();
+  const tenantBrandName = String(catalog.settings?.brandName || "").trim();
+  const tenantBrandTagline = String(catalog.settings?.brandTagline || "").trim();
+  const tenantBrandLogoUrl = String(catalog.settings?.brandLogoUrl || "").trim();
+  const workspaceName = String(
+    tenantBrandName
+    || organization?.name
+    || authSession.organizationId
+    || "Organization workspace"
+  ).trim();
+  const brandName = tenantBrandName || organizationName || "Catering workspace";
   const brandPrimaryColor = catalog.settings?.brandPrimaryColor || "#c99334";
   const brandAccentColor = catalog.settings?.brandAccentColor || "#f0d29a";
   const brandDarkAccentColor = catalog.settings?.brandDarkAccentColor || "#8d611a";
@@ -1821,10 +1839,10 @@ export default function App() {
   if (tenantContext.loading) {
     return (
       <main className="auth-shell container">
-        <section className="panel auth-card">
+        <WorkspaceStatusCard>
           <h1>Loading Workspace</h1>
           <p className="muted">Resolving tenant context for this host...</p>
-        </section>
+        </WorkspaceStatusCard>
       </main>
     );
   }
@@ -1832,13 +1850,13 @@ export default function App() {
   if (tenantContext.blocked) {
     return (
       <main className="auth-shell container">
-        <section className="panel auth-card">
+        <WorkspaceStatusCard>
           <h1>Tenant Not Found</h1>
           <p className="muted">
             Host <strong>{tenantContext.hostname || "unknown"}</strong> is not active or is not mapped to a tenant.
           </p>
           <p className="source-note">{tenantContext.error || "Contact support to provision this domain."}</p>
-        </section>
+        </WorkspaceStatusCard>
       </main>
     );
   }
@@ -1858,10 +1876,10 @@ export default function App() {
   if (authSession.loading) {
     return (
       <main className="auth-shell container">
-        <section className="panel auth-card">
+        <WorkspaceStatusCard>
           <h1>Loading</h1>
           <p className="muted">Checking your session...</p>
-        </section>
+        </WorkspaceStatusCard>
       </main>
     );
   }
@@ -1874,7 +1892,7 @@ export default function App() {
     const needsEmailVerification = authSession.user.emailVerified !== true;
     return (
       <main className="auth-shell container">
-        <section className="panel auth-card">
+        <WorkspaceStatusCard>
           <h1>{needsEmailVerification ? "Verify Your Email" : "Access Restricted"}</h1>
           {needsEmailVerification ? (
             <>
@@ -1903,7 +1921,7 @@ export default function App() {
             {customerPortalEnabled && <button type="button" className="ghost" onClick={openPortalMode}>Open Customer Portal</button>}
             <button type="button" className={needsEmailVerification ? "ghost" : "cta"} onClick={handleSignOut}>Sign Out</button>
           </div>
-        </section>
+        </WorkspaceStatusCard>
       </main>
     );
   }
@@ -1912,7 +1930,7 @@ export default function App() {
     return (
       <div className="app-shell" style={appThemeVars}>
         <main className="auth-shell container">
-          <section className="panel auth-card">
+          <WorkspaceStatusCard>
             <p className="eyebrow">Platform Operations</p>
             <h1>Customer Provisioning</h1>
             <p className="muted">
@@ -1924,7 +1942,7 @@ export default function App() {
               </button>
               <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
             </div>
-          </section>
+          </WorkspaceStatusCard>
         </main>
 
         <Suspense fallback={<WorkspaceModalFallback />}>
@@ -1949,10 +1967,10 @@ export default function App() {
   if (catalog.loading) {
     return (
       <main className="auth-shell container">
-        <section className="panel auth-card">
+        <WorkspaceStatusCard>
           <h1>Loading Catalog</h1>
           <p className="muted">Checking this organization’s configured products and pricing...</p>
-        </section>
+        </WorkspaceStatusCard>
       </main>
     );
   }
@@ -1960,7 +1978,7 @@ export default function App() {
   if (catalog.requiresFirebase) {
     return (
       <main className="auth-shell container">
-        <section className="panel auth-card">
+        <WorkspaceStatusCard>
           <h1>Catalog Unavailable</h1>
           <p className="muted">
             Firebase catalog access is required in this environment.
@@ -1969,7 +1987,7 @@ export default function App() {
           <div className="auth-actions">
             <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
           </div>
-        </section>
+        </WorkspaceStatusCard>
       </main>
     );
   }
@@ -1978,7 +1996,7 @@ export default function App() {
     return (
       <div className="app-shell" style={appThemeVars}>
         <main className="auth-shell container">
-          <section className="panel auth-card">
+          <WorkspaceStatusCard>
             <p className="eyebrow">Owner Setup Required</p>
             <h1>Configure Your Catalog</h1>
             <p className="muted">
@@ -2003,7 +2021,7 @@ export default function App() {
             {!authSession.isAdmin && (
               <p className="warning-note">Ask an organization admin to configure and save the catalog.</p>
             )}
-          </section>
+          </WorkspaceStatusCard>
         </main>
 
         <Suspense fallback={<WorkspaceModalFallback />}>
@@ -2031,23 +2049,27 @@ export default function App() {
     <div className="app-shell" style={appThemeVars}>
       <header className="site-header">
         <div className="container nav">
-          <div className="brand-lockup">
-            {brandLogoUrl ? (
-              <img
-                className="brand-logo"
-                src={brandLogoUrl}
-                alt={`${brandName} logo`}
-                loading="eager"
-                decoding="async"
-              />
-            ) : (
-              <span className="brand-logo brand-logo-placeholder" aria-hidden="true">
-                {brandName.slice(0, 2).toUpperCase()}
-              </span>
-            )}
-            <div className="brand-copy">
-              <div className="brand">{brandName}</div>
-              {brandTagline && <p>{brandTagline}</p>}
+          <div className="workspace-header-identity">
+            <ProductBrandLockup compact className="header-product-brand" />
+            <div className="workspace-brand" aria-label={`Current workspace: ${workspaceName}`}>
+              {tenantBrandLogoUrl ? (
+                <img
+                  className="workspace-brand-logo"
+                  src={tenantBrandLogoUrl}
+                  alt=""
+                  loading="eager"
+                  decoding="async"
+                />
+              ) : (
+                <span className="workspace-brand-logo workspace-brand-logo-placeholder" aria-hidden="true">
+                  {workspaceName.slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <div className="workspace-brand-copy">
+                <small>Workspace</small>
+                <strong>{workspaceName}</strong>
+                {tenantBrandTagline && tenantBrandName !== PRODUCT_NAME && <span>{tenantBrandTagline}</span>}
+              </div>
             </div>
           </div>
           {brandCrew.length > 0 && (
@@ -2056,8 +2078,8 @@ export default function App() {
                 <figure className="crew-chip" key={`${member.label || "member"}-${idx}`}>
                   {member.imageUrl ? (
                     <img src={member.imageUrl} alt={member.label || `Team member ${idx + 1}`} loading="lazy" decoding="async" />
-                  ) : brandLogoUrl ? (
-                    <img src={brandLogoUrl} alt={member.label || `Team member ${idx + 1}`} loading="lazy" decoding="async" />
+                  ) : tenantBrandLogoUrl ? (
+                    <img src={tenantBrandLogoUrl} alt={member.label || `Team member ${idx + 1}`} loading="lazy" decoding="async" />
                   ) : (
                     <span className="crew-chip-placeholder" aria-hidden="true">
                       {String(member.label || "TM").slice(0, 2).toUpperCase()}
@@ -2422,7 +2444,7 @@ export default function App() {
             open={importStudioOpen}
             onClose={() => setImportStudioOpen(false)}
             organizationId={authSession.organizationId}
-            organizationName={catalog.settings?.brandName || brandName}
+            organizationName={workspaceName}
             currentUserUid={authSession.user?.uid || ""}
             currentUserEmail={authSession.user?.email || ""}
             onImported={(result) => {

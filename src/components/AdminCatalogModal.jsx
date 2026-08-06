@@ -1768,10 +1768,13 @@ export default function AdminCatalogModal({
             </section>
 
             <section className="admin-section">
-          <div className="admin-section-head"><h3>Branding</h3></div>
+          <div className="admin-section-head"><h3>Customer-facing business branding</h3></div>
+          <p className="source-note">
+            These details identify your catering business on proposals and the customer portal. They do not replace the QuotePilot by MBMApps product identity.
+          </p>
           <div className="admin-grid-settings">
             <label>
-              Brand name
+              Business name
               <input
                 type="text"
                 value={draft.settings.brandName || ""}
@@ -1779,7 +1782,7 @@ export default function AdminCatalogModal({
               />
             </label>
             <label>
-              Brand tagline
+              Business tagline
               <input
                 type="text"
                 value={draft.settings.brandTagline || ""}
@@ -1787,7 +1790,7 @@ export default function AdminCatalogModal({
               />
             </label>
             <label>
-              Brand logo URL/path
+              Business logo URL/path
               <input
                 type="text"
                 value={draft.settings.brandLogoUrl || ""}

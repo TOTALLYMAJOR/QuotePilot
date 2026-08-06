@@ -1089,6 +1089,9 @@ export default function IntegrationOpsModal({
           <p className="source-note">
             Provider secrets belong in the trusted deployment/runtime secret channel, never in this browser, local validation file, or release artifact. This status reflects the current runtime; editing a local file does not change production.
           </p>
+          <p className="source-note">
+            The <code>tonicatering</code> value in these commands is the legacy Firebase project/site identifier. It remains infrastructure-only; the product name is QuotePilot by MBMApps.
+          </p>
           <pre className="integration-command-block"><code>{FUNCTIONS_ENV_SETUP_GUIDANCE}</code></pre>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={() => handleCopyValue(FUNCTIONS_ENV_SETUP_GUIDANCE, "Setup guidance")}>
