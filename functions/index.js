@@ -2598,7 +2598,7 @@ function buildQuoteDeliveryEmailPayload({ quote, quoteId, portalLink } = {}) {
   const paymentLink = storedPaymentLink
     ? parseStoredPaymentLinkOrThrow(storedPaymentLink)
     : "";
-  const brandName = normalizeText(quote?.quoteMeta?.brandName) || "QuotePilot";
+  const brandName = normalizeText(quote?.quoteMeta?.brandName);
   const bookedPortalRenewal = normalizeText(quote?.status).toLowerCase() === "booked";
   if (bookedPortalRenewal) {
     const contractNumber = normalizeText(quote?.booking?.contractNumber);
@@ -2623,7 +2623,7 @@ function buildQuoteDeliveryEmailPayload({ quote, quoteId, portalLink } = {}) {
     ];
     return {
       toEmail: customerEmail,
-      subject: `${brandName} Contract ${contractNumber} - portal access renewed`,
+      subject: `${brandName ? `${brandName} ` : ""}Contract ${contractNumber} - portal access renewed`,
       text: renewalLines.join("\n"),
       html: `
         <p>Hi ${escapeHtml(customerName)},</p>
@@ -2649,7 +2649,7 @@ function buildQuoteDeliveryEmailPayload({ quote, quoteId, portalLink } = {}) {
   ];
   return {
     toEmail: customerEmail,
-    subject: `${brandName} Quote ${quoteNumber} - ${eventDate}`,
+    subject: `${brandName ? `${brandName} ` : ""}Quote ${quoteNumber} - ${eventDate}`,
     text: lines.join("\n"),
     html: `
       <p>Hi ${escapeHtml(customerName)},</p>
@@ -7961,7 +7961,7 @@ async function sendApprovedPaymentRequestEmail(data, context, paymentKind = "dep
     const scopeLabel = flow.paymentKind === "final_balance"
       ? `Your contract ${normalizeText(claimedQuote.booking?.contractNumber)} for ${eventName} is ready for final payment.`
       : `Your quote ${quoteNumber} for ${eventName} has been accepted.`;
-    const brandName = normalizeText(claimedQuote?.quoteMeta?.brandName) || "QuotePilot";
+    const brandName = normalizeText(claimedQuote?.quoteMeta?.brandName);
     const emailIdempotencyKey = paymentRequestEmailIdempotencyKey({
       organizationId,
       quoteId,
@@ -7998,7 +7998,7 @@ async function sendApprovedPaymentRequestEmail(data, context, paymentKind = "dep
     } else {
       email = await sendCustomerEmail({
         toEmail: customerEmail,
-        subject: `${brandName} ${flow.title} - ${quoteNumber}`,
+        subject: `${brandName ? `${brandName} ` : ""}${flow.title} - ${quoteNumber}`,
         text: lines.join("\n"),
         html: `
           <p>Hi ${escapeHtml(customerName)},</p>
