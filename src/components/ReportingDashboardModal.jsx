@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { currency } from "../lib/quoteCalculator";
 import { getQuoteHistory } from "../lib/quoteStore";
+import { getProductAnalyticsSummary } from "../lib/productAnalytics";
 
 function monthKeyFromISO(iso) {
   const dt = new Date(iso || "");
@@ -24,18 +25,37 @@ function recentMonthKeys(count) {
   return out;
 }
 
-export default function ReportingDashboardModal({ open, onClose, organizationId = "" }) {
-  const [state, setState] = useState({ loading: false, error: "", source: "", quotes: [] });
+export default function ReportingDashboardModal({ open, onClose, organizationId = "", addons = [] }) {
+  const [state, setState] = useState({
+    loading: false,
+    error: "",
+    source: "",
+    quotes: [],
+    analytics: null
+  });
 
   const load = async () => {
     setState((prev) => ({ ...prev, loading: true, error: "" }));
     try {
-      const result = await getQuoteHistory({ organizationId });
+      const [result, analytics] = await Promise.all([
+        getQuoteHistory({ organizationId }),
+        getProductAnalyticsSummary({ organizationId, days: 30 }).catch((err) => ({
+          source: "unavailable",
+          days: 30,
+          sessionsStarted: 0,
+          quotesSaved: 0,
+          completionRate: 0,
+          funnel: [],
+          addons: [],
+          error: err?.message || "Analytics summary is unavailable."
+        }))
+      ]);
       setState({
         loading: false,
         error: "",
         source: result.source,
-        quotes: result.quotes
+        quotes: result.quotes,
+        analytics
       });
     } catch (err) {
       setState((prev) => ({
@@ -136,6 +156,13 @@ export default function ReportingDashboardModal({ open, onClose, organizationId 
     };
   }, [state.quotes]);
 
+  const addonNames = useMemo(() => new Map(
+    (Array.isArray(addons) ? addons : []).map((item) => [
+      String(item?.id || ""),
+      String(item?.name || item?.id || "")
+    ])
+  ), [addons]);
+
   if (!open) return null;
 
   return (
@@ -153,6 +180,7 @@ export default function ReportingDashboardModal({ open, onClose, organizationId 
 
         <p className="source-note">Source: {state.source || "-"}</p>
         {state.error && <p className="error-note">{state.error}</p>}
+        {state.analytics?.error && <p className="warning-note">Quote analytics: {state.analytics.error}</p>}
 
         <div className="dashboard-grid">
           <div className="metric-card"><span>Total Quotes</span><strong>{metrics.quotes}</strong></div>
@@ -177,6 +205,51 @@ export default function ReportingDashboardModal({ open, onClose, organizationId 
           <span>Payment Paid: {metrics.paymentPaid}</span>
           <span>Payment Refunded: {metrics.paymentRefunded}</span>
         </div>
+
+        <section className="dashboard-section" aria-labelledby="wizard-funnel-heading">
+          <div className="dashboard-section-head">
+            <div>
+              <h3 id="wizard-funnel-heading">Quote wizard funnel</h3>
+              <p className="source-note">Last {state.analytics?.days || 30} days · anonymous staff sessions · no customer details</p>
+            </div>
+            <strong>{Number(state.analytics?.completionRate || 0).toFixed(1)}% saved</strong>
+          </div>
+          <div className="status-strip">
+            {(state.analytics?.funnel || []).map((row) => (
+              <span key={row.step}>Reached step {row.step}: {row.sessions}</span>
+            ))}
+            <span>Drafts saved: {state.analytics?.quotesSaved || 0}</span>
+          </div>
+          {!state.loading && !(state.analytics?.sessionsStarted > 0) && (
+            <p className="source-note">No wizard sessions recorded yet. New activity will appear here.</p>
+          )}
+        </section>
+
+        <section className="dashboard-section" aria-labelledby="addon-trends-heading">
+          <div className="dashboard-section-head">
+            <div>
+              <h3 id="addon-trends-heading">Add-on selection trends</h3>
+              <p className="source-note">Selections reveal popular offers and choices that are often removed.</p>
+            </div>
+          </div>
+          <div className="history-table-wrap">
+            <table>
+              <thead><tr><th>Add-on</th><th>Selected</th><th>Removed</th></tr></thead>
+              <tbody>
+                {(state.analytics?.addons || []).map((row) => (
+                  <tr key={row.addonId}>
+                    <td>{addonNames.get(row.addonId) || row.addonId}</td>
+                    <td>{row.selected}</td>
+                    <td>{row.removed}</td>
+                  </tr>
+                ))}
+                {!state.loading && !(state.analytics?.addons || []).length && (
+                  <tr><td colSpan="3">No add-on activity recorded yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         <div className="history-table-wrap">
           <table>
