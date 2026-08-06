@@ -6,6 +6,85 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Added
+
+- Real email/password sign-in, invite-aware account guidance, and password-reset
+  request handling, with Firebase Auth emulator coverage at the OOB issuance
+  boundary rather than an inbox-delivery claim.
+- A saved-draft handoff that focuses the exact quote, keeps inactive draft
+  portal links hidden, and routes provider delivery or approval through the
+  existing staff authority boundaries.
+- Retryable Step 2 menu loading with accessible loading, event-specific empty,
+  error, and admin Catalog Admin deep-link states; stale event-type responses
+  cannot replace the current request or erase selections during retry.
+- Searchable, locally filtered Quotes history with quote-number, event-name,
+  customer-name, and email matching, visible result counts, unified short dates,
+  three-row loading skeletons, and clear-filter recovery.
+- Responsive workspace navigation with New quote, Quotes, Workflow,
+  Operations, Account, and mobile More entry points; menus are exclusive and
+  support outside-click dismissal, Escape, ARIA menu semantics, and focus
+  restoration.
+- Customer-safe portal recovery callable with bounded token validation,
+  delivery-activation checks, tenant activity checks, per-requester throttling,
+  and a whitelisted caterer contact response for known active or expired links.
+- Playwright axe contrast coverage at desktop and mobile widths, computed 12px
+  workspace type-floor checks, 44px target checks, and document font-loading
+  assertions.
+
+### Changed
+
+- Customer proposal branding now resolves configured brand name, then the
+  organization profile name, then neutral catering copy across authoritative
+  quote creation/edit, local quotes, portal snapshots, proposal email, and PDF.
+- Portal snapshots add optional organization branding/contact fields and the
+  applied service-charge percentage. Legacy snapshots remain valid and show a
+  rate-free `Service charge` label when no percentage was stored.
+- Customer PDFs use tenant or neutral metadata and plain-language staffing and
+  service-charge labels while retaining pricing internals only in persisted
+  staff data. Real PDF extraction rejects internal ids, rate lists, abbreviated
+  staffing, portal tokens, and QuotePilot fallback metadata.
+- Valid customer portals display caterer name, logo, email, phone, safe colors,
+  humanized values, and acceptance next steps. URL-token entry stays hidden on
+  loaded links, and Staff sign in remains a footer action.
+- Stripe `payment=success` and `payment=cancelled` returns are both consumed.
+  Success only polls stored webhook-backed state; cancellation leaves payment
+  evidence unchanged and offers a truthful retry path.
+- Workspace typography uses a 1.5 body line height, 1.15–1.25 heading rhythm,
+  a 12px minimum text size, fixed high-contrast dark-gold CTAs, stronger header
+  surfaces, and 44px primary, ghost, and quantity-stepper targets.
+- Bodoni Moda, Manrope, DM Mono, and Inter now load from preconnected,
+  `display=swap` document stylesheet links instead of CSS `@import` rules.
+
+### Fixed
+
+- New quote confirmation appears only for user-originated unsaved changes;
+  automatic catalog/template defaults stay clean, and reset returns all quote,
+  event, customer, pricing, and selection fields to the canonical initial state.
+- Step 1 click and Enter validation expose all seven required-field errors,
+  provide one summary, and move focus to the first invalid control.
+- The idempotent `sent` to `viewed` customer-visit transition and the rule that
+  browser payment returns never establish `paid` remain intact.
+
+## [0.2.3] - 2026-08-05
+
+### Added
+
+- Owner-onboarding starter catalog packs for Wedding & events, Corporate
+  drop-off, BBQ / Southern, and Church & community. Packs populate the existing
+  Catalog Admin setup gate with versioned menu, package, add-on, rental, and
+  staffing drafts while leaving pricing unconfirmed until owner review.
+- Blank catalog setup now presents only clearly described industry choices,
+  populates immediately from the selected pack without a second save step, and
+  opens the resulting menu for review; manual build-from-scratch remains one
+  explicit secondary path instead of a row of empty configuration tabs.
+- Server-authoritative starter-pack apply, safe staged replacement, and pricing
+  confirmation transactions with catalog revision preconditions, generated vs
+  modified record hashing, actor/timestamp/revision confirmation evidence,
+  historical manifest lookup, complete catalog validation, and integer
+  minor-unit money storage.
+- Dry-run-first `seed:menu:firestore -- --pack <pack-id>` support for applying
+  the same versioned starter manifests through the existing tenant seed tool.
+
 ### Fixed
 
 - Local buyer-invoice testing can now consume Cloudflare's published always-pass
