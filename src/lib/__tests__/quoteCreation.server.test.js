@@ -492,6 +492,13 @@ describe("trusted server quote creation documents", () => {
         quoteValidityDays: 45,
         organizationName: "Trusted Organization",
         brandName: "Trusted Caterer",
+        brandLogoUrl: "https://cdn.example.test/trusted-logo.png",
+        brandPrimaryColor: "#436b55",
+        brandAccentColor: "#a7c4a0",
+        brandDarkAccentColor: "#294536",
+        brandBackgroundStart: "#f4f7f1",
+        brandBackgroundMid: "#e1eadc",
+        brandBackgroundEnd: "#d5e1cf",
         businessEmail: "events@example.com",
         acceptanceEmail: "accept@example.com",
         crmEnabled: true,
@@ -544,6 +551,15 @@ describe("trusted server quote creation documents", () => {
     expect(documents.quote.quoteMeta).not.toHaveProperty("crmWebhookUrl");
     expect(documents.quote.quoteMeta).not.toHaveProperty("crmBridgeAuthToken");
     expect(documents.quote.quoteMeta.organizationName).toBe("Trusted Organization");
+    expect(documents.quote.quoteMeta).toMatchObject({
+      brandLogoUrl: "https://cdn.example.test/trusted-logo.png",
+      brandPrimaryColor: "#436b55",
+      brandAccentColor: "#a7c4a0",
+      brandDarkAccentColor: "#294536",
+      brandBackgroundStart: "#f4f7f1",
+      brandBackgroundMid: "#e1eadc",
+      brandBackgroundEnd: "#d5e1cf"
+    });
 
     expect(documents.portal).toMatchObject({
       quoteId: "quote-a",
@@ -557,6 +573,10 @@ describe("trusted server quote creation documents", () => {
       quoteMeta: {
         organizationName: "Trusted Organization",
         brandName: "Trusted Caterer",
+        brandLogoUrl: "https://cdn.example.test/trusted-logo.png",
+        brandBackgroundStart: "#f4f7f1",
+        brandBackgroundMid: "#e1eadc",
+        brandBackgroundEnd: "#d5e1cf",
         businessEmail: "events@example.com"
       },
       selection: {

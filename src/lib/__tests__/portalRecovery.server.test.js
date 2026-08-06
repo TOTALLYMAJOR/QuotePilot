@@ -35,7 +35,10 @@ describe("portal recovery contact", () => {
         businessPhone: "205-555-0100",
         brandLogoUrl: "https://cdn.example.test/logo.png",
         brandPrimaryColor: "#8d611a",
-        brandAccentColor: "not-a-color"
+        brandAccentColor: "not-a-color",
+        brandBackgroundStart: "#f4f7f1",
+        brandBackgroundMid: "bad",
+        brandBackgroundEnd: "#d5e1cf"
       }
     });
 
@@ -47,7 +50,10 @@ describe("portal recovery contact", () => {
       logoUrl: "https://cdn.example.test/logo.png",
       brandPrimaryColor: "#8d611a",
       brandAccentColor: "",
-      brandDarkAccentColor: ""
+      brandDarkAccentColor: "",
+      brandBackgroundStart: "#f4f7f1",
+      brandBackgroundMid: "",
+      brandBackgroundEnd: "#d5e1cf"
     });
     expect(contact).not.toHaveProperty("customerName");
     expect(contact).not.toHaveProperty("total");
@@ -187,7 +193,10 @@ describe("portal recovery contact", () => {
       logoUrl: "",
       brandPrimaryColor: "",
       brandAccentColor: "",
-      brandDarkAccentColor: ""
+      brandDarkAccentColor: "",
+      brandBackgroundStart: "",
+      brandBackgroundMid: "",
+      brandBackgroundEnd: ""
     });
     expect(contact).not.toHaveProperty("customerName");
     expect(contact).not.toHaveProperty("total");

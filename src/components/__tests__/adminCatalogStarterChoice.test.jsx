@@ -25,8 +25,10 @@ import AdminCatalogModal, {
   hasNoMenuInventory,
   resolveManagedEventTypeId
 } from "../AdminCatalogModal";
+import { DEFAULT_SETTINGS } from "../../data/mockCatalog";
+import { applyPortalThemePreset } from "../../data/portalThemePresets";
 
-function renderCatalog(catalog) {
+function renderCatalog(catalog, props = {}) {
   return renderToStaticMarkup(
     <AdminCatalogModal
       open
@@ -36,6 +38,7 @@ function renderCatalog(catalog) {
       onSave={async () => ({ ok: true })}
       onApplyStarterPack={async () => ({ ok: true })}
       saving={false}
+      {...props}
     />
   );
 }
@@ -145,5 +148,27 @@ describe("Admin Catalog starter choice", () => {
     expect(hasNoMenuInventory([
       { categories: [], items: [{ id: "chicken" }] }
     ])).toBe(false);
+  });
+
+  test("pricing shows four named accessible portal presets and an immediate matching preview", () => {
+    const html = renderCatalog({
+      packages: [{ id: "celebration", name: "Celebration", ppp: 28 }],
+      addons: [],
+      rentals: [],
+      settings: applyPortalThemePreset({
+        ...DEFAULT_SETTINGS,
+        brandName: "Northstar Catering",
+        pricingSetupConfirmed: true
+      }, "garden-sage")
+    }, { initialTab: "pricing" });
+
+    expect(html.match(/aria-label="Use /g)).toHaveLength(4);
+    expect(html).toContain("Use Midnight Amber. Dark, cinematic backdrop with warm gold accents.");
+    expect(html).toContain("Use Warm Linen. Soft neutral canvas for classic, elegant events.");
+    expect(html).toContain("Use Garden Sage. Calm green palette for natural and community settings.");
+    expect(html).toContain("Use Coastal Blue. Fresh blue palette for clean, modern proposals.");
+    expect(html).toContain("aria-label=\"Customer portal preview: Garden Sage\"");
+    expect(html).toContain("Your proposal from Northstar Catering");
+    expect(html).toContain("aria-pressed=\"true\"");
   });
 });
