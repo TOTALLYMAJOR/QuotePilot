@@ -1,0 +1,163 @@
+# BEO Slice Plan
+
+Source: not from the 2026-08-05 UX audit. This is a new differentiation feature
+(kitchen-facing Banquet Event Order export) proposed and designed in a
+2026-08-06 planning conversation, kept in its own doc so it isn't misread as
+audit-sourced work. One commit. Implement with the `slice-implementer` agent:
+"Implement slice E of docs/BEO_SLICE_PLAN.md".
+
+## Ground rules (same as UX_BATCH_2_PLAN.md)
+
+- Branch: work on the current branch. Do NOT commit — the human reviews the diff and commits.
+- Never touch: `firestore.rules`, tenant-scoping logic, `quoteStore.js` status flow, anything under `scripts/`.
+- Baseline tests: `npx vitest run` must end fully green (342+ passed at time of writing).
+- E2E: not required for this slice (no user-facing wizard/portal strings change).
+
+---
+
+## Slice E — Kitchen BEO (Banquet Event Order) export
+
+Goal: a staff-facing, printable/downloadable kitchen prep document per quote —
+distinct from the customer-facing proposal PDF (`src/lib/proposalExport.js`).
+Content: event timing, staffing headcounts, kitchen checkpoint timeline,
+menu/selections, and production checklist grouped by phase.
+
+### Step 1 — Finish the existing checkpoint-logic extraction (prerequisite)
+
+`src/components/EventScheduleModal.jsx` already imports `buildProductionChecklist`
+from `src/lib/quoteWorkflow.js` — that extraction happened already. Its sibling,
+`buildKitchenCheckpoints`, was never moved and is still a private, unexported
+function in `EventScheduleModal.jsx` (currently around line 303), along with
+its private helpers `defaultKitchenCheckpointOffsets`, `parseTimeToMinutes`,
+`formatCheckpointTime`, and `formatMinutesToTimeInput`.
+
+Move all five functions verbatim (cut, not duplicate) from
+`EventScheduleModal.jsx` into `src/lib/quoteWorkflow.js`, and export
+`buildKitchenCheckpoints` and `defaultKitchenCheckpointOffsets` (the other
+three are internal helpers to those two — export them too only if
+`buildKitchenCheckpoints`/`defaultKitchenCheckpointOffsets` need them exported
+transitively; otherwise keep them module-private in `quoteWorkflow.js`).
+`EventScheduleModal.jsx`'s own local `toNumber` may already have an equivalent
+in `quoteWorkflow.js` — reuse the existing one instead of moving a second copy
+if so; check before moving.
+
+Replace the deleted local definitions in `EventScheduleModal.jsx` with a
+named import from `quoteWorkflow.js`. Do not change any calling code, JSX, or
+behavior in `EventScheduleModal.jsx` beyond this — the goal is byte-identical
+runtime behavior, just relocated. Do not touch `quoteStore.js`'s separate
+`KITCHEN_CHECKPOINT_DEFS`/`KITCHEN_CHECKPOINT_IDS`/`KITCHEN_CHECKPOINT_BY_ID`
+(server-side override-id validation) — that's a distinct, intentionally
+separate concern (input validation vs. display-time computation) and is inside
+the "never touch `quoteStore.js`" boundary regardless.
+
+Add or extend `src/lib/__tests__/quoteWorkflow.test.js` with tests for
+`buildKitchenCheckpoints` (it currently has no test coverage anywhere — verify
+default offsets, override application, and the duration-aware `service-end`/
+`reset` offsets that depend on `event.hours`).
+
+### Step 2 — Data derivation: `src/lib/beoPayload.js` (new file)
+
+Mirror the style of `src/lib/proposalPayload.js` exactly: small local
+`cleanText`/`toNumber`/`toList` helpers (do not import shared helpers from
+elsewhere — this codebase's convention, per `proposalPayload.js`, is each
+payload module owns its own tiny normalizers), no side effects, pure function
+of a `quote` object.
+
+Export `buildBeoPayload(quote)` returning:
+- `quoteNumber`, `organizationName` (from `quote.quoteMeta?.organizationName`,
+  no brand name/logo — this document is internal, not customer branding)
+- `event`: name, date, time, venue, venueAddress, guests, hours, style,
+  dietaryRestrictions (same source fields as `buildProposalPayload`'s `event`
+  block in `proposalPayload.js`)
+- `staffing`: servers, chefs, bartenders (numeric, same source as
+  `proposalPayload.js`), plus `staffLead` (from `quote.booking?.staffLead`,
+  cleaned text)
+- `selections`: packageName, menuItemNames, addons, rentals (flat lists —
+  match `proposalPayload.js`'s existing flat shape; do not invent
+  course/category grouping, catalog items do not carry that field)
+- `checkpoints`: the array returned by `buildKitchenCheckpoints(event)`
+  (imported from `quoteWorkflow.js` per Step 1) called with an `event` shaped
+  the same way `EventScheduleModal.jsx` builds it today — i.e.
+  `{ time: quote.event?.time, hours: quote.event?.hours, kitchenCheckpointOverrides: quote.booking?.kitchenCheckpoints }`.
+  Read how `EventScheduleModal.jsx` currently constructs that shape (around
+  its own line ~401-405, before your Step 1 edit removes the local
+  functions) to match it exactly — do not guess the field names.
+- `productionChecklist`: cross-reference `PRODUCTION_CHECKLIST_ITEMS`
+  (imported from `quoteWorkflow.js`) against `quote.booking?.productionChecklist`
+  completion state, grouped by each item's `group` field (Plan/Kitchen/
+  Logistics/Team/Service/Closeout), preserving `PRODUCTION_CHECKLIST_ITEMS`'s
+  existing order within each group.
+
+Add `src/lib/__tests__/beoPayload.test.js`. Reuse or adapt the fixture at
+`src/lib/__tests__/fixtures/proposalPayloadFixture.js` rather than inventing a
+new one, if its shape covers `event`/`selection`/`booking` fields (extend the
+fixture file with a `booking` block only if it's missing one — check first).
+
+### Step 3 — Rendering: `src/lib/beoExport.js` (new file)
+
+Sibling module to `src/lib/proposalExport.js`, same low-level approach
+(`jsPDF`, `unit: "pt"`, `format: "letter"`) but simpler: no brand images, no
+crew photos, no color palette theming (plain black-on-white functional
+document — this is an internal kitchen doc, not a customer-facing branded
+proposal). Re-declare local `ensureSpace`/`section`/`row` closures the same
+way `proposalExport.js` does (do not import them — they're closures over
+that function's local `doc`/`y` state, not currently extractable without a
+broader refactor of `proposalExport.js`, which is out of scope here).
+
+Export `async function exportKitchenBeo(quote, { output = "save" } = {})`.
+Sections, in order: header (org name, quote number, event name/date — no
+logo), Event & Timing, Staffing, Kitchen Timeline (checkpoint id/label/
+computed clock time, one row per checkpoint), Menu & Selections (package,
+menu items, add-ons, rentals as flat lists — same row-per-list-with-preview
+pattern as `proposalExport.js`'s `countedAmountRow`), Production Checklist
+(grouped by phase, each item showing a checkbox-style mark for completion
+state and `completedByEmail`/`completedAtISO` when completed).
+
+Support the same `output: "base64"` vs `"save"` branches as
+`exportQuoteProposal` (mirror that function's ending exactly) even though
+only `"save"` is wired to UI in this slice — keep the shape consistent in
+case a future slice needs server-side generation.
+
+### Step 4 — UI wiring: `src/components/QuoteHistoryModal.jsx`
+
+Add `canExportBeo: isStaff` to the `permissions` object (same tier as the
+existing `canExportProposal: isStaff` — a kitchen prep sheet is an
+operational document, not a sensitive commercial action, so it does not need
+`isAdmin`-only gating).
+
+Add `handleExportBeo(quote)`, mirroring `handleExportPdf` exactly (dynamic
+`import("../lib/beoExport")`, call `exportKitchenBeo(quote, { output: "save" })`,
+same error handling/feedback pattern as `handleExportPdf`).
+
+Add a button labeled "Kitchen sheet" next to the existing "Export PDF" button
+in the per-quote row actions (same location as the `handleExportPdf` call
+site around line ~1703), gated on `permissions.canExportBeo`. Do not add it to
+the save→send handoff panel in this slice — row actions only, to keep this
+change reviewable; the handoff panel is a plausible follow-up, not required
+here.
+
+Styles: only touch `src/styles.css` if the new button cannot reuse an
+existing button class from the same row-actions group — check first.
+
+### Acceptance criteria
+
+- A staff user (admin or sales) sees a "Kitchen sheet" button on each saved
+  quote in Quote History, next to "Export PDF".
+- Clicking it downloads a PDF containing: event/timing, staffing headcounts +
+  staff lead, a kitchen checkpoint timeline with computed clock times matching
+  what `EventScheduleModal.jsx`'s schedule board would show for the same
+  quote, menu/add-ons/rentals, and the production checklist grouped by phase
+  with completion state.
+- `EventScheduleModal.jsx`'s kitchen-checkpoint behavior (default offsets,
+  overrides, duration-aware service-end/reset timing) is unchanged after the
+  Step 1 move — same computed times as before, just sourced from
+  `quoteWorkflow.js` instead of a local function.
+- No changes to `quoteStore.js`, `firestore.rules`, or any customer-facing
+  surface (portal, customer email, the existing proposal PDF).
+
+### Tests
+
+`npx vitest run` must stay fully green, including new tests for
+`buildKitchenCheckpoints` (moved logic, previously untested) and
+`buildBeoPayload` (new). No e2e coverage required — this is a staff-only,
+non-wizard, non-portal surface with no existing e2e lane touching it.
