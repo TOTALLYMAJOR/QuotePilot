@@ -144,6 +144,33 @@ describe("quoteStore portal token policy", () => {
     expect(Number(quote.portalExpiresAtMs)).toBeGreaterThan(0);
   });
 
+  test("projects enriched branding and service-charge context while legacy quotes still load", async () => {
+    seedQuotes([makeQuote({
+      totals: { serviceFee: 612, serviceFeePctApplied: 0.18 },
+      quoteMeta: {
+        organizationName: "Northstar Events",
+        brandName: "Northstar Catering",
+        brandLogoUrl: "https://cdn.example.test/logo.png",
+        businessEmail: "events@northstar.test",
+        businessPhone: "205-555-0100",
+        brandPrimaryColor: "#8d611a"
+      }
+    })]);
+    const enriched = await getPortalQuote("portal-key-12345678901234567890");
+    expect(enriched.totals.serviceFeePctApplied).toBe(0.18);
+    expect(enriched.quoteMeta).toMatchObject({
+      organizationName: "Northstar Events",
+      brandName: "Northstar Catering",
+      businessEmail: "events@northstar.test"
+    });
+
+    seedQuotes([makeQuote({ quoteMeta: {}, totals: { serviceFee: 612 } })]);
+    const legacy = await getPortalQuote("portal-key-12345678901234567890");
+    expect(legacy.quoteMeta.organizationName).toBe("");
+    expect(legacy.quoteMeta.brandName).toBe("");
+    expect(legacy.totals).not.toHaveProperty("serviceFeePctApplied");
+  });
+
   test("records the first portal view once and preserves its timestamp on reload", async () => {
     seedQuotes([makeQuote()]);
 

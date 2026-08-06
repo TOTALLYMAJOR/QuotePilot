@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { currency } from "../lib/quoteCalculator";
+import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import {
   getPortalQuote,
   updatePortalDecision,
   updatePortalQuoteStatus
 } from "../lib/quoteStore";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
+import { getPortalRecoveryContact } from "../lib/portalRecoveryClient";
 
 const PAYMENT_CONFIRMATION_POLL_INTERVAL_MS = 1500;
 const PAYMENT_CONFIRMATION_MAX_ATTEMPTS = 10;
@@ -24,6 +25,40 @@ const PAYMENT_STATUS_LABELS = {
 function paymentStatusLabel(depositStatus) {
   const normalized = String(depositStatus || "unpaid").trim().toLowerCase();
   return PAYMENT_STATUS_LABELS[normalized] || depositStatus;
+}
+
+function humanizeValue(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "-";
+  return normalized
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function safeColor(value) {
+  const normalized = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(normalized) ? normalized : "";
+}
+
+function safeLogoUrl(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  try {
+    const url = new URL(normalized);
+    return url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function safeEmail(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : "";
+}
+
+function safePhone(value) {
+  const normalized = String(value || "").trim().slice(0, 40);
+  return /^[+\d().\s-]{7,40}$/.test(normalized) ? normalized : "";
 }
 function fmtDate(iso) {
   if (!iso) return "-";
@@ -57,29 +92,29 @@ function decisionReceipt(quote) {
       tone: "booked",
       title: "Event booked",
       body: quote.booking?.confirmationStatus === "confirmed"
-        ? "Your booking is confirmed."
-        : "Your contract is booked; staff confirmation is still pending."
+        ? "You're all set—your caterer has confirmed the booking."
+        : "Your caterer has your approval and will confirm the final booking details with you."
     };
   }
   if (decision === "accepted" || quote?.status === "accepted") {
     return {
       tone: "accepted",
-      title: "Proposal accepted",
-      body: "Acceptance is recorded. Payment and booking confirmation remain separate steps."
+      title: "Thank you—we have your approval",
+      body: "Your caterer will follow up with booking details. A deposit payment does not by itself confirm the event."
     };
   }
   if (decision === "declined" || quote?.status === "declined") {
     return {
       tone: "declined",
-      title: "Proposal declined",
-      body: "Your decision is recorded."
+      title: "Thanks for letting us know",
+      body: "Your caterer has received your decision."
     };
   }
   if (decision === "changes_requested") {
     return {
       tone: "changes",
       title: "Changes requested",
-      body: "Your current proposal remains unaccepted while staff reviews your note."
+      body: "Your caterer has your note and will follow up with a revised proposal."
     };
   }
   return {
@@ -99,9 +134,14 @@ export default function CustomerPortalView({
   const [decisionMessage, setDecisionMessage] = useState("");
   const [acceptanceConfirmed, setAcceptanceConfirmed] = useState(false);
   const [paymentConfirmation, setPaymentConfirmation] = useState({
-    state: initialPaymentReturn === "success" ? "checking" : "idle",
+    state: initialPaymentReturn === "success"
+      ? "checking"
+      : initialPaymentReturn === "cancelled"
+        ? "cancelled"
+        : "idle",
     attempt: 0
   });
+  const [recovery, setRecovery] = useState({ loading: false, contact: null });
   const [state, setState] = useState({
     loading: false,
     busy: false,
@@ -111,7 +151,23 @@ export default function CustomerPortalView({
   });
 
   const quote = state.quote;
-  const brandName = String(quote?.quoteMeta?.brandName || "").trim();
+  const quoteMeta = quote?.quoteMeta || {};
+  const recoveryContact = recovery.contact || {};
+  const organizationName = String(
+    quoteMeta.organizationName || recoveryContact.organizationName || ""
+  ).trim();
+  const brandName = String(
+    quoteMeta.brandName || recoveryContact.brandName || organizationName || ""
+  ).trim();
+  const businessEmail = safeEmail(quoteMeta.businessEmail || recoveryContact.email);
+  const businessPhone = safePhone(quoteMeta.businessPhone || recoveryContact.phone);
+  const brandLogoUrl = safeLogoUrl(quoteMeta.brandLogoUrl || recoveryContact.logoUrl);
+  const brandPrimaryColor = safeColor(quoteMeta.brandPrimaryColor || recoveryContact.brandPrimaryColor);
+  const brandDarkAccentColor = safeColor(quoteMeta.brandDarkAccentColor || recoveryContact.brandDarkAccentColor);
+  const portalTheme = {
+    ...(brandPrimaryColor ? { "--portal-brand": brandPrimaryColor } : {}),
+    ...(brandDarkAccentColor ? { "--portal-brand-dark": brandDarkAccentColor } : {})
+  };
   const portalTitle = brandName ? `Your proposal from ${brandName}` : "Your proposal";
   const eventLabel = `${quote?.eventName || "Event"} on ${fmtDate(quote?.eventDate)}`;
   const receipt = decisionReceipt(quote);
@@ -120,6 +176,16 @@ export default function CustomerPortalView({
   const totals = quote?.totals || {};
   const payment = quote?.payment || {};
   const approvedPaymentLink = sanitizeStripePaymentLink(payment.depositLink);
+
+  const loadRecoveryContact = async (key) => {
+    setRecovery({ loading: true, contact: null });
+    try {
+      const contact = await getPortalRecoveryContact(key);
+      setRecovery({ loading: false, contact });
+    } catch {
+      setRecovery({ loading: false, contact: null });
+    }
+  };
 
   const load = async (nextPortalKey = portalKey) => {
     const key = String(nextPortalKey || "").trim();
@@ -149,13 +215,21 @@ export default function CustomerPortalView({
         quote,
         status: ""
       }));
+      if (key === String(initialPortalKey || "").trim()) {
+        void loadRecoveryContact(key);
+      }
     } catch (err) {
       setState((prev) => ({
         ...prev,
         loading: false,
         quote: null,
-        error: formatError(err)
+        error: key === String(initialPortalKey || "").trim()
+          ? "This proposal link is no longer available."
+          : formatError(err)
       }));
+      if (key === String(initialPortalKey || "").trim()) {
+        void loadRecoveryContact(key);
+      }
     }
   };
 
@@ -185,8 +259,8 @@ export default function CustomerPortalView({
         status: decisionDraft === "changes_requested"
           ? "Your change request was submitted."
           : decisionDraft === "accepted"
-            ? "Thanks — your acceptance is recorded."
-            : "Your decline was recorded."
+            ? "Thank you—your caterer has your approval and will follow up with next steps."
+            : "Thank you—your caterer has received your decision."
       }));
     } catch (err) {
       setState((prev) => ({
@@ -211,7 +285,7 @@ export default function CustomerPortalView({
   }, [portalTitle]);
 
   useEffect(() => {
-    if (initialPaymentReturn !== "success" || typeof window === "undefined") return;
+    if (!["success", "cancelled"].includes(initialPaymentReturn) || typeof window === "undefined") return;
     const url = new URL(window.location.href);
     url.searchParams.delete("payment");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
@@ -276,12 +350,16 @@ export default function CustomerPortalView({
 
   let paymentConfirmationMessage = "";
   if (paymentConfirmation.state === "checking") {
-    paymentConfirmationMessage = "Stripe returned you after checkout. Confirming payment securely...";
+    paymentConfirmationMessage = "Confirming your payment securely with the payment provider...";
   } else if (paymentConfirmation.state === "confirmed") {
-    paymentConfirmationMessage = "Payment confirmed. Your deposit is recorded as paid.";
+    paymentConfirmationMessage = "Payment confirmed—your deposit has been received. Your caterer will confirm the booking separately.";
   } else if (paymentConfirmation.state === "pending") {
     paymentConfirmationMessage = "Payment confirmation is still processing. Refresh this page in a moment to see the recorded status.";
+  } else if (paymentConfirmation.state === "cancelled") {
+    paymentConfirmationMessage = "Payment wasn’t completed. Your proposal is unchanged, and you can try again when you’re ready.";
   }
+
+  const serviceFeeLabel = serviceChargeLabel(totals.serviceFeePctApplied);
 
   const pricingRows = [
     ["Package", totals.base],
@@ -290,7 +368,7 @@ export default function CustomerPortalView({
     ["Rentals", totals.rentals],
     ["Labor", totals.labor],
     ["Travel", totals.travel],
-    ["Service charge", totals.serviceFee],
+    [serviceFeeLabel, totals.serviceFee],
     ["Tax", totals.tax]
   ].filter(([, amount]) => Number(amount || 0) !== 0);
   const eventRows = [
@@ -299,7 +377,7 @@ export default function CustomerPortalView({
     ["Guests", quote?.eventGuests || "-"],
     ["Duration", quote?.eventHours ? `${quote.eventHours} hours` : "-"],
     ["Venue", quote?.venue || "-"],
-    ["Service", quote?.eventStyle || "-"]
+    ["Service", humanizeValue(quote?.eventStyle)]
   ];
   const scopeRows = [
     ["Menu", scope.menuItems],
@@ -309,15 +387,24 @@ export default function CustomerPortalView({
 
   return (
     <main className="portal-shell container">
-      <section className="panel portal-card">
+      <section className="panel portal-card" style={portalTheme}>
         <div className="portal-head">
-          <div>
+          <div className="portal-brand-heading">
+            {brandLogoUrl && <img src={brandLogoUrl} alt={`${brandName || "Caterer"} logo`} />}
+            <div>
             <p className="eyebrow">Catering proposal</p>
             <h1>{portalTitle}</h1>
+            </div>
           </div>
+          {(businessEmail || businessPhone) && (
+            <div className="portal-brand-contact" aria-label="Caterer contact">
+              {businessEmail && <a href={`mailto:${businessEmail}`}>{businessEmail}</a>}
+              {businessPhone && <a href={`tel:${businessPhone.replace(/[^+\d]/g, "")}`}>{businessPhone}</a>}
+            </div>
+          )}
         </div>
 
-        {!quote && (!initialPortalKey || state.error || !state.loading) && (
+        {!quote && !initialPortalKey && (
           <div className="portal-entry">
             <input
               type="text"
@@ -335,11 +422,35 @@ export default function CustomerPortalView({
           <p className="source-note" role="status">Loading your proposal...</p>
         )}
 
-        {state.error && <p className="error-note">{state.error}</p>}
+        {state.error && <p className="error-note" role="alert">{state.error}</p>}
         {state.error && !quote && (
-          <p className="source-note">
-            If this link stopped working, contact {brandName || "your caterer"} to request a fresh proposal link.
-          </p>
+          <section className="portal-recovery" aria-busy={recovery.loading}>
+            <h2>Request a new link</h2>
+            {recovery.loading ? (
+              <p className="source-note" role="status">Finding the right catering contact...</p>
+            ) : (
+              <>
+                <p>
+                  Contact {brandName || "your caterer"} and ask for a fresh proposal link.
+                </p>
+                <div className="portal-recovery-actions">
+                  {businessEmail && (
+                    <a
+                      className="cta"
+                      href={`mailto:${businessEmail}?subject=${encodeURIComponent("Request for a new proposal link")}`}
+                    >
+                      Email {brandName || "your caterer"}
+                    </a>
+                  )}
+                  {businessPhone && (
+                    <a className="ghost" href={`tel:${businessPhone.replace(/[^+\d]/g, "")}`}>
+                      Call {businessPhone}
+                    </a>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
         )}
         {state.status && <p className="source-note">{state.status}</p>}
 
@@ -397,11 +508,6 @@ export default function CustomerPortalView({
                     {paymentConfirmationMessage}
                   </p>
                 )}
-                {approvedPaymentLink && ["accepted", "booked"].includes(quote.status) && payment.depositStatus !== "paid" && (
-                  <a className="cta portal-pay-link" href={approvedPaymentLink} target="_blank" rel="noreferrer">
-                    Pay Deposit
-                  </a>
-                )}
                 <p className="portal-expiry">
                   Proposal expires {fmtDate(
                     [quote.expiresAtISO, quote.portalExpiresAtISO]
@@ -454,6 +560,33 @@ export default function CustomerPortalView({
                     {state.busy ? "Submitting..." : "Submit Decision"}
                   </button>
                 </div>
+              </section>
+            )}
+
+            {["accepted", "booked"].includes(quote.status) && (
+              <section className="portal-next-steps">
+                <div>
+                  <p className="eyebrow">Next steps</p>
+                  <h3>{payment.depositStatus === "paid" ? "Your deposit is received" : "Deposit and booking"}</h3>
+                  <p>
+                    {payment.depositStatus === "paid"
+                      ? `${currency(quote.deposit || 0)} has been received. `
+                      : `${currency(quote.deposit || 0)} is due as the deposit. `}
+                    Your caterer will confirm the booking and final event details separately.
+                  </p>
+                  {(businessEmail || businessPhone) && (
+                    <p className="portal-next-contact">
+                      Questions? {businessEmail && <a href={`mailto:${businessEmail}`}>{businessEmail}</a>}
+                      {businessEmail && businessPhone ? " · " : ""}
+                      {businessPhone && <a href={`tel:${businessPhone.replace(/[^+\d]/g, "")}`}>{businessPhone}</a>}
+                    </p>
+                  )}
+                </div>
+                {approvedPaymentLink && payment.depositStatus !== "paid" && (
+                  <a className="cta portal-pay-link" href={approvedPaymentLink} target="_blank" rel="noreferrer">
+                    Pay deposit
+                  </a>
+                )}
               </section>
             )}
 

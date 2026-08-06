@@ -20,11 +20,10 @@ async function fillRequiredQuoteFields(page, {
   date = futureDateISO()
 } = {}) {
   const eventType = page.getByLabel(/Event type/i);
-  if (await eventType.count()) {
-    const optionCount = await eventType.locator("option").count();
-    if (optionCount > 1) {
-      await eventType.selectOption({ index: 1 });
-    }
+  await expect(eventType).toBeVisible();
+  const optionCount = await eventType.locator("option").count();
+  if (optionCount > 1) {
+    await eventType.selectOption({ index: 1 });
   }
 
   await page.getByLabel(/Event date/i).fill(date);
@@ -73,11 +72,11 @@ async function advanceToSaveButton(page, saveButtonLabel) {
 async function createQuoteToHistory(page, { guests = 72, eventName, venue, date } = {}) {
   await fillRequiredQuoteFields(page, { guests, eventName, venue, date });
   await advanceToSaveButton(page, "Save draft");
-  const history = page.getByRole("dialog", { name: "Quote History" });
+  const history = page.getByRole("dialog", { name: "Quotes" });
   const handoff = history.locator(".saved-quote-handoff");
   await expect(handoff).toContainText(/Saved as a draft/i);
   await expect(handoff).toBeFocused();
-  const historyHeading = history.getByRole("heading", { name: "Quote History" });
+  const historyHeading = history.getByRole("heading", { name: "Quotes" });
   await expect(historyHeading).toBeVisible();
 }
 
@@ -91,6 +90,11 @@ async function setQuoteStatus(row, status) {
   const statusSelect = row.locator("select").first();
   await statusSelect.selectOption(status);
   await expect(statusSelect).toHaveValue(status);
+}
+
+async function openOperationsItem(page, name) {
+  await page.getByRole("button", { name: "Operations" }).click();
+  await page.getByRole("menuitem", { name }).click();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -113,22 +117,22 @@ test("operator workspaces load only when first opened and stay mounted after clo
 
   expect(await modalResourceNames()).toEqual([]);
 
-  await page.getByRole("button", { name: "Sales Workflow" }).click();
-  await expect(page.getByRole("heading", { name: "Sales Workflow" })).toBeVisible();
+  await page.getByRole("button", { name: "Workflow" }).click();
+  await expect(page.getByRole("heading", { name: "Workflow" })).toBeVisible();
   await expect.poll(modalResourceNames).toEqual([
     expect.stringMatching(/SalesWorkflowModal(?:-[^/?]+\.js|\.jsx)/)
   ]);
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
-  await expect(page.getByRole("heading", { name: "Sales Workflow" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Sales Workflow" }).click();
-  await expect(page.getByRole("heading", { name: "Sales Workflow" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Workflow" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Workflow" }).click();
+  await expect(page.getByRole("heading", { name: "Workflow" })).toBeVisible();
   expect(await modalResourceNames()).toHaveLength(1);
 });
 
 test("workflow attention throttles passive reads and retains a known count on refresh failure", async ({ page }) => {
   const emptyTrigger = page.getByRole("button", {
-    name: /Sales Workflow, no quotes need attention/i
+    name: /Workflow, no quotes need attention/i
   });
   await expect(emptyTrigger).toBeVisible();
 
@@ -164,7 +168,7 @@ test("workflow attention throttles passive reads and retains a known count on re
     window.dispatchEvent(new StorageEvent("storage", { key: "quoteWizard.quotes" }));
   });
   await expect(page.getByRole("button", {
-    name: /Sales Workflow, 1 quote needs attention/i
+    name: /Workflow, 1 quote needs attention/i
   })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__quoteAttentionReadCount)).toBe(1);
 
@@ -176,8 +180,121 @@ test("workflow attention throttles passive reads and retains a known count on re
   });
   await expect.poll(() => page.evaluate(() => window.__quoteAttentionReadCount)).toBe(2);
   await expect(page.getByRole("button", {
-    name: /Sales Workflow, 1 quote needs attention/i
+    name: /Workflow, 1 quote needs attention/i
   })).toBeVisible();
+});
+
+test("Quotes loads once, then searches and counts the tenant result locally", async ({ page }) => {
+  await page.evaluate(() => {
+    window.__quotePilotE2eDelays = { quoteHistoryMs: 250 };
+    const base = {
+      organizationId: "e2e-org",
+      status: "draft",
+      portalIssuedAtISO: "2026-12-01T12:00:00.000Z",
+      portalExpiresAtISO: "2099-12-31T23:59:59.000Z",
+      expiresAtISO: "2099-12-31T23:59:59.000Z",
+      totals: { total: 2400, deposit: 720 },
+      payment: { depositStatus: "unpaid", depositLink: "" },
+      booking: {},
+      selection: { eventTypeId: "wedding" },
+      quoteMeta: {},
+      lifecycle: { draftAtISO: "2026-12-01T12:00:00.000Z" }
+    };
+    localStorage.setItem("quoteWizard.quotes", JSON.stringify([
+      {
+        ...base,
+        id: "history-alpha",
+        quoteNumber: "Q-ALPHA-1001",
+        portalKey: "history-alpha-portal-key-1234567890",
+        customerNameKey: "alex rivera",
+        customer: { name: "Alex Rivera", email: "alex@example.com" },
+        event: { name: "Winter Gala", date: "2027-01-05", guests: 80 },
+        createdAtISO: "2026-12-01T12:00:00.000Z",
+        updatedAtISO: "2026-12-02T12:00:00.000Z"
+      },
+      {
+        ...base,
+        id: "history-beta",
+        quoteNumber: "Q-BETA-1002",
+        portalKey: "history-beta-portal-key-12345678901",
+        customerNameKey: "blair chen",
+        customer: { name: "Blair Chen", email: "blair@example.com" },
+        event: { name: "Spring Dinner", date: "2027-03-09", guests: 60 },
+        createdAtISO: "2026-12-03T12:00:00.000Z",
+        updatedAtISO: "2026-12-04T12:00:00.000Z"
+      }
+    ]));
+  });
+
+  await page.getByRole("button", { name: "Quotes", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Quotes" });
+  await expect(dialog.locator(".history-skeleton-row")).toHaveCount(3);
+  await expect(dialog.getByText("Showing 2 of 2 quotes")).toBeVisible();
+  await expect(dialog.getByText("Jan 5, 2027")).toBeVisible();
+
+  const search = dialog.getByPlaceholder("Search customer, quote #, or event");
+  for (const query of ["Q-ALPHA", "Winter Gala", "alex@example.com"]) {
+    await search.fill(query);
+    await expect(dialog.getByText("Showing 1 of 2 quotes")).toBeVisible();
+    await expect(dialog.locator('tr[data-quote-id="history-alpha"]')).toBeVisible();
+  }
+  await search.fill("No such quote");
+  await expect(dialog.getByText("Showing 0 of 2 quotes")).toBeVisible();
+  await expect(dialog.getByText(/No quotes match/i)).toBeVisible();
+  await dialog.getByRole("button", { name: "Clear filters" }).click();
+  await expect(dialog.getByText("Showing 2 of 2 quotes")).toBeVisible();
+});
+
+test("desktop and mobile navigation stay bounded and menus restore focus", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const header = page.locator(".site-header");
+  for (const name of ["New quote", "Quotes", "Workflow", "Operations", "Account"]) {
+    await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  await expect(header.getByRole("button", { name: "More" })).toBeHidden();
+
+  const operations = header.getByRole("button", { name: "Operations" });
+  await operations.click();
+  await expect(operations).toHaveAttribute("aria-expanded", "true");
+  for (const name of [
+    "Event Schedule",
+    "Reporting Dashboard",
+    "Integrations Ops",
+    "Import Studio",
+    "Catalog Admin",
+    "Session Diagnostics"
+  ]) {
+    await expect(header.getByRole("menuitem", { name })).toBeVisible();
+  }
+  await header.getByRole("button", { name: "Account" }).click();
+  await expect(operations).toHaveAttribute("aria-expanded", "false");
+  await expect(header.getByText("e2e-admin@local.test")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(header.getByRole("button", { name: "Account" })).toBeFocused();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(header.getByRole("button", { name: "Operations" })).toBeHidden();
+  const more = header.getByRole("button", { name: "More" });
+  await expect(more).toBeVisible();
+  await more.click();
+  await expect(header.getByRole("menuitem", { name: "Event Schedule" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test("New quote confirms only real edits and resets the canonical quote fields", async ({ page }) => {
+  let dialogCount = 0;
+  page.on("dialog", () => { dialogCount += 1; });
+  await page.getByRole("button", { name: "New quote" }).click();
+  expect(dialogCount).toBe(0);
+
+  await page.getByRole("textbox", { name: /Event name/i }).fill("Unsaved Gala");
+  await page.getByRole("textbox", { name: /Your name/i }).fill("Unsaved Client");
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await page.getByRole("button", { name: "New quote" }).click();
+  expect(dialogCount).toBe(1);
+  await expect(page.getByRole("textbox", { name: /Event name/i })).toHaveValue("");
+  await expect(page.getByRole("textbox", { name: /Your name/i })).toHaveValue("");
+  await expect(page.getByText("Ready for a new quote")).toBeVisible();
 });
 
 test("step 1 next stays actionable and explains missing required fields", async ({ page }) => {
@@ -187,13 +304,80 @@ test("step 1 next stays actionable and explains missing required fields", async 
 
   await nextButton.click();
   await expect(page.getByText(/Complete required fields before continuing/i)).toBeVisible();
+  await expect(page.locator("[aria-invalid='true']")).toHaveCount(7);
+  await expect(page.getByText(/event type, event date, guest count, event name, venue, client name, valid client email/i)).toBeVisible();
   await expect(page.locator("[aria-invalid='true']").first()).toBeFocused();
   await expect(page.locator(".stepper-item[aria-current='step']")).toContainText("Event Basics");
+  await nextButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[aria-invalid='true']")).toHaveCount(7);
+  await expect(page.locator("[aria-invalid='true']").first()).toBeFocused();
 
   await fillRequiredQuoteFields(page, { guests: 58, eventName: "E2E Soft Lock", venue: "Guidance Hall" });
   await expect(page.getByText(/Missing required fields/i)).toHaveCount(0);
   await nextButton.click();
   await expect(page.getByText(/Customized Cuisine Menu/i)).toBeVisible();
+});
+
+test("menu loading and empty states lead admins to the selected Catalog Admin menu", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__pendingMenuResolvers = [];
+    window.__quotePilotE2eFunctions = {
+      loadMenuByEvent: () => new Promise((resolve) => {
+        window.__pendingMenuResolvers.push(resolve);
+      })
+    };
+  });
+  await page.reload();
+  await fillRequiredQuoteFields(page, { guests: 54, eventName: "Menu State Test", venue: "Menu Hall" });
+  const selectedEventTypeId = await page.getByLabel(/Event type/i).inputValue();
+  const selectedEventType = await page.getByLabel(/Event type/i).locator("option:checked").textContent();
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.locator(".menu-skeleton-row")).toHaveCount(3);
+  await expect(page.locator(".menu-state")).toHaveAttribute("aria-busy", "true");
+
+  await page.evaluate(() => {
+    window.__pendingMenuResolvers.splice(0).forEach((resolve) => resolve([]));
+  });
+  await expect(page.getByText(`No menu items are configured for ${selectedEventType} yet.`)).toBeVisible();
+  await page.getByRole("button", { name: "Add menu items" }).click();
+  const catalogAdmin = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Catalog Admin" }) });
+  await expect(catalogAdmin.getByRole("heading", { name: "Catalog Admin" })).toBeVisible();
+  await expect(page.locator(".admin-tab.active")).toHaveText("Menu");
+  await expect(catalogAdmin.getByLabel("Event type")).toHaveValue(selectedEventTypeId);
+});
+
+test("menu retry repeats the selected event request without clearing selections", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__menuShouldFail = false;
+    window.__quotePilotE2eFunctions = {
+      loadMenuByEvent: async () => {
+        if (window.__menuShouldFail) throw new Error("temporary menu failure");
+        return [{
+          id: "entrees",
+          name: "Entrees",
+          items: [{ id: "menu-retry-chicken", name: "Herb Chicken", pricingType: "per_person", price: 12 }]
+        }];
+      }
+    };
+  });
+  await page.reload();
+  await fillRequiredQuoteFields(page, { guests: 56, eventName: "Menu Retry Test", venue: "Retry Hall" });
+  await page.getByRole("button", { name: "Next" }).click();
+  const chicken = page.getByRole("checkbox", { name: /Herb Chicken/i });
+  await expect(chicken).toBeVisible();
+  await chicken.check();
+
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.evaluate(() => { window.__menuShouldFail = true; });
+  const eventType = page.getByLabel(/Event type/i);
+  const optionCount = await eventType.locator("option").count();
+  await eventType.selectOption({ index: Math.min(2, optionCount - 1) });
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("alert")).toContainText(/couldn't load the menu/i);
+  await page.evaluate(() => { window.__menuShouldFail = false; });
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(chicken).toBeChecked();
 });
 
 test("staffing counts stay primary while optional rate values remain reviewable", async ({ page }) => {
@@ -447,7 +631,7 @@ test("draft save handoff targets the exact new quote and stays truthful across s
 
   await advanceToSaveButton(page, "Save draft");
 
-  const history = page.getByRole("dialog", { name: "Quote History" });
+  const history = page.getByRole("dialog", { name: "Quotes" });
   const firstHandoff = history.locator(".saved-quote-handoff");
   await expect(firstHandoff).toContainText(/Saved as a draft/i);
   await expect(firstHandoff).toContainText(/has not been sent/i);
@@ -473,18 +657,18 @@ test("draft save handoff targets the exact new quote and stays truthful across s
   });
   await advanceToSaveButton(page, "Save draft");
 
-  const secondHandoff = page.getByRole("dialog", { name: "Quote History" }).locator(".saved-quote-handoff");
+  const secondHandoff = page.getByRole("dialog", { name: "Quotes" }).locator(".saved-quote-handoff");
   await expect(secondHandoff).toBeFocused();
   const secondQuoteId = await secondHandoff.getAttribute("data-quote-id");
   expect(secondQuoteId).toBeTruthy();
   expect(secondQuoteId).not.toBe(firstQuoteId);
-  const secondTargetRow = page.getByRole("dialog", { name: "Quote History" })
+  const secondTargetRow = page.getByRole("dialog", { name: "Quotes" })
     .locator("tr.history-row-target");
   await expect(secondTargetRow).toHaveAttribute("data-quote-id", secondQuoteId);
   await expect(secondTargetRow).toContainText("61");
 
-  const customerSearch = page.getByRole("dialog", { name: "Quote History" })
-    .getByPlaceholder("Search customer name");
+  const customerSearch = page.getByRole("dialog", { name: "Quotes" })
+    .getByPlaceholder("Search customer, quote #, or event");
   await customerSearch.fill("No Matching Customer");
   await expect(secondHandoff).toHaveCount(0);
   await expect(customerSearch).toBeFocused();
@@ -499,7 +683,7 @@ test("unresolved quote delivery locks conflicting mutations but keeps read-only 
     eventName: "Unresolved Delivery",
     venue: "Safety Hall"
   });
-  const history = page.getByRole("dialog", { name: "Quote History" });
+  const history = page.getByRole("dialog", { name: "Quotes" });
   const quoteId = await history.locator(".saved-quote-handoff").getAttribute("data-quote-id");
   expect(quoteId).toBeTruthy();
   await history.getByRole("button", { name: "Close" }).click();
@@ -539,7 +723,7 @@ test("unresolved quote delivery locks conflicting mutations but keeps read-only 
     localStorage.setItem("quoteWizard.quotes", JSON.stringify(quotes));
   }, quoteId);
 
-  await page.getByRole("button", { name: "Quote History" }).click();
+  await page.getByRole("button", { name: "Quotes", exact: true }).click();
   const row = page.locator(`tr[data-quote-id="${quoteId}"]`);
   await expect(row).toContainText("Delivery in progress");
   for (const control of await row.locator("select").all()) {
@@ -562,8 +746,7 @@ test("quote history supports export and safely blocks an unconfigured payment li
   await expect(firstQuoteRow).toBeVisible();
 
   await firstQuoteRow.getByRole("button", { name: "Copy Email" }).click();
-  await expect(page.getByRole("dialog").getByRole("status")).toContainText(/Email template copied/i);
-  await expect(page.getByRole("dialog").getByRole("status")).toContainText(/remains a draft/i);
+  await expect(page.getByRole("dialog").getByText(/Email template copied/i).first()).toContainText(/remains a draft/i);
   await expect(firstQuoteRow.getByRole("combobox").first()).toHaveValue("draft");
   await expect(firstQuoteRow.getByRole("button", { name: "Copy Portal" })).toBeDisabled();
 
@@ -584,10 +767,10 @@ test("sales workflow persists a follow-up plan", async ({ page }) => {
     venue: "Follow-up Hall"
   });
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
-  await page.getByRole("button", { name: "Sales Workflow" }).click();
+  await page.getByRole("button", { name: "Workflow" }).click();
 
   const workflow = page.getByRole("dialog");
-  await expect(workflow.getByRole("heading", { name: "Sales Workflow" })).toBeVisible();
+  await expect(workflow.getByRole("heading", { name: "Workflow" })).toBeVisible();
   await workflow.getByLabel("Due date").fill(dueDate);
   await workflow.getByLabel("Note").fill("Confirm final menu after tasting.");
   await workflow.getByRole("button", { name: "Save Follow-up" }).click();
@@ -610,12 +793,12 @@ test("sales workflow persists a follow-up plan", async ({ page }) => {
   const resolvedApproval = workflow.locator(".approval-row[data-pending='false']");
   await expect(resolvedApproval).toBeFocused();
 
-  await workflow.getByRole("button", { name: "Open Quote History" }).click();
-  const history = page.getByRole("dialog", { name: "Quote History" });
+  await workflow.getByRole("button", { name: "Open Quotes" }).click();
+  const history = page.getByRole("dialog", { name: "Quotes" });
   await expect(history.locator(".history-card")).toBeFocused();
   await history.getByRole("button", { name: "Close" }).click();
-  await expect(page.getByRole("button", { name: "Quote History" })).toBeFocused();
-  await page.getByRole("button", { name: "Sales Workflow" }).click();
+  await expect(page.getByRole("button", { name: "Quotes", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Workflow" }).click();
   await expect(page.getByRole("dialog").getByLabel("Due date")).toHaveValue(dueDate);
   await expect(page.getByRole("dialog").getByLabel("Note")).toHaveValue("Confirm final menu after tasting.");
 });
@@ -642,9 +825,10 @@ test("portal decision center records a customer change request", async ({ page }
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
   await expect(page.getByRole("button", {
-    name: /Sales Workflow, no quotes need attention/i
+    name: /Workflow, no quotes need attention/i
   })).toBeVisible();
-  await page.getByRole("button", { name: "Customer Portal" }).click();
+  await page.getByRole("button", { name: "Account" }).click();
+  await page.getByRole("menuitem", { name: "Customer Portal" }).click();
   await expect(page.getByRole("heading", { name: "Your proposal" })).toBeVisible();
   await page.getByPlaceholder("Paste your quote key").fill(portalKey);
   await page.getByRole("button", { name: "Open Proposal" }).click();
@@ -665,9 +849,9 @@ test("portal decision center records a customer change request", async ({ page }
   await page.getByLabel("Requested changes").fill("Please replace the entree with a vegetarian option.");
   await page.getByRole("button", { name: "Submit Decision" }).click();
   await expect(page.getByText("Changes requested", { exact: true })).toBeVisible();
-  await expect(page.getByText(/current proposal remains unaccepted/i)).toBeVisible();
+  await expect(page.getByText(/caterer has your note and will follow up with a revised proposal/i)).toBeVisible();
 
-  await page.getByRole("button", { name: "Staff Sign In" }).click();
+  await page.getByRole("button", { name: /Staff sign in/i }).click();
   const salesWorkflowResources = async () => page.evaluate(() => (
     performance
       .getEntriesByType("resource")
@@ -677,7 +861,7 @@ test("portal decision center records a customer change request", async ({ page }
   expect(await salesWorkflowResources()).toEqual([]);
 
   const workflowTrigger = page.getByRole("button", {
-    name: /Sales Workflow, 1 quote needs attention/i
+    name: /Workflow, 1 quote needs attention/i
   });
   await expect(workflowTrigger).toBeVisible();
   expect(await salesWorkflowResources()).toEqual([]);
@@ -734,7 +918,7 @@ test("portal decision center records a customer change request", async ({ page }
   await expect(workflow).toHaveCount(0);
   await expect(page.locator("main.wizard-grid")).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
-  await page.getByRole("button", { name: /Sales Workflow, 1 quote needs attention/i }).click();
+  await page.getByRole("button", { name: /Workflow, 1 quote needs attention/i }).click();
   await expect(workflow.getByRole("tab", { name: "Attention (1)" })).toHaveAttribute("aria-selected", "true");
 
   await workflow.getByRole("button", { name: `Acknowledge internally — ${quoteLabel}` }).click();
@@ -770,7 +954,7 @@ test("portal decision center records a customer change request", async ({ page }
   });
 
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /Sales Workflow, no quotes need attention/i })).toBeFocused();
+  await expect(page.getByRole("button", { name: /Workflow, no quotes need attention/i })).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
 });
 
@@ -778,9 +962,12 @@ test("portal refreshes webhook-backed payment state after a Stripe success retur
   const portalKey = "portal-payment-return-12345678901234567890";
   const nowISO = new Date().toISOString();
   const expiresAtISO = "2099-12-31T23:59:59.000Z";
-  await page.goto(`/app?portal=${encodeURIComponent(portalKey)}&payment=success`);
-  await expect(page.getByRole("heading", { name: "Your proposal" })).toBeVisible();
-  await page.evaluate(({ key, createdAtISO, portalExpiryISO }) => {
+  await page.addInitScript(({ key, createdAtISO, portalExpiryISO }) => {
+    const nativeClear = Storage.prototype.clear;
+    Storage.prototype.clear = function preservePortalFixture() {
+      if (this === localStorage) return;
+      return nativeClear.call(this);
+    };
     localStorage.setItem("quoteWizard.quotes", JSON.stringify([{
       id: "quote-payment-return",
       quoteNumber: "Q-PAYMENT-RETURN",
@@ -816,10 +1003,10 @@ test("portal refreshes webhook-backed payment state after a Stripe success retur
     }]));
   }, { key: portalKey, createdAtISO: nowISO, portalExpiryISO: expiresAtISO });
 
-  await page.getByRole("button", { name: "Open Proposal" }).click();
+  await page.goto(`/app?portal=${encodeURIComponent(portalKey)}&payment=success`);
   await expect(page.getByRole("heading", { name: /Payment Return Dinner on/i })).toBeVisible();
   const paymentReturnStatus = page.locator(".portal-pricing-section [role='status']");
-  await expect(paymentReturnStatus).toContainText(/confirming payment securely/i);
+  await expect(paymentReturnStatus).toContainText(/confirming (?:your )?payment securely/i);
   await expect(page).toHaveURL(new RegExp(`portal=${portalKey}$`));
   await expect(page.locator(".portal-payment-state strong")).toHaveText(/awaiting deposit/i);
 
@@ -841,6 +1028,142 @@ test("portal refreshes webhook-backed payment state after a Stripe success retur
   await expect(paymentReturnStatus).toContainText(/payment confirmed/i);
 });
 
+test("valid and expired portal links use tenant branding without exposing token entry", async ({ page }) => {
+  const activeKey = "portal-branded-active-12345678901234567890";
+  const expiredKey = "portal-branded-expired-1234567890123456";
+  const createdAtISO = "2026-08-06T12:00:00.000Z";
+  await page.addInitScript(({ activePortalKey, expiredPortalKey, createdAt }) => {
+    const nativeClear = Storage.prototype.clear;
+    Storage.prototype.clear = function preservePortalFixture() {
+      if (this === localStorage) return;
+      return nativeClear.call(this);
+    };
+    const quote = (portalKey, portalExpiresAtISO, id) => ({
+      id,
+      organizationId: "e2e-org",
+      quoteNumber: id === "portal-active" ? "Q-BRAND-ACTIVE" : "Q-BRAND-EXPIRED",
+      status: "sent",
+      portalKey,
+      portalIssuedAtISO: createdAt,
+      portalExpiresAtISO,
+      expiresAtISO: portalExpiresAtISO,
+      createdAtISO: createdAt,
+      updatedAtISO: createdAt,
+      customer: { name: "Portal Guest", email: "guest@example.com" },
+      event: {
+        name: "Family Celebration",
+        date: "2027-04-18",
+        time: "17:30",
+        hours: 4,
+        guests: 70,
+        venue: "Garden Hall",
+        style: "family_style"
+      },
+      totals: {
+        total: 4200,
+        deposit: 1260,
+        serviceFee: 540,
+        serviceFeePctApplied: 0.18
+      },
+      selection: { packageName: "Celebration Menu", menuItemNames: ["Herb Chicken"] },
+      payment: { depositStatus: "unpaid", depositLink: "" },
+      booking: {},
+      quoteMeta: {
+        organizationName: "Northstar Events",
+        brandName: "Northstar Catering",
+        brandLogoUrl: "https://cdn.example.test/northstar-logo.png",
+        businessEmail: "events@northstar.test",
+        businessPhone: "205-555-0100",
+        brandPrimaryColor: "#8d611a",
+        brandDarkAccentColor: "#5e3b08"
+      },
+      lifecycle: { sentAtISO: createdAt }
+    });
+    localStorage.setItem("quoteWizard.quotes", JSON.stringify([
+      quote(activePortalKey, "2099-12-31T23:59:59.000Z", "portal-active"),
+      quote(expiredPortalKey, "2020-01-01T00:00:00.000Z", "portal-expired")
+    ]));
+  }, { activePortalKey: activeKey, expiredPortalKey: expiredKey, createdAt: createdAtISO });
+
+  await page.goto(`/app?portal=${encodeURIComponent(activeKey)}`);
+  await expect(page.getByRole("heading", { name: "Your proposal from Northstar Catering" })).toBeVisible();
+  await expect(page.getByAltText("Northstar Catering logo")).toBeVisible();
+  await expect(page.getByText("Family Style", { exact: true })).toBeVisible();
+  await expect(page.getByText("Service charge (18%)", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Quote link key")).toHaveCount(0);
+  const firstView = await page.evaluate(() => {
+    const quote = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]")
+      .find((item) => item.id === "portal-active");
+    return { status: quote.status, viewedAtISO: quote.lifecycle?.viewedAtISO };
+  });
+  expect(firstView.status).toBe("viewed");
+  expect(firstView.viewedAtISO).toBeTruthy();
+  await page.getByRole("button", { name: "Staff sign in" }).click();
+  await page.getByRole("button", { name: "Account" }).click();
+  await page.getByRole("menuitem", { name: "Customer Portal" }).click();
+  await page.getByLabel("Quote link key").fill(activeKey);
+  await page.getByRole("button", { name: "Open Proposal" }).click();
+  await expect(page.getByRole("heading", { name: "Your proposal from Northstar Catering" })).toBeVisible();
+  expect(await page.evaluate(() => {
+    const quote = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]")
+      .find((item) => item.id === "portal-active");
+    return quote.lifecycle?.viewedAtISO;
+  })).toBe(firstView.viewedAtISO);
+
+  await page.goto(`/app?portal=${encodeURIComponent(expiredKey)}`);
+  await expect(page.getByRole("heading", { name: "Request a new link" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Email Northstar Catering" })).toHaveAttribute(
+    "href",
+    /^mailto:events@northstar\.test/
+  );
+  await expect(page.getByRole("link", { name: /Call 205-555-0100/ })).toHaveAttribute("href", "tel:2055550100");
+  await expect(page.getByLabel("Quote link key")).toHaveCount(0);
+});
+
+test("cancelled payment returns are consumed without changing stored payment evidence", async ({ page }) => {
+  const portalKey = "portal-payment-cancelled-123456789012345";
+  const createdAtISO = new Date().toISOString();
+  await page.addInitScript(({ key, createdAt }) => {
+    const nativeClear = Storage.prototype.clear;
+    Storage.prototype.clear = function preservePortalFixture() {
+      if (this === localStorage) return;
+      return nativeClear.call(this);
+    };
+    localStorage.setItem("quoteWizard.quotes", JSON.stringify([{
+      id: "quote-payment-cancelled",
+      organizationId: "e2e-org",
+      quoteNumber: "Q-PAYMENT-CANCELLED",
+      status: "accepted",
+      portalKey: key,
+      portalIssuedAtISO: createdAt,
+      portalExpiresAtISO: "2099-12-31T23:59:59.000Z",
+      expiresAtISO: "2099-12-31T23:59:59.000Z",
+      createdAtISO: createdAt,
+      updatedAtISO: createdAt,
+      customer: { name: "Payment Guest", email: "guest@example.com" },
+      event: { name: "Payment Dinner", date: "2027-05-12", guests: 50, style: "plated" },
+      totals: { total: 3000, deposit: 900 },
+      selection: {},
+      payment: {
+        depositStatus: "unpaid",
+        depositLink: "https://checkout.stripe.com/c/pay/cs_test_cancelled"
+      },
+      booking: {},
+      quoteMeta: { organizationName: "Northstar Events" },
+      portalDecision: { decision: "accepted", requestId: "cancelled-payment-request-123", submittedAtISO: createdAt },
+      lifecycle: { acceptedAtISO: createdAt }
+    }]));
+  }, { key: portalKey, createdAt: createdAtISO });
+
+  await page.goto(`/app?portal=${encodeURIComponent(portalKey)}&payment=cancelled`);
+  await expect(page.getByRole("status")).toContainText(/Payment wasn’t completed/i);
+  await expect(page.getByRole("link", { name: "Pay deposit" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`portal=${portalKey}$`));
+  expect(await page.evaluate(() => (
+    JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]")[0].payment.depositStatus
+  ))).toBe("unpaid");
+});
+
 test("accepted event production checklist persists completion", async ({ page }) => {
   const now = new Date();
   const today = [
@@ -859,7 +1182,7 @@ test("accepted event production checklist persists completion", async ({ page })
   await setQuoteStatus(row, "sent");
   await setQuoteStatus(row, "accepted");
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
-  await page.getByRole("button", { name: "Schedule" }).click();
+  await openOperationsItem(page, "Event Schedule");
 
   const schedule = page.getByRole("dialog");
   await expect(schedule.getByText("E2E Production Event")).toBeVisible();
@@ -868,7 +1191,7 @@ test("accepted event production checklist persists completion", async ({ page })
   await expect(schedule.getByText(/Production checklist updated for/i)).toBeVisible();
 
   await schedule.getByRole("button", { name: "Close" }).click();
-  await page.getByRole("button", { name: "Schedule" }).click();
+  await openOperationsItem(page, "Event Schedule");
   await expect(page.getByRole("dialog").getByLabel("Event brief reviewed")).toBeChecked();
 });
 
@@ -889,7 +1212,7 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("95");
   await advanceToSaveButton(page, "Save Changes");
 
-  const history = page.getByRole("dialog", { name: "Quote History" });
+  const history = page.getByRole("dialog", { name: "Quotes" });
   const handoff = history.locator(".saved-quote-handoff");
   await expect(handoff).toHaveAttribute("data-quote-id", originalQuoteId);
   await expect(handoff.locator(".eyebrow")).toHaveText("Draft updated");
@@ -962,9 +1285,9 @@ test("conversion is blocked when another quote is already booked for same venue/
   await advanceToSaveButton(page, "Save draft");
   await expect(page.getByText(/Availability conflict: this date\/venue is already booked/i)).toBeVisible();
 
-  const historyHeading = page.getByRole("heading", { name: "Quote History" });
+  const historyHeading = page.getByRole("heading", { name: "Quotes" });
   if (!(await historyHeading.isVisible())) {
-    await page.getByRole("button", { name: "Quote History" }).click();
+    await page.getByRole("button", { name: "Quotes", exact: true }).click();
   }
   await expect(historyHeading).toBeVisible();
 

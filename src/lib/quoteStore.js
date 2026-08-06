@@ -650,6 +650,9 @@ function buildPortalSnapshot(quoteId, quote) {
       labor: Number(quote.totals?.labor || 0),
       travel: Number(quote.totals?.travel || 0),
       serviceFee: Number(quote.totals?.serviceFee || 0),
+      ...(Object.prototype.hasOwnProperty.call(quote.totals || {}, "serviceFeePctApplied")
+        ? { serviceFeePctApplied: Number(quote.totals.serviceFeePctApplied || 0) }
+        : {}),
       tax: Number(quote.totals?.tax || 0),
       total: Number(quote.totals?.total || 0),
       deposit: Number(quote.totals?.deposit || 0)
@@ -667,7 +670,14 @@ function buildPortalSnapshot(quoteId, quote) {
         .filter(Boolean)
     },
     quoteMeta: {
-      brandName: quote.quoteMeta?.brandName || ""
+      organizationName: quote.quoteMeta?.organizationName || "",
+      brandName: quote.quoteMeta?.brandName || "",
+      brandLogoUrl: quote.quoteMeta?.brandLogoUrl || "",
+      brandPrimaryColor: quote.quoteMeta?.brandPrimaryColor || "",
+      brandAccentColor: quote.quoteMeta?.brandAccentColor || "",
+      brandDarkAccentColor: quote.quoteMeta?.brandDarkAccentColor || "",
+      businessPhone: quote.quoteMeta?.businessPhone || "",
+      businessEmail: quote.quoteMeta?.businessEmail || ""
     },
     status: normalizeStatus(quote.status),
     expiresAtISO: quote.expiresAtISO || addDaysISO(createdAtISO, DEFAULT_VALIDITY_DAYS),
@@ -2663,6 +2673,7 @@ export async function submitQuote({
     },
     pricing: persistedPricing,
     quoteMeta: {
+      organizationName: settings?.organizationName || "",
       quotePreparedBy: settings?.quotePreparedBy || "",
       brandName: settings?.brandName || "",
       brandTagline: settings?.brandTagline || "",
@@ -3053,6 +3064,7 @@ export async function updateQuote({
     },
     pricing: persistedPricing,
     quoteMeta: {
+      organizationName: settings?.organizationName || "",
       quotePreparedBy: settings?.quotePreparedBy || "",
       brandName: settings?.brandName || "",
       brandTagline: settings?.brandTagline || "",
@@ -3446,6 +3458,10 @@ export async function getWorkflowAttentionSnapshot({ organizationId = "" } = {})
 }
 
 export async function getQuoteHistory(filters = {}) {
+  const e2eDelayMs = Math.max(0, Number(globalThis.__quotePilotE2eDelays?.quoteHistoryMs || 0));
+  if (e2eDelayMs > 0) {
+    await new Promise((resolve) => globalThis.setTimeout(resolve, Math.min(e2eDelayMs, 5_000)));
+  }
   const normalizedEventTypeId = String(filters?.eventTypeId || "").trim();
   const normalizedCustomerName = normalizeCustomerNameKey(filters?.customerName || "");
   const includeDeleted = filters?.includeDeleted === true;

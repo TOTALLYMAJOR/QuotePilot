@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 async function openCustomerProvisioning(page) {
   const platformLauncher = page.getByRole("button", { name: "Open Customer Provisioning" });
-  const scopedLauncher = page.getByRole("button", { name: "Integrations" });
+  const scopedLauncher = page.getByRole("button", { name: "Operations" });
 
   await expect.poll(async () => (
     await platformLauncher.isVisible() || await scopedLauncher.isVisible()
@@ -13,6 +13,7 @@ async function openCustomerProvisioning(page) {
   } else {
     await expect(page.getByRole("button", { name: "New Quote" })).toBeVisible();
     await scopedLauncher.click();
+    await page.getByRole("menuitem", { name: "Integrations Ops" }).click();
   }
 
   await expect(page.getByRole("heading", { name: "Customer Provisioning (Admin)" })).toBeVisible();

@@ -2,6 +2,15 @@ export function currency(n) {
   return `$${(Math.round(Number(n || 0) * 100) / 100).toFixed(2)}`;
 }
 
+export function serviceChargeLabel(rate) {
+  if (rate === null || rate === undefined || String(rate).trim() === "") {
+    return "Service charge";
+  }
+  const normalized = Number(rate);
+  if (!Number.isFinite(normalized) || normalized < 0) return "Service charge";
+  return `Service charge (${Math.round(normalized * 1000) / 10}%)`;
+}
+
 function toNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isNaN(n) ? fallback : n;

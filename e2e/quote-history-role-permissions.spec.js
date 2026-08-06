@@ -2,6 +2,9 @@ import { expect, test } from "@playwright/test";
 
 async function fillRequiredQuoteFields(page) {
   const eventDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const eventType = page.getByLabel(/Event type/i);
+  await expect(eventType).toBeVisible();
+  await eventType.selectOption({ index: 1 });
   await page.getByLabel(/Event date/i).fill(eventDate);
   await page.getByLabel(/Start time/i).fill("18:00");
   await page.getByRole("spinbutton", { name: /Event hours/i }).fill("4");
@@ -49,12 +52,15 @@ test.beforeEach(async ({ page }) => {
 test("sales quote history preserves proposal actions and hides payment and booking authority controls", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/app");
-  await expect(page.getByText(/Signed in as .+ · sales/)).toBeVisible();
+  await page.getByRole("button", { name: "More" }).click();
+  const moreMenu = page.getByRole("menu", { name: "More" });
+  await expect(moreMenu).toContainText("sales");
+  await page.keyboard.press("Escape");
 
   await fillRequiredQuoteFields(page);
   await advanceToSave(page);
 
-  const historyHeading = page.getByRole("heading", { name: "Quote History" });
+  const historyHeading = page.getByRole("heading", { name: "Quotes" });
   await expect(historyHeading).toBeVisible();
 
   const dialog = page.getByRole("dialog");
@@ -75,7 +81,7 @@ test("sales quote history preserves proposal actions and hides payment and booki
   await expect(requestApprovalButton).toBeVisible();
   await requestApprovalButton.click();
   await expect(dialog.getByText(
-    /Approval requested\. An admin will see it in Sales Workflow\./i
+    /Approval requested\. An admin will see it in Workflow\./i
   )).toBeVisible();
 
   const row = dialog.locator(".history-table-wrap tbody tr").filter({
@@ -95,7 +101,7 @@ test("sales quote history preserves proposal actions and hides payment and booki
   );
 
   await row.getByRole("button", { name: "Copy Email" }).click();
-  await expect(dialog.getByRole("status")).toContainText(/remains a draft/i);
+  await expect(dialog.getByText(/remains a draft/i).first()).toBeVisible();
 
   await expect(row.getByRole("button", { name: "Copy Pay Link" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Create Stripe Link" })).toHaveCount(0);

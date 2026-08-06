@@ -98,7 +98,7 @@ function readPortalPaymentReturnFromUrl() {
   if (typeof window === "undefined") return "";
   const params = new URLSearchParams(window.location.search);
   const paymentReturn = String(params.get("payment") || "").trim().toLowerCase();
-  return paymentReturn === "success" ? paymentReturn : "";
+  return ["success", "cancelled"].includes(paymentReturn) ? paymentReturn : "";
 }
 
 function toNumber(value, fallback = 0) {
@@ -399,10 +399,14 @@ export default function App() {
   const stepperRef = useRef(null);
   const mobilePricingToggleRef = useRef(null);
   const historyTriggerRef = useRef(null);
+  const headerMenusRef = useRef(null);
+  const operationsMenuTriggerRef = useRef(null);
+  const accountMenuTriggerRef = useRef(null);
+  const moreMenuTriggerRef = useRef(null);
   const saveQuoteButtonRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
-  const { setOrganizationId } = useOrganization();
+  const { organization, setOrganizationId } = useOrganization();
   const tenantContext = useTenantContext();
   const authSession = useAuthSession({ tenantContext });
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
@@ -442,6 +446,7 @@ export default function App() {
   const [dynamicMenuSections, setDynamicMenuSections] = useState([]);
   const [dynamicMenuLoading, setDynamicMenuLoading] = useState(false);
   const [dynamicMenuError, setDynamicMenuError] = useState("");
+  const [dynamicMenuRetryToken, setDynamicMenuRetryToken] = useState(0);
   const [step, setStep] = useState(1);
   const [mobilePricingOpen, setMobilePricingOpen] = useState(false);
 
@@ -553,6 +558,7 @@ export default function App() {
   }, [mobilePricingOpen]);
 
   const [adminOpen, setAdminOpen] = useState(false);
+  const [adminInitialTab, setAdminInitialTab] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [importStudioOpen, setImportStudioOpen] = useState(false);
@@ -562,6 +568,7 @@ export default function App() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [salesWorkflowOpen, setSalesWorkflowOpen] = useState(false);
+  const [openHeaderMenu, setOpenHeaderMenu] = useState("");
   const workflowAttentionScopeKey = `${String(authSession.organizationId || "").trim()}:${String(authSession.role || "").trim().toLowerCase()}`;
   const [workflowAttentionBadge, setWorkflowAttentionBadge] = useState({ scopeKey: "", count: null });
   const workflowAttentionCount = workflowAttentionBadge.scopeKey === workflowAttentionScopeKey
@@ -624,6 +631,7 @@ export default function App() {
   const [editingQuote, setEditingQuote] = useState({ id: "", quoteNumber: "" });
   const [toasts, setToasts] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [quoteDirty, setQuoteDirty] = useState(false);
   const [touchedFields, setTouchedFields] = useState({});
   const [showStepValidation, setShowStepValidation] = useState(false);
   const [stepValidation, setStepValidation] = useState(() => buildStepValidation(INITIAL_FORM));
@@ -632,6 +640,31 @@ export default function App() {
     stepValidation: buildStepValidation(INITIAL_FORM)
   }));
   const [templateDefaultsNotice, setTemplateDefaultsNotice] = useState(null);
+
+  useEffect(() => {
+    if (!openHeaderMenu || typeof document === "undefined") return undefined;
+    const handlePointerDown = (event) => {
+      if (headerMenusRef.current?.contains(event.target)) return;
+      setOpenHeaderMenu("");
+    };
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      const trigger = openHeaderMenu === "operations"
+        ? operationsMenuTriggerRef.current
+        : openHeaderMenu === "account"
+          ? accountMenuTriggerRef.current
+          : moreMenuTriggerRef.current;
+      setOpenHeaderMenu("");
+      window.requestAnimationFrame(() => trigger?.focus());
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openHeaderMenu]);
 
   const pushToast = (message, tone = "info") => {
     const id = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -659,6 +692,7 @@ export default function App() {
 
   const handleStep1FieldChange = (field, value) => {
     markFieldsTouched([field]);
+    setQuoteDirty(true);
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -668,6 +702,7 @@ export default function App() {
 
   const handleSelectionTouched = (field, itemId) => {
     markFieldsTouched([field]);
+    setQuoteDirty(true);
     // An id the user edits (toggled, re-added, or requantified) after a
     // template applied it stops counting as template-sourced, so "Clear
     // defaults" leaves user-made selections alone (audit #17).
@@ -706,11 +741,12 @@ export default function App() {
     };
     return {
       ...catalog.settings,
+      organizationName: String(organization?.name || "").trim(),
       menuSections: effectiveMenuSections,
       featureFlags,
       guidedSellingEnabled: (catalog.settings?.guidedSellingEnabled !== false) && featureFlags.guidedSelling
     };
-  }, [catalog.settings, effectiveMenuSections]);
+  }, [catalog.settings, effectiveMenuSections, organization?.name]);
   const featureFlags = effectiveSettings.featureFlags || DEFAULT_FEATURE_FLAGS;
   const customerPortalEnabled = featureFlags.customerPortal !== false;
   const eventScheduleEnabled = featureFlags.eventSchedule !== false;
@@ -891,22 +927,6 @@ export default function App() {
   }, [catalog.loading, catalog.packages, isUnscopedPlatformOperator]);
 
   useEffect(() => {
-    if (isUnscopedPlatformOperator || catalog.loading) return;
-    const currentEventTypeId = String(form.eventTypeId || "").trim();
-    if (currentEventTypeId) return;
-    const fallbackEventTypeId = String(catalog.eventTypes?.[0]?.id || "").trim();
-    if (!fallbackEventTypeId) return;
-    setGlobalEventTypeId(fallbackEventTypeId);
-    setForm((prev) => {
-      if (String(prev.eventTypeId || "").trim()) return prev;
-      return {
-        ...prev,
-        eventTypeId: fallbackEventTypeId
-      };
-    });
-  }, [catalog.eventTypes, catalog.loading, form.eventTypeId, isUnscopedPlatformOperator, setGlobalEventTypeId]);
-
-  useEffect(() => {
     const nextGlobal = String(globalEventTypeId || "").trim();
     if (!nextGlobal) return;
     if (nextGlobal === String(form.eventTypeId || "").trim()) return;
@@ -932,7 +952,8 @@ export default function App() {
     [form, catalog, totals, effectiveSettings]
   );
   const isEditingQuote = Boolean(editingQuote.id);
-  const brandName = String(catalog.settings?.brandName || "").trim() || "Quote Operations";
+  const organizationName = String(organization?.name || "").trim();
+  const brandName = String(catalog.settings?.brandName || "").trim() || organizationName || "Catering workspace";
   const brandTagline = String(catalog.settings?.brandTagline || "").trim();
   const brandLogoUrl = String(catalog.settings?.brandLogoUrl || "").trim();
   const brandPrimaryColor = catalog.settings?.brandPrimaryColor || "#c99334";
@@ -977,14 +998,12 @@ export default function App() {
     async function loadMenu() {
       setDynamicMenuLoading(true);
       setDynamicMenuError("");
-      setDynamicMenuSections([]);
       try {
         const sections = await catalog.loadMenuByEvent(nextEventTypeId);
         if (!alive) return;
         setDynamicMenuSections(Array.isArray(sections) ? sections : []);
       } catch (err) {
         if (!alive) return;
-        setDynamicMenuSections([]);
         setDynamicMenuError(err?.message || "Failed to load event type menu.");
       } finally {
         if (alive) {
@@ -997,7 +1016,13 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [catalog.loading, catalog.loadMenuByEvent, form.eventTypeId, isUnscopedPlatformOperator]);
+  }, [
+    catalog.loading,
+    catalog.loadMenuByEvent,
+    dynamicMenuRetryToken,
+    form.eventTypeId,
+    isUnscopedPlatformOperator
+  ]);
 
   useEffect(() => {
     const availableMenuItemIds = new Set(
@@ -1094,6 +1119,7 @@ export default function App() {
   }, [catalog.error]);
 
   const applyEventTemplate = (templateId) => {
+    setQuoteDirty(true);
     if (templateId === "custom") {
       setForm((prev) => ({ ...prev, eventTemplateId: "custom" }));
       setTemplateDefaultsNotice(null);
@@ -1183,6 +1209,7 @@ export default function App() {
   const handleEventTypeChange = (eventTypeId) => {
     const nextEventTypeId = String(eventTypeId || "").trim();
     markFieldsTouched(["eventTypeId"]);
+    setQuoteDirty(true);
     setGlobalEventTypeId(nextEventTypeId);
     const templates = Array.isArray(catalog.settings?.eventTemplates) ? catalog.settings.eventTemplates : [];
     const matchedTemplate = findTemplateForEventType({
@@ -1223,6 +1250,7 @@ export default function App() {
 
   const clearTemplateDefaults = () => {
     if (!templateDefaultsNotice) return;
+    setQuoteDirty(true);
     const ownedAddonIds = new Set(templateDefaultsNotice.addonIds);
     const ownedRentalIds = new Set(templateDefaultsNotice.rentalIds);
     const resetMilesRT = templateDefaultsNotice.milesRTApplied;
@@ -1251,16 +1279,19 @@ export default function App() {
     setTemplateDefaultsNotice(null);
   };
 
-  const applyRecommendation = (item) => {
+  const applyRecommendation = (item, { userOriginated = true } = {}) => {
     if (!item) return;
-    if (item.kind === "package") markFieldsTouched(["pkg"]);
+    if (userOriginated) {
+      setQuoteDirty(true);
+      if (item.kind === "package") markFieldsTouched(["pkg"]);
+    }
     // Route addon/rental recommendations through handleSelectionTouched (not
     // a bare markFieldsTouched) so an applied id that happens to match a
     // template-sourced one is released from templateDefaultsNotice — "Clear
     // defaults" must never strip a selection the user just deliberately
     // applied here (audit #17).
-    if (item.kind === "addon") handleSelectionTouched("addons", item.id);
-    if (item.kind === "rental") handleSelectionTouched("rentals", item.id);
+    if (userOriginated && item.kind === "addon") handleSelectionTouched("addons", item.id);
+    if (userOriginated && item.kind === "rental") handleSelectionTouched("rentals", item.id);
 
     setForm((prev) => {
       if (item.kind === "package") {
@@ -1306,7 +1337,7 @@ export default function App() {
     const nextRecommendation = recommendations.find((item) => !autopilotAppliedRef.current.has(item.key));
     if (!nextRecommendation) return;
     autopilotAppliedRef.current.add(nextRecommendation.key);
-    applyRecommendation(nextRecommendation);
+    applyRecommendation(nextRecommendation, { userOriginated: false });
   }, [aiAutopilotEnabled, recommendations, step]);
 
   const handleNextStep = () => {
@@ -1481,6 +1512,7 @@ export default function App() {
         isEditingQuote ? "updateQuote" : "submitQuote"
       );
       if (isEditingQuote) {
+        setQuoteDirty(false);
         setSubmitState({
           saving: false,
           message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`
@@ -1492,6 +1524,7 @@ export default function App() {
       }
 
       const savedDraftMessage = `Quote ${result.quoteNumber} saved as a draft in ${result.storage}. It has not been sent to the customer.`;
+      setQuoteDirty(false);
       setSubmitState({
         saving: false,
         message: `${savedDraftMessage}${pricingAdjustmentNote}`
@@ -1647,6 +1680,7 @@ export default function App() {
       id: quote.id,
       quoteNumber: quote.quoteNumber || quote.id
     });
+    setQuoteDirty(false);
     setTouchedFields({});
     setShowStepValidation(false);
     setTemplateDefaultsNotice(null);
@@ -1662,15 +1696,19 @@ export default function App() {
   };
 
   const handleGetInstantQuote = () => {
-    if (editingQuote.id && !window.confirm(`Start a new quote? Unsaved changes to ${editingQuote.quoteNumber || "the current quote"} will be discarded.`)) {
+    if (quoteDirty && !window.confirm("Start a new quote? Your unsaved changes will be discarded.")) {
       return;
     }
     setEditingQuote({ id: "", quoteNumber: "" });
+    setQuoteDirty(false);
     setForm(INITIAL_FORM);
+    setGlobalEventTypeId("");
     setTouchedFields({});
     setShowStepValidation(false);
+    setAvailabilityNotice("");
     setSubmitState((prev) => ({ ...prev, message: "" }));
     setTemplateDefaultsNotice(null);
+    autopilotAppliedRef.current.clear();
     setStep(1);
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1999,46 +2037,126 @@ export default function App() {
               ))}
             </div>
           )}
-          <div className="right-actions header-actions">
-            <button
-              className="ghost workflow-attention-trigger"
-              onClick={() => setSalesWorkflowOpen(true)}
-              aria-label={workflowAttentionCount === null
-                ? "Sales Workflow"
-                : workflowAttentionCount > 0
-                  ? `Sales Workflow, ${workflowAttentionCount} ${workflowAttentionCount === 1 ? "quote needs" : "quotes need"} attention`
-                  : "Sales Workflow, no quotes need attention"}
-            >
-              <span>Sales Workflow</span>
-              {workflowAttentionCount > 0 && (
-                <span className="workflow-attention-badge" aria-hidden="true">{workflowAttentionCount}</span>
-              )}
-            </button>
-            {eventScheduleEnabled && <button className="ghost" onClick={() => setScheduleOpen(true)}>Schedule</button>}
-            {integrationsEnabled && <button className="ghost" onClick={() => setIntegrationsOpen(true)}>Integrations</button>}
-            {diagnosticsEnabled && <button className="ghost" onClick={() => setDiagnosticsOpen(true)}>Diagnostics</button>}
-            {dashboardEnabled && <button className="ghost" onClick={() => setDashboardOpen(true)}>Dashboard</button>}
+          <div className="right-actions header-actions" ref={headerMenusRef}>
+            <button className="cta header-quick-cta" type="button" onClick={handleGetInstantQuote}>New quote</button>
             <button
               className="ghost"
+              type="button"
               ref={historyTriggerRef}
               onClick={() => {
+                setOpenHeaderMenu("");
                 setHistoryTarget({ quoteId: "", reason: "" });
                 setHistoryOpen(true);
               }}
             >
-              Quote History
+              Quotes
             </button>
-            {authSession.isAdmin && <button className="ghost" onClick={() => setAdminOpen(true)}>Admin Catalog</button>}
-            {authSession.isAdmin && <button className="ghost" onClick={() => setImportStudioOpen(true)}>Import Studio</button>}
-            {customerPortalEnabled && <button className="ghost" onClick={openPortalMode}>Customer Portal</button>}
-            <button className="cta header-quick-cta" type="button" onClick={handleGetInstantQuote}>New Quote</button>
-            <button className="ghost" onClick={handleSignOut}>Sign Out</button>
+            <button
+              className="ghost workflow-attention-trigger"
+              type="button"
+              onClick={() => {
+                setOpenHeaderMenu("");
+                setSalesWorkflowOpen(true);
+              }}
+              aria-label={workflowAttentionCount === null
+                ? "Workflow"
+                : workflowAttentionCount > 0
+                  ? `Workflow, ${workflowAttentionCount} ${workflowAttentionCount === 1 ? "quote needs" : "quotes need"} attention`
+                  : "Workflow, no quotes need attention"}
+            >
+              <span>Workflow</span>
+              {workflowAttentionCount > 0 && (
+                <span className="workflow-attention-badge" aria-hidden="true">{workflowAttentionCount}</span>
+              )}
+            </button>
+
+            <div className="header-menu desktop-header-menu">
+              <button
+                className="ghost header-menu-trigger"
+                type="button"
+                ref={operationsMenuTriggerRef}
+                aria-haspopup="menu"
+                aria-expanded={openHeaderMenu === "operations"}
+                onClick={() => setOpenHeaderMenu((current) => current === "operations" ? "" : "operations")}
+              >
+                Operations
+              </button>
+              {openHeaderMenu === "operations" && (
+                <div className="header-menu-popover" role="menu" aria-label="Operations">
+                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setScheduleOpen(true); }}>Event Schedule</button>}
+                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setDashboardOpen(true); }}>Reporting Dashboard</button>}
+                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setIntegrationsOpen(true); }}>Integrations Ops</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setImportStudioOpen(true); }}>Import Studio</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setAdminInitialTab(""); setAdminOpen(true); }}>Catalog Admin</button>}
+                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setDiagnosticsOpen(true); }}>Session Diagnostics</button>}
+                </div>
+              )}
+            </div>
+
+            <div className="header-menu desktop-header-menu">
+              <button
+                className="ghost header-menu-trigger"
+                type="button"
+                ref={accountMenuTriggerRef}
+                aria-haspopup="menu"
+                aria-expanded={openHeaderMenu === "account"}
+                onClick={() => setOpenHeaderMenu((current) => current === "account" ? "" : "account")}
+              >
+                Account
+              </button>
+              {openHeaderMenu === "account" && (
+                <div className="header-menu-popover account-menu-popover" role="menu" aria-label="Account">
+                  <div className="header-account-summary" role="presentation">
+                    <strong>{authSession.user.email}</strong>
+                    <span>{authSession.role}</span>
+                  </div>
+                  {customerPortalEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); openPortalMode(); }}>Customer Portal</button>}
+                  <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); handleSignOut(); }}>Sign Out</button>
+                </div>
+              )}
+            </div>
+
+            <div className="header-menu mobile-header-menu">
+              <button
+                className="ghost header-menu-trigger"
+                type="button"
+                ref={moreMenuTriggerRef}
+                aria-haspopup="menu"
+                aria-expanded={openHeaderMenu === "more"}
+                onClick={() => setOpenHeaderMenu((current) => current === "more" ? "" : "more")}
+              >
+                More
+              </button>
+              {openHeaderMenu === "more" && (
+                <div className="header-menu-popover mobile-more-popover" role="menu" aria-label="More">
+                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setScheduleOpen(true); }}>Event Schedule</button>}
+                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setDashboardOpen(true); }}>Reporting Dashboard</button>}
+                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setIntegrationsOpen(true); }}>Integrations Ops</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setImportStudioOpen(true); }}>Import Studio</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setAdminInitialTab(""); setAdminOpen(true); }}>Catalog Admin</button>}
+                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setDiagnosticsOpen(true); }}>Session Diagnostics</button>}
+                  <div className="header-account-summary" role="presentation">
+                    <strong>{authSession.user.email}</strong>
+                    <span>{authSession.role}</span>
+                  </div>
+                  {customerPortalEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); openPortalMode(); }}>Customer Portal</button>}
+                  <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); handleSignOut(); }}>Sign Out</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
       <section className="workspace-intro container">
-        <p>Signed in as {authSession.user.email} · {authSession.role}</p>
+        <p><strong>{String(organization?.name || brandName || "Catering workspace").trim()}</strong></p>
+        <p className={quoteDirty ? "workspace-save-state is-dirty" : "workspace-save-state"} aria-live="polite">
+          {quoteDirty
+            ? "Unsaved changes"
+            : editingQuote.id
+              ? `Editing ${editingQuote.quoteNumber || "saved quote"} · no unsaved changes`
+              : "Ready for a new quote"}
+        </p>
       </section>
 
       <main
@@ -2111,6 +2229,17 @@ export default function App() {
                 setForm={setForm}
                 menuSections={effectiveMenuSections}
                 menuLoading={dynamicMenuLoading}
+                menuError={dynamicMenuError}
+                eventTypeLabel={catalog.eventTypes?.find(
+                  (item) => String(item.id) === String(form.eventTypeId)
+                )?.name || form.eventTypeId}
+                isAdmin={authSession.isAdmin}
+                onRetry={() => setDynamicMenuRetryToken((value) => value + 1)}
+                onOpenCatalogMenu={() => {
+                  setGlobalEventTypeId(form.eventTypeId);
+                  setAdminInitialTab("menu");
+                  setAdminOpen(true);
+                }}
                 onSelectionTouched={handleSelectionTouched}
               />
             )}
@@ -2214,7 +2343,6 @@ export default function App() {
             </p>
           )}
           {catalog.error && <p className="error-note">{catalog.error}</p>}
-          {dynamicMenuError && <p className="warning-note">{dynamicMenuError}</p>}
           {availabilityNotice && <p className="warning-note">{availabilityNotice}</p>}
           {submitState.message && <p className="source-note">{submitState.message}</p>}
         </section>
@@ -2250,6 +2378,7 @@ export default function App() {
             onApplyStarterPack={catalog.stageStarterPack}
             onCatalogMutation={catalog.acceptCatalogMutation}
             saving={catalog.saving}
+            initialTab={adminInitialTab}
             selectedEventType={globalEventTypeId}
             onEventTypeChange={setGlobalEventTypeId}
             onToast={pushToast}
@@ -2365,7 +2494,10 @@ export default function App() {
             open={compareOpen}
             onClose={() => setCompareOpen(false)}
             form={form}
-            setForm={setForm}
+            setForm={(updater) => {
+              setQuoteDirty(true);
+              setForm(updater);
+            }}
             catalog={catalog}
             settings={effectiveSettings}
             styles={Object.keys(STAFF_RULES)}

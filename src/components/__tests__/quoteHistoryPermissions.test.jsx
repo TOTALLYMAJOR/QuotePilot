@@ -1,11 +1,48 @@
 import { describe, expect, test } from "vitest";
 import {
   canRotateQuotePortal,
+  filterQuoteHistoryQuotes,
+  formatQuoteHistoryDate,
   getExecutableApprovalRequest,
   isCustomerPortalShareable,
   getQuoteDeliveryUiState,
   getQuoteHistoryActionPermissions
 } from "../QuoteHistoryModal";
+
+describe("quote history presentation helpers", () => {
+  const quotes = [
+    {
+      quoteNumber: "Q-2026-0042",
+      status: "sent",
+      eventTypeId: "wedding",
+      customer: { name: "Jordan Lee", email: "jordan@example.com" },
+      event: { name: "Garden Gala" }
+    },
+    {
+      quoteNumber: "Q-2026-0043",
+      status: "draft",
+      eventTypeId: "corporate",
+      customer: { name: "Morgan Reed", email: "morgan@example.com" },
+      event: { name: "Board Dinner" }
+    }
+  ];
+
+  test("searches quote number, event name, customer name, and email locally", () => {
+    for (const query of ["0042", "garden gala", "jordan", "jordan@example.com"]) {
+      expect(filterQuoteHistoryQuotes(quotes, { query })).toEqual([quotes[0]]);
+    }
+    expect(filterQuoteHistoryQuotes(quotes, {
+      query: "morgan",
+      eventTypeFilter: "corporate",
+      statusFilter: "draft"
+    })).toEqual([quotes[1]]);
+  });
+
+  test("formats both date-only and timestamp values as short human dates", () => {
+    expect(formatQuoteHistoryDate("2026-01-05")).toMatch(/Jan\s+5,\s+2026/);
+    expect(formatQuoteHistoryDate("not-a-date")).toBe("-");
+  });
+});
 
 describe("quote history action permissions", () => {
   test("admin can manage quote, payment, booking, portal, and contract state", () => {

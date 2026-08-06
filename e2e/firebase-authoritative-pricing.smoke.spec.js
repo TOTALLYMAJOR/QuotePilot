@@ -59,9 +59,9 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   await fillRequiredQuoteFields(page);
   await advanceToSave(page, "Save draft");
 
-  const historyHeading = page.getByRole("heading", { name: "Quote History" });
+  const historyHeading = page.getByRole("heading", { name: "Quotes" });
   await expect(historyHeading).toBeVisible({ timeout: 45_000 });
-  const handoff = page.getByRole("dialog", { name: "Quote History" }).locator(".saved-quote-handoff");
+  const handoff = page.getByRole("dialog", { name: "Quotes" }).locator(".saved-quote-handoff");
   await expect(handoff).toContainText(/Saved as a draft/i, { timeout: 45_000 });
   await expect(handoff).toBeFocused();
   await expect(page.getByText(/Email delivery unavailable/i)).toBeVisible();

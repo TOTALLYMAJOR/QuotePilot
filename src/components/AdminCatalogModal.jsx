@@ -155,6 +155,7 @@ export default function AdminCatalogModal({
   onApplyStarterPack,
   onCatalogMutation,
   saving,
+  initialTab = "",
   selectedEventType: selectedEventTypeProp = "",
   onEventTypeChange,
   onToast
@@ -246,7 +247,7 @@ export default function AdminCatalogModal({
       setSavedFingerprint(catalogDraftFingerprint(nextDraft, nextJsonDrafts));
       setStatus("");
       setUploadingLogo(false);
-      setActiveTab(initialCatalogAdminTab(catalog));
+      setActiveTab(initialTab || initialCatalogAdminTab(catalog));
       setSelectedEventType(String(selectedEventTypeProp || "").trim());
       setSelectedCategory("");
       setMenuEventTypes([]);
@@ -265,7 +266,12 @@ export default function AdminCatalogModal({
       setCategoryEditName("");
       setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
     }
-  }, [open, scopedOrganizationId, catalog?.settings?.starterCatalogPack?.appliedCatalogRevision]);
+  }, [
+    open,
+    scopedOrganizationId,
+    initialTab,
+    catalog?.settings?.starterCatalogPack?.appliedCatalogRevision
+  ]);
 
   useEffect(() => {
     if (!open) return;

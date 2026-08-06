@@ -74,6 +74,11 @@ const {
   planQuoteDeliveryAttemptFailure,
   planQuoteDeliveryOutcomeResolution
 } = require("./quoteDelivery");
+const {
+  createPortalRecoveryThrottle,
+  isPortalRecoveryToken,
+  resolvePortalRecoveryContact
+} = require("./portalRecovery");
 
 initializeApp();
 
@@ -107,6 +112,7 @@ const RESERVED_SUBDOMAINS = new Set(["www", "app", "api", "admin"]);
 const UNKNOWN_HOST_WINDOW_MS = Math.max(1_000, Number(readConfig("security.unknown_host_window_ms", "300000")) || 300000);
 const UNKNOWN_HOST_LIMIT = Math.max(1, Number(readConfig("security.unknown_host_limit", "20")) || 20);
 const unknownHostCounter = new Map();
+const recordPortalRecoveryAttempt = createPortalRecoveryThrottle();
 function getFunctionsConfigSnapshot() {
   if (cachedFunctionsConfig !== undefined) {
     return cachedFunctionsConfig;
@@ -1621,7 +1627,9 @@ function buildQuoteDeliveryEmailPayload({ quote, quoteId, portalLink } = {}) {
   const paymentLink = storedPaymentLink
     ? parseStoredPaymentLinkOrThrow(storedPaymentLink)
     : "";
-  const brandName = normalizeText(quote?.quoteMeta?.brandName);
+  const brandName = normalizeText(
+    quote?.quoteMeta?.brandName || quote?.quoteMeta?.organizationName
+  );
   const lines = [
     `Hi ${customerName},`,
     "",
@@ -3993,6 +4001,43 @@ exports.calculateQuotePricing = functions.region(REGION).https.onCall(async (dat
   }
 });
 
+exports.getPortalRecoveryContact = functions.region(REGION).https.onCall(async (data, context) => {
+  const portalKey = normalizeText(data?.portalKey);
+  if (!isPortalRecoveryToken(portalKey)) {
+    return { ok: true, contact: null };
+  }
+  if (recordPortalRecoveryAttempt(getRequestIp(context))) {
+    throw new functions.https.HttpsError(
+      "resource-exhausted",
+      "Too many recovery requests. Wait a few minutes and try again."
+    );
+  }
+
+  return {
+    ok: true,
+    contact: await resolvePortalRecoveryContact({
+      portalKey,
+      readPortal: async (key) => {
+        const snapshot = await db.collection(PORTAL_COLLECTION).doc(key).get();
+        return snapshot.exists ? snapshot.data() || {} : null;
+      },
+      readOrganization: async (organizationId) => {
+        const snapshot = await db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).get();
+        return snapshot.exists ? snapshot.data() || {} : null;
+      },
+      readSettings: async (organizationId) => {
+        const snapshot = await db.collection(ORGANIZATIONS_COLLECTION)
+          .doc(organizationId)
+          .collection("settings")
+          .doc("config")
+          .get();
+        return snapshot.exists ? snapshot.data() || {} : {};
+      },
+      isOrganizationActive: isOrganizationRecordActive
+    })
+  };
+});
+
 async function createTrustedQuoteDraftInternal({
   organizationId,
   staff,
@@ -4030,7 +4075,11 @@ async function createTrustedQuoteDraftInternal({
     .doc(organizationId)
     .collection("settings")
     .doc("config");
-  const settingsSnap = await settingsRef.get();
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const [settingsSnap, organizationSnap] = await Promise.all([
+    settingsRef.get(),
+    organizationRef.get()
+  ]);
   if (!settingsSnap.exists) {
     throw new QuoteCreationError(
       "failed-precondition",
@@ -4054,7 +4103,10 @@ async function createTrustedQuoteDraftInternal({
     form: sanitized.form,
     pricing: pricingResult.pricing,
     catalogSource: pricingResult.catalogSource,
-    settings: settingsSnap.data() || {},
+    settings: {
+      ...(settingsSnap.data() || {}),
+      organizationName: normalizeText(organizationSnap.data()?.name)
+    },
     nowISO,
     creationReason,
     sourceQuoteId
@@ -4134,7 +4186,11 @@ async function updateTrustedQuoteDraftInternal({
     .doc(organizationId)
     .collection("settings")
     .doc("config");
-  const settingsSnap = await settingsRef.get();
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const [settingsSnap, organizationSnap] = await Promise.all([
+    settingsRef.get(),
+    organizationRef.get()
+  ]);
   if (!settingsSnap.exists) {
     throw new QuoteCreationError(
       "failed-precondition",
@@ -4164,7 +4220,10 @@ async function updateTrustedQuoteDraftInternal({
       form: sanitized.form,
       pricing: pricingResult.pricing,
       catalogSource: pricingResult.catalogSource,
-      settings: settingsSnap.data() || {},
+      settings: {
+        ...(settingsSnap.data() || {}),
+        organizationName: normalizeText(organizationSnap.data()?.name)
+      },
       nowISO
     });
     const portalRef = db.collection(PORTAL_COLLECTION).doc(documents.result.portalKey);
@@ -5782,7 +5841,9 @@ exports.sendPaymentRequestEmail = functions.region(REGION).https.onCall(async (d
     const customerName = normalizeText(claimedQuote.customer?.name) || "there";
     const eventName = normalizeText(claimedQuote.event?.name) || "your event";
     const deposit = currencyLabel(claimedQuote.totals?.deposit);
-    const brandName = normalizeText(claimedQuote?.quoteMeta?.brandName);
+    const brandName = normalizeText(
+      claimedQuote?.quoteMeta?.brandName || claimedQuote?.quoteMeta?.organizationName
+    );
     const lines = [
       `Hi ${customerName},`,
       "",

@@ -143,6 +143,21 @@ describe("proposal payload snapshots", () => {
     expect(email.body).not.toContain("QuotePilot");
   });
 
+  test("uses the tenant organization name when custom branding is blank", () => {
+    const email = buildQuoteEmailPayload({
+      quoteNumber: "Q-2",
+      customer: {},
+      event: { date: "2026-05-02" },
+      totals: { total: 0, deposit: 0 },
+      payment: {},
+      quoteMeta: { organizationName: "Northstar Catering", brandName: "" }
+    });
+
+    expect(email.subject).toBe("Northstar Catering Quote Q-2 - 2026-05-02");
+    expect(email.body).toContain("Thank you for considering Northstar Catering");
+    expect(email.body).not.toContain("QuotePilot");
+  });
+
   test("includes the acceptance portal link when the caller marks the quote portal-shareable", () => {
     const email = buildQuoteEmailPayload(
       { ...proposalPayloadFixtureQuote, portalKey: "fixture-portal-key-1234567890" },
