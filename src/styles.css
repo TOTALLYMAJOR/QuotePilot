@@ -2443,7 +2443,7 @@ hr {
 
 .portal-theme-preview-card span,
 .portal-theme-preview-card small {
-  color: var(--portal-brand-dark);
+  color: var(--portal-link);
   font-size: 0.75rem;
 }
 
@@ -4212,6 +4212,8 @@ hr {
   --portal-brand-dark: #8d611a;
   --portal-action: #8d611a;
   --portal-action-text: #fff;
+  --portal-focus: #5e3b08;
+  --portal-link: #5e3b08;
   --portal-surface: #100d09;
   --portal-surface-alt: #221a12;
   --portal-canvas: #ae7d2b;
@@ -4234,7 +4236,7 @@ hr {
 
 .portal-shell .cta:focus-visible,
 .portal-shell .portal-decision-options button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--portal-accent) 72%, #fff);
+  outline: 3px solid var(--portal-focus);
   outline-offset: 2px;
 }
 
@@ -4264,20 +4266,20 @@ hr {
 
 .portal-brand-contact a,
 .portal-next-contact a {
-  color: var(--portal-brand-dark, #5e3b08);
+  color: var(--portal-link, #5e3b08);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
 .portal-staff-entry .ghost {
-  border-color: var(--portal-action);
+  border-color: var(--portal-link);
   background: rgba(255, 253, 248, 0.94);
-  color: var(--portal-action);
+  color: var(--portal-link);
 }
 
 .portal-head .eyebrow {
   margin: 0 0 0.15rem;
-  color: var(--portal-brand-dark, #527064);
+  color: var(--portal-link, #527064);
 }
 
 .portal-recovery {

@@ -72,5 +72,19 @@ describe("customer portal theme presets", () => {
     expect(style["--portal-action"]).toBe("#fefefe");
     expect(style["--portal-action-text"]).toBe("#17130f");
     expect(contrastRatio(style["--portal-action"], style["--portal-action-text"])).toBeGreaterThanOrEqual(4.5);
+    expect(style["--portal-link"]).toBe("#17130f");
+    expect(style["--portal-focus"]).toBe("#17130f");
+    expect(contrastRatio(style["--portal-link"], "#fbfbf8")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(style["--portal-focus"], "#fbfbf8")).toBeGreaterThanOrEqual(3);
+  });
+
+  test("keeps branded link and focus colors when they remain accessible", () => {
+    PORTAL_THEME_PRESETS.forEach((preset) => {
+      const style = buildPortalThemeStyle(preset.colors);
+      expect(style["--portal-link"]).toBe(preset.colors.brandDarkAccentColor);
+      expect(style["--portal-focus"]).toBe(preset.colors.brandDarkAccentColor);
+      expect(contrastRatio(style["--portal-link"], "#fbfbf8")).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(style["--portal-focus"], "#fbfbf8")).toBeGreaterThanOrEqual(3);
+    });
   });
 });

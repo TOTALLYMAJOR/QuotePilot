@@ -1295,23 +1295,32 @@ export default function AdminCatalogModal({
                   ["includedMenuItemIds", "Menu items", menuItems],
                   ["includedAddonIds", "Add-ons", draft.addons || []],
                   ["includedRentalIds", "Rentals", draft.rentals || []]
-                ].map(([field, label, options]) => (
-                  <fieldset key={field}>
-                    <legend>{label} available at no added charge</legend>
-                    {options.length === 0 ? (
-                      <small>{field === "includedMenuItemIds" ? "Choose an event type with menu items." : `No ${label.toLowerCase()} available.`}</small>
-                    ) : options.map((option) => (
-                      <label key={option.id} className="admin-inline-toggle">
-                        <input
-                          type="checkbox"
-                          checked={(item[field] || []).includes(option.id)}
-                          onChange={(event) => togglePackageInclusion(i, field, option.id, event.target.checked)}
-                        />
-                        <span>{option.name}{option.active === false ? " (inactive)" : ""}</span>
-                      </label>
-                    ))}
-                  </fieldset>
-                ))}
+                ].map(([field, label, options]) => {
+                  const includedIds = new Set(item[field] || []);
+                  const availableOptions = options.filter((option) => (
+                    option.active !== false || includedIds.has(option.id)
+                  ));
+                  return (
+                    <fieldset key={field}>
+                      <legend>{label} available at no added charge</legend>
+                      {availableOptions.length === 0 ? (
+                        <small>{field === "includedMenuItemIds" ? "Choose an event type with menu items." : `No active ${label.toLowerCase()} available.`}</small>
+                      ) : availableOptions.map((option) => (
+                        <label key={option.id} className="admin-inline-toggle">
+                          <input
+                            type="checkbox"
+                            checked={includedIds.has(option.id)}
+                            onChange={(event) => togglePackageInclusion(i, field, option.id, event.target.checked)}
+                          />
+                          <span>
+                            {option.name}
+                            {option.active === false ? " (inactive — remove from this package before saving)" : ""}
+                          </span>
+                        </label>
+                      ))}
+                    </fieldset>
+                  );
+                })}
               </div>
             </div>
           ))}

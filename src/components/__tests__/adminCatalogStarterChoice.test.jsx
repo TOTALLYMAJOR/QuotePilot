@@ -105,6 +105,29 @@ describe("Admin Catalog starter choice", () => {
     expect(html).not.toContain("Starter packs are available only during initial unconfirmed catalog setup.");
   });
 
+  test("package inclusions hide unavailable choices while keeping stale selections removable", () => {
+    const html = renderCatalog({
+      packages: [{
+        id: "celebration",
+        name: "Celebration",
+        ppp: 28,
+        includedAddonIds: ["retired-dessert"]
+      }],
+      addons: [
+        { id: "active-dessert", name: "Active dessert", active: true },
+        { id: "unused-retired-dessert", name: "Unused retired dessert", active: false },
+        { id: "retired-dessert", name: "Retired dessert", active: false }
+      ],
+      rentals: [],
+      settings: { pricingSetupConfirmed: true }
+    });
+
+    expect(html).toContain("Active dessert");
+    expect(html).not.toContain("Unused retired dessert");
+    expect(html).toContain("Retired dessert (inactive — remove from this package before saving)");
+    expect(html).toContain("No active rentals available.");
+  });
+
   test("Enter delegates menu item persistence to the single blur path", () => {
     const preventDefault = vi.fn();
     const blur = vi.fn();
