@@ -8,14 +8,14 @@ import {
 
 const PASSWORD_RESET_CONFIRMATION = "If an account exists for that email, password-reset instructions have been sent.";
 
-function friendlyError(err) {
-  const text = String(err?.message || "Authentication failed.");
+export function friendlyError(err) {
+  const text = String(err?.message || "");
   if (text.includes("auth/invalid-credential")) return "Invalid email or password.";
   if (text.includes("auth/popup-closed-by-user")) return "Google sign-in popup was closed.";
   if (text.includes("auth/email-already-in-use")) return "This email is already registered.";
   if (text.includes("auth/invalid-email")) return "Enter a valid email address.";
-  if (text.includes("auth/too-many-requests")) return "Too many attempts. Wait a moment and try again.";
-  return text;
+  if (text.includes("auth/too-many-requests")) return "Too many attempts. Wait a few minutes and try again.";
+  return "Sign-in failed. Try again or reset your password.";
 }
 
 export default function AuthGate({ sessionError = "" }) {
@@ -32,7 +32,8 @@ export default function AuthGate({ sessionError = "" }) {
     setStatus("");
   };
 
-  const submit = async () => {
+  const submit = async (event) => {
+    event?.preventDefault();
     setPendingAction(mode === "register" ? "register" : "signin");
     setStatus("");
     try {
@@ -100,57 +101,60 @@ export default function AuthGate({ sessionError = "" }) {
           </button>
         </div>
 
-        <label className="field">
-          <span>Email</span>
-          <input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              setStatus("");
-            }}
-            placeholder="you@business.com"
-            disabled={busy}
-          />
-        </label>
-
-        <label className="field">
-          <span>Password</span>
-          <input
-            type="password"
-            autoComplete={mode === "register" ? "new-password" : "current-password"}
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setStatus("");
-            }}
-            placeholder="At least 8 characters"
-            disabled={busy}
-          />
-        </label>
-
-        <div className="auth-actions">
-          <button type="button" className="cta" onClick={submit} disabled={busy}>
-            {pendingAction === "signin" || pendingAction === "register"
-              ? "Working..."
-              : mode === "register" ? "Create Account" : "Sign In"}
-          </button>
-          <button type="button" className="ghost" onClick={submitGoogle} disabled={busy}>
-            {pendingAction === "google" ? "Connecting..." : "Continue with Google"}
-          </button>
-          {mode === "signin" && (
-            <button
-              type="button"
-              className="ghost"
-              onClick={submitPasswordReset}
+        <form onSubmit={submit}>
+          <label className="field">
+            <span>Email</span>
+            <input
+              type="email"
+              autoComplete="email"
+              autoFocus
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setStatus("");
+              }}
+              placeholder="you@business.com"
               disabled={busy}
-              aria-busy={pendingAction === "password-reset"}
-            >
-              {pendingAction === "password-reset" ? "Sending..." : "Forgot password?"}
+            />
+          </label>
+
+          <label className="field">
+            <span>Password</span>
+            <input
+              type="password"
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setStatus("");
+              }}
+              placeholder="At least 8 characters"
+              disabled={busy}
+            />
+          </label>
+
+          <div className="auth-actions">
+            <button type="submit" className="cta" disabled={busy}>
+              {pendingAction === "signin" || pendingAction === "register"
+                ? "Working..."
+                : mode === "register" ? "Create Account" : "Sign In"}
             </button>
-          )}
-        </div>
+            <button type="button" className="ghost" onClick={submitGoogle} disabled={busy}>
+              {pendingAction === "google" ? "Connecting..." : "Continue with Google"}
+            </button>
+            {mode === "signin" && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={submitPasswordReset}
+                disabled={busy}
+                aria-busy={pendingAction === "password-reset"}
+              >
+                {pendingAction === "password-reset" ? "Sending..." : "Forgot password?"}
+              </button>
+            )}
+          </div>
+        </form>
 
         {status && <p className="source-note" role="status" aria-live="polite">{status}</p>}
       </section>
