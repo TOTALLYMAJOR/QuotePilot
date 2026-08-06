@@ -1169,6 +1169,7 @@ test("valid and expired portal links use tenant branding without exposing token 
   expect(firstView.status).toBe("viewed");
   expect(firstView.viewedAtISO).toBeTruthy();
   await page.getByRole("button", { name: "Staff sign in" }).click();
+  await expect(page).toHaveURL(/\/app$/);
   await page.getByRole("button", { name: "Account" }).click();
   await page.getByRole("menuitem", { name: "Customer Portal" }).click();
   await page.getByLabel("Quote link key").fill(activeKey);
@@ -1187,7 +1188,16 @@ test("valid and expired portal links use tenant branding without exposing token 
     /^mailto:events@northstar\.test/
   );
   await expect(page.getByRole("link", { name: /Call 205-555-0100/ })).toHaveAttribute("href", "tel:2055550100");
-  await expect(page.getByLabel("Quote link key")).toHaveCount(0);
+  await expect(page.getByLabel("Quote link key")).toBeVisible();
+  await page.getByRole("button", { name: "Try another key" }).click();
+  await expect(page.getByLabel("Quote link key")).toBeFocused();
+  await expect(page.getByLabel("Quote link key")).toHaveValue("");
+  await page.getByLabel("Quote link key").fill("portal-missing-12345678901234567890");
+  await page.getByRole("button", { name: "Open Proposal" }).click();
+  await expect(page.getByRole("heading", { name: "Request a new link" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try another key" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Email / })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /^Call / })).toHaveCount(0);
 });
 
 test("cancelled payment returns are consumed without changing stored payment evidence", async ({ page }) => {

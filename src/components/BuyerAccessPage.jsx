@@ -134,7 +134,7 @@ export function getBuyerAccessStatusMessage(status = "", evidence = {}) {
     case "expired":
       return {
         title: "This invoice has expired",
-        text: "The server reports that this invoice is no longer payable. It cannot activate a QuotePilot workspace."
+        text: "The server reports that this invoice is no longer payable. It cannot activate a QuotePilot workspace. You may start a fresh test request, but the server still enforces the 24-hour email window."
       };
     default:
       return {
@@ -419,7 +419,7 @@ function PurchaseStatusCard({
           <button className="buyer-secondary" type="button" onClick={onRetry} disabled={checking}>
             {checking ? "Checking..." : "Check again"}
           </button>
-          {status?.status === "void" && (
+          {["void", "expired"].includes(status?.status) && (
             <button
               className="buyer-secondary"
               type="button"
@@ -548,8 +548,8 @@ export default function BuyerAccessPage() {
     }
   };
 
-  const startNewVoidedRequest = () => {
-    if (invoiceStatus?.status !== "void") return;
+  const startNewTerminalRequest = () => {
+    if (!["void", "expired"].includes(invoiceStatus?.status)) return;
     clearBuyerAccessStatusContext();
     clearBuyerAccessRequestContext();
     setStatusContext(null);
@@ -631,7 +631,7 @@ export default function BuyerAccessPage() {
               error={statusError}
               exhausted={pollExhausted}
               onRetry={() => setRetryNonce((value) => value + 1)}
-              onStartNewRequest={startNewVoidedRequest}
+              onStartNewRequest={startNewTerminalRequest}
             />
           )}
 
