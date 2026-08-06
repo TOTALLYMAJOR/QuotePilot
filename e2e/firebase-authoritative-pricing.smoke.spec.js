@@ -163,3 +163,46 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   await expect(copyPortalButton).toBeDisabled();
   await expect(page.getByText(/Failed to calculate authoritative quote pricing/i)).toHaveCount(0);
 });
+
+test("concurrent quote transactions reuse and preserve one imported customer projection", async ({ page }) => {
+  test.setTimeout(180_000);
+  await signInAsStaff(page);
+
+  const proof = await page.evaluate(async () => {
+    const fixture = await import("/e2e/firebase-customer-projection.fixture.js");
+    return fixture.exerciseCustomerProjectionTransactions();
+  });
+
+  expect(proof.createdQuoteIds).toHaveLength(2);
+  expect(new Set(proof.createdQuoteIds).size).toBe(2);
+  expect(proof.customerDocs).toHaveLength(1);
+  const [customer] = proof.customerDocs;
+  expect(customer).toMatchObject({
+    id: proof.importedCustomerId,
+    organizationId: "e2e-org",
+    email: proof.normalizedEmail,
+    phone: "205-555-0142",
+    company: "Imported Customer Company",
+    notes: "Preserve this imported customer note.",
+    importSource: "import_studio",
+    importBatchId: proof.importedBatchId,
+    createdAtISO: proof.importedCreatedAtISO,
+    lastQuoteId: proof.finalQuote.id,
+    lastQuoteNumber: proof.finalQuote.quoteNumber,
+    lastEventName: proof.finalQuote.event.name,
+    lastEventDate: proof.finalQuote.event.date,
+    name: proof.finalQuote.customer.name
+  });
+  expect(customer).not.toHaveProperty("recordSource");
+  expect(proof.finalQuote).toMatchObject({
+    id: proof.createdQuoteIds[0],
+    organizationId: "e2e-org",
+    customer: {
+      email: proof.normalizedEmail,
+      phone: "",
+      organization: ""
+    },
+    activeVersionId: "v0003",
+    latestVersionNumber: 3
+  });
+});
