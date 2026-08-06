@@ -353,6 +353,40 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
   await expect(catalogAdmin.getByLabel("Event type")).toHaveValue(selectedEventTypeId);
 });
 
+test("a menu item created in Catalog Admin appears in the active quote immediately", async ({ page }) => {
+  await fillRequiredQuoteFields(page, {
+    guests: 55,
+    eventName: "Immediate Menu Refresh",
+    venue: "Refresh Hall"
+  });
+  const selectedEventTypeId = await page.getByLabel(/Event type/i).inputValue();
+  await page.getByRole("button", { name: "Next" }).click();
+
+  await page.getByRole("button", { name: "Operations" }).click();
+  await page.getByRole("menuitem", { name: "Catalog Admin" }).click();
+  const catalogAdmin = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "Catalog Admin" })
+  });
+  await catalogAdmin.getByRole("button", { name: "Menu" }).click();
+  await catalogAdmin.getByLabel("Event type").selectOption(selectedEventTypeId);
+  const category = catalogAdmin.getByLabel("Category");
+  await expect.poll(() => category.locator("option").count()).toBeGreaterThan(1);
+  await category.selectOption({ index: 1 });
+  await catalogAdmin.getByPlaceholder("New item name").fill("Immediate Recovery Entree");
+  await catalogAdmin.locator(".admin-inline-actions-create-item input[type='number']").fill("12.34");
+  await catalogAdmin.getByRole("button", { name: "Add Item" }).click();
+  const setupCatalogAdmin = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "Catalog Admin" })
+  });
+  await expect(setupCatalogAdmin.getByRole("heading", { name: "Pricing Review Required" }))
+    .toBeVisible();
+  await setupCatalogAdmin.getByLabel("Pricing setup reviewed and approved").check();
+  await setupCatalogAdmin.getByRole("button", { name: "Save catalog changes" }).first().click();
+  await expect(setupCatalogAdmin).toHaveCount(0);
+
+  await expect(page.getByRole("checkbox", { name: /Immediate Recovery Entree/i })).toBeVisible();
+});
+
 test("menu retry repeats the selected event request without clearing selections", async ({ page }) => {
   await page.addInitScript(() => {
     window.__menuShouldFail = false;
@@ -1266,6 +1300,9 @@ test("accepted event production checklist persists completion", async ({ page })
 
   const schedule = page.getByRole("dialog");
   await expect(schedule.getByText("E2E Production Event")).toBeVisible();
+  const eventDetail = schedule.locator(".schedule-event-card").first();
+  await schedule.getByRole("button", { name: /Focus event details for/i }).click();
+  await expect(eventDetail).toBeFocused();
   const eventBrief = schedule.getByLabel("Event brief reviewed");
   await eventBrief.check();
   await expect(schedule.getByText(/Production checklist updated for/i)).toBeVisible();
@@ -1306,6 +1343,54 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   await expect(handoff.locator(".eyebrow")).toHaveText("Quote sent");
   await expect(handoff).toContainText("Current quote status is sent.");
   await expect(handoff).not.toContainText(/did not send|has not been sent/i);
+});
+
+test("Catalog Admin menu browsing never mutates the clean quote being edited", async ({ page }) => {
+  await createQuoteToHistory(page, { guests: 70, eventName: "Admin Isolation Quote" });
+
+  const row = quoteRows(page).first();
+  await row.getByRole("button", { name: "Edit" }).click();
+  const quoteEventType = page.getByLabel(/Event type/i);
+  const originalEventType = await quoteEventType.inputValue();
+  expect(originalEventType).toBeTruthy();
+
+  await page.getByRole("button", { name: "Next" }).click();
+  const selectedMenuIds = await page.locator(".wizard-panel .menu-library input[type='checkbox']:checked")
+    .evaluateAll((inputs) => inputs.map((input) => input.value).sort());
+  expect(selectedMenuIds.length).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Back" }).click();
+
+  await page.getByRole("button", { name: "Operations" }).click();
+  await page.getByRole("menuitem", { name: "Catalog Admin" }).click();
+  const catalogAdmin = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "Catalog Admin" })
+  });
+  await catalogAdmin.getByRole("button", { name: "Menu" }).click();
+  const adminEventType = catalogAdmin.getByLabel("Event type");
+  await expect.poll(() => adminEventType.locator("option").count()).toBeGreaterThan(2);
+  const alternative = await adminEventType.locator("option").evaluateAll((options, current) => (
+    options.map((option) => option.value).find((value) => value && value !== current) || ""
+  ), originalEventType);
+  expect(alternative).toBeTruthy();
+  await adminEventType.selectOption(alternative);
+  await catalogAdmin.getByRole("button", { name: "Close" }).click();
+
+  await expect(quoteEventType).toHaveValue(originalEventType);
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.locator(".wizard-panel .menu-library input[type='checkbox']:checked"))
+    .toHaveCount(selectedMenuIds.length);
+  expect(await page.locator(".wizard-panel .menu-library input[type='checkbox']:checked")
+    .evaluateAll((inputs) => inputs.map((input) => input.value).sort())).toEqual(selectedMenuIds);
+
+  await page.evaluate(() => {
+    window.__newQuoteConfirmations = [];
+    window.confirm = (message) => {
+      window.__newQuoteConfirmations.push(String(message));
+      return false;
+    };
+  });
+  await page.getByRole("button", { name: "New Quote" }).click();
+  expect(await page.evaluate(() => window.__newQuoteConfirmations)).toEqual([]);
 });
 
 test("accepted quote can be converted and confirmation lifecycle is trackable", async ({ page }) => {

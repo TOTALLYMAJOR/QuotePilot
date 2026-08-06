@@ -22,7 +22,11 @@ vi.mock("../../lib/menuService", () => ({
 
 import AdminCatalogModal, {
   blurManagedMenuItemOnEnter,
+  eventTemplateMenuItemReferences,
   hasNoMenuInventory,
+  packageMenuItemReferences,
+  parseEventTemplateDrafts,
+  removeCatalogRowWithInclusions,
   resolveManagedEventTypeId
 } from "../AdminCatalogModal";
 import { DEFAULT_SETTINGS } from "../../data/mockCatalog";
@@ -126,6 +130,69 @@ describe("Admin Catalog starter choice", () => {
     expect(html).not.toContain("Unused retired dessert");
     expect(html).toContain("Retired dessert (inactive — remove from this package before saving)");
     expect(html).toContain("No active rentals available.");
+  });
+
+  test("removing add-ons or rentals also removes hidden package references", () => {
+    const catalog = {
+      packages: [{
+        id: "celebration",
+        includedAddonIds: ["dessert", "coffee"],
+        includedRentalIds: ["linens", "chairs"]
+      }],
+      addons: [{ id: "dessert" }, { id: "coffee" }],
+      rentals: [{ id: "linens" }, { id: "chairs" }],
+      settings: {
+        upsellRules: [
+          { id: "dessert-rule", kind: "addon", targetId: "dessert" },
+          { id: "chairs-rule", kind: "rental", targetId: "chairs" }
+        ],
+        eventTemplates: [{
+          id: "wedding",
+          pkg: "celebration",
+          addons: ["dessert", "coffee"],
+          rentals: ["linens", "chairs"]
+        }]
+      }
+    };
+
+    const withoutDessert = removeCatalogRowWithInclusions(catalog, "addons", 0);
+    expect(withoutDessert.addons).toEqual([{ id: "coffee" }]);
+    expect(withoutDessert.packages[0].includedAddonIds).toEqual(["coffee"]);
+    expect(withoutDessert.packages[0].includedRentalIds).toEqual(["linens", "chairs"]);
+    expect(withoutDessert.settings.upsellRules.map((rule) => rule.id)).toEqual(["chairs-rule"]);
+    expect(withoutDessert.settings.eventTemplates[0].addons).toEqual(["coffee"]);
+
+    const withoutLinens = removeCatalogRowWithInclusions(withoutDessert, "rentals", 0);
+    expect(withoutLinens.rentals).toEqual([{ id: "chairs" }]);
+    expect(withoutLinens.packages[0].includedRentalIds).toEqual(["chairs"]);
+    expect(withoutLinens.settings.eventTemplates[0].rentals).toEqual(["chairs"]);
+  });
+
+  test("finds package references that must be removed before deleting a menu item", () => {
+    const packages = [
+      { id: "classic", name: "Classic", includedMenuItemIds: ["chicken"] },
+      { id: "premium", name: "Premium", includedMenuItemIds: ["chicken", "rice"] },
+      { id: "custom", name: "Custom", includedMenuItemIds: [] }
+    ];
+
+    expect(packageMenuItemReferences(packages, "chicken").map((pkg) => pkg.id))
+      .toEqual(["classic", "premium"]);
+    expect(packageMenuItemReferences(packages, "missing")).toEqual([]);
+    const templates = [
+      { id: "wedding", menuItems: ["chicken", "rice"] },
+      { id: "corporate", menuItems: ["salad"] }
+    ];
+    expect(eventTemplateMenuItemReferences(templates, "chicken").map((template) => template.id))
+      .toEqual(["wedding"]);
+  });
+
+  test("rejects malformed event-template dependencies instead of deleting through them", () => {
+    expect(() => parseEventTemplateDrafts('{"id":"not-an-array"}')).toThrow("JSON array");
+    expect(() => parseEventTemplateDrafts('[null]')).toThrow("must be an object");
+    expect(() => parseEventTemplateDrafts('[{"id":"wedding","menuItems":"chicken"}]'))
+      .toThrow("menuItems must be an array");
+    expect(parseEventTemplateDrafts('[{"id":"wedding","menuItems":["chicken"]}]'))
+      .toEqual([{ id: "wedding", menuItems: ["chicken"] }]);
   });
 
   test("Enter delegates menu item persistence to the single blur path", () => {

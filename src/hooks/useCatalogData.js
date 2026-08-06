@@ -163,7 +163,8 @@ function packageWriteShape(item = {}) {
     pppMinor: Math.round(Number(item.ppp || 0) * 100),
     includedMenuItemIds: stableIds(item.includedMenuItemIds),
     includedAddonIds: stableIds(item.includedAddonIds),
-    includedRentalIds: stableIds(item.includedRentalIds)
+    includedRentalIds: stableIds(item.includedRentalIds),
+    active: item.active !== false
   };
 }
 
@@ -624,7 +625,8 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     const normalized = normalizeCatalog(nextCatalog);
     const hasPricedPackage = normalized.packages.some((item) => {
       const name = String(item?.name || "").trim();
-      return name
+      return item?.active !== false
+        && name
         && name.toLowerCase() !== "new package"
         && Number(item?.ppp || 0) > 0;
     });

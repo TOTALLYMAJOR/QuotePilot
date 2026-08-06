@@ -72,6 +72,11 @@ function dayLabel(isoDate) {
   return dt.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
 }
 
+function scheduleEventDetailId(value) {
+  const id = String(value || "").trim().replace(/[^A-Za-z0-9_-]+/g, "-");
+  return `schedule-event-detail-${id || "event"}`;
+}
+
 function monthRangeLabel(anchorDate) {
   return anchorDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
@@ -863,6 +868,8 @@ export default function EventScheduleModal({
                   {selectedEvents.map((item) => (
                     <article
                       key={item.id}
+                      id={scheduleEventDetailId(item.id)}
+                      tabIndex={-1}
                       className={[
                         "schedule-event-card",
                         item.status,
@@ -1049,7 +1056,12 @@ export default function EventScheduleModal({
                                 draggable={!assigningId}
                                 onDragStart={(event) => handleDragStart(event, item.id)}
                                 disabled={Boolean(assigningId)}
-                                onClick={() => setSelectedIso(item.date)}
+                                onClick={() => {
+                                  const detail = document.getElementById(scheduleEventDetailId(item.id));
+                                  detail?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                                  detail?.focus({ preventScroll: true });
+                                }}
+                                aria-label={`Focus event details for ${item.quoteNumber}`}
                               >
                                 <strong>{item.quoteNumber}</strong>
                                 <span>{item.time || "TBD"} • {item.guests || 0} guests</span>

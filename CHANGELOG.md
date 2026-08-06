@@ -128,6 +128,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Catalog interactions now keep quote and admin event-type choices isolated,
+  refresh the active menu immediately after a managed-menu mutation, and focus
+  the selected production event from Staffing Board. Catalog reconciliation
+  removes unavailable package, add-on, rental, and menu selections with a
+  visible unsaved-work warning; inactive package choices persist and stay out
+  of quote/template/recommendation decisions; dependency-aware deletion fails
+  closed when advanced event-template JSON is malformed.
 - Quote creation now requires at least one selected menu item in Step 2, local
   persistence, authoritative server creation, proposal acceptance, and contract
   conversion. Validation returns staff to the first menu choice, while a

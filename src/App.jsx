@@ -17,6 +17,10 @@ import {
 import { setActiveOrganizationId } from "./lib/organizationService";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
+import {
+  catalogReconciliationNotice,
+  reconcileCatalogSelections
+} from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness, buildWorkflowAttentionSummary } from "./lib/quoteWorkflow";
 import { recommendationWouldChangeForm } from "./lib/recommendationState";
 import { PRODUCT_NAME } from "./lib/productIdentity";
@@ -436,6 +440,7 @@ export default function App() {
   const saveQuoteButtonRef = useRef(null);
   const menuSelectionValidationRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
+  const catalogReconciliationNoticeRef = useRef("");
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { organization, setOrganizationId } = useOrganization();
   const tenantContext = useTenantContext();
@@ -460,7 +465,8 @@ export default function App() {
   });
   const hasConfiguredPackage = catalog.packages.some((item) => {
     const name = String(item?.name || "").trim();
-    return name
+    return item?.active !== false
+      && name
       && name.toLowerCase() !== "new package"
       && Number(item?.ppp || 0) > 0;
   });
@@ -477,6 +483,7 @@ export default function App() {
   const [dynamicMenuSections, setDynamicMenuSections] = useState([]);
   const [dynamicMenuLoading, setDynamicMenuLoading] = useState(false);
   const [dynamicMenuError, setDynamicMenuError] = useState("");
+  const [dynamicMenuLoadedEventTypeId, setDynamicMenuLoadedEventTypeId] = useState("");
   const [dynamicMenuRetryToken, setDynamicMenuRetryToken] = useState(0);
   const [step, setStep] = useState(1);
   const [mobilePricingOpen, setMobilePricingOpen] = useState(false);
@@ -487,6 +494,11 @@ export default function App() {
       window.requestAnimationFrame(() => mobilePricingToggleRef.current?.focus());
     }
   };
+
+  const handleCatalogMutation = useCallback((mutation) => {
+    catalog.acceptCatalogMutation(mutation);
+    setDynamicMenuRetryToken((token) => token + 1);
+  }, [catalog.acceptCatalogMutation]);
 
   useEffect(() => {
     setMobilePricingOpen(false);
@@ -699,13 +711,13 @@ export default function App() {
     };
   }, [openHeaderMenu]);
 
-  const pushToast = (message, tone = "info") => {
+  const pushToast = useCallback((message, tone = "info") => {
     const id = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
     setToasts((prev) => [...prev, { id, message, tone }]);
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }, 3600);
-  };
+  }, []);
 
   const markFieldsTouched = (fields = []) => {
     const unique = Array.from(new Set(fields.filter(Boolean)));
@@ -993,26 +1005,6 @@ export default function App() {
   }, [authSession.organizationId, authSession.role, requestWorkflowAttentionRefresh]);
 
   useEffect(() => {
-    if (isUnscopedPlatformOperator || catalog.loading) return;
-    const availablePackageIds = catalog.packages
-      .filter((item) => {
-        const name = String(item?.name || "").trim();
-        return name
-          && name.toLowerCase() !== "new package"
-          && Number(item?.ppp || 0) > 0;
-      })
-      .map((item) => String(item.id || "").trim())
-      .filter(Boolean);
-    setForm((prev) => {
-      if (availablePackageIds.includes(String(prev.pkg || "").trim())) return prev;
-      return {
-        ...prev,
-        pkg: availablePackageIds[0] || ""
-      };
-    });
-  }, [catalog.loading, catalog.packages, isUnscopedPlatformOperator]);
-
-  useEffect(() => {
     const nextGlobal = String(globalEventTypeId || "").trim();
     if (!nextGlobal) return;
     if (nextGlobal === String(form.eventTypeId || "").trim()) return;
@@ -1073,6 +1065,7 @@ export default function App() {
     let alive = true;
 
     if (isUnscopedPlatformOperator || catalog.loading) {
+      setDynamicMenuLoadedEventTypeId("");
       return () => {
         alive = false;
       };
@@ -1083,6 +1076,7 @@ export default function App() {
       setDynamicMenuSections([]);
       setDynamicMenuLoading(false);
       setDynamicMenuError("");
+      setDynamicMenuLoadedEventTypeId("");
       return () => {
         alive = false;
       };
@@ -1091,12 +1085,15 @@ export default function App() {
     async function loadMenu() {
       setDynamicMenuLoading(true);
       setDynamicMenuError("");
+      setDynamicMenuLoadedEventTypeId("");
       try {
         const sections = await catalog.loadMenuByEvent(nextEventTypeId);
         if (!alive) return;
         setDynamicMenuSections(Array.isArray(sections) ? sections : []);
+        setDynamicMenuLoadedEventTypeId(nextEventTypeId);
       } catch (err) {
         if (!alive) return;
+        setDynamicMenuLoadedEventTypeId("");
         setDynamicMenuError(err?.message || "Failed to load event type menu.");
       } finally {
         if (alive) {
@@ -1111,6 +1108,7 @@ export default function App() {
     };
   }, [
     catalog.loading,
+    catalog.authoritativeVersion,
     catalog.loadMenuByEvent,
     dynamicMenuRetryToken,
     form.eventTypeId,
@@ -1118,44 +1116,61 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    const availableMenuItemIds = new Set(
-      effectiveMenuSections.flatMap((section) => (section.items || []).map((item) => item.id))
-    );
-    setForm((prev) => {
-      const filtered = (prev.menuItems || []).filter((id) => availableMenuItemIds.has(id));
-      const nextMenuQty = Object.entries(prev.menuItemQuantities || {}).reduce((acc, [id, quantity]) => {
-        if (availableMenuItemIds.has(id)) {
-          acc[id] = Math.max(1, Number(quantity || 1));
-        }
-        return acc;
-      }, {});
-      const unchangedSelection = filtered.length === (prev.menuItems || []).length;
-      const unchangedQuantities =
-        Object.keys(nextMenuQty).length === Object.keys(prev.menuItemQuantities || {}).length;
-      if (unchangedSelection && unchangedQuantities) {
-        return prev;
+    if (isUnscopedPlatformOperator || catalog.loading) return;
+    const eventTypeId = String(form.eventTypeId || "").trim();
+    const waitingForMenu = eventTypeId
+      && !dynamicMenuError
+      && (dynamicMenuLoading || dynamicMenuLoadedEventTypeId !== eventTypeId);
+    if (waitingForMenu) return;
+
+    const menuItemIds = eventTypeId && dynamicMenuLoadedEventTypeId === eventTypeId
+      ? new Set(effectiveMenuSections.flatMap((section) => (
+          (section.items || [])
+            .filter((item) => item?.active !== false)
+            .map((item) => String(item?.id || "").trim())
+            .filter(Boolean)
+        )))
+      : null;
+    const result = reconcileCatalogSelections({ form, catalog, menuItemIds });
+    if (!result.changed) {
+      catalogReconciliationNoticeRef.current = "";
+      return;
+    }
+
+    setForm(result.form);
+    if (result.userSelectionChanged) {
+      setQuoteDirty(true);
+      const fingerprint = JSON.stringify({
+        organizationId: authSession.organizationId,
+        eventTypeId,
+        removed: result.removed
+      });
+      if (catalogReconciliationNoticeRef.current !== fingerprint) {
+        catalogReconciliationNoticeRef.current = fingerprint;
+        pushToast(catalogReconciliationNotice(result.removed), "warning");
       }
-      return {
-        ...prev,
-        menuItems: filtered,
-        menuItemQuantities: nextMenuQty
-      };
-    });
-  }, [effectiveMenuSections]);
+    }
+  }, [
+    authSession.organizationId,
+    catalog,
+    catalog.loading,
+    dynamicMenuError,
+    dynamicMenuLoadedEventTypeId,
+    dynamicMenuLoading,
+    effectiveMenuSections,
+    form,
+    isUnscopedPlatformOperator,
+    pushToast
+  ]);
 
   useEffect(() => {
     if (catalog.loading) return;
     setForm((prev) => {
       let changed = false;
       const next = { ...prev };
-      const defaultPackageId = resolveFirstValidPackageId(catalog.packages, next.pkg);
       const defaultTaxRegion = catalog.settings?.defaultTaxRegion || catalog.settings?.taxRegions?.[0]?.id || "";
       const defaultSeasonProfile = catalog.settings?.defaultSeasonProfile || "auto";
 
-      if (next.pkg !== defaultPackageId) {
-        next.pkg = defaultPackageId;
-        changed = true;
-      }
       if (!next.taxRegion && defaultTaxRegion) {
         next.taxRegion = defaultTaxRegion;
         changed = true;
@@ -1170,7 +1185,7 @@ export default function App() {
       }
       return changed ? next : prev;
     });
-  }, [catalog.loading, catalog.packages, catalog.settings]);
+  }, [catalog.loading, catalog.settings]);
 
   useEffect(() => {
     if (!eventScheduleEnabled) setScheduleOpen(false);
@@ -1233,8 +1248,8 @@ export default function App() {
       return;
     }
 
-    const addonIds = new Set(catalog.addons.map((item) => item.id));
-    const rentalIds = new Set(catalog.rentals.map((item) => item.id));
+    const addonIds = new Set(catalog.addons.filter((item) => item?.active !== false).map((item) => item.id));
+    const rentalIds = new Set(catalog.rentals.filter((item) => item?.active !== false).map((item) => item.id));
     const menuItemIds = new Set(
       effectiveMenuSections.flatMap((section) => (section.items || []).map((item) => item.id))
     );
@@ -1254,7 +1269,7 @@ export default function App() {
       servers: Number(template.servers ?? form.servers ?? 0),
       chefs: Number(template.chefs ?? form.chefs ?? 0),
       bartenders: Number(template.bartenders ?? form.bartenders ?? 0),
-      pkg: template.pkg || form.pkg,
+      pkg: resolveFirstValidPackageId(catalog.packages, template.pkg || form.pkg),
       addons: templateAddons,
       addonQuantities: templateAddons.reduce((acc, id) => ({ ...acc, [id]: 1 }), {}),
       rentals: templateRentals,
@@ -2190,7 +2205,7 @@ export default function App() {
               onClose={() => setAdminOpen(false)}
               onSave={saveCatalogDuringSetup}
               onApplyStarterPack={catalog.stageStarterPack}
-              onCatalogMutation={catalog.acceptCatalogMutation}
+              onCatalogMutation={handleCatalogMutation}
               onReload={catalog.reload}
               saving={catalog.saving}
               selectedEventType={globalEventTypeId}
@@ -2637,12 +2652,10 @@ export default function App() {
             onClose={() => setAdminOpen(false)}
             onSave={catalog.saveCatalog}
             onApplyStarterPack={catalog.stageStarterPack}
-            onCatalogMutation={catalog.acceptCatalogMutation}
+            onCatalogMutation={handleCatalogMutation}
             onReload={catalog.reload}
             saving={catalog.saving}
             initialTab={adminInitialTab}
-            selectedEventType={globalEventTypeId}
-            onEventTypeChange={setGlobalEventTypeId}
             onToast={pushToast}
           />
         )}

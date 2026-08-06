@@ -722,7 +722,10 @@ export function StepServices({
       : catalog.settings?.guidedSellingEnabled !== false;
   const aiAssistEnabled = aiAssistEnabledProp !== false;
   const aiAutopilotEnabled = aiAssistEnabled && aiAutopilotEnabledProp === true;
-  const selectedPackage = catalog.packages.find((item) => item.id === form.pkg) || catalog.packages[0] || {};
+  const activePackages = catalog.packages.filter((item) => item?.active !== false);
+  const activeAddons = catalog.addons.filter((item) => item?.active !== false);
+  const activeRentals = catalog.rentals.filter((item) => item?.active !== false);
+  const selectedPackage = activePackages.find((item) => item.id === form.pkg) || activePackages[0] || {};
   const includedAddonIds = new Set(selectedPackage.includedAddonIds || []);
   const includedRentalIds = new Set(selectedPackage.includedRentalIds || []);
   const menuItemsById = new Map(
@@ -731,8 +734,8 @@ export function StepServices({
   );
   const packageInclusionLabels = [
     ...(selectedPackage.includedMenuItemIds || []).map((id) => menuItemsById.get(id)?.name || id),
-    ...(selectedPackage.includedAddonIds || []).map((id) => catalog.addons.find((item) => item.id === id)?.name || id),
-    ...(selectedPackage.includedRentalIds || []).map((id) => catalog.rentals.find((item) => item.id === id)?.name || id)
+    ...(selectedPackage.includedAddonIds || []).map((id) => activeAddons.find((item) => item.id === id)?.name || id),
+    ...(selectedPackage.includedRentalIds || []).map((id) => activeRentals.find((item) => item.id === id)?.name || id)
   ];
   const packageInclusionCount = (pkg) => [
     ...(pkg?.includedMenuItemIds || []),
@@ -827,7 +830,7 @@ export function StepServices({
             setForm((f) => ({ ...f, pkg: e.target.value }));
           }}
         >
-          {catalog.packages.map((p) => (
+          {activePackages.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} - {currency(p.ppp)}/person{packageInclusionCount(p) ? ` · ${packageInclusionCount(p)} select-to-add choices included` : ""}
             </option>
@@ -857,7 +860,8 @@ export function StepServices({
         <h4>Add-ons</h4>
         <p className="source-note">Per-item (and configured unit-based) add-ons support quantity edits.</p>
         <div className="checklist">
-          {catalog.addons.map((item) => {
+          {activeAddons.length === 0 && <p className="source-note">No active add-ons are available.</p>}
+          {activeAddons.map((item) => {
             const pricingType = resolvePricingType(item, "per_person");
             const quantityEnabled = addonSupportsQuantity(item, pricingType);
             const selected = form.addons.includes(item.id);
@@ -889,7 +893,8 @@ export function StepServices({
       <div>
         <h4>Rentals</h4>
         <div className="checklist">
-          {catalog.rentals.map((item) => {
+          {activeRentals.length === 0 && <p className="source-note">No active rentals are available.</p>}
+          {activeRentals.map((item) => {
             const pricingType = resolvePricingType(item, "per_item");
             const selected = form.rentals.includes(item.id);
             const fallbackQty = typeof item.qtyRule === "function"
