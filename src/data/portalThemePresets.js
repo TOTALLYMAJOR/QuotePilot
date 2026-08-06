@@ -98,6 +98,12 @@ function accessibleActionText(background) {
   return contrastRatio(background, white) >= contrastRatio(background, ink) ? white : ink;
 }
 
+function accessibleLightSurfaceText(candidate) {
+  const lightSurface = "#fbfbf8";
+  const ink = "#17130f";
+  return contrastRatio(candidate, lightSurface) >= 4.5 ? candidate : ink;
+}
+
 export function applyPortalThemePreset(settings = {}, presetId = "") {
   const preset = PORTAL_THEME_PRESETS.find((item) => item.id === presetId);
   return preset ? { ...settings, ...preset.colors } : { ...settings };
@@ -118,6 +124,7 @@ export function buildPortalThemeStyle(settings = {}) {
   const surface = safeHexColor(settings.brandBackgroundStart, FALLBACK_THEME_COLORS.brandBackgroundStart);
   const surfaceAlt = safeHexColor(settings.brandBackgroundMid, FALLBACK_THEME_COLORS.brandBackgroundMid);
   const canvas = safeHexColor(settings.brandBackgroundEnd, FALLBACK_THEME_COLORS.brandBackgroundEnd);
+  const lightSurfaceText = accessibleLightSurfaceText(dark);
 
   return {
     "--portal-brand": primary,
@@ -125,6 +132,8 @@ export function buildPortalThemeStyle(settings = {}) {
     "--portal-brand-dark": dark,
     "--portal-action": dark,
     "--portal-action-text": accessibleActionText(dark),
+    "--portal-focus": lightSurfaceText,
+    "--portal-link": lightSurfaceText,
     "--portal-surface": surface,
     "--portal-surface-alt": surfaceAlt,
     "--portal-canvas": canvas
