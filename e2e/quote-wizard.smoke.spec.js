@@ -192,7 +192,9 @@ test("workflow attention throttles passive reads and retains a known count on re
 
 test("Quotes loads once, then searches and counts the tenant result locally", async ({ page }) => {
   await page.evaluate(() => {
-    window.__quotePilotE2eDelays = { quoteHistoryMs: 250 };
+    // Keep the loading contract observable even on fast CI workers. A 250 ms
+    // delay can elapse while Playwright resolves and clicks the lazy modal.
+    window.__quotePilotE2eDelays = { quoteHistoryMs: 1_500 };
     const base = {
       organizationId: "e2e-org",
       status: "draft",
