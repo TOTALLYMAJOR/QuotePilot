@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: August 6, 2026
+Last updated: August 7, 2026
 
 ## Goal
 Prepare, promote, and verify QuotePilot safely with isolated credentials,
@@ -48,11 +48,13 @@ Both workflows accept the full release SHA, exact-SHA CI run id, environment-gat
 run id, and target-specific rollback SHA. They check out the immutable dispatch
 SHA and reject the run before dependency execution when evidence is incomplete,
 mismatched, stale, or the current environment policy is unprotected. The
-verifier also queries the exact UAT workflow run's historical GitHub deployment
-review log and requires exactly one `APPROVED` review for `production-uat` by a
-current directly assigned user reviewer other than the attester. It also queries
-the exact preparation run and requires one `production` approval by a current
-direct reviewer other than both the dispatcher and UAT attester.
+verifier supports two explicit approval policies. `independent-review` queries
+the exact UAT and preparation deployment-review logs and requires one current
+independent approval at each gate. `solo-operator` requires exactly one
+allowlisted human to perform separate UAT and preparation dispatches, binds the
+mode into both workflow titles, rejects preparation during the first 15 minutes
+after UAT, and uses reviewless protected-branch-only solo environments. Solo
+mode is a repository policy for a genuinely solo owner, not a per-run bypass.
 
 Preparation runs tests and production configuration checks, builds only the
 selected target surface, stages an explicit payload, hashes every payload file,
@@ -63,7 +65,8 @@ Vercel and do not change production.
 
 Production promotion remains blocked until a separately owned trusted deployer
 can download the artifact, independently revalidate the GitHub run and artifact
-identity/digest, repository, SHA, both review records, UAT, every payload file
+identity/digest, repository, SHA, the mode-specific approval/control records,
+UAT, every payload file
 against the manifest, allowed paths, provider project, and rollback record, and
 perform only the final provider mutation with a locked audited client. The
 trusted deployer must then record provider acceptance/READY state and the new
@@ -91,6 +94,9 @@ Set repository or environment variables used by the prepare workflows:
   widget configuration and human review require separate evidence
 - `RELEASE_UAT_ATTESTER_IDS`: comma-separated numeric GitHub user ids for the
   approved human UAT attesters; service/bot identities are not accepted
+- `RELEASE_APPROVAL_MODE`: `independent-review` (default) or `solo-operator`
+- `RELEASE_SOLO_OPERATOR_IDS`: in solo mode, exactly one numeric GitHub user id;
+  it must identify the same human who attests UAT and dispatches preparation
 
 Do not expose `FIREBASE_TOKEN`, `VERCEL_TOKEN`, Stripe, Twilio, Resend, or
 platform-admin secrets to either prepare workflow. Provider credentials belong
@@ -99,16 +105,17 @@ only in the independently owned trusted deployer.
 Configure the external release controls before the first promotion:
 
 1. Protect `main` with required `CI Quality` checks and pull-request review.
-2. Create `production-uat` and `production` GitHub environments. For both,
-   require an independent reviewer, enable prevention of self-review, and
-   restrict deployment branches to protected branches. Disable administrator
-   bypass of protection rules.
-3. Ensure at least one required environment reviewer is not an approved UAT
-   attester and is not the workflow dispatcher.
-4. Confirm the GitHub plan and repository ownership support required reviewers
-   for this private repository. If they do not, stop and transfer/upgrade the
-   repository or install a separately owned deployment protection gate; do not
-   weaken the verifier.
+2. For `independent-review`, create `production-uat` and `production`, require a
+   directly assigned independent user reviewer, and prevent self-review. For a
+   genuinely solo repository, create reviewless `production-uat-solo` and
+   `production-solo`, set the one-user solo allowlist, and retain the enforced
+   two-dispatch 15-minute cooling period. Never mix the two environment sets in
+   one release.
+3. For every release environment, restrict deployment branches to protected
+   branches and disable administrator bypass.
+4. Treat any approval-mode or solo-operator allowlist change as production
+   authorization configuration: review it in source/config history and never
+   change it to rescue an already-running release.
 5. Disable Vercel automatic production promotion from Git pushes (or apply an
    equivalent provider rule) so the separately owned trusted deployer is the
    only production mutation path. Confirm no alternate Firebase automation or
@@ -805,15 +812,20 @@ After the reviewed PR merges:
    - `checked_item_ids`: every id printed for that target exactly once,
      comma-separated,
    - `confirmation`: `ATTEST UAT <full-release-sha>`.
-5. A reviewer other than the attester approves `production-uat`. Record the
-   successful workflow run id. Reruns, bot actors, stale receipts, and a UAT run
-   started before exact-SHA CI completion are rejected.
+5. Complete the configured approval policy and record the successful workflow
+   run id. Independent mode requires a reviewer other than the attester at
+   `production-uat`. Solo mode requires the one allowlisted operator at
+   `production-uat-solo` and starts the 15-minute cooling period. Reruns, bot
+   actors, stale receipts, and a UAT run started before exact-SHA CI completion
+   are rejected.
 6. Create and publish the semantic version tag on that same SHA.
 7. Dispatch the target prepare workflow with `release_sha`, `ci_run_id`,
    `uat_run_id`, and `rollback_sha`; Firebase also requires `firebase_scope`
-   matching the attested profile. A protected `production` reviewer other than
-   both the dispatcher and UAT attester must approve preparation. Download and
-   record the resulting uploaded payload,
+   matching the attested profile. Independent mode requires a protected
+   `production` reviewer other than both dispatcher and UAT attester. Solo mode
+   uses `production-solo`, requires the same allowlisted human to dispatch a
+   separate run, and rejects it until 15 minutes after UAT completion. Download
+   and record the resulting uploaded payload,
    release-evidence receipt, and deterministic manifest. If targets have
    different rollback SHAs, use separate target-specific attestations.
 8. Only after the separately owned trusted deployer is implemented and

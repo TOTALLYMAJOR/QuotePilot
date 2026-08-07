@@ -32,7 +32,8 @@ function makeTempDirectory(label) {
 
 function makeEvidence(target = "vercel", overrides = {}) {
   return {
-    schema: "com.mbmapps.quotepilot.production-release-evidence/v4",
+    schema: "com.mbmapps.quotepilot.production-release-evidence/v5",
+    approvalMode: "independent-review",
     releaseSha: RELEASE_SHA,
     releaseTag: "v1.2.3",
     rollbackSha: ROLLBACK_SHA,
@@ -152,6 +153,28 @@ describe("verified evidence and target binding", () => {
     [{ verifiedAt: "2026-08-04" }, /canonical ISO-8601/i]
   ])("rejects malformed verified evidence %#", (overrides, expected) => {
     expect(() => validateVerifiedReleaseEvidence(makeEvidence("vercel", overrides))).toThrow(expected);
+  });
+
+  test("accepts an internally consistent solo-operator evidence receipt", () => {
+    expect(() => validateVerifiedReleaseEvidence(makeEvidence("vercel", {
+      approvalMode: "solo-operator",
+      attesterId: 404,
+      uatReviewerId: 404,
+      uatReviewId: "solo-uat:202",
+      operatorId: 404,
+      productionReviewerId: 404,
+      productionReviewId: "solo-cooldown-15m:303"
+    }))).not.toThrow();
+  });
+
+  test("rejects solo evidence without the cooling-period identity", () => {
+    expect(() => validateVerifiedReleaseEvidence(makeEvidence("vercel", {
+      approvalMode: "solo-operator",
+      attesterId: 404,
+      uatReviewerId: 404,
+      operatorId: 404,
+      productionReviewerId: 404
+    }))).toThrow(/cooling-period contract/i);
   });
 
   test("rejects missing or extra evidence fields", () => {

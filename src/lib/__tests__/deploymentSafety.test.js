@@ -50,7 +50,7 @@ describe("production mutation retirement", () => {
     const source = fs.readFileSync(workflow, "utf8");
 
     expect(source).toMatch(/name: Prepare .* Production Artifact/i);
-    expect(source).toMatch(/run-name: prepare\/v1\//);
+    expect(source).toMatch(/run-name: prepare\/v2\//);
     expect(source).not.toMatch(/FIREBASE_TOKEN|VERCEL_TOKEN/);
     expect(source).not.toMatch(/secrets\./);
     expect(source).not.toMatch(/\bnpx\b|firebase-tools|vercel\s+(?:build|deploy)/i);

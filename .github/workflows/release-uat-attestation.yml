@@ -1,5 +1,5 @@
 name: Release UAT Attestation
-run-name: release-uat/v1/${{ inputs.release_sha }}/${{ inputs.target }}/${{ inputs.rollback_sha }}/${{ inputs.staging_id }}/${{ inputs.checklist_digest }}
+run-name: release-uat/v2/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/${{ inputs.release_sha }}/${{ inputs.target }}/${{ inputs.rollback_sha }}/${{ inputs.staging_id }}/${{ inputs.checklist_digest }}
 
 on:
   workflow_dispatch:
@@ -51,10 +51,12 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: production-uat
+    environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-uat-solo' || 'production-uat' }}
     permissions:
       contents: read
     env:
+      RELEASE_APPROVAL_MODE: ${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}
+      RELEASE_SOLO_OPERATOR_IDS: ${{ vars.RELEASE_SOLO_OPERATOR_IDS }}
       RELEASE_UAT_ATTESTER_IDS: ${{ vars.RELEASE_UAT_ATTESTER_IDS }}
     steps:
       - name: Checkout exact release SHA

@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import {
   getReleaseUatChecklist,
   parseAttesterIds,
+  parseReleaseApprovalMode,
+  parseSoloOperatorIds,
   RELEASE_EVIDENCE_POLICY
 } from "./production-release-evidence.mjs";
 
@@ -145,6 +147,25 @@ export function buildReleaseUatReceipt(
   if (!attesterIds.has(actorId)) {
     throw attestationError("the GitHub actor is not allowlisted to attest release UAT.");
   }
+  let approvalMode;
+  try {
+    approvalMode = parseReleaseApprovalMode(env.RELEASE_APPROVAL_MODE);
+  } catch (error) {
+    throw attestationError(String(error?.message || "the approval mode is invalid."));
+  }
+  if (approvalMode === "solo-operator") {
+    let soloOperatorIds;
+    try {
+      soloOperatorIds = parseSoloOperatorIds(env.RELEASE_SOLO_OPERATOR_IDS);
+    } catch (error) {
+      throw attestationError(String(error?.message || "the solo operator allowlist is invalid."));
+    }
+    if (soloOperatorIds.size !== 1 || !soloOperatorIds.has(actorId)) {
+      throw attestationError(
+        "solo-operator UAT requires the one allowlisted human operator."
+      );
+    }
+  }
   const attesterAllowlistDigest = crypto
     .createHash("sha256")
     .update([...attesterIds].sort((left, right) => left - right).join(","))
@@ -156,7 +177,8 @@ export function buildReleaseUatReceipt(
   }
 
   return Object.freeze({
-    schema: "com.mbmapps.quotepilot.release-uat-attestation/v1",
+    schema: "com.mbmapps.quotepilot.release-uat-attestation/v2",
+    approvalMode,
     releaseSha,
     target,
     rollbackSha,

@@ -7,12 +7,15 @@ import {
   RELEASE_EVIDENCE_POLICY,
   getReleaseUatChecklist,
   parseAttesterIds,
+  parseReleaseApprovalMode,
+  parseSoloOperatorIds,
   parseReleaseEvidenceCliArgs,
   parseReleaseUatRunTitle,
   validateCiJobs,
   validateCiRun,
   validatePreparationDeploymentReviews,
   validatePreparationRun,
+  validateSoloOperatorControls,
   validateGitEvidence,
   validateProtectedEnvironment,
   validateUatDeploymentReviews,
@@ -202,6 +205,7 @@ function makeCiJobs() {
 }
 
 function makePreparationTitle({
+  approvalMode = "independent-review",
   profile = "vercel",
   releaseSha = RELEASE_SHA,
   ciRunId = CI_RUN_ID,
@@ -210,7 +214,8 @@ function makePreparationTitle({
 } = {}) {
   return [
     "prepare",
-    "v1",
+    "v2",
+    approvalMode,
     profile,
     releaseSha,
     String(ciRunId),
@@ -239,6 +244,7 @@ function makePreparationRun(profile = "vercel", overrides = {}) {
     display_title: makePreparationTitle({ profile }),
     actor: { id: OPERATOR_ID, type: "User", login: "release-operator" },
     triggering_actor: { id: OPERATOR_ID, type: "User", login: "release-operator" },
+    created_at: "2026-08-04T10:00:00.000Z",
     ...overrides
   };
 }
@@ -256,6 +262,7 @@ function makePreparationOptions(target = "vercel", overrides = {}) {
 }
 
 function makeUatTitle({
+  approvalMode = "independent-review",
   releaseSha = RELEASE_SHA,
   target = "vercel",
   rollbackSha = ROLLBACK_SHA,
@@ -264,7 +271,8 @@ function makeUatTitle({
 } = {}) {
   return [
     "release-uat",
-    "v1",
+    "v2",
+    approvalMode,
     releaseSha,
     target,
     rollbackSha,
@@ -323,7 +331,7 @@ function makeUatJobs() {
 }
 
 function makeEnvironment(name, { reviewerIds = [REVIEWER_ID], ...overrides } = {}) {
-  const environmentId = name.toLowerCase() === "production-uat"
+  const environmentId = name.toLowerCase().includes("uat")
     ? UAT_ENVIRONMENT_ID
     : PRODUCTION_ENVIRONMENT_ID;
   return {
@@ -782,6 +790,7 @@ describe("attester and UAT title parsing", () => {
 
   test("parses an exact release UAT run title", () => {
     expect(parseReleaseUatRunTitle(makeUatTitle())).toEqual({
+      approvalMode: "independent-review",
       releaseSha: RELEASE_SHA,
       target: "vercel",
       rollbackSha: ROLLBACK_SHA,
@@ -791,7 +800,7 @@ describe("attester and UAT title parsing", () => {
   });
 
   test.each([
-    ["release-uat/v2", /does not match the v1 evidence contract/i],
+    ["release-uat/v2", /does not match the v2 evidence contract/i],
     [makeUatTitle({ releaseSha: "abc" }), /UAT release SHA must be a full/i],
     [makeUatTitle({ target: "all" }), /target is not firebase-hosting, firebase-backend, firebase-all, or vercel/i],
     [makeUatTitle({ target: "firebase-functions" }), /target is not firebase-hosting, firebase-backend, firebase-all, or vercel/i],
@@ -799,6 +808,11 @@ describe("attester and UAT title parsing", () => {
     [makeUatTitle({ checklistDigest: "abc" }), /checklist digest is invalid/i]
   ])("rejects malformed UAT title %#", (title, expected) => {
     expect(() => parseReleaseUatRunTitle(title)).toThrow(expected);
+  });
+
+  test("parses explicit approval modes and solo operator ids", () => {
+    expect(parseReleaseApprovalMode("solo-operator")).toBe("solo-operator");
+    expect([...parseSoloOperatorIds("303")]).toEqual([303]);
   });
 });
 
@@ -850,7 +864,10 @@ describe("current preparation workflow validator", () => {
       expect(validatePreparationRun(
         makePreparationRun(profile),
         makePreparationOptions(profile)
-      )).toEqual({ operatorId: OPERATOR_ID });
+      )).toEqual({
+        operatorId: OPERATOR_ID,
+        createdAt: "2026-08-04T10:00:00.000Z"
+      });
     }
   );
 
@@ -896,7 +913,7 @@ describe("current preparation workflow validator", () => {
     ["CI run", makePreparationTitle({ ciRunId: 999 })],
     ["UAT run", makePreparationTitle({ uatRunId: 999 })],
     ["rollback SHA", makePreparationTitle({ rollbackSha: OTHER_SHA })],
-    ["format", "prepare/v1/tampered"]
+    ["format", "prepare/v2/tampered"]
   ])("rejects a preparation title with tampered %s", (_field, displayTitle) => {
     expect(() => validatePreparationRun(
       makePreparationRun("vercel", { display_title: displayTitle }),
@@ -911,6 +928,7 @@ describe("protected GitHub environment validator", () => {
       makeEnvironment("production-uat"),
       { name: "production-uat", attesterId: ATTESTER_ID }
     )).toEqual({
+      approvalMode: "independent-review",
       environmentId: UAT_ENVIRONMENT_ID,
       reviewerIds: new Set([REVIEWER_ID])
     });
@@ -921,6 +939,21 @@ describe("protected GitHub environment validator", () => {
       makeEnvironment("Production"),
       { name: "production" }
     )).not.toThrow();
+  });
+
+  test("accepts a reviewless protected environment only for solo-operator mode", () => {
+    expect(validateProtectedEnvironment(
+      makeEnvironment("production-uat-solo", { protection_rules: [] }),
+      {
+        name: "production-uat-solo",
+        attesterId: ATTESTER_ID,
+        approvalMode: "solo-operator"
+      }
+    )).toEqual({
+      approvalMode: "solo-operator",
+      environmentId: UAT_ENVIRONMENT_ID,
+      reviewerIds: new Set()
+    });
   });
 
   test.each([
@@ -941,6 +974,37 @@ describe("protected GitHub environment validator", () => {
     expect(() => validateProtectedEnvironment(environment, {
       name: "production-uat",
       attesterId: ATTESTER_ID
+    })).toThrow(expected);
+  });
+});
+
+describe("solo-operator compensating controls", () => {
+  test("accepts one allowlisted human after the cooling period", () => {
+    expect(validateSoloOperatorControls({
+      attesterId: ATTESTER_ID,
+      operatorId: ATTESTER_ID,
+      soloOperatorIds: new Set([ATTESTER_ID]),
+      uatCompletedAt: UAT_COMPLETED_AT,
+      preparationCreatedAt: "2026-08-04T09:45:00.000Z"
+    })).toEqual({
+      approvalMode: "solo-operator",
+      controlId: "solo-cooldown-15m",
+      operatorId: ATTESTER_ID
+    });
+  });
+
+  test.each([
+    [{ soloOperatorIds: new Set([ATTESTER_ID, REVIEWER_ID]) }, /one allowlisted human/i],
+    [{ operatorId: OPERATOR_ID }, /one allowlisted human/i],
+    [{ preparationCreatedAt: "2026-08-04T09:44:59.000Z" }, /at least 15 minutes/i]
+  ])("rejects an invalid solo-operator control %#", (overrides, expected) => {
+    expect(() => validateSoloOperatorControls({
+      attesterId: ATTESTER_ID,
+      operatorId: ATTESTER_ID,
+      soloOperatorIds: new Set([ATTESTER_ID]),
+      uatCompletedAt: UAT_COMPLETED_AT,
+      preparationCreatedAt: "2026-08-04T09:45:00.000Z",
+      ...overrides
     })).toThrow(expected);
   });
 });
@@ -1034,11 +1098,28 @@ describe("UAT workflow evidence validators", () => {
         makeUatOptions({ target: profile })
       )).toEqual({
         actorId: ATTESTER_ID,
+        approvalMode: "independent-review",
+        completedAt: UAT_COMPLETED_AT,
         stagingId: "dpl_immutable-123",
         attestedTarget: profile
       });
     }
   );
+
+  test("accepts an allowlisted solo-operator UAT dispatch", () => {
+    expect(validateUatRun(
+      makeUatRun({
+        display_title: makeUatTitle({ approvalMode: "solo-operator" })
+      }),
+      makeUatOptions({
+        approvalMode: "solo-operator",
+        soloOperatorIds: new Set([ATTESTER_ID])
+      })
+    )).toMatchObject({
+      actorId: ATTESTER_ID,
+      approvalMode: "solo-operator"
+    });
+  });
 
   test.each([
     [{ repository: { id: 1, full_name: "other/repo" } }, {}, /different repository/i],
@@ -1146,7 +1227,8 @@ describe("full production release verifier", () => {
     preparationGraphQlPayloads = null,
     annotatedTag = false,
     mainSha = RELEASE_SHA,
-    tagSha = RELEASE_SHA
+    tagSha = RELEASE_SHA,
+    solo = false
   } = {}) {
     const calls = [];
     let graphQlPage = 0;
@@ -1172,17 +1254,28 @@ describe("full production release verifier", () => {
           object: { type: "commit", sha: tagSha }
         };
       } else if (url.endsWith(`/actions/runs/${PREPARATION_RUN_ID}`)) {
-        payload = makePreparationRun("vercel");
+        payload = makePreparationRun("vercel", solo ? {
+          actor: { id: ATTESTER_ID, type: "User", login: "release-attester" },
+          triggering_actor: { id: ATTESTER_ID, type: "User", login: "release-attester" },
+          display_title: makePreparationTitle({ approvalMode: "solo-operator" }),
+          created_at: "2026-08-04T09:45:00.000Z"
+        } : {});
       } else if (url.endsWith(`/actions/runs/${CI_RUN_ID}`)) payload = makeCiRun();
       else if (url.includes(`/actions/runs/${CI_RUN_ID}/jobs?`)) {
         payload = { total_count: makeCiJobs().length, jobs: makeCiJobs() };
-      } else if (url.endsWith(`/actions/runs/${UAT_RUN_ID}`)) payload = makeUatRun();
+      } else if (url.endsWith(`/actions/runs/${UAT_RUN_ID}`)) payload = makeUatRun(solo ? {
+        display_title: makeUatTitle({ approvalMode: "solo-operator" })
+      } : {});
       else if (url.includes(`/actions/runs/${UAT_RUN_ID}/jobs?`)) {
         payload = { total_count: makeUatJobs().length, jobs: makeUatJobs() };
       } else if (url.endsWith("/environments/production-uat")) {
         payload = makeEnvironment("production-uat");
       } else if (url.endsWith("/environments/production")) {
         payload = makeEnvironment("production");
+      } else if (url.endsWith("/environments/production-uat-solo")) {
+        payload = makeEnvironment("production-uat-solo", { protection_rules: [] });
+      } else if (url.endsWith("/environments/production-solo")) {
+        payload = makeEnvironment("production-solo", { protection_rules: [] });
       } else if (url.endsWith("/graphql")) {
         const variables = JSON.parse(options.body).variables;
         if (variables.runId === UAT_RUN_NODE_ID) {
@@ -1241,7 +1334,8 @@ describe("full production release verifier", () => {
     );
 
     expect(result).toEqual({
-      schema: "com.mbmapps.quotepilot.production-release-evidence/v4",
+      schema: "com.mbmapps.quotepilot.production-release-evidence/v5",
+      approvalMode: "independent-review",
       releaseSha: RELEASE_SHA,
       releaseTag: RELEASE_TAG,
       rollbackSha: ROLLBACK_SHA,
@@ -1291,6 +1385,29 @@ describe("full production release verifier", () => {
       { fetchImpl: makeFetch({ annotatedTag: true }).fetchImpl, git: makeGit().git, now: NOW }
     );
     expect(result.releaseTag).toBe(RELEASE_TAG);
+  });
+
+  test("binds solo-operator cooling-period evidence without a fabricated reviewer", async () => {
+    const { fetchImpl, calls } = makeFetch({ solo: true });
+    const result = await verifyProductionReleaseEvidence(
+      verifierInput({
+        approvalMode: "solo-operator",
+        soloOperatorIds: new Set([ATTESTER_ID])
+      }),
+      { fetchImpl, git: makeGit().git, now: NOW }
+    );
+
+    expect(result).toMatchObject({
+      schema: "com.mbmapps.quotepilot.production-release-evidence/v5",
+      approvalMode: "solo-operator",
+      attesterId: ATTESTER_ID,
+      uatReviewerId: ATTESTER_ID,
+      operatorId: ATTESTER_ID,
+      productionReviewerId: ATTESTER_ID,
+      uatReviewId: `solo-uat:${UAT_RUN_ID}`,
+      productionReviewId: `solo-cooldown-15m:${PREPARATION_RUN_ID}`
+    });
+    expect(calls.some(({ url }) => url.endsWith("/graphql"))).toBe(false);
   });
 
   test.each([
@@ -1490,7 +1607,8 @@ describe("release UAT attestation validator", () => {
     });
 
     expect(receipt).toEqual({
-      schema: "com.mbmapps.quotepilot.release-uat-attestation/v1",
+      schema: "com.mbmapps.quotepilot.release-uat-attestation/v2",
+      approvalMode: "independent-review",
       releaseSha: RELEASE_SHA,
       target: "vercel",
       rollbackSha: ROLLBACK_SHA,
@@ -1513,6 +1631,18 @@ describe("release UAT attestation validator", () => {
       recordedAt: NOW.toISOString()
     });
     expect(Object.isFrozen(receipt)).toBe(true);
+  });
+
+  test("records the explicit solo-operator approval mode", () => {
+    const receipt = buildReleaseUatReceipt(makeReceiptArgs(), {
+      env: makeReceiptEnv({
+        RELEASE_APPROVAL_MODE: "solo-operator",
+        RELEASE_SOLO_OPERATOR_IDS: String(ATTESTER_ID)
+      }),
+      root: process.cwd(),
+      now: NOW
+    });
+    expect(receipt.approvalMode).toBe("solo-operator");
   });
 
   test("writes a create-only receipt and rejects symlinked output ancestors", () => {
