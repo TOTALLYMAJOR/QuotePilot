@@ -128,6 +128,12 @@ Last updated: August 6, 2026
   returns HTTP 200 and unauthenticated callable probes fail closed with HTTP 401.
   A signed-in owner pack application and pricing confirmation remain pending
   tenant acceptance rather than being inferred from route reachability.
+- Current source starter-catalog hardening detects owner-deactivated or removed
+  generated records before replacement, rejects malformed dependency data
+  before menu removal, and requires browser catalog/pricing edits to advance
+  the catalog revision atomically while reopening pricing review. Pack
+  provenance and staged-pack metadata remain server-owned. These additions are
+  locally validated source changes and are not part of deployed `v0.2.3`.
 - Production provisioning hardening includes verified-email,
   role-document, and allowlist-backed platform authority; explicit plan/create
   confirmation; atomic collision-safe creation; seven-day owner invitations;

@@ -212,6 +212,12 @@ describe("starter catalog pack manifests", () => {
     )).toBe("modified");
     expect(classifyPackRecord(
       "catalogPackages",
+      { ...generated, active: false },
+      "wedding-events",
+      2
+    )).toBe("modified");
+    expect(classifyPackRecord(
+      "catalogPackages",
       { name: "Owner special", pppMinor: 2500 },
       "wedding-events",
       2
@@ -367,6 +373,29 @@ describe("starter catalog pack safety", () => {
     })).rejects.toMatchObject({
       code: "failed-precondition",
       details: { modifiedCount: 1 }
+    });
+  });
+
+  test.each([
+    ["package", "catalogPackages"],
+    ["menu item", "menuItems"]
+  ])("blocks replacement after an owner removes a generated %s", async (_label, collectionName) => {
+    const { db, plan } = stagedCatalog();
+    const removedId = plan.collections[collectionName][0].id;
+    db.store.delete(`organizations/acme/${collectionName}/${removedId}`);
+
+    await expect(applyStarterCatalogPack({
+      db,
+      organizationId: "acme",
+      packId: "corporate-drop-off",
+      replaceStagedPack: true,
+      expectedCatalogRevision: 1
+    })).rejects.toMatchObject({
+      code: "failed-precondition",
+      details: {
+        missingGeneratedCount: 1,
+        missingGeneratedKeys: [`${collectionName}/${removedId}`]
+      }
     });
   });
 
@@ -626,6 +655,47 @@ describe("starter catalog pack safety", () => {
     });
     expect(result).toMatchObject({ ok: true, action: "delete", catalogRevision: 2 });
     expect(db.store.has(itemPath)).toBe(false);
+  });
+
+  test.each([
+    ["package dependencies", ({ db, plan }) => {
+      const packageId = plan.collections.catalogPackages[0].id;
+      db.store.get(`organizations/acme/catalogPackages/${packageId}`).includedMenuItemIds = {
+        malformed: true
+      };
+    }, { malformedPackageId: expect.any(String) }],
+    ["event template collection", ({ db }) => {
+      db.store.get("organizations/acme/settings/config").eventTemplates = { malformed: true };
+    }, { malformedSetting: "eventTemplates" }],
+    ["event template dependencies", ({ db }) => {
+      db.store.get("organizations/acme/settings/config").eventTemplates = [{
+        id: "malformed-template",
+        menuItems: { malformed: true }
+      }];
+    }, { malformedTemplateIndex: 0 }]
+  ])("managed menu deletion rejects malformed %s without mutating state", async (_label, corrupt, details) => {
+    const fixture = stagedCatalog();
+    const { db, plan } = fixture;
+    const includedIds = new Set(
+      plan.collections.catalogPackages.flatMap((entry) => entry.data.includedMenuItemIds)
+    );
+    const itemEntry = [...plan.collections.menuItems]
+      .reverse()
+      .find((entry) => !includedIds.has(entry.id));
+    const settingsPath = "organizations/acme/settings/config";
+    const itemPath = `organizations/acme/menuItems/${itemEntry.id}`;
+    corrupt(fixture);
+
+    await expect(mutateManagedMenuItemAvailability({
+      db,
+      organizationId: "acme",
+      itemId: itemEntry.id,
+      action: "delete",
+      expectedCatalogRevision: 1,
+      actorUid: "owner-1"
+    })).rejects.toMatchObject({ code: "failed-precondition", details });
+    expect(db.store.has(itemPath)).toBe(true);
+    expect(db.store.get(settingsPath).catalogRevision).toBe(1);
   });
 
   test("server confirmation rejects invalid cross-collection menu references", () => {

@@ -438,6 +438,12 @@ function classifyPackRecord(collectionName, docData = {}, packId = "", packVersi
   ) {
     return "custom";
   }
+  // Package activity was not part of the original baseline hash schema. Keep
+  // legacy staged manifests readable, but treat an explicit owner
+  // deactivation as divergence so replacement can never restore it silently.
+  if (collectionName === "catalogPackages" && docData?.active === false) {
+    return "modified";
+  }
   const baselineHash = text(docData?.starterPackBaselineHash);
   if (!baselineHash) return "modified";
   return baselineHash === hashValue(recordBusinessData(collectionName, docData))
@@ -1349,13 +1355,31 @@ async function applyStarterCatalogPack({
           `Referenced starter manifest ${manifestKey(currentPackId, currentPackVersion)} is unavailable.`
         );
       }
+      const currentPlan = buildStarterCatalogPackDocuments(currentPackId, {
+        packVersion: currentPackVersion,
+        nowISO,
+        actorUid
+      });
+      const existingKeys = new Set(existingDocs.map(
+        (entry) => `${entry.collectionName}/${entry.id}`
+      ));
+      const missingGeneratedKeys = COLLECTION_NAMES.flatMap((collectionName) => (
+        currentPlan.collections[collectionName]
+          .map((entry) => `${collectionName}/${entry.id}`)
+          .filter((key) => !existingKeys.has(key))
+      ));
       const customCount = classifications.filter((entry) => entry.state === "custom").length;
       const modifiedCount = classifications.filter((entry) => entry.state === "modified").length;
-      if (customCount || modifiedCount) {
+      if (customCount || modifiedCount || missingGeneratedKeys.length) {
         throw new StarterCatalogPackError(
           "failed-precondition",
-          "Replacement is blocked because the staged catalog contains custom or user-modified records.",
-          { customCount, modifiedCount }
+          "Replacement is blocked because the staged catalog contains custom, user-modified, or removed pack records.",
+          {
+            customCount,
+            modifiedCount,
+            missingGeneratedCount: missingGeneratedKeys.length,
+            missingGeneratedKeys: missingGeneratedKeys.slice(0, 25)
+          }
         );
       }
       assertStagedSettingsUnmodified(currentSettings);
@@ -1536,6 +1560,39 @@ async function mutateManagedMenuItemAvailability({
     const revision = assertExpectedRevision(settings, expectedCatalogRevision);
     if (!itemSnapshot.exists) {
       throw new StarterCatalogPackError("not-found", `Menu item ${normalizedItemId} was not found.`);
+    }
+
+    const malformedPackage = packageSnapshot.docs.find((snapshot) => {
+      const packageData = snapshot.data() || {};
+      return Object.prototype.hasOwnProperty.call(packageData, "includedMenuItemIds")
+        && !Array.isArray(packageData.includedMenuItemIds);
+    });
+    if (malformedPackage) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `Package ${malformedPackage.id} has malformed menu item dependencies. Repair the package before changing menu availability.`,
+        { itemId: normalizedItemId, malformedPackageId: malformedPackage.id }
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, "eventTemplates")
+      && !Array.isArray(settings.eventTemplates)) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        "Event template dependencies must be configured as an array before changing menu availability.",
+        { itemId: normalizedItemId, malformedSetting: "eventTemplates" }
+      );
+    }
+    const malformedTemplateIndex = (settings.eventTemplates || []).findIndex((template) => (
+      template
+      && Object.prototype.hasOwnProperty.call(template, "menuItems")
+      && !Array.isArray(template.menuItems)
+    ));
+    if (malformedTemplateIndex >= 0) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `Event template ${text(settings.eventTemplates[malformedTemplateIndex]?.id, `template-${malformedTemplateIndex + 1}`)} has malformed menu item dependencies.`,
+        { itemId: normalizedItemId, malformedTemplateIndex }
+      );
     }
 
     const packageReferences = packageSnapshot.docs
