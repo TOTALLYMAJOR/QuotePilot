@@ -116,10 +116,10 @@ Configure the external release controls before the first promotion:
 4. Treat any approval-mode or solo-operator allowlist change as production
    authorization configuration: review it in source/config history and never
    change it to rescue an already-running release.
-5. Disable Vercel automatic production promotion from Git pushes (or apply an
-   equivalent provider rule) so the separately owned trusted deployer is the
-   only production mutation path. Confirm no alternate Firebase automation or
-   customer-site helper bypasses that boundary.
+5. Keep `vercel.json` `git.deploymentEnabled` set to `false` so Git pushes do
+   not create or promote Vercel deployments. The separately owned trusted
+   deployer must remain the only production mutation path. Confirm no alternate
+   Firebase automation or customer-site helper bypasses that boundary.
 6. Rehearse the prepare workflow with intentionally invalid evidence and
    confirm it fails before dependency execution or artifact upload. Do not
    treat repository source as proof that these external settings are active.

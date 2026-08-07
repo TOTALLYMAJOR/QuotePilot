@@ -48,6 +48,10 @@ git checkout -b feature/<scope>-<topic>
   enforced 15-minute cooling period. Every environment disables administrator
   bypass and allows protected branches only. Changing modes is a reviewed
   release-policy change, not an ad hoc per-release bypass.
+- Keep Vercel Git auto-deployments disabled through the reviewed
+  `vercel.json` `git.deploymentEnabled: false` setting. Git publication and
+  production mutation are separate events; only the credential-isolated
+  deployer may promote the prepared artifact.
 - `Mainline Safety Net (Auto-Revert Failed Pushes)` is recovery defense that
   reverts a failed current `main` push head. It does not substitute for branch
   protection, the configured approval policy, or release evidence; production

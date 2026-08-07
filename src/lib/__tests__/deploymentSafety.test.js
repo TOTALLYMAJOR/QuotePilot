@@ -26,6 +26,7 @@ const FIREBASE_STUB = path.join(ROOT, "scripts", "deploy-firebase-production.mjs
 const VERCEL_STUB = path.join(ROOT, "scripts", "deploy-vercel-production.mjs");
 const CUSTOMER_DEPLOY_SCRIPT = path.join(ROOT, "scripts", "deploy-hosting-customer.mjs");
 const CI_LANE_CLASSIFIER = path.join(ROOT, "scripts", "ci-lane-classifier.mjs");
+const VERCEL_CONFIG = path.join(ROOT, "vercel.json");
 
 describe("production mutation retirement", () => {
   test.each([
@@ -93,6 +94,12 @@ describe("production mutation retirement", () => {
     expect(rootPackage.scripts["release:uat:items"]).toBe(
       "node ./scripts/release-uat-attestation.mjs --print-items"
     );
+  });
+
+  test("disables Vercel Git auto-deployments so governed promotion is the only production path", () => {
+    const config = JSON.parse(fs.readFileSync(VERCEL_CONFIG, "utf8"));
+
+    expect(config.git).toEqual({ deploymentEnabled: false });
   });
 });
 

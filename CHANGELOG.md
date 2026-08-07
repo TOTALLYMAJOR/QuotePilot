@@ -89,6 +89,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Vercel Git-triggered deployments are disabled in the reviewed project
+  configuration. Merging or pushing a branch can no longer create or promote a
+  Vercel deployment; production promotion remains a separate governed action
+  against the deterministic release artifact.
 - Release evidence now supports an explicit solo-owner policy without
   fabricating a second reviewer. Solo mode requires one allowlisted human,
   separate exact-SHA UAT and preparation dispatches, protected-branch-only

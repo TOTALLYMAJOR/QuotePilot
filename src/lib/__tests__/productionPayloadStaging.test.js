@@ -27,6 +27,7 @@ function makeRoot() {
     "dist/assets/app.js": "console.log('QuotePilot');\n",
     "vercel.json": `${JSON.stringify({
       framework: "vite",
+      git: { deploymentEnabled: false },
       cleanUrls: true,
       buildCommand: "npm run check:env && npm run build",
       headers: [{
