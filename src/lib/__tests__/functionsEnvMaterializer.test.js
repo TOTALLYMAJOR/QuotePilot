@@ -30,7 +30,7 @@ function runMaterializer(overrides = {}, { existing = "", args = [] } = {}) {
     AUTH_PLATFORM_ADMIN_EMAILS: "operator@mbmapps.com",
     NOTIFICATIONS_EMAIL_PROVIDER: "none",
     EMAIL_FROM_NAME: "QuotePilot by MBMApps",
-    EMAIL_FROM_EMAIL: "onboarding@quotepilot.mbmapps.com",
+    EMAIL_FROM_EMAIL: "quotepilot@leaguepilot.us",
     NOTIFICATIONS_SMS_PROVIDER: "none",
     STRIPE_MODE: "live",
     ...overrides
@@ -63,6 +63,9 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(INTEGRATION_OPS_SOURCE).toContain(
       "production provider credentials belong only in Firebase Secret Manager bindings"
     );
+    expect(INTEGRATION_OPS_SOURCE).toContain("TWILIO_MESSAGING_SERVICE_SID=");
+    expect(INTEGRATION_OPS_SOURCE).not.toContain("TWILIO_FROM_NUMBER=");
+    expect(INTEGRATION_OPS_SOURCE).not.toContain('"TWILIO_AUTH_TOKEN=",');
     expect(INTEGRATION_OPS_SOURCE).not.toContain(
       "Use placeholders or non-production provider values only; never commit or paste secrets here"
     );
@@ -94,7 +97,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).not.toContain("STRIPE_WEBHOOK_SECRET");
     expect(output).not.toContain("TWILIO_ACCOUNT_SID");
     expect(output).not.toContain("TWILIO_AUTH_TOKEN");
-    expect(output).not.toContain("TWILIO_FROM_NUMBER");
+    expect(output).not.toContain("TWILIO_MESSAGING_SERVICE_SID");
     expect(output).not.toContain("NOTIFICATIONS_OWNER_PHONE");
     expect(result.stdout).not.toContain("test_only_secret");
   });
@@ -177,6 +180,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
   test("rejects generic provider secrets in dotenv because Secret Manager owns them", () => {
     for (const [name, value] of [
       ["RESEND_API_KEY", "re_secret_fixture"],
+      ["TWILIO_AUTH_TOKEN", "twilio-secret-fixture"],
       ["STRIPE_SECRET_KEY", "rk_live_secret_fixture"],
       ["STRIPE_WEBHOOK_SECRET", "whsec_secret_fixture"]
     ]) {
@@ -232,6 +236,27 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toMatch(/must be unset/i);
+  });
+
+  test("enables Twilio with a Messaging Service and without materializing its secret", () => {
+    const { cwd, result } = runMaterializer({
+      NOTIFICATIONS_SMS_PROVIDER: "twilio",
+      TWILIO_ACCOUNT_SID: `AC${"1".repeat(32)}`,
+      TWILIO_MESSAGING_SERVICE_SID: `MG${"2".repeat(32)}`,
+      NOTIFICATIONS_OWNER_PHONE: "+13125550123"
+    });
+    expect(result.status).toBe(0);
+
+    const output = fs.readFileSync(
+      path.join(cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    );
+    expect(output).toContain("NOTIFICATIONS_SMS_PROVIDER=twilio");
+    expect(output).toContain(`TWILIO_ACCOUNT_SID=AC${"1".repeat(32)}`);
+    expect(output).toContain(`TWILIO_MESSAGING_SERVICE_SID=MG${"2".repeat(32)}`);
+    expect(output).toContain("NOTIFICATIONS_OWNER_PHONE=+13125550123");
+    expect(output).not.toContain("TWILIO_AUTH_TOKEN");
+    expect(output).not.toContain("TWILIO_FROM_NUMBER");
   });
 
   test("rejects a Functions environment for a different Firebase project", () => {

@@ -100,7 +100,7 @@ if (emailFromName !== "QuotePilot by MBMApps") {
 }
 
 const emailFromEmail = required("EMAIL_FROM_EMAIL").toLowerCase();
-if (emailFromEmail !== "onboarding@quotepilot.mbmapps.com") {
+if (emailFromEmail !== "quotepilot@leaguepilot.us") {
   throw new Error(
     "EMAIL_FROM_EMAIL must use the approved QuotePilot sender identity; enable Resend only after provider and DNS verification."
   );
@@ -112,20 +112,19 @@ if (!["none", "twilio"].includes(smsProvider)) {
 }
 
 const twilioAccountSid = optional("TWILIO_ACCOUNT_SID");
-const twilioAuthToken = optional("TWILIO_AUTH_TOKEN");
-const twilioFromNumber = optional("TWILIO_FROM_NUMBER");
+const twilioMessagingServiceSid = optional("TWILIO_MESSAGING_SERVICE_SID");
 const ownerPhone = optional("NOTIFICATIONS_OWNER_PHONE");
 if (
   smsProvider === "twilio"
-  && (!twilioAccountSid || !twilioAuthToken || !twilioFromNumber || !ownerPhone)
+  && (!twilioAccountSid || !twilioMessagingServiceSid || !ownerPhone)
 ) {
   throw new Error(
-    "TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER, and NOTIFICATIONS_OWNER_PHONE are required when Twilio is enabled."
+    "TWILIO_ACCOUNT_SID, TWILIO_MESSAGING_SERVICE_SID, and NOTIFICATIONS_OWNER_PHONE are required when Twilio is enabled. Store TWILIO_AUTH_TOKEN in Firebase Secret Manager."
   );
 }
 if (
   smsProvider === "none"
-  && (twilioAccountSid || twilioAuthToken || twilioFromNumber || ownerPhone)
+  && (twilioAccountSid || twilioMessagingServiceSid || ownerPhone)
 ) {
   throw new Error(
     "Twilio credentials and owner phone must be unset while NOTIFICATIONS_SMS_PROVIDER is none."
@@ -168,6 +167,7 @@ const normalizedBuyerAccessTurnstileHostnames = buyerAccessTurnstileHostnames
   : "";
 for (const secretName of [
   "RESEND_API_KEY",
+  "TWILIO_AUTH_TOKEN",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
@@ -195,8 +195,7 @@ const values = {
   NOTIFICATIONS_SMS_PROVIDER: smsProvider,
   ...(smsProvider === "twilio" ? {
     TWILIO_ACCOUNT_SID: twilioAccountSid,
-    TWILIO_AUTH_TOKEN: twilioAuthToken,
-    TWILIO_FROM_NUMBER: twilioFromNumber,
+    TWILIO_MESSAGING_SERVICE_SID: twilioMessagingServiceSid,
     NOTIFICATIONS_OWNER_PHONE: ownerPhone
   } : {}),
   STRIPE_MODE: stripeMode,

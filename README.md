@@ -140,9 +140,12 @@ Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
 `test` or `live`, a secret/restricted key with the matching mode prefix, and a
 webhook secret. Event and Checkout Session `livemode` must also match. The
 tracked Functions template and materializer contain only `STRIPE_MODE`;
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `RESEND_API_KEY` are Firebase
-Secret Manager values bound only to Functions that consume them. The
-materializer rejects all three. Use the credential-isolated runtime channel
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, and
+`TWILIO_AUTH_TOKEN` are Firebase Secret Manager values bound only to Functions
+that consume them. The materializer rejects all four. Twilio's account SID,
+Messaging Service SID, and owner destination are non-secret runtime values;
+owner alerts route through the Messaging Service rather than a raw sender
+number. Use the credential-isolated runtime channel
 described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and never place real
 provider values in a browser environment, Functions dotenv, or committed file.
 

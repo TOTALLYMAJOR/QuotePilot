@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 6, 2026
+Last updated: August 7, 2026
 
 ## Operational Health
 - Runtime: release `v0.2.3` is live from merged `main` commit
@@ -277,7 +277,23 @@ Last updated: August 6, 2026
   but a disposable second organization has not yet been created and activated
   through an authenticated platform-admin session. Do not treat deployment as
   owner onboarding or hosted tenant acceptance.
-- Resend custom-domain sending remains blocked because the account's one included domain slot is occupied by `leaguepilot.us`; adding `quotepilot.mbmapps.com` requires an account upgrade or explicit authorization to remove/migrate the existing domain, followed by authoritative DNS verification. The production custom-domain sender remains disabled. An external, manual Resend dashboard sandbox message from `QuotePilot by MBMapps <onboarding@resend.dev>` was provider-accepted and recorded as delivered (`34deea9f-8a1c-47ce-8f4e-2ea5164a2eec`), but that address is not an allowed QuotePilot Functions configuration and the result is not custom-domain or recipient-inbox proof.
+- The Resend account's existing `leaguepilot.us` domain is provider-verified and
+  has been selected for the interim QuotePilot sender
+  `QuotePilot by MBMApps <quotepilot@leaguepilot.us>`. A restricted send-only
+  Resend key now has a Firebase Secret Manager version, and source plus local
+  non-secret configuration are aligned. The currently deployed Functions still
+  have email disabled; the exact Functions release, provider acceptance,
+  delivered-event, and recipient-inbox proof remain outstanding. Migration to
+  a dedicated QuotePilot domain remains a separate follow-up. The prior
+  `onboarding@resend.dev` sandbox result is not production sender or inbox
+  proof.
+- The Twilio account is authenticated, a dedicated `QuotePilot Production`
+  Messaging Service now reuses the account's existing SMS-capable number, and
+  `TWILIO_AUTH_TOKEN` has a Firebase Secret Manager version. Source requires
+  that bound secret and the Messaging Service SID instead of a raw sender
+  number. Production SMS remains disabled because the Messaging Service has no
+  US A2P registration; A2P approval, governed Functions release, provider
+  acceptance, and destination-device receipt remain separate gates.
 - Import Studio frontend and `importBatches` Firestore rules are deployed but
   not hosted-smoke-verified. Excel intake,
   merge/update policies, saved import history UI, and active
@@ -327,7 +343,9 @@ Last updated: August 6, 2026
 1. Sign in as an allowlisted platform admin, create and activate a disposable
    second organization, then run the hosted owner/quote/portal tenant acceptance
    checklist against the live `v0.2.3` frontend and backend.
-2. Verify the intended Resend sender domain in the Resend dashboard and authoritative DNS; only then configure `onboarding@quotepilot.mbmapps.com` and capture accepted, delivered, and recipient proof from one controlled test.
+2. Promote the restricted-key interim Resend sender
+   `quotepilot@leaguepilot.us`, then capture accepted, delivered-event, and
+   recipient-inbox proof from one controlled test.
 3. Run hosted portal decision smoke checks for current-issuance evidence,
    active, expired, deleted, rotated,
    legacy-no-evidence, and change-request paths. Prove that a provider-accepted
