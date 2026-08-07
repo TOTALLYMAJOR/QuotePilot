@@ -5,10 +5,24 @@ PROJECT_ID="${E2E_FIREBASE_PROJECT_ID:-demo-e2e}"
 ORG_ID="${E2E_FIREBASE_ORG_ID:-e2e-org}"
 EMAIL="${E2E_FIREBASE_EMAIL:-e2e-admin@local.test}"
 PASSWORD="${E2E_FIREBASE_PASSWORD:-Passw0rd!}"
+SECOND_ORG_ID="${E2E_FIREBASE_SECOND_ORG_ID:-e2e-org-blank}"
+SECOND_EMAIL="${E2E_FIREBASE_SECOND_EMAIL:-e2e-admin-blank@local.test}"
+SECOND_PASSWORD="${E2E_FIREBASE_SECOND_PASSWORD:-Passw0rd!}"
 PLAYWRIGHT_CONFIG="${E2E_PLAYWRIGHT_CONFIG:-playwright.firebase.config.js}"
 PLAYWRIGHT_SPEC="${E2E_PLAYWRIGHT_SPEC:-e2e/firebase-auth-rules.smoke.spec.js}"
 
 node ./scripts/seed-e2e-emulator-user.mjs --project "$PROJECT_ID" --organization "$ORG_ID" --email "$EMAIL" --password "$PASSWORD"
+if [[ "${E2E_SEED_SECOND_PRINCIPAL:-true}" == "true" ]]; then
+  node ./scripts/seed-e2e-emulator-user.mjs \
+    --project "$PROJECT_ID" \
+    --organization "$SECOND_ORG_ID" \
+    --email "$SECOND_EMAIL" \
+    --password "$SECOND_PASSWORD" \
+    --skip-conversation
+  node ./scripts/seed-e2e-blank-catalog.mjs \
+    --project "$PROJECT_ID" \
+    --organization "$SECOND_ORG_ID"
+fi
 if [[ "${E2E_START_BLANK:-false}" == "true" ]]; then
   node ./scripts/seed-e2e-blank-catalog.mjs \
     --project "$PROJECT_ID" \
