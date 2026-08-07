@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { buildAuthenticatedWorkspaceScopeKey } from "../workspaceScope";
+import {
+  buildAuthenticatedWorkspaceScopeKey,
+  buildWorkspaceRouteScopeKey
+} from "../workspaceScope";
 
 function scope({
   loading = false,
@@ -46,5 +49,23 @@ describe("authenticated workspace scope key", () => {
 
   test("is stable for equivalent normalized scope values", () => {
     expect(scope()).toBe(scope());
+  });
+
+  test("keeps a direct customer portal mounted while auth resolution changes", () => {
+    const resolving = buildWorkspaceRouteScopeKey({
+      publicPortal: true,
+      authSession: { loading: true, user: null }
+    });
+    const authenticated = buildWorkspaceRouteScopeKey({
+      publicPortal: true,
+      authSession: {
+        loading: false,
+        user: { uid: "owner-a" },
+        organizationId: "org-a",
+        role: "admin"
+      }
+    });
+
+    expect(authenticated).toBe(resolving);
   });
 });
