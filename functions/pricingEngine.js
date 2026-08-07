@@ -674,6 +674,25 @@ function normalizeStaffingRateTypes(rateTypes, fallbackServerRate = 22, fallback
   }));
 }
 
+function isExactIsoTimestamp(value) {
+  const normalized = toText(value);
+  if (!normalized) return false;
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === normalized;
+}
+
+function isCatalogPricingConfirmationCurrent(settings = {}) {
+  if (settings?.pricingSetupConfirmed !== true) return false;
+  const catalogRevision = Number(settings?.catalogRevision);
+  const confirmation = settings?.pricingConfirmation;
+  if (!Number.isSafeInteger(catalogRevision) || catalogRevision < 0) return false;
+  if (!confirmation || typeof confirmation !== "object" || Array.isArray(confirmation)) return false;
+  if (!toText(confirmation.actorUid) || !toText(confirmation.actorEmail)) return false;
+  if (!isExactIsoTimestamp(confirmation.confirmedAtISO)) return false;
+  return Number.isSafeInteger(Number(confirmation.confirmedCatalogRevision))
+    && Number(confirmation.confirmedCatalogRevision) === catalogRevision;
+}
+
 function normalizePricingSettings(settings = {}) {
   const source = settings && typeof settings === "object" ? settings : {};
   const hasEmptyServiceFeeTiers = Array.isArray(source.serviceFeeTiers) && source.serviceFeeTiers.length === 0;
@@ -701,6 +720,18 @@ function normalizePricingSettings(settings = {}) {
 
   const normalized = {
     pricingSetupConfirmed: source.pricingSetupConfirmed === true,
+    catalogRevision: Number.isSafeInteger(Number(source.catalogRevision))
+      && Number(source.catalogRevision) >= 0
+      ? Number(source.catalogRevision)
+      : -1,
+    pricingConfirmation: source.pricingConfirmation && typeof source.pricingConfirmation === "object"
+      ? {
+          actorUid: toText(source.pricingConfirmation.actorUid),
+          actorEmail: toText(source.pricingConfirmation.actorEmail).toLowerCase(),
+          confirmedAtISO: toText(source.pricingConfirmation.confirmedAtISO),
+          confirmedCatalogRevision: Number(source.pricingConfirmation.confirmedCatalogRevision)
+        }
+      : null,
     perMileRate: Math.max(0, moneyValue(source, "perMileRateMinor", "perMileRate", DEFAULT_PRICING_SETTINGS.perMileRate)),
     longDistancePerMileRate: Math.max(0, moneyValue(
       source,
@@ -761,6 +792,8 @@ function buildRulesSettingsSnapshot(settings = {}) {
 
   return {
     pricingSetupConfirmed: settings.pricingSetupConfirmed === true,
+    catalogRevision: Number(settings.catalogRevision),
+    pricingConfirmation: settings.pricingConfirmation,
     pricingSettingsVersion: Math.max(0, toInt(settings.pricingSettingsVersion, 0)),
     pricingSettingsUpdatedAtISO: normalizeISO(settings.pricingSettingsUpdatedAtISO, ""),
     serviceFeePct: toNumber(settings.serviceFeePct, 0),
@@ -1591,10 +1624,10 @@ async function calculateQuotePricingAuthoritative({
   const catalogBundle = await loadCatalogAndSettings(db, organizationsCollection, {
     organizationId: normalizedInput.organizationId
   });
-  if (catalogBundle.settings.pricingSetupConfirmed !== true) {
+  if (!isCatalogPricingConfirmationCurrent(catalogBundle.settings)) {
     throw new PricingEngineError(
       "failed-precondition",
-      "Pricing setup must be reviewed and confirmed before authoritative quotes can be calculated."
+      "Pricing setup must be reviewed and confirmed for the current catalog revision before authoritative quotes can be calculated."
     );
   }
 
@@ -1621,5 +1654,6 @@ module.exports = {
   PRICING_VERSION,
   PRICING_AUTHORITY,
   PricingEngineError,
-  calculateQuotePricingAuthoritative
+  calculateQuotePricingAuthoritative,
+  isCatalogPricingConfirmationCurrent
 };

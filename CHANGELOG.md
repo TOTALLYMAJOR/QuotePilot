@@ -96,6 +96,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   confirmation only when records change, supports stable-batch retry, and
   protects edited or still-referenced records from rollback; customer CSV
   imports retain their existing direct path.
+- Catalog activation and authoritative pricing now require an attributed
+  pricing-confirmation receipt whose confirmed revision exactly matches the
+  current catalog revision. Server confirmation validates guided-selling and
+  event-template package, add-on, rental, menu, event-type, tax, season,
+  bartender, and staffing references (including active availability), and
+  malformed pricing arrays fail with a controlled precondition.
 - Standardized the customer-facing product identity to `QuotePilot by MBMApps`
   across public marketing, sign-in and workspace states, the authenticated app
   header, portal attribution, proposal metadata/footer, install metadata,
@@ -156,6 +162,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   closed when advanced event-template JSON is malformed.
 - Browser interaction coverage now executes the staff Kitchen sheet action and
   verifies that it produces a BEO PDF download from the saved quote row.
+- Menu-item deactivation and deletion now use a same-organization admin
+  callable with an exact catalog-revision precondition. Referenced items are
+  rejected transactionally, successful removals advance the revision and
+  reopen pricing review, stale clients reload instead of overwriting, and
+  direct browser deletes or active-to-inactive writes are denied by rules.
 - Quote creation now requires at least one selected menu item in Step 2, local
   persistence, authoritative server creation, proposal acceptance, and contract
   conversion. Validation returns staff to the first menu choice, while a

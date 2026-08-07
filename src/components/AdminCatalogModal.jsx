@@ -16,6 +16,7 @@ import {
   getEventTypes,
   getMenuCategories,
   getMenuItems,
+  isMenuCatalogRevisionConflict,
   updateCategory,
   updateEventType,
   updateMenuItem
@@ -307,6 +308,7 @@ export default function AdminCatalogModal({
   const [confirmedMenuRecoveryAvailable, setConfirmedMenuRecoveryAvailable] = useState(false);
   const [confirmedMenuRecoveryChecked, setConfirmedMenuRecoveryChecked] = useState(false);
   const scopedOrganizationId = String(organizationId || "").trim();
+  const catalogRevision = Math.max(0, Number(catalog?.settings?.catalogRevision || 0));
   const authoritativeVersion = Math.max(0, Number(catalog?.authoritativeVersion || 0));
   const starterPackRevision = Math.max(
     0,
@@ -1055,9 +1057,14 @@ export default function AdminCatalogModal({
         ...nextPayload,
         eventTypeId: selectedEventType,
         categoryId: selectedCategory || item.categoryId,
-        organizationId: scopedOrganizationId
+        organizationId: scopedOrganizationId,
+        expectedCatalogRevision: catalogRevision
       });
-      onCatalogMutation?.(updated);
+      if (updated?.authoritativeMutation) {
+        onReload?.();
+      } else {
+        onCatalogMutation?.(updated);
+      }
       setMenuItems((prev) =>
         prev.map((entry) =>
           entry.id === itemId
@@ -1082,10 +1089,18 @@ export default function AdminCatalogModal({
         delete next[itemId];
         return next;
       });
-      setStatus("Menu item updated.");
-      pushToast("Menu item updated.", "success");
+      const successMessage = updated?.authoritativeMutation
+        ? "Menu item deactivated. Pricing review reopened for the new catalog revision."
+        : "Menu item updated.";
+      setStatus(successMessage);
+      pushToast(successMessage, "success");
     } catch (err) {
-      setStatus(err?.message || "Failed to update menu item.");
+      const revisionConflict = isMenuCatalogRevisionConflict(err);
+      const errorMessage = revisionConflict
+        ? `${err?.message || "Catalog revision changed."} Refreshing the latest catalog before retry.`
+        : err?.message || "Failed to update menu item.";
+      if (revisionConflict) onReload?.();
+      setStatus(errorMessage);
       const baseline = menuItemBaselines[itemId];
       if (baseline) {
         setMenuItems((prev) => prev.map((entry) => (entry.id === itemId ? { ...baseline } : entry)));
@@ -1095,7 +1110,7 @@ export default function AdminCatalogModal({
         delete next[itemId];
         return next;
       });
-      pushToast(err?.message || "Failed to update menu item.", "error");
+      pushToast(errorMessage, "error");
     } finally {
       menuItemSaveInFlightRef.current.delete(itemId);
       setMenuItemSavingId("");
@@ -1156,14 +1171,21 @@ export default function AdminCatalogModal({
     }
     setMenuActionLoading(true);
     try {
-      const deleted = await deleteMenuItem(id, { organizationId: scopedOrganizationId });
-      onCatalogMutation?.(deleted);
-      setStatus("Menu item deleted.");
-      pushToast("Menu item deleted.", "success");
-      await refreshEventMenuData(selectedEventType);
+      await deleteMenuItem(id, {
+        organizationId: scopedOrganizationId,
+        expectedCatalogRevision: catalogRevision
+      });
+      onReload?.();
+      setStatus("Menu item deleted. Pricing review reopened for the new catalog revision.");
+      pushToast("Menu item deleted. Pricing review reopened for the new catalog revision.", "success");
     } catch (err) {
-      setStatus(err?.message || "Failed to delete menu item.");
-      pushToast(err?.message || "Failed to delete menu item.", "error");
+      const revisionConflict = isMenuCatalogRevisionConflict(err);
+      const errorMessage = revisionConflict
+        ? `${err?.message || "Catalog revision changed."} Refreshing the latest catalog before retry.`
+        : err?.message || "Failed to delete menu item.";
+      if (revisionConflict) onReload?.();
+      setStatus(errorMessage);
+      pushToast(errorMessage, "error");
     } finally {
       setMenuActionLoading(false);
     }

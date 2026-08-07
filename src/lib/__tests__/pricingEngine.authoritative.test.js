@@ -5,7 +5,8 @@ const require = createRequire(import.meta.url);
 const {
   PRICING_AUTHORITY,
   PricingEngineError,
-  calculateQuotePricingAuthoritative
+  calculateQuotePricingAuthoritative,
+  isCatalogPricingConfirmationCurrent
 } = require("../../../functions/pricingEngine.js");
 
 function collectionSnapshot(records = []) {
@@ -108,6 +109,20 @@ const pricingStaff = {
   organizationId: "org-a"
 };
 
+function confirmedPricingSettings(overrides = {}) {
+  return {
+    pricingSetupConfirmed: true,
+    catalogRevision: 4,
+    pricingConfirmation: {
+      actorUid: "staff-a",
+      actorEmail: "admin@example.com",
+      confirmedAtISO: "2026-08-06T15:00:00.000Z",
+      confirmedCatalogRevision: 4
+    },
+    ...overrides
+  };
+}
+
 describe("server-authoritative pricing setup safety", () => {
   test.each([
     ["missing", undefined, false],
@@ -127,11 +142,35 @@ describe("server-authoritative pricing setup safety", () => {
     await expect(operation).rejects.toBeInstanceOf(PricingEngineError);
   });
 
+  test("fails closed when a confirmation receipt is missing, unattributed, or stale", async () => {
+    expect(isCatalogPricingConfirmationCurrent(confirmedPricingSettings())).toBe(true);
+    const invalidSettings = [
+      { pricingSetupConfirmed: true, catalogRevision: 4, pricingConfirmation: null },
+      confirmedPricingSettings({ catalogRevision: 5 }),
+      confirmedPricingSettings({
+        pricingConfirmation: {
+          ...confirmedPricingSettings().pricingConfirmation,
+          actorEmail: ""
+        }
+      })
+    ];
+
+    for (const settings of invalidSettings) {
+      await expect(calculateQuotePricingAuthoritative({
+        db: buildPricingDb({ settings }),
+        data: buildPricingRequest(),
+        staff: pricingStaff
+      })).rejects.toMatchObject({
+        code: "failed-precondition",
+        message: expect.stringMatching(/current catalog revision/i)
+      });
+    }
+  });
+
   test("keeps explicit empty pricing arrays empty and uses only explicit neutral scalar rates", async () => {
     const result = await calculateQuotePricingAuthoritative({
       db: buildPricingDb({
-        settings: {
-          pricingSetupConfirmed: true,
+        settings: confirmedPricingSettings({
           serviceFeeTiers: [],
           taxRegions: [],
           defaultTaxRegion: "",
@@ -146,7 +185,7 @@ describe("server-authoritative pricing setup safety", () => {
           perMileRate: 0,
           longDistancePerMileRate: 0,
           deliveryThresholdMiles: 0
-        }
+        })
       }),
       data: buildPricingRequest({
         servers: 1,
@@ -198,8 +237,7 @@ describe("server-authoritative pricing setup safety", () => {
   test("uses explicitly configured scalar rates when their optional rate arrays are empty", async () => {
     const result = await calculateQuotePricingAuthoritative({
       db: buildPricingDb({
-        settings: {
-          pricingSetupConfirmed: true,
+        settings: confirmedPricingSettings({
           serviceFeePct: 0.05,
           serviceFeeTiers: [],
           taxRate: 0.02,
@@ -215,7 +253,7 @@ describe("server-authoritative pricing setup safety", () => {
           perMileRate: 0,
           longDistancePerMileRate: 0,
           deliveryThresholdMiles: 0
-        }
+        })
       }),
       data: buildPricingRequest({
         servers: 1,
@@ -249,8 +287,7 @@ describe("server-authoritative pricing setup safety", () => {
   test("preserves configured pricing arrays for confirmed tenants", async () => {
     const result = await calculateQuotePricingAuthoritative({
       db: buildPricingDb({
-        settings: {
-          pricingSetupConfirmed: true,
+        settings: confirmedPricingSettings({
           serviceFeePct: 0.2,
           serviceFeeTiers: [
             { id: "configured", minGuests: 0, maxGuests: 9999, pct: 0.1 }
@@ -293,7 +330,7 @@ describe("server-authoritative pricing setup safety", () => {
           perMileRate: 0,
           longDistancePerMileRate: 0,
           deliveryThresholdMiles: 0
-        }
+        })
       }),
       data: buildPricingRequest(),
       staff: pricingStaff
@@ -356,8 +393,7 @@ describe("server-authoritative pricing setup safety", () => {
     };
     const result = await calculateQuotePricingAuthoritative({
       db: buildPricingDb({
-        settings: {
-          pricingSetupConfirmed: true,
+        settings: confirmedPricingSettings({
           serviceFeeTiers: [],
           taxRegions: [],
           depositPct: 0,
@@ -368,7 +404,7 @@ describe("server-authoritative pricing setup safety", () => {
           perMileRate: 0,
           longDistancePerMileRate: 0,
           deliveryThresholdMiles: 0
-        },
+        }),
         packages: [{
           id: "package-a",
           name: "Package A",
@@ -412,7 +448,7 @@ describe("server-authoritative pricing setup safety", () => {
   test("fails closed when an authoritative package inclusion is missing", async () => {
     await expect(calculateQuotePricingAuthoritative({
       db: buildPricingDb({
-        settings: { pricingSetupConfirmed: true },
+        settings: confirmedPricingSettings(),
         packages: [{
           id: "package-a",
           name: "Package A",

@@ -9,10 +9,20 @@ PLAYWRIGHT_CONFIG="${E2E_PLAYWRIGHT_CONFIG:-playwright.firebase.config.js}"
 PLAYWRIGHT_SPEC="${E2E_PLAYWRIGHT_SPEC:-e2e/firebase-auth-rules.smoke.spec.js}"
 
 node ./scripts/seed-e2e-emulator-user.mjs --project "$PROJECT_ID" --organization "$ORG_ID" --email "$EMAIL" --password "$PASSWORD"
-node ./scripts/seed-firestore-menu.mjs \
-  --project "$PROJECT_ID" \
-  --organization "$ORG_ID" \
-  --apply \
-  --confirm "SEED $PROJECT_ID $ORG_ID"
+if [[ "${E2E_START_BLANK:-false}" == "true" ]]; then
+  node ./scripts/seed-e2e-blank-catalog.mjs \
+    --project "$PROJECT_ID" \
+    --organization "$ORG_ID"
+else
+  node ./scripts/seed-firestore-menu.mjs \
+    --project "$PROJECT_ID" \
+    --organization "$ORG_ID" \
+    --apply \
+    --confirm "SEED $PROJECT_ID $ORG_ID"
+  node ./scripts/confirm-e2e-catalog-pricing.mjs \
+    --project "$PROJECT_ID" \
+    --organization "$ORG_ID" \
+    --email "$EMAIL"
+fi
 
 bash ./scripts/run-playwright.sh test --config="$PLAYWRIGHT_CONFIG" "$PLAYWRIGHT_SPEC"

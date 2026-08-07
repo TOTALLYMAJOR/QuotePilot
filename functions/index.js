@@ -117,7 +117,8 @@ const { buildOperationsAuditSnapshot } = require("./operationsAudit");
 const {
   StarterCatalogPackError,
   applyStarterCatalogPack: applyStarterCatalogPackInternal,
-  confirmCatalogPricing: confirmCatalogPricingInternal
+  confirmCatalogPricing: confirmCatalogPricingInternal,
+  mutateManagedMenuItemAvailability: mutateManagedMenuItemAvailabilityInternal
 } = require("./starterCatalogPacks");
 const {
   CatalogImportError,
@@ -5969,6 +5970,36 @@ exports.confirmCatalogPricing = functions.region(REGION).https.onCall(async (dat
     });
   } catch (error) {
     throw toStarterCatalogHttpsError(error, "Failed to confirm catalog pricing.");
+  }
+});
+
+exports.mutateManagedMenuItemAvailability = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  if (
+    !organizationId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Managed menu availability changes require a same-organization admin."
+    );
+  }
+  try {
+    return await mutateManagedMenuItemAvailabilityInternal({
+      db,
+      organizationId,
+      itemId: data?.itemId,
+      action: data?.action,
+      item: data?.item,
+      expectedCatalogRevision: Number(data?.expectedCatalogRevision),
+      actorUid: staff.uid,
+      serverTimestamp: FieldValue.serverTimestamp
+    });
+  } catch (error) {
+    throw toStarterCatalogHttpsError(error, "Failed to change managed menu item availability.");
   }
 });
 

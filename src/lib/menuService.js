@@ -13,6 +13,7 @@ import {
   DEFAULT_SETTINGS
 } from "../data/mockCatalog";
 import { buildCanonicalMenuForEventType } from "../data/canonicalMenuTemplate";
+import { mutateManagedMenuItemAvailability } from "./catalogStarterPackService";
 
 const LOCAL_EVENT_TYPES = (() => {
   const templates = Array.isArray(DEFAULT_SETTINGS?.eventTemplates)
@@ -191,6 +192,12 @@ function fromStoredMoney(data = {}, minorKey = "priceMinor", legacyKey = "price"
     return Number.isSafeInteger(minor) ? minor / 100 : 0;
   }
   return asNumber(data[legacyKey], 0);
+}
+
+export function isMenuCatalogRevisionConflict(error) {
+  const code = String(error?.code || "").trim().toLowerCase().split("/").at(-1);
+  const message = String(error?.message || "").toLowerCase();
+  return code === "aborted" || message.includes("catalog revision changed");
 }
 
 async function commitCatalogMutation(organizationId, updatedAtISO, applyWrites) {
@@ -468,6 +475,28 @@ export async function updateMenuItem(id, data = {}) {
   ensureReady();
 
   const organizationId = resolveScopedOrganizationId(data.organizationId);
+  if (payload.active === false) {
+    const authorityResult = await mutateManagedMenuItemAvailability({
+      organizationId,
+      itemId,
+      action: "deactivate",
+      item: {
+        name: payload.name,
+        ...(Object.prototype.hasOwnProperty.call(payload, "priceMinor")
+          ? { priceMinor: payload.priceMinor }
+          : {}),
+        pricingType: payload.pricingType || payload.type
+      },
+      expectedCatalogRevision: Number(data.expectedCatalogRevision)
+    });
+    return {
+      id: itemId,
+      ...payload,
+      ...(Object.prototype.hasOwnProperty.call(data, "price") ? { price: asNumber(data.price, 0) } : {}),
+      ...authorityResult,
+      authoritativeMutation: true
+    };
+  }
   const ref = resolveWritableDocRef("menuItems", itemId, organizationId, "updateMenuItem");
   const catalogMutation = await commitCatalogMutation(organizationId, payload.updatedAtISO, (transaction) => {
     transaction.update(ref, payload);
@@ -480,7 +509,10 @@ export async function updateMenuItem(id, data = {}) {
   };
 }
 
-export async function deleteMenuItem(id, { organizationId = "" } = {}) {
+export async function deleteMenuItem(id, {
+  organizationId = "",
+  expectedCatalogRevision
+} = {}) {
   const itemId = asText(id);
   if (!itemId) {
     throw new Error("Menu item id is required.");
@@ -495,12 +527,18 @@ export async function deleteMenuItem(id, { organizationId = "" } = {}) {
   }
   ensureReady();
   const resolvedOrganizationId = resolveScopedOrganizationId(organizationId);
-  const updatedAtISO = new Date().toISOString();
-  const ref = resolveWritableDocRef("menuItems", itemId, resolvedOrganizationId, "deleteMenuItem");
-  const catalogMutation = await commitCatalogMutation(resolvedOrganizationId, updatedAtISO, (transaction) => {
-    transaction.delete(ref);
+  const authorityResult = await mutateManagedMenuItemAvailability({
+    organizationId: resolvedOrganizationId,
+    itemId,
+    action: "delete",
+    expectedCatalogRevision: Number(expectedCatalogRevision)
   });
-  return { ok: true, id: itemId, ...catalogMutation };
+  return {
+    ok: true,
+    id: itemId,
+    ...authorityResult,
+    authoritativeMutation: true
+  };
 }
 
 export async function createCategory(data = {}) {
