@@ -868,12 +868,15 @@ service cloud.firestore {
       allow read: if isOrgAdmin(orgId);
       allow create: if isOrgAdmin(orgId)
         && request.resource.data.organizationId == orgId
-        && request.resource.data.importBatchId == batchId;
+        && request.resource.data.importBatchId == batchId
+        && request.resource.data.importType == "customers";
       allow update: if isOrgAdmin(orgId)
         && resource.data.organizationId == orgId
         && request.resource.data.organizationId == orgId
         && resource.data.importBatchId == batchId
-        && request.resource.data.importBatchId == batchId;
+        && request.resource.data.importBatchId == batchId
+        && resource.data.importType == "customers"
+        && request.resource.data.importType == "customers";
       allow delete: if false;
     }
 

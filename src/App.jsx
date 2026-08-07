@@ -2655,6 +2655,8 @@ export default function App() {
             organizationName={workspaceName}
             currentUserUid={authSession.user?.uid || ""}
             currentUserEmail={authSession.user?.email || ""}
+            catalogRevision={Math.max(0, Number(catalog.settings?.catalogRevision || 0))}
+            onReload={catalog.reload}
             onImported={(result) => {
               catalog.reload();
               if (result?.status === "rolled_back") {

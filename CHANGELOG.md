@@ -77,6 +77,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Catalog Import Studio writes and rolls back package, add-on, rental, and menu
+  batches through same-organization admin callables. Each operation is a
+  revision-preconditioned transaction that stores prices in integer minor
+  units, advances each real catalog mutation exactly once, clears pricing
+  confirmation only when records change, supports stable-batch retry, and
+  protects edited or still-referenced records from rollback; customer CSV
+  imports retain their existing direct path.
 - Standardized the customer-facing product identity to `QuotePilot by MBMApps`
   across public marketing, sign-in and workspace states, the authenticated app
   header, portal attribution, proposal metadata/footer, install metadata,

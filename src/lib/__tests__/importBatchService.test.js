@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const mockState = vi.hoisted(() => ({
+  cloudFunctions: { id: "mock-functions" },
   db: { id: "mock-db" },
   collection: vi.fn(),
   doc: vi.fn(),
@@ -9,10 +10,16 @@ const mockState = vi.hoisted(() => ({
   limit: vi.fn(),
   query: vi.fn(),
   writeBatch: vi.fn(),
+  httpsCallable: vi.fn(),
+  callable: vi.fn(),
   normalizeOrganizationId: vi.fn()
 }));
 
-vi.mock("../firebase", () => ({ db: mockState.db, firebaseReady: true }));
+vi.mock("../firebase", () => ({
+  cloudFunctions: mockState.cloudFunctions,
+  db: mockState.db,
+  firebaseReady: true
+}));
 vi.mock("../organizationService", () => ({
   normalizeOrganizationId: mockState.normalizeOrganizationId
 }));
@@ -26,6 +33,9 @@ vi.mock("firebase/firestore", () => ({
   query: mockState.query,
   serverTimestamp: vi.fn(() => "server-time"),
   writeBatch: mockState.writeBatch
+}));
+vi.mock("firebase/functions", () => ({
+  httpsCallable: mockState.httpsCallable
 }));
 
 import { createImportBatch, rollbackImportBatch } from "../importBatchService";
@@ -49,6 +59,8 @@ describe("tenant-locked import persistence", () => {
     mockState.limit.mockImplementation((value) => ({ limit: value }));
     mockState.query.mockImplementation((...parts) => ({ parts }));
     mockState.getDocs.mockResolvedValue({ docs: [] });
+    mockState.callable.mockResolvedValue({ data: { ok: true } });
+    mockState.httpsCallable.mockReturnValue(mockState.callable);
     batch = {
       set: vi.fn(),
       update: vi.fn(),
@@ -155,6 +167,7 @@ describe("tenant-locked import persistence", () => {
         data: () => ({
           organizationId: "mbmapps-001",
           importBatchId: "batch-1",
+          importType: "customers",
           status: "completed",
           createdRecords: [
             { collection: "customers", id: "customer-1" },
@@ -189,28 +202,91 @@ describe("tenant-locked import persistence", () => {
     expect(result).toMatchObject({ deletedCount: 1, protectedCount: 1, status: "rolled_back" });
   });
 
-  test("rollback counts an existing record with a removed batch stamp as protected", async () => {
+  test("customer rollback rejects a receipt that crosses into a catalog collection", async () => {
     mockState.getDoc
       .mockResolvedValueOnce({
         exists: () => true,
         data: () => ({
           organizationId: "mbmapps-001",
           importBatchId: "batch-1",
+          importType: "customers",
           status: "completed",
           createdRecords: [{ collection: "catalogPackages", id: "package-1" }]
         })
-      })
-      .mockResolvedValueOnce({
-        exists: () => true,
-        data: () => ({ name: "Edited package" })
       });
 
-    const result = await rollbackImportBatch({
+    await expect(rollbackImportBatch({
       organizationId: "mbmapps-001",
       importBatchId: "batch-1"
-    });
+    })).rejects.toThrow(/invalid record target/i);
 
     expect(batch.delete).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ deletedCount: 0, protectedCount: 1 });
+    expect(batch.update).not.toHaveBeenCalled();
+  });
+
+  test("catalog import uses the authoritative callable with stable identity and revision", async () => {
+    mockState.callable.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        importBatchId: "catalog_abcdefghijklmnopqrst",
+        importType: "packages",
+        createdCount: 1,
+        catalogRevision: 8
+      }
+    });
+
+    const result = await createImportBatch({
+      organizationId: "MBMapps-001",
+      organizationName: "MBMapps",
+      importType: "packages",
+      fileName: "packages.csv",
+      records: [{ rowNumber: 2, record: { name: "Celebration", ppp: 23.45 } }],
+      importBatchId: "catalog_abcdefghijklmnopqrst",
+      expectedCatalogRevision: 7,
+      actor: { uid: "browser-spoof", email: "spoof@example.com" }
+    });
+
+    expect(mockState.httpsCallable).toHaveBeenCalledWith(
+      mockState.cloudFunctions,
+      "createCatalogImportBatch"
+    );
+    expect(mockState.callable).toHaveBeenCalledWith({
+      organizationId: "mbmapps-001",
+      organizationName: "MBMapps",
+      importType: "packages",
+      fileName: "packages.csv",
+      records: [{ rowNumber: 2, record: { name: "Celebration", ppp: 23.45 } }],
+      importBatchId: "catalog_abcdefghijklmnopqrst",
+      expectedCatalogRevision: 7
+    });
+    expect(result).toMatchObject({ ok: true, catalogRevision: 8 });
+    expect(mockState.getDocs).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
+  });
+
+  test("catalog rollback uses the authoritative callable and revision precondition", async () => {
+    mockState.callable.mockResolvedValueOnce({
+      data: { ok: true, importBatchId: "catalog_abcdefghijklmnopqrst", status: "rolled_back" }
+    });
+
+    const result = await rollbackImportBatch({
+      organizationId: "MBMapps-001",
+      importBatchId: "catalog_abcdefghijklmnopqrst",
+      importType: "addons",
+      expectedCatalogRevision: 11
+    });
+
+    expect(mockState.httpsCallable).toHaveBeenCalledWith(
+      mockState.cloudFunctions,
+      "rollbackCatalogImportBatch"
+    );
+    expect(mockState.callable).toHaveBeenCalledWith({
+      organizationId: "mbmapps-001",
+      importBatchId: "catalog_abcdefghijklmnopqrst",
+      expectedCatalogRevision: 11
+    });
+    expect(result).toMatchObject({ ok: true, status: "rolled_back" });
+    expect(mockState.getDoc).not.toHaveBeenCalled();
+    expect(mockState.writeBatch).not.toHaveBeenCalled();
   });
 });

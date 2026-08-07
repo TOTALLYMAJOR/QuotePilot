@@ -172,6 +172,7 @@ truth.
 npm run check:env
 npm run test:unit
 npm run test:rules:firestore
+npm run test:catalog-import:emulator
 npm run test:e2e
 npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
@@ -231,6 +232,13 @@ instruction if that browser is unavailable.
   - Proves direct browser acceptance is denied, concurrent callable requests
     converge on one immutable receipt, and signer/revision/hash evidence plus
     integer minor-unit totals persist to both quote copies.
+- `npm run test:catalog-import:emulator`
+  - Starts isolated Auth, Firestore, and Functions emulators for catalog CSV
+    import authority and rollback.
+  - Proves browser-authored catalog receipts are denied, same-organization admin
+    authority is enforced, prices persist in integer minor units, concurrent
+    revision writers fail safely, stable retries are idempotent, and rollback
+    deletes only unchanged records without orphaning package dependencies.
 - `scripts/provisioning-emulator-acceptance.mjs`
   - Full emulator-only platform/tenant lifecycle matrix run under Auth,
     Firestore, and Functions emulators.

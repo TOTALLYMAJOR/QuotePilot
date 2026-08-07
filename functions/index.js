@@ -120,6 +120,11 @@ const {
   confirmCatalogPricing: confirmCatalogPricingInternal
 } = require("./starterCatalogPacks");
 const {
+  CatalogImportError,
+  createCatalogImportBatch: createCatalogImportBatchInternal,
+  rollbackCatalogImportBatch: rollbackCatalogImportBatchInternal
+} = require("./catalogImportBatches");
+const {
   QuoteDeliveryError,
   assertNoConflictingQuoteExecution,
   assertQuoteDeliveryPortalActivation,
@@ -5850,6 +5855,60 @@ function toStarterCatalogHttpsError(error, fallbackMessage) {
   });
   return new functions.https.HttpsError("internal", fallbackMessage);
 }
+
+function toCatalogImportHttpsError(error, fallbackMessage) {
+  if (error instanceof CatalogImportError) {
+    return new functions.https.HttpsError(error.code, error.message, error.details);
+  }
+  functions.logger.error(fallbackMessage, {
+    error: normalizeText(error?.message)
+  });
+  return new functions.https.HttpsError("internal", fallbackMessage);
+}
+
+exports.createCatalogImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await createCatalogImportBatchInternal({
+      db,
+      organizationId: staff.organizationId,
+      organizationName: data?.organizationName,
+      importType: data?.importType,
+      fileName: data?.fileName,
+      records: data?.records,
+      importBatchId: data?.importBatchId,
+      expectedCatalogRevision: Number(data?.expectedCatalogRevision),
+      actorUid: staff.uid,
+      actorEmail: staff.email,
+      serverTimestamp: FieldValue.serverTimestamp
+    });
+  } catch (error) {
+    throw toCatalogImportHttpsError(error, "Failed to import catalog records.");
+  }
+});
+
+exports.rollbackCatalogImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await rollbackCatalogImportBatchInternal({
+      db,
+      organizationId: staff.organizationId,
+      importBatchId: data?.importBatchId,
+      expectedCatalogRevision: Number(data?.expectedCatalogRevision),
+      actorUid: staff.uid,
+      actorEmail: staff.email,
+      serverTimestamp: FieldValue.serverTimestamp
+    });
+  } catch (error) {
+    throw toCatalogImportHttpsError(error, "Failed to roll back catalog import.");
+  }
+});
 
 exports.applyStarterCatalogPack = functions.region(REGION).https.onCall(async (data, context) => {
   const organizationId = normalizeOrganizationId(data?.organizationId);
