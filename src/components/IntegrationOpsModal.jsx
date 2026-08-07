@@ -35,19 +35,18 @@ const FUNCTIONS_ENV_SETUP_GUIDANCE = [
   "For local validation of the production deploy configuration only, keep non-secret configuration in the ignored functions/.env.tonicatering file (mode 0600):",
   "NOTIFICATIONS_SMS_PROVIDER=twilio",
   "TWILIO_ACCOUNT_SID=",
-  "TWILIO_AUTH_TOKEN=",
-  "TWILIO_FROM_NUMBER=",
+  "TWILIO_MESSAGING_SERVICE_SID=",
   "NOTIFICATIONS_OWNER_PHONE=",
   "STRIPE_MODE=live",
   "",
   "Validate the production dotenv payload without rewriting:",
   "FIREBASE_PROJECT_ID=tonicatering node --env-file=functions/.env.tonicatering scripts/materialize-functions-env.mjs --validate-only",
-  "The production materializer rejects Resend and Stripe secret values. Do not use it for emulator setup: disposable emulator configuration must use STRIPE_MODE=test, with expendable RESEND_API_KEY, STRIPE_SECRET_KEY, and STRIPE_WEBHOOK_SECRET fixtures only in the separately ignored functions/.secret.local file.",
+  "The production materializer rejects Resend, Twilio, and Stripe secret values. Do not use it for emulator setup: disposable emulator configuration must use STRIPE_MODE=test, with expendable RESEND_API_KEY, TWILIO_AUTH_TOKEN, STRIPE_SECRET_KEY, and STRIPE_WEBHOOK_SECRET fixtures only in the separately ignored functions/.secret.local file.",
   "Never upload either file or use production credentials locally; production provider credentials belong only in Firebase Secret Manager bindings."
 ].join("\n");
 const SMS_DISABLE_GUIDANCE = [
   "Keep NOTIFICATIONS_SMS_PROVIDER=none in the trusted runtime configuration",
-  "until an authorized backend promotion includes approved buyer-owned Twilio credentials."
+  "until Twilio Messaging Service sender attachment, applicable A2P approval, and the governed backend promotion are complete."
 ].join(" ");
 const PREPARE_BACKEND_GUIDANCE = [
   "GitHub Actions -> Prepare Firebase Production Artifact",

@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 6, 2026
+Last updated: August 7, 2026
 
 ## P0 - Production Acceptance and Tenant Provisioning
 - Prepare and promote the next tagged exact-`main` revision containing this
@@ -14,9 +14,10 @@ Last updated: August 6, 2026
   inspection, reviewed package/event/pricing setup, conflict-safe catalog save,
   trusted quote create/readback/version proof, signed-out portal acceptance,
   staff decision verification, and exact cleanup/tombstone proof.
-- Verify `quotepilot.mbmapps.com` in Resend and authoritative DNS before
-  activating `QuotePilot by MBMApps <onboarding@quotepilot.mbmapps.com>`;
-  capture provider accepted, delivered-event, and recipient-inbox proof.
+- Promote the shared verified-domain sender
+  `QuotePilot by MBMApps <quotepilot@leaguepilot.us>` with a restricted Resend
+  key, then capture provider accepted, delivered-event, and recipient-inbox
+  proof. Track migration to a dedicated QuotePilot sender domain separately.
 - Keep public buyer onboarding and the deposit/final-balance rails disabled until
   their exact target receives coordinated hosted Stripe test-mode, webhook,
   reconciliation, cross-rail, negative-path, and customer-projection acceptance.
@@ -75,6 +76,9 @@ Last updated: August 6, 2026
   tool and emulator acceptance are complete; production execution is not.
 
 ## P2 - Integrations
+- Complete Twilio Messaging Service A2P registration and approval, promote the
+  Secret Manager-bound SMS configuration through the governed Functions
+  release, and capture provider acceptance plus destination-device receipt.
 - Add CRM adapters (HubSpot/Salesforce or webhook bridge).
 - Add accounting sync for invoicing and reconciliation flows.
 - Add two-way owner/client SMS thread support.

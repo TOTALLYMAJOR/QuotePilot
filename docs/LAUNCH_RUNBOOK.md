@@ -132,9 +132,9 @@ channels, not in the prepare job:
 - Set trusted runtime configuration:
   - `APP_BASE_URL=https://quotepilot.mbmapps.com/app`
   - `APP_BASE_DOMAIN=mbmapps.com`
-  - `NOTIFICATIONS_EMAIL_PROVIDER=none` until Resend is verified
+  - `NOTIFICATIONS_EMAIL_PROVIDER=none` until the shared Resend sender is released and tested
   - `EMAIL_FROM_NAME=QuotePilot by MBMApps`
-  - `EMAIL_FROM_EMAIL=onboarding@quotepilot.mbmapps.com`
+  - `EMAIL_FROM_EMAIL=quotepilot@leaguepilot.us`
   - `NOTIFICATIONS_SMS_PROVIDER=none` until Twilio is approved
   - `STRIPE_MODE=live` for an authorized production runtime; use `test` only in
     an isolated hosted acceptance environment
@@ -160,7 +160,9 @@ channels, not in the prepare job:
   - `RESEND_API_KEY` in Firebase Secret Manager before any Resend-bound
     Function is deployed; provider enablement remains controlled separately by
     `NOTIFICATIONS_EMAIL_PROVIDER`
-  - Twilio account/auth secrets only when Twilio is enabled
+  - `TWILIO_AUTH_TOKEN` in Firebase Secret Manager before any SMS-capable
+    Function is deployed; keep the account SID, Messaging Service SID, and
+    owner destination in trusted non-secret runtime configuration
 - Select `firebase_scope=backend` or `firebase_scope=all` only after the
   matching evidence profile is attested (requires Blaze plan). The `backend`
   artifact and any eventual promotion always include Firestore rules and
@@ -217,18 +219,21 @@ archive/delete operations.
 
 ### Resend activation gate
 
-The intended sender is
-`QuotePilot by MBMApps <onboarding@quotepilot.mbmapps.com>`. Do not activate or
-represent that sender as operational until the `quotepilot.mbmapps.com` sender
-domain is verified in the Resend dashboard and the required DNS records are
-confirmed at the authoritative DNS provider.
+The approved interim sender is
+`QuotePilot by MBMApps <quotepilot@leaguepilot.us>`. It deliberately reuses the
+existing verified `leaguepilot.us` Resend domain while the account has a
+single-domain limit. Do not represent it as operational until the restricted
+production key is bound, the exact Functions release is promoted, and provider
+acceptance, delivered-event, and recipient-inbox proof are captured. Replacing
+the shared sender with a dedicated QuotePilot domain remains a later migration,
+not a prerequisite for this interim activation.
 
 Only after verification, set the trusted runtime configuration to:
 
 ```dotenv
 NOTIFICATIONS_EMAIL_PROVIDER=resend
 EMAIL_FROM_NAME=QuotePilot by MBMApps
-EMAIL_FROM_EMAIL=onboarding@quotepilot.mbmapps.com
+EMAIL_FROM_EMAIL=quotepilot@leaguepilot.us
 APP_BASE_URL=https://quotepilot.mbmapps.com/app
 ```
 
@@ -237,8 +242,8 @@ explicitly bound email/provisioning Functions. Never materialize it in the
 Functions dotenv file. For a local Functions emulator only, an expendable
 fixture may be supplied through the ignored `functions/.secret.local` file.
 
-If verification is incomplete, keep the production custom-domain sender gated
-and send the copy-ready onboarding message manually. The recorded
+If release or delivery acceptance is incomplete, keep the production sender
+gated and send the copy-ready onboarding message manually. The recorded
 `onboarding@resend.dev` check was performed externally as a manual Resend
 dashboard sandbox test; it is not an allowed QuotePilot Functions sender
 configuration, customer-ready sender-domain proof, or recipient-inbox proof.
@@ -264,6 +269,29 @@ proof. Keep production customer email disabled if any layer fails.
 Buyer setup assistance is also available in-app:
 - `Integrations Ops` -> `Buyer Setup Assistant (Optional Twilio)` to check status and send SMS test.
 
+### Twilio activation gate
+
+QuotePilot sends owner alerts through a Twilio Messaging Service, not directly
+from a raw phone number. Keep `NOTIFICATIONS_SMS_PROVIDER=none` until the
+Messaging Service has an attached sender, the applicable US A2P registration is
+approved, and the exact Functions release is ready for a controlled live test.
+
+Store `TWILIO_AUTH_TOKEN` only in Firebase Secret Manager. Set the trusted
+non-secret runtime configuration to:
+
+```dotenv
+NOTIFICATIONS_SMS_PROVIDER=twilio
+TWILIO_ACCOUNT_SID=<twilio-account-sid>
+TWILIO_MESSAGING_SERVICE_SID=<twilio-messaging-service-sid>
+NOTIFICATIONS_OWNER_PHONE=<e164-owner-phone>
+```
+
+The Functions dotenv materializer rejects `TWILIO_AUTH_TOKEN`; local emulator
+fixtures belong only in the ignored `functions/.secret.local` file. After the
+governed release, send one controlled integration test and confirm Twilio
+accepted it and the destination device received it before treating SMS as
+operational. Configuration presence alone is not delivery proof.
+
 ### Stripe activation gate
 
 The quote-payment Stripe rail has no enabled/disabled provider flag: it requires
@@ -272,9 +300,6 @@ explicit non-secret `STRIPE_MODE=test|live` plus Secret Manager bindings for
 materializer rejects both secret values. The secret or restricted key prefix
 must match the configured mode, and webhook Event plus Checkout Session
 `livemode` must match it. Missing or mixed-mode configuration fails closed.
-Keep the Twilio provider flag at `none` until buyer-owned credentials, sender
-registration, and provider acceptance checks are complete.
-
 Use `STRIPE_MODE=test` only with test credentials in an isolated hosted
 acceptance environment. An authorized production runtime must explicitly use
 `STRIPE_MODE=live` with a matching live key. Passing source tests, setting

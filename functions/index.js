@@ -213,7 +213,7 @@ const ORGANIZATION_TOMBSTONES_COLLECTION = "organizationTombstones";
 const SMS_PROVIDERS = new Set(["twilio", "none"]);
 const EMAIL_PROVIDERS = new Set(["resend", "none"]);
 const APPROVED_EMAIL_FROM_NAME = "QuotePilot by MBMApps";
-const APPROVED_EMAIL_FROM_EMAIL = "onboarding@quotepilot.mbmapps.com";
+const APPROVED_EMAIL_FROM_EMAIL = "quotepilot@leaguepilot.us";
 const QUOTES_COLLECTION = "quotes";
 const QUOTE_APPROVAL_EXECUTIONS_COLLECTION = "quoteApprovalExecutions";
 const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
@@ -231,6 +231,7 @@ const BUYER_ACCESS_RATE_LIMITS_COLLECTION = "buyerAccessRateLimits";
 const STRIPE_SECRET_NAME = "STRIPE_SECRET_KEY";
 const STRIPE_WEBHOOK_SECRET_NAME = "STRIPE_WEBHOOK_SECRET";
 const RESEND_API_KEY_SECRET_NAME = "RESEND_API_KEY";
+const TWILIO_AUTH_TOKEN_SECRET_NAME = "TWILIO_AUTH_TOKEN";
 const BUYER_ACCESS_STRIPE_SECRET_NAME = "BUYER_ACCESS_STRIPE_SECRET_KEY";
 const BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME = "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET";
 const BUYER_ACCESS_TURNSTILE_SECRET_NAME = "BUYER_ACCESS_TURNSTILE_SECRET";
@@ -961,8 +962,8 @@ function getSmsProvider() {
 function getTwilioConfig() {
   return {
     accountSid: readConfig("twilio.account_sid"),
-    authToken: readConfig("twilio.auth_token"),
-    fromNumber: readConfig("twilio.from_number"),
+    authToken: readBoundSecret(TWILIO_AUTH_TOKEN_SECRET_NAME),
+    messagingServiceSid: readConfig("twilio.messaging_service_sid"),
     toNumber: readConfig("notifications.owner_phone")
   };
 }
@@ -1018,7 +1019,7 @@ function buildIntegrationSetupStatus() {
   const twilioMissingFields = listMissingFields([
     { name: "TWILIO_ACCOUNT_SID", value: twilioConfig.accountSid },
     { name: "TWILIO_AUTH_TOKEN", value: twilioConfig.authToken },
-    { name: "TWILIO_FROM_NUMBER", value: twilioConfig.fromNumber },
+    { name: "TWILIO_MESSAGING_SERVICE_SID", value: twilioConfig.messagingServiceSid },
     { name: "NOTIFICATIONS_OWNER_PHONE", value: twilioConfig.toNumber }
   ]);
   const stripeMissingFields = listMissingFields([
@@ -3203,7 +3204,7 @@ async function sendOwnerSms(message) {
   const missingFields = listMissingFields([
     { name: "twilio.account_sid", value: twilioConfig.accountSid },
     { name: "twilio.auth_token", value: twilioConfig.authToken },
-    { name: "twilio.from_number", value: twilioConfig.fromNumber },
+    { name: "twilio.messaging_service_sid", value: twilioConfig.messagingServiceSid },
     { name: "notifications.owner_phone", value: twilioConfig.toNumber }
   ]);
   if (missingFields.length) {
@@ -3217,7 +3218,7 @@ async function sendOwnerSms(message) {
   try {
     const client = twilio(twilioConfig.accountSid, twilioConfig.authToken);
     const payload = await client.messages.create({
-      from: twilioConfig.fromNumber,
+      messagingServiceSid: twilioConfig.messagingServiceSid,
       to: twilioConfig.toNumber,
       body: normalizeText(message).slice(0, 1500)
     });
@@ -8074,7 +8075,10 @@ exports.rotateQuotePortalKey = functions
   }
   });
 
-exports.notifyOwnerNewQuote = functions.region(REGION).https.onCall(async (data, context) => {
+exports.notifyOwnerNewQuote = functions
+  .runWith({ secrets: [TWILIO_AUTH_TOKEN_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
   const staff = assertAdminStaff(await assertStaff(context));
   if (normalizeText(data?.portalLink)) {
     throw new functions.https.HttpsError(
@@ -9645,7 +9649,8 @@ exports.getIntegrationSetupStatus = functions
     secrets: [
       STRIPE_SECRET_NAME,
       STRIPE_WEBHOOK_SECRET_NAME,
-      RESEND_API_KEY_SECRET_NAME
+      RESEND_API_KEY_SECRET_NAME,
+      TWILIO_AUTH_TOKEN_SECRET_NAME
     ]
   })
   .region(REGION)
@@ -9662,7 +9667,8 @@ exports.sendIntegrationTestSms = functions
     secrets: [
       STRIPE_SECRET_NAME,
       STRIPE_WEBHOOK_SECRET_NAME,
-      RESEND_API_KEY_SECRET_NAME
+      RESEND_API_KEY_SECRET_NAME,
+      TWILIO_AUTH_TOKEN_SECRET_NAME
     ]
   })
   .region(REGION)
@@ -12327,7 +12333,7 @@ exports.buyerAccessStripeWebhook = functions
   });
 
 exports.stripeWebhook = functions
-  .runWith({ secrets: [STRIPE_WEBHOOK_SECRET_NAME] })
+  .runWith({ secrets: [STRIPE_WEBHOOK_SECRET_NAME, TWILIO_AUTH_TOKEN_SECRET_NAME] })
   .region(REGION)
   .https.onRequest(async (req, res) => {
   if (req.method !== "POST") {

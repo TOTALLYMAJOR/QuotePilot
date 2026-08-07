@@ -89,6 +89,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- QuotePilot email now supports the approved interim sender
+  `QuotePilot by MBMApps <quotepilot@leaguepilot.us>`, reusing the existing
+  provider-verified Resend domain without deleting or disrupting that domain.
+  The restricted production key is held in Firebase Secret Manager; live email
+  remains disabled until the governed Functions release and accepted,
+  delivered, and inbox evidence are complete.
+- Twilio owner-alert delivery now keeps the auth token in Firebase Secret
+  Manager, routes sends through the configured Messaging Service SID, and binds
+  the secret only to Functions that inspect or send SMS. SMS remains disabled
+  until registration, release, and live-delivery acceptance are complete.
 - The JavaScript bundle baseline now reflects the fully converged clean `main`
   build, and its forward-growth allowance is tightened from 15% to 5%, closing
   the temporary performance-baseline exception.
