@@ -94,7 +94,7 @@ await Promise.all([
 ]);
 
 const app = initializeApp({
-  apiKey: "demo-api-key",
+  apiKey: "demo-key",
   authDomain: `${projectId}.firebaseapp.com`,
   projectId
 }, "catalog-import-emulator");
