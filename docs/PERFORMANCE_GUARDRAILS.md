@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: July 27, 2026
+Last updated: August 6, 2026
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -18,7 +18,7 @@ Measured metrics:
 - `largestJsChunkBytes`: largest single JavaScript asset in `dist/assets`
 
 Threshold policy:
-- Maximum allowed = baseline * 1.15 (15% allowance)
+- Maximum allowed = baseline * 1.05 (5% allowance)
 
 Regenerate baseline (intentional only):
 ```bash
@@ -27,6 +27,11 @@ git pull origin main
 npm run build
 npm run check:perf:bundle -- --update-baseline
 ```
+
+The current baseline was regenerated from the fully converged clean `main`
+checkout on August 6, 2026. It captures 1,997,365 total JavaScript bytes and a
+387,929-byte largest chunk; the prior temporary 15% allowance was tightened to
+5% when that exception closed.
 
 Baseline updates must include a brief reason in PR notes.
 Run baseline updates only from a clean `main` checkout unless an exception is recorded.
