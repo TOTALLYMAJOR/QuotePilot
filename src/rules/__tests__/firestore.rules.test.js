@@ -81,6 +81,24 @@ const ORG_SCOPED_ADMIN_WRITE_CASES = [
   }
 ];
 
+const CATALOG_COLLECTIONS = new Set([
+  "catalogPackages",
+  "catalogAddons",
+  "catalogRentals",
+  "eventTypes",
+  "menuCategories",
+  "menuItems"
+]);
+
+function addCatalogRevisionAdvance(batch, db, organizationId, nextRevision) {
+  batch.set(doc(db, "organizations", organizationId, "settings", "config"), {
+    catalogRevision: nextRevision,
+    pricingSetupConfirmed: false,
+    pricingConfirmation: null,
+    updatedAtISO: `2026-08-06T00:00:${String(nextRevision).padStart(2, "0")}.000Z`
+  }, { merge: true });
+}
+
 let testEnv;
 
 async function seedBaseData() {
@@ -697,9 +715,22 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     const crossOrgQuoteRef = quoteRefFor("admin-org-a", "admin-a@example.com", "org-b", "q-admin-cross");
     await assertFails(setDoc(crossOrgQuoteRef, buildQuotePayload("admin-org-a", "org-b")));
 
+    const ownOrgDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    let catalogRevision = 0;
     for (const { collection, docId, data } of ORG_SCOPED_ADMIN_WRITE_CASES) {
       const ownOrgRef = orgScopedRefFor("admin-org-a", "admin-a@example.com", "org-a", collection, docId);
-      await assertSucceeds(setDoc(ownOrgRef, data));
+      if (CATALOG_COLLECTIONS.has(collection)) {
+        catalogRevision += 1;
+        const batch = writeBatch(ownOrgDb);
+        batch.set(doc(ownOrgDb, "organizations", "org-a", collection, docId), data);
+        addCatalogRevisionAdvance(batch, ownOrgDb, "org-a", catalogRevision);
+        await assertSucceeds(batch.commit());
+      } else {
+        await assertSucceeds(setDoc(ownOrgRef, data));
+      }
 
       const crossOrgRef = orgScopedRefFor("admin-org-a", "admin-a@example.com", "org-b", collection, docId);
       await assertFails(setDoc(crossOrgRef, data));
@@ -707,6 +738,10 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
   });
 
   test("menu removal is callable-only while ordinary edits and reactivation remain admin-scoped", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
     const activeRef = orgScopedRefFor(
       "admin-org-a",
       "admin-a@example.com",
@@ -714,13 +749,22 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       "menuItems",
       "managed-active"
     );
-    await assertSucceeds(setDoc(activeRef, {
+    const createBatch = writeBatch(adminDb);
+    createBatch.set(doc(adminDb, "organizations", "org-a", "menuItems", "managed-active"), {
       name: "Managed entrée",
       active: true,
       priceMinor: 1500,
       pricingType: "per_event"
-    }));
-    await assertSucceeds(updateDoc(activeRef, { name: "Managed entree" }));
+    });
+    addCatalogRevisionAdvance(createBatch, adminDb, "org-a", 1);
+    await assertSucceeds(createBatch.commit());
+
+    const editBatch = writeBatch(adminDb);
+    editBatch.update(doc(adminDb, "organizations", "org-a", "menuItems", "managed-active"), {
+      name: "Managed entree"
+    });
+    addCatalogRevisionAdvance(editBatch, adminDb, "org-a", 2);
+    await assertSucceeds(editBatch.commit());
     await assertFails(updateDoc(activeRef, { active: false }));
     await assertFails(deleteDoc(activeRef));
 
@@ -737,7 +781,109 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       "menuItems",
       "managed-inactive"
     );
-    await assertSucceeds(updateDoc(inactiveRef, { active: true }));
+    const reactivateBatch = writeBatch(adminDb);
+    reactivateBatch.update(doc(adminDb, "organizations", "org-a", "menuItems", "managed-inactive"), {
+      active: true
+    });
+    addCatalogRevisionAdvance(reactivateBatch, adminDb, "org-a", 3);
+    await assertSucceeds(reactivateBatch.commit());
+  });
+
+  test("catalog and pricing edits atomically advance revision and preserve pack provenance", async () => {
+    const db = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    const settingsRef = doc(db, "organizations", "org-a", "settings", "config");
+    const packageRef = doc(db, "organizations", "org-a", "catalogPackages", "guarded-package");
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "organizations", "org-a", "settings", "config"), {
+        catalogRevision: 10,
+        pricingSetupConfirmed: true,
+        pricingConfirmation: {
+          actorUid: "admin-org-a",
+          actorEmail: "admin-a@example.com",
+          confirmedAtISO: "2026-08-06T00:00:00.000Z",
+          confirmedCatalogRevision: 10
+        },
+        serviceFeePct: 0.2,
+        brandName: "Organization A"
+      }, { merge: true });
+      await setDoc(doc(adminDb, "organizations", "org-a", "catalogPackages", "guarded-package"), {
+        name: "Guarded Package",
+        pppMinor: 2500,
+        active: true,
+        source: "starter-catalog-pack",
+        starterPackId: "wedding-events",
+        starterPackVersion: 2,
+        starterPackBaselineHash: "baseline-hash",
+        starterPackCatalogRevision: 10
+      });
+    });
+
+    await assertFails(updateDoc(packageRef, { pppMinor: 2600 }));
+    await assertFails(updateDoc(settingsRef, { serviceFeePct: 0.25 }));
+    await assertSucceeds(updateDoc(settingsRef, { brandName: "Admin-Managed Brand" }));
+    await assertFails(updateDoc(settingsRef, {
+      starterCatalogPack: { id: "corporate-drop-off", version: 2 }
+    }));
+    await assertFails(updateDoc(settingsRef, {
+      catalogRevision: 12,
+      pricingSetupConfirmed: false,
+      pricingConfirmation: null
+    }));
+
+    const priceBatch = writeBatch(db);
+    priceBatch.update(packageRef, { pppMinor: 2600 });
+    addCatalogRevisionAdvance(priceBatch, db, "org-a", 11);
+    await assertSucceeds(priceBatch.commit());
+
+    const provenanceBatch = writeBatch(db);
+    provenanceBatch.update(packageRef, { starterPackBaselineHash: "forged" });
+    addCatalogRevisionAdvance(provenanceBatch, db, "org-a", 12);
+    await assertFails(provenanceBatch.commit());
+
+    const pricingBatch = writeBatch(db);
+    pricingBatch.update(settingsRef, { serviceFeePct: 0.25 });
+    addCatalogRevisionAdvance(pricingBatch, db, "org-a", 12);
+    await assertSucceeds(pricingBatch.commit());
+
+    const forgedCreateBatch = writeBatch(db);
+    forgedCreateBatch.set(
+      doc(db, "organizations", "org-a", "catalogPackages", "forged-pack-record"),
+      {
+        name: "Forged",
+        pppMinor: 1000,
+        source: "starter-catalog-pack",
+        starterPackId: "wedding-events"
+      }
+    );
+    addCatalogRevisionAdvance(forgedCreateBatch, db, "org-a", 13);
+    await assertFails(forgedCreateBatch.commit());
+
+    const canonicalSeedBatch = writeBatch(db);
+    canonicalSeedBatch.set(doc(db, "organizations", "org-a", "eventTypes", "seeded-event"), {
+      name: "Seeded Event"
+    });
+    canonicalSeedBatch.set(doc(db, "organizations", "org-a", "menuCategories", "seeded-category"), {
+      eventTypeId: "seeded-event",
+      name: "Entrées",
+      source: "canonical-menu-seed"
+    });
+    canonicalSeedBatch.set(doc(db, "organizations", "org-a", "menuItems", "seeded-item"), {
+      eventTypeId: "seeded-event",
+      categoryId: "seeded-category",
+      name: "Roasted Chicken",
+      priceMinor: 0,
+      pricingType: "per_event",
+      type: "per_event",
+      active: true,
+      source: "canonical-menu-seed"
+    });
+    addCatalogRevisionAdvance(canonicalSeedBatch, db, "org-a", 13);
+    await assertSucceeds(canonicalSeedBatch.commit());
   });
 
   test("org-a sales cannot write org-b quotes/catalog/menu/settings", async () => {

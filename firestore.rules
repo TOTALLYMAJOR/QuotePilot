@@ -60,6 +60,34 @@ service cloud.firestore {
         || (previousActive == false && nextActive == true);
     }
 
+    function catalogRevisionAdvancedAndUnconfirmed(orgId) {
+      let settingsPath = /databases/$(database)/documents/organizations/$(orgId)/settings/config;
+      let currentSettings = get(settingsPath).data;
+      let nextSettings = getAfter(settingsPath).data;
+      return exists(settingsPath)
+        && nextSettings.get("catalogRevision", 0) == currentSettings.get("catalogRevision", 0) + 1
+        && nextSettings.get("pricingSetupConfirmed", false) == false
+        && nextSettings.get("pricingConfirmation", null) == null;
+    }
+
+    function catalogProvenanceCreateSafe() {
+      return request.resource.data.get("source", "") != "starter-catalog-pack"
+        && !request.resource.data.keys().hasAny([
+          "starterPackId",
+          "starterPackVersion",
+          "starterPackBaselineHash",
+          "starterPackCatalogRevision"
+        ]);
+    }
+
+    function catalogProvenanceUpdateSafe() {
+      return request.resource.data.get("source", "") == resource.data.get("source", "")
+        && request.resource.data.get("starterPackId", "") == resource.data.get("starterPackId", "")
+        && request.resource.data.get("starterPackVersion", 0) == resource.data.get("starterPackVersion", 0)
+        && request.resource.data.get("starterPackBaselineHash", "") == resource.data.get("starterPackBaselineHash", "")
+        && request.resource.data.get("starterPackCatalogRevision", 0) == resource.data.get("starterPackCatalogRevision", 0);
+    }
+
     function quoteBelongsToUser(data, orgId) {
       return hasVerifiedEmail()
         && organizationActive(orgId)
@@ -755,6 +783,51 @@ service cloud.firestore {
         );
     }
 
+    function catalogSettingsAuthoritySafe(orgId) {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      let catalogSettingsChanged = affectedKeys.hasAny([
+        "perMileRate",
+        "perMileRateMinor",
+        "longDistancePerMileRate",
+        "longDistancePerMileRateMinor",
+        "deliveryThresholdMiles",
+        "capacityLimit",
+        "serviceFeePct",
+        "serviceFeeTiers",
+        "taxRate",
+        "taxRegions",
+        "defaultTaxRegion",
+        "depositPct",
+        "depositNotice",
+        "quoteValidityDays",
+        "staffingChargeMode",
+        "staffingLaborEnabled",
+        "bartenderRate",
+        "bartenderRateMinor",
+        "bartenderRateTypes",
+        "defaultBartenderRateType",
+        "serverRate",
+        "serverRateMinor",
+        "chefRate",
+        "chefRateMinor",
+        "staffingRateTypes",
+        "defaultStaffingRateType",
+        "seasonalProfiles",
+        "defaultSeasonProfile",
+        "eventTemplates",
+        "upsellRules",
+        "guidedSellingEnabled",
+        "menuSections",
+        "pricingSettingsVersion",
+        "pricingSettingsUpdatedAtISO"
+      ]);
+      return !affectedKeys.hasAny(["starterCatalogPack"])
+        && (
+          !(catalogSettingsChanged || affectedKeys.hasAny(["catalogRevision"]))
+          || catalogRevisionAdvancedAndUnconfirmed(orgId)
+        );
+    }
+
     match /userRoles/{uid} {
       allow read: if isSignedIn() && (
         request.auth.uid == uid
@@ -810,39 +883,79 @@ service cloud.firestore {
       allow delete: if false;
       allow update: if isOrgAdmin(orgId)
         && commercialSettingsUnchanged()
-        && pricingConfirmationAuthoritySafe();
+        && pricingConfirmationAuthoritySafe()
+        && catalogSettingsAuthoritySafe(orgId);
     }
 
     match /organizations/{orgId}/catalogPackages/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow write: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId)
+        && catalogProvenanceCreateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow update: if isOrgAdmin(orgId)
+        && catalogProvenanceUpdateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow delete: if isOrgAdmin(orgId)
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
     }
 
     match /organizations/{orgId}/catalogAddons/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow write: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId)
+        && catalogProvenanceCreateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow update: if isOrgAdmin(orgId)
+        && catalogProvenanceUpdateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow delete: if isOrgAdmin(orgId)
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
     }
 
     match /organizations/{orgId}/catalogRentals/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow write: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId)
+        && catalogProvenanceCreateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow update: if isOrgAdmin(orgId)
+        && catalogProvenanceUpdateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow delete: if isOrgAdmin(orgId)
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
     }
 
     match /organizations/{orgId}/eventTypes/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow write: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId)
+        && catalogProvenanceCreateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow update: if isOrgAdmin(orgId)
+        && catalogProvenanceUpdateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow delete: if isOrgAdmin(orgId)
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
     }
 
     match /organizations/{orgId}/menuCategories/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow write: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId)
+        && catalogProvenanceCreateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow update: if isOrgAdmin(orgId)
+        && catalogProvenanceUpdateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
+      allow delete: if isOrgAdmin(orgId)
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
     }
 
     match /organizations/{orgId}/menuItems/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow create: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId)
+        && catalogProvenanceCreateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
       allow update: if isOrgAdmin(orgId)
-        && managedMenuAvailabilityUpdateAllowed();
+        && managedMenuAvailabilityUpdateAllowed()
+        && catalogProvenanceUpdateSafe()
+        && catalogRevisionAdvancedAndUnconfirmed(orgId);
       allow delete: if false;
     }
 

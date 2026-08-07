@@ -153,6 +153,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Starter-pack replacement now treats owner-deactivated packages and missing
+  generated records as divergence, and managed menu removal fails closed when
+  package or event-template dependency containers are malformed. Historical
+  manifest hashing remains compatible with catalogs already staged from older
+  pack versions.
+- Catalog, menu, and pricing browser writes now require the same atomic
+  catalog-revision advance and pricing-confirmation reset used by the normal
+  save workflow. Starter-pack provenance and staged-pack settings remain
+  callable-owned, preventing a direct client write from bypassing replacement
+  or confirmation authority.
 - Catalog interactions now keep quote and admin event-type choices isolated,
   refresh the active menu immediately after a managed-menu mutation, and focus
   the selected production event from Staffing Board. Catalog reconciliation
