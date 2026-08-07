@@ -12,9 +12,7 @@ import { StepEvent, StepMenu, StepReview, StepServices } from "./components/Wiza
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
 import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
-import { useAuthSession } from "./hooks/useAuthSession";
 import { useCatalogData } from "./hooks/useCatalogData";
-import { useTenantContext } from "./hooks/useTenantContext";
 import {
   calculateQuotePricing,
   notifyOwnerNewQuote
@@ -481,7 +479,7 @@ function buildTemplateDefaultsNotice({
   };
 }
 
-export default function App() {
+export default function App({ tenantContext, authSession }) {
   const wizardRef = useRef(null);
   const stepperRef = useRef(null);
   const mobilePricingToggleRef = useRef(null);
@@ -498,8 +496,6 @@ export default function App() {
   const catalogReconciliationNoticeRef = useRef("");
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { organization, setOrganizationId } = useOrganization();
-  const tenantContext = useTenantContext();
-  const authSession = useAuthSession({ tenantContext });
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
   const [paymentReturn] = useState(() => readPaymentReturnFromUrl());

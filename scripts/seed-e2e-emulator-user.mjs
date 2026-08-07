@@ -11,6 +11,10 @@ function readArg(name, fallback = "") {
   return String(process.argv[idx + 1] || "").trim() || fallback;
 }
 
+function hasFlag(name) {
+  return process.argv.includes(name);
+}
+
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -181,6 +185,7 @@ async function main() {
   const organizationId = slugify(readArg("--organization", process.env.E2E_FIREBASE_ORG_ID || "e2e-org"));
   const email = normalizeEmail(readArg("--email", process.env.E2E_FIREBASE_EMAIL || "e2e-admin@local.test"));
   const password = readArg("--password", process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!");
+  const skipConversation = hasFlag("--skip-conversation");
 
   if (!email || !password) {
     throw new Error("email and password are required.");
@@ -216,7 +221,9 @@ async function main() {
     createdAt: now
   }, { merge: true });
 
-  await seedPortalConversationFixture({ db, organizationId, uid, email });
+  if (!skipConversation) {
+    await seedPortalConversationFixture({ db, organizationId, uid, email });
+  }
 
   console.log(`Seeded e2e auth user: ${email} (${uid}) in org ${organizationId}`);
 }
