@@ -21,7 +21,7 @@ import {
 import { getEventTypes, getMenuCategories, getMenuItems } from "../lib/menuService";
 import { recordDiagnosticError } from "../lib/sessionDiagnostics";
 import {
-  applyStarterCatalogPack,
+  applyStarterCatalogPackWithCompatibility,
   confirmCatalogPricing
 } from "../lib/catalogStarterPackService";
 
@@ -873,14 +873,18 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
       return { ok: false, error: "organizationId is required for starter packs." };
     }
     setState((prev) => ({ ...prev, saving: true, error: "" }));
+    let attemptedPackVersion = packVersion;
     try {
-      const result = await applyStarterCatalogPack({
+      const attempt = await applyStarterCatalogPackWithCompatibility({
         organizationId: resolvedOrganizationId,
         packId,
         packVersion,
         replaceStagedPack,
         expectedCatalogRevision: Math.max(0, Number(state.settings?.catalogRevision || 0))
       });
+      attemptedPackVersion = attempt.attemptedPackVersion;
+      if (!attempt.completed) throw attempt.error;
+      const result = attempt.result;
       const reloaded = await loadFromFirebaseByOrganization(resolvedOrganizationId);
       let eventTypes = state.eventTypes;
       try {
@@ -901,7 +905,11 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         eventTypes,
         ...reloaded.catalog
       }));
-      return { ...result, ok: true };
+      return {
+        ...result,
+        ok: true,
+        compatibilityFallback: attempt.compatibilityFallback === true
+      };
     } catch (err) {
       recordDiagnosticError(err, { surface: "catalog", action: "stage-starter-pack" });
       const originalError = err?.message || "Failed to apply starter catalog pack.";
@@ -918,7 +926,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         }
         const reconciledSuccess = isStarterPackApplyReconciled({
           packId,
-          packVersion,
+          packVersion: attemptedPackVersion,
           settings: reloaded.catalog.settings
         });
         const recoveryError = reconciledSuccess
