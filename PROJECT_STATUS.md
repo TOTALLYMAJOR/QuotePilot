@@ -28,14 +28,15 @@ Last updated: August 7, 2026
   cloud install and each function update completed successfully from `v0.2.3`;
   the local authoritative and provisioning matrices also pass.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
-- Current source release governance supports the repository's actual solo-owner
+- Main release governance supports the repository's actual solo-owner
   operating model without inventing an independent reviewer. The explicit
   `solo-operator` policy retains exact-SHA CI/UAT, one allowlisted human,
   separate dispatches, a 15-minute cooling period, protected-branch-only
   environments, rollback ancestry, and deterministic credential-free
-  artifacts. This source change is not yet merged or configured in GitHub, and
-  production promotion still requires a qualified credential-isolated
-  deployer plus provider and post-launch evidence.
+  artifacts. The policy is merged and configured in GitHub. Vercel Git-triggered
+  deployments are disabled in source so future merges cannot bypass governed
+  preparation and promotion. Production promotion still requires a qualified
+  credential-isolated deployer plus provider and post-launch evidence.
 - Current source workflow delivery: proposal readiness, Good/Better/Best
   scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action
   approval requests, the customer decision center, and event production
