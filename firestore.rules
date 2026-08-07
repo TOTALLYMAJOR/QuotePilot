@@ -53,6 +53,13 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/userRoles/$(request.auth.uid)).data.role in ["admin", "sales"];
     }
 
+    function managedMenuAvailabilityUpdateAllowed() {
+      let previousActive = resource.data.get("active", true);
+      let nextActive = request.resource.data.get("active", true);
+      return nextActive == previousActive
+        || (previousActive == false && nextActive == true);
+    }
+
     function quoteBelongsToUser(data, orgId) {
       return hasVerifiedEmail()
         && organizationActive(orgId)
@@ -833,7 +840,10 @@ service cloud.firestore {
 
     match /organizations/{orgId}/menuItems/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow write: if isOrgAdmin(orgId);
+      allow create: if isOrgAdmin(orgId);
+      allow update: if isOrgAdmin(orgId)
+        && managedMenuAvailabilityUpdateAllowed();
+      allow delete: if false;
     }
 
     match /organizations/{orgId}/customers/{docId} {

@@ -247,7 +247,12 @@ describe("catalog save reconciliation", () => {
       settings: {
         catalogRevision: 8,
         pricingSetupConfirmed: true,
-        pricingConfirmation: { confirmedCatalogRevision: 8 }
+        pricingConfirmation: {
+          actorUid: "owner-1",
+          actorEmail: "owner@example.com",
+          confirmedAtISO: "2026-08-06T15:00:00.000Z",
+          confirmedCatalogRevision: 8
+        }
       }
     })).toBe(true);
 

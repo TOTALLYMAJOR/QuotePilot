@@ -176,6 +176,7 @@ npm run test:catalog-import:emulator
 npm run test:e2e
 npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
+npm run test:e2e:firebase:starter-onboarding
 npm run build
 npm run check:secrets
 npm run check:workflows
@@ -226,7 +227,14 @@ instruction if that browser is unavailable.
 - `npm run test:e2e:firebase:authoritative`
   - Firebase emulator browser lane that also starts Functions emulator.
   - Requires authoritative pricing callable success and trusted quote creation
-    in the save path (no client-only pricing fallback).
+    in the save path (no client-only pricing fallback). Its configured fixture
+    is confirmed through the same server validator used by owners, then proves
+    managed menu deactivation reopens pricing and a stale revision is rejected.
+- `npm run test:e2e:firebase:starter-onboarding`
+  - Starts with an authenticated owner and an intentionally blank catalog.
+  - Proves the owner can choose a starter pack, see the populated menu, approve
+    and save pricing, and reach `New Quote` only after the server records the
+    exact current-revision confirmation receipt.
 - `npm run test:proposal-acceptance:emulator`
   - Starts isolated Firestore and Functions emulators for the public proposal
     acceptance boundary.
@@ -547,7 +555,12 @@ carry immutable baseline hashes so custom records and owner-modified pack
 records are distinguishable; replacement never overwrites either owner-edited
 records or owner-edited pricing settings. Final confirmation revalidates the
 complete catalog on the server and records the admin actor, time, and confirmed
-catalog revision. Monetary amounts are persisted in integer minor units, with
+catalog revision. The quote workspace and authoritative pricing both require
+that exact actor-attributed receipt to match the current revision; a boolean
+flag alone is not activation evidence. The validator checks every package,
+guided-selling, and event-template reference, including active availability,
+and rejects malformed pricing collections as a controlled precondition.
+Monetary amounts are persisted in integer minor units, with
 lossless legacy values migrated during server confirmation. Firebase quote creation and duplication use trusted
 callables that re-price from current tenant data and create the draft quote,
 portal snapshot, and first version atomically; direct Firestore quote creation

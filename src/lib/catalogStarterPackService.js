@@ -3,6 +3,7 @@ import { cloudFunctions, firebaseReady } from "./firebase";
 
 const APPLY_STARTER_PACK_CALLABLE = "applyStarterCatalogPack";
 const CONFIRM_CATALOG_PRICING_CALLABLE = "confirmCatalogPricing";
+const MUTATE_MANAGED_MENU_ITEM_CALLABLE = "mutateManagedMenuItemAvailability";
 const E2E_FUNCTION_ADAPTER_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_E2E_BYPASS_AUTH || "").trim().toLowerCase()
 );
@@ -47,6 +48,22 @@ export async function confirmCatalogPricing({
 } = {}) {
   return callCatalogFunction(CONFIRM_CATALOG_PRICING_CALLABLE, {
     organizationId,
+    expectedCatalogRevision
+  });
+}
+
+export async function mutateManagedMenuItemAvailability({
+  organizationId = "",
+  itemId = "",
+  action = "",
+  item = {},
+  expectedCatalogRevision
+} = {}) {
+  return callCatalogFunction(MUTATE_MANAGED_MENU_ITEM_CALLABLE, {
+    organizationId,
+    itemId,
+    action,
+    item,
     expectedCatalogRevision
   });
 }

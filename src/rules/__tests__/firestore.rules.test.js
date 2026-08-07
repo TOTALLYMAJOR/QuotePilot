@@ -706,6 +706,40 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }
   });
 
+  test("menu removal is callable-only while ordinary edits and reactivation remain admin-scoped", async () => {
+    const activeRef = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "menuItems",
+      "managed-active"
+    );
+    await assertSucceeds(setDoc(activeRef, {
+      name: "Managed entrée",
+      active: true,
+      priceMinor: 1500,
+      pricingType: "per_event"
+    }));
+    await assertSucceeds(updateDoc(activeRef, { name: "Managed entree" }));
+    await assertFails(updateDoc(activeRef, { active: false }));
+    await assertFails(deleteDoc(activeRef));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "organizations", "org-a", "menuItems", "managed-inactive"),
+        { name: "Inactive entrée", active: false, priceMinor: 1200, pricingType: "per_event" }
+      );
+    });
+    const inactiveRef = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "menuItems",
+      "managed-inactive"
+    );
+    await assertSucceeds(updateDoc(inactiveRef, { active: true }));
+  });
+
   test("org-a sales cannot write org-b quotes/catalog/menu/settings", async () => {
     const ownOrgQuoteRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q-sales-own");
     await assertFails(setDoc(ownOrgQuoteRef, buildQuotePayload("sales-org-a", "org-a")));

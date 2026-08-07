@@ -582,6 +582,8 @@ let acceptanceQuoteId = "";
 let acceptancePortalKey = "";
 const acceptancePackageId = "customer-owned-package";
 const acceptanceEventTypeId = "customer-owned-event-type";
+const acceptanceCategoryId = "customer-owned-category";
+const acceptanceMenuItemId = "customer-owned-menu-item";
 const customerEmail = "portal.customer@example.test";
 const catalogConfiguredAtISO = new Date().toISOString();
 let invitedOwner = null;
@@ -651,6 +653,20 @@ try {
     "eventTypes",
     acceptanceEventTypeId
   );
+  const ownerCategoryRef = doc(
+    ownerSession.db,
+    "organizations",
+    organizationId,
+    "menuCategories",
+    acceptanceCategoryId
+  );
+  const ownerMenuItemRef = doc(
+    ownerSession.db,
+    "organizations",
+    organizationId,
+    "menuItems",
+    acceptanceMenuItemId
+  );
   await updateDoc(ownerSettingsRef, {
     brandName: "Customer-Owned Brand",
     brandTagline: "Acceptance events, clearly quoted.",
@@ -674,8 +690,7 @@ try {
       }
     ],
     defaultTaxRegion: "owner-local",
-    depositPct: 0.25,
-    pricingSetupConfirmed: true
+    depositPct: 0.25
   });
   await setDoc(ownerPackageRef, {
     name: "Customer-Owned Package",
@@ -689,6 +704,31 @@ try {
     active: true,
     createdAtISO: catalogConfiguredAtISO
   });
+  await setDoc(ownerCategoryRef, {
+    name: "Customer-Owned Entrées",
+    eventTypeId: acceptanceEventTypeId,
+    createdAtISO: catalogConfiguredAtISO
+  });
+  await setDoc(ownerMenuItemRef, {
+    name: "Customer-Owned Entrée",
+    eventTypeId: acceptanceEventTypeId,
+    categoryId: acceptanceCategoryId,
+    priceMinor: 0,
+    pricingType: "per_event",
+    type: "per_event",
+    active: true,
+    createdAtISO: catalogConfiguredAtISO
+  });
+  const confirmedPricing = await callFunction(
+    "confirmCatalogPricing",
+    bootstrapToken,
+    {
+      organizationId,
+      expectedCatalogRevision: 0
+    }
+  );
+  assert.equal(confirmedPricing.ok, true);
+  assert.equal(confirmedPricing.confirmedCatalogRevision, 0);
 
   const trustedCreation = await callFunction(
     "createQuoteDraft",
@@ -767,6 +807,8 @@ try {
     .get();
   assert.equal(configuredSettings.data()?.brandName, "Customer-Owned Brand");
   assert.equal(configuredSettings.data()?.pricingSetupConfirmed, true);
+  assert.equal(configuredSettings.data()?.pricingConfirmation?.actorUid, invitedOwner.uid);
+  assert.equal(configuredSettings.data()?.pricingConfirmation?.confirmedCatalogRevision, 0);
   assert.equal(configuredSettings.data()?.serviceFeePct, 0.15);
   assert.equal(configuredSettings.data()?.taxRate, 0.08);
   assert.equal(configuredSettings.data()?.depositPct, 0.25);

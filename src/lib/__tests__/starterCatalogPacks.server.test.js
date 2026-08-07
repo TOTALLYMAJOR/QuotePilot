@@ -12,6 +12,7 @@ const {
   findStarterCatalogPack,
   getStarterCatalogPackSummaries,
   manifestKey,
+  mutateManagedMenuItemAvailability,
   validateCatalogForConfirmation
 } = require("../../../functions/starterCatalogPacks.js");
 const manifests = require("../../../functions/data/starterCatalogPacks.json");
@@ -106,6 +107,47 @@ function stagedCatalog(packId = "wedding-events", revision = 1) {
     });
   });
   return { db: fakeDb(store), plan };
+}
+
+function catalogCollections(db) {
+  const collections = {};
+  ["catalogPackages", "catalogAddons", "catalogRentals", "eventTypes", "menuCategories", "menuItems"]
+    .forEach((name) => {
+      collections[name] = collectionSnapshot(
+        new FakeCollectionRef(db.store, `organizations/acme/${name}`)
+      ).docs.map((snap) => ({ id: snap.id, data: snap.data(), ref: snap.ref }));
+    });
+  return collections;
+}
+
+function fullyReferencedCatalog() {
+  const { db } = stagedCatalog();
+  const collections = catalogCollections(db);
+  const settings = clone(db.store.get("organizations/acme/settings/config"));
+  const packageId = collections.catalogPackages[0].id;
+  const addonId = collections.catalogAddons[0].id;
+  const rentalId = collections.catalogRentals[0].id;
+  const menuItem = collections.menuItems[0];
+  const eventTypeId = menuItem.data.eventTypeId;
+  settings.upsellRules = [
+    { id: "addon-rule", kind: "addon", targetId: addonId },
+    { id: "rental-rule", kind: "rental", targetId: rentalId },
+    { id: "package-rule", kind: "package", targetId: packageId }
+  ];
+  settings.eventTemplates = [{
+    id: "fully-referenced-template",
+    name: "Fully referenced template",
+    eventTypeId,
+    pkg: packageId,
+    addons: [addonId],
+    rentals: [rentalId],
+    menuItems: [menuItem.id],
+    taxRegion: settings.defaultTaxRegion,
+    seasonProfileId: settings.defaultSeasonProfile,
+    bartenderRateTypeId: settings.defaultBartenderRateType,
+    staffingRateTypeId: settings.defaultStaffingRateType
+  }];
+  return { db, collections, settings };
 }
 
 describe("starter catalog pack manifests", () => {
@@ -361,6 +403,229 @@ describe("starter catalog pack safety", () => {
         confirmedCatalogRevision: 1
       }
     });
+  });
+
+  test("server confirmation requires an attributed exact-timestamp receipt", async () => {
+    const { db } = stagedCatalog();
+    await expect(confirmCatalogPricing({
+      db,
+      organizationId: "acme",
+      expectedCatalogRevision: 1,
+      actorUid: "",
+      actorEmail: "owner@example.com",
+      nowISO: "2026-08-05T13:00:00.000Z"
+    })).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(confirmCatalogPricing({
+      db,
+      organizationId: "acme",
+      expectedCatalogRevision: 1,
+      actorUid: "owner-1",
+      actorEmail: "owner@example.com",
+      nowISO: "August 5, 2026"
+    })).rejects.toMatchObject({ code: "invalid-argument" });
+    expect(db.store.get("organizations/acme/settings/config").pricingSetupConfirmed).toBe(false);
+  });
+
+  test("server confirmation validates every guided-selling and event-template reference", () => {
+    const { settings, collections } = fullyReferencedCatalog();
+    expect(() => validateCatalogForConfirmation({ settings, collections })).not.toThrow();
+
+    const automaticSeasonSettings = clone(settings);
+    automaticSeasonSettings.defaultSeasonProfile = "auto";
+    automaticSeasonSettings.eventTemplates[0].seasonProfileId = "auto";
+    expect(() => validateCatalogForConfirmation({
+      settings: automaticSeasonSettings,
+      collections
+    })).not.toThrow();
+
+    const invalidReferences = [
+      ["upsell add-on", (draft) => { draft.upsellRules[0].targetId = "missing-addon"; }],
+      ["upsell rental", (draft) => { draft.upsellRules[1].targetId = "missing-rental"; }],
+      ["upsell package", (draft) => { draft.upsellRules[2].targetId = "missing-package"; }],
+      ["template package", (draft) => { draft.eventTemplates[0].pkg = "missing-package"; }],
+      ["template add-on", (draft) => { draft.eventTemplates[0].addons = ["missing-addon"]; }],
+      ["template rental", (draft) => { draft.eventTemplates[0].rentals = ["missing-rental"]; }],
+      ["template menu item", (draft) => { draft.eventTemplates[0].menuItems = ["missing-menu"]; }],
+      ["template event type", (draft) => { draft.eventTemplates[0].eventTypeId = "missing-event"; }],
+      ["template tax region", (draft) => { draft.eventTemplates[0].taxRegion = "missing-tax"; }],
+      ["template season", (draft) => { draft.eventTemplates[0].seasonProfileId = "missing-season"; }],
+      ["template bartender rate", (draft) => { draft.eventTemplates[0].bartenderRateTypeId = "missing-bar"; }],
+      ["template staffing rate", (draft) => { draft.eventTemplates[0].staffingRateTypeId = "missing-staff"; }]
+    ];
+    invalidReferences.forEach(([label, mutate]) => {
+      const invalidSettings = clone(settings);
+      mutate(invalidSettings);
+      expect(
+        () => validateCatalogForConfirmation({ settings: invalidSettings, collections }),
+        label
+      ).toThrow(/unavailable/i);
+    });
+  });
+
+  test("server confirmation rejects inactive records referenced by templates", () => {
+    const inactiveReferences = [
+      ["package", ({ settings, collections }) => {
+        const id = settings.eventTemplates[0].pkg;
+        collections.catalogPackages.find((entry) => entry.id === id).data.active = false;
+      }],
+      ["add-on", ({ settings, collections }) => {
+        const id = settings.eventTemplates[0].addons[0];
+        collections.catalogAddons.find((entry) => entry.id === id).data.active = false;
+      }],
+      ["rental", ({ settings, collections }) => {
+        const id = settings.eventTemplates[0].rentals[0];
+        collections.catalogRentals.find((entry) => entry.id === id).data.active = false;
+      }],
+      ["menu item", ({ settings, collections }) => {
+        const id = settings.eventTemplates[0].menuItems[0];
+        collections.menuItems.find((entry) => entry.id === id).data.active = false;
+      }],
+      ["event type", ({ settings, collections }) => {
+        const id = settings.eventTemplates[0].eventTypeId;
+        collections.eventTypes.find((entry) => entry.id === id).data.active = false;
+      }],
+      ["tax region", ({ settings }) => {
+        const id = settings.eventTemplates[0].taxRegion;
+        settings.taxRegions.find((entry) => entry.id === id).active = false;
+      }],
+      ["seasonal profile", ({ settings }) => {
+        const id = settings.eventTemplates[0].seasonProfileId;
+        settings.seasonalProfiles.find((entry) => entry.id === id).active = false;
+      }],
+      ["bartender rate", ({ settings }) => {
+        const id = settings.eventTemplates[0].bartenderRateTypeId;
+        settings.bartenderRateTypes.find((entry) => entry.id === id).active = false;
+      }],
+      ["staffing rate", ({ settings }) => {
+        const id = settings.eventTemplates[0].staffingRateTypeId;
+        settings.staffingRateTypes.find((entry) => entry.id === id).active = false;
+      }]
+    ];
+    inactiveReferences.forEach(([label, mutate]) => {
+      const fixture = fullyReferencedCatalog();
+      mutate(fixture);
+      expect(
+        () => validateCatalogForConfirmation(fixture),
+        label
+      ).toThrow(/unavailable/i);
+    });
+  });
+
+  test("malformed pricing collection settings fail with a controlled precondition", () => {
+    [
+      "serviceFeeTiers",
+      "taxRegions",
+      "bartenderRateTypes",
+      "staffingRateTypes",
+      "seasonalProfiles"
+    ].forEach((key) => {
+      const { settings, collections } = fullyReferencedCatalog();
+      settings[key] = { malformed: true };
+      let thrown;
+      try {
+        validateCatalogForConfirmation({ settings, collections });
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown, key).toMatchObject({
+        name: "StarterCatalogPackError",
+        code: "failed-precondition"
+      });
+      expect(thrown?.message).toMatch(/must be configured as an array/i);
+    });
+  });
+
+  test("managed menu deactivation is revisioned and refuses referenced records transactionally", async () => {
+    const { db, plan } = stagedCatalog();
+    const referencedItemId = plan.collections.catalogPackages[0].data.includedMenuItemIds[0];
+    const settingsPath = "organizations/acme/settings/config";
+    const itemPath = `organizations/acme/menuItems/${referencedItemId}`;
+
+    await expect(mutateManagedMenuItemAvailability({
+      db,
+      organizationId: "acme",
+      itemId: referencedItemId,
+      action: "deactivate",
+      expectedCatalogRevision: 1,
+      actorUid: "owner-1",
+      nowISO: "2026-08-06T15:00:00.000Z"
+    })).rejects.toMatchObject({
+      code: "failed-precondition",
+      details: { itemId: referencedItemId }
+    });
+    expect(db.store.get(itemPath).active).toBe(true);
+    expect(db.store.get(settingsPath).catalogRevision).toBe(1);
+  });
+
+  test("managed menu deactivation fails on stale revision then reopens pricing review", async () => {
+    const { db, plan } = stagedCatalog();
+    const includedIds = new Set(
+      plan.collections.catalogPackages.flatMap((entry) => entry.data.includedMenuItemIds)
+    );
+    const itemEntry = plan.collections.menuItems.find((entry) => !includedIds.has(entry.id));
+    expect(itemEntry).toBeTruthy();
+    const settingsPath = "organizations/acme/settings/config";
+    const itemPath = `organizations/acme/menuItems/${itemEntry.id}`;
+
+    await expect(mutateManagedMenuItemAvailability({
+      db,
+      organizationId: "acme",
+      itemId: itemEntry.id,
+      action: "deactivate",
+      expectedCatalogRevision: 0,
+      actorUid: "owner-1"
+    })).rejects.toMatchObject({ code: "aborted" });
+    expect(db.store.get(itemPath).active).toBe(true);
+
+    const result = await mutateManagedMenuItemAvailability({
+      db,
+      organizationId: "acme",
+      itemId: itemEntry.id,
+      action: "deactivate",
+      item: {
+        name: itemEntry.data.name,
+        priceMinor: itemEntry.data.priceMinor,
+        pricingType: itemEntry.data.pricingType
+      },
+      expectedCatalogRevision: 1,
+      actorUid: "owner-1",
+      nowISO: "2026-08-06T15:00:00.000Z"
+    });
+
+    expect(result).toMatchObject({ ok: true, action: "deactivate", catalogRevision: 2 });
+    expect(db.store.get(itemPath)).toMatchObject({
+      active: false,
+      priceMinor: itemEntry.data.priceMinor,
+      updatedByUid: "owner-1"
+    });
+    expect(db.store.get(settingsPath)).toMatchObject({
+      catalogRevision: 2,
+      pricingSetupConfirmed: false,
+      pricingConfirmation: null
+    });
+  });
+
+  test("managed menu deletion uses the same revision precondition", async () => {
+    const { db, plan } = stagedCatalog();
+    const includedIds = new Set(
+      plan.collections.catalogPackages.flatMap((entry) => entry.data.includedMenuItemIds)
+    );
+    const itemEntry = [...plan.collections.menuItems]
+      .reverse()
+      .find((entry) => !includedIds.has(entry.id));
+    const itemPath = `organizations/acme/menuItems/${itemEntry.id}`;
+
+    const result = await mutateManagedMenuItemAvailability({
+      db,
+      organizationId: "acme",
+      itemId: itemEntry.id,
+      action: "delete",
+      expectedCatalogRevision: 1,
+      actorUid: "owner-1",
+      nowISO: "2026-08-06T15:00:00.000Z"
+    });
+    expect(result).toMatchObject({ ok: true, action: "delete", catalogRevision: 2 });
+    expect(db.store.has(itemPath)).toBe(false);
   });
 
   test("server confirmation rejects invalid cross-collection menu references", () => {
