@@ -153,6 +153,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- The normal local-fallback Playwright suite now excludes the Firebase-only
+  blank-owner starter-catalog scenario; that scenario continues to execute in
+  its dedicated Auth, Firestore, and Functions emulator lane.
 - Starter-pack replacement now treats owner-deactivated packages and missing
   generated records as divergence, and managed menu removal fails closed when
   package or event-template dependency containers are malformed. Historical

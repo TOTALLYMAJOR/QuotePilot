@@ -33,7 +33,7 @@ function buildWebServer(port, role) {
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: /firebase-(?:auth-rules|authoritative-pricing)\.smoke\.spec\.js$/,
+  testIgnore: /firebase-(?:auth-rules|authoritative-pricing|starter-catalog-onboarding)\.smoke\.spec\.js$/,
   fullyParallel: false,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
@@ -52,7 +52,7 @@ export default defineConfig({
     {
       name: "chromium-admin",
       testIgnore: [
-        /firebase-(?:auth-rules|authoritative-pricing)\.smoke\.spec\.js$/,
+        /firebase-(?:auth-rules|authoritative-pricing|starter-catalog-onboarding)\.smoke\.spec\.js$/,
         /quote-history-role-permissions\.spec\.js$/
       ],
       use: { ...devices["Desktop Chrome"], baseURL: BASE_URL }
