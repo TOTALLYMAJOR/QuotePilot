@@ -20,6 +20,7 @@ import {
   updateEventType,
   updateMenuItem
 } from "../lib/menuService";
+import { useModalDialog } from "../hooks/useModalDialog";
 
 const JSON_FIELD_META = [
   {
@@ -176,6 +177,7 @@ export default function AdminCatalogModal({
   onCatalogMutation,
   onReload,
   saving,
+  returnFocusRef = null,
   initialTab = "",
   selectedEventType: selectedEventTypeProp = "",
   onEventTypeChange,
@@ -441,6 +443,32 @@ export default function AdminCatalogModal({
     const selected = menuCategories.find((category) => category.id === selectedCategory);
     setCategoryEditName(selected?.name || "");
   }, [open, selectedCategory, menuCategories]);
+
+  const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
+  const closeBlocked = Boolean(
+    saving
+    || uploadingLogo
+    || menuActionLoading
+    || menuItemSavingId
+    || packActionId
+  );
+  const handleClose = () => {
+    if (closeBlocked) {
+      setStatus("Wait for the current catalog action to finish before closing.");
+      return;
+    }
+    if (hasUnsavedChanges && !window.confirm("Discard unsaved catalog and branding changes?")) {
+      return;
+    }
+    onClose();
+  };
+  const { dialogRef } = useModalDialog({
+    open,
+    onRequestClose: handleClose,
+    canClose: !closeBlocked,
+    onCloseBlocked: () => setStatus("Wait for the current catalog action to finish before closing."),
+    returnFocusRef
+  });
 
   if (!open) return null;
 
@@ -1077,7 +1105,6 @@ export default function AdminCatalogModal({
       ? "Included in order (read only)."
       : "Not included in order (read only).";
   };
-  const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
   const selectedPortalTheme = findPortalThemePreset(draft?.settings);
   const portalThemePreviewStyle = buildPortalThemeStyle(draft?.settings);
   const hasCatalogContent = Boolean(
@@ -1103,18 +1130,18 @@ export default function AdminCatalogModal({
     setStatus("Refreshing the latest catalog from the server...");
     onReload();
   };
-  const handleClose = () => {
-    if (hasUnsavedChanges && !window.confirm("Discard unsaved catalog and branding changes?")) {
-      return;
-    }
-    onClose();
-  };
-
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
+    <div
+      ref={dialogRef}
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="catalog-admin-title"
+      tabIndex={-1}
+    >
       <div className="modal-card admin-catalog-card">
         <div className="modal-head">
-          <h2>Catalog Admin</h2>
+          <h2 id="catalog-admin-title">Catalog Admin</h2>
           <div className="admin-save-actions">
             <span className={hasUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
               {saving ? "Saving…" : hasUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "No pending changes"}
@@ -1124,7 +1151,15 @@ export default function AdminCatalogModal({
                 {saving ? "Saving..." : "Save catalog changes"}
               </button>
             )}
-            <button type="button" className="ghost" onClick={handleClose}>Close</button>
+            <button
+              type="button"
+              className="ghost"
+              data-modal-initial-focus
+              onClick={handleClose}
+              disabled={closeBlocked}
+            >
+              Close
+            </button>
           </div>
         </div>
 

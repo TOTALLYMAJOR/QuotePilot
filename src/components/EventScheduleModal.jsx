@@ -13,6 +13,7 @@ import {
   updateQuoteKitchenCheckpoints,
   updateQuoteProductionChecklist
 } from "../lib/quoteStore";
+import { useModalDialog } from "../hooks/useModalDialog";
 
 const STATUS_SET = new Set(["accepted", "booked"]);
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -264,7 +265,8 @@ export default function EventScheduleModal({
   organizationId = "",
   staffLeads = [],
   capacityLimit = 400,
-  currentUserEmail = ""
+  currentUserEmail = "",
+  returnFocusRef = null
 }) {
   const todayIso = toIsoDate(new Date());
   const [state, setState] = useState({ loading: false, error: "", source: "", quotes: [] });
@@ -702,18 +704,49 @@ export default function EventScheduleModal({
     handleAssignStaff(quoteId, laneId);
   };
 
+  const closeBlocked = Boolean(assigningId || savingCheckpointId || savingChecklistId);
+  const handleClose = () => {
+    if (closeBlocked) {
+      setFeedback("Wait for the current schedule update to finish before closing.");
+      return;
+    }
+    onClose();
+  };
+  const { dialogRef } = useModalDialog({
+    open,
+    onRequestClose: handleClose,
+    canClose: !closeBlocked,
+    onCloseBlocked: () => setFeedback("Wait for the current schedule update to finish before closing."),
+    returnFocusRef
+  });
+
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
+    <div
+      ref={dialogRef}
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="event-schedule-title"
+      tabIndex={-1}
+    >
       <div className="modal-card schedule-card">
         <div className="modal-head">
-          <h2>Event Schedule</h2>
+          <h2 id="event-schedule-title">Event Schedule</h2>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
             </button>
-            <button type="button" className="ghost" onClick={onClose}>Close</button>
+            <button
+              type="button"
+              className="ghost"
+              data-modal-initial-focus
+              onClick={handleClose}
+              disabled={closeBlocked}
+            >
+              Close
+            </button>
           </div>
         </div>
 

@@ -12,6 +12,7 @@ import {
   parseCsvText,
   suggestFieldMapping
 } from "../lib/importStudio";
+import { useModalDialog } from "../hooks/useModalDialog";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
@@ -32,7 +33,8 @@ export default function ImportStudioModal({
   organizationName = "",
   currentUserUid = "",
   currentUserEmail = "",
-  onImported
+  onImported,
+  returnFocusRef = null
 }) {
   const fileInputRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
@@ -53,8 +55,6 @@ export default function ImportStudioModal({
   const readyRows = useMemo(() => previewRows.filter((row) => row.ready), [previewRows]);
   const issueRows = useMemo(() => previewRows.filter((row) => !row.ready), [previewRows]);
 
-  if (!open) return null;
-
   const reset = () => {
     setDragActive(false);
     setFileName("");
@@ -69,9 +69,22 @@ export default function ImportStudioModal({
   };
 
   const handleClose = () => {
+    if (busy) {
+      setError("Wait for the current import operation to finish before closing.");
+      return;
+    }
     reset();
     onClose();
   };
+  const { dialogRef } = useModalDialog({
+    open,
+    onRequestClose: handleClose,
+    canClose: !busy,
+    onCloseBlocked: () => setError("Wait for the current import operation to finish before closing."),
+    returnFocusRef
+  });
+
+  if (!open) return null;
 
   const loadFile = async (file) => {
     setError("");
@@ -165,7 +178,14 @@ export default function ImportStudioModal({
   };
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="import-studio-title">
+    <div
+      ref={dialogRef}
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-studio-title"
+      tabIndex={-1}
+    >
       <div className="modal-card import-studio-card">
         <header className="modal-head import-studio-head">
           <div>
@@ -173,7 +193,15 @@ export default function ImportStudioModal({
             <h2 id="import-studio-title">Import Studio</h2>
             <p>Turn customer and catalog spreadsheets into a clean, reviewable workspace.</p>
           </div>
-          <button type="button" className="ghost" onClick={handleClose}>Close</button>
+          <button
+            type="button"
+            className="ghost"
+            data-modal-initial-focus
+            onClick={handleClose}
+            disabled={busy}
+          >
+            Close
+          </button>
         </header>
 
         <div className="import-destination-lock" aria-label="Locked import destination">

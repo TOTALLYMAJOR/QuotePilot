@@ -221,6 +221,23 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   - `Submitted` (sent/viewed/accepted)
   - `Archived` (booked/declined/expired)
 
+## Workspace Tool and Recovery Controls
+
+- Opening a tool from `Operations`, `More`, or another workspace action loads
+  only that tool. Keyboard focus starts inside the dialog, Tab and Shift+Tab
+  remain within it, and focus returns to the persistent trigger after closing.
+- Press `Escape` to close a dialog when it is safe. Catalog drafts keep their
+  discard confirmation, and an in-progress save, import, schedule update, or
+  provider operation keeps the dialog open with visible guidance until the
+  action finishes.
+- If a workspace tool cannot load, use `Try again` for a fresh tool import,
+  `Reload workspace` for a full reload, or `Close tool` to return to the intact
+  quote workspace. Public-route recovery similarly offers `Try again`, `Reload
+  page`, and `Back to QuotePilot`.
+- Before retrying an operation with an uncertain provider or save outcome,
+  check the most recent stored work or provider evidence. The recovery screen
+  deliberately shows safe guidance rather than internal error paths or stacks.
+
 ## Sales Workflow
 - Open `Sales Workflow` from the top navigation.
 - When active quotes need action, the navigation control shows the number of

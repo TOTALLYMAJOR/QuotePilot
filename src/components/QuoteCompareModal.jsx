@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { calculateQuote, currency } from "../lib/quoteCalculator";
 import { buildQuoteScenarios } from "../lib/quoteWorkflow";
+import { useModalDialog } from "../hooks/useModalDialog";
 
 function cloneForm(form) {
   return {
@@ -34,7 +35,8 @@ export default function QuoteCompareModal({
   catalog,
   settings,
   styles,
-  primaryTotals
+  primaryTotals,
+  returnFocusRef = null
 }) {
   const [compareForm, setCompareForm] = useState(() => cloneForm(form));
   const [scenarioId, setScenarioId] = useState("better");
@@ -62,6 +64,11 @@ export default function QuoteCompareModal({
     () => calculateQuote(compareForm, catalog, settings),
     [compareForm, catalog, settings]
   );
+  const { dialogRef } = useModalDialog({
+    open,
+    onRequestClose: onClose,
+    returnFocusRef
+  });
 
   if (!open) return null;
 
@@ -101,11 +108,18 @@ export default function QuoteCompareModal({
   const taxRegionOptions = Array.isArray(settings?.taxRegions) ? settings.taxRegions : [];
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
+    <div
+      ref={dialogRef}
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="scenario-compare-title"
+      tabIndex={-1}
+    >
       <div className="modal-card compare-card">
         <div className="modal-head">
-          <h2>Scenario Compare</h2>
-          <button type="button" className="ghost" onClick={onClose}>Close</button>
+          <h2 id="scenario-compare-title">Scenario Compare</h2>
+          <button type="button" className="ghost" data-modal-initial-focus onClick={onClose}>Close</button>
         </div>
 
         <div className="scenario-presets" aria-label="Good better best quote scenarios">

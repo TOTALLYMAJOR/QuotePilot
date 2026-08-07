@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useModalDialog } from "../hooks/useModalDialog";
 import { currency } from "../lib/quoteCalculator";
 import { getQuoteHistory } from "../lib/quoteStore";
 import { getProductAnalyticsSummary } from "../lib/productAnalytics";
@@ -25,7 +26,13 @@ function recentMonthKeys(count) {
   return out;
 }
 
-export default function ReportingDashboardModal({ open, onClose, organizationId = "", addons = [] }) {
+export default function ReportingDashboardModal({
+  open,
+  onClose,
+  organizationId = "",
+  addons = [],
+  returnFocusRef = null
+}) {
   const [state, setState] = useState({
     loading: false,
     error: "",
@@ -163,18 +170,31 @@ export default function ReportingDashboardModal({ open, onClose, organizationId 
     ])
   ), [addons]);
 
+  const { dialogRef } = useModalDialog({
+    open,
+    onRequestClose: onClose,
+    returnFocusRef
+  });
+
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reporting-dashboard-title"
+      ref={dialogRef}
+      tabIndex={-1}
+    >
       <div className="modal-card dashboard-card">
         <div className="modal-head">
-          <h2>Reporting Dashboard</h2>
+          <h2 id="reporting-dashboard-title">Reporting Dashboard</h2>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
             </button>
-            <button type="button" className="ghost" onClick={onClose}>Close</button>
+            <button type="button" className="ghost" onClick={onClose} data-modal-initial-focus>Close</button>
           </div>
         </div>
 
