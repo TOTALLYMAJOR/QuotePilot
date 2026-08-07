@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import {
+  createImportBatchId,
   createImportBatch,
+  isCatalogImportType,
   MAX_IMPORT_RECORDS,
   rollbackImportBatch
 } from "../lib/importBatchService";
@@ -32,6 +34,8 @@ export default function ImportStudioModal({
   organizationName = "",
   currentUserUid = "",
   currentUserEmail = "",
+  catalogRevision = 0,
+  onReload,
   onImported
 }) {
   const fileInputRef = useRef(null);
@@ -44,6 +48,7 @@ export default function ImportStudioModal({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState(null);
+  const [pendingImportBatchId, setPendingImportBatchId] = useState("");
 
   const definition = getImportTypeDefinition(importType);
   const previewRows = useMemo(
@@ -65,6 +70,7 @@ export default function ImportStudioModal({
     setError("");
     setBusy(false);
     setReceipt(null);
+    setPendingImportBatchId("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -76,6 +82,7 @@ export default function ImportStudioModal({
   const loadFile = async (file) => {
     setError("");
     setReceipt(null);
+    setPendingImportBatchId("");
     if (!file) return;
     if (!String(file.name || "").toLowerCase().endsWith(".csv")) {
       setError("Choose a CSV file. Excel support will follow in a later release.");
@@ -106,6 +113,7 @@ export default function ImportStudioModal({
     setImportType(nextType);
     setMapping(suggestFieldMapping(headers, nextType));
     setReceipt(null);
+    setPendingImportBatchId("");
   };
 
   const handleImport = async () => {
@@ -121,25 +129,38 @@ export default function ImportStudioModal({
       setError(`Import batches are limited to ${MAX_IMPORT_RECORDS} ready records.`);
       return;
     }
-    const confirmed = window.confirm(
-      `Create up to ${readyRows.length} ${definition.label.toLowerCase()} record(s) in ${organizationName || organizationId} (${organizationId})? Existing duplicates will be skipped and no messages will be sent.`
-    );
+    const catalogImport = isCatalogImportType(importType);
+    const confirmed = window.confirm([
+      `Create up to ${readyRows.length} ${definition.label.toLowerCase()} record(s) in ${organizationName || organizationId} (${organizationId})?`,
+      "Existing duplicates will be skipped and no messages will be sent.",
+      catalogImport ? "If new records are created, catalog pricing confirmation will be cleared for review." : ""
+    ].filter(Boolean).join(" "));
     if (!confirmed) return;
     setBusy(true);
     setError("");
     try {
+      const importBatchId = catalogImport
+        ? (pendingImportBatchId || createImportBatchId())
+        : "";
+      if (catalogImport && !pendingImportBatchId) setPendingImportBatchId(importBatchId);
       const result = await createImportBatch({
         organizationId,
         organizationName,
         importType,
         fileName,
         records: readyRows,
-        actor: { uid: currentUserUid, email: currentUserEmail }
+        actor: { uid: currentUserUid, email: currentUserEmail },
+        importBatchId,
+        expectedCatalogRevision: catalogImport ? Math.max(0, Number(catalogRevision || 0)) : undefined
       });
       setReceipt(result);
+      setPendingImportBatchId("");
       if (typeof onImported === "function") onImported(result);
     } catch (err) {
       setError(err?.message || "Import failed.");
+      if (String(err?.code || "").includes("aborted") && typeof onReload === "function") {
+        onReload();
+      }
     } finally {
       setBusy(false);
     }
@@ -147,18 +168,32 @@ export default function ImportStudioModal({
 
   const handleRollback = async () => {
     if (!receipt?.importBatchId) return;
-    const confirmed = window.confirm(
-      `Undo import ${receipt.importBatchId}? Only records created by this import will be removed.`
-    );
+    const catalogImport = isCatalogImportType(receipt.importType || importType);
+    const confirmed = window.confirm([
+      `Undo import ${receipt.importBatchId}?`,
+      "Only unchanged records created by this import will be removed.",
+      catalogImport ? "Records still used by packages or templates will be protected." : ""
+    ].filter(Boolean).join(" "));
     if (!confirmed) return;
     setBusy(true);
     setError("");
     try {
-      const result = await rollbackImportBatch({ organizationId, importBatchId: receipt.importBatchId });
+      const receiptRevision = Number(receipt.catalogRevisionAfter ?? receipt.catalogRevision ?? 0);
+      const result = await rollbackImportBatch({
+        organizationId,
+        importBatchId: receipt.importBatchId,
+        importType: receipt.importType || importType,
+        expectedCatalogRevision: catalogImport
+          ? Math.max(0, Number(catalogRevision || 0), Number.isSafeInteger(receiptRevision) ? receiptRevision : 0)
+          : undefined
+      });
       setReceipt((current) => ({ ...current, ...result }));
       if (typeof onImported === "function") onImported(result);
     } catch (err) {
       setError(err?.message || "Rollback failed.");
+      if (String(err?.code || "").includes("aborted") && typeof onReload === "function") {
+        onReload();
+      }
     } finally {
       setBusy(false);
     }
@@ -312,15 +347,25 @@ export default function ImportStudioModal({
                 <strong>{receipt.status === "rolled_back" ? (receipt.deletedCount || 0) : (receipt.createdCount || 0)}</strong>
               </div>
               <div>
-                <span>{receipt.status === "rolled_back" ? "Protected edits" : "Skipped"}</span>
+                <span>
+                  {receipt.status === "rolled_back"
+                    ? (isCatalogImportType(receipt.importType || importType) ? "Protected" : "Protected edits")
+                    : "Skipped"}
+                </span>
                 <strong>{receipt.status === "rolled_back" ? (receipt.protectedCount || 0) : (receipt.skippedCount || 0)}</strong>
               </div>
               <div><span>Batch</span><strong className="import-batch-id">{receipt.importBatchId}</strong></div>
             </div>
             <p>
               {receipt.status === "rolled_back"
-                ? "Only unchanged records stamped by this batch were removed. Records edited after import were protected."
-                : "No outbound messages were sent. Existing duplicate records were left unchanged."}
+                ? (isCatalogImportType(receipt.importType || importType)
+                    ? "Only unchanged records stamped by this batch were removed. Edited records and records still used by packages or templates were protected."
+                    : "Only unchanged records stamped by this batch were removed. Records edited after import were protected.")
+                : (isCatalogImportType(receipt.importType || importType) && Number(receipt.createdCount || 0) > 0
+                    ? "Prices were stored in integer minor units. Review and confirm catalog pricing before activation; existing duplicates were left unchanged."
+                    : isCatalogImportType(receipt.importType || importType)
+                      ? "No new catalog records were needed. Existing duplicates and current pricing confirmation were left unchanged."
+                    : "No outbound messages were sent. Existing duplicate records were left unchanged.")}
             </p>
             <div className="right-actions">
               {receipt.status !== "rolled_back" && (

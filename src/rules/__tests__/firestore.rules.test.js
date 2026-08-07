@@ -2108,9 +2108,11 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertSucceeds(setDoc(ownReceipt, {
       organizationId: "org-a",
       importBatchId: "batch-a",
+      importType: "customers",
       status: "completed"
     }));
     await assertSucceeds(getDoc(ownReceipt));
+    await assertSucceeds(updateDoc(ownReceipt, { status: "rolled_back" }));
 
     const crossOrgReceipt = orgScopedRefFor(
       "admin-org-a",
@@ -2122,6 +2124,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(setDoc(crossOrgReceipt, {
       organizationId: "org-b",
       importBatchId: "batch-b",
+      importType: "customers",
       status: "completed"
     }));
 
@@ -2135,8 +2138,42 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(setDoc(salesReceipt, {
       organizationId: "org-a",
       importBatchId: "batch-sales",
+      importType: "customers",
       status: "completed"
     }));
+
+    const browserCatalogReceipt = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "importBatches",
+      "batch-browser-catalog"
+    );
+    await assertFails(setDoc(browserCatalogReceipt, {
+      organizationId: "org-a",
+      importBatchId: "batch-browser-catalog",
+      importType: "packages",
+      status: "completed"
+    }));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "organizations", "org-a", "importBatches", "batch-server-catalog"), {
+        organizationId: "org-a",
+        importBatchId: "batch-server-catalog",
+        importType: "packages",
+        batchKind: "catalog",
+        status: "completed"
+      });
+    });
+    const serverCatalogReceipt = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "importBatches",
+      "batch-server-catalog"
+    );
+    await assertSucceeds(getDoc(serverCatalogReceipt));
+    await assertFails(updateDoc(serverCatalogReceipt, { status: "rolled_back" }));
   });
 
   test("customer cannot write staff-only org quote/catalog/menu/settings paths", async () => {

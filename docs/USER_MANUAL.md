@@ -371,7 +371,23 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - Upload a CSV, confirm the suggested record type, and review the proposed column mappings.
 - Rows labeled `Need attention` are not imported. Correct the source file or change the mapping, then review again.
 - Import creates ready records only, skips existing duplicate emails/names, sends no outbound messages, and saves an organization-scoped receipt.
-- `Undo this import` removes only unchanged documents whose `importBatchId` matches that receipt. Records edited after import are protected from rollback, and pre-existing records are never deleted by the batch.
+- Customer imports retain the direct, reversible customer-record path. Package,
+  add-on, rental, and menu imports run through the signed-in organization's
+  admin-only server operation. The server revalidates every row, stores prices
+  in integer minor units, and, when a record is created, advances the catalog
+  revision once and clears prior pricing confirmation so an owner reviews the
+  resulting catalog again. An all-duplicate receipt does not disturb confirmed
+  pricing.
+- A catalog import retry keeps the same batch identity. If another catalog save,
+  import, pack action, rollback, or confirmation advanced the revision first,
+  the stale operation makes no writes; reload the catalog and retry.
+- `Undo this import` removes only unchanged documents whose `importBatchId` and
+  baseline hash match that receipt. Records edited after import, package
+  inclusions, and records still selected by persistent templates are protected
+  so rollback cannot leave an orphaned catalog reference. Pre-existing records
+  are never deleted by the batch. Catalog rollback also requires the current
+  revision; it advances once and reopens pricing review only when a record is
+  actually deleted.
 - Saving or editing a quote also projects its customer into the matching
   organization record inside the trusted server transaction. An existing
   normalized email is reused; blank quote fields do not erase imported phone,
