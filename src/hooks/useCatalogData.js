@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { doc, getDoc, getDocs, runTransaction, serverTimestamp } from "firebase/firestore";
 import {
   DEFAULT_ADDONS,
@@ -482,6 +482,14 @@ async function saveToFirebase(
   return expectedCatalogRevision + 1;
 }
 
+export function beginCatalogReloadState(state = {}, { background = false } = {}) {
+  return {
+    ...state,
+    loading: background ? state.loading === true : true,
+    error: ""
+  };
+}
+
 export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
   const baseCatalog = enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK
     ? blockedCatalog()
@@ -498,9 +506,12 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     ...baseCatalog
   }));
   const [reloadVersion, setReloadVersion] = useState(0);
+  const backgroundReloadVersionRef = useRef(-1);
 
   useEffect(() => {
     let alive = true;
+    const backgroundReload = backgroundReloadVersionRef.current === reloadVersion;
+    if (backgroundReload) backgroundReloadVersionRef.current = -1;
 
     if (!enabled) {
       const fallback = defaultCatalog();
@@ -534,6 +545,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
                 ...prev,
                 loading: false,
                 source: `${source}-empty`,
+                error: "",
                 requiresFirebase: false,
                 serverFingerprints,
                 authoritativeVersion: prev.authoritativeVersion + 1,
@@ -548,6 +560,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
             ...prev,
             loading: false,
             source,
+            error: "",
             requiresFirebase: false,
             serverFingerprints,
             authoritativeVersion: prev.authoritativeVersion + 1,
@@ -582,6 +595,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           ...prev,
           loading: false,
           source: cached ? "local-cache" : "local-defaults",
+          error: "",
           requiresFirebase: false,
           serverFingerprints: null,
           eventTypes: deriveEventTypesFromSettings(catalog.settings),
@@ -593,6 +607,14 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           surface: "catalog",
           action: "load"
         });
+        if (backgroundReload) {
+          setState((prev) => ({
+            ...prev,
+            loading: false,
+            error: err?.message || "Failed to refresh the latest catalog."
+          }));
+          return;
+        }
         const shouldUseLocalFallback = !firebaseReady && ALLOW_LOCAL_CATALOG_FALLBACK;
         const fallback = shouldUseLocalFallback ? defaultCatalog() : blockedCatalog();
         setState((prev) => ({
@@ -616,9 +638,13 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     };
   }, [enabled, organizationId, reloadVersion]);
 
-  const reload = useCallback(() => {
-    setState((prev) => ({ ...prev, loading: true, error: "" }));
-    setReloadVersion((version) => version + 1);
+  const reload = useCallback(({ background = false } = {}) => {
+    setState((prev) => beginCatalogReloadState(prev, { background }));
+    setReloadVersion((version) => {
+      const nextVersion = version + 1;
+      backgroundReloadVersionRef.current = background ? nextVersion : -1;
+      return nextVersion;
+    });
   }, []);
 
   const acceptCatalogMutation = useCallback(({ catalogSettings } = {}) => {

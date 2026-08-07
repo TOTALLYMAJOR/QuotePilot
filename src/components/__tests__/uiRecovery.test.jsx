@@ -12,8 +12,10 @@ vi.mock("../../lib/sessionDiagnostics", () => ({
 
 import {
   classifyRecoverableUiFailure,
+  confirmRecoveryReload,
   RecoverableErrorBoundary,
-  resolveRecoverableImportUrl
+  resolveRecoverableImportUrl,
+  UNSAVED_QUOTE_RELOAD_PROMPT
 } from "../RecoverableErrorBoundary";
 import {
   acquireModalBodyScrollLock,
@@ -99,6 +101,34 @@ describe("recoverable lazy surfaces", () => {
     expect(recoverySource).toContain("Reload workspace");
     expect(recoverySource).toContain("Close tool");
     expect(recoverySource).not.toMatch(/\{\s*(?:error|this\.state\.error)\.(?:message|stack)/);
+  });
+
+  test("requires explicit discard confirmation before a tool recovery reload loses quote work", () => {
+    const confirmDiscard = vi.fn().mockReturnValue(false);
+    expect(confirmRecoveryReload({
+      surfaceKind: "tool",
+      hasUnsavedWorkspaceChanges: true,
+      confirmDiscard
+    })).toBe(false);
+    expect(confirmDiscard).toHaveBeenCalledWith(UNSAVED_QUOTE_RELOAD_PROMPT);
+
+    expect(confirmRecoveryReload({
+      surfaceKind: "tool",
+      hasUnsavedWorkspaceChanges: false,
+      confirmDiscard
+    })).toBe(true);
+    expect(confirmRecoveryReload({
+      surfaceKind: "route",
+      hasUnsavedWorkspaceChanges: true,
+      confirmDiscard
+    })).toBe(true);
+    expect(confirmDiscard).toHaveBeenCalledOnce();
+  });
+
+  test("uses non-blocking catalog refresh for Import Studio receipts and conflicts", () => {
+    const appSource = readSource("../../App.jsx");
+    expect(appSource.match(/catalog\.reload\(\{ background: true \}\)/g)).toHaveLength(2);
+    expect(appSource).toContain("onReload={() => catalog.reload({ background: true })}");
   });
 });
 
