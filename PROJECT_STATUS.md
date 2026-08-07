@@ -77,7 +77,11 @@ Last updated: August 6, 2026
   uncertain outcomes against the authoritative revision; tenant, menu, booking,
   and verification blockers expose retry, correction, schedule, or support
   actions; every lazy route and workspace tool has its own safe retry, reload,
-  and close/back boundary; and the seven core workspace dialogs share contained
+  and close/back boundary; recovery reload protects unsaved quote work with a
+  discard confirmation while Close tool preserves it; Import Studio catalog
+  refreshes keep receipts, Undo, and errors mounted; revisioned menu removal
+  waits until unrelated Catalog Admin drafts are saved or discarded; and the
+  seven core workspace dialogs share contained
   focus, safe Escape, body-scroll lock, close guards, and trigger restoration.
   New-quote resets preserve canonical defaults without treating automatic
   values as unsaved user work. Focused unit, real chunk-failure browser, and

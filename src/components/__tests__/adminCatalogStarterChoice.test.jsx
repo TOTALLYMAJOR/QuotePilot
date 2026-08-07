@@ -23,6 +23,7 @@ vi.mock("../../lib/menuService", () => ({
 import AdminCatalogModal, {
   blurManagedMenuItemOnEnter,
   eventTemplateMenuItemReferences,
+  hasUnrelatedManagedMenuDraft,
   hasNoMenuInventory,
   packageMenuItemReferences,
   parseEventTemplateDrafts,
@@ -213,6 +214,25 @@ describe("Admin Catalog starter choice", () => {
       currentTarget: { blur }
     })).toBe(false);
     expect(blur).toHaveBeenCalledOnce();
+  });
+
+  test("authoritative menu changes are blocked only by unrelated Admin drafts", () => {
+    expect(hasUnrelatedManagedMenuDraft({
+      catalogDraftDirty: true,
+      targetItemId: "chicken"
+    })).toBe(true);
+    expect(hasUnrelatedManagedMenuDraft({
+      menuItemDirty: { chicken: true },
+      targetItemId: "chicken"
+    })).toBe(false);
+    expect(hasUnrelatedManagedMenuDraft({
+      menuItemDirty: { chicken: true, rice: true },
+      targetItemId: "chicken"
+    })).toBe(true);
+    expect(hasUnrelatedManagedMenuDraft({
+      pendingMenuEditorDraft: true,
+      targetItemId: "chicken"
+    })).toBe(true);
   });
 
   test("a replaced pack falls back from a stale event selection to its first populated event", () => {

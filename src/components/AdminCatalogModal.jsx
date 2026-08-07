@@ -232,6 +232,22 @@ export function hasNoMenuInventory(inventory = []) {
   ));
 }
 
+export function hasUnrelatedManagedMenuDraft({
+  catalogDraftDirty = false,
+  menuItemDirty = {},
+  targetItemId = "",
+  pendingMenuEditorDraft = false
+} = {}) {
+  const targetId = String(targetItemId || "").trim();
+  return Boolean(
+    catalogDraftDirty
+    || pendingMenuEditorDraft
+    || Object.entries(menuItemDirty || {}).some(([itemId, dirty]) => (
+      dirty === true && String(itemId || "").trim() !== targetId
+    ))
+  );
+}
+
 function catalogDraftFingerprint(draft, jsonDrafts) {
   return JSON.stringify({ draft, jsonDrafts });
 }
@@ -536,6 +552,37 @@ export default function AdminCatalogModal({
   }, [open, selectedCategory, menuCategories]);
 
   const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
+  const hasPendingMenuEditorDraft = () => {
+    const selectedEventTypeRecord = menuEventTypes.find((item) => item.id === selectedEventType);
+    const selectedCategoryRecord = menuCategories.find((item) => item.id === selectedCategory);
+    return Boolean(
+      String(newEventTypeName || "").trim()
+      || String(newCategoryName || "").trim()
+      || String(newItemDraft.name || "").trim()
+      || Number(newItemDraft.price || 0) !== 0
+      || normalizePricingType(newItemDraft.pricingType, "per_event") !== "per_event"
+      || newItemDraft.active === false
+      || String(eventTypeEditName || "").trim()
+        !== String(selectedEventTypeRecord?.name || "").trim()
+      || String(categoryEditName || "").trim()
+        !== String(selectedCategoryRecord?.name || "").trim()
+    );
+  };
+  const blockManagedMenuMutationForDraft = (action, targetItemId) => {
+    if (!hasUnrelatedManagedMenuDraft({
+      catalogDraftDirty: hasUnsavedChanges,
+      menuItemDirty,
+      targetItemId,
+      pendingMenuEditorDraft: hasPendingMenuEditorDraft()
+    })) {
+      return false;
+    }
+    const actionLabel = action === "delete" ? "deleting" : "deactivating";
+    const message = `Save or finish the other Catalog Admin edits, or close and discard them, then reopen Catalog Admin before ${actionLabel} this menu item. No menu change was made.`;
+    setStatus(message);
+    pushToast(message, "error");
+    return true;
+  };
   const closeBlocked = Boolean(
     saving
     || uploadingLogo
@@ -1043,6 +1090,31 @@ export default function AdminCatalogModal({
   const handleUpdateManagedMenuItem = async (item) => {
     const itemId = String(item?.id || "").trim();
     if (!itemId || menuItemSaveInFlightRef.current.has(itemId)) return;
+    if (
+      item?.active === false
+      && blockManagedMenuMutationForDraft("deactivate", itemId)
+    ) {
+      const baseline = menuItemBaselines[itemId];
+      if (baseline) {
+        const revertedItem = { ...item, active: baseline.active !== false };
+        const stillDirty = (
+          String(revertedItem.name || "").trim() !== String(baseline.name || "").trim()
+          || Number(revertedItem.price || 0) !== Number(baseline.price || 0)
+          || normalizePricingType(revertedItem.pricingType || revertedItem.type, "per_event")
+            !== normalizePricingType(baseline.pricingType || baseline.type, "per_event")
+        );
+        setMenuItems((prev) => prev.map((entry) => (
+          entry.id === itemId ? revertedItem : entry
+        )));
+        setMenuItemDirty((prev) => {
+          const next = { ...prev };
+          if (stillDirty) next[itemId] = true;
+          else delete next[itemId];
+          return next;
+        });
+      }
+      return;
+    }
     menuItemSaveInFlightRef.current.add(itemId);
     setMenuItemSavingId(itemId);
     try {
@@ -1130,6 +1202,7 @@ export default function AdminCatalogModal({
   };
 
   const handleDeleteManagedMenuItem = async (id) => {
+    if (blockManagedMenuMutationForDraft("delete", id)) return;
     let draftEventTemplates;
     try {
       draftEventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);
