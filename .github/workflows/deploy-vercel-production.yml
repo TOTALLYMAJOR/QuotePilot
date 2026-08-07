@@ -1,5 +1,5 @@
 name: Prepare Vercel Production Artifact
-run-name: prepare/v1/vercel/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
+run-name: prepare/v2/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/vercel/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
 
 on:
   workflow_dispatch:
@@ -31,11 +31,13 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
+    environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
     permissions:
       actions: read
       contents: read
     env:
+      RELEASE_APPROVAL_MODE: ${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}
+      RELEASE_SOLO_OPERATOR_IDS: ${{ vars.RELEASE_SOLO_OPERATOR_IDS }}
       RELEASE_UAT_ATTESTER_IDS: ${{ vars.RELEASE_UAT_ATTESTER_IDS }}
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}

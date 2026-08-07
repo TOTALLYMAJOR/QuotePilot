@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const EVIDENCE_SCHEMA = "com.mbmapps.quotepilot.production-release-evidence/v4";
+const EVIDENCE_SCHEMA = "com.mbmapps.quotepilot.production-release-evidence/v5";
 const MANIFEST_SCHEMA = "com.mbmapps.quotepilot.production-artifact-manifest/v1";
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/;
@@ -19,6 +19,7 @@ const PROVIDER_CREDENTIAL_KEYS = Object.freeze([
 ]);
 const EVIDENCE_FIELDS = Object.freeze([
   "schema",
+  "approvalMode",
   "releaseSha",
   "releaseTag",
   "rollbackSha",
@@ -151,6 +152,9 @@ export function validateVerifiedReleaseEvidence(value) {
   if (value.schema !== EVIDENCE_SCHEMA) {
     throw artifactError(`release evidence schema must be ${EVIDENCE_SCHEMA}.`);
   }
+  if (!["independent-review", "solo-operator"].includes(value.approvalMode)) {
+    throw artifactError("approvalMode must be independent-review or solo-operator.");
+  }
   if (!FULL_SHA_PATTERN.test(value.releaseSha)) {
     throw artifactError("releaseSha must be a lowercase full commit SHA.");
   }
@@ -171,16 +175,34 @@ export function validateVerifiedReleaseEvidence(value) {
   requirePositiveInteger(value.uatReviewerId, "uatReviewerId");
   requirePositiveInteger(value.operatorId, "operatorId");
   requirePositiveInteger(value.productionReviewerId, "productionReviewerId");
-  if (value.attesterId === value.uatReviewerId) {
+  if (
+    value.approvalMode === "independent-review"
+    && value.attesterId === value.uatReviewerId
+  ) {
     throw artifactError("the UAT reviewer must differ from the UAT attester.");
   }
   if (
-    value.operatorId === value.productionReviewerId
-    || value.attesterId === value.productionReviewerId
+    value.approvalMode === "independent-review"
+    && (
+      value.operatorId === value.productionReviewerId
+      || value.attesterId === value.productionReviewerId
+    )
   ) {
     throw artifactError(
       "the production reviewer must differ from the preparation operator and UAT attester."
     );
+  }
+  if (
+    value.approvalMode === "solo-operator"
+    && (
+      value.attesterId !== value.operatorId
+      || value.uatReviewerId !== value.operatorId
+      || value.productionReviewerId !== value.operatorId
+      || !String(value.uatReviewId || "").startsWith("solo-uat:")
+      || !String(value.productionReviewId || "").startsWith("solo-cooldown-")
+    )
+  ) {
+    throw artifactError("solo-operator release evidence does not match the cooling-period contract.");
   }
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{2,79}$/.test(value.stagingId)) {
     throw artifactError("stagingId is missing or invalid.");

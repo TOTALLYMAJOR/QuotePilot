@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: August 6, 2026
+Last updated: August 7, 2026
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -30,22 +30,28 @@ git checkout -b feature/<scope>-<topic>
 - Primary production preparation is manual-workflow-only. The prepare
   entrypoints accept only the exact remotely published, semantically tagged
   `main` SHA and verify the matching successful main-push `CI Quality` run, a
-  fresh allowlisted-human UAT workflow result, the exact run's recorded
-  `production-uat` approval, the exact preparation run's independent
-  `production` approval, a target-specific rollback ancestor, and current
-  protected environment policy before dependency execution. They stage a
+  fresh allowlisted-human UAT workflow result, a target-specific rollback
+  ancestor, and the current configured approval policy before dependency
+  execution. `independent-review` requires the exact run's recorded
+  `production-uat` and `production` approvals. `solo-operator` requires the one
+  allowlisted human to perform separate UAT and preparation dispatches at least
+  15 minutes apart through protected-branch-only `production-uat-solo` and
+  `production-solo` environments. Both modes bind the approval mode into the
+  workflow title and evidence receipt. They stage a
   target-scoped payload with a deterministic manifest and never receive provider
   mutation credentials or Functions runtime secrets or mutate production.
-- Protect `main` and both GitHub environments (`production-uat`, `production`).
-  Each environment must prevent self-review, require a directly assigned
-  independent user reviewer, disable administrator bypass, and allow protected
-  branches only. Release-critical changes require
-  independent review; same-repository scripts are not an external attestation
-  authority.
+- Protect `main` and configure exactly one release approval mode. Team-owned
+  repositories use `production-uat` and `production`, each with a directly
+  assigned independent reviewer and self-review prevention. Solo-owned
+  repositories use reviewless `production-uat-solo` and `production-solo`
+  environments plus a one-user `RELEASE_SOLO_OPERATOR_IDS` allowlist and the
+  enforced 15-minute cooling period. Every environment disables administrator
+  bypass and allows protected branches only. Changing modes is a reviewed
+  release-policy change, not an ad hoc per-release bypass.
 - `Mainline Safety Net (Auto-Revert Failed Pushes)` is recovery defense that
   reverts a failed current `main` push head. It does not substitute for branch
-  protection, independent review, or release evidence; production release is
-  blocked wherever those controls are unavailable.
+  protection, the configured approval policy, or release evidence; production
+  release is blocked wherever those controls are unavailable.
 
 ## Branch Naming
 - `feature/<scope>-<topic>`
@@ -110,8 +116,9 @@ git checkout -b feature/<scope>-<topic>
    dispatch `Release UAT Attestation` with the release SHA, target, rollback
    SHA, staging identifier, tracked checklist digest, all and only checklist
    item ids applicable to that target, and exact confirmation. Print the set
-   with `npm run release:uat:items -- --target <profile>`. A reviewer other than
-   the attester must approve the `production-uat` environment gate.
+   with `npm run release:uat:items -- --target <profile>`. Independent mode
+   requires a reviewer other than the attester; solo mode records the
+   allowlisted operator and begins the mandatory cooling period.
 9. Tag the same semantic version SHA:
 ```bash
 git tag v<major>.<minor>.<patch>
@@ -119,9 +126,10 @@ git push origin v<major>.<minor>.<patch>
 ```
 10. Dispatch the target prepare-only workflow with the release SHA, exact-SHA
     CI run id, UAT attestation run id, target rollback SHA, and the exact
-    evidence-bound Firebase scope when applicable. A separate `production`
-    environment approval by a current direct reviewer other than the dispatcher
-    and UAT attester is required. Record the uploaded payload, evidence
+    evidence-bound Firebase scope when applicable. Independent mode requires a
+    separate `production` approval. Solo mode requires the same allowlisted
+    operator, a separate dispatch, and at least 15 elapsed minutes after UAT.
+    Record the uploaded payload, evidence
     receipt, and deterministic manifest; this step does not deploy.
 11. Only after it is implemented and qualified, promote through a separately
     owned trusted deployer that revalidates the GitHub run/artifact identity and

@@ -89,6 +89,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Release evidence now supports an explicit solo-owner policy without
+  fabricating a second reviewer. Solo mode requires one allowlisted human,
+  separate exact-SHA UAT and preparation dispatches, protected-branch-only
+  environments, a 15-minute cooling period, rollback evidence, and the same
+  deterministic credential-free artifacts; independent-review mode remains
+  the default for team-owned repositories.
+
 - QuotePilot email now supports the approved interim sender
   `QuotePilot by MBMApps <quotepilot@leaguepilot.us>`, reusing the existing
   provider-verified Resend domain without deleting or disrupting that domain.

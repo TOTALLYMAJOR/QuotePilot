@@ -84,7 +84,12 @@ export const RELEASE_EVIDENCE_POLICY = Object.freeze({
   }),
   environments: Object.freeze({
     uat: "production-uat",
-    deploy: "production"
+    deploy: "production",
+    soloUat: "production-uat-solo",
+    soloDeploy: "production-solo"
+  }),
+  soloOperator: Object.freeze({
+    minimumCooldownMinutes: 15
   }),
   requiredCiJobs: Object.freeze([
     "Classify Changes + Lane Plan",
@@ -97,6 +102,11 @@ export const RELEASE_EVIDENCE_POLICY = Object.freeze({
     "lane:cwv-smoke"
   ])
 });
+
+export const RELEASE_APPROVAL_MODES = Object.freeze([
+  "independent-review",
+  "solo-operator"
+]);
 
 const RELEASE_UAT_CHECKLIST_SCHEMA =
   "com.mbmapps.quotepilot.release-uat-checklist/v2";
@@ -274,12 +284,32 @@ export function parseAttesterIds(value) {
   return new Set(ids);
 }
 
+export function parseReleaseApprovalMode(value) {
+  const normalized = String(value || "independent-review").trim().toLowerCase();
+  if (!RELEASE_APPROVAL_MODES.includes(normalized)) {
+    throw evidenceError(
+      "RELEASE_APPROVAL_MODE must be independent-review or solo-operator."
+    );
+  }
+  return normalized;
+}
+
+export function parseSoloOperatorIds(value) {
+  try {
+    return parseAttesterIds(value);
+  } catch {
+    throw evidenceError("RELEASE_SOLO_OPERATOR_IDS must contain GitHub numeric user ids.");
+  }
+}
+
 export function parseReleaseUatRunTitle(value) {
   const parts = String(value || "").split("/");
-  if (parts.length !== 7 || parts[0] !== "release-uat" || parts[1] !== "v1") {
-    throw evidenceError("the UAT workflow title does not match the v1 evidence contract.");
+  if (parts.length !== 8 || parts[0] !== "release-uat" || parts[1] !== "v2") {
+    throw evidenceError("the UAT workflow title does not match the v2 evidence contract.");
   }
-  const [, , releaseShaValue, target, rollbackShaValue, stagingId, checklistDigest] = parts;
+  const [, , approvalModeValue, releaseShaValue, target, rollbackShaValue, stagingId,
+    checklistDigest] = parts;
+  const approvalMode = parseReleaseApprovalMode(approvalModeValue);
   const releaseSha = requireFullSha(releaseShaValue, "UAT release SHA");
   const rollbackSha = requireFullSha(rollbackShaValue, "UAT rollback SHA");
   if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
@@ -293,7 +323,7 @@ export function parseReleaseUatRunTitle(value) {
   if (!/^[0-9a-f]{64}$/.test(checklistDigest)) {
     throw evidenceError("the UAT checklist digest is invalid.");
   }
-  return { releaseSha, target, rollbackSha, stagingId, checklistDigest };
+  return { approvalMode, releaseSha, target, rollbackSha, stagingId, checklistDigest };
 }
 
 function validateCanonicalRepository(run, label) {
@@ -352,7 +382,11 @@ export function validateCiJobs(jobs) {
   }
 }
 
-export function validateProtectedEnvironment(environment, { name, attesterId = null }) {
+export function validateProtectedEnvironment(
+  environment,
+  { name, attesterId = null, approvalMode = "independent-review" }
+) {
+  const normalizedApprovalMode = parseReleaseApprovalMode(approvalMode);
   if (
     String(environment?.name || "").toLowerCase()
     !== String(name || "").toLowerCase()
@@ -362,21 +396,26 @@ export function validateProtectedEnvironment(environment, { name, attesterId = n
   const reviewerRule = Array.isArray(environment.protection_rules)
     ? environment.protection_rules.find((rule) => rule?.type === "required_reviewers")
     : null;
-  if (!reviewerRule || reviewerRule.prevent_self_review !== true) {
-    throw evidenceError(`${name} must require reviewers and prevent self-review.`);
-  }
-  const reviewers = Array.isArray(reviewerRule.reviewers) ? reviewerRule.reviewers : [];
-  if (reviewers.some((entry) => entry?.type !== "User" || entry?.reviewer?.type !== "User")) {
-    throw evidenceError(`${name} must use directly assigned user reviewers.`);
-  }
-  const reviewerIds = reviewers
-    .map((entry) => Number(entry?.reviewer?.id))
-    .filter((id) => Number.isSafeInteger(id) && id > 0);
-  if (reviewerIds.length === 0 || new Set(reviewerIds).size !== reviewerIds.length) {
-    throw evidenceError(`${name} has no valid required reviewer.`);
-  }
-  if (attesterId && !reviewerIds.some((id) => id !== attesterId)) {
-    throw evidenceError(`${name} needs a reviewer other than the UAT attester.`);
+  const reviewers = Array.isArray(reviewerRule?.reviewers) ? reviewerRule.reviewers : [];
+  let reviewerIds = [];
+  if (normalizedApprovalMode === "independent-review") {
+    if (!reviewerRule || reviewerRule.prevent_self_review !== true) {
+      throw evidenceError(`${name} must require reviewers and prevent self-review.`);
+    }
+    if (reviewers.some((entry) => entry?.type !== "User" || entry?.reviewer?.type !== "User")) {
+      throw evidenceError(`${name} must use directly assigned user reviewers.`);
+    }
+    reviewerIds = reviewers
+      .map((entry) => Number(entry?.reviewer?.id))
+      .filter((id) => Number.isSafeInteger(id) && id > 0);
+    if (reviewerIds.length === 0 || new Set(reviewerIds).size !== reviewerIds.length) {
+      throw evidenceError(`${name} has no valid required reviewer.`);
+    }
+    if (attesterId && !reviewerIds.some((id) => id !== attesterId)) {
+      throw evidenceError(`${name} needs a reviewer other than the UAT attester.`);
+    }
+  } else if (reviewerRule || reviewers.length > 0) {
+    throw evidenceError(`${name} solo-operator policy may not contain a reviewer gate.`);
   }
   if (
     environment?.deployment_branch_policy?.protected_branches !== true
@@ -393,7 +432,11 @@ export function validateProtectedEnvironment(environment, { name, attesterId = n
     throw evidenceError(`${name} has no valid GitHub environment id.`);
   }
 
-  return Object.freeze({ environmentId, reviewerIds: new Set(reviewerIds) });
+  return Object.freeze({
+    approvalMode: normalizedApprovalMode,
+    environmentId,
+    reviewerIds: new Set(reviewerIds)
+  });
 }
 
 function requireOpaqueNodeId(value, field) {
@@ -534,11 +577,14 @@ export function validateUatRun(
     uatRunId,
     checklistDigest,
     attesterIds,
+    approvalMode = "independent-review",
+    soloOperatorIds = new Set(),
     ciCompletedAt,
     now,
     maximumAttestationAgeHours
   }
 ) {
+  const normalizedApprovalMode = parseReleaseApprovalMode(approvalMode);
   validateCanonicalRepository(run, "the UAT run");
   if (Number(run?.id) !== uatRunId) {
     throw evidenceError("the UAT response id does not match the requested run.");
@@ -571,6 +617,12 @@ export function validateUatRun(
   ) {
     throw evidenceError("the UAT attestation actor is not an allowed human attester.");
   }
+  if (
+    normalizedApprovalMode === "solo-operator"
+    && (!(soloOperatorIds instanceof Set) || !soloOperatorIds.has(actorId))
+  ) {
+    throw evidenceError("the UAT attestation actor is not an allowlisted solo operator.");
+  }
 
   const title = parseReleaseUatRunTitle(run?.display_title);
   if (title.releaseSha !== releaseSha || title.rollbackSha !== rollbackSha) {
@@ -578,6 +630,9 @@ export function validateUatRun(
   }
   if (title.target !== target) {
     throw evidenceError("the UAT attestation does not cover this deployment target.");
+  }
+  if (title.approvalMode !== normalizedApprovalMode) {
+    throw evidenceError("the UAT attestation used a different approval mode.");
   }
   if (title.checklistDigest !== checklistDigest) {
     throw evidenceError("the UAT attestation used a different checklist digest.");
@@ -601,7 +656,13 @@ export function validateUatRun(
     throw evidenceError("the UAT attestation is stale.");
   }
 
-  return { actorId, stagingId: title.stagingId, attestedTarget: title.target };
+  return {
+    actorId,
+    approvalMode: normalizedApprovalMode,
+    completedAt: new Date(uatCompletedMs).toISOString(),
+    stagingId: title.stagingId,
+    attestedTarget: title.target
+  };
 }
 
 export function validateUatJobs(jobs) {
@@ -623,8 +684,17 @@ export function validateUatJobs(jobs) {
 
 export function validatePreparationRun(
   run,
-  { releaseSha, rollbackSha, target, preparationRunId, ciRunId, uatRunId }
+  {
+    releaseSha,
+    rollbackSha,
+    target,
+    preparationRunId,
+    ciRunId,
+    uatRunId,
+    approvalMode = "independent-review"
+  }
 ) {
+  const normalizedApprovalMode = parseReleaseApprovalMode(approvalMode);
   validateCanonicalRepository(run, "the preparation run");
   if (Number(run?.id) !== preparationRunId) {
     throw evidenceError("the preparation response id does not match the current run.");
@@ -645,7 +715,8 @@ export function validatePreparationRun(
   }
   const expectedTitle = [
     "prepare",
-    "v1",
+    "v2",
+    normalizedApprovalMode,
     target,
     releaseSha,
     String(ciRunId),
@@ -670,7 +741,57 @@ export function validatePreparationRun(
   ) {
     throw evidenceError("the preparation workflow was not dispatched by one human operator.");
   }
-  return { operatorId: actorId };
+  const createdAtMs = Date.parse(run?.created_at || run?.run_started_at);
+  if (!Number.isFinite(createdAtMs)) {
+    throw evidenceError("the preparation workflow creation timestamp is invalid.");
+  }
+  return {
+    operatorId: actorId,
+    createdAt: new Date(createdAtMs).toISOString()
+  };
+}
+
+export function validateSoloOperatorControls({
+  attesterId,
+  operatorId,
+  soloOperatorIds,
+  uatCompletedAt,
+  preparationCreatedAt,
+  minimumCooldownMinutes = RELEASE_EVIDENCE_POLICY.soloOperator.minimumCooldownMinutes
+} = {}) {
+  if (
+    !(soloOperatorIds instanceof Set)
+    || soloOperatorIds.size !== 1
+    || !soloOperatorIds.has(attesterId)
+    || operatorId !== attesterId
+  ) {
+    throw evidenceError(
+      "solo-operator release requires one allowlisted human to attest and dispatch preparation."
+    );
+  }
+  if (
+    !Number.isSafeInteger(minimumCooldownMinutes)
+    || minimumCooldownMinutes < 5
+    || minimumCooldownMinutes > 1440
+  ) {
+    throw evidenceError("the solo-operator cooling period is invalid.");
+  }
+  const uatCompletedMs = Date.parse(uatCompletedAt);
+  const preparationCreatedMs = Date.parse(preparationCreatedAt);
+  if (![uatCompletedMs, preparationCreatedMs].every(Number.isFinite)) {
+    throw evidenceError("the solo-operator release timestamps are invalid.");
+  }
+  const cooldownMs = minimumCooldownMinutes * 60 * 1000;
+  if (preparationCreatedMs - uatCompletedMs < cooldownMs) {
+    throw evidenceError(
+      `solo-operator preparation must start at least ${minimumCooldownMinutes} minutes after UAT completes.`
+    );
+  }
+  return Object.freeze({
+    approvalMode: "solo-operator",
+    controlId: `solo-cooldown-${minimumCooldownMinutes}m`,
+    operatorId
+  });
 }
 
 function defaultGit(args, root = ROOT) {
@@ -923,6 +1044,8 @@ export async function verifyProductionReleaseEvidence(
     preparationRunId: preparationRunIdValue,
     token,
     attesterIds: attesterIdsValue,
+    approvalMode: approvalModeValue = "independent-review",
+    soloOperatorIds: soloOperatorIdsValue = "",
     root = ROOT
   },
   { fetchImpl = globalThis.fetch, git = defaultGit, now = new Date() } = {}
@@ -947,6 +1070,21 @@ export async function verifyProductionReleaseEvidence(
   const attesterIds = attesterIdsValue instanceof Set
     ? attesterIdsValue
     : parseAttesterIds(attesterIdsValue);
+  const approvalMode = parseReleaseApprovalMode(approvalModeValue);
+  const soloOperatorIds = approvalMode === "solo-operator"
+    ? (soloOperatorIdsValue instanceof Set
+      ? soloOperatorIdsValue
+      : parseSoloOperatorIds(soloOperatorIdsValue))
+    : new Set();
+  const environmentNames = approvalMode === "solo-operator"
+    ? {
+      uat: RELEASE_EVIDENCE_POLICY.environments.soloUat,
+      deploy: RELEASE_EVIDENCE_POLICY.environments.soloDeploy
+    }
+    : {
+      uat: RELEASE_EVIDENCE_POLICY.environments.uat,
+      deploy: RELEASE_EVIDENCE_POLICY.environments.deploy
+    };
   const checklist = readChecklist(root);
 
   const gitEvidence = validateGitEvidence(
@@ -974,11 +1112,11 @@ export async function verifyProductionReleaseEvidence(
       ),
       fetchRunJobs(uatRunId, requestOptions),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/environments/${RELEASE_EVIDENCE_POLICY.environments.uat}`,
+        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/environments/${environmentNames.uat}`,
         requestOptions
       ),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/environments/${RELEASE_EVIDENCE_POLICY.environments.deploy}`,
+        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/environments/${environmentNames.deploy}`,
         requestOptions
       )
     ]);
@@ -989,7 +1127,8 @@ export async function verifyProductionReleaseEvidence(
     target,
     preparationRunId,
     ciRunId,
-    uatRunId
+    uatRunId,
+    approvalMode
   });
   validateCiRun(ciRun, { releaseSha, ciRunId });
   validateCiJobs(ciJobs);
@@ -1000,42 +1139,67 @@ export async function verifyProductionReleaseEvidence(
     uatRunId,
     checklistDigest: checklist.digest,
     attesterIds,
+    approvalMode,
+    soloOperatorIds,
     ciCompletedAt: ciRun.updated_at,
     now,
     maximumAttestationAgeHours: checklist.maximumAttestationAgeHours
   });
   validateUatJobs(uatJobs);
   const uatEnvironmentPolicy = validateProtectedEnvironment(uatEnvironment, {
-    name: RELEASE_EVIDENCE_POLICY.environments.uat,
-    attesterId: uat.actorId
+    name: environmentNames.uat,
+    attesterId: uat.actorId,
+    approvalMode
   });
   const deployEnvironmentPolicy = validateProtectedEnvironment(deployEnvironment, {
-    name: RELEASE_EVIDENCE_POLICY.environments.deploy
+    name: environmentNames.deploy,
+    approvalMode
   });
-  const [uatReviewLog, preparationReviewLog] = await Promise.all([
-    fetchDeploymentReviews(uatRun, "UAT", requestOptions),
-    fetchDeploymentReviews(preparationRun, "preparation", requestOptions)
-  ]);
-  const uatReview = validateUatDeploymentReviews(uatReviewLog, {
-    uatRunId,
-    uatNodeId: uatRun.node_id,
-    environmentName: RELEASE_EVIDENCE_POLICY.environments.uat,
-    environmentId: uatEnvironmentPolicy.environmentId,
-    attesterId: uat.actorId,
-    requiredReviewerIds: uatEnvironmentPolicy.reviewerIds
-  });
-  const preparationReview = validatePreparationDeploymentReviews(preparationReviewLog, {
-    preparationRunId,
-    preparationNodeId: preparationRun.node_id,
-    environmentName: RELEASE_EVIDENCE_POLICY.environments.deploy,
-    environmentId: deployEnvironmentPolicy.environmentId,
-    operatorId: preparation.operatorId,
-    attesterId: uat.actorId,
-    requiredReviewerIds: deployEnvironmentPolicy.reviewerIds
-  });
+  let uatReview;
+  let preparationReview;
+  if (approvalMode === "solo-operator") {
+    const control = validateSoloOperatorControls({
+      attesterId: uat.actorId,
+      operatorId: preparation.operatorId,
+      soloOperatorIds,
+      uatCompletedAt: uat.completedAt,
+      preparationCreatedAt: preparation.createdAt
+    });
+    uatReview = {
+      reviewId: `solo-uat:${uatRunId}`,
+      reviewerId: control.operatorId
+    };
+    preparationReview = {
+      reviewId: `${control.controlId}:${preparationRunId}`,
+      reviewerId: control.operatorId
+    };
+  } else {
+    const [uatReviewLog, preparationReviewLog] = await Promise.all([
+      fetchDeploymentReviews(uatRun, "UAT", requestOptions),
+      fetchDeploymentReviews(preparationRun, "preparation", requestOptions)
+    ]);
+    uatReview = validateUatDeploymentReviews(uatReviewLog, {
+      uatRunId,
+      uatNodeId: uatRun.node_id,
+      environmentName: environmentNames.uat,
+      environmentId: uatEnvironmentPolicy.environmentId,
+      attesterId: uat.actorId,
+      requiredReviewerIds: uatEnvironmentPolicy.reviewerIds
+    });
+    preparationReview = validatePreparationDeploymentReviews(preparationReviewLog, {
+      preparationRunId,
+      preparationNodeId: preparationRun.node_id,
+      environmentName: environmentNames.deploy,
+      environmentId: deployEnvironmentPolicy.environmentId,
+      operatorId: preparation.operatorId,
+      attesterId: uat.actorId,
+      requiredReviewerIds: deployEnvironmentPolicy.reviewerIds
+    });
+  }
 
   return Object.freeze({
-    schema: "com.mbmapps.quotepilot.production-release-evidence/v4",
+    schema: "com.mbmapps.quotepilot.production-release-evidence/v5",
+    approvalMode,
     releaseSha,
     releaseTag: publishedRevision.releaseTag,
     rollbackSha,
@@ -1147,6 +1311,8 @@ async function main() {
     preparationRunId: process.env.GITHUB_RUN_ID,
     token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
     attesterIds: process.env.RELEASE_UAT_ATTESTER_IDS,
+    approvalMode: process.env.RELEASE_APPROVAL_MODE,
+    soloOperatorIds: process.env.RELEASE_SOLO_OPERATOR_IDS,
     root: ROOT
   });
   if (args.output) writeProductionReleaseEvidenceReceipt(result, args.output, ROOT);

@@ -616,7 +616,7 @@ platform-admin workflow.
 Primary production preparation is workflow-only:
 
 - `Release UAT Attestation` records an allowlisted human's exact-main UAT
-  statement while running in the configured `production-uat` environment.
+  statement under the configured independent-review or solo-operator policy.
 - `Prepare Firebase Production Artifact` verifies the evidence, stages the
   selected Firebase surface, and uploads a target-scoped payload with a
   deterministic manifest.
@@ -637,11 +637,12 @@ dependency execution
 unless the checkout is the exact tagged `main` SHA, all eight CI jobs passed,
 the tracked UAT checklist digest matches, the attestation is fresh and came
 from an allowlisted human, the current run is the canonical in-progress target
-preparation dispatched by a human, the exact UAT run has one recorded approval
-by an independent current direct reviewer, the exact preparation run has one
-recorded `production` approval by a current direct reviewer other than both the
-dispatcher and UAT attester, and the current `production-uat` and `production`
-environment policies match the source contract. The verifier still
+preparation dispatched by a human, and the configured approval policy matches
+the source contract. Independent-review mode requires the exact UAT and
+preparation approvals from current direct reviewers. Solo-operator mode
+requires exactly one allowlisted human, distinct UAT and preparation
+dispatches, reviewless protected-branch-only solo environments, and at least a
+15-minute cooling period between those runs. The verifier still
 does not prove provider identity behind the human-entered staging id or the
 historical environment-policy snapshot. Run `npm run
 release:uat:digest` on the release SHA to obtain the checklist digest.
@@ -675,9 +676,9 @@ payload file. Provider/environment setup and the full operator sequence live in
 
 These two primary preparation workflows are implemented source controls, not
 an operational production gate, and they do not mutate production. The legacy
-primary deploy commands fail closed. Promotion remains blocked until protected
-environments and independent
-reviewers exist, provider staging/rollback evidence is machine-bound, Vercel
+primary deploy commands fail closed. Promotion remains blocked until the
+configured protected environments and mode-specific controls exist, provider
+staging/rollback evidence is machine-bound, Vercel
 bypass paths are closed, and a separately owned trusted deployer revalidates the
 uploaded payload against its manifest and GitHub run/artifact identity before
 receiving provider mutation credentials.
