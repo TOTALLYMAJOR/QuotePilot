@@ -4,6 +4,7 @@ import {
   readSessionDiagnostics,
   recordDiagnosticEvent
 } from "../lib/sessionDiagnostics";
+import { useModalDialog } from "../hooks/useModalDialog";
 
 function formatDateTime(iso) {
   const date = new Date(iso || "");
@@ -27,7 +28,7 @@ function eventTitle(event) {
   return event.message || "-";
 }
 
-export default function DiagnosticsModal({ open, onClose }) {
+export default function DiagnosticsModal({ open, onClose, returnFocusRef = null }) {
   const [state, setState] = useState(() => readSessionDiagnostics());
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
@@ -96,17 +97,29 @@ export default function DiagnosticsModal({ open, onClose }) {
     setError("");
     setFeedback("Diagnostics cleared.");
   };
+  const { dialogRef } = useModalDialog({
+    open,
+    onRequestClose: onClose,
+    returnFocusRef
+  });
 
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
+    <div
+      ref={dialogRef}
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="session-diagnostics-title"
+      tabIndex={-1}
+    >
       <div className="modal-card diagnostics-card">
         <div className="modal-head">
-          <h2>Session Diagnostics</h2>
+          <h2 id="session-diagnostics-title">Session Diagnostics</h2>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={refresh}>Refresh</button>
-            <button type="button" className="ghost" onClick={onClose}>Close</button>
+            <button type="button" className="ghost" data-modal-initial-focus onClick={onClose}>Close</button>
           </div>
         </div>
 
