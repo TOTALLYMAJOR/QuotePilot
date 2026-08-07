@@ -24,3 +24,12 @@ export function buildAuthenticatedWorkspaceScopeKey({
     normalized(tenantContext.organizationId)
   ]);
 }
+
+export function buildWorkspaceRouteScopeKey({
+  publicPortal = false,
+  tenantContext = {},
+  authSession = {}
+} = {}) {
+  if (publicPortal) return JSON.stringify(["public-portal"]);
+  return buildAuthenticatedWorkspaceScopeKey({ tenantContext, authSession });
+}
