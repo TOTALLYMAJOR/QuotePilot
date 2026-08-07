@@ -163,6 +163,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   save workflow. Starter-pack provenance and staged-pack settings remain
   callable-owned, preventing a direct client write from bypassing replacement
   or confirmation authority.
+- Import Studio now refreshes catalog revisions in the background after import,
+  rollback, or revision-conflict recovery, so the receipt, Undo action, and
+  visible error remain mounted. Authoritative menu deactivate/delete actions
+  refuse to run while unrelated Catalog Admin drafts are pending, and lazy-tool
+  workspace reload requires confirmation before discarding an unsaved quote;
+  closing the failed tool keeps that quote intact.
 - Catalog interactions now keep quote and admin event-type choices isolated,
   refresh the active menu immediately after a managed-menu mutation, and focus
   the selected production event from Staffing Board. Catalog reconciliation

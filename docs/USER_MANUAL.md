@@ -242,6 +242,9 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   `Reload workspace` for a full reload, or `Close tool` to return to the intact
   quote workspace. Public-route recovery similarly offers `Try again`, `Reload
   page`, and `Back to QuotePilot`.
+- `Reload workspace` asks for confirmation when the current quote has unsaved
+  changes. Cancel to keep working, or use `Close tool` to leave the failed tool
+  without discarding the quote.
 - Before retrying an operation with an uncertain provider or save outcome,
   check the most recent stored work or provider evidence. The recovery screen
   deliberately shows safe guidance rather than internal error paths or stacks.
@@ -406,7 +409,9 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   pricing.
 - A catalog import retry keeps the same batch identity. If another catalog save,
   import, pack action, rollback, or confirmation advanced the revision first,
-  the stale operation makes no writes; reload the catalog and retry.
+  the stale operation makes no writes; Import Studio refreshes the catalog in
+  the background while keeping the file, visible error, or receipt available
+  so the admin can review and retry.
 - `Undo this import` removes only unchanged documents whose `importBatchId` and
   baseline hash match that receipt. Records edited after import, package
   inclusions, and records still selected by persistent templates are protected
@@ -414,6 +419,9 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   are never deleted by the batch. Catalog rollback also requires the current
   revision; it advances once and reopens pricing review only when a record is
   actually deleted.
+- Catalog Admin blocks menu deactivation or deletion while other catalog,
+  branding, menu-item, or menu-form drafts are pending. Finish/save those edits,
+  or close and discard them, before retrying the revisioned menu action.
 - Saving or editing a quote also projects its customer into the matching
   organization record inside the trusted server transaction. An existing
   normalized email is reused; blank quote fields do not erase imported phone,

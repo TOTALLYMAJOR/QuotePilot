@@ -221,6 +221,7 @@ function WorkspaceLazyTool({
   component: LazyComponent,
   onClose,
   returnFocusRef,
+  hasUnsavedWorkspaceChanges = false,
   children
 }) {
   return (
@@ -231,6 +232,7 @@ function WorkspaceLazyTool({
       onRetry={LazyComponent.retry}
       onClose={onClose}
       returnFocusRef={returnFocusRef}
+      hasUnsavedWorkspaceChanges={hasUnsavedWorkspaceChanges}
     >
       <Suspense
         fallback={open ? (
@@ -2190,6 +2192,7 @@ export default function App() {
             component={IntegrationOpsModal}
             onClose={() => setIntegrationsOpen(false)}
             returnFocusRef={workspaceToolReturnFocusRef}
+            hasUnsavedWorkspaceChanges={quoteDirty}
           >
             <IntegrationOpsModal
               open={integrationsOpen}
@@ -2283,6 +2286,7 @@ export default function App() {
             component={AdminCatalogModal}
             onClose={() => setAdminOpen(false)}
             returnFocusRef={workspaceToolReturnFocusRef}
+            hasUnsavedWorkspaceChanges={quoteDirty}
           >
             <AdminCatalogModal
               open={adminOpen}
@@ -2738,6 +2742,7 @@ export default function App() {
           component={AdminCatalogModal}
           onClose={() => setAdminOpen(false)}
           returnFocusRef={workspaceToolReturnFocusRef}
+          hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <AdminCatalogModal
             open={adminOpen}
@@ -2763,6 +2768,7 @@ export default function App() {
           component={ImportStudioModal}
           onClose={() => setImportStudioOpen(false)}
           returnFocusRef={workspaceToolReturnFocusRef}
+          hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <ImportStudioModal
             open={importStudioOpen}
@@ -2773,9 +2779,9 @@ export default function App() {
             currentUserUid={authSession.user?.uid || ""}
             currentUserEmail={authSession.user?.email || ""}
             catalogRevision={Math.max(0, Number(catalog.settings?.catalogRevision || 0))}
-            onReload={catalog.reload}
+            onReload={() => catalog.reload({ background: true })}
             onImported={(result) => {
-              catalog.reload();
+              catalog.reload({ background: true });
               if (result?.status === "rolled_back") {
                 pushToast(`Import ${result.importBatchId} was undone.`, "info");
               } else {
@@ -2793,6 +2799,7 @@ export default function App() {
           component={QuoteHistoryModal}
           onClose={() => setHistoryOpen(false)}
           returnFocusRef={historyTriggerRef}
+          hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <QuoteHistoryModal
             open={historyOpen}
@@ -2838,6 +2845,7 @@ export default function App() {
           component={SalesWorkflowModal}
           onClose={() => setSalesWorkflowOpen(false)}
           returnFocusRef={workflowTriggerRef}
+          hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <SalesWorkflowModal
             open={salesWorkflowOpen}
@@ -2873,6 +2881,7 @@ export default function App() {
           component={EventScheduleModal}
           onClose={() => setScheduleOpen(false)}
           returnFocusRef={workspaceToolReturnFocusRef}
+          hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <EventScheduleModal
             open={scheduleOpen}
@@ -2893,6 +2902,7 @@ export default function App() {
           component={IntegrationOpsModal}
           onClose={() => setIntegrationsOpen(false)}
           returnFocusRef={workspaceToolReturnFocusRef}
+          hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <IntegrationOpsModal
             open={integrationsOpen}
@@ -2915,6 +2925,7 @@ export default function App() {
           component={DiagnosticsModal}
           onClose={() => setDiagnosticsOpen(false)}
           returnFocusRef={workspaceToolReturnFocusRef}
+          hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <DiagnosticsModal
             open={diagnosticsOpen}
@@ -2931,6 +2942,7 @@ export default function App() {
           component={QuoteCompareModal}
           onClose={() => setCompareOpen(false)}
           returnFocusRef={workspaceToolReturnFocusRef}
+          hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <QuoteCompareModal
             open={compareOpen}
@@ -2956,6 +2968,7 @@ export default function App() {
           component={ReportingDashboardModal}
           onClose={() => setDashboardOpen(false)}
           returnFocusRef={workspaceToolReturnFocusRef}
+          hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <ReportingDashboardModal
             open={dashboardOpen}

@@ -1,9 +1,27 @@
 import { describe, expect, test } from "vitest";
 import {
+  beginCatalogReloadState,
   buildCatalogRecordChanges,
   isCatalogSaveReconciled,
   isStarterPackApplyReconciled
 } from "../useCatalogData";
+
+describe("catalog reload presentation", () => {
+  test("background refresh keeps the mounted workspace out of the blocking loading screen", () => {
+    const current = {
+      loading: false,
+      error: "stale revision",
+      packages: [{ id: "package-a" }]
+    };
+
+    expect(beginCatalogReloadState(current, { background: true })).toEqual({
+      loading: false,
+      error: "",
+      packages: [{ id: "package-a" }]
+    });
+    expect(beginCatalogReloadState(current)).toMatchObject({ loading: true, error: "" });
+  });
+});
 
 function catalog(overrides = {}) {
   return {

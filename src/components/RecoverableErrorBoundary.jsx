@@ -9,6 +9,20 @@ import {
 import { useModalDialog } from "../hooks/useModalDialog";
 import { recordDiagnosticEvent } from "../lib/sessionDiagnostics";
 
+export const UNSAVED_QUOTE_RELOAD_PROMPT =
+  "Reload workspace? Your unsaved quote changes will be discarded.";
+
+export function confirmRecoveryReload({
+  surfaceKind = "tool",
+  hasUnsavedWorkspaceChanges = false,
+  confirmDiscard
+} = {}) {
+  if (surfaceKind === "route" || !hasUnsavedWorkspaceChanges) return true;
+  return typeof confirmDiscard === "function"
+    ? confirmDiscard(UNSAVED_QUOTE_RELOAD_PROMPT)
+    : false;
+}
+
 function safeSurfaceName(value) {
   const normalized = String(value || "QuotePilot")
     .replace(/[^a-zA-Z0-9 &'-]/g, " ")
@@ -262,6 +276,23 @@ export class RecoverableErrorBoundary extends Component {
   };
 
   handleReload = () => {
+    const confirmDiscard = typeof window !== "undefined"
+      ? window.confirm.bind(window)
+      : null;
+    if (!confirmRecoveryReload({
+      surfaceKind: this.props.surfaceKind,
+      hasUnsavedWorkspaceChanges: this.props.hasUnsavedWorkspaceChanges,
+      confirmDiscard
+    })) {
+      recordUiRecoveryEvent({
+        level: "info",
+        action: "reload_cancelled",
+        surfaceName: this.props.surfaceName,
+        surfaceKind: this.props.surfaceKind,
+        failureKind: this.state.failureKind
+      });
+      return;
+    }
     recordUiRecoveryEvent({
       level: "info",
       action: "reload",

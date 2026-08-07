@@ -90,6 +90,43 @@ test("Escape preserves the Catalog Admin unsaved-change guard", async ({ page })
   await expect(operationsTrigger).toBeFocused();
 });
 
+test("authoritative menu deactivate and delete keep unrelated Catalog Admin drafts", async ({ page }) => {
+  await page.goto("/app");
+  await openOperationsItem(page, "Catalog Admin");
+
+  const catalog = page.getByRole("dialog", { name: "Catalog Admin" });
+  await catalog.getByRole("button", { name: "Pricing" }).click();
+  const businessName = catalog.getByLabel("Business name");
+  const draftName = `${await businessName.inputValue()} protected draft`;
+  await businessName.fill(draftName);
+  await expect(catalog.getByText("Unsaved changes")).toBeVisible();
+
+  await catalog.getByRole("button", { name: "Menu" }).click();
+  const managedRows = catalog.locator(".admin-menu-row-managed");
+  await expect.poll(() => managedRows.count()).toBeGreaterThan(0);
+  const row = managedRows.first();
+  const active = row.getByRole("checkbox");
+  await expect(active).toBeChecked();
+  await active.uncheck();
+  await active.press("Tab");
+
+  await expect(catalog.getByText(
+    /Save or finish the other Catalog Admin edits.*before deactivating this menu item/i
+  ).first()).toBeVisible();
+  await expect(active).toBeChecked();
+
+  const rowCount = await managedRows.count();
+  await row.getByRole("button", { name: "Delete" }).click();
+  await expect(catalog.getByText(
+    /Save or finish the other Catalog Admin edits.*before deleting this menu item/i
+  ).first()).toBeVisible();
+  await expect(managedRows).toHaveCount(rowCount);
+
+  await catalog.getByRole("button", { name: "Pricing" }).click();
+  await expect(catalog.getByLabel("Business name")).toHaveValue(draftName);
+  await expect(catalog.getByText("Unsaved changes")).toBeVisible();
+});
+
 test("a failed workspace chunk keeps the app usable with safe executable recovery actions", async ({ page }) => {
   let chunkRequestCount = 0;
   await page.route("**/src/components/DiagnosticsModal.jsx*", (route) => {
@@ -97,6 +134,8 @@ test("a failed workspace chunk keeps the app usable with safe executable recover
     return route.abort("failed");
   });
   await page.goto("/app");
+  const eventName = page.getByRole("textbox", { name: /Event name/i });
+  await eventName.fill("Unsaved recovery quote");
   const operationsTrigger = page.getByRole("button", { name: "Operations" });
   await openOperationsItem(page, "Session Diagnostics");
 
@@ -125,6 +164,17 @@ test("a failed workspace chunk keeps the app usable with safe executable recover
   ]));
   expect(JSON.stringify(recoveryEvents)).not.toMatch(/Failed to fetch|DiagnosticsModal\.jsx|\/src\//i);
 
+  let reloadGuardMessage = "";
+  page.once("dialog", async (guard) => {
+    reloadGuardMessage = guard.message();
+    await guard.dismiss();
+  });
+  await recovery.getByRole("button", { name: "Reload workspace" }).click();
+  await expect.poll(() => reloadGuardMessage)
+    .toBe("Reload workspace? Your unsaved quote changes will be discarded.");
+  await expect(recovery).toBeVisible();
+  await expect(eventName).toHaveValue("Unsaved recovery quote");
+
   await recovery.getByRole("button", { name: "Try again" }).click();
   await expect.poll(() => chunkRequestCount).toBeGreaterThanOrEqual(2);
   await expect(recovery).toBeVisible();
@@ -140,6 +190,7 @@ test("a failed workspace chunk keeps the app usable with safe executable recover
   await expect(recovery).toHaveCount(0);
   await expect(operationsTrigger).toBeFocused();
   await expect(page.getByRole("button", { name: "New Quote" })).toBeVisible();
+  await expect(eventName).toHaveValue("Unsaved recovery quote");
 });
 
 test("a failed public route offers recovery and Reload page executes a clean retry", async ({ page }) => {
