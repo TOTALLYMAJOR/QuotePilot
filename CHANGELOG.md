@@ -89,6 +89,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- The JavaScript bundle baseline now reflects the fully converged clean `main`
+  build, and its forward-growth allowance is tightened from 15% to 5%, closing
+  the temporary performance-baseline exception.
 - Catalog Import Studio writes and rolls back package, add-on, rental, and menu
   batches through same-organization admin callables. Each operation is a
   revision-preconditioned transaction that stores prices in integer minor
