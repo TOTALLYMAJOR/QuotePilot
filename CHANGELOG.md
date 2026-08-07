@@ -8,6 +8,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Independent recovery boundaries for every lazy public route and workspace
+  tool. A failed chunk now preserves the surrounding app and exposes executing
+  retry, reload, and close/back actions with sanitized diagnostics. The seven
+  core workspace dialogs share initial focus, contained Tab navigation, safe
+  Escape handling, body scroll lock, unsaved/busy close guards, and trigger
+  focus restoration.
 - Versioned starter-pack package inclusions with stable menu, add-on, and
   rental references. Quote builders explicitly select covered items at no
   added charge; client previews and server-authoritative pricing prevent a

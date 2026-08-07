@@ -76,9 +76,13 @@ Last updated: August 6, 2026
   executing starter-pack or manual-build path; catalog writes reconcile
   uncertain outcomes against the authoritative revision; tenant, menu, booking,
   and verification blockers expose retry, correction, schedule, or support
-  actions; new-quote resets preserve canonical defaults without treating
-  automatic values as unsaved user work. These are source/local interaction
-  guarantees and are not yet hosted human-acceptance evidence.
+  actions; every lazy route and workspace tool has its own safe retry, reload,
+  and close/back boundary; and the seven core workspace dialogs share contained
+  focus, safe Escape, body-scroll lock, close guards, and trigger restoration.
+  New-quote resets preserve canonical defaults without treating automatic
+  values as unsaved user work. Focused unit, real chunk-failure browser, and
+  dialog accessibility checks are local evidence only; these are not yet hosted
+  human-acceptance guarantees.
 - Current source quote conversation: same-tenant staff and the customer holding
   the exact current provider-accepted portal can load and exchange messages
   attached to the canonical quote. The server owns actor identity, display

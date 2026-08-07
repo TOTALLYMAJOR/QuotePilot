@@ -25,6 +25,7 @@ import {
   getQuoteHistory,
   recordQuoteIntegrationSync
 } from "../lib/quoteStore";
+import { useModalDialog } from "../hooks/useModalDialog";
 
 const PROVIDERS = ["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"];
 const STATES = ["queued", "success", "error", "retrying", "skipped"];
@@ -222,7 +223,8 @@ export default function IntegrationOpsModal({
   currentUserUid = "",
   canProvisionCustomer = false,
   canManageProviders = false,
-  provisioningOnly = false
+  provisioningOnly = false,
+  returnFocusRef = null
 }) {
   const defaultProvider = toProvider(settings.crmProvider || "crm");
   const [state, setState] = useState({
@@ -887,13 +889,42 @@ export default function IntegrationOpsModal({
     }
   };
 
+  const closeBlocked = Boolean(
+    saving
+    || setupState.testing
+    || provisionState.loading
+    || cleanupState.loading
+    || buyerRepairState.loading
+  );
+  const handleClose = () => {
+    if (closeBlocked) {
+      setFeedback("Wait for the current operation to finish before closing this tool.");
+      return;
+    }
+    onClose();
+  };
+  const { dialogRef } = useModalDialog({
+    open,
+    onRequestClose: handleClose,
+    canClose: !closeBlocked,
+    onCloseBlocked: () => setFeedback("Wait for the current operation to finish before closing this tool."),
+    returnFocusRef
+  });
+
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
+    <div
+      ref={dialogRef}
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="integration-ops-title"
+      tabIndex={-1}
+    >
       <div className="modal-card integration-card">
         <div className="modal-head">
-          <h2>{provisioningOnly ? "Customer Provisioning" : "Integrations Ops"}</h2>
+          <h2 id="integration-ops-title">{provisioningOnly ? "Customer Provisioning" : "Integrations Ops"}</h2>
           <div className="right-actions">
             {!provisioningOnly && (
               <>
@@ -905,7 +936,15 @@ export default function IntegrationOpsModal({
                 </button>}
               </>
             )}
-            <button type="button" className="ghost" onClick={onClose}>Close</button>
+            <button
+              type="button"
+              className="ghost"
+              data-modal-initial-focus
+              onClick={handleClose}
+              disabled={closeBlocked}
+            >
+              Close
+            </button>
           </div>
         </div>
 

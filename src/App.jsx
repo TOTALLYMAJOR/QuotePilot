@@ -1,8 +1,13 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "./components/CustomerPortalView";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProductBrandLockup from "./components/ProductBrandLockup";
+import {
+  createRecoverableLazy,
+  LazySurfaceLoading,
+  RecoverableErrorBoundary
+} from "./components/RecoverableErrorBoundary";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
@@ -53,15 +58,42 @@ import {
   recordProductAnalyticsEvent
 } from "./lib/productAnalytics";
 
-const AdminCatalogModal = lazy(() => import("./components/AdminCatalogModal"));
-const EventScheduleModal = lazy(() => import("./components/EventScheduleModal"));
-const IntegrationOpsModal = lazy(() => import("./components/IntegrationOpsModal"));
-const ImportStudioModal = lazy(() => import("./components/ImportStudioModal"));
-const DiagnosticsModal = lazy(() => import("./components/DiagnosticsModal"));
-const QuoteCompareModal = lazy(() => import("./components/QuoteCompareModal"));
-const QuoteHistoryModal = lazy(() => import("./components/QuoteHistoryModal"));
-const ReportingDashboardModal = lazy(() => import("./components/ReportingDashboardModal"));
-const SalesWorkflowModal = lazy(() => import("./components/SalesWorkflowModal"));
+const AdminCatalogModal = createRecoverableLazy(
+  () => import("./components/AdminCatalogModal"),
+  "AdminCatalogModal"
+);
+const EventScheduleModal = createRecoverableLazy(
+  () => import("./components/EventScheduleModal"),
+  "EventScheduleModal"
+);
+const IntegrationOpsModal = createRecoverableLazy(
+  () => import("./components/IntegrationOpsModal"),
+  "IntegrationOpsModal"
+);
+const ImportStudioModal = createRecoverableLazy(
+  () => import("./components/ImportStudioModal"),
+  "ImportStudioModal"
+);
+const DiagnosticsModal = createRecoverableLazy(
+  () => import("./components/DiagnosticsModal"),
+  "DiagnosticsModal"
+);
+const QuoteCompareModal = createRecoverableLazy(
+  () => import("./components/QuoteCompareModal"),
+  "QuoteCompareModal"
+);
+const QuoteHistoryModal = createRecoverableLazy(
+  () => import("./components/QuoteHistoryModal"),
+  "QuoteHistoryModal"
+);
+const ReportingDashboardModal = createRecoverableLazy(
+  () => import("./components/ReportingDashboardModal"),
+  "ReportingDashboardModal"
+);
+const SalesWorkflowModal = createRecoverableLazy(
+  () => import("./components/SalesWorkflowModal"),
+  "SalesWorkflowModal"
+);
 
 const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING || "").trim().toLowerCase()
@@ -182,14 +214,35 @@ function useStickyMount(active) {
   return Boolean(active) || hasMounted;
 }
 
-function WorkspaceModalFallback() {
+function WorkspaceLazyTool({
+  open,
+  surfaceName,
+  component: LazyComponent,
+  onClose,
+  returnFocusRef,
+  children
+}) {
   return (
-    <div className="modal-overlay modal-loading-overlay" role="status" aria-live="polite">
-      <div className="modal-card modal-loading-card">
-        <strong>Opening workspace...</strong>
-        <span>Loading this tool only when it is needed.</span>
-      </div>
-    </div>
+    <RecoverableErrorBoundary
+      active={open}
+      surfaceName={surfaceName}
+      surfaceKind="tool"
+      onRetry={LazyComponent.retry}
+      onClose={onClose}
+      returnFocusRef={returnFocusRef}
+    >
+      <Suspense
+        fallback={open ? (
+          <LazySurfaceLoading
+            surfaceName={surfaceName}
+            onClose={onClose}
+            returnFocusRef={returnFocusRef}
+          />
+        ) : null}
+      >
+        {children}
+      </Suspense>
+    </RecoverableErrorBoundary>
   );
 }
 
@@ -437,6 +490,7 @@ export default function App() {
   const operationsMenuTriggerRef = useRef(null);
   const accountMenuTriggerRef = useRef(null);
   const moreMenuTriggerRef = useRef(null);
+  const workspaceToolReturnFocusRef = useRef(null);
   const saveQuoteButtonRef = useRef(null);
   const menuSelectionValidationRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
@@ -612,6 +666,24 @@ export default function App() {
   const [compareOpen, setCompareOpen] = useState(false);
   const [salesWorkflowOpen, setSalesWorkflowOpen] = useState(false);
   const [openHeaderMenu, setOpenHeaderMenu] = useState("");
+  const openWorkspaceTool = (setOpen, {
+    menuTriggerRef = null,
+    fallbackRef = null,
+    beforeOpen = null
+  } = {}) => {
+    const activeElement = typeof document !== "undefined"
+      && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const activeInsideClosingDialog = Boolean(activeElement?.closest('[role="dialog"]'));
+    workspaceToolReturnFocusRef.current = menuTriggerRef?.current
+      || (activeInsideClosingDialog ? fallbackRef?.current : activeElement)
+      || fallbackRef?.current
+      || null;
+    setOpenHeaderMenu("");
+    beforeOpen?.();
+    setOpen(true);
+  };
   const workflowAttentionScopeKey = `${String(authSession.organizationId || "").trim()}:${String(authSession.role || "").trim().toLowerCase()}`;
   const [workflowAttentionBadge, setWorkflowAttentionBadge] = useState({ scopeKey: "", count: null });
   const workflowAttentionCount = workflowAttentionBadge.scopeKey === workflowAttentionScopeKey
@@ -2102,7 +2174,7 @@ export default function App() {
               Create a customer workspace and complete its owner handoff before entering an organization-scoped workspace.
             </p>
             <div className="auth-actions">
-              <button type="button" className="cta" onClick={() => setIntegrationsOpen(true)}>
+              <button type="button" className="cta" onClick={() => openWorkspaceTool(setIntegrationsOpen)}>
                 Open Customer Provisioning
               </button>
               <button type="button" className="ghost" onClick={handleSignOut}>Sign Out</button>
@@ -2110,11 +2182,18 @@ export default function App() {
           </WorkspaceStatusCard>
         </main>
 
-        <Suspense fallback={<WorkspaceModalFallback />}>
-          {integrationsMounted && (
+        {integrationsMounted && (
+          <WorkspaceLazyTool
+            open={integrationsOpen}
+            surfaceName="Customer Provisioning"
+            component={IntegrationOpsModal}
+            onClose={() => setIntegrationsOpen(false)}
+            returnFocusRef={workspaceToolReturnFocusRef}
+          >
             <IntegrationOpsModal
               open={integrationsOpen}
               onClose={() => setIntegrationsOpen(false)}
+              returnFocusRef={workspaceToolReturnFocusRef}
               organizationId=""
               settings={{}}
               currentUserEmail={authSession.user?.email || ""}
@@ -2123,8 +2202,8 @@ export default function App() {
               canManageProviders={authSession.isAdmin}
               provisioningOnly
             />
-          )}
-        </Suspense>
+          </WorkspaceLazyTool>
+        )}
       </div>
     );
   }
@@ -2179,7 +2258,7 @@ export default function App() {
             </ul>
             <div className="auth-actions">
               {authSession.isAdmin && (
-                <button type="button" className="cta" onClick={() => setAdminOpen(true)}>
+                <button type="button" className="cta" onClick={() => openWorkspaceTool(setAdminOpen)}>
                   Open Admin Catalog
                 </button>
               )}
@@ -2196,13 +2275,20 @@ export default function App() {
           </WorkspaceStatusCard>
         </main>
 
-        <Suspense fallback={<WorkspaceModalFallback />}>
-          {authSession.isAdmin && adminMounted && (
+        {authSession.isAdmin && adminMounted && (
+          <WorkspaceLazyTool
+            open={adminOpen}
+            surfaceName="Catalog Admin"
+            component={AdminCatalogModal}
+            onClose={() => setAdminOpen(false)}
+            returnFocusRef={workspaceToolReturnFocusRef}
+          >
             <AdminCatalogModal
               open={adminOpen}
               catalog={catalog}
               organizationId={authSession.organizationId}
               onClose={() => setAdminOpen(false)}
+              returnFocusRef={workspaceToolReturnFocusRef}
               onSave={saveCatalogDuringSetup}
               onApplyStarterPack={catalog.stageStarterPack}
               onCatalogMutation={handleCatalogMutation}
@@ -2212,8 +2298,8 @@ export default function App() {
               onEventTypeChange={setGlobalEventTypeId}
               onToast={pushToast}
             />
-          )}
-        </Suspense>
+          </WorkspaceLazyTool>
+        )}
       </div>
     );
   }
@@ -2310,12 +2396,12 @@ export default function App() {
               </button>
               {openHeaderMenu === "operations" && (
                 <div className="header-menu-popover" role="menu" aria-label="Operations">
-                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setScheduleOpen(true); }}>Event Schedule</button>}
-                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setDashboardOpen(true); }}>Reporting Dashboard</button>}
-                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setIntegrationsOpen(true); }}>Integrations Ops</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setImportStudioOpen(true); }}>Import Studio</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setAdminInitialTab(""); setAdminOpen(true); }}>Catalog Admin</button>}
-                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setDiagnosticsOpen(true); }}>Session Diagnostics</button>}
+                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setScheduleOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Event Schedule</button>}
+                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setDashboardOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Reporting Dashboard</button>}
+                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setIntegrationsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Integrations Ops</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setImportStudioOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Import Studio</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setAdminOpen, { menuTriggerRef: operationsMenuTriggerRef, beforeOpen: () => setAdminInitialTab("") })}>Catalog Admin</button>}
+                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setDiagnosticsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Session Diagnostics</button>}
                 </div>
               )}
             </div>
@@ -2356,12 +2442,12 @@ export default function App() {
               </button>
               {openHeaderMenu === "more" && (
                 <div className="header-menu-popover mobile-more-popover" role="menu" aria-label="More">
-                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setScheduleOpen(true); }}>Event Schedule</button>}
-                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setDashboardOpen(true); }}>Reporting Dashboard</button>}
-                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setIntegrationsOpen(true); }}>Integrations Ops</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setImportStudioOpen(true); }}>Import Studio</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setAdminInitialTab(""); setAdminOpen(true); }}>Catalog Admin</button>}
-                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); setDiagnosticsOpen(true); }}>Session Diagnostics</button>}
+                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setScheduleOpen, { menuTriggerRef: moreMenuTriggerRef })}>Event Schedule</button>}
+                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setDashboardOpen, { menuTriggerRef: moreMenuTriggerRef })}>Reporting Dashboard</button>}
+                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setIntegrationsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Integrations Ops</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setImportStudioOpen, { menuTriggerRef: moreMenuTriggerRef })}>Import Studio</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setAdminOpen, { menuTriggerRef: moreMenuTriggerRef, beforeOpen: () => setAdminInitialTab("") })}>Catalog Admin</button>}
+                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setDiagnosticsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Session Diagnostics</button>}
                   <div className="header-account-summary" role="presentation">
                     <strong>{authSession.user.email}</strong>
                     <span>{authSession.role}</span>
@@ -2465,8 +2551,9 @@ export default function App() {
                   onRetry={() => setDynamicMenuRetryToken((value) => value + 1)}
                   onOpenCatalogMenu={() => {
                     setGlobalEventTypeId(form.eventTypeId);
-                    setAdminInitialTab("menu");
-                    setAdminOpen(true);
+                    openWorkspaceTool(setAdminOpen, {
+                      beforeOpen: () => setAdminInitialTab("menu")
+                    });
                   }}
                   onSelectionTouched={handleSelectionTouched}
                   packageIncludedMenuItemIds={
@@ -2550,7 +2637,7 @@ export default function App() {
             <div className="right-actions">
               <button className="ghost" onClick={() => setStep((s) => Math.max(1, s - 1))} disabled={step === 1 || catalog.loading}>Back</button>
               {quoteCompareEnabled && (
-                <button className="ghost" onClick={() => setCompareOpen(true)} disabled={catalog.loading || step < 2}>
+                <button className="ghost" onClick={() => openWorkspaceTool(setCompareOpen)} disabled={catalog.loading || step < 2}>
                   Compare Scenario
                 </button>
               )}
@@ -2613,7 +2700,7 @@ export default function App() {
                   Edit Date, Time, or Venue
                 </button>
                 {eventScheduleEnabled && (
-                  <button type="button" className="ghost" onClick={() => setScheduleOpen(true)}>
+                  <button type="button" className="ghost" onClick={() => openWorkspaceTool(setScheduleOpen)}>
                     Open Event Schedule
                   </button>
                 )}
@@ -2643,13 +2730,20 @@ export default function App() {
         </div>
       )}
 
-      <Suspense fallback={<WorkspaceModalFallback />}>
-        {authSession.isAdmin && adminMounted && (
+      {authSession.isAdmin && adminMounted && (
+        <WorkspaceLazyTool
+          open={adminOpen}
+          surfaceName="Catalog Admin"
+          component={AdminCatalogModal}
+          onClose={() => setAdminOpen(false)}
+          returnFocusRef={workspaceToolReturnFocusRef}
+        >
           <AdminCatalogModal
             open={adminOpen}
             catalog={catalog}
             organizationId={authSession.organizationId}
             onClose={() => setAdminOpen(false)}
+            returnFocusRef={workspaceToolReturnFocusRef}
             onSave={catalog.saveCatalog}
             onApplyStarterPack={catalog.stageStarterPack}
             onCatalogMutation={handleCatalogMutation}
@@ -2658,12 +2752,21 @@ export default function App() {
             initialTab={adminInitialTab}
             onToast={pushToast}
           />
-        )}
+        </WorkspaceLazyTool>
+      )}
 
-        {authSession.isAdmin && importStudioMounted && (
+      {authSession.isAdmin && importStudioMounted && (
+        <WorkspaceLazyTool
+          open={importStudioOpen}
+          surfaceName="Import Studio"
+          component={ImportStudioModal}
+          onClose={() => setImportStudioOpen(false)}
+          returnFocusRef={workspaceToolReturnFocusRef}
+        >
           <ImportStudioModal
             open={importStudioOpen}
             onClose={() => setImportStudioOpen(false)}
+            returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
             organizationName={workspaceName}
             currentUserUid={authSession.user?.uid || ""}
@@ -2679,9 +2782,17 @@ export default function App() {
               }
             }}
           />
-        )}
+        </WorkspaceLazyTool>
+      )}
 
-        {historyMounted && (
+      {historyMounted && (
+        <WorkspaceLazyTool
+          open={historyOpen}
+          surfaceName="Quote History"
+          component={QuoteHistoryModal}
+          onClose={() => setHistoryOpen(false)}
+          returnFocusRef={historyTriggerRef}
+        >
           <QuoteHistoryModal
             open={historyOpen}
             onClose={() => {
@@ -2710,15 +2821,23 @@ export default function App() {
             onOpenIntegrations={() => {
               setHistoryTarget({ quoteId: "", reason: "" });
               setHistoryOpen(false);
-              setIntegrationsOpen(true);
+              openWorkspaceTool(setIntegrationsOpen, { fallbackRef: historyTriggerRef });
             }}
             integrationsAvailable={integrationsEnabled}
             canDeleteQuotes={authSession.isAdmin}
             onToast={pushToast}
           />
-        )}
+        </WorkspaceLazyTool>
+      )}
 
-        {salesWorkflowMounted && (
+      {salesWorkflowMounted && (
+        <WorkspaceLazyTool
+          open={salesWorkflowOpen}
+          surfaceName="Workflow"
+          component={SalesWorkflowModal}
+          onClose={() => setSalesWorkflowOpen(false)}
+          returnFocusRef={workflowTriggerRef}
+        >
           <SalesWorkflowModal
             open={salesWorkflowOpen}
             onClose={() => setSalesWorkflowOpen(false)}
@@ -2743,23 +2862,41 @@ export default function App() {
             onAttentionSummaryChange={handleWorkflowAttentionSummary}
             onToast={pushToast}
           />
-        )}
+        </WorkspaceLazyTool>
+      )}
 
-        {eventScheduleEnabled && scheduleMounted && (
+      {eventScheduleEnabled && scheduleMounted && (
+        <WorkspaceLazyTool
+          open={scheduleOpen}
+          surfaceName="Event Schedule"
+          component={EventScheduleModal}
+          onClose={() => setScheduleOpen(false)}
+          returnFocusRef={workspaceToolReturnFocusRef}
+        >
           <EventScheduleModal
             open={scheduleOpen}
             onClose={() => setScheduleOpen(false)}
+            returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={authSession.user?.email || ""}
           />
-        )}
+        </WorkspaceLazyTool>
+      )}
 
-        {integrationsEnabled && integrationsMounted && (
+      {integrationsEnabled && integrationsMounted && (
+        <WorkspaceLazyTool
+          open={integrationsOpen}
+          surfaceName="Integrations Ops"
+          component={IntegrationOpsModal}
+          onClose={() => setIntegrationsOpen(false)}
+          returnFocusRef={workspaceToolReturnFocusRef}
+        >
           <IntegrationOpsModal
             open={integrationsOpen}
             onClose={() => setIntegrationsOpen(false)}
+            returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
             settings={effectiveSettings}
             currentUserEmail={authSession.user?.email || ""}
@@ -2767,19 +2904,37 @@ export default function App() {
             canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
             canManageProviders={authSession.isAdmin}
           />
-        )}
+        </WorkspaceLazyTool>
+      )}
 
-        {diagnosticsEnabled && diagnosticsMounted && (
+      {diagnosticsEnabled && diagnosticsMounted && (
+        <WorkspaceLazyTool
+          open={diagnosticsOpen}
+          surfaceName="Session Diagnostics"
+          component={DiagnosticsModal}
+          onClose={() => setDiagnosticsOpen(false)}
+          returnFocusRef={workspaceToolReturnFocusRef}
+        >
           <DiagnosticsModal
             open={diagnosticsOpen}
             onClose={() => setDiagnosticsOpen(false)}
+            returnFocusRef={workspaceToolReturnFocusRef}
           />
-        )}
+        </WorkspaceLazyTool>
+      )}
 
-        {quoteCompareEnabled && compareMounted && (
+      {quoteCompareEnabled && compareMounted && (
+        <WorkspaceLazyTool
+          open={compareOpen}
+          surfaceName="Scenario Compare"
+          component={QuoteCompareModal}
+          onClose={() => setCompareOpen(false)}
+          returnFocusRef={workspaceToolReturnFocusRef}
+        >
           <QuoteCompareModal
             open={compareOpen}
             onClose={() => setCompareOpen(false)}
+            returnFocusRef={workspaceToolReturnFocusRef}
             form={form}
             setForm={(updater) => {
               setQuoteDirty(true);
@@ -2790,17 +2945,26 @@ export default function App() {
             styles={Object.keys(STAFF_RULES)}
             primaryTotals={totals}
           />
-        )}
+        </WorkspaceLazyTool>
+      )}
 
-        {dashboardEnabled && dashboardMounted && (
+      {dashboardEnabled && dashboardMounted && (
+        <WorkspaceLazyTool
+          open={dashboardOpen}
+          surfaceName="Reporting Dashboard"
+          component={ReportingDashboardModal}
+          onClose={() => setDashboardOpen(false)}
+          returnFocusRef={workspaceToolReturnFocusRef}
+        >
           <ReportingDashboardModal
             open={dashboardOpen}
             onClose={() => setDashboardOpen(false)}
+            returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
             addons={catalog.addons}
           />
-        )}
-      </Suspense>
+        </WorkspaceLazyTool>
+      )}
     </div>
   );
 }

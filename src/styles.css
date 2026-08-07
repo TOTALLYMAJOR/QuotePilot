@@ -1644,6 +1644,40 @@ hr {
   font-size: 0.84rem;
 }
 
+.ui-recovery-route {
+  min-height: min(76vh, 760px);
+  display: grid;
+  place-items: center;
+  padding-block: clamp(2rem, 8vh, 6rem);
+}
+
+.ui-recovery-card {
+  width: min(620px, 100%);
+}
+
+.ui-recovery-card h1,
+.ui-recovery-card h2 {
+  margin: 0.35rem 0 0.75rem;
+}
+
+.ui-recovery-card [role="alert"] {
+  margin: 0;
+  color: #3d2f1d;
+}
+
+.ui-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 520px) {
+  .ui-recovery-actions > button {
+    width: 100%;
+  }
+}
+
 .history-card {
   width: min(1210px, 100%);
 }
