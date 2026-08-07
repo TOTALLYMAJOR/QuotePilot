@@ -163,3 +163,63 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   await expect(copyPortalButton).toBeDisabled();
   await expect(page.getByText(/Failed to calculate authoritative quote pricing/i)).toHaveCount(0);
 });
+
+test("managed menu removal reopens pricing and rejects a stale catalog revision", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signInAsStaff(page);
+
+  const mutation = await page.evaluate(async () => {
+    const menu = await import("/src/lib/menuService.js");
+    const eventTypes = await menu.getEventTypes({ organizationId: "e2e-org" });
+    const eventTypeId = eventTypes[0]?.id || "";
+    const items = await menu.getMenuItems(eventTypeId, {
+      includeInactive: true,
+      organizationId: "e2e-org"
+    });
+    const [first, second] = items.filter((item) => item.active !== false);
+    if (!first || !second) throw new Error("The authoritative menu fixture needs two active items.");
+    const firstResult = await menu.updateMenuItem(first.id, {
+      name: first.name,
+      price: first.price,
+      pricingType: first.pricingType || first.type,
+      eventTypeId: first.eventTypeId,
+      categoryId: first.categoryId,
+      active: false,
+      organizationId: "e2e-org",
+      expectedCatalogRevision: 0
+    });
+    let staleError = null;
+    try {
+      await menu.updateMenuItem(second.id, {
+        name: second.name,
+        price: second.price,
+        pricingType: second.pricingType || second.type,
+        eventTypeId: second.eventTypeId,
+        categoryId: second.categoryId,
+        active: false,
+        organizationId: "e2e-org",
+        expectedCatalogRevision: 0
+      });
+    } catch (error) {
+      staleError = {
+        code: String(error?.code || ""),
+        message: String(error?.message || error),
+        recognizedConflict: menu.isMenuCatalogRevisionConflict(error)
+      };
+    }
+    return { firstResult, staleError };
+  });
+
+  expect(mutation.firstResult).toMatchObject({
+    authoritativeMutation: true,
+    catalogRevision: 1
+  });
+  expect(mutation.staleError).toMatchObject({ recognizedConflict: true });
+  expect(mutation.staleError.code).toMatch(/aborted/i);
+  expect(mutation.staleError.message).toMatch(/catalog revision changed/i);
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Configure Your Catalog" }))
+    .toBeVisible({ timeout: 45_000 });
+  await expect(page.getByRole("button", { name: "New Quote" })).toHaveCount(0);
+});

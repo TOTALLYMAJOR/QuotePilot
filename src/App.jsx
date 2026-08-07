@@ -15,6 +15,7 @@ import {
   notifyOwnerNewQuote
 } from "./lib/commerceOps";
 import { setActiveOrganizationId } from "./lib/organizationService";
+import { isCatalogPricingConfirmationCurrent } from "./lib/catalogPricingConfirmation";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
 import { buildProposalReadiness, buildWorkflowAttentionSummary } from "./lib/quoteWorkflow";
@@ -470,7 +471,7 @@ export default function App() {
       (item) => String(item?.id || "").trim() && String(item?.name || "").trim()
     )
   );
-  const pricingSetupConfirmed = catalog.settings?.pricingSetupConfirmed === true;
+  const pricingSetupConfirmed = isCatalogPricingConfirmationCurrent(catalog.settings);
   const catalogSetupComplete = hasConfiguredPackage
     && hasConfiguredEventType
     && pricingSetupConfirmed;

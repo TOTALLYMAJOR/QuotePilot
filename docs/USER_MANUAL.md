@@ -315,6 +315,12 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   2. Select Category
   3. Add/Edit/Delete items
   4. Inline edits auto-save on blur or Enter
+- Deactivating or deleting a menu item is a server-authorized catalog
+  operation. It uses the revision currently loaded in Catalog Admin, refuses
+  items still referenced by a package or event template, advances the catalog
+  revision, and reopens pricing review. If another session wins the revision,
+  QuotePilot reloads the latest catalog and asks you to retry instead of
+  overwriting it.
 - Menu item fields include:
   - Name
   - Price
@@ -340,7 +346,10 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - Review package, add-on, rental, menu, travel, fee, tax, deposit, and staffing
   values. Suggested prices become active only after an admin checks pricing
   confirmation and saves. The server rechecks the complete catalog and the
-  loaded catalog revision before recording who confirmed it and when.
+  loaded catalog revision before recording who confirmed it and when. Quote
+  creation remains locked unless that receipt includes the actor, exact ISO
+  timestamp, and a confirmed revision equal to the current catalog revision.
+  Missing, stale, or unattributed confirmation data is treated as unconfirmed.
 - You may replace an untouched staged pack before confirmation. Once any
   generated record or suggested pricing setting is edited, replacement is
   blocked so the owner change cannot be overwritten; continue editing that

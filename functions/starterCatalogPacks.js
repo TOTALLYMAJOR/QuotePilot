@@ -534,6 +534,183 @@ function validatePackageInclusionIds(packageEntry, {
   return result;
 }
 
+function assertAvailableReference(records, id, label, ownerLabel) {
+  const referenced = records.get(id);
+  if (!referenced || referenced.data?.active === false) {
+    throw new StarterCatalogPackError(
+      "failed-precondition",
+      `${ownerLabel} references unavailable ${label} ${id}.`
+    );
+  }
+  return referenced;
+}
+
+function validateReferenceList(values, {
+  records,
+  label,
+  ownerLabel
+}) {
+  if (!Array.isArray(values) || values.length > MAX_PACKAGE_INCLUSIONS_PER_TYPE) {
+    throw new StarterCatalogPackError(
+      "failed-precondition",
+      `${ownerLabel} ${label} references must be an array of at most ${MAX_PACKAGE_INCLUSIONS_PER_TYPE} stable ids.`
+    );
+  }
+  const seen = new Set();
+  return values.map((value) => {
+    const id = text(value);
+    if (!id || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(id) || seen.has(id)) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `${ownerLabel} has an invalid or duplicate ${label} reference.`
+      );
+    }
+    seen.add(id);
+    assertAvailableReference(records, id, label, ownerLabel);
+    return id;
+  });
+}
+
+function validateGuidedSellingAndEventTemplateReferences({
+  settings,
+  packageById,
+  addonById,
+  rentalById,
+  menuItemById,
+  eventTypeIds,
+  taxRegionIds,
+  seasonalProfileIds,
+  bartenderTypeIds,
+  staffingTypeIds
+}) {
+  const upsellRules = settings.upsellRules ?? [];
+  if (!Array.isArray(upsellRules) || upsellRules.length > 100) {
+    throw new StarterCatalogPackError(
+      "failed-precondition",
+      "Guided-selling rules must be an array of at most 100 entries."
+    );
+  }
+  const upsellRuleIds = new Set();
+  upsellRules.forEach((rule, index) => {
+    if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+      throw new StarterCatalogPackError("failed-precondition", `Guided-selling rule ${index + 1} is invalid.`);
+    }
+    const id = text(rule.id);
+    const kind = text(rule.kind).toLowerCase();
+    const targetId = text(rule.targetId);
+    const ownerLabel = `Guided-selling rule ${id || index + 1}`;
+    if (!id || upsellRuleIds.has(id) || !["addon", "rental", "package"].includes(kind)) {
+      throw new StarterCatalogPackError("failed-precondition", `${ownerLabel} has an invalid id or type.`);
+    }
+    upsellRuleIds.add(id);
+    if (!targetId && kind !== "package") {
+      throw new StarterCatalogPackError("failed-precondition", `${ownerLabel} needs a target ${kind}.`);
+    }
+    if (!targetId) return;
+    const reference = kind === "addon"
+      ? { records: addonById, label: "add-on" }
+      : kind === "rental"
+        ? { records: rentalById, label: "rental" }
+        : { records: packageById, label: "package" };
+    assertAvailableReference(reference.records, targetId, reference.label, ownerLabel);
+  });
+
+  const eventTemplates = settings.eventTemplates ?? [];
+  if (!Array.isArray(eventTemplates) || eventTemplates.length > 100) {
+    throw new StarterCatalogPackError(
+      "failed-precondition",
+      "Event templates must be an array of at most 100 entries."
+    );
+  }
+  const templateIds = new Set();
+  eventTemplates.forEach((template, index) => {
+    if (!template || typeof template !== "object" || Array.isArray(template)) {
+      throw new StarterCatalogPackError("failed-precondition", `Event template ${index + 1} is invalid.`);
+    }
+    const id = text(template.id);
+    const ownerLabel = `Event template ${id || index + 1}`;
+    if (!id || templateIds.has(id)) {
+      throw new StarterCatalogPackError("failed-precondition", `${ownerLabel} has an invalid or duplicate id.`);
+    }
+    templateIds.add(id);
+
+    const packageId = text(template.pkg);
+    if (!packageId) {
+      throw new StarterCatalogPackError("failed-precondition", `${ownerLabel} needs a package reference.`);
+    }
+    assertAvailableReference(packageById, packageId, "package", ownerLabel);
+
+    validateReferenceList(template.addons ?? [], {
+      records: addonById,
+      label: "add-on",
+      ownerLabel
+    });
+    validateReferenceList(template.rentals ?? [], {
+      records: rentalById,
+      label: "rental",
+      ownerLabel
+    });
+    const referencedMenuItemIds = validateReferenceList(template.menuItems ?? [], {
+      records: menuItemById,
+      label: "menu item",
+      ownerLabel
+    });
+
+    const explicitEventTypeId = text(template.eventTypeId);
+    const resolvedEventTypeId = explicitEventTypeId || id;
+    if (!eventTypeIds.has(resolvedEventTypeId)) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `${ownerLabel} references unavailable event type ${resolvedEventTypeId}.`
+      );
+    }
+    if (
+      resolvedEventTypeId
+      && referencedMenuItemIds.some(
+        (menuItemId) => text(menuItemById.get(menuItemId)?.data?.eventTypeId) !== resolvedEventTypeId
+      )
+    ) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `${ownerLabel} includes a menu item from another event type.`
+      );
+    }
+
+    const taxRegionId = text(template.taxRegion);
+    if (taxRegionId && !taxRegionIds.has(taxRegionId)) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `${ownerLabel} references unavailable tax region ${taxRegionId}.`
+      );
+    }
+    const seasonalProfileId = text(template.seasonProfileId);
+    if (
+      seasonalProfileId
+      && seasonalProfileId !== "auto"
+      && !seasonalProfileIds.has(seasonalProfileId)
+    ) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `${ownerLabel} references unavailable seasonal profile ${seasonalProfileId}.`
+      );
+    }
+    const bartenderRateTypeId = text(template.bartenderRateTypeId);
+    if (bartenderRateTypeId && !bartenderTypeIds.has(bartenderRateTypeId)) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `${ownerLabel} references unavailable bartender rate ${bartenderRateTypeId}.`
+      );
+    }
+    const staffingRateTypeId = text(template.staffingRateTypeId);
+    if (staffingRateTypeId && !staffingTypeIds.has(staffingRateTypeId)) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `${ownerLabel} references unavailable staffing rate ${staffingRateTypeId}.`
+      );
+    }
+  });
+}
+
 function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}) {
   const packages = collections.catalogPackages || [];
   const addons = collections.catalogAddons || [];
@@ -553,9 +730,9 @@ function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}
   if (!menuItems.length) {
     throw new StarterCatalogPackError("failed-precondition", "Add at least one menu item before confirming pricing.");
   }
-
   const eventTypeIds = new Set(eventTypes.map((entry) => entry.id));
   const categoriesById = new Map(categories.map((entry) => [entry.id, entry.data || {}]));
+  const packageById = new Map(packages.map((entry) => [entry.id, entry]));
   const addonById = new Map(addons.map((entry) => [entry.id, entry]));
   const rentalById = new Map(rentals.map((entry) => [entry.id, entry]));
   const menuItemById = new Map(menuItems.map((entry) => [entry.id, entry]));
@@ -569,6 +746,12 @@ function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}
     });
     validatePackageInclusionIds(entry, { addonById, rentalById, menuItemById });
   });
+  if (!packages.some((entry) => entry.data?.active !== false)) {
+    throw new StarterCatalogPackError(
+      "failed-precondition",
+      "At least one active package is required before confirming pricing."
+    );
+  }
   [...addons, ...rentals, ...menuItems].forEach((entry) => {
     if (!text(entry.data?.name)) {
       throw new StarterCatalogPackError("failed-precondition", `${entry.id} needs a customer-facing name.`);
@@ -604,6 +787,21 @@ function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}
       || text(category.eventTypeId) !== text(entry.data?.eventTypeId)
     ) {
       throw new StarterCatalogPackError("failed-precondition", `Menu item ${entry.id} has an invalid menu reference.`);
+    }
+  });
+
+  [
+    ["serviceFeeTiers", "Service fee tiers"],
+    ["taxRegions", "Tax regions"],
+    ["bartenderRateTypes", "Bartender rate types"],
+    ["staffingRateTypes", "Staffing rate types"],
+    ["seasonalProfiles", "Seasonal pricing profiles"]
+  ].forEach(([key, label]) => {
+    if (!Array.isArray(settings[key])) {
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `${label} must be configured as an array before confirming pricing.`
+      );
     }
   });
 
@@ -756,9 +954,39 @@ function validateCatalogForConfirmation({ settings = {}, collections = {} } = {}
     }
     seasonalProfileIds.add(id);
   });
-  if (!seasonalProfileIds.has(text(settings.defaultSeasonProfile))) {
+  const defaultSeasonProfile = text(settings.defaultSeasonProfile);
+  if (defaultSeasonProfile !== "auto" && !seasonalProfileIds.has(defaultSeasonProfile)) {
     throw new StarterCatalogPackError("failed-precondition", "Default seasonal profile is unavailable.");
   }
+
+  validateGuidedSellingAndEventTemplateReferences({
+    settings,
+    packageById,
+    addonById,
+    rentalById,
+    menuItemById,
+    eventTypeIds: new Set(
+      eventTypes.filter((entry) => entry.data?.active !== false).map((entry) => entry.id)
+    ),
+    taxRegionIds: new Set(
+      (settings.taxRegions || []).filter((entry) => entry?.active !== false).map((entry) => text(entry?.id))
+    ),
+    seasonalProfileIds: new Set(
+      (settings.seasonalProfiles || [])
+        .filter((entry) => entry?.active !== false)
+        .map((entry) => text(entry?.id))
+    ),
+    bartenderTypeIds: new Set(
+      (settings.bartenderRateTypes || [])
+        .filter((entry) => entry?.active !== false)
+        .map((entry) => text(entry?.id))
+    ),
+    staffingTypeIds: new Set(
+      (settings.staffingRateTypes || [])
+        .filter((entry) => entry?.active !== false)
+        .map((entry) => text(entry?.id))
+    )
+  });
 
   const stagedPack = settings.starterCatalogPack || {};
   const referencedManifest = text(stagedPack.id)
@@ -1198,8 +1426,22 @@ async function confirmCatalogPricing({
   nowISO = new Date().toISOString()
 } = {}) {
   const normalizedOrganizationId = slug(organizationId, "");
-  if (!db || !normalizedOrganizationId) {
-    throw new StarterCatalogPackError("invalid-argument", "organizationId is required.");
+  const normalizedActorUid = text(actorUid);
+  const normalizedActorEmail = text(actorEmail).toLowerCase();
+  const parsedConfirmationTime = Date.parse(nowISO);
+  const hasExactConfirmationTime = Number.isFinite(parsedConfirmationTime)
+    && new Date(parsedConfirmationTime).toISOString() === nowISO;
+  if (
+    !db
+    || !normalizedOrganizationId
+    || !normalizedActorUid
+    || !normalizedActorEmail
+    || !hasExactConfirmationTime
+  ) {
+    throw new StarterCatalogPackError(
+      "invalid-argument",
+      "organizationId, confirming actor, and an exact ISO confirmation timestamp are required."
+    );
   }
   const organizationRef = db.collection("organizations").doc(normalizedOrganizationId);
   const settingsRef = organizationRef.collection("settings").doc("config");
@@ -1232,8 +1474,8 @@ async function confirmCatalogPricing({
       pricingSettingsVersion,
       pricingSettingsUpdatedAtISO: nowISO,
       pricingConfirmation: {
-        actorUid: text(actorUid),
-        actorEmail: text(actorEmail).toLowerCase(),
+        actorUid: normalizedActorUid,
+        actorEmail: normalizedActorEmail,
         confirmedAtISO: nowISO,
         confirmedCatalogRevision: revision
       },
@@ -1246,6 +1488,141 @@ async function confirmCatalogPricing({
       confirmedCatalogRevision: revision,
       pricingSettingsVersion,
       counts
+    };
+  });
+}
+
+async function mutateManagedMenuItemAvailability({
+  db,
+  organizationId = "",
+  itemId = "",
+  action = "",
+  item = {},
+  expectedCatalogRevision,
+  actorUid = "",
+  serverTimestamp = null,
+  nowISO = new Date().toISOString()
+} = {}) {
+  const normalizedOrganizationId = slug(organizationId, "");
+  const normalizedItemId = text(itemId);
+  const normalizedAction = text(action).toLowerCase();
+  if (!db || !normalizedOrganizationId || !normalizedItemId) {
+    throw new StarterCatalogPackError(
+      "invalid-argument",
+      "organizationId and itemId are required."
+    );
+  }
+  if (!["deactivate", "delete"].includes(normalizedAction)) {
+    throw new StarterCatalogPackError(
+      "invalid-argument",
+      "Managed menu action must be deactivate or delete."
+    );
+  }
+
+  const organizationRef = db.collection("organizations").doc(normalizedOrganizationId);
+  const settingsRef = organizationRef.collection("settings").doc("config");
+  const packagesRef = organizationRef.collection("catalogPackages");
+  const itemRef = organizationRef.collection("menuItems").doc(normalizedItemId);
+  return db.runTransaction(async (transaction) => {
+    const [settingsSnap, packageSnapshot, itemSnapshot] = await Promise.all([
+      transaction.get(settingsRef),
+      transaction.get(packagesRef),
+      transaction.get(itemRef)
+    ]);
+    if (!settingsSnap.exists) {
+      throw new StarterCatalogPackError("failed-precondition", "Organization catalog settings are missing.");
+    }
+    const settings = settingsSnap.data() || {};
+    const revision = assertExpectedRevision(settings, expectedCatalogRevision);
+    if (!itemSnapshot.exists) {
+      throw new StarterCatalogPackError("not-found", `Menu item ${normalizedItemId} was not found.`);
+    }
+
+    const packageReferences = packageSnapshot.docs
+      .filter((snapshot) => (
+        Array.isArray(snapshot.data()?.includedMenuItemIds)
+        && snapshot.data().includedMenuItemIds.map((id) => text(id)).includes(normalizedItemId)
+      ))
+      .map((snapshot) => ({ id: snapshot.id, name: text(snapshot.data()?.name, snapshot.id) }));
+    const eventTemplateReferences = (Array.isArray(settings.eventTemplates) ? settings.eventTemplates : [])
+      .filter((template) => (
+        Array.isArray(template?.menuItems)
+        && template.menuItems.map((id) => text(id)).includes(normalizedItemId)
+      ))
+      .map((template, index) => ({
+        id: text(template?.id, `template-${index + 1}`),
+        name: text(template?.name, text(template?.id, `Template ${index + 1}`))
+      }));
+    if (packageReferences.length || eventTemplateReferences.length) {
+      const dependencies = [
+        packageReferences.length
+          ? `packages: ${packageReferences.map((entry) => entry.name).join(", ")}`
+          : "",
+        eventTemplateReferences.length
+          ? `event templates: ${eventTemplateReferences.map((entry) => entry.name).join(", ")}`
+          : ""
+      ].filter(Boolean).join("; ");
+      throw new StarterCatalogPackError(
+        "failed-precondition",
+        `Remove menu item ${normalizedItemId} from ${dependencies} and confirm that catalog revision before ${normalizedAction === "delete" ? "deleting" : "deactivating"} it.`,
+        {
+          itemId: normalizedItemId,
+          packageReferences,
+          eventTemplateReferences
+        }
+      );
+    }
+
+    if (normalizedAction === "delete") {
+      transaction.delete(itemRef);
+    } else {
+      const name = text(item?.name, text(itemSnapshot.data()?.name));
+      const priceMinor = Object.prototype.hasOwnProperty.call(item || {}, "priceMinor")
+        ? Number(item.priceMinor)
+        : resolveStoredMinor(
+            itemSnapshot.data() || {},
+            "priceMinor",
+            "price",
+            `Menu item ${normalizedItemId} price`
+          ).minor;
+      const pricingType = assertPricingType(
+        item?.pricingType || item?.type || itemSnapshot.data()?.pricingType || itemSnapshot.data()?.type,
+        `Menu item ${normalizedItemId}`
+      );
+      if (!name || !Number.isSafeInteger(priceMinor) || priceMinor < 0) {
+        throw new StarterCatalogPackError(
+          "invalid-argument",
+          `Menu item ${normalizedItemId} needs a name and a non-negative integer minor-unit price.`
+        );
+      }
+      transaction.set(itemRef, {
+        name,
+        priceMinor,
+        pricingType,
+        type: pricingType,
+        active: false,
+        updatedAtISO: nowISO,
+        updatedByUid: text(actorUid),
+        ...(serverTimestamp ? { updatedAt: serverTimestamp() } : {})
+      }, { merge: true });
+    }
+
+    const nextRevision = revision + 1;
+    const settingsPatch = {
+      catalogRevision: nextRevision,
+      pricingSetupConfirmed: false,
+      pricingConfirmation: null,
+      updatedAtISO: nowISO,
+      ...(serverTimestamp ? { updatedAt: serverTimestamp() } : {})
+    };
+    transaction.set(settingsRef, settingsPatch, { merge: true });
+    return {
+      ok: true,
+      action: normalizedAction,
+      itemId: normalizedItemId,
+      organizationId: normalizedOrganizationId,
+      catalogRevision: nextRevision,
+      catalogSettings: settingsPatch
     };
   });
 }
@@ -1267,6 +1644,7 @@ module.exports = {
   getStarterCatalogPackSummaries,
   hashValue,
   manifestKey,
+  mutateManagedMenuItemAvailability,
   recordBusinessData,
   validatePackageInclusionIds,
   validateCatalogForConfirmation

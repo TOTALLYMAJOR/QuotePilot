@@ -21,6 +21,7 @@
     "test:e2e:headed": "bash ./scripts/run-playwright.sh test --headed",
     "test:e2e:firebase": "node ./scripts/run-firebase-e2e.mjs",
     "test:e2e:firebase:authoritative": "node ./scripts/run-firebase-e2e-authoritative.mjs",
+    "test:e2e:firebase:starter-onboarding": "node ./scripts/run-firebase-e2e-starter-onboarding.mjs",
     "check:env": "node ./scripts/check-env.mjs",
     "check:workflows": "node ./scripts/check-github-workflows.mjs",
     "env:local:firebase": "node ./scripts/configure-local-firebase-env.mjs",

@@ -10,6 +10,10 @@ import {
 } from "../data/mockCatalog";
 import { db, firebaseReady } from "../lib/firebase";
 import {
+  buildLocalCatalogPricingConfirmation,
+  isCatalogPricingConfirmationCurrent
+} from "../lib/catalogPricingConfirmation";
+import {
   getOrganizationCollectionRef,
   getOrganizationSubDocRef,
   resolveOrganizationId
@@ -29,13 +33,40 @@ const ALLOW_LOCAL_CATALOG_FALLBACK =
     String(import.meta.env.VITE_ALLOW_LOCAL_CATALOG_FALLBACK || "").trim().toLowerCase()
   );
 
+function reflectCurrentPricingConfirmation(catalog) {
+  if (
+    catalog?.settings?.pricingSetupConfirmed !== true
+    || isCatalogPricingConfirmationCurrent(catalog.settings)
+  ) {
+    return catalog;
+  }
+  return {
+    ...catalog,
+    settings: {
+      ...catalog.settings,
+      pricingSetupConfirmed: false,
+      pricingConfirmation: null
+    }
+  };
+}
+
 function defaultCatalog() {
-  return normalizeCatalog({
+  const catalog = normalizeCatalog({
     packages: DEFAULT_PACKAGES,
     addons: DEFAULT_ADDONS,
     rentals: DEFAULT_RENTALS,
     settings: DEFAULT_SETTINGS
   });
+  if (
+    catalog.settings?.pricingSetupConfirmed === true
+    && !isCatalogPricingConfirmationCurrent(catalog.settings)
+  ) {
+    catalog.settings.pricingConfirmation = buildLocalCatalogPricingConfirmation(
+      catalog.settings,
+      { confirmedAtISO: "1970-01-01T00:00:00.000Z" }
+    );
+  }
+  return catalog;
 }
 
 function blockedCatalog() {
@@ -134,12 +165,12 @@ async function loadFromFirebaseByOrganization(organizationId = "") {
     throw new Error("Organization catalog settings are missing. Ask a platform administrator to repair this workspace.");
   }
 
-  const orgCatalog = normalizeCatalog({
+  const orgCatalog = reflectCurrentPricingConfirmation(normalizeCatalog({
     packages: pkgSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     addons: addSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     rentals: rentSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     settings: settingsSnap.data()
-  });
+  }));
 
   return {
     catalog: orgCatalog,
@@ -328,8 +359,7 @@ export function isCatalogSaveReconciled({
   const currentRevision = Math.max(0, Number(settings?.catalogRevision || 0));
   if (currentRevision !== savedRevision) return false;
   if (!wantsPricingConfirmation) return true;
-  return settings?.pricingSetupConfirmed === true
-    && Number(settings?.pricingConfirmation?.confirmedCatalogRevision) === savedRevision;
+  return isCatalogPricingConfirmationCurrent(settings);
 }
 
 export function isStarterPackApplyReconciled({
@@ -543,7 +573,9 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         }
 
         const cached = localStorage.getItem(LOCAL_KEY);
-        const catalog = cached ? normalizeCatalog(JSON.parse(cached)) : defaultCatalog();
+        const catalog = cached
+          ? reflectCurrentPricingConfirmation(normalizeCatalog(JSON.parse(cached)))
+          : defaultCatalog();
         if (!alive) return;
         setState((prev) => ({
           ...prev,
@@ -597,9 +629,10 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         rentals: prev.rentals,
         settings: catalogSettings
       });
+      const reflected = reflectCurrentPricingConfirmation(normalized);
       return {
         ...prev,
-        settings: normalized.settings,
+        settings: reflected.settings,
         serverFingerprints: prev.serverFingerprints
           ? {
               ...prev.serverFingerprints,
@@ -642,13 +675,31 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         error: "Review the Pricing tab and confirm this organization's fee, tax, deposit, travel, and staffing settings before saving."
       };
     }
-    const normalizedForPersistence = normalizeCatalog({
+    let normalizedForPersistence = normalizeCatalog({
       ...normalized,
       settings: {
         ...normalized.settings,
         pricingSetupConfirmed: firebaseReady ? false : wantsPricingConfirmation
       }
     });
+    if (!firebaseReady) {
+      const catalogRevision = Math.max(0, Number(state.settings?.catalogRevision || 0)) + 1;
+      const localSettings = {
+        ...normalizedForPersistence.settings,
+        catalogRevision,
+        pricingSetupConfirmed: wantsPricingConfirmation,
+        pricingConfirmation: null
+      };
+      normalizedForPersistence = normalizeCatalog({
+        ...normalizedForPersistence,
+        settings: {
+          ...localSettings,
+          pricingConfirmation: wantsPricingConfirmation
+            ? buildLocalCatalogPricingConfirmation(localSettings)
+            : null
+        }
+      });
+    }
     setState((prev) => ({ ...prev, saving: true, error: "" }));
     let savedCatalogRevision = null;
 
