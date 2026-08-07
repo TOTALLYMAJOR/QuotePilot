@@ -156,6 +156,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Starter-pack setup now retries the retained version 1 manifest only when an
+  older deployed callable explicitly rejects the current manifest version. The
+  compatibility retry preserves the exact catalog-revision precondition,
+  remains single-attempt, and does not retry authorization, revision, network,
+  or other catalog failures.
 - The normal local-fallback Playwright suite now excludes the Firebase-only
   blank-owner starter-catalog scenario; that scenario continues to execute in
   its dedicated Auth, Firestore, and Functions emulator lane.

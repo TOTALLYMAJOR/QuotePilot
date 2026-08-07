@@ -132,6 +132,12 @@ Last updated: August 6, 2026
   returns HTTP 200 and unauthenticated callable probes fail closed with HTTP 401.
   A signed-in owner pack application and pricing confirmation remain pending
   tenant acceptance rather than being inferred from route reachability.
+- Current source starter-pack release compatibility retries the retained
+  version 1 manifest exactly once only when an older deployed callable
+  explicitly rejects the newer manifest version. The retry preserves the same
+  catalog-revision precondition; authorization, revision, network, and other
+  catalog failures remain fail-closed, and the server still owns every write
+  and divergence check. Hosted owner acceptance remains pending.
 - Current source starter-catalog hardening detects owner-deactivated or removed
   generated records before replacement, rejects malformed dependency data
   before menu removal, and requires browser catalog/pricing edits to advance
