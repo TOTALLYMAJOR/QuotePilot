@@ -235,6 +235,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Security
 
+- Hardened authenticated tenant switching so principal, organization, role, or
+  authority-resolution changes remount the complete workspace boundary before
+  the next scope renders. Unsaved customer details, quote edit state, open or
+  sticky modal state, event selection, and catalog state can no longer carry
+  across sign-out and re-authentication; the Firebase browser lane now proves a
+  configured owner -> blank second organization -> original owner transition.
+
 - Raw product analytics records cannot be read or written from the browser;
   same-tenant staff receive only a server-derived summary, and analytics
   failures never block quote creation or dashboard quote reporting.

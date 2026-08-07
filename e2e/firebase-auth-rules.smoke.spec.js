@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 const STAFF_EMAIL = process.env.E2E_FIREBASE_EMAIL || "e2e-admin@local.test";
 const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
+const SECOND_STAFF_EMAIL = process.env.E2E_FIREBASE_SECOND_EMAIL || "e2e-admin-blank@local.test";
+const SECOND_STAFF_PASSWORD = process.env.E2E_FIREBASE_SECOND_PASSWORD || "Passw0rd!";
 const RECOVERED_PASSWORD = "RecoveredPassw0rd!";
 const FIREBASE_PROJECT_ID = process.env.E2E_FIREBASE_PROJECT_ID || "demo-e2e";
 const AUTH_EMULATOR_PORT = process.env.E2E_FIREBASE_AUTH_EMULATOR_PORT || "9399";
@@ -42,6 +44,76 @@ test("firebase auth and firestore rules load the organization catalog", async ({
   await expect(accountMenu).toContainText(STAFF_EMAIL);
   await expect(accountMenu).toContainText("admin");
   await expect(page.getByLabel(/Event type/i).locator("option")).toHaveCount(5);
+});
+
+test("switching authenticated principals destroys the prior tenant workspace state", async ({ page }) => {
+  test.setTimeout(180_000);
+  await signInAsStaff(page);
+
+  const eventType = page.getByLabel(/Event type/i);
+  await eventType.selectOption({ index: 1 });
+  expect(await eventType.inputValue()).not.toBe("");
+
+  await page.getByRole("button", { name: "Quotes", exact: true }).click();
+  const quotesDialog = page.getByRole("dialog", { name: "Quotes" });
+  const quoteRow = quotesDialog.locator('tr[data-quote-id="conversation-e2e-quote"]');
+  await expect(quoteRow).toContainText(CONVERSATION_QUOTE_NUMBER);
+  await quoteRow.getByRole("button", { name: "Edit" }).click();
+  await expect(page.getByText(`Editing quote ${CONVERSATION_QUOTE_NUMBER}`)).toBeAttached();
+  await page.getByRole("button", { name: "Quotes", exact: true }).click();
+  await expect(quotesDialog).toBeVisible();
+
+  await page.evaluate(async () => {
+    const { signOutCurrentUser } = await import("/src/lib/authClient.js");
+    await signOutCurrentUser();
+  });
+  await expect(page.getByRole("heading", { name: "Staff Sign In" })).toBeVisible({ timeout: 45_000 });
+  await expect(quotesDialog).toHaveCount(0);
+
+  await page.evaluate(() => {
+    window.__quotePilotScopeLeakFrames = [];
+    const recordFrame = () => {
+      const text = document.body?.innerText || "";
+      const leaked = [
+        text.includes("New Quote"),
+        text.includes("Portal Conversation Customer"),
+        text.includes("Editing quote QP-CONVERSATION-E2E"),
+        Boolean(document.querySelector('[role="dialog"]'))
+      ].some(Boolean);
+      if (leaked) window.__quotePilotScopeLeakFrames.push(text.slice(0, 500));
+    };
+    const observer = new MutationObserver(recordFrame);
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    window.__quotePilotScopeLeakObserver = observer;
+  });
+
+  await page.getByLabel(/^Email$/i).fill(SECOND_STAFF_EMAIL);
+  await page.getByLabel(/^Password$/i).fill(SECOND_STAFF_PASSWORD);
+  await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
+  await expect(page.getByRole("heading", { name: "Configure Your Catalog" })).toBeVisible({
+    timeout: 45_000
+  });
+  expect(await page.evaluate(() => {
+    window.__quotePilotScopeLeakObserver?.disconnect();
+    return window.__quotePilotScopeLeakFrames || [];
+  })).toEqual([]);
+  await expect(page.getByRole("button", { name: "New Quote" })).toHaveCount(0);
+  await expect(page.getByText("Portal Conversation Customer")).toHaveCount(0);
+  await expect(page.getByText(`Editing quote ${CONVERSATION_QUOTE_NUMBER}`)).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Sign Out" }).click();
+  await expect(page.getByRole("heading", { name: "Staff Sign In" })).toBeVisible({ timeout: 45_000 });
+  await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
+  await page.getByLabel(/^Password$/i).fill(STAFF_PASSWORD);
+  await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
+  await expect(page.getByRole("button", { name: "New Quote" })).toBeVisible({ timeout: 45_000 });
+
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText(`Editing quote ${CONVERSATION_QUOTE_NUMBER}`)).toHaveCount(0);
+  await expect(page.getByLabel(/Event type/i)).toHaveValue("");
+  await expect(page.getByRole("textbox", { name: /Your name/i })).toHaveValue("");
+  await expect(page.getByRole("textbox", { name: /^Email$/i })).toHaveValue("");
 });
 
 test("staff and the exact customer portal share one quote-scoped conversation", async ({ page }) => {
