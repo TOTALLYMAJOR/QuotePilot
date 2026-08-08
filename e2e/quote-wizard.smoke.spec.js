@@ -256,9 +256,10 @@ test("Quotes loads once, then searches and counts the tenant result locally", as
 test("desktop and mobile navigation stay bounded and menus restore focus", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const header = page.locator(".site-header");
-  for (const name of ["New quote", "Quotes", "Workflow", "Operations", "Account"]) {
+  for (const name of ["New quote", "Quotes", "Operations", "Account"]) {
     await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
   }
+  await expect(header.getByRole("button", { name: /^Workflow(?:,|$)/ })).toBeVisible();
   await expect(header.getByRole("button", { name: "More" })).toBeHidden();
 
   const operations = header.getByRole("button", { name: "Operations" });
