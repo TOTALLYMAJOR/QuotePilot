@@ -328,12 +328,38 @@ function listFunctionsInputs(root) {
     if (/^\.env(?:\.|$)/i.test(entry.name)) {
       throw stageError(`runtime environment files are not allowed (functions/${entry.name}).`);
     }
+    if (entry.name === "data" && entry.isDirectory()) {
+      const dataRoot = path.join(functionsRoot, entry.name);
+      const dataEntries = fs.readdirSync(dataRoot, { withFileTypes: true });
+      for (const dataEntry of dataEntries) {
+        const relativePath = `functions/data/${dataEntry.name}`;
+        const source = path.join(dataRoot, dataEntry.name);
+        const stat = assertSafeSourceEntry(source, relativePath);
+        if (
+          dataEntry.name !== "starterCatalogPacks.json"
+          || !dataEntry.isFile()
+          || !stat.isFile()
+        ) {
+          throw stageError(`unapproved Functions artifact input (${relativePath}).`);
+        }
+        inputs.push(relativePath);
+      }
+      if (!inputs.includes("functions/data/starterCatalogPacks.json")) {
+        throw stageError("required artifact input is missing (functions/data/starterCatalogPacks.json).");
+      }
+      continue;
+    }
     if (!entry.isFile() || (!entry.name.endsWith(".js") && !/^package(?:-lock)?\.json$/.test(entry.name))) {
       throw stageError(`unapproved Functions artifact input (functions/${entry.name}).`);
     }
     inputs.push(`functions/${entry.name}`);
   }
-  for (const required of ["functions/index.js", "functions/package.json", "functions/package-lock.json"]) {
+  for (const required of [
+    "functions/index.js",
+    "functions/package.json",
+    "functions/package-lock.json",
+    "functions/data/starterCatalogPacks.json"
+  ]) {
     if (!inputs.includes(required)) {
       throw stageError(`required artifact input is missing (${required}).`);
     }

@@ -834,6 +834,9 @@ After the reviewed PR merges:
    and record the resulting uploaded payload,
    release-evidence receipt, and deterministic manifest. If targets have
    different rollback SHAs, use separate target-specific attestations.
+   Firebase backend/all payloads include the reviewed versioned starter-pack
+   manifest at `functions/data/starterCatalogPacks.json`; preparation rejects
+   any other unreviewed nested Functions data artifact.
    The verifier binds the preparation to the repository's immutable GitHub
    workflow id, canonical workflow path, and complete evidence-bearing run
    title. GitHub may expose that dynamic `run-name` through the API `name`
