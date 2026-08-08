@@ -89,6 +89,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Production buyer-access browser flags are scoped to release configuration
+  validation and frontend builds, so preparation unit tests retain their
+  default-off environment while the prepared artifact keeps the approved
+  public test-access configuration.
 - Production preparation and UAT evidence now identify their canonical GitHub
   Actions workflows by immutable repository workflow ids and tracked paths,
   while complete evidence-bearing run titles remain independently validated.

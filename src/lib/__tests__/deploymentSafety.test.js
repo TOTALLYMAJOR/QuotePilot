@@ -64,6 +64,8 @@ describe("production mutation retirement", () => {
     ["Vercel", VERCEL_WORKFLOW]
   ])("binds the %s artifact to explicit public buyer configuration", (_provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
+    const stepsOffset = source.indexOf("\n    steps:");
+    const jobConfiguration = source.slice(0, stepsOffset);
 
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"true"\s*$/m);
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"true"\s*$/m);
@@ -72,6 +74,13 @@ describe("production mutation retirement", () => {
     );
     expect(source).not.toMatch(/vars\.VITE_BUYER_ACCESS_(?:ENABLED|PUBLIC_CTA_ENABLED)/);
     expect(source).not.toMatch(/BUYER_ACCESS_TURNSTILE_SECRET/);
+    expect(stepsOffset).toBeGreaterThan(0);
+    expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_ENABLED");
+    expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED");
+    expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY");
+    expect(source.match(/VITE_BUYER_ACCESS_ENABLED:/g)).toHaveLength(2);
+    expect(source.match(/VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:/g)).toHaveLength(2);
+    expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toHaveLength(2);
   });
 
   test("does not persist checkout credentials in the UAT attestation job", () => {

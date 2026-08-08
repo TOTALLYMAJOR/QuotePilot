@@ -140,6 +140,9 @@ git push origin v<major>.<minor>.<patch>
     repository workflow id and tracked path, and separately validates the exact
     evidence-bound run title; GitHub's dynamic `run-name` may therefore appear
     in the API `name` field without being mistaken for the workflow identity.
+    Production buyer-access browser flags are scoped to configuration
+    validation and frontend build steps; neutral preparation unit tests must
+    not inherit those release-only flags.
     Record the uploaded payload, evidence
     receipt, and deterministic manifest; this step does not deploy.
 11. Only after it is implemented and qualified, promote through a separately
