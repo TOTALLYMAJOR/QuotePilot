@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: August 6, 2026
+Last updated: August 8, 2026
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -65,6 +65,27 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
    whose safe retry window has closed starts a fresh delivery generation; an
    ambiguous outcome stays locked for provider review. Edit and save a new
    revision before sending updated content.
+
+## Commercial Command Center (Home)
+- Select `Home` in the top navigation to open a triaged view of what needs
+  attention, alongside the existing wizard, Quotes, and Workflow entry
+  points. Home does not replace the wizard as the default landing view in
+  this release; both are reachable from the header.
+- `Needs your attention` lists new and acknowledged change requests, overdue
+  and due-today follow-ups, and quotes with a pending approval, using the
+  same prioritized attention snapshot as the `Workflow` header badge, so the
+  counts always agree. Selecting a row opens `Workflow` for that item; Home
+  itself performs no acknowledge/handled/approve actions.
+- `Next 7 days` lists accepted or booked quotes with an event date in the
+  coming week. `Money at a glance` lists deposits that are unpaid or
+  requested and final balances that are eligible to request or already
+  requested, split into "Requested, awaiting customer" and "Not yet
+  requested" totals. A final balance never appears as actionable until its
+  deposit is Stripe-paid, matching the existing final-balance request gate.
+  Selecting a row opens `Quotes` focused on that quote.
+- Home reads existing quote and workflow-attention data only; it creates no
+  new records and cannot request payment, approve a request, or change a
+  quote's status by itself.
 
 ## Quote Builder Details
 - Event Type drives dynamic menu categories and items.

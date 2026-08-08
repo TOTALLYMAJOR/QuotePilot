@@ -8,6 +8,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- A Commercial Command Center ("Home") workspace view, reachable from a new
+  header button alongside the existing wizard, Quotes, and Workflow entry
+  points. It surfaces a triaged attention inbox (change requests, follow-ups,
+  approvals, reusing the existing workflow attention snapshot and summary so
+  its counts always match the header badge), events accepted or booked in the
+  next 7 days, and a money-at-a-glance view of deposits and final balances
+  awaiting action. Row actions open the existing Workflow and Quotes surfaces
+  focused on the relevant record; no new write paths, Firestore collections,
+  or callables were introduced. A shared status-semantics module and
+  `StatusChip` component give staff-facing state (quote lifecycle, deposit,
+  final-balance, booking confirmation, attention-item type) a consistent,
+  never-color-only presentation that other surfaces can adopt incrementally.
 - Independent recovery boundaries for every lazy public route and workspace
   tool. A failed chunk now preserves the surrounding app and exposes executing
   retry, reload, and close/back actions with sanitized diagnostics. The seven
