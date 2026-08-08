@@ -20,6 +20,7 @@ function makeRoot() {
     "functions/helper.js": "export const helper = true;\n",
     "functions/package.json": "{}\n",
     "functions/package-lock.json": "{}\n",
+    "functions/data/starterCatalogPacks.json": "{}\n",
     "functions/.env.example": "PLACEHOLDER=\n",
     "functions/.gitignore": ".env.*\n",
     "functions/node_modules/ignored/index.js": "ignored\n",
@@ -79,6 +80,7 @@ describe("target-scoped production payload staging", () => {
       "firebase.json",
       "firestore.indexes.json",
       "firestore.rules",
+      "functions/data/starterCatalogPacks.json",
       "functions/helper.js",
       "functions/index.js",
       "functions/package-lock.json",
@@ -91,6 +93,7 @@ describe("target-scoped production payload staging", () => {
       "firebase.json",
       "firestore.indexes.json",
       "firestore.rules",
+      "functions/data/starterCatalogPacks.json",
       "functions/helper.js",
       "functions/index.js",
       "functions/package-lock.json",
@@ -289,6 +292,24 @@ describe("target-scoped production payload staging", () => {
       { target: "firebase-backend", root },
       { env: {} }
     )).toThrow(/unapproved Functions artifact input/i);
+  });
+
+  test("rejects an unreviewed nested Functions data artifact", () => {
+    const root = makeRoot();
+    fs.writeFileSync(path.join(root, "functions", "data", "extra.json"), "{}\n");
+    expect(() => stageProductionPayload(
+      { target: "firebase-backend", root },
+      { env: {} }
+    )).toThrow(/unapproved Functions artifact input.*functions\/data\/extra\.json/i);
+  });
+
+  test("requires the versioned starter-pack manifest in backend artifacts", () => {
+    const root = makeRoot();
+    fs.rmSync(path.join(root, "functions", "data"), { recursive: true });
+    expect(() => stageProductionPayload(
+      { target: "firebase-backend", root },
+      { env: {} }
+    )).toThrow(/required artifact input.*functions\/data\/starterCatalogPacks\.json/i);
   });
 });
 

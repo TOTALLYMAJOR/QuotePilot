@@ -89,6 +89,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Firebase backend/all artifact preparation now includes the reviewed
+  versioned starter-pack manifest required by staged organizations while
+  rejecting every other unapproved nested Functions data file.
 - Production buyer-access browser flags are scoped to release configuration
   validation and frontend builds, so preparation unit tests retain their
   default-off environment while the prepared artifact keeps the approved
