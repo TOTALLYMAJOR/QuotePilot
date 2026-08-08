@@ -89,6 +89,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Browser navigation smoke coverage now recognizes the Workflow button's live
+  accessible-status suffix, preventing a release check race after attention
+  data loads.
 - Firebase backend/all artifact preparation now includes the reviewed
   versioned starter-pack manifest required by staged organizations while
   rejecting every other unapproved nested Functions data file.
