@@ -828,6 +828,10 @@ After the reviewed PR merges:
    and record the resulting uploaded payload,
    release-evidence receipt, and deterministic manifest. If targets have
    different rollback SHAs, use separate target-specific attestations.
+   The verifier binds the preparation to the repository's immutable GitHub
+   workflow id, canonical workflow path, and complete evidence-bearing run
+   title. GitHub may expose that dynamic `run-name` through the API `name`
+   field, so the display name is not used as workflow identity.
 8. Only after the separately owned trusted deployer is implemented and
    qualified, submit that exact artifact for final provider mutation. Record
    the provider deployment id, accepted/READY state, and artifact and

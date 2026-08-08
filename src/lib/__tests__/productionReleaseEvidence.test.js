@@ -233,7 +233,8 @@ function makePreparationRun(profile = "vercel", overrides = {}) {
       id: RELEASE_EVIDENCE_POLICY.repository.id,
       full_name: RELEASE_EVIDENCE_POLICY.repository.fullName
     },
-    name: workflow?.name,
+    workflow_id: workflow?.id,
+    name: makePreparationTitle({ profile }),
     path: `${workflow?.path}@refs/heads/main`,
     event: "workflow_dispatch",
     head_branch: "main",
@@ -874,7 +875,7 @@ describe("current preparation workflow validator", () => {
   test.each([
     [{ repository: { id: 1, full_name: "other/repo" } }, /different repository/i],
     [{ id: 999 }, /response id does not match the current run/i],
-    [{ name: "Prepare Something Else" }, /not the canonical target preparation workflow/i],
+    [{ workflow_id: 1 }, /not the canonical target preparation workflow/i],
     [{ path: ".github/workflows/other.yml" }, /not the canonical target preparation workflow/i],
     [{ event: "push" }, /not a main-branch manual dispatch/i],
     [{ head_branch: "feature" }, /not a main-branch manual dispatch/i],

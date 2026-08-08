@@ -133,6 +133,10 @@ git push origin v<major>.<minor>.<patch>
     evidence-bound Firebase scope when applicable. Independent mode requires a
     separate `production` approval. Solo mode requires the same allowlisted
     operator, a separate dispatch, and at least 15 elapsed minutes after UAT.
+    The preparation verifier identifies the canonical workflow by its immutable
+    repository workflow id and tracked path, and separately validates the exact
+    evidence-bound run title; GitHub's dynamic `run-name` may therefore appear
+    in the API `name` field without being mistaken for the workflow identity.
     Record the uploaded payload, evidence
     receipt, and deterministic manifest; this step does not deploy.
 11. Only after it is implemented and qualified, promote through a separately
