@@ -394,12 +394,14 @@ final-balance rails retain their independently configured mode, key, signing
 secret, event set, and `stripeWebhook`.
 
 This source does not authorize a branch deploy, workstation deploy, provider
-mutation, or live launch. Preparation source-binds
+mutation, or live launch. Preparation source-binds only its production
+configuration-validation and frontend-build steps to
 `VITE_BUYER_ACCESS_ENABLED=true` and
 `VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED=true` only with
 `VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY`; `check:env` fails on a missing,
 placeholder, malformed, or incoherent public configuration but cannot prove
-Cloudflare setup or human review. Browser variables are not backend authority.
+Cloudflare setup or human review. Neutral unit tests run without those
+production-only buyer flags. Browser variables are not backend authority.
 Keep `BUYER_ACCESS_ENABLED=false` until the exact
 candidate passes review and the merged-main, semantic-tag, target-specific UAT,
 prepare-artifact, and separately owned trusted-deployer controls in section 6.
