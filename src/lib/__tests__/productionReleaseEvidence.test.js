@@ -290,7 +290,8 @@ function makeUatRun(overrides = {}) {
       id: RELEASE_EVIDENCE_POLICY.repository.id,
       full_name: RELEASE_EVIDENCE_POLICY.repository.fullName
     },
-    name: RELEASE_EVIDENCE_POLICY.uatWorkflow.name,
+    workflow_id: RELEASE_EVIDENCE_POLICY.uatWorkflow.id,
+    name: makeUatTitle(),
     path: `${RELEASE_EVIDENCE_POLICY.uatWorkflow.path}@refs/heads/main`,
     event: "workflow_dispatch",
     head_branch: "main",
@@ -1125,7 +1126,7 @@ describe("UAT workflow evidence validators", () => {
   test.each([
     [{ repository: { id: 1, full_name: "other/repo" } }, {}, /different repository/i],
     [{ id: 999 }, {}, /response id does not match/i],
-    [{ name: "Other UAT" }, {}, /not the canonical attestation workflow/i],
+    [{ workflow_id: 1 }, {}, /not the canonical attestation workflow/i],
     [{ path: ".github/workflows/other.yml" }, {}, /not the canonical attestation workflow/i],
     [{ event: "push" }, {}, /not a main-branch manual dispatch/i],
     [{ head_branch: "feature" }, {}, /not a main-branch manual dispatch/i],

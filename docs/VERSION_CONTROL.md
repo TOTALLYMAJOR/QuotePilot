@@ -122,7 +122,10 @@ git checkout -b feature/<scope>-<topic>
    item ids applicable to that target, and exact confirmation. Print the set
    with `npm run release:uat:items -- --target <profile>`. Independent mode
    requires a reviewer other than the attester; solo mode records the
-   allowlisted operator and begins the mandatory cooling period.
+   allowlisted operator and begins the mandatory cooling period. The verifier
+   binds the UAT run to its immutable repository workflow id and tracked path,
+   then separately validates its full evidence-bearing run title even when the
+   API `name` field contains the dynamic `run-name`.
 9. Tag the same semantic version SHA:
 ```bash
 git tag v<major>.<minor>.<patch>
