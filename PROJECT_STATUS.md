@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 7, 2026
+Last updated: August 8, 2026
 
 ## Operational Health
 - Runtime: release `v0.2.3` is live from merged `main` commit
@@ -45,6 +45,14 @@ Last updated: August 7, 2026
   current customer change requests. Its post-idle header count preserves the
   lazy workspace boundary; request-ID-bound acknowledge/handled state is internal
   only and never edits customer decision evidence or sends email/SMS.
+- Current source Commercial Command Center: a new "Home" workspace view reads
+  the existing workflow attention snapshot and quote history (no new reads,
+  writes, collections, or callables) to show a triaged attention inbox,
+  upcoming accepted/booked events, and outstanding deposit/final-balance
+  amounts. Its counts are computed from the same snapshot as the existing
+  header attention badge. Row actions open the existing Workflow and Quotes
+  surfaces; the view introduces no new commercial state or authority. This is
+  local source and unit-test evidence only and has not been hosted-accepted.
 - Current source quote-entry simplification: Step 1 keeps attendance and role
   counts in the primary flow while placing five exceptional staffing-rate
   values in Advanced Pricing. Existing saved/template values trigger a visible

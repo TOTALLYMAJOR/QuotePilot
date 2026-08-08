@@ -5630,3 +5630,194 @@ hr {
   border-color: color-mix(in srgb, #d97757 50%, transparent);
   background: color-mix(in srgb, #d97757 10%, transparent);
 }
+
+/* ---------- Semantic status chips ---------- */
+/* Fixed staff-chrome colors, deliberately independent of tenant brand tokens
+   (--tone-gold-*) so a state's meaning never shifts with a tenant's palette. */
+:root {
+  --sem-info: #4a6fa5;
+  --sem-pending: #8a6a15;
+  --sem-action: #b4530a;
+  --sem-customer: #6c4fa1;
+  --sem-provider: #33608c;
+  --sem-confirmed: #1e6b44;
+  --sem-blocked: #a32c2c;
+  --sem-failed: #8e1f1f;
+  --sem-expired: #7a7264;
+  --sem-archived: #857e70;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.16em 0.6em;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.status-chip-dot {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.status-chip-info { color: var(--sem-info); background: color-mix(in srgb, var(--sem-info) 12%, transparent); border-color: color-mix(in srgb, var(--sem-info) 32%, transparent); }
+.status-chip-pending { color: var(--sem-pending); background: color-mix(in srgb, var(--sem-pending) 14%, transparent); border-color: color-mix(in srgb, var(--sem-pending) 32%, transparent); }
+.status-chip-action { color: var(--sem-action); background: color-mix(in srgb, var(--sem-action) 14%, transparent); border-color: color-mix(in srgb, var(--sem-action) 32%, transparent); }
+.status-chip-customer { color: var(--sem-customer); background: color-mix(in srgb, var(--sem-customer) 12%, transparent); border-color: color-mix(in srgb, var(--sem-customer) 32%, transparent); }
+.status-chip-provider { color: var(--sem-provider); background: color-mix(in srgb, var(--sem-provider) 12%, transparent); border-color: color-mix(in srgb, var(--sem-provider) 32%, transparent); }
+.status-chip-confirmed { color: var(--sem-confirmed); background: color-mix(in srgb, var(--sem-confirmed) 12%, transparent); border-color: color-mix(in srgb, var(--sem-confirmed) 32%, transparent); }
+.status-chip-blocked { color: var(--sem-blocked); background: color-mix(in srgb, var(--sem-blocked) 12%, transparent); border-color: color-mix(in srgb, var(--sem-blocked) 32%, transparent); }
+.status-chip-failed { color: var(--sem-failed); background: color-mix(in srgb, var(--sem-failed) 12%, transparent); border-color: color-mix(in srgb, var(--sem-failed) 32%, transparent); }
+.status-chip-expired { color: var(--sem-expired); background: color-mix(in srgb, var(--sem-expired) 12%, transparent); border-color: color-mix(in srgb, var(--sem-expired) 32%, transparent); }
+.status-chip-archived { color: var(--sem-archived); background: color-mix(in srgb, var(--sem-archived) 12%, transparent); border-color: color-mix(in srgb, var(--sem-archived) 32%, transparent); }
+
+/* ---------- Commercial Command Center (Home) ---------- */
+.nav-view-active {
+  color: #2b1c04;
+  background: rgba(232, 195, 118, 0.28);
+  border-radius: 8px;
+}
+
+.command-center-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.command-center-head .eyebrow {
+  margin: 0 0 0.15rem;
+}
+
+.command-center-head h2 {
+  margin: 0;
+}
+
+.command-center-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.command-center-inbox h3,
+.command-center-rail-section h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+}
+
+.command-center-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.command-center-rail-section {
+  border-top: 1px solid rgba(201, 153, 74, 0.32);
+  padding-top: var(--space-3);
+}
+
+.command-center-rail-section:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.command-center-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.command-center-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(201, 153, 74, 0.28);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 253, 247, 0.6);
+}
+
+.command-center-row-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.command-center-row-detail {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #3a2f1e;
+}
+
+.command-center-row-meta {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #6b5a43;
+}
+
+.command-center-more {
+  margin-top: 0.6rem;
+  width: 100%;
+}
+
+.command-center-money-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.command-center-money-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 253, 247, 0.6);
+  border: 1px solid rgba(201, 153, 74, 0.28);
+}
+
+.command-center-money-summary span {
+  font-size: 0.72rem;
+  color: #6b5a43;
+}
+
+.command-center-money-summary strong {
+  font-size: 1.05rem;
+  color: #2b1c04;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .command-center-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .command-center-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .command-center-money-summary {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "./components/AuthGate";
+import CommandCenterHome from "./components/CommandCenterHome";
 import CustomerPortalView from "./components/CustomerPortalView";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProductBrandLockup from "./components/ProductBrandLockup";
@@ -501,6 +502,7 @@ export default function App({ tenantContext, authSession }) {
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
   const [paymentReturn] = useState(() => readPaymentReturnFromUrl());
+  const [workspaceView, setWorkspaceView] = useState("wizard");
   const isUnscopedPlatformOperator = (
     tenantContext.ready
     && (tenantContext.hostType === "app" || tenantContext.hostType === "local")
@@ -1903,6 +1905,7 @@ export default function App({ tenantContext, authSession }) {
     setHistoryTarget({ quoteId: "", reason: "" });
     setHistoryOpen(false);
     setStep(1);
+    setWorkspaceView("wizard");
     beginWizardAnalyticsSession({
       organizationId: authSession.organizationId,
       mode: "edit",
@@ -1933,6 +1936,7 @@ export default function App({ tenantContext, authSession }) {
     if (quoteDirty && !window.confirm("Start a new quote? Your unsaved changes will be discarded.")) {
       return;
     }
+    setWorkspaceView("wizard");
     setEditingQuote({ id: "", quoteNumber: "" });
     setQuoteDirty(false);
     setForm({
@@ -2351,6 +2355,14 @@ export default function App({ tenantContext, authSession }) {
             </div>
           )}
           <div className="right-actions header-actions" ref={headerMenusRef}>
+            <button
+              className={`ghost${workspaceView === "home" ? " nav-view-active" : ""}`}
+              type="button"
+              aria-current={workspaceView === "home" ? "page" : undefined}
+              onClick={() => { setOpenHeaderMenu(""); setWorkspaceView("home"); }}
+            >
+              Home
+            </button>
             <button className="cta header-quick-cta" type="button" onClick={handleGetInstantQuote}>New quote</button>
             <button
               className="ghost"
@@ -2473,6 +2485,19 @@ export default function App({ tenantContext, authSession }) {
         </p>
       </section>
 
+      {workspaceView === "home" ? (
+        <main className="container">
+          <CommandCenterHome
+            organizationId={authSession.organizationId}
+            onOpenWorkflow={() => setSalesWorkflowOpen(true)}
+            onOpenQuote={(quoteId) => {
+              setHistoryTarget({ quoteId, reason: "" });
+              setHistoryOpen(true);
+            }}
+            onNewQuote={handleGetInstantQuote}
+          />
+        </main>
+      ) : (
       <main
         className="container wizard-grid"
         ref={wizardRef}
@@ -2720,6 +2745,7 @@ export default function App({ tenantContext, authSession }) {
           onMobileClose={closeMobilePricing}
         />
       </main>
+      )}
 
       {toasts.length > 0 && (
         <div className="toast-stack" role="status" aria-live="polite">

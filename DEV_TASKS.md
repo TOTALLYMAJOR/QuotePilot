@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 7, 2026
+Last updated: August 8, 2026
 
 ## P0 - Production Acceptance and Tenant Provisioning
 - Prepare and promote the next tagged exact-`main` revision containing this
@@ -74,6 +74,53 @@ Last updated: August 7, 2026
   conflicts, then explicitly authorize the guarded apply so older active links
   receive the new decision-center event, selection, and pricing fields. The
   tool and emulator acceptance are complete; production execution is not.
+
+## P1 - Commercial Command Center Follow-on
+The Home workspace view and shared status-chip system shipped in source
+(`docs/FEATURE_MATRIX.md` row 29); these are the pieces of the originating
+UX audit intentionally left out of that first pass to keep it reviewable,
+frontend-only, and free of any change to a high-risk file.
+- Add a route/shell so Home, Quotes, and the wizard are real navigable
+  destinations instead of a header button that swaps the main content
+  region; keep `?portal=` precedence and the existing lazy-tool recovery
+  boundaries intact through the migration.
+- Retrofit the `StatusChip`/`src/lib/statusSemantics.js` system onto Quote
+  History's status column, Event Schedule's confirmation/conflict labels,
+  and the customer portal's payment status, replacing today's plain text
+  and raw `<select>` with the same never-color-only chip grammar Home now
+  uses. Do this as its own reviewable pass per surface, not all at once.
+- Add delivery/provider blockers (mutation-locked delivery, disabled email
+  provider) to Home's attention inbox once a lightweight, Home-safe read of
+  `getQuoteDeliveryUiState`-equivalent state exists; the first Home pass
+  intentionally left this out rather than duplicating that logic.
+- Consider making Home the default landing view instead of the wizard; this
+  needs `e2e/quote-wizard.smoke.spec.js` and related specs updated for the
+  new landing assertion, not just the App.jsx change.
+- Neutralize the staff application shell (retire the tenant-tinted
+  full-screen gradient/pinstripe on `.app-shell`) separately from any IA
+  change, and audit `src/components/__tests__/wizardVisualSnapshots.test.jsx`
+  and any other visual-regression coverage before touching shared tokens.
+
+## P1 - Customer Workspace Backend (Codex Handoff)
+Full slice plan: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md).
+Each slice below is independently scoped with its own Change Intent
+Contract, files, data shape, and acceptance criteria; none is started.
+- Slice 1: a server-maintained commercial rollup on each `customers` record
+  (open quotes, active events, deposit/balance due, last activity) so an
+  Internal Customer 360 view can answer "what's open here" in one read.
+- Slice 2: a first-class `changeRequests` record (structured asks, status,
+  owner, linked resulting revision) replacing today's freeform-message-only
+  `portalDecision.changes_requested` path — without removing that existing
+  path. This is the largest and highest-value slice; expect it to be split
+  further by whoever implements it.
+- Slice 3: a tenant Stripe Connect merchant-account foundation (account
+  status, requirements, payouts) isolated from both existing Stripe rails,
+  populated only from Stripe API responses and signed webhooks. Requires an
+  explicit Connect account-type decision (Standard/Express/Custom) before
+  implementation starts.
+- Slice 4: external customer account (persistent, multi-event) — explicitly
+  not yet spec-ready; needs an identity/migration decision documented in
+  the handoff doc before it can be scoped as an implementable slice.
 
 ## P2 - Integrations
 - Complete Twilio Messaging Service A2P registration and approval, promote the
