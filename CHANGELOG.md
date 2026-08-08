@@ -89,6 +89,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Production preparation evidence now identifies the canonical GitHub Actions
+  workflow by its immutable repository workflow id and tracked path, while the
+  complete evidence-bearing run title remains independently validated. This
+  accepts GitHub's dynamic `run-name` value in the API `name` field without
+  weakening workflow identity checks.
 - Vercel Git-triggered deployments are disabled in the reviewed project
   configuration. Merging or pushing a branch can no longer create or promote a
   Vercel deployment; production promotion remains a separate governed action

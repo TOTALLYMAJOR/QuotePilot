@@ -66,18 +66,22 @@ export const RELEASE_EVIDENCE_POLICY = Object.freeze({
   }),
   preparationWorkflows: Object.freeze({
     "firebase-hosting": Object.freeze({
+      id: 244706943,
       name: "Prepare Firebase Production Artifact",
       path: ".github/workflows/deploy-firebase-hosting.yml"
     }),
     "firebase-backend": Object.freeze({
+      id: 244706943,
       name: "Prepare Firebase Production Artifact",
       path: ".github/workflows/deploy-firebase-hosting.yml"
     }),
     "firebase-all": Object.freeze({
+      id: 244706943,
       name: "Prepare Firebase Production Artifact",
       path: ".github/workflows/deploy-firebase-hosting.yml"
     }),
     vercel: Object.freeze({
+      id: 328972919,
       name: "Prepare Vercel Production Artifact",
       path: ".github/workflows/deploy-vercel-production.yml"
     })
@@ -702,7 +706,7 @@ export function validatePreparationRun(
   const expectedWorkflow = RELEASE_EVIDENCE_POLICY.preparationWorkflows[target];
   if (
     !expectedWorkflow
-    || String(run?.name || "") !== expectedWorkflow.name
+    || Number(run?.workflow_id) !== expectedWorkflow.id
     || normalizeWorkflowPath(run?.path) !== expectedWorkflow.path
   ) {
     throw evidenceError("the current run is not the canonical target preparation workflow.");
