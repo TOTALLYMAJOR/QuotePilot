@@ -812,6 +812,10 @@ After the reviewed PR merges:
    - `checked_item_ids`: every id printed for that target exactly once,
      comma-separated,
    - `confirmation`: `ATTEST UAT <full-release-sha>`.
+   The verifier identifies the canonical UAT workflow by its immutable
+   repository workflow id and tracked path, and separately validates the full
+   evidence-bearing run title even when GitHub exposes that dynamic `run-name`
+   through the API `name` field.
 5. Complete the configured approval policy and record the successful workflow
    run id. Independent mode requires a reviewer other than the attester at
    `production-uat`. Solo mode requires the one allowlisted operator at

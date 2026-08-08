@@ -60,6 +60,7 @@ export const RELEASE_EVIDENCE_POLICY = Object.freeze({
     path: ".github/workflows/ci-quality.yml"
   }),
   uatWorkflow: Object.freeze({
+    id: 328972920,
     name: "Release UAT Attestation",
     path: ".github/workflows/release-uat-attestation.yml",
     jobName: "release-uat-attestation"
@@ -594,7 +595,7 @@ export function validateUatRun(
     throw evidenceError("the UAT response id does not match the requested run.");
   }
   if (
-    String(run?.name || "") !== RELEASE_EVIDENCE_POLICY.uatWorkflow.name
+    Number(run?.workflow_id) !== RELEASE_EVIDENCE_POLICY.uatWorkflow.id
     || normalizeWorkflowPath(run?.path) !== RELEASE_EVIDENCE_POLICY.uatWorkflow.path
   ) {
     throw evidenceError("the UAT run is not the canonical attestation workflow.");
