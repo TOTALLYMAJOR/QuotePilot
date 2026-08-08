@@ -20,6 +20,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   `StatusChip` component give staff-facing state (quote lifecycle, deposit,
   final-balance, booking confirmation, attention-item type) a consistent,
   never-color-only presentation that other surfaces can adopt incrementally.
+- Neutral staff chrome: the authenticated staff workspace now renders on a
+  calm warm-neutral shell (flat paper background, charcoal header, white
+  panels) instead of the tenant-tinted full-screen gold gradient and
+  pinstripe overlay. The change is scoped by an `app-shell-neutral` class on
+  staff shells only: tenant identity remains in the workspace header chip,
+  and the customer portal, proposal artifacts, and marketing surfaces keep
+  their tenant-branded hospitality treatment unchanged.
 - Independent recovery boundaries for every lazy public route and workspace
   tool. A failed chunk now preserves the surrounding app and exposes executing
   retry, reload, and close/back actions with sanitized diagnostics. The seven

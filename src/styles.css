@@ -5821,3 +5821,104 @@ hr {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Neutral staff chrome ---------- */
+/* Scoped to the staff workspace shells only (App.jsx adds app-shell-neutral
+   there). The customer portal, proposals, and marketing surfaces keep their
+   tenant-branded hospitality treatment; tenant identity in the staff app
+   lives in the workspace chip, not the chrome. */
+.app-shell-neutral {
+  background: #f6f3ed;
+}
+
+.app-shell-neutral::before {
+  content: none;
+}
+
+.app-shell-neutral .site-header {
+  background: rgba(25, 22, 18, 0.97);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.app-shell-neutral .site-header .ghost {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(238, 234, 226, 0.92);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.app-shell-neutral .site-header .ghost:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.app-shell-neutral .cta {
+  background: #8a6414;
+  box-shadow: none;
+}
+
+.app-shell-neutral .site-header .nav-view-active {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.26);
+  color: #ffffff;
+}
+
+.app-shell-neutral .header-menu-popover {
+  background: #211d18;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.app-shell-neutral .workspace-intro {
+  background: #ffffff;
+  border: 1px solid #e6dfd0;
+}
+
+.app-shell-neutral .workspace-intro p {
+  color: #4a4234;
+}
+
+.app-shell-neutral .workspace-save-state {
+  color: #6e6455 !important;
+  font-weight: 600;
+}
+
+.app-shell-neutral .workspace-save-state.is-dirty {
+  color: #b4530a !important;
+}
+
+.app-shell-neutral .panel {
+  background: #ffffff;
+  border: 1px solid #e4dccb;
+  box-shadow: 0 10px 26px -20px rgba(38, 28, 12, 0.35);
+  backdrop-filter: none;
+}
+
+.app-shell-neutral .wizard-panel,
+.app-shell-neutral .breakdown-panel {
+  box-shadow: 0 10px 26px -20px rgba(38, 28, 12, 0.35);
+}
+
+.app-shell-neutral .ghost {
+  background: #ffffff;
+  border-color: #d9d0bd;
+  color: #4a4234;
+}
+
+.app-shell-neutral .site-header .ghost {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(238, 234, 226, 0.92);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.app-shell-neutral .modal-card {
+  background: #ffffff;
+  border-color: #ded4c0;
+}
+
+.app-shell-neutral .command-center-row,
+.app-shell-neutral .command-center-money-summary > div {
+  background: #faf8f3;
+  border-color: #e7e0d0;
+}
+
+.app-shell-neutral .command-center-rail-section {
+  border-top-color: #e7e0d0;
+}

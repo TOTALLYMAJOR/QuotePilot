@@ -2168,7 +2168,7 @@ export default function App({ tenantContext, authSession }) {
 
   if (isUnscopedPlatformOperator) {
     return (
-      <div className="app-shell" style={appThemeVars}>
+      <div className="app-shell app-shell-neutral" style={appThemeVars}>
         <main className="auth-shell container">
           <WorkspaceStatusCard>
             <p className="eyebrow">Platform Operations</p>
@@ -2244,7 +2244,7 @@ export default function App({ tenantContext, authSession }) {
 
   if (!catalogSetupComplete) {
     return (
-      <div className="app-shell" style={appThemeVars}>
+      <div className="app-shell app-shell-neutral" style={appThemeVars}>
         <main className="auth-shell container">
           <WorkspaceStatusCard>
             <p className="eyebrow">Owner Setup Required</p>
@@ -2310,7 +2310,7 @@ export default function App({ tenantContext, authSession }) {
   }
 
   return (
-    <div className="app-shell" style={appThemeVars}>
+    <div className="app-shell app-shell-neutral" style={appThemeVars}>
       <header className="site-header">
         <div className="container nav">
           <div className="workspace-header-identity">

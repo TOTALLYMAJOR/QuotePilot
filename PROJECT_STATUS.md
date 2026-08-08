@@ -51,7 +51,11 @@ Last updated: August 8, 2026
   upcoming accepted/booked events, and outstanding deposit/final-balance
   amounts. Its counts are computed from the same snapshot as the existing
   header attention badge. Row actions open the existing Workflow and Quotes
-  surfaces; the view introduces no new commercial state or authority. This is
+  surfaces; the view introduces no new commercial state or authority. The
+  staff workspace shell is now visually neutral (paper background, charcoal
+  header, white panels) via a staff-scoped `app-shell-neutral` class; tenant
+  branding remains on the workspace chip and on customer-facing portal,
+  proposal, and marketing surfaces, whose treatment is unchanged. This is
   local source and unit-test evidence only and has not been hosted-accepted.
 - Current source quote-entry simplification: Step 1 keeps attendance and role
   counts in the primary flow while placing five exceptional staffing-rate

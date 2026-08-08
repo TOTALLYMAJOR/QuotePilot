@@ -96,10 +96,10 @@ frontend-only, and free of any change to a high-risk file.
 - Consider making Home the default landing view instead of the wizard; this
   needs `e2e/quote-wizard.smoke.spec.js` and related specs updated for the
   new landing assertion, not just the App.jsx change.
-- Neutralize the staff application shell (retire the tenant-tinted
-  full-screen gradient/pinstripe on `.app-shell`) separately from any IA
-  change, and audit `src/components/__tests__/wizardVisualSnapshots.test.jsx`
-  and any other visual-regression coverage before touching shared tokens.
+- Extend the shipped staff-scoped `app-shell-neutral` chrome to the interior
+  of the large workspace dialogs (Quote History, Catalog Admin, Integrations
+  Ops tables and section styling), which still carry cream/gold treatments
+  inside the now-white modal cards.
 
 ## P1 - Customer Workspace Backend (Codex Handoff)
 Full slice plan: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md).
