@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 1,
+  "catalogVersion": 2,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -695,6 +695,88 @@
       ],
       "headlessReason": "Canonical link construction is a presentation utility inside existing guarded share/export actions, not a new customer-authentication or portal-write authority.",
       "safeOutcome": "Eligible staff-generated links open the exact token decision center at /app while ineligible drafts and stale delivery evidence continue to omit the link."
+    },
+    {
+      "id": "commercial-dependency-graph-beo-provenance",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "headless_operational",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "The versioned Commercial Dependency Graph and deterministic Kitchen BEO input digest expose source provenance through the existing staff-only download without creating retained freshness or receipt authority.",
+      "backendPaths": [
+        "src/lib/commercialDependencyGraphCore.cjs",
+        "src/lib/commercialDependencyGraph.js",
+        "src/lib/beoArtifactFingerprint.js",
+        "src/lib/beoPayload.js",
+        "src/lib/beoExport.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/QuoteHistoryModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/QuoteHistoryModal.jsx",
+          "locator": "Kitchen sheet"
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/commercialDependencyGraph.test.js",
+        "src/lib/__tests__/commercialDependencyGraph.parity.test.js",
+        "src/lib/__tests__/beoPayload.test.js",
+        "src/lib/__tests__/beoArtifactFingerprint.test.js",
+        "src/lib/__tests__/beoExport.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/commercialDependencyGraph.test.js",
+          "locator": "traverses event-time and accepted-revision consequences exactly"
+        },
+        {
+          "path": "src/lib/__tests__/commercialDependencyGraph.parity.test.js",
+          "locator": "produces identical canonical bytes, SHA-256, and traversal results"
+        },
+        {
+          "path": "src/lib/__tests__/beoPayload.test.js",
+          "locator": "uses the active version pointer and only matching metadata may supply its timestamp"
+        },
+        {
+          "path": "src/lib/__tests__/beoArtifactFingerprint.test.js",
+          "locator": "is deterministic and changes for every governed rendered input family"
+        },
+        {
+          "path": "src/lib/__tests__/beoArtifactFingerprint.test.js",
+          "locator": "excludes source revision and unrelated portal, workflow, conversation, and payment states"
+        },
+        {
+          "path": "src/lib/__tests__/beoExport.test.js",
+          "locator": "renders the full dependency digest, schemas, graph, exact source, and proof boundary"
+        }
+      ],
+      "documentationPaths": [
+        "docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md",
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md",
+          "locator": "## Kitchen BEO provenance in CWF-15A"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Commercial Dependency Graph v1 and Kitchen BEO download-time provenance"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Kitchen Sheet Input Provenance (CWF-15A)"
+        }
+      ],
+      "headlessReason": "The registry, traversal, canonical bytes, and browser-generated digest are deterministic internal mechanics behind the existing staff-only Kitchen sheet download. Presenting them as a mutable dashboard or freshness status in CWF-15A would imply retained server authority the browser does not possess.",
+      "safeOutcome": "Authorized staff keep using Kitchen sheet and receive visible source, digest, schema, graph, and proof-boundary provenance inside the PDF; no quote is written and no freshness, completion, actor, server-time, or receipt evidence is created."
     }
   ]
 }

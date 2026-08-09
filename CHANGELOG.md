@@ -8,6 +8,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Source-complete `CWF-15A` Commercial Dependency Graph and Kitchen BEO
+  download-time provenance. The frozen v1 registry validates node and edge
+  contracts, rejects cycles and unknown dependencies, traverses downstream
+  impact deterministically, and produces identical canonical bytes and SHA-256
+  digests in browser and Node tests. The existing staff-only `Kitchen sheet`
+  download now displays its exact source revision, graph/fingerprint/canonical
+  schema versions, complete dependency digest, browser-local generated time,
+  and an explicit non-freshness disclaimer. This slice performs no write,
+  persists no generation record, and creates no `CURRENT`/`STALE`/`REVIEW`,
+  actor, server-time, receipt, reconciliation, or publication evidence. It is
+  source/local evidence only and is not deployed or hosted-operator accepted.
 - A documented temporary 5.5% aggregate-JavaScript branch allowance for the
   unmerged customer-centered workspace convergence. It does not reset the
   clean-main baseline or relax the largest-chunk gate and must return to the
@@ -35,10 +46,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   change blast radius, artifact freshness, and decision debt. The track pairs
   user-relevant backend contracts with polished, discoverable, role-safe
   frontend states and keeps provider, payment, booking, pricing, customer-view,
-  and accounting authority distinct. CWF-15 is sequenced as registry/fingerprint,
-  existing-action generation receipts and read-only simulation, then UI-bound
-  authorized invalidation/reconciliation; no dependency-graph runtime capability
-  is claimed by this planning change.
+  and accounting authority distinct. CWF-15 is sequenced as the now
+  source-complete 15A registry/fingerprint, a separately governed server
+  generation/receipt action plus read-only simulation, then UI-bound authorized
+  invalidation/reconciliation. There is no existing governed server BEO action,
+  and browser-supplied digest, source revision, actor, or time can never become
+  receipt truth.
 - A required diff-aware capability-surfacing check in `lane:core`, backed by a
   versioned capability-surfacing contract manifest. It inventories changed,
   new, or removed

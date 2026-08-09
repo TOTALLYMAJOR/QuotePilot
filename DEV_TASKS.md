@@ -116,53 +116,51 @@ Detailed contracts and invariants:
   ledger as separate work. Never invoke the portal loader, create `viewed`
   evidence, or infer provider/commercial truth.
 
-### Platform Primitive - First New Program
+### Platform Primitive - Next Governed Slices
 
-- Before CWF-15A source work, accept a dedicated ADR/design contract covering
-  registry ownership and schema evolution, deterministic canonical
-  serialization and hashing, browser/server parity boundaries, cycle and
-  version compatibility, and simulation/invalidation transaction authority.
-  The graph may consume server-authoritative pricing outputs but must never
-  become a second pricing engine.
-- **CWF-15:** Build a versioned Commercial Dependency Graph before adding more
-  isolated dashboards or workflows. Model authoritative fact nodes (including
-  guest count, event timing, venue, accepted revision, menu, rentals, staffing,
-  and dietary constraints), their dependent commercial/operational outputs,
-  and deterministic traversal with cycle/unknown-node rejection. A trusted
-  change must support `simulate -> authorize -> invalidate -> reconcile ->
-  publish`: show before/after facts, pricing and payment-scope deltas, stale or
-  review-required artifacts, reopened checks, and safe-to-publish status before
-  any mutation. Keep immutable accepted versions, contracts, provider/payment
-  evidence, portal decisions, and generated artifacts unchanged during
-  simulation; atomically record authorized invalidations and require explicit
-  reconciliation/publication.
-- Derive artifact freshness from schema-versioned dependency fingerprints plus
-  source revision and generation time, starting with the revision-stamped BEO.
-  A matching fingerprint proves only declared-input equivalence; a mismatch
-  surfaces `STALE`/`REVIEW` and an exact role-safe action, never inferred
-  acceptance, delivery, payment, booking, or completion.
-- Derive Decision Debt deterministically from unresolved dependencies,
-  tenant-local event proximity, bounded commercial exposure, dependency weight,
-  reversibility, and validated tenant lock windows. Explain every factor and
-  affected decision; do not market it as predictive AI. Require pure graph and
-  parity fixtures, immutable simulation receipts, transaction/authorization
-  tests, and CWF-14-bound Change Impact, freshness, and Attention UI states.
-- Before CWF-15C source work, accept a UI specification with a state/display
-  matrix for Change Impact, Current/Stale/Review, authorization, invalidation,
-  reconciliation, receipt, error, and recovery, plus acceptance-criteria
-  traceability to every discoverable role-safe control and Attention outcome.
-- Deliver CWF-15 in three reviewable slices: **15A** pure versioned registry,
-  traversal/parity fixtures, and a BEO fingerprint embedded in the generated
-  artifact without claiming retained freshness; **15B** server-owned immutable
-  artifact-generation receipts emitted only by already governed existing
-  artifact actions plus read-only impact simulations, with no independent
-  authorize/invalidate/reconcile/publish mutation; **15C** trusted receipt
-  comparison, the UI-bound authorized invalidation/reconciliation/publication
-  workflow and its atomic audit receipts, Current/Stale/Review controls, Change
-  Impact, and explainable Decision Debt UI. Do not start 15B until 15A is
-  deterministic in browser/server tests. Do not call any slice complete until
-  its applicable backend and frontend states pass the CWF-14 productization gate;
-  exact hosted staff acceptance remains separately recorded.
+- Treat **CWF-15A** as the source-complete baseline defined by
+  `docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md`: a frozen versioned registry,
+  validation and deterministic downstream traversal, browser/Node canonical
+  serialization and SHA-256 parity, and a schema-bound Kitchen BEO input digest
+  visible in the existing staff download. It performs no write and establishes
+  no retained generation, freshness, actor, server-time, receipt,
+  reconciliation, or publication evidence. The graph may consume
+  server-authoritative pricing outputs but must never become a second pricing
+  engine. Hosted kitchen-operator acceptance remains a separate release gate.
+- **CWF-15B — establish generation authority before freshness.** There is no
+  existing governed server BEO generation action to extend. Approve and
+  productize either a new CWF-14-bound server generation/receipt action or move
+  artifact generation authority server-side. The server must reload canonical
+  same-tenant data, recompute the declared-input fingerprint, bind the exact
+  artifact/quote/revision identity plus actor and server time, and persist an
+  immutable idempotent receipt through a role-safe UI with ready, submitting,
+  uncertain, reconciliation, success, definitive-error, and recovery states.
+  Browser-supplied digest, source revision, actor, or time can never become
+  receipt truth.
+- Add a read-only CWF-15B impact simulation that reports exact before/after
+  facts and deterministic dependent nodes without mutating an accepted version,
+  contract, payment/provider evidence, portal decision, generated artifact, or
+  checklist. It introduces no independent
+  `authorize -> invalidate -> reconcile -> publish` authority.
+- Before **CWF-15C** source work, accept a UI specification with a state/display
+  matrix for Change Impact, `CURRENT`/`STALE`/`REVIEW`, authorization,
+  invalidation, reconciliation, receipt, error, and recovery, plus
+  acceptance-criteria traceability to every discoverable role-safe control and
+  Attention outcome. Only a trusted server receipt may be compared with a
+  freshly server-derived authoritative fingerprint.
+- CWF-15C may then deliver the UI-bound, role-gated
+  `simulate -> authorize -> invalidate -> reconcile -> publish` workflow and
+  atomic audit receipts. Keep immutable accepted versions, contracts,
+  provider/payment evidence, portal decisions, and generated artifacts
+  unchanged during simulation; stale dependents never silently regenerate or
+  republish.
+- Derive Decision Debt only after those authority boundaries exist, using
+  unresolved dependencies, tenant-local event proximity, bounded commercial
+  exposure, dependency weight, reversibility, and validated tenant lock
+  windows. Explain every factor and affected decision; do not market it as
+  predictive AI. Each remaining slice requires graph/parity, transaction,
+  authorization, reconciliation, and CWF-14 UI-state coverage appropriate to
+  its authority. Exact hosted staff acceptance remains separately recorded.
 
 ### First Follow-On
 

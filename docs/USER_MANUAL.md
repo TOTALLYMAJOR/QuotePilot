@@ -446,10 +446,29 @@ unchanged.
   with confirmation pending is not displayed as a confirmed booking.
 - Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.
 - Checklist completion is an operational task record only. The app does not track inventory, so checklist state does not confirm stock counts or item availability.
+
+### Kitchen Sheet Input Provenance (CWF-15A)
+
 - From `Quotes`, staff can select `Kitchen sheet` on a saved quote to download
   the internal Banquet Event Order. Before service, verify the quote revision
   and generated timestamp, event and day-of contacts, staffing, checkpoint
   times, menu selections, dietary/allergen callouts, and checklist state.
+- The PDF includes the exact source-revision identity, the Commercial
+  Dependency Graph and fingerprint schema versions, the canonical-serialization
+  schema, and the complete `sha256:` dependency digest. That digest covers the
+  normalized rendered organization, contact, event, staffing, selection,
+  checkpoint, and checklist inputs declared for the Kitchen BEO.
+- Source-revision identity and the browser-local generation time are displayed
+  separately and are excluded from the digest. A source timestamp is displayed
+  only when version metadata matches the active source-version pointer; mutable
+  quote timestamps are not substituted for missing revision evidence. Portal,
+  Workflow, conversation, and payment state do not change this BEO input
+  digest.
+- The PDF states that this digest identifies only the declared inputs used for
+  that download. It is not retained freshness or completion evidence. CWF-15A
+  does not persist a generation record, compare `CURRENT`/`STALE`/`REVIEW`, or
+  establish a server actor, server time, immutable receipt, reconciliation, or
+  publication decision.
 - The Kitchen sheet includes blank prepared-by and chef sign-off lines plus
   ruled day-of notes for event-day use. Downloading or signing the PDF does not
   change the quote, record a digital acceptance, prove payment, confirm
