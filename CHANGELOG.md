@@ -8,6 +8,26 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Source/local `CWF-11` authoritative post-event closeout. A governed booking
+  with a verified private acceptance receipt now atomically creates one
+  deterministic, same-tenant closeout record bound to the exact accepted
+  immutable proposal version and stable customer. Legacy bookings whose source
+  cannot meet that newer authority contract remain bookable and enter a visible
+  source-review block rather than manufacturing a closeout receipt.
+  The record becomes due seven calendar days after the event, fails safely into
+  `blocked_configuration` when the tenant IANA time zone is missing, and projects
+  only bounded internal review state onto the canonical quote. A separate exact
+  configuration-refresh receipt makes a repaired time-zone block recoverable
+  without reviewing an item. Customer 360 and
+  Workflow expose scheduled, due, overdue, blocked, completed, uncertainty,
+  reconciliation, exact receipt, rejection, and recovery states. Four explicit
+  staff-only review items can be reviewed or reopened through one idempotent
+  callable; the private record and action receipts remain browser-inaccessible
+  and absent from the token portal. These receipts prove internal review only:
+  no thank-you, review request, follow-up email, delivery, open, reply, lead,
+  booking, payment, or revenue outcome is inferred. Functions/rules deployment,
+  hosted staff acceptance, and outbound consent/provider-gated messages remain
+  separate release work.
 - Source/local/emulator-qualified `CWF-11` exact-version rebooking in Customer
   360. A bounded
   anniversary cue can now invoke a same-tenant callable that revalidates the

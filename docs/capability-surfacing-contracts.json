@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 3,
+  "catalogVersion": 4,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -1361,6 +1361,152 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "Staff can create or reconcile exactly one review-required rebook draft and open it for editing, while no message, acceptance, booking, payment, or revenue outcome is inferred and outbound delivery remains blocked until trusted review evidence is saved."
+    },
+    {
+      "id": "authoritative-post-event-closeout",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Governed booking creates one deterministic private post-event closeout bound to the exact accepted immutable proposal version and stable customer; Customer 360 and Workflow expose its bounded state and an exact callable-owned internal review/reopen receipt flow.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/postEventCloseout.js",
+        "scripts/provisioning-emulator-acceptance.mjs",
+        "src/lib/customerRebookingRadar.js",
+        "src/lib/postEventCloseoutClient.js",
+        "src/lib/quoteWorkflow.js",
+        "src/lib/statusSemantics.js"
+      ],
+      "backendExports": [
+        "functions/index.js#recordPostEventCloseoutReview",
+        "functions/index.js#refreshPostEventCloseoutConfiguration"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#convertQuoteToContract",
+        "functions/index.js#recordPostEventCloseoutReview",
+        "functions/index.js#refreshPostEventCloseoutConfiguration"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/CommandCenterHome.jsx",
+        "src/components/CustomerRevenueOpportunities.jsx",
+        "src/components/CustomerWorkspaceView.jsx",
+        "src/components/PostEventCloseoutReviewAction.jsx",
+        "src/components/SalesWorkflowModal.jsx",
+        "src/styles.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CustomerWorkspaceView.jsx",
+          "locator": "closeoutReviewAvailable={workspace.source === \"firebase\"}"
+        },
+        {
+          "path": "src/components/PostEventCloseoutReviewAction.jsx",
+          "locator": "data-capability-id=\"cwf-11-authoritative-post-event-closeout\""
+        },
+        {
+          "path": "src/components/SalesWorkflowModal.jsx",
+          "locator": "Open Customer 360\" : \"Open quote\"} for post-event closeout"
+        }
+      ],
+      "testPaths": [
+        "scripts/provisioning-emulator-acceptance.mjs",
+        "src/components/__tests__/customerRevenueOpportunities.test.jsx",
+        "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
+        "src/lib/__tests__/postEventCloseout.server.test.js",
+        "src/lib/__tests__/postEventCloseoutClient.test.js",
+        "src/lib/__tests__/quoteWorkflow.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/postEventCloseout.server.test.js",
+          "locator": "builds a future-due pending record with all four review decisions"
+        },
+        {
+          "path": "src/lib/__tests__/postEventCloseout.server.test.js",
+          "locator": "reconciles an exact retry without planning a second mutation"
+        },
+        {
+          "path": "src/lib/__tests__/postEventCloseoutClient.test.js",
+          "locator": "retains an ambiguous attempt and reconciles the exact request identity"
+        },
+        {
+          "path": "src/components/__tests__/customerRevenueOpportunities.test.jsx",
+          "locator": "binds a server closeout projection to explicit review controls without claiming outbound delivery"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "post-event closeout records and action receipts are callable-only"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "CWF-11 authoritative post-event closeout:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "Mark reviewed` and `Reopen review"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Governed booking, exact source binding, tenant-calendar configuration blocking, private receipt authority, Customer 360 and Workflow entry points, responsive review controls, and all mutation/reconciliation states were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
+          "locator": "renders the governed ready state without a provider-delivery claim",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
+          "locator": "moves ready to submitting and preserves exact bounded mutation input",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
+          "locator": "locks an ambiguous outcome to reconciliation of the unchanged pending request",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
+          "locator": "locks an ambiguous outcome to reconciliation of the unchanged pending request",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
+          "locator": "records only an exact internal receipt and notifies the owning surface",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
+          "locator": "separates definitive error from explicit recovery before a new request",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
+          "locator": "separates definitive error from explicit recovery before a new request",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Same-tenant staff can review or reopen one exact due closeout item and reconcile an uncertain attempt from a server receipt; this proves internal review only and never claims that outbound email was accepted, delivered, opened, answered, or that revenue was recovered."
     },
     {
       "id": "commercial-change-impact-preview",

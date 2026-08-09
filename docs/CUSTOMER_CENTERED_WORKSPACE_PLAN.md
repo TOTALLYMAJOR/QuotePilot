@@ -517,10 +517,20 @@ without reopening the customer/account or commercial-authority boundary.
   catalog with server-authoritative repricing, and records source provenance.
   Delivery remains blocked until staff saves a new current-or-future event date
   later than the source event; creating the draft starts no customer message,
-  decision, booking, or payment. Scheduled closeout records and outbound review
-  asks remain later work and require consent, suppression, idempotency, provider
-  evidence, and tenant-time-zone controls. A reminder is an opportunity—not a
-  lead, accepted quote, booking, delivery, or revenue fact.
+  decision, booking, or payment. The next source tranche now atomically creates
+  one deterministic private closeout record during an eligible governed booking,
+  bound to the stable customer, exact accepted immutable version, and verified
+  private acceptance snapshot. Legacy sources remain bookable with a visible
+  source-review block instead of manufactured authority. The record becomes due
+  seven tenant-calendar days after the event, records a safe configuration block
+  when the tenant time zone is missing, projects bounded state to Customer 360
+  and Workflow, uses a separate exact configuration-refresh receipt, and uses
+  idempotent callable-owned receipts for four explicit
+  internal review/reopen actions. Those receipts prove internal review only.
+  Outbound review asks remain later work and require consent, unsubscribe,
+  suppression, idempotency, quiet hours, provider evidence, and tenant-time-zone
+  controls. A reminder is an opportunity—not customer contact, a lead, accepted
+  quote, booking, delivery, payment, or revenue fact.
 - **CWF-12 — Revenue autopilot, email follow-ups, and payment dunning (medium).**
   Add scheduled tenant-branded email policies and Attention escalation on proven
   server/provider boundaries: quote reminders stop on exact portal view,

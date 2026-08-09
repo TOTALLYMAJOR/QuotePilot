@@ -987,6 +987,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Post-event closeout records and exact action receipts are callable-owned.
+    // Staff consume the bounded projection on the canonical quote; customer
+    // portal records never receive this internal operational evidence.
+    match /organizations/{orgId}/postEventCloseouts/{closeoutId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/postEventCloseouts/{closeoutId}/actionReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/quotes/{quoteId} {
       allow create: if false;
       allow read: if isOrgStaff(orgId);

@@ -43,6 +43,18 @@ const {
   resolveAcceptedRebookSource
 } = require("./rebookQuoteDraft");
 const {
+  PostEventCloseoutError,
+  addCalendarDaysDateOnly,
+  assertPostEventCloseoutMatchesSource,
+  buildPostEventCloseoutPolicySnapshot,
+  buildPostEventCloseoutRecord,
+  normalizePostEventCloseoutActionRequest,
+  normalizePostEventCloseoutPolicyRefreshRequest,
+  planPostEventCloseoutAction,
+  planPostEventCloseoutPolicyRefresh,
+  resolvePostEventCloseoutSource
+} = require("./postEventCloseout");
+const {
   buildExistingOrderMessage,
   buildExistingOrganizationMessage,
   canProvisionOrganization,
@@ -8333,6 +8345,7 @@ function quoteCreationFailure(err, {
   if (
     err instanceof QuoteCreationError
     || err instanceof RebookQuoteDraftError
+    || err instanceof PostEventCloseoutError
     || err instanceof PricingEngineError
     || err instanceof ApprovalWorkflowError
     || err instanceof ContractWorkflowError
@@ -8848,6 +8861,98 @@ exports.resolveQuoteApprovalRequest = functions.region(REGION).https.onCall(asyn
   }
 });
 
+function projectPostEventCloseoutToQuote(record = {}) {
+  const reviewItems = record?.reviewItems && typeof record.reviewItems === "object"
+    ? record.reviewItems
+    : {};
+  return {
+    schemaVersion: Number(record.schemaVersion || 0),
+    closeoutId: normalizeText(record.closeoutId),
+    organizationId: normalizeOrganizationId(record.organizationId),
+    quoteId: normalizeText(record.quoteId),
+    customerId: normalizeText(record.customerId),
+    sourceVersionId: normalizeText(record.sourceVersionId),
+    acceptanceReceiptId: normalizeText(record.acceptanceReceiptId),
+    eventDate: normalizeText(record.eventDate),
+    dueDate: normalizeText(record.dueDate),
+    policy: {
+      version: Number(record.policy?.version || 0),
+      state: normalizeText(record.policy?.state),
+      source: normalizeText(record.policy?.source),
+      timeZone: normalizeText(record.policy?.timeZone),
+      dueBoundary: normalizeText(record.policy?.dueBoundary),
+      offsetDays: Number(record.policy?.offsetDays || 0),
+      blockedReason: normalizeText(record.policy?.blockedReason)
+    },
+    state: normalizeText(record.state),
+    reviewItems: Object.fromEntries(Object.entries(reviewItems).map(([code, item]) => [
+      code,
+      {
+        state: normalizeText(item?.state),
+        reviewedAtISO: normalizeText(item?.reviewedAtISO),
+        reviewedBy: item?.reviewedBy && typeof item.reviewedBy === "object"
+          ? {
+              email: normalizeEmail(item.reviewedBy.email),
+              role: normalizeText(item.reviewedBy.role)
+            }
+          : null,
+        lastActionReceiptId: normalizeText(item?.lastActionReceiptId)
+      }
+    ])),
+    completedAtISO: normalizeText(record.completedAtISO),
+    completedBy: record?.completedBy && typeof record.completedBy === "object"
+      ? {
+          email: normalizeEmail(record.completedBy.email),
+          role: normalizeText(record.completedBy.role)
+        }
+      : null,
+    createdAtISO: normalizeText(record.createdAtISO),
+    updatedAtISO: normalizeText(record.updatedAtISO)
+  };
+}
+
+function projectUnavailablePostEventCloseoutToQuote({
+  organizationId,
+  quoteId,
+  quote,
+  acceptedSourceVersionId,
+  reason = "accepted_source_unavailable"
+} = {}) {
+  const eventDate = normalizeText(quote?.event?.date);
+  let dueDate = "";
+  try {
+    dueDate = addCalendarDaysDateOnly(eventDate);
+  } catch {
+    dueDate = "";
+  }
+  return {
+    schemaVersion: 1,
+    closeoutId: "",
+    organizationId: normalizeOrganizationId(organizationId),
+    quoteId: normalizeText(quoteId),
+    customerId: normalizeText(quote?.customerId),
+    sourceVersionId: normalizeText(acceptedSourceVersionId),
+    acceptanceReceiptId: normalizeText(quote?.acceptanceReceipt?.receiptId),
+    eventDate,
+    dueDate,
+    policy: {
+      version: 1,
+      state: "blocked_source",
+      source: "accepted_proposal_authority",
+      timeZone: "",
+      dueBoundary: "tenant_calendar_date",
+      offsetDays: 7,
+      blockedReason: reason
+    },
+    state: "blocked_source",
+    reviewItems: {},
+    completedAtISO: "",
+    completedBy: null,
+    createdAtISO: "",
+    updatedAtISO: ""
+  };
+}
+
 exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
   const staff = assertAdminStaff(await assertStaff(context, {
@@ -8877,11 +8982,8 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
       organizationId,
       approvalRequestId
     );
-    const settingsRef = db
-      .collection(ORGANIZATIONS_COLLECTION)
-      .doc(organizationId)
-      .collection("settings")
-      .doc("config");
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+    const settingsRef = organizationRef.collection("settings").doc("config");
     const convertedAtISO = new Date().toISOString();
     const contractDate = convertedAtISO.slice(2, 10).replace(/-/g, "");
     const contractNumber = `C-${contractDate}-${String(randomInt(0, 100_000)).padStart(5, "0")}`;
@@ -8922,6 +9024,20 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
       }
       assertQuoteEditNotDispatching({ ...quote, id: quoteId }, convertedAtISO);
 
+      const acceptedSourceVersionId = normalizeText(
+        quote.activeVersionId || quote.versionMeta?.versionId
+      );
+      const acceptedSourceVersionSnap = acceptedSourceVersionId
+        ? await tx.get(quoteRef.collection("versions").doc(acceptedSourceVersionId))
+        : null;
+      const acceptanceReceiptId = normalizeText(quote.acceptanceReceipt?.receiptId);
+      const acceptanceReceiptDocumentSnap = acceptanceReceiptId
+        ? await tx.get(
+            organizationRef
+              .collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION)
+              .doc(acceptanceReceiptId)
+          )
+        : null;
       const eventDate = normalizeText(quote.event?.date);
       const conflictQuery = quoteRef.parent.where("event.date", "==", eventDate || "__missing__");
       const conflictSnap = await tx.get(conflictQuery);
@@ -8957,6 +9073,66 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         contractNumber,
         capacityLimit: settingsSnap.data()?.capacityLimit || 400
       });
+      const bookedSourceQuote = {
+        ...quote,
+        ...conversion.quotePatch,
+        id: quoteId
+      };
+      let closeoutRecord = null;
+      let closeoutRef = null;
+      let closeoutSnap = null;
+      let closeoutProjection = projectUnavailablePostEventCloseoutToQuote({
+        organizationId,
+        quoteId,
+        quote: bookedSourceQuote,
+        acceptedSourceVersionId
+      });
+      try {
+        if (!acceptedSourceVersionSnap?.exists || !acceptanceReceiptDocumentSnap?.exists) {
+          throw new PostEventCloseoutError(
+            "failed-precondition",
+            "The exact accepted proposal source is unavailable for closeout scheduling."
+          );
+        }
+        const sourceVersion = {
+          id: acceptedSourceVersionSnap.id,
+          ...(acceptedSourceVersionSnap.data() || {})
+        };
+        const acceptanceReceiptDocument = acceptanceReceiptDocumentSnap.data() || {};
+        const closeoutSource = resolvePostEventCloseoutSource({
+          organizationId,
+          quoteId,
+          sourceQuote: bookedSourceQuote,
+          sourceVersion,
+          acceptanceReceiptDocument
+        });
+        closeoutRecord = buildPostEventCloseoutRecord({
+          organizationId,
+          quoteId,
+          sourceQuote: bookedSourceQuote,
+          sourceVersion,
+          acceptanceReceiptDocument,
+          settings: settingsSnap.exists ? settingsSnap.data() || {} : {},
+          actor: staff,
+          nowISO: convertedAtISO
+        });
+        closeoutRef = organizationRef
+          .collection("postEventCloseouts")
+          .doc(closeoutRecord.closeoutId);
+        closeoutSnap = await tx.get(closeoutRef);
+        if (closeoutSnap.exists) {
+          assertPostEventCloseoutMatchesSource(closeoutSnap.data() || {}, closeoutSource);
+        }
+        closeoutProjection = projectPostEventCloseoutToQuote(
+          closeoutSnap.exists ? closeoutSnap.data() || {} : closeoutRecord
+        );
+      } catch (error) {
+        if (!(error instanceof PostEventCloseoutError)) throw error;
+        if (closeoutSnap?.exists) throw error;
+        closeoutRecord = null;
+        closeoutRef = null;
+        closeoutSnap = null;
+      }
       const completed = buildApprovalExecutionOutcome({
         workflow: {
           ...(quote.workflow || {}),
@@ -8972,7 +9148,8 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
       });
       const workflow = {
         ...(quote.workflow || {}),
-        approvalRequests: completed.approvalRequests
+        approvalRequests: completed.approvalRequests,
+        postEventCloseout: closeoutProjection
       };
       const versionMeta = {
         versionId,
@@ -8989,7 +9166,8 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         ...conversion.quotePatch,
         workflow,
         latestVersionNumber: nextVersionNumber,
-        versionMeta
+        versionMeta,
+        ...(acceptedSourceVersionId ? { activeVersionId: acceptedSourceVersionId } : {})
       };
       const convertedQuote = {
         ...quote,
@@ -9010,6 +9188,7 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         contractNumber: conversion.contractNumber,
         availability: conversion.availability,
         approvalRequest: completed.request,
+        postEventCloseout: closeoutProjection,
         versionId,
         versionNumber: nextVersionNumber
       };
@@ -9048,6 +9227,13 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         completedAtISO: convertedAtISO,
         result: response
       }));
+      if (closeoutRecord && closeoutRef && closeoutSnap && !closeoutSnap.exists) {
+        tx.create(closeoutRef, {
+          ...closeoutRecord,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
       return response;
     });
 
@@ -9065,6 +9251,356 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
       organizationId,
       failureMessage: "Failed to convert quote to contract."
     });
+  }
+});
+
+exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(async (data, context) => {
+  let request;
+  try {
+    request = normalizePostEventCloseoutActionRequest(data);
+  } catch (err) {
+    if (err instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: request.organizationId
+  });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== request.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Closeout review requires same-organization staff authority."
+    );
+  }
+
+  try {
+    const nowISO = new Date().toISOString();
+    const organizationRef = db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .doc(request.organizationId);
+    const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(request.quoteId);
+    const closeoutRef = organizationRef
+      .collection("postEventCloseouts")
+      .doc(request.closeoutId);
+    const receiptRef = closeoutRef
+      .collection("actionReceipts")
+      .doc(request.receiptId);
+    const settingsRef = organizationRef.collection("settings").doc("config");
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, closeoutSnap, receiptSnap, settingsSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(closeoutRef),
+        tx.get(receiptRef),
+        tx.get(settingsRef)
+      ]);
+      if (!quoteSnap.exists || !closeoutSnap.exists) {
+        throw new PostEventCloseoutError(
+          "not-found",
+          "The authoritative booked quote or closeout record is unavailable."
+        );
+      }
+      const quote = quoteSnap.data() || {};
+      const closeout = closeoutSnap.data() || {};
+      if (
+        normalizeOrganizationId(quote.organizationId) !== request.organizationId
+        || normalizeText(closeout.organizationId) !== request.organizationId
+        || normalizeText(closeout.quoteId) !== request.quoteId
+      ) {
+        throw new PostEventCloseoutError(
+          "permission-denied",
+          "The closeout record is outside this organization or quote scope."
+        );
+      }
+      const sourceVersionId = normalizeText(closeout.sourceVersionId);
+      const acceptanceReceiptDocumentId = normalizeText(closeout.acceptanceReceiptId);
+      if (!sourceVersionId || !acceptanceReceiptDocumentId) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout record is missing its accepted proposal source or receipt."
+        );
+      }
+      const [sourceVersionSnap, acceptanceReceiptDocumentSnap] = await Promise.all([
+        tx.get(quoteRef.collection("versions").doc(sourceVersionId)),
+        tx.get(
+          organizationRef
+            .collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION)
+            .doc(acceptanceReceiptDocumentId)
+        )
+      ]);
+      if (!sourceVersionSnap.exists || !acceptanceReceiptDocumentSnap.exists) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout accepted proposal source or private receipt is unavailable."
+        );
+      }
+      const source = resolvePostEventCloseoutSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        sourceQuote: { id: quoteSnap.id, ...quote },
+        sourceVersion: {
+          id: sourceVersionSnap.id,
+          ...(sourceVersionSnap.data() || {})
+        },
+        acceptanceReceiptDocument: acceptanceReceiptDocumentSnap.data() || {}
+      });
+      assertPostEventCloseoutMatchesSource(closeout, source);
+
+      const currentPolicy = buildPostEventCloseoutPolicySnapshot(
+        settingsSnap.exists ? settingsSnap.data() || {} : {}
+      );
+      const policyRecovered = normalizeText(closeout.policy?.state) === "blocked_configuration"
+        && currentPolicy.state === "configured";
+      const workingRecord = policyRecovered
+        ? {
+            ...closeout,
+            policy: currentPolicy,
+            state: "pending",
+            updatedAtISO: nowISO
+          }
+        : closeout;
+      const planned = planPostEventCloseoutAction({
+        request,
+        record: workingRecord,
+        source,
+        actor: staff,
+        nowISO,
+        existingReceipt: receiptSnap.exists ? receiptSnap.data() || {} : null
+      });
+      const nextRecord = planned.nextRecord || workingRecord;
+      const quoteProjection = projectPostEventCloseoutToQuote(nextRecord);
+
+      if (!receiptSnap.exists) {
+        tx.create(receiptRef, {
+          ...planned.receipt,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      if (planned.nextRecord || policyRecovered) {
+        tx.set(closeoutRef, {
+          ...nextRecord,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+      if (planned.nextRecord || policyRecovered) {
+        tx.update(quoteRef, {
+          "workflow.postEventCloseout": quoteProjection,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+
+      return {
+        kind: planned.kind,
+        idempotent: planned.idempotent,
+        state: quoteProjection.state,
+        postEventCloseout: quoteProjection,
+        receipt: {
+          receiptId: normalizeText(planned.receipt.receiptId),
+          requestId: normalizeText(planned.receipt.requestId),
+          itemCode: normalizeText(planned.receipt.itemCode),
+          action: normalizeText(planned.receipt.action),
+          applied: planned.receipt.applied === true,
+          priorItemState: normalizeText(planned.receipt.priorItemState),
+          resultItemState: normalizeText(planned.receipt.resultItemState),
+          priorCloseoutState: normalizeText(planned.receipt.priorCloseoutState),
+          resultCloseoutState: normalizeText(planned.receipt.resultCloseoutState),
+          recordedAtISO: normalizeText(planned.receipt.recordedAtISO),
+          recordedByEmail: normalizeEmail(planned.receipt.recordedBy?.email)
+        }
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      ...result
+    };
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (err instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    functions.logger.error("Post-event closeout review failed", {
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      actorUid: staff.uid,
+      error: normalizeText(err?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to record the post-event closeout review."
+    );
+  }
+});
+
+exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.onCall(async (data, context) => {
+  let request;
+  try {
+    request = normalizePostEventCloseoutPolicyRefreshRequest(data);
+  } catch (error) {
+    if (error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    throw error;
+  }
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: request.organizationId
+  });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== request.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Closeout configuration refresh requires same-organization staff authority."
+    );
+  }
+
+  try {
+    const nowISO = new Date().toISOString();
+    const organizationRef = db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .doc(request.organizationId);
+    const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(request.quoteId);
+    const closeoutRef = organizationRef
+      .collection("postEventCloseouts")
+      .doc(request.closeoutId);
+    const receiptRef = closeoutRef
+      .collection("actionReceipts")
+      .doc(request.receiptId);
+    const settingsRef = organizationRef.collection("settings").doc("config");
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, closeoutSnap, receiptSnap, settingsSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(closeoutRef),
+        tx.get(receiptRef),
+        tx.get(settingsRef)
+      ]);
+      if (!quoteSnap.exists || !closeoutSnap.exists) {
+        throw new PostEventCloseoutError(
+          "not-found",
+          "The authoritative booked quote or closeout record is unavailable."
+        );
+      }
+      const quote = quoteSnap.data() || {};
+      const closeout = closeoutSnap.data() || {};
+      if (
+        normalizeOrganizationId(quote.organizationId) !== request.organizationId
+        || normalizeText(closeout.organizationId) !== request.organizationId
+        || normalizeText(closeout.quoteId) !== request.quoteId
+      ) {
+        throw new PostEventCloseoutError(
+          "permission-denied",
+          "The closeout record is outside this organization or quote scope."
+        );
+      }
+      const sourceVersionId = normalizeText(closeout.sourceVersionId);
+      const acceptanceReceiptDocumentId = normalizeText(closeout.acceptanceReceiptId);
+      if (!sourceVersionId || !acceptanceReceiptDocumentId) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout record is missing its accepted proposal source or receipt."
+        );
+      }
+      const [sourceVersionSnap, acceptanceReceiptDocumentSnap] = await Promise.all([
+        tx.get(quoteRef.collection("versions").doc(sourceVersionId)),
+        tx.get(
+          organizationRef
+            .collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION)
+            .doc(acceptanceReceiptDocumentId)
+        )
+      ]);
+      if (!sourceVersionSnap.exists || !acceptanceReceiptDocumentSnap.exists) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout accepted proposal source or private receipt is unavailable."
+        );
+      }
+      const source = resolvePostEventCloseoutSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        sourceQuote: { id: quoteSnap.id, ...quote },
+        sourceVersion: {
+          id: sourceVersionSnap.id,
+          ...(sourceVersionSnap.data() || {})
+        },
+        acceptanceReceiptDocument: acceptanceReceiptDocumentSnap.data() || {}
+      });
+      const planned = planPostEventCloseoutPolicyRefresh({
+        request,
+        record: closeout,
+        source,
+        settings: settingsSnap.exists ? settingsSnap.data() || {} : {},
+        actor: staff,
+        nowISO,
+        existingReceipt: receiptSnap.exists ? receiptSnap.data() || {} : null
+      });
+      const nextRecord = planned.nextRecord || closeout;
+      const quoteProjection = projectPostEventCloseoutToQuote(nextRecord);
+
+      if (!receiptSnap.exists) {
+        tx.create(receiptRef, {
+          ...planned.receipt,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      if (planned.nextRecord) {
+        tx.set(closeoutRef, {
+          ...planned.nextRecord,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        tx.update(quoteRef, {
+          "workflow.postEventCloseout": quoteProjection,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+
+      return {
+        kind: planned.kind,
+        idempotent: planned.idempotent,
+        state: quoteProjection.state,
+        postEventCloseout: quoteProjection,
+        receipt: {
+          receiptId: normalizeText(planned.receipt.receiptId),
+          requestId: normalizeText(planned.receipt.requestId),
+          action: "refresh_configuration",
+          applied: planned.receipt.applied === true,
+          priorPolicyState: normalizeText(planned.receipt.priorPolicyState),
+          resultPolicyState: normalizeText(planned.receipt.resultPolicyState),
+          priorTimeZone: normalizeText(planned.receipt.priorTimeZone),
+          resultTimeZone: normalizeText(planned.receipt.resultTimeZone),
+          resultCloseoutState: normalizeText(planned.receipt.resultCloseoutState),
+          recordedAtISO: normalizeText(planned.receipt.recordedAtISO),
+          recordedByEmail: normalizeEmail(planned.receipt.recordedBy?.email)
+        }
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      ...result
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    if (error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    functions.logger.error("Post-event closeout configuration refresh failed", {
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      actorUid: staff.uid,
+      error: normalizeText(error?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to refresh post-event closeout configuration."
+    );
   }
 });
 

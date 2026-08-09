@@ -6457,6 +6457,84 @@ hr {
   color: #514b40;
 }
 
+.post-event-closeout-action {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid #bdd1c4;
+  border-radius: var(--radius-sm);
+  background: rgba(247, 251, 248, 0.96);
+}
+
+.post-event-closeout-action[data-closeout-state="blocked_configuration"],
+.post-event-closeout-action[data-capability-state="uncertain"],
+.post-event-closeout-action[data-capability-state="error"] {
+  border-color: #d5ad67;
+  background: rgba(255, 248, 232, 0.97);
+}
+
+.post-event-closeout-action[data-closeout-state="completed"],
+.post-event-closeout-action[data-capability-state="receipt"] {
+  border-color: #93b9a1;
+}
+
+.post-event-closeout-action h4,
+.post-event-closeout-action p {
+  margin: 0;
+}
+
+.post-event-closeout-items {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.post-event-closeout-configuration {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem;
+  border: 1px solid #d5ad67;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+
+.post-event-closeout-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(12rem, 1fr) auto;
+  align-items: end;
+  gap: 0.7rem;
+  padding: 0.7rem;
+  border: 1px solid #dfe8e2;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.post-event-closeout-item .compact-field {
+  min-width: 0;
+  margin: 0;
+}
+
+.post-event-closeout-item .right-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .post-event-closeout-configuration,
+  .post-event-closeout-item {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .post-event-closeout-configuration .right-actions,
+  .post-event-closeout-configuration .right-actions button,
+  .post-event-closeout-item .right-actions,
+  .post-event-closeout-item .right-actions button {
+    width: 100%;
+  }
+}
+
 .customer-rebook-draft-action {
   display: grid;
   gap: 0.65rem;

@@ -343,10 +343,13 @@ const WORKFLOW_ATTENTION_STATUSES = new Set([
 ]);
 const WORKFLOW_ATTENTION_PRIORITY = {
   new_change_request: 0,
-  overdue_follow_up: 1,
-  pending_approval: 2,
-  acknowledged_change_request: 3,
-  due_follow_up: 4
+  blocked_closeout: 1,
+  overdue_closeout: 2,
+  overdue_follow_up: 3,
+  pending_approval: 4,
+  acknowledged_change_request: 5,
+  due_closeout: 6,
+  due_follow_up: 7
 };
 
 function text(value) {
@@ -378,6 +381,27 @@ function localDateIso(value = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function calendarDateInTimeZone(value, timeZone) {
+  const instantISO = safeIso(value);
+  const requestedTimeZone = text(timeZone);
+  if (!instantISO || !requestedTimeZone) return "";
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      calendar: "gregory",
+      numberingSystem: "latn",
+      timeZone: requestedTimeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(new Date(instantISO));
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const result = `${values.year}-${values.month}-${values.day}`;
+    return /^\d{4}-\d{2}-\d{2}$/.test(result) ? result : "";
+  } catch {
+    return "";
+  }
+}
+
 function daysBetweenDates(earlierDateIso, laterDateIso) {
   const earlier = Date.parse(`${earlierDateIso}T00:00:00.000Z`);
   const later = Date.parse(`${laterDateIso}T00:00:00.000Z`);
@@ -389,16 +413,21 @@ export function buildWorkflowAttentionSummary(quotes = [], options = {}) {
   const todayISO = /^\d{4}-\d{2}-\d{2}$/.test(text(options.todayISO))
     ? text(options.todayISO)
     : localDateIso(options.now);
+  const evaluationInstantISO = safeIso(options.nowISO || options.now)
+    || (/^\d{4}-\d{2}-\d{2}$/.test(text(options.todayISO))
+      ? `${text(options.todayISO)}T12:00:00.000Z`
+      : new Date().toISOString());
   const items = [];
 
   (Array.isArray(quotes) ? quotes : []).forEach((quote) => {
     const quoteId = text(quote?.id);
     const quoteStatus = text(quote?.status).toLowerCase();
-    if (!quoteId || !WORKFLOW_ATTENTION_STATUSES.has(quoteStatus)) return;
+    if (!quoteId) return;
+    const commercialAttentionEligible = WORKFLOW_ATTENTION_STATUSES.has(quoteStatus);
 
     const portalDecision = quote?.portalDecision || {};
     const requestSubmittedAtISO = safeIso(portalDecision.submittedAtISO);
-    if (portalDecision.decision === "changes_requested") {
+    if (commercialAttentionEligible && portalDecision.decision === "changes_requested") {
       const handling = quote?.workflow?.changeRequestHandling || {};
       const requestId = text(portalDecision.requestId);
       const requestMessage = text(portalDecision.message);
@@ -448,7 +477,12 @@ export function buildWorkflowAttentionSummary(quotes = [], options = {}) {
     const followUp = quote?.workflow?.followUp || {};
     const dueDate = text(followUp.dueDate);
     const followUpClosed = followUp.completed === true || ["won", "lost"].includes(text(followUp.stage));
-    if (!followUpClosed && /^\d{4}-\d{2}-\d{2}$/.test(dueDate) && dueDate <= todayISO) {
+    if (
+      commercialAttentionEligible
+      && !followUpClosed
+      && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)
+      && dueDate <= todayISO
+    ) {
       const daysOverdue = daysBetweenDates(dueDate, todayISO);
       items.push({
         id: `follow-up:${quoteId}`,
@@ -462,7 +496,7 @@ export function buildWorkflowAttentionSummary(quotes = [], options = {}) {
       });
     }
 
-    const pendingRequests = (Array.isArray(quote?.workflow?.approvalRequests)
+    const pendingRequests = (commercialAttentionEligible && Array.isArray(quote?.workflow?.approvalRequests)
       ? quote.workflow.approvalRequests
       : [])
       .filter((request) => request?.state === "pending")
@@ -478,6 +512,81 @@ export function buildWorkflowAttentionSummary(quotes = [], options = {}) {
         quote,
         quoteId
       });
+    }
+
+    const closeout = quote?.workflow?.postEventCloseout || {};
+    const closeoutId = text(closeout.closeoutId);
+    const closeoutState = text(closeout.state).toLowerCase();
+    const closeoutPolicyState = text(closeout.policy?.state).toLowerCase();
+    const sourceBlocked = closeoutState === "blocked_source";
+    const closeoutScopeValid = quoteStatus === "booked"
+      && (closeoutId || sourceBlocked)
+      && text(closeout.quoteId) === quoteId
+      && (!text(closeout.organizationId)
+        || text(closeout.organizationId) === text(quote.organizationId))
+      && (!text(closeout.customerId)
+        || text(closeout.customerId) === text(quote.customerId));
+    if (closeoutScopeValid && closeoutState !== "completed") {
+      const dueDate = text(closeout.dueDate);
+      if (sourceBlocked) {
+        items.push({
+          id: `post-event-closeout:${quoteId}:blocked-source`,
+          type: "post_event_closeout",
+          state: "blocked_source",
+          priority: WORKFLOW_ATTENTION_PRIORITY.blocked_closeout,
+          dateISO: dueDate || text(closeout.eventDate) || safeIso(quote.updatedAtISO),
+          closeoutId: "",
+          dueDate,
+          quote,
+          quoteId
+        });
+      } else if (closeoutPolicyState === "blocked_configuration") {
+        items.push({
+          id: `post-event-closeout:${quoteId}:${closeoutId}`,
+          type: "post_event_closeout",
+          state: "blocked_configuration",
+          priority: WORKFLOW_ATTENTION_PRIORITY.blocked_closeout,
+          dateISO: dueDate || text(closeout.eventDate) || safeIso(quote.updatedAtISO),
+          closeoutId,
+          dueDate,
+          quote,
+          quoteId
+        });
+      } else {
+        const closeoutTodayISO = calendarDateInTimeZone(
+          evaluationInstantISO,
+          closeout.policy?.timeZone
+        );
+        if (!closeoutTodayISO) {
+          items.push({
+            id: `post-event-closeout:${quoteId}:${closeoutId}`,
+            type: "post_event_closeout",
+            state: "blocked_configuration",
+            priority: WORKFLOW_ATTENTION_PRIORITY.blocked_closeout,
+            dateISO: dueDate || text(closeout.eventDate) || safeIso(quote.updatedAtISO),
+            closeoutId,
+            dueDate,
+            quote,
+            quoteId
+          });
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate) && dueDate <= closeoutTodayISO) {
+          const daysOverdue = daysBetweenDates(dueDate, closeoutTodayISO);
+          items.push({
+            id: `post-event-closeout:${quoteId}:${closeoutId}`,
+            type: "post_event_closeout",
+            state: daysOverdue > 0 ? "overdue" : "due_today",
+            priority: WORKFLOW_ATTENTION_PRIORITY[
+              daysOverdue > 0 ? "overdue_closeout" : "due_closeout"
+            ],
+            dateISO: dueDate,
+            daysOverdue,
+            closeoutId,
+            dueDate,
+            quote,
+            quoteId
+          });
+        }
+      }
     }
   });
 
@@ -495,7 +604,8 @@ export function buildWorkflowAttentionSummary(quotes = [], options = {}) {
     counts: {
       changeRequests: items.filter((item) => item.type === "change_request").length,
       followUps: items.filter((item) => item.type === "follow_up").length,
-      approvals: items.filter((item) => item.type === "approval").length
+      approvals: items.filter((item) => item.type === "approval").length,
+      postEventCloseouts: items.filter((item) => item.type === "post_event_closeout").length
     },
     items
   };

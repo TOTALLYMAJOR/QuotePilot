@@ -166,7 +166,8 @@ describe("Customer revenue opportunities presentation", () => {
     })).toEqual({
       date: "2026-08-09",
       source: "tenant",
-      timeZone: "America/Chicago"
+      timeZone: "America/Chicago",
+      instantISO: "2026-08-10T01:30:00.000Z"
     });
     expect(resolveCustomerRevenueCalendarContext({
       loadedAt,
@@ -174,7 +175,8 @@ describe("Customer revenue opportunities presentation", () => {
     })).toEqual({
       date: "2026-08-10",
       source: "device",
-      timeZone: "Asia/Tokyo"
+      timeZone: "Asia/Tokyo",
+      instantISO: "2026-08-10T01:30:00.000Z"
     });
     expect(() => resolveCustomerRevenueCalendarContext({
       loadedAt,
@@ -229,6 +231,81 @@ describe("Customer revenue opportunities presentation", () => {
     });
     sourceButton.props.onClick();
     expect(onOpenQuote).toHaveBeenCalledWith("anniversary");
+  });
+
+  test("binds a server closeout projection to explicit review controls without claiming outbound delivery", () => {
+    const closeoutQuote = makeQuote({ id: "authoritative-closeout", date: "2026-08-05" });
+    closeoutQuote.workflow = {
+      postEventCloseout: {
+        schemaVersion: 1,
+        closeoutId: `closeout_${"a".repeat(48)}`,
+        organizationId: ORGANIZATION_ID,
+        quoteId: closeoutQuote.id,
+        customerId: CUSTOMER_ID,
+        sourceVersionId: closeoutQuote.activeVersionId,
+        acceptanceReceiptId: closeoutQuote.acceptanceReceipt.receiptId,
+        eventDate: closeoutQuote.event.date,
+        dueDate: "2026-08-12",
+        policy: {
+          version: 1,
+          state: "configured",
+          source: "organization_settings",
+          timeZone: "America/Chicago",
+          dueBoundary: "tenant_calendar_date",
+          offsetDays: 7,
+          blockedReason: ""
+        },
+        state: "pending",
+        reviewItems: {
+          internal_closeout: { state: "reviewed", reviewedAtISO: "2026-08-12T15:00:00.000Z", reviewedBy: { email: "staff@example.test" } },
+          thank_you: { state: "pending" },
+          review_request: { state: "pending" },
+          operational_follow_up: { state: "pending" }
+        },
+        completedAtISO: "",
+        completedBy: null,
+        createdAtISO: "2026-07-01T12:00:00.000Z",
+        updatedAtISO: "2026-08-12T15:00:00.000Z"
+      }
+    };
+    const workspace = makeWorkspace({ quotes: [closeoutQuote] });
+    const radar = buildCustomerRevenueOpportunityRead({
+      workspace,
+      organizationId: ORGANIZATION_ID,
+      loadedAt: "2026-08-13T15:00:00.000Z",
+      tenantTimeZone: "America/Chicago"
+    });
+    const markup = renderToStaticMarkup(
+      <CustomerRevenueOpportunitiesPresentation radar={radar} />
+    );
+
+    expect(radar.opportunities[0]).toMatchObject({
+      id: `closeout_${"a".repeat(48)}`,
+      organizationId: ORGANIZATION_ID,
+      reviewedAction: {
+        kind: "review_post_event_closeout",
+        state: "overdue"
+      }
+    });
+    expect(markup).toContain('data-capability-id="cwf-11-authoritative-post-event-closeout"');
+    expect(markup).toContain('data-capability-state="ready"');
+    expect(markup).toContain('data-closeout-state="overdue"');
+    expect(markup).toContain("Mark reviewed");
+    expect(markup).toContain("Reopen review");
+    expect(markup).toContain("does not claim that a thank-you or review request was sent");
+    expect(markup).not.toContain("Email delivered");
+
+    const boundary = buildCustomerRevenueOpportunityRead({
+      workspace,
+      organizationId: ORGANIZATION_ID,
+      loadedAt: "2026-08-12T03:00:00.000Z",
+      tenantTimeZone: "Asia/Tokyo"
+    });
+    expect(boundary.calendarContext.date).toBe("2026-08-12");
+    expect(boundary.opportunities[0].reviewedAction).toMatchObject({
+      state: "scheduled",
+      policy: { timeZone: "America/Chicago" }
+    });
   });
 
   test("opens an exact pending descendant for edit instead of rendering another create action", () => {
