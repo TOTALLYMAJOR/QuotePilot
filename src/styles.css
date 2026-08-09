@@ -5822,6 +5822,380 @@ hr {
   }
 }
 
+/* ---------- Routed staff workspace ---------- */
+.workspace-route-main {
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.wizard-grid[hidden] {
+  display: none;
+}
+
+.workspace-route-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.workspace-route-head h1,
+.workspace-route-head h2,
+.workspace-route-head h3,
+.workspace-route-head p {
+  margin-top: 0;
+}
+
+.embedded-workspace-route {
+  width: min(1180px, calc(100% - 2rem));
+  max-width: calc(100% - 2rem);
+}
+
+.workspace-route-card {
+  position: static;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+}
+
+.customer-directory-search {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) auto auto auto;
+  align-items: end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.customer-directory-search .field {
+  margin: 0;
+}
+
+.customer-directory-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.customer-directory-table th,
+.customer-directory-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(122, 105, 75, 0.2);
+  text-align: left;
+  vertical-align: top;
+}
+
+.customer-directory-table td small,
+.customer-directory-table td span {
+  display: block;
+}
+
+.customer-directory-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.customer-partial-results {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.workspace-text-link,
+.command-center-customer-link {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #315f87;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+
+.workspace-text-link:hover,
+.command-center-customer-link:hover {
+  color: #183c5d;
+}
+
+.customer-workspace-tabs {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  margin-bottom: var(--space-4);
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #e4dccb;
+}
+
+.customer-workspace-tabs button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #655c4e;
+}
+
+.customer-workspace-tabs button.active {
+  border-color: #c7b997;
+  background: #f3eee3;
+  color: #2f2a22;
+}
+
+.customer-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.customer-overview-grid article,
+.customer-next-action,
+.customer-card-list > article {
+  border: 1px solid #e4dccb;
+  border-radius: var(--radius-sm);
+  background: #faf8f3;
+}
+
+.customer-overview-grid article {
+  display: grid;
+  gap: 0.25rem;
+  padding: var(--space-3);
+}
+
+.customer-overview-grid span {
+  color: #6e6455;
+  font-size: 0.78rem;
+}
+
+.customer-overview-grid strong {
+  color: #2f2a22;
+  font-size: 1.55rem;
+}
+
+.customer-next-action {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+}
+
+.customer-card-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.customer-card-list > article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.customer-card-list h3,
+.customer-card-list p {
+  margin: 0 0 0.35rem;
+}
+
+.customer-card-list small {
+  display: block;
+  margin-top: 0.35rem;
+  color: #6e6455;
+}
+
+.customer-activity-list {
+  display: grid;
+  gap: 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.customer-activity-list li {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) minmax(10rem, 1fr) auto;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.customer-activity-list time {
+  color: #6e6455;
+  font-size: 0.78rem;
+}
+
+.staff-proposal-preview {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid #d9d0bd;
+  border-radius: var(--radius-md);
+  background: #f7f4ed;
+  color: #30291f;
+  box-shadow: 0 18px 42px -32px rgba(43, 34, 20, 0.38);
+}
+
+.staff-proposal-preview-controls {
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.staff-proposal-preview-controls h3,
+.staff-proposal-preview-controls p {
+  margin-bottom: 0;
+}
+
+.staff-proposal-preview-controls .ghost {
+  min-height: 40px;
+}
+
+.staff-proposal-customer-presentation {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--portal-brand) 38%, #d9d0bd);
+  border-top: 5px solid var(--portal-brand);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(145deg, var(--portal-surface) 0%, var(--portal-surface-alt) 72%, var(--portal-canvas) 100%);
+  color: var(--portal-brand-dark);
+  box-shadow: 0 18px 42px -32px color-mix(in srgb, var(--portal-brand) 45%, transparent);
+  isolation: isolate;
+}
+
+.staff-proposal-brand-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--portal-brand) 24%, transparent);
+}
+
+.staff-proposal-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.staff-proposal-brand-lockup img {
+  width: 52px;
+  height: 52px;
+  border-radius: 9px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.staff-proposal-brand-lockup h4,
+.staff-proposal-brand-lockup p,
+.staff-proposal-brand-contact,
+.staff-proposal-title-block h5,
+.staff-proposal-title-block p {
+  margin: 0;
+}
+
+.staff-proposal-brand-lockup h4 {
+  color: var(--portal-brand-dark);
+  font-size: 1.2rem;
+}
+
+.staff-proposal-brand-kicker,
+.staff-proposal-title-block > span {
+  color: var(--portal-link);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.staff-proposal-brand-contact {
+  max-width: 24rem;
+  color: var(--portal-link);
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.staff-proposal-title-block {
+  margin: var(--space-4) 0;
+}
+
+.staff-proposal-title-block h5 {
+  margin-top: 0.2rem;
+  color: var(--portal-brand-dark);
+  font-size: 1.35rem;
+}
+
+.staff-proposal-title-block p {
+  margin-top: 0.25rem;
+  color: var(--portal-link);
+}
+
+.staff-proposal-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.staff-proposal-preview-grid > div {
+  padding: 0.7rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--portal-accent) 18%, rgba(255, 255, 255, 0.86));
+}
+
+.staff-proposal-preview-grid dt {
+  color: var(--portal-link);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.staff-proposal-preview-grid dd {
+  margin: 0.15rem 0 0;
+  color: var(--portal-brand-dark);
+  font-weight: 700;
+}
+
+.workspace-not-found {
+  max-width: 44rem;
+}
+
+@media (max-width: 760px) {
+  .customer-directory-search {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .customer-directory-search .field {
+    grid-column: 1 / -1;
+  }
+
+  .customer-overview-grid,
+  .staff-proposal-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .staff-proposal-brand-heading {
+    flex-direction: column;
+  }
+
+  .staff-proposal-brand-contact {
+    text-align: left;
+  }
+
+  .customer-card-list > article,
+  .customer-activity-list li {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+}
+
 /* ---------- Neutral staff chrome ---------- */
 /* Scoped to the staff workspace shells only (App.jsx adds app-shell-neutral
    there). The customer portal, proposals, and marketing surfaces keep their
@@ -5850,7 +6224,7 @@ hr {
   background: rgba(255, 255, 255, 0.11);
 }
 
-.app-shell-neutral .cta {
+.app-shell-neutral .cta:not([data-customer-presentation="true"] *) {
   background: #8a6414;
   box-shadow: none;
 }
@@ -5884,7 +6258,14 @@ hr {
   color: #b4530a !important;
 }
 
-.app-shell-neutral .panel {
+.app-shell-neutral .wizard-panel,
+.app-shell-neutral .breakdown-panel,
+.app-shell-neutral .command-center,
+.app-shell-neutral .customer-directory,
+.app-shell-neutral .customer-workspace,
+.app-shell-neutral .workspace-not-found,
+.app-shell-neutral .workspace-route-card,
+.app-shell-neutral > .auth-shell > .auth-card {
   background: #ffffff;
   border: 1px solid #e4dccb;
   box-shadow: 0 10px 26px -20px rgba(38, 28, 12, 0.35);
@@ -5896,7 +6277,7 @@ hr {
   box-shadow: 0 10px 26px -20px rgba(38, 28, 12, 0.35);
 }
 
-.app-shell-neutral .ghost {
+.app-shell-neutral .ghost:not([data-customer-presentation="true"] *) {
   background: #ffffff;
   border-color: #d9d0bd;
   color: #4a4234;
@@ -5908,7 +6289,17 @@ hr {
   border-color: rgba(255, 255, 255, 0.14);
 }
 
-.app-shell-neutral .modal-card {
+.app-shell-neutral .admin-catalog-card,
+.app-shell-neutral .compare-card,
+.app-shell-neutral .dashboard-card,
+.app-shell-neutral .diagnostics-card,
+.app-shell-neutral .history-card,
+.app-shell-neutral .import-studio-card,
+.app-shell-neutral .integration-card,
+.app-shell-neutral .modal-loading-card,
+.app-shell-neutral .sales-workflow-card,
+.app-shell-neutral .schedule-card,
+.app-shell-neutral .ui-recovery-card {
   background: #ffffff;
   border-color: #ded4c0;
 }

@@ -78,17 +78,22 @@ function followUpFromQuote(quote) {
   };
 }
 
-export default function SalesWorkflowModal({
+export function SalesWorkflowView({
   open,
   onClose,
+  presentation = "embedded",
   onOpenQuoteHistory,
   onEditQuote,
   onAttentionSummaryChange,
+  focusQuoteId = "",
+  focusAttentionType = "",
+  focusRequestId = "",
   organizationId = "",
   currentUserEmail = "",
   currentUserRole = "customer",
   onToast
 }) {
+  const embedded = presentation === "embedded";
   const [state, setState] = useState({
     loading: false,
     error: "",
@@ -151,9 +156,10 @@ export default function SalesWorkflowModal({
         organizationId: loadOrganizationId,
         quotes: result.quotes
       });
-      setSelectedQuoteId((current) => (
-        result.quotes.some((item) => item.id === current) ? current : result.quotes[0]?.id || ""
-      ));
+      setSelectedQuoteId((current) => {
+        if (focusQuoteId && result.quotes.some((item) => item.id === focusQuoteId)) return focusQuoteId;
+        return result.quotes.some((item) => item.id === current) ? current : result.quotes[0]?.id || "";
+      });
       if (selectDefaultTab && !tabInteractedRef.current) {
         setActiveTab(buildWorkflowAttentionSummary(result.quotes).quoteCount > 0 ? "attention" : "followups");
       }
@@ -186,10 +192,10 @@ export default function SalesWorkflowModal({
     setHandlingNotes({});
     setBusyKey("");
     load({ selectDefaultTab: true });
-  }, [open, organizationId]);
+  }, [focusQuoteId, open, organizationId]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || embedded) return undefined;
     returnFocusRef.current = document.activeElement;
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -229,7 +235,7 @@ export default function SalesWorkflowModal({
         window.requestAnimationFrame(() => returnTarget.focus());
       }
     };
-  }, [open]);
+  }, [embedded, open]);
 
   const selectedQuote = useMemo(
     () => state.quotes.find((item) => item.id === selectedQuoteId) || null,
@@ -279,6 +285,39 @@ export default function SalesWorkflowModal({
     () => buildWorkflowAttentionSummary(state.quotes),
     [state.quotes]
   );
+
+  useEffect(() => {
+    if (!open || state.loading || !focusQuoteId) return undefined;
+    setSelectedQuoteId((current) => (
+      state.quotes.some((quote) => quote.id === focusQuoteId) ? focusQuoteId : current
+    ));
+    const attentionItem = attentionSummary.items.find((item) => (
+      item.quoteId === focusQuoteId
+      && (!focusAttentionType || item.type === focusAttentionType)
+      && (
+        !focusRequestId
+        || item.sourceRequestId === focusRequestId
+        || item.pendingRequests?.some((request) => request.id === focusRequestId)
+      )
+    ));
+    if (!attentionItem) return undefined;
+    setActiveTab("attention");
+    const frame = window.requestAnimationFrame(() => {
+      const row = Array.from(dialogRef.current?.querySelectorAll("[data-attention-id]") || [])
+        .find((element) => element.dataset.attentionId === attentionItem.id);
+      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+      row?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    attentionSummary.items,
+    focusAttentionType,
+    focusQuoteId,
+    focusRequestId,
+    open,
+    state.loading,
+    state.quotes
+  ]);
 
   useEffect(() => {
     if (
@@ -590,9 +629,14 @@ export default function SalesWorkflowModal({
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="sales-workflow-title">
+    <div
+      className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
+      aria-labelledby="sales-workflow-title"
+    >
       <div
-        className="modal-card sales-workflow-card"
+        className={`modal-card sales-workflow-card${embedded ? " workspace-route-card" : ""}`}
         ref={dialogRef}
         tabIndex={-1}
         aria-busy={state.loading}
@@ -1133,4 +1177,8 @@ export default function SalesWorkflowModal({
       </div>
     </div>
   );
+}
+
+export default function SalesWorkflowModal(props) {
+  return <SalesWorkflowView {...props} presentation="modal" />;
 }

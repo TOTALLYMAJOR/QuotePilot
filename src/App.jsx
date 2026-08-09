@@ -1,6 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "./components/AuthGate";
-import CommandCenterHome from "./components/CommandCenterHome";
 import CustomerPortalView from "./components/CustomerPortalView";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProductBrandLockup from "./components/ProductBrandLockup";
@@ -12,8 +11,10 @@ import {
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
+import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
 import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useCatalogData } from "./hooks/useCatalogData";
+import { useCommercialWorkspaceSnapshot } from "./hooks/useCommercialWorkspaceSnapshot";
 import {
   calculateQuotePricing,
   notifyOwnerNewQuote
@@ -26,7 +27,7 @@ import {
   catalogReconciliationNotice,
   reconcileCatalogSelections
 } from "./lib/catalogSelectionReconciliation";
-import { buildProposalReadiness, buildWorkflowAttentionSummary } from "./lib/quoteWorkflow";
+import { buildProposalReadiness } from "./lib/quoteWorkflow";
 import { recommendationWouldChangeForm } from "./lib/recommendationState";
 import { PRODUCT_NAME } from "./lib/productIdentity";
 import {
@@ -46,11 +47,19 @@ import {
 } from "./lib/wizardUi";
 import {
   checkEventAvailability,
-  getWorkflowAttentionSnapshot,
+  getQuoteById,
   setQuoteStoreOrganizationId,
   submitQuote,
   updateQuote
 } from "./lib/quoteStore";
+import {
+  buildCustomerPath,
+  buildQuoteEditPath,
+  buildQuotePath,
+  buildWorkflowPath,
+  WORKSPACE_PATHS,
+  WORKSPACE_ROUTE_IDS
+} from "./lib/workspaceRoutes";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
 import { clearTenantContextCache } from "./lib/tenantDomainService";
 import {
@@ -61,6 +70,22 @@ import {
 const AdminCatalogModal = createRecoverableLazy(
   () => import("./components/AdminCatalogModal"),
   "AdminCatalogModal"
+);
+const CommandCenterHome = createRecoverableLazy(
+  () => import("./components/CommandCenterHome"),
+  "CommandCenterHome"
+);
+const CustomerDirectoryView = createRecoverableLazy(
+  () => import("./components/CustomerDirectoryView"),
+  "CustomerDirectoryView"
+);
+const CustomerWorkspaceView = createRecoverableLazy(
+  () => import("./components/CustomerWorkspaceView"),
+  "CustomerWorkspaceView"
+);
+const WorkspaceNotFound = createRecoverableLazy(
+  () => import("./components/WorkspaceNotFound"),
+  "WorkspaceNotFound"
 );
 const EventScheduleModal = createRecoverableLazy(
   () => import("./components/EventScheduleModal"),
@@ -82,21 +107,24 @@ const QuoteCompareModal = createRecoverableLazy(
   () => import("./components/QuoteCompareModal"),
   "QuoteCompareModal"
 );
-const QuoteHistoryModal = createRecoverableLazy(
-  () => import("./components/QuoteHistoryModal"),
-  "QuoteHistoryModal"
+const QuoteHistoryView = createRecoverableLazy(
+  () => import("./components/QuoteHistoryModal").then((module) => ({ default: module.QuoteHistoryView })),
+  "QuoteHistoryView"
 );
 const ReportingDashboardModal = createRecoverableLazy(
   () => import("./components/ReportingDashboardModal"),
   "ReportingDashboardModal"
 );
-const SalesWorkflowModal = createRecoverableLazy(
-  () => import("./components/SalesWorkflowModal"),
-  "SalesWorkflowModal"
+const SalesWorkflowView = createRecoverableLazy(
+  () => import("./components/SalesWorkflowModal").then((module) => ({ default: module.SalesWorkflowView })),
+  "SalesWorkflowView"
 );
 
 const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING || "").trim().toLowerCase()
+);
+const CUSTOMER_CENTERED_WORKSPACE_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED || "").trim().toLowerCase()
 );
 
 const INITIAL_FORM = {
@@ -242,6 +270,22 @@ function WorkspaceLazyTool({
           />
         ) : null}
       >
+        {children}
+      </Suspense>
+    </RecoverableErrorBoundary>
+  );
+}
+
+function WorkspaceLazyRoute({ surfaceName, component: LazyComponent, children }) {
+  return (
+    <RecoverableErrorBoundary
+      active
+      surfaceName={surfaceName}
+      surfaceKind="route"
+      onRetry={LazyComponent.retry}
+      onClose={() => window.location.assign(WORKSPACE_PATHS.home)}
+    >
+      <Suspense fallback={<div className="qp-route-loading" role="status">Loading {surfaceName}...</div>}>
         {children}
       </Suspense>
     </RecoverableErrorBoundary>
@@ -483,11 +527,17 @@ function buildTemplateDefaultsNotice({
 }
 
 export default function App({ tenantContext, authSession }) {
+  const { route: browserRoute, navigate, replace } = useWorkspaceNavigation();
+  const navigateWorkspace = useCallback((destination, options = {}) => navigate(destination, {
+    ...options,
+    preserveSearch: false
+  }), [navigate]);
   const wizardRef = useRef(null);
   const stepperRef = useRef(null);
   const mobilePricingToggleRef = useRef(null);
   const historyTriggerRef = useRef(null);
   const workflowTriggerRef = useRef(null);
+  const scheduleTriggerRef = useRef(null);
   const headerMenusRef = useRef(null);
   const operationsMenuTriggerRef = useRef(null);
   const accountMenuTriggerRef = useRef(null);
@@ -496,13 +546,23 @@ export default function App({ tenantContext, authSession }) {
   const saveQuoteButtonRef = useRef(null);
   const menuSelectionValidationRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
+  const directEditLoadRef = useRef({ key: "", generation: 0 });
   const catalogReconciliationNoticeRef = useRef("");
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { organization, setOrganizationId } = useOrganization();
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
   const [paymentReturn] = useState(() => readPaymentReturnFromUrl());
-  const [workspaceView, setWorkspaceView] = useState("wizard");
+
+  useEffect(() => {
+    if (browserRoute.surface === "portal") {
+      setPortalKey(browserRoute.portalToken);
+      setPortalMode(true);
+      return;
+    }
+    setPortalKey("");
+    setPortalMode(false);
+  }, [browserRoute.portalToken, browserRoute.surface]);
   const isUnscopedPlatformOperator = (
     tenantContext.ready
     && (tenantContext.hostType === "app" || tenantContext.hostType === "local")
@@ -661,12 +721,20 @@ export default function App({ tenantContext, authSession }) {
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [importStudioOpen, setImportStudioOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [historyTarget, setHistoryTarget] = useState({ quoteId: "", reason: "" });
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
-  const [salesWorkflowOpen, setSalesWorkflowOpen] = useState(false);
   const [openHeaderMenu, setOpenHeaderMenu] = useState("");
+  const resolvedWorkspaceRouteId = (
+    !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && browserRoute.routeId === WORKSPACE_ROUTE_IDS.HOME
+  ) ? WORKSPACE_ROUTE_IDS.QUOTE_NEW : browserRoute.routeId;
+  const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL].includes(resolvedWorkspaceRouteId);
+  const salesWorkflowOpen = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.WORKFLOW;
+  const closeWorkspaceToolRoute = (routeId, setOpen) => {
+    setOpen(false);
+    if (resolvedWorkspaceRouteId === routeId) navigateWorkspace(WORKSPACE_PATHS.home);
+  };
   const openWorkspaceTool = (setOpen, {
     menuTriggerRef = null,
     fallbackRef = null,
@@ -685,51 +753,31 @@ export default function App({ tenantContext, authSession }) {
     beforeOpen?.();
     setOpen(true);
   };
-  const workflowAttentionScopeKey = `${String(authSession.organizationId || "").trim()}:${String(authSession.role || "").trim().toLowerCase()}`;
-  const [workflowAttentionBadge, setWorkflowAttentionBadge] = useState({ scopeKey: "", count: null });
-  const workflowAttentionCount = workflowAttentionBadge.scopeKey === workflowAttentionScopeKey
-    ? workflowAttentionBadge.count
-    : null;
-  const [workflowAttentionRefreshToken, setWorkflowAttentionRefreshToken] = useState(0);
-  const workflowAttentionGenerationRef = useRef(0);
-  const workflowAttentionForceRefreshRef = useRef(false);
-  const workflowAttentionRequestRef = useRef({
-    scopeKey: "",
-    inFlight: null,
-    lastSuccessAt: 0,
-    pendingForce: false
+  const openRoutedWorkspaceTool = (path, setOpen, {
+    menuTriggerRef = null,
+    beforeOpen = null
+  } = {}) => {
+    openWorkspaceTool(setOpen, {
+      menuTriggerRef,
+      beforeOpen: () => {
+        beforeOpen?.();
+        if (CUSTOMER_CENTERED_WORKSPACE_ENABLED) {
+          navigateWorkspace(path);
+        }
+      }
+    });
+  };
+  const commercialSnapshot = useCommercialWorkspaceSnapshot({
+    enabled: Boolean(authSession.isStaff && authSession.organizationId),
+    includeHistory: CUSTOMER_CENTERED_WORKSPACE_ENABLED,
+    organizationId: authSession.organizationId
   });
-  const requestWorkflowAttentionRefresh = useCallback(({ force = false } = {}) => {
-    const requestState = workflowAttentionRequestRef.current;
-    if (force && requestState.inFlight) {
-      requestState.pendingForce = true;
-      return;
-    }
-    if (!force && (
-      requestState.inFlight
-      || (requestState.lastSuccessAt > 0 && Date.now() - requestState.lastSuccessAt < 60000)
-    )) {
-      return;
-    }
-    workflowAttentionForceRefreshRef.current = force;
-    setWorkflowAttentionRefreshToken((value) => value + 1);
-  }, []);
+  const workflowAttentionCount = commercialSnapshot.attentionSummary?.quoteCount ?? null;
+  const requestWorkflowAttentionRefresh = commercialSnapshot.refresh;
   const handleWorkflowAttentionSummary = useCallback((summary) => {
-    const summaryOrganizationId = String(summary?.organizationId || "").trim();
-    if (summaryOrganizationId !== String(authSession.organizationId || "").trim()) return;
-    const nextCount = Number(summary?.quoteCount || 0);
-    setWorkflowAttentionBadge((current) => (
-      current.scopeKey === workflowAttentionScopeKey && current.count === nextCount
-        ? current
-        : { scopeKey: workflowAttentionScopeKey, count: nextCount }
-    ));
-    const requestState = workflowAttentionRequestRef.current;
-    if (requestState.scopeKey !== workflowAttentionScopeKey) return;
-    requestState.lastSuccessAt = Date.now();
-    if (requestState.inFlight) {
-      workflowAttentionGenerationRef.current += 1;
-    }
-  }, [authSession.organizationId, workflowAttentionScopeKey]);
+    if (String(summary?.organizationId || "").trim() !== String(authSession.organizationId || "").trim()) return;
+    commercialSnapshot.refresh({ force: true });
+  }, [authSession.organizationId, commercialSnapshot.refresh]);
   const adminMounted = useStickyMount(adminOpen);
   const scheduleMounted = useStickyMount(scheduleOpen);
   const integrationsMounted = useStickyMount(integrationsOpen);
@@ -739,6 +787,9 @@ export default function App({ tenantContext, authSession }) {
   const dashboardMounted = useStickyMount(dashboardOpen);
   const compareMounted = useStickyMount(compareOpen);
   const salesWorkflowMounted = useStickyMount(salesWorkflowOpen);
+  const quoteBuilderActive = [WORKSPACE_ROUTE_IDS.QUOTE_NEW, WORKSPACE_ROUTE_IDS.QUOTE_EDIT]
+    .includes(resolvedWorkspaceRouteId);
+  const quoteBuilderMounted = useStickyMount(quoteBuilderActive);
   const [submitState, setSubmitState] = useState({
     saving: false,
     message: ""
@@ -746,6 +797,12 @@ export default function App({ tenantContext, authSession }) {
   const [availabilityNotice, setAvailabilityNotice] = useState("");
   const [availabilityBlock, setAvailabilityBlock] = useState(null);
   const [editingQuote, setEditingQuote] = useState({ id: "", quoteNumber: "" });
+  const [quoteEditLoadState, setQuoteEditLoadState] = useState({
+    quoteId: "",
+    loading: false,
+    error: ""
+  });
+  const [quoteEditRetryToken, setQuoteEditRetryToken] = useState(0);
   const [toasts, setToasts] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [quoteDirty, setQuoteDirty] = useState(false);
@@ -758,6 +815,16 @@ export default function App({ tenantContext, authSession }) {
     stepValidation: buildStepValidation(INITIAL_FORM)
   }));
   const [templateDefaultsNotice, setTemplateDefaultsNotice] = useState(null);
+
+  useEffect(() => {
+    if (!quoteDirty || typeof window === "undefined") return undefined;
+    const protectDirtyQuote = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectDirtyQuote);
+    return () => window.removeEventListener("beforeunload", protectDirtyQuote);
+  }, [quoteDirty]);
 
   useEffect(() => {
     if (!openHeaderMenu || typeof document === "undefined") return undefined;
@@ -921,6 +988,30 @@ export default function App({ tenantContext, authSession }) {
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
+  const routedToolAuthorized = (
+    (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS && diagnosticsEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && authSession.isAdmin)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS && authSession.isAdmin)
+  );
+
+  useEffect(() => {
+    setScheduleOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled);
+    setDashboardOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled);
+    setIntegrationsOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled);
+    setDiagnosticsOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS && diagnosticsEnabled);
+    setAdminOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && authSession.isAdmin);
+    setImportStudioOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS && authSession.isAdmin);
+  }, [
+    authSession.isAdmin,
+    dashboardEnabled,
+    diagnosticsEnabled,
+    eventScheduleEnabled,
+    integrationsEnabled,
+    resolvedWorkspaceRouteId
+  ]);
 
   useEffect(() => {
     setStepValidation(buildStepValidation(form));
@@ -952,132 +1043,6 @@ export default function App({ tenantContext, authSession }) {
   }, [authSession.isStaff, authSession.organizationId, catalog.loading, editingQuote.id]);
 
   useEffect(() => {
-    const organizationId = String(authSession.organizationId || "").trim();
-    const role = String(authSession.role || "").trim().toLowerCase();
-    const isStaff = ["admin", "sales"].includes(role);
-    const scopeKey = `${organizationId}:${role}`;
-    const generation = workflowAttentionGenerationRef.current + 1;
-    workflowAttentionGenerationRef.current = generation;
-    let cancelled = false;
-    let idleId = 0;
-    let timeoutId = 0;
-
-    if (!organizationId || !isStaff) {
-      workflowAttentionRequestRef.current = {
-        scopeKey: "",
-        inFlight: null,
-        lastSuccessAt: 0,
-        pendingForce: false
-      };
-      setWorkflowAttentionBadge({ scopeKey: "", count: null });
-      return undefined;
-    }
-
-    const scopeChanged = workflowAttentionRequestRef.current.scopeKey !== scopeKey;
-    if (scopeChanged) {
-      workflowAttentionRequestRef.current = {
-        scopeKey,
-        inFlight: null,
-        lastSuccessAt: 0,
-        pendingForce: false
-      };
-      setWorkflowAttentionBadge({ scopeKey, count: null });
-    }
-    if (catalog.loading) return undefined;
-
-    const force = workflowAttentionForceRefreshRef.current;
-    workflowAttentionForceRefreshRef.current = false;
-    const currentRequestState = workflowAttentionRequestRef.current;
-    if (!force && (
-      currentRequestState.inFlight
-      || (currentRequestState.lastSuccessAt > 0 && Date.now() - currentRequestState.lastSuccessAt < 60000)
-    )) {
-      return undefined;
-    }
-
-    const loadAttention = async () => {
-      const requestState = workflowAttentionRequestRef.current;
-      if (requestState.scopeKey !== scopeKey || requestState.inFlight) return;
-      if (!force && requestState.lastSuccessAt > 0 && Date.now() - requestState.lastSuccessAt < 60000) {
-        return;
-      }
-      const request = getWorkflowAttentionSnapshot({ organizationId });
-      requestState.inFlight = request;
-      try {
-        const result = await request;
-        if (
-          cancelled
-          || workflowAttentionGenerationRef.current !== generation
-          || workflowAttentionRequestRef.current !== requestState
-          || requestState.pendingForce
-        ) return;
-        requestState.lastSuccessAt = Date.now();
-        setWorkflowAttentionBadge({
-          scopeKey,
-          count: buildWorkflowAttentionSummary(result.quotes).quoteCount
-        });
-      } catch {
-        // Preserve a same-tenant count when a background refresh fails.
-      } finally {
-        if (workflowAttentionRequestRef.current !== requestState || requestState.inFlight !== request) return;
-        requestState.inFlight = null;
-        if (requestState.pendingForce || cancelled) {
-          requestState.pendingForce = false;
-          workflowAttentionForceRefreshRef.current = true;
-          setWorkflowAttentionRefreshToken((value) => value + 1);
-        }
-      }
-    };
-
-    if (typeof window.requestIdleCallback === "function") {
-      idleId = window.requestIdleCallback(loadAttention, { timeout: 2500 });
-    } else {
-      timeoutId = window.setTimeout(loadAttention, 900);
-    }
-
-    return () => {
-      cancelled = true;
-      if (idleId && typeof window.cancelIdleCallback === "function") {
-        window.cancelIdleCallback(idleId);
-      }
-      if (timeoutId) window.clearTimeout(timeoutId);
-    };
-  }, [authSession.organizationId, authSession.role, catalog.loading, workflowAttentionRefreshToken]);
-
-  useEffect(() => {
-    const organizationId = String(authSession.organizationId || "").trim();
-    const isStaff = ["admin", "sales"].includes(String(authSession.role || "").trim().toLowerCase());
-    if (!organizationId || !isStaff) return undefined;
-    const requestRefresh = () => requestWorkflowAttentionRefresh();
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") requestRefresh();
-    };
-    const handleStorage = (event) => {
-      if (event.key === "quoteWizard.quotes") requestWorkflowAttentionRefresh({ force: true });
-    };
-    let midnightTimer = 0;
-    const scheduleMidnightRefresh = () => {
-      const now = new Date();
-      const nextMidnight = new Date(now);
-      nextMidnight.setHours(24, 0, 0, 100);
-      midnightTimer = window.setTimeout(() => {
-        requestWorkflowAttentionRefresh({ force: true });
-        scheduleMidnightRefresh();
-      }, Math.max(1000, nextMidnight.getTime() - now.getTime()));
-    };
-    scheduleMidnightRefresh();
-    window.addEventListener("focus", requestRefresh);
-    window.addEventListener("storage", handleStorage);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.clearTimeout(midnightTimer);
-      window.removeEventListener("focus", requestRefresh);
-      window.removeEventListener("storage", handleStorage);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [authSession.organizationId, authSession.role, requestWorkflowAttentionRefresh]);
-
-  useEffect(() => {
     const nextGlobal = String(globalEventTypeId || "").trim();
     if (!nextGlobal) return;
     if (nextGlobal === String(form.eventTypeId || "").trim()) return;
@@ -1102,7 +1067,11 @@ export default function App({ tenantContext, authSession }) {
     () => buildUpsellRecommendations({ form, catalog, totals, settings: effectiveSettings }),
     [form, catalog, totals, effectiveSettings]
   );
-  const isEditingQuote = Boolean(editingQuote.id);
+  const quoteEditRouteId = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_EDIT
+    ? String(browserRoute.params?.quoteId || "").trim()
+    : "";
+  const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
+  const isEditingQuote = quoteEditReady;
   const organizationName = String(organization?.name || "").trim();
   const tenantBrandName = String(catalog.settings?.brandName || "").trim();
   const tenantBrandTagline = String(catalog.settings?.brandTagline || "").trim();
@@ -1133,6 +1102,10 @@ export default function App({ tenantContext, authSession }) {
     "--app-bg-mid": brandBackgroundMid,
     "--app-bg-end": brandBackgroundEnd
   };
+  const activeWorkspaceSection = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
+    || resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_EDIT
+    ? "quotes"
+    : browserRoute.section;
 
   useEffect(() => {
     let alive = true;
@@ -1558,6 +1531,14 @@ export default function App({ tenantContext, authSession }) {
   };
 
   const handleSubmitQuote = async () => {
+    if (quoteEditRouteId && !quoteEditReady) {
+      setSubmitState((current) => ({
+        ...current,
+        saving: false,
+        message: "This saved quote has not loaded for editing. Retry the edit before saving."
+      }));
+      return;
+    }
     if (selectedMenuItemCount < 1) {
       showMissingMenuSelection({ moveToMenuStep: true });
       return;
@@ -1734,7 +1715,7 @@ export default function App({ tenantContext, authSession }) {
         });
         pushToast(`Quote ${result.quoteNumber} updated.`, "success");
         setHistoryTarget({ quoteId: result.id, reason: "updated" });
-        setHistoryOpen(true);
+        navigateWorkspace(buildQuotePath(result.id));
         return;
       }
 
@@ -1748,7 +1729,7 @@ export default function App({ tenantContext, authSession }) {
       pushToast(`Quote ${result.quoteNumber} saved as a draft.`, "success");
       requestWorkflowAttentionRefresh({ force: true });
       setHistoryTarget({ quoteId: result.id, reason: "created" });
-      setHistoryOpen(true);
+      navigateWorkspace(buildQuotePath(result.id));
 
       // Quote persistence is the handoff boundary. Owner notification is
       // intentionally non-blocking so a slow/disabled SMS provider cannot
@@ -1800,8 +1781,16 @@ export default function App({ tenantContext, authSession }) {
     }
   };
 
-  const handleEditQuote = (quote) => {
+  const handleEditQuote = (quote, { navigateToRoute = true } = {}) => {
     if (!quote?.id) return;
+    if (
+      navigateToRoute
+      && CUSTOMER_CENTERED_WORKSPACE_ENABLED
+      && quoteDirty
+      && !window.confirm("Edit this saved quote? Your unsaved quote changes will be discarded.")
+    ) {
+      return;
+    }
 
     const selection = quote.selection || {};
     const event = quote.event || {};
@@ -1903,9 +1892,8 @@ export default function App({ tenantContext, authSession }) {
     setAvailabilityBlock(null);
     setAvailabilityNotice("");
     setHistoryTarget({ quoteId: "", reason: "" });
-    setHistoryOpen(false);
     setStep(1);
-    setWorkspaceView("wizard");
+    if (navigateToRoute) navigateWorkspace(buildQuoteEditPath(quote.id));
     beginWizardAnalyticsSession({
       organizationId: authSession.organizationId,
       mode: "edit",
@@ -1918,6 +1906,73 @@ export default function App({ tenantContext, authSession }) {
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
   };
+
+  useEffect(() => {
+    if (resolvedWorkspaceRouteId !== WORKSPACE_ROUTE_IDS.QUOTE_EDIT) {
+      setQuoteEditLoadState({ quoteId: "", loading: false, error: "" });
+      if (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW && editingQuote.id) {
+        directEditLoadRef.current = {
+          key: "",
+          generation: directEditLoadRef.current.generation + 1
+        };
+        setEditingQuote({ id: "", quoteNumber: "" });
+        setQuoteDirty(true);
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: "This in-memory draft is detached from the saved quote and will save as a new quote."
+        }));
+      }
+      return undefined;
+    }
+    const quoteId = String(browserRoute.params?.quoteId || "").trim();
+    const organizationId = String(authSession.organizationId || "").trim();
+    if (!quoteId || !organizationId) return undefined;
+    if (editingQuote.id === quoteId) {
+      setQuoteEditLoadState({ quoteId, loading: false, error: "" });
+      return undefined;
+    }
+    const key = `${organizationId}:${quoteId}`;
+    if (directEditLoadRef.current.key === key) return undefined;
+    if (
+      quoteDirty
+      && !window.confirm("Load this saved quote for editing? Your unsaved quote changes will be discarded.")
+    ) {
+      navigateWorkspace(WORKSPACE_PATHS.quoteNew, { replace: true });
+      return undefined;
+    }
+    const generation = directEditLoadRef.current.generation + 1;
+    directEditLoadRef.current = { key, generation };
+    setQuoteEditLoadState({ quoteId, loading: true, error: "" });
+    setSubmitState((current) => ({ ...current, message: "Loading the saved quote for editing..." }));
+    getQuoteById(quoteId)
+      .then((quote) => {
+        if (directEditLoadRef.current.generation !== generation) return;
+        handleEditQuote(quote, { navigateToRoute: false });
+        setQuoteEditLoadState({ quoteId, loading: false, error: "" });
+      })
+      .catch((error) => {
+        if (directEditLoadRef.current.generation !== generation) return;
+        const message = error?.message || "Unable to load this quote for editing.";
+        setQuoteEditLoadState({ quoteId, loading: false, error: message });
+        setSubmitState((current) => ({
+          ...current,
+          message
+        }));
+      });
+    return () => {
+      if (directEditLoadRef.current.generation === generation) {
+        directEditLoadRef.current = { key: "", generation: generation + 1 };
+      }
+    };
+  }, [
+    authSession.organizationId,
+    browserRoute.params?.quoteId,
+    editingQuote.id,
+    quoteDirty,
+    quoteEditRetryToken,
+    resolvedWorkspaceRouteId
+  ]);
 
   const handleCorrectAvailability = () => {
     setStep(1);
@@ -1936,7 +1991,8 @@ export default function App({ tenantContext, authSession }) {
     if (quoteDirty && !window.confirm("Start a new quote? Your unsaved changes will be discarded.")) {
       return;
     }
-    setWorkspaceView("wizard");
+    directEditLoadRef.current = { key: "", generation: directEditLoadRef.current.generation + 1 };
+    navigateWorkspace(WORKSPACE_PATHS.quoteNew);
     setEditingQuote({ id: "", quoteNumber: "" });
     setQuoteDirty(false);
     setForm({
@@ -2036,7 +2092,7 @@ export default function App({ tenantContext, authSession }) {
     setPortalMode(false);
     setPortalKey("");
     requestWorkflowAttentionRefresh({ force: true });
-    window.history.replaceState({}, "", "/app");
+    replace(WORKSPACE_PATHS.home, { preserveSearch: false, preserveHash: false });
   };
 
   const saveCatalogDuringSetup = async (nextCatalog) => {
@@ -2190,13 +2246,13 @@ export default function App({ tenantContext, authSession }) {
             open={integrationsOpen}
             surfaceName="Customer Provisioning"
             component={IntegrationOpsModal}
-            onClose={() => setIntegrationsOpen(false)}
+            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             hasUnsavedWorkspaceChanges={quoteDirty}
           >
             <IntegrationOpsModal
               open={integrationsOpen}
-              onClose={() => setIntegrationsOpen(false)}
+              onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
               returnFocusRef={workspaceToolReturnFocusRef}
               organizationId=""
               settings={{}}
@@ -2284,7 +2340,7 @@ export default function App({ tenantContext, authSession }) {
             open={adminOpen}
             surfaceName="Catalog Admin"
             component={AdminCatalogModal}
-            onClose={() => setAdminOpen(false)}
+            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             hasUnsavedWorkspaceChanges={quoteDirty}
           >
@@ -2292,7 +2348,7 @@ export default function App({ tenantContext, authSession }) {
               open={adminOpen}
               catalog={catalog}
               organizationId={authSession.organizationId}
-              onClose={() => setAdminOpen(false)}
+              onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
               returnFocusRef={workspaceToolReturnFocusRef}
               onSave={saveCatalogDuringSetup}
               onApplyStarterPack={catalog.stageStarterPack}
@@ -2310,7 +2366,7 @@ export default function App({ tenantContext, authSession }) {
   }
 
   return (
-    <div className="app-shell app-shell-neutral" style={appThemeVars}>
+    <div className={`app-shell${CUSTOMER_CENTERED_WORKSPACE_ENABLED ? " app-shell-neutral" : ""}`} style={appThemeVars}>
       <header className="site-header">
         <div className="container nav">
           <div className="workspace-header-identity">
@@ -2355,34 +2411,46 @@ export default function App({ tenantContext, authSession }) {
             </div>
           )}
           <div className="right-actions header-actions" ref={headerMenusRef}>
-            <button
-              className={`ghost${workspaceView === "home" ? " nav-view-active" : ""}`}
-              type="button"
-              aria-current={workspaceView === "home" ? "page" : undefined}
-              onClick={() => { setOpenHeaderMenu(""); setWorkspaceView("home"); }}
-            >
-              Home
-            </button>
+            {CUSTOMER_CENTERED_WORKSPACE_ENABLED && (
+              <>
+                <button
+                  className={`ghost${activeWorkspaceSection === "home" ? " nav-view-active" : ""}`}
+                  type="button"
+                  aria-current={activeWorkspaceSection === "home" ? "page" : undefined}
+                  onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.home); }}
+                >
+                  Home
+                </button>
+                <button
+                  className={`ghost${activeWorkspaceSection === "customers" ? " nav-view-active" : ""}`}
+                  type="button"
+                  aria-current={activeWorkspaceSection === "customers" ? "page" : undefined}
+                  onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.customers); }}
+                >
+                  Customers
+                </button>
+              </>
+            )}
             <button className="cta header-quick-cta" type="button" onClick={handleGetInstantQuote}>New quote</button>
             <button
-              className="ghost"
+              className={`ghost${activeWorkspaceSection === "quotes" && !quoteBuilderActive ? " nav-view-active" : ""}`}
               type="button"
               ref={historyTriggerRef}
               onClick={() => {
                 setOpenHeaderMenu("");
                 setHistoryTarget({ quoteId: "", reason: "" });
-                setHistoryOpen(true);
+                navigateWorkspace(WORKSPACE_PATHS.quotes);
               }}
             >
               Quotes
             </button>
             <button
-              className="ghost workflow-attention-trigger"
+              className={`ghost workflow-attention-trigger${activeWorkspaceSection === "workflow" ? " nav-view-active" : ""}`}
               type="button"
               ref={workflowTriggerRef}
               onClick={() => {
                 setOpenHeaderMenu("");
-                setSalesWorkflowOpen(true);
+                navigateWorkspace(WORKSPACE_PATHS.workflow);
               }}
               aria-label={workflowAttentionCount === null
                 ? "Workflow"
@@ -2395,6 +2463,20 @@ export default function App({ tenantContext, authSession }) {
                 <span className="workflow-attention-badge" aria-hidden="true">{workflowAttentionCount}</span>
               )}
             </button>
+            {CUSTOMER_CENTERED_WORKSPACE_ENABLED && eventScheduleEnabled && (
+              <button
+                className={`ghost${activeWorkspaceSection === "schedule" ? " nav-view-active" : ""}`}
+                type="button"
+                ref={scheduleTriggerRef}
+                onClick={() => openRoutedWorkspaceTool(
+                  WORKSPACE_PATHS.schedule,
+                  setScheduleOpen,
+                  { menuTriggerRef: scheduleTriggerRef }
+                )}
+              >
+                Schedule
+              </button>
+            )}
 
             <div className="header-menu desktop-header-menu">
               <button
@@ -2409,12 +2491,12 @@ export default function App({ tenantContext, authSession }) {
               </button>
               {openHeaderMenu === "operations" && (
                 <div className="header-menu-popover" role="menu" aria-label="Operations">
-                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setScheduleOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Event Schedule</button>}
-                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setDashboardOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Reporting Dashboard</button>}
-                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setIntegrationsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Integrations Ops</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setImportStudioOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Import Studio</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setAdminOpen, { menuTriggerRef: operationsMenuTriggerRef, beforeOpen: () => setAdminInitialTab("") })}>Catalog Admin</button>}
-                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setDiagnosticsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Session Diagnostics</button>}
+                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Event Schedule</button>}
+                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Reporting Dashboard</button>}
+                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Integrations Ops</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.imports, setImportStudioOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Import Studio</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.catalog, setAdminOpen, { menuTriggerRef: operationsMenuTriggerRef, beforeOpen: () => setAdminInitialTab("") })}>Catalog Admin</button>}
+                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.diagnostics, setDiagnosticsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Session Diagnostics</button>}
                 </div>
               )}
             </div>
@@ -2455,12 +2537,12 @@ export default function App({ tenantContext, authSession }) {
               </button>
               {openHeaderMenu === "more" && (
                 <div className="header-menu-popover mobile-more-popover" role="menu" aria-label="More">
-                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setScheduleOpen, { menuTriggerRef: moreMenuTriggerRef })}>Event Schedule</button>}
-                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setDashboardOpen, { menuTriggerRef: moreMenuTriggerRef })}>Reporting Dashboard</button>}
-                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setIntegrationsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Integrations Ops</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setImportStudioOpen, { menuTriggerRef: moreMenuTriggerRef })}>Import Studio</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setAdminOpen, { menuTriggerRef: moreMenuTriggerRef, beforeOpen: () => setAdminInitialTab("") })}>Catalog Admin</button>}
-                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => openWorkspaceTool(setDiagnosticsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Session Diagnostics</button>}
+                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: moreMenuTriggerRef })}>Event Schedule</button>}
+                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: moreMenuTriggerRef })}>Reporting Dashboard</button>}
+                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Integrations Ops</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.imports, setImportStudioOpen, { menuTriggerRef: moreMenuTriggerRef })}>Import Studio</button>}
+                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.catalog, setAdminOpen, { menuTriggerRef: moreMenuTriggerRef, beforeOpen: () => setAdminInitialTab("") })}>Catalog Admin</button>}
+                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.diagnostics, setDiagnosticsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Session Diagnostics</button>}
                   <div className="header-account-summary" role="presentation">
                     <strong>{authSession.user.email}</strong>
                     <span>{authSession.role}</span>
@@ -2479,29 +2561,115 @@ export default function App({ tenantContext, authSession }) {
         <p className={quoteDirty ? "workspace-save-state is-dirty" : "workspace-save-state"} aria-live="polite">
           {quoteDirty
             ? "Unsaved changes"
-            : editingQuote.id
+            : isEditingQuote
               ? `Editing ${editingQuote.quoteNumber || "saved quote"} · no unsaved changes`
               : "Ready for a new quote"}
         </p>
       </section>
 
-      {workspaceView === "home" ? (
-        <main className="container">
-          <CommandCenterHome
+      {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.HOME && (
+        <WorkspaceLazyRoute surfaceName="Command Center" component={CommandCenterHome}>
+          <main className="container workspace-route-main">
+            <CommandCenterHome
+              snapshot={commercialSnapshot}
+              onRefresh={commercialSnapshot.refresh}
+              onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+              onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+              onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+              onNewQuote={handleGetInstantQuote}
+            />
+          </main>
+        </WorkspaceLazyRoute>
+      )}
+
+      {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CUSTOMER_LIST && (
+        <WorkspaceLazyRoute surfaceName="Customer directory" component={CustomerDirectoryView}>
+          <CustomerDirectoryView
             organizationId={authSession.organizationId}
-            onOpenWorkflow={() => setSalesWorkflowOpen(true)}
-            onOpenQuote={(quoteId) => {
-              setHistoryTarget({ quoteId, reason: "" });
-              setHistoryOpen(true);
-            }}
+            onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onNewQuote={handleGetInstantQuote}
           />
+        </WorkspaceLazyRoute>
+      )}
+
+      {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL && (
+        <WorkspaceLazyRoute surfaceName="Customer 360" component={CustomerWorkspaceView}>
+          <CustomerWorkspaceView
+            organizationId={authSession.organizationId}
+            customerId={browserRoute.params?.customerId || ""}
+            onBack={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
+            onOpenQuotes={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
+            onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+            onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
+      {(browserRoute.routeId === WORKSPACE_ROUTE_IDS.NOT_FOUND
+        || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
+        || ([
+          WORKSPACE_ROUTE_IDS.SCHEDULE,
+          WORKSPACE_ROUTE_IDS.REPORTING,
+          WORKSPACE_ROUTE_IDS.CATALOG,
+          WORKSPACE_ROUTE_IDS.IMPORTS,
+          WORKSPACE_ROUTE_IDS.INTEGRATIONS,
+          WORKSPACE_ROUTE_IDS.DIAGNOSTICS
+        ].includes(resolvedWorkspaceRouteId) && !routedToolAuthorized)
+        || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && [
+          WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
+          WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL
+        ].includes(resolvedWorkspaceRouteId))) && (
+        <WorkspaceLazyRoute surfaceName="Workspace page" component={WorkspaceNotFound}>
+          <WorkspaceNotFound pathname={browserRoute.pathname} onHome={() => navigateWorkspace(WORKSPACE_PATHS.home)} />
+        </WorkspaceLazyRoute>
+      )}
+
+      {quoteBuilderActive && quoteEditRouteId && !quoteEditReady && (
+        <main className="container workspace-route-main" aria-labelledby="quote-edit-load-title">
+          <section className="panel workspace-not-found">
+            <p className="eyebrow">Quotes</p>
+            <h1 id="quote-edit-load-title">
+              {quoteEditLoadState.error ? "Quote edit unavailable" : "Loading saved quote"}
+            </h1>
+            {quoteEditLoadState.error ? (
+              <p className="error-note" role="alert">{quoteEditLoadState.error}</p>
+            ) : (
+              <p className="source-note" role="status">
+                Loading the exact canonical quote before editing is enabled.
+              </p>
+            )}
+            <div className="right-actions">
+              {quoteEditLoadState.error && (
+                <button
+                  type="button"
+                  className="cta"
+                  onClick={() => {
+                    directEditLoadRef.current = {
+                      key: "",
+                      generation: directEditLoadRef.current.generation + 1
+                    };
+                    setQuoteEditRetryToken((value) => value + 1);
+                  }}
+                >
+                  Retry edit
+                </button>
+              )}
+              <button type="button" className="ghost" onClick={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}>
+                Back to Quotes
+              </button>
+            </div>
+          </section>
         </main>
-      ) : (
+      )}
+
+      {quoteBuilderMounted && (
       <main
         className="container wizard-grid"
         ref={wizardRef}
         tabIndex={-1}
+        hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
+        aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
         <section className="panel wizard-panel">
           <ol className="stepper" ref={stepperRef}>
@@ -2726,7 +2894,7 @@ export default function App({ tenantContext, authSession }) {
                   Edit Date, Time, or Venue
                 </button>
                 {eventScheduleEnabled && (
-                  <button type="button" className="ghost" onClick={() => openWorkspaceTool(setScheduleOpen)}>
+                  <button type="button" className="ghost" onClick={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}>
                     Open Event Schedule
                   </button>
                 )}
@@ -2762,7 +2930,7 @@ export default function App({ tenantContext, authSession }) {
           open={adminOpen}
           surfaceName="Catalog Admin"
           component={AdminCatalogModal}
-          onClose={() => setAdminOpen(false)}
+          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
           returnFocusRef={workspaceToolReturnFocusRef}
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
@@ -2770,7 +2938,7 @@ export default function App({ tenantContext, authSession }) {
             open={adminOpen}
             catalog={catalog}
             organizationId={authSession.organizationId}
-            onClose={() => setAdminOpen(false)}
+            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             onSave={catalog.saveCatalog}
             onApplyStarterPack={catalog.stageStarterPack}
@@ -2788,13 +2956,13 @@ export default function App({ tenantContext, authSession }) {
           open={importStudioOpen}
           surfaceName="Import Studio"
           component={ImportStudioModal}
-          onClose={() => setImportStudioOpen(false)}
+          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.IMPORTS, setImportStudioOpen)}
           returnFocusRef={workspaceToolReturnFocusRef}
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <ImportStudioModal
             open={importStudioOpen}
-            onClose={() => setImportStudioOpen(false)}
+            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.IMPORTS, setImportStudioOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
             organizationName={workspaceName}
@@ -2815,65 +2983,55 @@ export default function App({ tenantContext, authSession }) {
       )}
 
       {historyMounted && (
-        <WorkspaceLazyTool
-          open={historyOpen}
-          surfaceName="Quote History"
-          component={QuoteHistoryModal}
-          onClose={() => setHistoryOpen(false)}
-          returnFocusRef={historyTriggerRef}
-          hasUnsavedWorkspaceChanges={quoteDirty}
-        >
-          <QuoteHistoryModal
+        <WorkspaceLazyRoute surfaceName="Quotes" component={QuoteHistoryView}>
+          <QuoteHistoryView
             open={historyOpen}
+            presentation={CUSTOMER_CENTERED_WORKSPACE_ENABLED ? "embedded" : "modal"}
             onClose={() => {
-              const returnTarget = historyTarget.returnFocus === "workflow"
-                ? workflowTriggerRef.current
-                : historyTarget.quoteId
-                  ? saveQuoteButtonRef.current
-                  : historyTriggerRef.current;
-              setHistoryOpen(false);
+              const returnTarget = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+                ? historyTarget.returnFocus === "workflow"
+                  ? workflowTriggerRef.current
+                  : historyTarget.quoteId
+                    ? saveQuoteButtonRef.current
+                    : historyTriggerRef.current
+                : null;
               setHistoryTarget({ quoteId: "", reason: "" });
               requestWorkflowAttentionRefresh({ force: true });
-              window.requestAnimationFrame(() => returnTarget?.focus());
+              navigateWorkspace(WORKSPACE_PATHS.home);
+              if (returnTarget) {
+                window.requestAnimationFrame(() => returnTarget.focus());
+              }
             }}
-            basePortalUrl={`${window.location.origin}${window.location.pathname}`}
+            basePortalUrl={`${window.location.origin}${WORKSPACE_PATHS.home}`}
             organizationId={authSession.organizationId}
             currentUserUid={authSession.user?.uid || ""}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
-            focusQuoteId={historyTarget.quoteId}
-            focusAction={historyTarget.action}
-            focusReason={historyTarget.reason}
+            focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
+            focusAction={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.action : ""}
+            focusReason={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.reason : ""}
             onEditQuote={(quote) => {
               requestWorkflowAttentionRefresh({ force: true });
               handleEditQuote(quote);
             }}
             onOpenIntegrations={() => {
               setHistoryTarget({ quoteId: "", reason: "" });
-              setHistoryOpen(false);
-              openWorkspaceTool(setIntegrationsOpen, { fallbackRef: historyTriggerRef });
+              navigateWorkspace(WORKSPACE_PATHS.integrations);
             }}
             integrationsAvailable={integrationsEnabled}
             canDeleteQuotes={authSession.isAdmin}
             onToast={pushToast}
           />
-        </WorkspaceLazyTool>
+        </WorkspaceLazyRoute>
       )}
 
       {salesWorkflowMounted && (
-        <WorkspaceLazyTool
-          open={salesWorkflowOpen}
-          surfaceName="Workflow"
-          component={SalesWorkflowModal}
-          onClose={() => setSalesWorkflowOpen(false)}
-          returnFocusRef={workflowTriggerRef}
-          hasUnsavedWorkspaceChanges={quoteDirty}
-        >
-          <SalesWorkflowModal
+        <WorkspaceLazyRoute surfaceName="Workflow" component={SalesWorkflowView}>
+          <SalesWorkflowView
             open={salesWorkflowOpen}
-            onClose={() => setSalesWorkflowOpen(false)}
+            presentation={CUSTOMER_CENTERED_WORKSPACE_ENABLED ? "embedded" : "modal"}
+            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
             onOpenQuoteHistory={({ quoteId = "", action = "" } = {}) => {
-              setSalesWorkflowOpen(false);
               const actionLabel = String(action || "approved action").replaceAll("_", " ");
               setHistoryTarget({
                 quoteId,
@@ -2881,19 +3039,21 @@ export default function App({ tenantContext, authSession }) {
                 reason: `Execute approved ${actionLabel}`,
                 returnFocus: "workflow"
               });
-              setHistoryOpen(true);
+              navigateWorkspace(buildQuotePath(quoteId));
             }}
             organizationId={authSession.organizationId}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
+            focusQuoteId={browserRoute.workflowFocus?.quoteId || ""}
+            focusAttentionType={browserRoute.workflowFocus?.attentionType || ""}
+            focusRequestId={browserRoute.workflowFocus?.requestId || ""}
             onEditQuote={(quote) => {
-              setSalesWorkflowOpen(false);
               handleEditQuote(quote);
             }}
             onAttentionSummaryChange={handleWorkflowAttentionSummary}
             onToast={pushToast}
           />
-        </WorkspaceLazyTool>
+        </WorkspaceLazyRoute>
       )}
 
       {eventScheduleEnabled && scheduleMounted && (
@@ -2901,13 +3061,13 @@ export default function App({ tenantContext, authSession }) {
           open={scheduleOpen}
           surfaceName="Event Schedule"
           component={EventScheduleModal}
-          onClose={() => setScheduleOpen(false)}
+          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
           returnFocusRef={workspaceToolReturnFocusRef}
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <EventScheduleModal
             open={scheduleOpen}
-            onClose={() => setScheduleOpen(false)}
+            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
             staffLeads={scheduleStaffLeads}
@@ -2922,13 +3082,13 @@ export default function App({ tenantContext, authSession }) {
           open={integrationsOpen}
           surfaceName="Integrations Ops"
           component={IntegrationOpsModal}
-          onClose={() => setIntegrationsOpen(false)}
+          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
           returnFocusRef={workspaceToolReturnFocusRef}
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <IntegrationOpsModal
             open={integrationsOpen}
-            onClose={() => setIntegrationsOpen(false)}
+            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
             settings={effectiveSettings}
@@ -2945,13 +3105,13 @@ export default function App({ tenantContext, authSession }) {
           open={diagnosticsOpen}
           surfaceName="Session Diagnostics"
           component={DiagnosticsModal}
-          onClose={() => setDiagnosticsOpen(false)}
+          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.DIAGNOSTICS, setDiagnosticsOpen)}
           returnFocusRef={workspaceToolReturnFocusRef}
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <DiagnosticsModal
             open={diagnosticsOpen}
-            onClose={() => setDiagnosticsOpen(false)}
+            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.DIAGNOSTICS, setDiagnosticsOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
           />
         </WorkspaceLazyTool>
@@ -2988,13 +3148,13 @@ export default function App({ tenantContext, authSession }) {
           open={dashboardOpen}
           surfaceName="Reporting Dashboard"
           component={ReportingDashboardModal}
-          onClose={() => setDashboardOpen(false)}
+          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.REPORTING, setDashboardOpen)}
           returnFocusRef={workspaceToolReturnFocusRef}
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <ReportingDashboardModal
             open={dashboardOpen}
-            onClose={() => setDashboardOpen(false)}
+            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.REPORTING, setDashboardOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
             addons={catalog.addons}
