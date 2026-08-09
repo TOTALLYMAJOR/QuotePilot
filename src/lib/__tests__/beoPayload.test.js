@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildBeoPayload } from "../beoPayload";
+import { buildBeoPayload, resolveBeoCommercialSourceRevision } from "../beoPayload";
 import { proposalPayloadFixtureQuote } from "./fixtures/proposalPayloadFixture";
 
 describe("BEO payload", () => {
@@ -92,20 +92,22 @@ describe("BEO payload", () => {
   });
 
   describe("version block", () => {
-    test("reports unversioned legacy (number 0) when versionMeta and latestVersionNumber are both absent", () => {
+    test("reports explicit legacy-unversioned provenance without borrowing mutable quote timestamps", () => {
       const payload = buildBeoPayload(proposalPayloadFixtureQuote);
 
       expect(payload.version).toEqual({
+        id: "legacy-unversioned",
         number: 0,
-        createdAtISO: "2026-03-10T15:30:00.000Z",
-        createdOn: "2026-03-10"
+        createdAtISO: "",
+        createdOn: "-"
       });
     });
 
-    test("uses versionMeta.versionNumber and versionMeta.createdAt when versionMeta is present", () => {
+    test("uses version metadata identity and timestamp when no active pointer exists", () => {
       const payload = buildBeoPayload({
         ...proposalPayloadFixtureQuote,
         versionMeta: {
+          versionId: "v0003",
           versionNumber: 3,
           createdAt: "2026-04-15T09:00:00.000Z",
           createdBy: { uid: "u1", email: "sales@acme.test", role: "sales" },
@@ -114,39 +116,61 @@ describe("BEO payload", () => {
       });
 
       expect(payload.version).toEqual({
+        id: "v0003",
         number: 3,
         createdAtISO: "2026-04-15T09:00:00.000Z",
         createdOn: "2026-04-15"
       });
     });
 
-    test("falls back to latestVersionNumber when versionMeta is absent", () => {
+    test("uses an explicit number-only label for legacy version records", () => {
       const payload = buildBeoPayload({
         ...proposalPayloadFixtureQuote,
         latestVersionNumber: 2
       });
 
-      expect(payload.version.number).toBe(2);
+      expect(payload.version).toEqual({
+        id: "legacy-version-2",
+        number: 2,
+        createdAtISO: "",
+        createdOn: "-"
+      });
     });
 
-    test("falls back through updatedAtISO before createdAtISO for the version date", () => {
-      const payload = buildBeoPayload({
+    test("uses the active version pointer and only matching metadata may supply its timestamp", () => {
+      const matching = resolveBeoCommercialSourceRevision({
+        activeVersionId: "v0004",
+        latestVersionNumber: 4,
+        versionMeta: {
+          versionId: "v0004",
+          versionNumber: 4,
+          createdAt: "2026-05-01T12:00:00.000Z"
+        }
+      });
+      const mismatched = resolveBeoCommercialSourceRevision({
+        activeVersionId: "v0004",
+        latestVersionNumber: 4,
+        versionMeta: {
+          versionId: "v0003",
+          versionNumber: 3,
+          createdAt: "2026-04-15T09:00:00.000Z"
+        },
         ...proposalPayloadFixtureQuote,
         updatedAtISO: "2026-05-01T12:00:00.000Z"
       });
 
-      expect(payload.version.createdAtISO).toBe("2026-05-01T12:00:00.000Z");
-      expect(payload.version.createdOn).toBe("2026-05-01");
-    });
-
-    test("reports createdOn as - when no date fields are present at all", () => {
-      const payload = buildBeoPayload({
-        ...proposalPayloadFixtureQuote,
-        createdAtISO: ""
+      expect(matching).toEqual({
+        id: "v0004",
+        number: 4,
+        createdAtISO: "2026-05-01T12:00:00.000Z",
+        createdOn: "2026-05-01"
       });
-
-      expect(payload.version.createdAtISO).toBe("");
-      expect(payload.version.createdOn).toBe("-");
+      expect(mismatched).toEqual({
+        id: "v0004",
+        number: 4,
+        createdAtISO: "",
+        createdOn: "-"
+      });
     });
   });
 
