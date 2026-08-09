@@ -45,18 +45,19 @@ Last updated: August 8, 2026
   current customer change requests. Its post-idle header count preserves the
   lazy workspace boundary; request-ID-bound acknowledge/handled state is internal
   only and never edits customer decision evidence or sends email/SMS.
-- Current source Commercial Command Center: a new "Home" workspace view reads
-  the existing workflow attention snapshot and quote history (no new reads,
-  writes, collections, or callables) to show a triaged attention inbox,
-  upcoming accepted/booked events, and outstanding deposit/final-balance
-  amounts. Its counts are computed from the same snapshot as the existing
-  header attention badge. Row actions open the existing Workflow and Quotes
-  surfaces; the view introduces no new commercial state or authority. The
-  staff workspace shell is now visually neutral (paper background, charcoal
-  header, white panels) via a staff-scoped `app-shell-neutral` class; tenant
-  branding remains on the workspace chip and on customer-facing portal,
-  proposal, and marketing surfaces, whose treatment is unchanged. This is
-  local source and unit-test evidence only and has not been hosted-accepted.
+- Current candidate customer-centered workspace: a dependency-free History API
+  route layer defines `/app` Home, Customers, Quotes, the sticky-mounted quote
+  builder, focused quote/edit records, Workflow focus, `/app/home`
+  canonicalization, and authenticated in-shell 404 behavior. The customer
+  portal query remains route-preemptive. A temporary build flag defaults the
+  new shell off pending exact hosted acceptance. Home and the attention badge
+  consume one loading-aware, generation-guarded snapshot over the existing
+  quote-history and workflow-attention contracts; this introduces no new read
+  contracts or data sources and no new commercial write authority. The neutral
+  staff shell remains distinct from tenant-branded customer portal, proposal,
+  and marketing surfaces. This is current branch source; integrated local,
+  emulator, hosted, deployment, and human-acceptance evidence are reported
+  separately and must not be inferred from the source claim.
 - Current source quote-entry simplification: Step 1 keeps attendance and role
   counts in the primary flow while placing five exceptional staffing-rate
   values in Advanced Pricing. Existing saved/template values trigger a visible
@@ -127,7 +128,14 @@ Last updated: August 8, 2026
   export is locally covered but is not part of the live v0.2.3 frontend and has
   not received hosted kitchen-operator acceptance.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
-- Current source tenant onboarding delivery: admin-only Import Studio supports tenant-locked CSV preview/import for customers, packages, add-ons, rentals, and menu items, with duplicate skipping, receipts, and rollback limited to records stamped by the import batch.
+- Current source tenant onboarding delivery: admin-only Import Studio supports
+  tenant-locked CSV preview/import for customers, packages, add-ons, rentals,
+  and menu items. Customer create/rollback now joins catalog imports behind
+  trusted callables; new customer records receive opaque stable IDs and
+  server-owned normalized directory keys. Duplicate/collision decisions,
+  actor receipts, exact-input replay, and modified-record rollback protection
+  are emulator-covered. This callable change is source/local evidence and is
+  not yet deployed or hosted-smoke-accepted.
 - Current source starter-pack package scope: version 2 manifests add typed menu,
   add-on, and rental inclusion references without changing the addressable
   version 1 manifests. Inclusions remain explicit quote-builder choices labeled
@@ -135,12 +143,21 @@ Last updated: August 8, 2026
   server-derived quote, proposal, and portal snapshots, and authoritative
   pricing prevents a selected inclusion from being charged twice. This is
   source/local evidence and is not yet deployed or owner-accepted.
-- Current source customer continuity: authoritative quote creation and editing
-  project the latest quote/customer reference into the organization customer
-  record in the same server transaction. Existing normalized-email records are
-  reused, blank optional quote fields do not erase richer imported data, and
-  Firestore rules prevent browser-forged projection history. Deployment and
-  hosted acceptance remain pending.
+- Current candidate customer continuity and Internal Customer 360:
+  authoritative create, duplicate, and edit transactions bind a server-owned
+  stable `customerId` to new canonical quotes and immutable versions, add
+  normalized customer-directory search fields, retain identity on edit, and
+  reject a collision with another same-tenant customer rather than silently
+  reassigning it. Paginated directory reads and bounded Customer 360 reads
+  derive Overview, Quotes & Proposals, Events, Money, Conversations, attention,
+  and next-action projections without a persisted `commercialSummary` cache.
+  Customer IDs remain absent from the public portal projection, and staff
+  preview does not establish `viewed`. Canonical quotes are staff-readable
+  only, and browser self-creation of a customer role is retired while exact-
+  token portal behavior remains intact. A dry-run-first legacy binding tool is
+  present, but apply is limited to loopback emulators and `demo-*` projects.
+  This is current branch source and is neither a production data operation nor
+  deployment/hosted acceptance evidence.
 - Production `v0.2.3` starter catalog delivery: the existing post-login blank-catalog
   gate now offers four one-click industry drafts in Catalog Admin. Versioned
   manifests populate tenant-scoped catalog and menu records with suggested
@@ -291,6 +308,15 @@ Last updated: August 8, 2026
   `NOTIFICATIONS_SMS_PROVIDER=none` in the ignored project-scoped Functions
   environment.
 ## Active Risks
+- The customer-centered staff shell is behind
+  `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED`, which defaults off. It still
+  requires complete local/high-risk qualification plus hosted signed-in deep-
+  link, Back/Forward, mobile, portal-precedence, branding-isolation, and human
+  acceptance before the flag can be removed or enabled for production.
+- The customer-ID backfill has no authorized production apply path in this
+  release. A production mutation requires a separately approved, tenant-scoped
+  dry-run artifact, exact confirmation contract, release record, and rollback
+  review; emulator success is not production-data evidence.
 - Firebase `functions.config()` compatibility remains temporary and must be
   migrated to environment parameters before the March 2027 shutdown.
 - The Vercel deployment and custom-domain alias are provider-verified, but the authenticated production quote/save/export workflow still needs post-release browser acceptance.
@@ -315,8 +341,10 @@ Last updated: August 8, 2026
   number. Production SMS remains disabled because the Messaging Service has no
   US A2P registration; A2P approval, governed Functions release, provider
   acceptance, and destination-device receipt remain separate gates.
-- Import Studio frontend and `importBatches` Firestore rules are deployed but
-  not hosted-smoke-verified. Excel intake,
+- The existing Import Studio frontend is deployed but not hosted-smoke-
+  verified. The current branch replaces direct customer and receipt writes
+  with admin-only callables and denies those browser writes; that coordinated
+  Functions/rules/frontend change is not deployed. Excel intake,
   merge/update policies, saved import history UI, and active
   quote/payment/contract/booking imports are intentionally not included in this
   first slice.

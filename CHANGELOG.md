@@ -8,18 +8,41 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
-- A Commercial Command Center ("Home") workspace view, reachable from a new
-  header button alongside the existing wizard, Quotes, and Workflow entry
-  points. It surfaces a triaged attention inbox (change requests, follow-ups,
-  approvals, reusing the existing workflow attention snapshot and summary so
-  its counts always match the header badge), events accepted or booked in the
-  next 7 days, and a money-at-a-glance view of deposits and final balances
-  awaiting action. Row actions open the existing Workflow and Quotes surfaces
-  focused on the relevant record; no new write paths, Firestore collections,
-  or callables were introduced. A shared status-semantics module and
-  `StatusChip` component give staff-facing state (quote lifecycle, deposit,
-  final-balance, booking confirmation, attention-item type) a consistent,
-  never-color-only presentation that other surfaces can adopt incrementally.
+- A temporary-flagged, dependency-free staff route foundation for `/app`,
+  Customers, Quotes, the five-step builder, focused quote/edit records, and
+  Workflow. The browser History API preserves Back/Forward and the mounted
+  in-memory quote draft; `/app/home` canonicalizes to `/app`, unknown staff
+  paths receive an authenticated in-shell 404, and `?portal=<token>` retains
+  precedence with canonical `/app?portal=...` links. Dirty quote drafts receive
+  `beforeunload` protection and are not serialized into route state or storage.
+- A recoverably lazy Commercial Command Center at `/app` when the temporary
+  customer-centered workspace build flag is enabled. One generation-guarded
+  quote/attention snapshot feeds Home and the header badge, and exact Workflow
+  actions carry quote ID, attention type, and request ID. Home introduces no
+  new read contracts or data sources and no new commercial write authority. A
+  shared status-semantics module and `StatusChip` keep quote lifecycle,
+  acceptance, booking, deposit, final balance, readiness, and attention labels
+  textually distinct even when they share a visual family.
+- A paginated same-tenant customer directory and Internal Customer 360 with
+  Overview, Quotes & Proposals, Events, Money, and Conversations sections.
+  Customer 360 derives bounded summaries from customer-scoped canonical quote
+  reads, exposes quote/workflow/Schedule/BEO entry points, keeps payment states
+  distinct from accounting revenue, and aggregates conversation links without
+  merging quote-scoped message histories. Its staff proposal preview adapts
+  canonical data without calling the public portal loader or creating customer
+  `viewed` evidence.
+- Stable server-owned `customerId` bindings on trusted canonical quote writes
+  and immutable versions, normalized customer search keys, collision-safe edit
+  behavior that retains the existing identity, and a dry-run-first legacy
+  binding tool whose apply mode is restricted to loopback Firestore emulators
+  and `demo-*` projects. No customer ID is added to the public portal
+  projection, no persisted `commercialSummary` cache is introduced, and no
+  production backfill is authorized.
+- Customer CSV create and rollback now use admin-only trusted callables instead
+  of direct browser writes. New imports receive opaque stable IDs and
+  server-owned normalized directory keys, while receipts preserve exact-input
+  replay, duplicate/collision refusal, modified-record rollback protection,
+  and safe rollback compatibility for legacy customer-import receipts.
 - Neutral staff chrome: the authenticated staff workspace now renders on a
   calm warm-neutral shell (flat paper background, charcoal header, white
   panels) instead of the tenant-tinted full-screen gold gradient and
@@ -301,6 +324,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Security
 
+- Canonical organization quote reads are now staff-only: the legacy
+  verified-email customer grant is retired, and signed-in browsers can no
+  longer self-create a `customer` role document. Exact-token customer-safe
+  portal reads, expiry/rotation, server-authoritative acceptance, signed
+  payment truth, and quote-scoped conversation behavior remain unchanged.
 - Hardened authenticated tenant switching so principal, organization, role, or
   authority-resolution changes remount the complete workspace boundary before
   the next scope renders. Unsaved customer details, quote edit state, open or

@@ -9,6 +9,8 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
+- Customer workspace backend handoff: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
 - Orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
 - Orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
@@ -16,11 +18,29 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 ## Application Routes
 - `/`: hospitality-first public QuotePilot marketing page.
 - `/system`: saved dark product and operating-system overview.
-- `/app`: authenticated staff quote workspace.
+- `/app`: authenticated staff workspace. Generic builds retain the five-step
+  builder landing; builds with `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`
+  use the Commercial Command Center as the default landing.
+- `/app/customers` and `/app/customers/:customerId`: temporary-flagged,
+  paginated staff customer directory and opaque-ID Internal Customer 360.
+- `/app/quotes`, `/app/quotes/new`, `/app/quotes/:quoteId`, and
+  `/app/quotes/:quoteId/edit`: routed quote list, sticky-mounted builder,
+  focused record, and trusted edit entry points.
+- `/app/workflow`: routed attention, follow-up, and approval surface; optional
+  query parameters focus an exact quote, attention type, and request.
+- `/app/home`: compatibility path that replaces to `/app`.
 - `/start`: public invoice-first $1 Stripe test buyer flow when the reviewed
   browser flags and Turnstile site key are present; the independently disabled
   server gate still prevents initiation until backend release approval.
-- `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal; existing token links remain compatible.
+- `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal. The
+  token takes precedence on every pathname, existing links remain compatible,
+  and newly generated canonical links use `/app?portal=...`.
+
+Schedule, Reporting, Catalog, Imports, Integrations, and Diagnostics retain
+their existing modal/tool behavior until their planned `/app/*` route
+extractions ship. See the
+[customer-centered workspace plan](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
+for that delivery contract.
 
 ## Product Scope
 The app supports a 5-step quote wizard, dynamic event-type menus, pricing
@@ -103,6 +123,11 @@ Optional:
   `https://quotepilot.mbmapps.com/app` return URL for Firebase email actions;
   its domain must be authorized in Firebase Authentication; loopback HTTP is
   accepted only for local development)
+- `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED` (temporary build-time gate for
+  the native staff route shell, `/app` Command Center landing, customer
+  directory, and Customer 360; defaults off. The flag does not bypass staff
+  authentication or exact-token portal precedence, and enabling it is not a
+  deployment or production-acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   preparation workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human
@@ -374,6 +399,36 @@ skips foreign-tenant, deleted, expired, identity-mismatched, and conflicting
 commercial records. The create-only private (`0600`) evidence destination is
 reserved before any database work and completed atomically with aggregate
 counts rather than portal tokens or customer data.
+
+## Customer Identity Backfill
+
+Legacy organization quotes can be classified for a stable same-tenant
+`customerId` binding. The command is read-only by default and requires exact
+project and organization scope:
+
+```bash
+npm run customer:id:backfill -- \
+  --project <firebase-project-id> \
+  --organization <organization-id> \
+  --dry-run
+```
+
+The report separates already-bound quotes, unique normalized-email matches,
+missing email/customer matches, duplicate matches, and foreign-organization
+records. It does not create delivery, portal-view, acceptance, booking, or
+payment evidence.
+
+Apply mode in the current source is emulator-only: it fails closed unless
+`FIRESTORE_EMULATOR_HOST` resolves to loopback and the project ID begins with
+`demo-`. Run the isolated fixture with:
+
+```bash
+npm run test:customer-id-backfill:emulator
+```
+
+Do not run a production apply from this source. A production backfill requires
+separate authorization, a reviewed tenant-scoped dry run, an exact confirmation
+contract, and its own release/audit record.
 
 ## Stripe Deposit and Final-Balance Workflows
 
@@ -701,6 +756,8 @@ as the primary targets.
 - Skill index: [docs/SKILLS.md](docs/SKILLS.md)
 - Staff/admin operations guide: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature checklist mapping: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Customer-centered workspace architecture: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
+- Customer identity/360 backend contract: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
 - Cloud/local orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
 - Cloud/local orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
 - Performance guardrails: [docs/PERFORMANCE_GUARDRAILS.md](docs/PERFORMANCE_GUARDRAILS.md)

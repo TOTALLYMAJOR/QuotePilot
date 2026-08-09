@@ -30,7 +30,8 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   valid portal issuance activates that portal.
 
 ## Staff Workflow (Quote Builder)
-1. Open the app and sign in.
+1. Open the app and sign in. In a customer-centered workspace build, select
+   `New quote`; `/app/quotes/new` resumes the current in-memory draft.
 2. Build quote data through the 5 wizard steps:
    - `Event Basics`
    - `Menu Selection`
@@ -67,25 +68,67 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
    revision before sending updated content.
 
 ## Commercial Command Center (Home)
-- Select `Home` in the top navigation to open a triaged view of what needs
-  attention, alongside the existing wizard, Quotes, and Workflow entry
-  points. Home does not replace the wizard as the default landing view in
-  this release; both are reachable from the header.
+- When the temporary customer-centered workspace build flag is enabled,
+  `/app` opens Home after staff authentication. Persistent navigation exposes
+  `Home`, `Customers`, `Quotes`, `Workflow`, and, when enabled, `Schedule`;
+  administrative tools remain under their existing role and feature gates. `/app/home`
+  canonicalizes to `/app`.
+- Select `New quote` to enter the five-step builder. Leaving the builder through
+  ordinary staff navigation or browser Back/Forward keeps its in-memory draft
+  mounted. Returning to `/app/quotes/new` resumes it. Starting an explicit new
+  quote still asks before discarding unsaved work, and closing or refreshing
+  the browser triggers the browser's unsaved-changes warning when the draft is
+  dirty. Quote/customer contents are not stored in the URL or browser storage
+  for this continuity behavior.
 - `Needs your attention` lists new and acknowledged change requests, overdue
   and due-today follow-ups, and quotes with a pending approval, using the
   same prioritized attention snapshot as the `Workflow` header badge, so the
-  counts always agree. Selecting a row opens `Workflow` for that item; Home
-  itself performs no acknowledge/handled/approve actions.
+  counts agree. Selecting a row opens `Workflow` with its quote, attention
+  type, and request identity focused; Home itself performs no
+  acknowledge/handled/approve actions.
 - `Next 7 days` lists accepted or booked quotes with an event date in the
   coming week. `Money at a glance` lists deposits that are unpaid or
   requested and final balances that are eligible to request or already
   requested, split into "Requested, awaiting customer" and "Not yet
   requested" totals. A final balance never appears as actionable until its
   deposit is Stripe-paid, matching the existing final-balance request gate.
-  Selecting a row opens `Quotes` focused on that quote.
-- Home reads existing quote and workflow-attention data only; it creates no
-  new records and cannot request payment, approve a request, or change a
-  quote's status by itself.
+  Selecting a quote or payment row opens the authoritative quote record. When
+  a row has a stable `customerId`, selecting the customer name opens Customer
+  360 instead.
+- Home uses the existing quote-history and workflow-attention contracts. It
+  introduces no new read contracts or data sources, creates no records, and
+  cannot request payment, approve a request, or change a quote's status by
+  itself.
+
+## Customer Directory and Customer 360
+
+- Open `Customers` or `/app/customers` to load the paginated same-tenant
+  directory. Search uses normalized customer name or email prefixes; page
+  controls keep the read bounded. Routes use an opaque customer ID, never an
+  email address.
+- Select a customer name or `Open 360` to open
+  `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
+  customer and offers a safe return to the directory.
+- `Overview` shows active quote, accepted/booked-event, and attention counts,
+  the next safe staff action, and recent lifecycle activity.
+- `Quotes & Proposals` lists canonical staff records and retained versions.
+  `Preview` uses a read-only staff adapter; it never opens the public token
+  portal or records customer `viewed` evidence. `Open record` continues to the
+  authoritative quote surface.
+- `Events` lists accepted and booked events and provides the existing Schedule
+  or quote/BEO entry points. Acceptance, booking, and operational readiness are
+  separate facts.
+- `Money` shows deposit and final-balance states derived from canonical payment
+  evidence. These are operational states, not an accounting revenue report.
+- `Conversations` links to each quote's existing conversation. Customer 360
+  does not merge messages into a customer-wide thread.
+- Customer 360 reads are bounded. For high-volume customers, use the
+  authoritative Quotes surface for the complete operational record rather than
+  treating the 360 summary as an accounting or archive export.
+
+The exact-token customer decision center remains the only customer-facing
+experience. A `?portal=<token>` query takes precedence on any pathname, and
+newly generated links use `/app?portal=...`.
 
 ## Quote Builder Details
 - Event Type drives dynamic menu categories and items.
@@ -104,7 +147,8 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - Totals update in real time when guest count, item selection, or quantity changes.
 
 ## Quote History Operations
-- Open `Quote History` from the top navigation.
+- Select `Quotes` in the top navigation. The routed workspace uses
+  `/app/quotes`; a focused `/app/quotes/<quoteId>` opens that exact record.
 - Available actions per quote:
   - Edit an eligible draft, sent, or viewed quote. Firebase re-prices the edit
     from current tenant settings and atomically updates the quote/portal while
@@ -421,14 +465,18 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - Upload a CSV, confirm the suggested record type, and review the proposed column mappings.
 - Rows labeled `Need attention` are not imported. Correct the source file or change the mapping, then review again.
 - Import creates ready records only, skips existing duplicate emails/names, sends no outbound messages, and saves an organization-scoped receipt.
-- Customer imports retain the direct, reversible customer-record path. Package,
-  add-on, rental, and menu imports run through the signed-in organization's
-  admin-only server operation. The server revalidates every row, stores prices
-  in integer minor units, and, when a record is created, advances the catalog
-  revision once and clears prior pricing confirmation so an owner reviews the
-  resulting catalog again. An all-duplicate receipt does not disturb confirmed
-  pricing.
-- A catalog import retry keeps the same batch identity. If another catalog save,
+- Customer and catalog imports run through the signed-in organization's
+  admin-only server operations. For customers, the server owns the opaque
+  customer ID, normalized name/email directory keys, duplicate/collision
+  decision, actor receipt, and rollback check; browser code cannot create or
+  mutate customer/import-receipt documents directly. For package, add-on,
+  rental, and menu records, the server also stores prices in integer minor
+  units and, when a record is created, advances the catalog revision once and
+  clears prior pricing confirmation so an owner reviews the resulting catalog
+  again. An all-duplicate receipt does not disturb confirmed pricing.
+- An import retry keeps the same batch identity. Customer retries are accepted
+  only for the exact same normalized input; a mismatched retry fails closed.
+  If another catalog save,
   import, pack action, rollback, or confirmation advanced the revision first,
   the stale operation makes no writes; Import Studio refreshes the catalog in
   the background while keeping the file, visible error, or receipt available
@@ -440,6 +488,11 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   are never deleted by the batch. Catalog rollback also requires the current
   revision; it advances once and reopens pricing review only when a record is
   actually deleted.
+- Existing customer imports created by the previously deployed browser path
+  remain readable records, and their legacy receipts retain guarded rollback
+  compatibility. They do not acquire new directory keys merely because this
+  source exists; normalize/migrate legacy customer data under a separately
+  reviewed data operation before enabling the new directory for a tenant.
 - Catalog Admin blocks menu deactivation or deletion while other catalog,
   branding, menu-item, or menu-form drafts are pending. Finish/save those edits,
   or close and discard them, before retrying the revisioned menu action.
