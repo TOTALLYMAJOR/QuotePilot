@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { loadFirebaseAdmin } from "../scripts/firebase-admin-modular.mjs";
 
 const STAFF_EMAIL = process.env.E2E_FIREBASE_EMAIL || "e2e-admin@local.test";
 const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
@@ -6,11 +7,42 @@ const SECOND_STAFF_EMAIL = process.env.E2E_FIREBASE_SECOND_EMAIL || "e2e-admin-b
 const SECOND_STAFF_PASSWORD = process.env.E2E_FIREBASE_SECOND_PASSWORD || "Passw0rd!";
 const RECOVERED_PASSWORD = "RecoveredPassw0rd!";
 const FIREBASE_PROJECT_ID = process.env.E2E_FIREBASE_PROJECT_ID || "demo-e2e";
+const FIREBASE_ORGANIZATION_ID = process.env.E2E_FIREBASE_ORG_ID || "e2e-org";
 const AUTH_EMULATOR_PORT = process.env.E2E_FIREBASE_AUTH_EMULATOR_PORT || "9399";
 const APP_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || "4174"}`;
 const PASSWORD_RESET_CONFIRMATION = "If an account exists for that email, password-reset instructions have been sent.";
 const CONVERSATION_QUOTE_NUMBER = "QP-CONVERSATION-E2E";
+const CONVERSATION_QUOTE_ID = "conversation-e2e-quote";
 const CONVERSATION_PORTAL_KEY = "conversation-e2e-portal-token-1234567890";
+
+async function readCanonicalConversationSummary() {
+  const admin = loadFirebaseAdmin();
+  if (!admin.getApps().length) {
+    admin.initializeApp({ projectId: FIREBASE_PROJECT_ID });
+  }
+  const snapshot = await admin.getFirestore()
+    .doc(`organizations/${FIREBASE_ORGANIZATION_ID}/quotes/${CONVERSATION_QUOTE_ID}`)
+    .get();
+  const summary = snapshot.data()?.conversationSummary || {};
+  const allowedSummaryKeys = new Set([
+    "latestActorType",
+    "latestMessageAtISO",
+    "latestMessageId",
+    "messageCount",
+    "schemaVersion",
+    "updatedAt"
+  ]);
+  return {
+    schemaVersion: summary.schemaVersion,
+    messageCount: summary.messageCount,
+    latestMessageId: summary.latestMessageId,
+    latestMessageAtISO: summary.latestMessageAtISO,
+    latestActorType: summary.latestActorType,
+    unexpectedSummaryKeys: Object.keys(summary)
+      .filter((key) => !allowedSummaryKeys.has(key))
+      .sort()
+  };
+}
 
 async function getPasswordResetCodes(request) {
   const response = await request.get(
@@ -145,6 +177,15 @@ test("staff and the exact customer portal share one quote-scoped conversation", 
   await customerConversation.getByRole("button", { name: "Close conversation" }).click();
   await page.getByRole("button", { name: "Staff sign in" }).click();
   await expect(page.getByRole("button", { name: "Quotes", exact: true })).toBeVisible();
+  const canonicalSummary = await readCanonicalConversationSummary();
+  expect(canonicalSummary).toMatchObject({
+    schemaVersion: 1,
+    messageCount: 2,
+    latestActorType: "customer",
+    unexpectedSummaryKeys: []
+  });
+  expect(canonicalSummary.latestMessageId).toBeTruthy();
+  expect(canonicalSummary.latestMessageAtISO).toBeTruthy();
   await page.getByRole("button", { name: "Quotes", exact: true }).click();
   const reopenedDialog = page.getByRole("dialog", { name: "Quotes" });
   const reopenedRow = reopenedDialog.locator(`tr[data-quote-id="conversation-e2e-quote"]`);

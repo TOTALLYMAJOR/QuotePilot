@@ -6,6 +6,7 @@ const {
   QuoteCreationError,
   bindCustomerIdentityToQuoteDocuments,
   buildCanonicalPortalSnapshot,
+  buildCustomerEmailClaim,
   buildCustomerProjection,
   buildDuplicateQuoteForm,
   buildPortalRotationDocuments,
@@ -13,6 +14,7 @@ const {
   buildServerQuoteNumber,
   buildTrustedQuoteCreationDocuments,
   buildTrustedQuoteEditDocuments,
+  customerEmailClaimDocumentId,
   customerProjectionDocumentId,
   sanitizeQuoteCreationRequest,
   sanitizeStoredStripePaymentLink
@@ -213,7 +215,7 @@ function buildForm(overrides = {}) {
 }
 
 describe("trusted server quote creation documents", () => {
-  test("builds a deterministic, tenant-scoped customer projection from trusted quote data", () => {
+  test("builds a stable, tenant-scoped customer projection from trusted quote data", () => {
     const projection = buildCustomerProjection({
       organizationId: "org-a",
       quoteId: "quote-a",
@@ -228,14 +230,15 @@ describe("trusted server quote creation documents", () => {
         name: "Launch Dinner",
         date: "2026-09-12"
       },
-      nowISO: "2026-07-27T12:00:00.000Z"
+      nowISO: "2026-07-27T12:00:00.000Z",
+      newCustomerId: "customer-generated-a"
     });
 
     expect(projection).toEqual({
-      customerId: customerProjectionDocumentId("ada@example.com"),
+      customerId: "customer-generated-a",
       isNew: true,
       patch: {
-        customerId: customerProjectionDocumentId("ada@example.com"),
+        customerId: "customer-generated-a",
         organizationId: "org-a",
         name: "Ada Lovelace",
         email: "ada@example.com",
@@ -256,6 +259,90 @@ describe("trusted server quote creation documents", () => {
     });
     expect(customerProjectionDocumentId("ADA@example.com"))
       .toBe(customerProjectionDocumentId("ada@example.com"));
+  });
+
+  test("builds normalized server-owned email claims and rejects identity reassignment", () => {
+    const claim = buildCustomerEmailClaim({
+      organizationId: "org-a",
+      customerId: "customer-generated-a",
+      customerEmail: " ADA@Example.com ",
+      nowISO: "2026-07-27T12:00:00.000Z"
+    });
+
+    expect(claim).toEqual({
+      claimId: customerEmailClaimDocumentId("ada@example.com"),
+      customerId: "customer-generated-a",
+      emailKey: "ada@example.com",
+      isNew: true,
+      patch: {
+        schemaVersion: 1,
+        organizationId: "org-a",
+        customerId: "customer-generated-a",
+        emailKey: "ada@example.com",
+        updatedAtISO: "2026-07-27T12:00:00.000Z",
+        lastConfirmedSource: "trusted_quote_projection",
+        recordSource: "trusted_customer_email_claim",
+        createdBySource: "trusted_quote_projection",
+        createdAtISO: "2026-07-27T12:00:00.000Z"
+      }
+    });
+    expect(customerEmailClaimDocumentId("ADA@example.com"))
+      .toBe(customerProjectionDocumentId("ada@example.com"));
+
+    const existingClaim = buildCustomerEmailClaim({
+      organizationId: "org-a",
+      customerId: "customer-generated-a",
+      customerEmail: "ada@example.com",
+      nowISO: "2026-07-28T12:00:00.000Z",
+      existingClaim: claim.patch
+    });
+    expect(existingClaim.isNew).toBe(false);
+    expect(existingClaim.patch).not.toHaveProperty("createdAtISO");
+    expect(existingClaim.patch).not.toHaveProperty("createdBySource");
+
+    expect(() => buildCustomerEmailClaim({
+      organizationId: "org-a",
+      customerId: "customer-other",
+      customerEmail: "ada@example.com",
+      nowISO: "2026-07-28T12:00:00.000Z",
+      existingClaim: claim.patch
+    })).toThrow(/another customer identity/i);
+    expect(() => buildCustomerEmailClaim({
+      organizationId: "org-b",
+      customerId: "customer-generated-a",
+      customerEmail: "ada@example.com",
+      nowISO: "2026-07-28T12:00:00.000Z",
+      existingClaim: claim.patch
+    })).toThrow(/does not match/i);
+  });
+
+  test("requires bounded provenance for customer email claims", () => {
+    const base = {
+      organizationId: "org-a",
+      customerId: "customer-a",
+      customerEmail: "ada@example.com",
+      nowISO: "2026-07-27T12:00:00.000Z"
+    };
+    expect(() => buildCustomerEmailClaim({
+      ...base,
+      claimSource: "browser"
+    })).toThrow(/not trusted/i);
+    expect(() => buildCustomerEmailClaim({
+      ...base,
+      customerId: "customer/forged"
+    })).toThrow(/incomplete/i);
+    expect(() => buildCustomerEmailClaim({
+      ...base,
+      claimSource: "import_studio"
+    })).toThrow(/import provenance/i);
+    expect(buildCustomerEmailClaim({
+      ...base,
+      claimSource: "import_studio",
+      importBatchId: "customer_import_batch_0001"
+    }).patch).toMatchObject({
+      createdBySource: "import_studio",
+      importBatchId: "customer_import_batch_0001"
+    });
   });
 
   test("merges into an existing matching customer without erasing richer optional data", () => {

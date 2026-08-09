@@ -6,7 +6,19 @@ import {
   assertSucceeds,
   initializeTestEnvironment
 } from "@firebase/rules-unit-testing";
-import { deleteDoc, deleteField, doc, getDoc, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import {
+  collection,
+  deleteDoc,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  setDoc,
+  updateDoc,
+  writeBatch
+} from "firebase/firestore";
 
 const PROJECT_ID = "demo-quote-wizard-rules";
 const RULES_PATH = path.resolve(process.cwd(), "firestore.rules");
@@ -832,6 +844,114 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertSucceeds(getDoc(adminImportRef));
     await assertFails(updateDoc(adminImportRef, { nameKey: "forged" }));
     await assertFails(deleteDoc(adminImportRef));
+  });
+
+  test("customer directory lists require same-org staff and an explicit safe limit", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    const salesDb = testEnv.authenticatedContext("sales-org-a", {
+      email: "sales-a@example.com",
+      email_verified: true
+    }).firestore();
+    const customerDb = testEnv.authenticatedContext("customer-org-a", {
+      email: "customer-a@example.com",
+      email_verified: true
+    }).firestore();
+    const foreignDb = testEnv.authenticatedContext("sales-org-a", {
+      email: "sales-a@example.com",
+      email_verified: true
+    }).firestore();
+    const adminCustomers = collection(adminDb, "organizations", "org-a", "customers");
+    const salesCustomers = collection(salesDb, "organizations", "org-a", "customers");
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "organizations", "org-a", "customers", "directory-a"), {
+        customerId: "directory-a",
+        organizationId: "org-a",
+        name: "Directory Customer",
+        nameKey: "directory customer",
+        email: "directory@example.com",
+        emailKey: "directory@example.com"
+      });
+    });
+
+    await assertSucceeds(getDocs(query(adminCustomers, limit(101))));
+    await assertSucceeds(getDocs(query(salesCustomers, limit(101))));
+    await assertFails(getDocs(adminCustomers));
+    await assertFails(getDocs(query(adminCustomers, limit(102))));
+    await assertFails(getDocs(query(
+      collection(customerDb, "organizations", "org-a", "customers"),
+      limit(101)
+    )));
+    await assertFails(getDocs(query(
+      collection(foreignDb, "organizations", "org-b", "customers"),
+      limit(101)
+    )));
+  });
+
+  test("customer email claim documents are inaccessible to every browser principal", async () => {
+    const claimPath = [
+      "organizations",
+      "org-a",
+      "customerEmailClaims",
+      "email_claim_a"
+    ];
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), ...claimPath), {
+        organizationId: "org-a",
+        customerId: "directory-a",
+        emailKey: "directory@example.com"
+      });
+    });
+    const contexts = [
+      testEnv.unauthenticatedContext().firestore(),
+      testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true
+      }).firestore(),
+      testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true
+      }).firestore(),
+      testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true
+      }).firestore(),
+      testEnv.authenticatedContext("unassigned-user", {
+        email: "unassigned@example.com",
+        email_verified: true
+      }).firestore(),
+      testEnv.authenticatedContext("sales-org-b", {
+        email: "sales-b@example.com",
+        email_verified: true
+      }).firestore()
+    ];
+
+    for (const browserDb of contexts) {
+      await assertFails(getDoc(doc(browserDb, ...claimPath)));
+      await assertFails(getDocs(query(
+        collection(browserDb, "organizations", "org-a", "customerEmailClaims"),
+        limit(1)
+      )));
+    }
+
+    const adminDb = contexts[1];
+    const adminClaimRef = doc(adminDb, ...claimPath);
+    await assertFails(setDoc(doc(
+      adminDb,
+      "organizations",
+      "org-a",
+      "customerEmailClaims",
+      "browser-forged"
+    ), {
+      organizationId: "org-a",
+      customerId: "browser-forged",
+      emailKey: "forged@example.com"
+    }));
+    await assertFails(updateDoc(adminClaimRef, { customerId: "browser-forged" }));
+    await assertFails(deleteDoc(adminClaimRef));
   });
 
   test("org-a admin can write own org paths but cannot write org-b quotes/catalog/menu/settings", async () => {
@@ -1743,6 +1863,21 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       await assertFails(updateDoc(adminRef, { body: "Browser-edited message" }));
       await assertFails(deleteDoc(adminRef));
     }
+    const adminQuote = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "quotes",
+      "q1"
+    );
+    await assertFails(updateDoc(adminQuote, {
+      conversationSummary: {
+        schemaVersion: 1,
+        messageCount: 999,
+        latestMessageAtISO: "2026-03-22T05:00:00.000Z",
+        latestActorType: "customer"
+      }
+    }));
   });
 
   test("product analytics events are callable-owned and cannot expose raw staff activity", async () => {

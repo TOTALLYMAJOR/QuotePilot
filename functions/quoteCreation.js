@@ -9,6 +9,11 @@ const PORTAL_VALIDITY_DAYS_MAX = 30;
 const MAX_SELECTION_ITEMS = 100;
 const MAX_CREW_MEMBERS = 20;
 const PRICING_AUTHORITY = "server_authoritative";
+const CUSTOMER_EMAIL_CLAIM_SOURCES = new Set([
+  "trusted_quote_projection",
+  "import_studio",
+  "legacy_repair"
+]);
 const CRM_PROVIDERS = new Set(["webhook", "webhook_bridge", "hubspot", "salesforce"]);
 const APPROVED_STRIPE_PAYMENT_HOSTS = new Set([
   "checkout.stripe.com",
@@ -71,6 +76,98 @@ function customerProjectionDocumentId(value) {
   return `email_${createHash("sha256").update(normalizedEmail).digest("hex")}`;
 }
 
+function customerEmailClaimDocumentId(value) {
+  return customerProjectionDocumentId(value);
+}
+
+function buildCustomerEmailClaim({
+  organizationId,
+  customerId,
+  customerEmail,
+  nowISO,
+  existingClaim = null,
+  claimSource = "trusted_quote_projection",
+  importBatchId = ""
+} = {}) {
+  const orgId = sanitizeIdentifier(organizationId);
+  const id = sanitizeIdentifier(customerId, 500);
+  const emailKey = email(customerEmail);
+  const claimedAtISO = normalizeISO(nowISO, "");
+  const source = text(claimSource, 80) || "trusted_quote_projection";
+  const batchId = sanitizeIdentifier(importBatchId, 128);
+  const existing = isRecord(existingClaim) ? existingClaim : null;
+
+  if (!orgId || !/^[^/]{1,500}$/.test(id) || !emailKey || !claimedAtISO) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Trusted customer email claim identity is incomplete."
+    );
+  }
+  customerEmailClaimDocumentId(emailKey);
+  if (!CUSTOMER_EMAIL_CLAIM_SOURCES.has(source)) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Customer email claim source is not trusted."
+    );
+  }
+  if (
+    (source === "import_studio" && !batchId)
+    || (source !== "import_studio" && batchId)
+  ) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Customer import claims require matching import provenance."
+    );
+  }
+
+  if (existing) {
+    const existingOrgId = sanitizeIdentifier(existing.organizationId);
+    const existingCustomerId = sanitizeIdentifier(existing.customerId, 500);
+    const existingEmailKey = email(existing.emailKey || existing.email);
+    if (!existingOrgId || !existingCustomerId || !existingEmailKey) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "Existing customer email claim is incomplete. Repair it before saving the customer."
+      );
+    }
+    if (existingOrgId !== orgId || existingEmailKey !== emailKey) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "Existing customer email claim does not match this organization and email."
+      );
+    }
+    if (existingCustomerId !== id) {
+      throw new QuoteCreationError(
+        "already-exists",
+        "Another customer identity already claims this email."
+      );
+    }
+  }
+
+  return {
+    claimId: customerEmailClaimDocumentId(emailKey),
+    customerId: id,
+    emailKey,
+    isNew: !existing,
+    patch: {
+      schemaVersion: 1,
+      organizationId: orgId,
+      customerId: id,
+      emailKey,
+      updatedAtISO: claimedAtISO,
+      lastConfirmedSource: source,
+      ...(!existing
+        ? {
+            recordSource: "trusted_customer_email_claim",
+            createdBySource: source,
+            createdAtISO: claimedAtISO,
+            ...(batchId ? { importBatchId: batchId } : {})
+          }
+        : {})
+    }
+  };
+}
+
 function buildCustomerProjection({
   organizationId,
   quoteId,
@@ -80,6 +177,7 @@ function buildCustomerProjection({
   nowISO,
   existingCustomer = null,
   existingCustomerId = "",
+  newCustomerId = "",
   allowEmailChange = false
 } = {}) {
   const orgId = sanitizeIdentifier(organizationId);
@@ -90,7 +188,9 @@ function buildCustomerProjection({
   const customerName = text(customer?.name, 160);
   const existing = isRecord(existingCustomer) ? existingCustomer : null;
   const deterministicId = customerProjectionDocumentId(customerEmail);
-  const customerId = sanitizeIdentifier(existingCustomerId, 500) || deterministicId;
+  const customerId = sanitizeIdentifier(existingCustomerId, 500)
+    || sanitizeIdentifier(newCustomerId, 500)
+    || deterministicId;
 
   if (!orgId || !id || !number || !projectedAtISO || !customerName) {
     throw new QuoteCreationError(
@@ -1664,6 +1764,7 @@ module.exports = {
   QUOTE_VERSION_ID,
   QuoteCreationError,
   buildCanonicalPortalSnapshot,
+  buildCustomerEmailClaim,
   bindCustomerIdentityToQuoteDocuments,
   buildCustomerProjection,
   buildDuplicateQuoteForm,
@@ -1672,6 +1773,7 @@ module.exports = {
   buildServerQuoteNumber,
   buildTrustedQuoteCreationDocuments,
   buildTrustedQuoteEditDocuments,
+  customerEmailClaimDocumentId,
   customerProjectionDocumentId,
   customerNameSearchKey,
   sanitizeQuoteCreationRequest,

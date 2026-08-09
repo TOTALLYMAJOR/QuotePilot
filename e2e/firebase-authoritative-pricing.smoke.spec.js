@@ -164,7 +164,7 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   await expect(page.getByText(/Failed to calculate authoritative quote pricing/i)).toHaveCount(0);
 });
 
-test("concurrent quote transactions reuse and preserve one imported customer projection", async ({ page }) => {
+test("quote transactions reuse identity, move email ownership, and reject collisions", async ({ page }) => {
   test.setTimeout(180_000);
   await signInAsStaff(page);
 
@@ -175,12 +175,16 @@ test("concurrent quote transactions reuse and preserve one imported customer pro
 
   expect(proof.createdQuoteIds).toHaveLength(2);
   expect(new Set(proof.createdQuoteIds).size).toBe(2);
+  expect(proof.originalEmailCustomerCount).toBe(0);
+  expect(proof.collisionCustomerIds).toHaveLength(1);
+  expect(proof.collisionCustomerIds[0]).not.toBe(proof.importedCustomerId);
+  expect(proof.collisionErrorCode).toMatch(/already-exists$/);
   expect(proof.customerDocs).toHaveLength(1);
   const [customer] = proof.customerDocs;
   expect(customer).toMatchObject({
     id: proof.importedCustomerId,
     organizationId: "e2e-org",
-    email: proof.normalizedEmail,
+    email: proof.movedEmail,
     phone: "205-555-0142",
     company: "Imported Customer Company",
     notes: "Preserve this imported customer note.",
@@ -198,12 +202,12 @@ test("concurrent quote transactions reuse and preserve one imported customer pro
     id: proof.createdQuoteIds[0],
     organizationId: "e2e-org",
     customer: {
-      email: proof.normalizedEmail,
+      email: proof.movedEmail,
       phone: "",
       organization: ""
     },
-    activeVersionId: "v0003",
-    latestVersionNumber: 3
+    activeVersionId: "v0004",
+    latestVersionNumber: 4
   });
 });
 

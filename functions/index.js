@@ -13,6 +13,7 @@ const {
   QuoteCreationError,
   bindCustomerIdentityToQuoteDocuments,
   buildCanonicalPortalSnapshot,
+  buildCustomerEmailClaim,
   buildCustomerProjection,
   buildDuplicateQuoteForm,
   buildPortalRotationDocuments,
@@ -20,6 +21,7 @@ const {
   buildServerQuoteNumber,
   buildTrustedQuoteCreationDocuments,
   buildTrustedQuoteEditDocuments,
+  customerEmailClaimDocumentId,
   customerProjectionDocumentId,
   sanitizeQuoteCreationRequest
 } = require("./quoteCreation");
@@ -222,11 +224,13 @@ const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
 const PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION = "proposalAcceptanceReceipts";
 const PRODUCT_ANALYTICS_COLLECTION = "productAnalyticsEvents";
 const PORTAL_COLLECTION = "customerPortalQuotes";
+const CUSTOMER_EMAIL_CLAIMS_COLLECTION = "customerEmailClaims";
 const CUSTOMER_IMPORT_BATCH_KIND = "customer";
 const CUSTOMER_IMPORT_SOURCE = "import_studio";
 const CUSTOMER_IMPORT_TYPE = "customers";
 const CUSTOMER_IMPORT_MAX_RECORDS = 350;
 const CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS = 2000;
+const CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES = 500;
 const PORTAL_CONVERSATION_MESSAGES_COLLECTION = "portalConversationMessages";
 const PORTAL_CONVERSATION_REQUESTS_COLLECTION = "portalConversationRequests";
 const PORTAL_CONVERSATION_RATE_LIMITS_COLLECTION = "portalConversationRateLimits";
@@ -6141,8 +6145,18 @@ async function createCustomerImportBatchInternal({
   const operationHash = customerImportRequestHash({ fileName, rows });
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
   const customerCollectionRef = organizationRef.collection("customers");
+  const customerEmailClaimCollectionRef = organizationRef
+    .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION);
   const receiptRef = organizationRef.collection("importBatches").doc(normalizedBatchId);
-
+  const emailClaimRefs = new Map();
+  rows.forEach((row) => {
+    const emailKey = normalizeEmail(row.data.emailKey || row.data.email);
+    if (!emailKey || emailClaimRefs.has(emailKey)) return;
+    emailClaimRefs.set(
+      emailKey,
+      customerEmailClaimCollectionRef.doc(customerEmailClaimDocumentId(emailKey))
+    );
+  });
   return db.runTransaction(async (transaction) => {
     const receiptSnapshot = await transaction.get(receiptRef);
     if (receiptSnapshot.exists) {
@@ -6158,10 +6172,18 @@ async function createCustomerImportBatchInternal({
         "This customer import was already rolled back. Start a new import batch."
       );
     }
+    if (rows.length + emailClaimRefs.size + 1 > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES) {
+      throw new CustomerImportError(
+        "resource-exhausted",
+        "This customer import has too many email identities for one atomic batch. Split it into smaller files."
+      );
+    }
 
-    const existingSnapshot = await transaction.get(
-      customerCollectionRef.limit(CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS + 1)
-    );
+    const orderedEmailClaims = [...emailClaimRefs.entries()];
+    const [existingSnapshot, ...emailClaimSnapshots] = await Promise.all([
+      transaction.get(customerCollectionRef.limit(CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS + 1)),
+      ...orderedEmailClaims.map(([, claimRef]) => transaction.get(claimRef))
+    ]);
     if (existingSnapshot.docs.length > CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS) {
       throw new CustomerImportError(
         "resource-exhausted",
@@ -6188,16 +6210,54 @@ async function createCustomerImportBatchInternal({
       existingKeys.set(duplicateKey, snapshot.id);
     });
 
+    const emailClaimsByEmail = new Map();
+    orderedEmailClaims.forEach(([emailKey], index) => {
+      const binding = readCustomerEmailClaim(
+        emailClaimSnapshots[index],
+        normalizedOrganizationId,
+        emailKey
+      );
+      if (!binding) return;
+      const existingCustomerId = existingKeys.get(`email:${emailKey}`);
+      if (!existingCustomerId || existingCustomerId !== binding.customerId) {
+        throw new CustomerImportError(
+          "failed-precondition",
+          "A customer email claim does not match the existing customer directory. Repair it before importing."
+        );
+      }
+      emailClaimsByEmail.set(emailKey, binding);
+    });
+
     const seenKeys = new Set(existingKeys.keys());
     const createdRecords = [];
     const skippedRows = [];
     rows.forEach((row) => {
       if (seenKeys.has(row.duplicateKey)) {
+        const emailKey = normalizeEmail(row.data.emailKey || row.data.email);
+        const existingCustomerId = existingKeys.get(row.duplicateKey);
+        if (emailKey && existingCustomerId && !emailClaimsByEmail.has(emailKey)) {
+          const claim = buildCustomerEmailClaim({
+            organizationId: normalizedOrganizationId,
+            customerId: existingCustomerId,
+            customerEmail: emailKey,
+            nowISO,
+            claimSource: "legacy_repair"
+          });
+          writeCustomerEmailClaim(
+            transaction,
+            emailClaimRefs.get(emailKey),
+            claim
+          );
+          emailClaimsByEmail.set(emailKey, {
+            customerId: existingCustomerId,
+            data: claim.patch
+          });
+        }
         skippedRows.push({ rowNumber: row.rowNumber, reason: "duplicate" });
         return;
       }
       const collidingKey = existingIds.get(row.customerId);
-      if (collidingKey && collidingKey !== row.duplicateKey) {
+      if (existingIds.has(row.customerId) && collidingKey !== row.duplicateKey) {
         throw new CustomerImportError(
           "failed-precondition",
           "A stable customer identity is already occupied by a different normalized customer."
@@ -6221,16 +6281,39 @@ async function createCustomerImportBatchInternal({
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       });
+      const emailKey = normalizeEmail(row.data.emailKey || row.data.email);
+      let emailClaimId = "";
+      if (emailKey) {
+        const claim = buildCustomerEmailClaim({
+          organizationId: normalizedOrganizationId,
+          customerId: row.customerId,
+          customerEmail: emailKey,
+          nowISO,
+          claimSource: CUSTOMER_IMPORT_SOURCE,
+          importBatchId: normalizedBatchId
+        });
+        writeCustomerEmailClaim(
+          transaction,
+          emailClaimRefs.get(emailKey),
+          claim
+        );
+        emailClaimsByEmail.set(emailKey, {
+          customerId: row.customerId,
+          data: claim.patch
+        });
+        emailClaimId = claim.claimId;
+      }
       createdRecords.push({
         collection: "customers",
         id: row.customerId,
         rowNumber: row.rowNumber,
-        baselineHash
+        baselineHash,
+        ...(emailClaimId ? { emailClaimId, emailKey } : {})
       });
     });
 
     transaction.set(receiptRef, {
-      schemaVersion: 2,
+      schemaVersion: 3,
       batchKind: CUSTOMER_IMPORT_BATCH_KIND,
       operation: "customer_import",
       importBatchId: normalizedBatchId,
@@ -6307,6 +6390,8 @@ async function rollbackCustomerImportBatchInternal({
   }
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
   const customerCollectionRef = organizationRef.collection("customers");
+  const customerEmailClaimCollectionRef = organizationRef
+    .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION);
   const receiptRef = organizationRef.collection("importBatches").doc(normalizedBatchId);
 
   return db.runTransaction(async (transaction) => {
@@ -6351,6 +6436,15 @@ async function rollbackCustomerImportBatchInternal({
     if (createdRecords.some((entry) => (
       customerImportText(entry?.collection, 80) !== "customers"
       || !/^[^/]{1,500}$/.test(customerImportText(entry?.id, 500))
+      || (
+        customerImportText(entry?.emailClaimId, 500)
+        && !/^[^/]{1,500}$/.test(customerImportText(entry.emailClaimId, 500))
+      )
+      || (
+        customerImportText(entry?.emailKey, 254)
+        && customerImportText(entry?.emailClaimId, 500)
+          !== customerEmailClaimDocumentId(entry.emailKey)
+      )
     ))) {
       throw new CustomerImportError(
         "failed-precondition",
@@ -6360,6 +6454,24 @@ async function rollbackCustomerImportBatchInternal({
 
     const recordSnapshots = await Promise.all(createdRecords.map((entry) => (
       transaction.get(customerCollectionRef.doc(customerImportText(entry.id, 500)))
+    )));
+    const claimRefs = recordSnapshots.map((snapshot, index) => {
+      if (!snapshot.exists) return null;
+      const data = snapshot.data() || {};
+      const emailKey = normalizeEmail(data.emailKey || data.email);
+      if (!emailKey) return null;
+      const claimId = customerEmailClaimDocumentId(emailKey);
+      const receiptClaimId = customerImportText(createdRecords[index]?.emailClaimId, 500);
+      if (receiptClaimId && receiptClaimId !== claimId) {
+        throw new CustomerImportError(
+          "failed-precondition",
+          "Customer import receipt email claim no longer matches its customer record."
+        );
+      }
+      return customerEmailClaimCollectionRef.doc(claimId);
+    });
+    const claimSnapshots = await Promise.all(claimRefs.map((claimRef) => (
+      claimRef ? transaction.get(claimRef) : Promise.resolve(null)
     )));
     const protectedRecords = [];
     let deletedCount = 0;
@@ -6387,6 +6499,36 @@ async function rollbackCustomerImportBatchInternal({
       if (!currentRecordUnchanged && !legacyRecordUnchanged) {
         protectedRecords.push({ collection: "customers", id, reason: "record_modified" });
         return;
+      }
+      const claimRef = claimRefs[index];
+      const claimSnapshot = claimSnapshots[index];
+      const expectedClaimId = customerImportText(entry.emailClaimId, 500);
+      if (expectedClaimId && !claimSnapshot?.exists) {
+        protectedRecords.push({ collection: "customers", id, reason: "email_claim_missing" });
+        return;
+      }
+      if (claimSnapshot?.exists) {
+        const emailKey = normalizeEmail(data.emailKey || data.email);
+        let claimBinding;
+        try {
+          claimBinding = readCustomerEmailClaim(
+            claimSnapshot,
+            normalizedOrganizationId,
+            emailKey
+          );
+        } catch {
+          protectedRecords.push({ collection: "customers", id, reason: "email_claim_modified" });
+          return;
+        }
+        const claimData = claimBinding?.data || {};
+        const claimOwnedByImport = claimBinding?.customerId === id
+          && claimData.createdBySource === CUSTOMER_IMPORT_SOURCE
+          && claimData.importBatchId === normalizedBatchId;
+        if (!claimOwnedByImport) {
+          protectedRecords.push({ collection: "customers", id, reason: "email_claim_modified" });
+          return;
+        }
+        transaction.delete(claimRef);
       }
       transaction.delete(snapshot.ref);
       deletedCount += 1;
@@ -6952,6 +7094,43 @@ function assertNoCustomerProjectionCollision(snapshots, customerEmail, retainedC
   }
 }
 
+function readCustomerEmailClaim(snapshot, organizationId, customerEmail) {
+  if (!snapshot?.exists) return null;
+  const data = snapshot.data() || {};
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  const normalizedEmail = normalizeEmail(customerEmail);
+  const customerId = normalizeText(data.customerId);
+  const claimOrganizationId = normalizeOrganizationId(data.organizationId);
+  const claimEmail = normalizeEmail(data.emailKey || data.email);
+  if (
+    !/^[^/]{1,500}$/.test(customerId)
+    || !claimOrganizationId
+    || !claimEmail
+    || claimOrganizationId !== normalizedOrganizationId
+    || claimEmail !== normalizedEmail
+    || normalizeText(snapshot.id) !== customerEmailClaimDocumentId(normalizedEmail)
+  ) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Customer email claim identity is inconsistent. Repair it before saving the customer."
+    );
+  }
+  return { customerId, data };
+}
+
+function writeCustomerEmailClaim(transaction, claimRef, claim) {
+  const data = {
+    ...claim.patch,
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(claim.isNew ? { createdAt: FieldValue.serverTimestamp() } : {})
+  };
+  if (claim.isNew) {
+    transaction.create(claimRef, data);
+  } else {
+    transaction.set(claimRef, data, { merge: true });
+  }
+}
+
 function normalizePortalConversationQuoteId(value) {
   const id = normalizeText(value);
   return /^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/.test(id) ? id : "";
@@ -7284,6 +7463,16 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
         latestMessageAtISO: nowISO,
         updatedAt: FieldValue.serverTimestamp()
       });
+      tx.set(scope.refs.quoteRef, {
+        conversationSummary: {
+          schemaVersion: 1,
+          messageCount: nextMessageCount,
+          latestMessageId: generatedMessageId,
+          latestMessageAtISO: nowISO,
+          latestActorType: message.actorType,
+          updatedAt: FieldValue.serverTimestamp()
+        }
+      }, { merge: true });
       return portalConversationResponse(scope, [message], {
         message,
         idempotent: false
@@ -7384,6 +7573,10 @@ async function createTrustedQuoteDraftInternal({
   const deterministicCustomerRef = customerCollectionRef.doc(
     customerProjectionDocumentId(normalizedCustomerEmail)
   );
+  const generatedCustomerRef = customerCollectionRef.doc();
+  const customerEmailClaimRef = organizationRef
+    .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION)
+    .doc(customerEmailClaimDocumentId(normalizedCustomerEmail));
 
   const result = await db.runTransaction(async (tx) => {
     const [
@@ -7392,14 +7585,16 @@ async function createTrustedQuoteDraftInternal({
       versionSnap,
       customerEmailSnapshot,
       customerEmailKeySnapshot,
-      deterministicCustomerSnapshot
+      deterministicCustomerSnapshot,
+      customerEmailClaimSnapshot
     ] = await Promise.all([
       tx.get(quoteRef),
       tx.get(portalRef),
       tx.get(versionRef),
       tx.get(customerEmailQuery),
       tx.get(customerEmailKeyQuery),
-      tx.get(deterministicCustomerRef)
+      tx.get(deterministicCustomerRef),
+      tx.get(customerEmailClaimRef)
     ]);
     if (quoteSnap.exists || portalSnap.exists || versionSnap.exists) {
       throw new QuoteCreationError(
@@ -7407,15 +7602,54 @@ async function createTrustedQuoteDraftInternal({
         "A generated quote identity collided. Retry quote creation."
       );
     }
-    const customerSnapshots = [
+    const claimBinding = readCustomerEmailClaim(
+      customerEmailClaimSnapshot,
+      organizationId,
+      normalizedCustomerEmail
+    );
+    const initialCustomerSnapshots = [
       customerEmailSnapshot,
       customerEmailKeySnapshot,
       deterministicCustomerSnapshot
     ];
+    const knownClaimedCustomerSnapshot = claimBinding
+      ? customerProjectionDocuments(...initialCustomerSnapshots)
+        .find((snapshot) => snapshot.id === claimBinding.customerId) || null
+      : null;
+    const claimedCustomerSnapshot = claimBinding && !knownClaimedCustomerSnapshot
+      ? await tx.get(customerCollectionRef.doc(claimBinding.customerId))
+      : knownClaimedCustomerSnapshot;
+    const customerSnapshots = [
+      ...initialCustomerSnapshots,
+      ...(claimedCustomerSnapshot ? [claimedCustomerSnapshot] : [])
+    ];
     assertCustomerProjectionEmailConsistency(customerSnapshots);
-    const existingCustomerDoc = selectCustomerProjectionDocument(
+    const emailMatchedCustomerDoc = selectCustomerProjectionDocument(
       customerSnapshots,
       normalizedCustomerEmail
+    );
+    if (claimBinding && !claimedCustomerSnapshot?.exists) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "The customer email claim no longer resolves to a customer record."
+      );
+    }
+    if (
+      claimBinding
+      && customerProjectionEmail(claimedCustomerSnapshot) !== normalizedCustomerEmail
+    ) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "The claimed customer record no longer matches its normalized email."
+      );
+    }
+    const existingCustomerDoc = claimBinding
+      ? claimedCustomerSnapshot
+      : emailMatchedCustomerDoc;
+    assertNoCustomerProjectionCollision(
+      customerSnapshots,
+      normalizedCustomerEmail,
+      existingCustomerDoc?.id || generatedCustomerRef.id
     );
     if (
       deterministicCustomerSnapshot.exists
@@ -7434,9 +7668,18 @@ async function createTrustedQuoteDraftInternal({
       event: documents.quote.event,
       nowISO,
       existingCustomer: existingCustomerDoc?.data() || null,
-      existingCustomerId: existingCustomerDoc?.id || ""
+      existingCustomerId: existingCustomerDoc?.id || "",
+      newCustomerId: generatedCustomerRef.id
     });
     const customerRef = customerCollectionRef.doc(customerProjection.customerId);
+    const customerEmailClaim = buildCustomerEmailClaim({
+      organizationId,
+      customerId: customerProjection.customerId,
+      customerEmail: normalizedCustomerEmail,
+      nowISO,
+      existingClaim: claimBinding?.data || null,
+      claimSource: "trusted_quote_projection"
+    });
     const boundDocuments = bindCustomerIdentityToQuoteDocuments(
       documents,
       customerProjection.customerId
@@ -7456,6 +7699,7 @@ async function createTrustedQuoteDraftInternal({
       ...boundDocuments.version,
       createdAt: FieldValue.serverTimestamp()
     });
+    writeCustomerEmailClaim(tx, customerEmailClaimRef, customerEmailClaim);
     tx.set(customerRef, {
       ...customerProjection.patch,
       updatedAt: FieldValue.serverTimestamp(),
@@ -7572,6 +7816,14 @@ async function updateTrustedQuoteDraftInternal({
     const fallbackCustomerId = customerProjectionDocumentId(sourceCustomerEmail);
     const retainedCustomerId = storedCustomerId || fallbackCustomerId;
     const retainedCustomerRef = customerCollectionRef.doc(retainedCustomerId);
+    const customerEmailClaimCollectionRef = organizationRef
+      .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION);
+    const sourceCustomerEmailClaimRef = customerEmailClaimCollectionRef.doc(
+      customerEmailClaimDocumentId(sourceCustomerEmail)
+    );
+    const desiredCustomerEmailClaimRef = customerEmailClaimCollectionRef.doc(
+      customerEmailClaimDocumentId(desiredCustomerEmail)
+    );
     const desiredCustomerEmailQuery = customerCollectionRef
       .where("email", "==", desiredCustomerEmail)
       .limit(25);
@@ -7591,7 +7843,9 @@ async function updateTrustedQuoteDraftInternal({
       desiredCustomerEmailSnapshot,
       desiredCustomerEmailKeySnapshot,
       sourceCustomerEmailSnapshot,
-      sourceCustomerEmailKeySnapshot
+      sourceCustomerEmailKeySnapshot,
+      sourceCustomerEmailClaimSnapshot,
+      desiredCustomerEmailClaimSnapshot
     ] = await Promise.all([
       tx.get(portalRef),
       tx.get(versionRef),
@@ -7599,7 +7853,9 @@ async function updateTrustedQuoteDraftInternal({
       tx.get(desiredCustomerEmailQuery),
       tx.get(desiredCustomerEmailKeyQuery),
       tx.get(sourceCustomerEmailQuery),
-      tx.get(sourceCustomerEmailKeyQuery)
+      tx.get(sourceCustomerEmailKeyQuery),
+      tx.get(sourceCustomerEmailClaimRef),
+      tx.get(desiredCustomerEmailClaimRef)
     ]);
     if (versionSnap.exists) {
       throw new QuoteCreationError(
@@ -7620,12 +7876,50 @@ async function updateTrustedQuoteDraftInternal({
         );
       }
     }
-    const customerSnapshots = [
+    const retainedCustomerEmail = retainedCustomerSnapshot.exists
+      ? customerProjectionEmail(retainedCustomerSnapshot)
+      : "";
+    const identitySourceEmail = storedCustomerId && retainedCustomerEmail
+      ? retainedCustomerEmail
+      : sourceCustomerEmail;
+    const identitySourceClaimRef = identitySourceEmail === sourceCustomerEmail
+      ? sourceCustomerEmailClaimRef
+      : customerEmailClaimCollectionRef.doc(
+        customerEmailClaimDocumentId(identitySourceEmail)
+      );
+    const identitySourceClaimSnapshot = identitySourceEmail === sourceCustomerEmail
+      ? sourceCustomerEmailClaimSnapshot
+      : await tx.get(identitySourceClaimRef);
+    const sourceClaimBinding = readCustomerEmailClaim(
+      identitySourceClaimSnapshot,
+      organizationId,
+      identitySourceEmail
+    );
+    const desiredClaimBinding = desiredCustomerEmail === identitySourceEmail
+      ? sourceClaimBinding
+      : readCustomerEmailClaim(
+        desiredCustomerEmailClaimSnapshot,
+        organizationId,
+        desiredCustomerEmail
+      );
+    const initialCustomerSnapshots = [
       retainedCustomerSnapshot,
       desiredCustomerEmailSnapshot,
       desiredCustomerEmailKeySnapshot,
       sourceCustomerEmailSnapshot,
       sourceCustomerEmailKeySnapshot
+    ];
+    const knownSourceClaimedCustomerSnapshot = sourceClaimBinding
+      ? customerProjectionDocuments(...initialCustomerSnapshots)
+        .find((snapshot) => snapshot.id === sourceClaimBinding.customerId) || null
+      : null;
+    const sourceClaimedCustomerSnapshot = sourceClaimBinding
+      && !knownSourceClaimedCustomerSnapshot
+      ? await tx.get(customerCollectionRef.doc(sourceClaimBinding.customerId))
+      : knownSourceClaimedCustomerSnapshot;
+    const customerSnapshots = [
+      ...initialCustomerSnapshots,
+      ...(sourceClaimedCustomerSnapshot ? [sourceClaimedCustomerSnapshot] : [])
     ];
     assertCustomerProjectionEmailConsistency(customerSnapshots);
     let existingCustomerDoc = retainedCustomerSnapshot.exists
@@ -7638,13 +7932,26 @@ async function updateTrustedQuoteDraftInternal({
       );
     }
     if (!storedCustomerId) {
-      existingCustomerDoc = selectCustomerProjectionDocument(
-        customerSnapshots,
-        sourceCustomerEmail
-      );
+      if (sourceClaimBinding) {
+        if (
+          !sourceClaimedCustomerSnapshot?.exists
+          || customerProjectionEmail(sourceClaimedCustomerSnapshot) !== identitySourceEmail
+        ) {
+          throw new QuoteCreationError(
+            "failed-precondition",
+            "The customer email claim no longer resolves to its customer record."
+          );
+        }
+        existingCustomerDoc = sourceClaimedCustomerSnapshot;
+      } else {
+        existingCustomerDoc = selectCustomerProjectionDocument(
+          customerSnapshots,
+          identitySourceEmail
+        );
+      }
       if (
         retainedCustomerSnapshot.exists
-        && customerProjectionEmail(retainedCustomerSnapshot) !== sourceCustomerEmail
+        && customerProjectionEmail(retainedCustomerSnapshot) !== identitySourceEmail
       ) {
         throw new QuoteCreationError(
           "failed-precondition",
@@ -7653,6 +7960,18 @@ async function updateTrustedQuoteDraftInternal({
       }
     }
     const resolvedCustomerId = existingCustomerDoc?.id || retainedCustomerId;
+    if (sourceClaimBinding && sourceClaimBinding.customerId !== resolvedCustomerId) {
+      throw new QuoteCreationError(
+        "already-exists",
+        "The current customer email is claimed by another customer identity."
+      );
+    }
+    if (desiredClaimBinding && desiredClaimBinding.customerId !== resolvedCustomerId) {
+      throw new QuoteCreationError(
+        "already-exists",
+        "Another customer identity already claims the requested email."
+      );
+    }
     assertNoCustomerProjectionCollision(
       customerSnapshots,
       desiredCustomerEmail,
@@ -7670,6 +7989,14 @@ async function updateTrustedQuoteDraftInternal({
       allowEmailChange: true
     });
     const customerRef = customerCollectionRef.doc(customerProjection.customerId);
+    const desiredCustomerEmailClaim = buildCustomerEmailClaim({
+      organizationId,
+      customerId: customerProjection.customerId,
+      customerEmail: desiredCustomerEmail,
+      nowISO,
+      existingClaim: desiredClaimBinding?.data || null,
+      claimSource: "trusted_quote_projection"
+    });
     const boundDocuments = bindCustomerIdentityToQuoteDocuments(
       documents,
       customerProjection.customerId
@@ -7690,6 +8017,14 @@ async function updateTrustedQuoteDraftInternal({
       ...boundDocuments.version,
       createdAt: FieldValue.serverTimestamp()
     });
+    if (identitySourceEmail !== desiredCustomerEmail && sourceClaimBinding) {
+      tx.delete(identitySourceClaimRef);
+    }
+    writeCustomerEmailClaim(
+      tx,
+      desiredCustomerEmailClaimRef,
+      desiredCustomerEmailClaim
+    );
     tx.set(customerRef, {
       ...customerProjection.patch,
       updatedAt: FieldValue.serverTimestamp(),

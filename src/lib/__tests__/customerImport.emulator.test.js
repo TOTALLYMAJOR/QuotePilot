@@ -140,6 +140,14 @@ emulatorDescribe("authoritative customer imports", () => {
         status: "completed"
       }
     )).rejects.toBeTruthy();
+    await expect(setDoc(
+      doc(clientDb, "organizations", organizationId, "customerEmailClaims", "browser-forged"),
+      {
+        organizationId,
+        customerId: "browser-forged",
+        emailKey: "browser@example.com"
+      }
+    )).rejects.toBeTruthy();
 
     const request = {
       organizationId,
@@ -174,11 +182,13 @@ emulatorDescribe("authoritative customer imports", () => {
     const nameCustomerId = customerIdForName("Name Only Customer");
     expect(new Set(result.createdRecords.map((record) => record.id)))
       .toEqual(new Set([emailCustomerId, nameCustomerId]));
-    const [emailCustomer, nameCustomer, receipt] = await Promise.all([
+    const [emailCustomer, nameCustomer, emailClaim, receipt] = await Promise.all([
       adminDb.collection("organizations").doc(organizationId)
         .collection("customers").doc(emailCustomerId).get(),
       adminDb.collection("organizations").doc(organizationId)
         .collection("customers").doc(nameCustomerId).get(),
+      adminDb.collection("organizations").doc(organizationId)
+        .collection("customerEmailClaims").doc(customerIdForEmail("rowan@example.com")).get(),
       adminDb.collection("organizations").doc(organizationId)
         .collection("importBatches").doc(request.importBatchId).get()
     ]);
@@ -199,8 +209,25 @@ emulatorDescribe("authoritative customer imports", () => {
       nameKey: "name only customer",
       emailKey: ""
     });
+    expect(emailClaim.data()).toMatchObject({
+      schemaVersion: 1,
+      organizationId,
+      customerId: emailCustomerId,
+      emailKey: "rowan@example.com",
+      recordSource: "trusted_customer_email_claim",
+      createdBySource: "import_studio",
+      importBatchId: request.importBatchId
+    });
     expect(receipt.data()?.actor).toEqual({ uid: user.uid, email });
     expect(receipt.data()?.requestHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(receipt.data()?.schemaVersion).toBe(3);
+    expect(receipt.data()?.createdRecords).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: emailCustomerId,
+        emailClaimId: customerIdForEmail("rowan@example.com"),
+        emailKey: "rowan@example.com"
+      })
+    ]));
 
     const replay = (await createCustomerImport(request)).data;
     expect(replay).toMatchObject({ idempotentReplay: true, createdCount: 2, skippedCount: 1 });
@@ -228,6 +255,8 @@ emulatorDescribe("authoritative customer imports", () => {
     });
     expect((await adminDb.collection("organizations").doc(organizationId)
       .collection("customers").doc(emailCustomerId).get()).exists).toBe(false);
+    expect((await adminDb.collection("organizations").doc(organizationId)
+      .collection("customerEmailClaims").doc(customerIdForEmail("rowan@example.com")).get()).exists).toBe(false);
     expect((await adminDb.collection("organizations").doc(organizationId)
       .collection("customers").doc(nameCustomerId).get()).exists).toBe(true);
     const rollbackReplay = (await rollbackCustomerImport({
@@ -259,6 +288,30 @@ emulatorDescribe("authoritative customer imports", () => {
       importBatchId: "customer_emulator_collision_0001",
       records: [{ rowNumber: 2, record: { name: "New", email: "new@example.com" } }]
     }), "failed-precondition");
+    await Promise.all([
+      customersRef.doc("legacy-collision-a").delete(),
+      customersRef.doc("legacy-collision-b").delete()
+    ]);
+
+    const orphanClaimEmail = "orphan-claim@example.com";
+    const orphanClaimId = customerIdForEmail(orphanClaimEmail);
+    const orphanClaimRef = adminDb.collection("organizations").doc(organizationId)
+      .collection("customerEmailClaims").doc(orphanClaimId);
+    await orphanClaimRef.set({
+      schemaVersion: 1,
+      organizationId,
+      customerId: "missing-customer",
+      emailKey: orphanClaimEmail,
+      recordSource: "trusted_customer_email_claim",
+      createdBySource: "legacy_repair"
+    });
+    await expectCallableCode(() => createCustomerImport({
+      organizationId,
+      fileName: "orphan-claim.csv",
+      importBatchId: "customer_emulator_orphan_claim_0001",
+      records: [{ rowNumber: 2, record: { name: "Orphan", email: orphanClaimEmail } }]
+    }), "failed-precondition");
+    await orphanClaimRef.delete();
 
     const legacyBatchId = "legacy_customer_batch_0001";
     const legacyCustomerId = "legacy-imported-customer";

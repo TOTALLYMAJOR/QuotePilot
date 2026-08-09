@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   query,
   where
 } from "firebase/firestore";
@@ -154,9 +155,70 @@ export async function exerciseCustomerProjectionTransactions() {
     throw new Error("Concurrent quote edits did not complete through the trusted transaction path.");
   }
 
+  const movedEmail = `projection-moved-${unique}@example.com`;
+  const collisionEmail = `projection-collision-${unique}@example.com`;
+  const collisionCustomerQuote = (await createQuote({
+    organizationId,
+    form: {
+      ...baseForm,
+      name: "Collision Owner",
+      email: collisionEmail,
+      eventName: "Collision Owner Event"
+    }
+  })).data;
+  if (collisionCustomerQuote?.ok !== true || !collisionCustomerQuote?.id) {
+    throw new Error("The destination collision customer fixture was not created.");
+  }
+
+  const movedQuote = (await updateQuote({
+    organizationId,
+    quoteId: editedQuoteId,
+    form: {
+      ...baseForm,
+      name: "Projection Customer Moved",
+      email: movedEmail,
+      eventName: "Atomic Projection Email Move",
+      date: "2026-10-13"
+    }
+  })).data;
+  if (movedQuote?.ok !== true || movedQuote?.customerId !== importedCustomerId) {
+    throw new Error("The trusted quote edit did not retain customer identity during an email move.");
+  }
+
+  let collisionErrorCode = "";
+  try {
+    await updateQuote({
+      organizationId,
+      quoteId: editedQuoteId,
+      form: {
+        ...baseForm,
+        name: "Projection Customer Collision Attempt",
+        email: collisionEmail,
+        eventName: "Rejected Projection Collision",
+        date: "2026-10-14"
+      }
+    });
+  } catch (error) {
+    collisionErrorCode = String(error?.code || "");
+  }
+  if (!collisionErrorCode.endsWith("already-exists")) {
+    throw new Error(`Expected an already-exists email collision, received ${collisionErrorCode || "no error"}.`);
+  }
+
   const customerSnapshot = await getDocs(query(
     collection(db, "organizations", organizationId, "customers"),
-    where("email", "==", normalizedEmail)
+    where("email", "==", movedEmail),
+    limit(2)
+  ));
+  const originalEmailSnapshot = await getDocs(query(
+    collection(db, "organizations", organizationId, "customers"),
+    where("email", "==", normalizedEmail),
+    limit(2)
+  ));
+  const collisionCustomerSnapshot = await getDocs(query(
+    collection(db, "organizations", organizationId, "customers"),
+    where("email", "==", collisionEmail),
+    limit(2)
   ));
   const finalQuoteSnapshot = await getDoc(doc(
     db,
@@ -171,11 +233,16 @@ export async function exerciseCustomerProjectionTransactions() {
   }));
   return {
     normalizedEmail,
+    movedEmail,
+    collisionEmail,
+    collisionErrorCode,
     importedCustomerId,
     importedBatchId,
     importedCreatedAtISO,
     createdQuoteIds: createdQuotes.map((quote) => quote.id),
     customerDocs,
+    originalEmailCustomerCount: originalEmailSnapshot.size,
+    collisionCustomerIds: collisionCustomerSnapshot.docs.map((snapshot) => snapshot.id),
     finalQuote: finalQuoteSnapshot.exists()
       ? { id: finalQuoteSnapshot.id, ...finalQuoteSnapshot.data() }
       : null
