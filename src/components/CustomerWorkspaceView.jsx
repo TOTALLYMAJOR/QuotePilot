@@ -6,6 +6,9 @@ import { buildPortalThemeStyle } from "../data/portalThemePresets";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { StaffReadContextRail } from "./StaffEvidenceRail";
 import CustomerCommercialTimeline from "./CustomerCommercialTimeline";
+import CustomerRevenueOpportunities, {
+  buildCustomerRevenueOpportunityRead
+} from "./CustomerRevenueOpportunities";
 import QuoteVersionComparison from "./QuoteVersionComparison";
 import {
   formatWorkspaceDate,
@@ -33,7 +36,9 @@ const EMPTY_WORKSPACE_STATE = {
   stale: false,
   loadedAt: 0,
   scopeKey: "",
-  workspace: null
+  workspace: null,
+  revenueRadar: null,
+  revenueRadarError: ""
 };
 
 function safeLogoUrl(value) {
@@ -303,7 +308,8 @@ export default function CustomerWorkspaceView({
   onOpenQuote,
   onOpenWorkflow,
   onOpenSchedule,
-  scheduleAvailable = true
+  scheduleAvailable = true,
+  tenantTimeZone = ""
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [previewQuoteId, setPreviewQuoteId] = useState("");
@@ -325,13 +331,30 @@ export default function CustomerWorkspaceView({
     getCustomerWorkspace({ organizationId, customerId })
       .then((workspace) => {
         if (generation !== generationRef.current) return;
+        const loadedAt = Date.now();
+        let revenueRadar = null;
+        let revenueRadarError = "";
+        if (workspace) {
+          try {
+            revenueRadar = buildCustomerRevenueOpportunityRead({
+              workspace,
+              organizationId,
+              loadedAt,
+              tenantTimeZone
+            });
+          } catch (error) {
+            revenueRadarError = error?.message || "Revenue opportunities could not be evaluated.";
+          }
+        }
         setState({
           loading: false,
           error: "",
           stale: false,
-          loadedAt: Date.now(),
+          loadedAt,
           scopeKey: requestedScopeKey,
-          workspace
+          workspace,
+          revenueRadar,
+          revenueRadarError
         });
       })
       .catch((error) => {
@@ -348,7 +371,7 @@ export default function CustomerWorkspaceView({
     return () => {
       generationRef.current += 1;
     };
-  }, [customerId, organizationId, refreshToken, requestedScopeKey]);
+  }, [customerId, organizationId, refreshToken, requestedScopeKey, tenantTimeZone]);
 
   const previewQuote = useMemo(
     () => workspaceForScope?.quotes.find((quote) => quote.id === previewQuoteId) || null,
@@ -516,6 +539,13 @@ export default function CustomerWorkspaceView({
         />
 
         <section id="customer-panel-overview" role="tabpanel" aria-labelledby="customer-tab-overview" tabIndex={0} hidden={activeTab !== "overview"}>
+          <CustomerRevenueOpportunities
+            radar={state.revenueRadar}
+            error={state.revenueRadarError}
+            loading={state.loading}
+            stale={state.stale}
+            onOpenQuote={onOpenQuote}
+          />
           <CustomerCommercialTimeline workspace={workspace} onOpenQuote={onOpenQuote} />
         </section>
 

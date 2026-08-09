@@ -6378,6 +6378,51 @@ hr {
   font-size: 0.76rem;
 }
 
+.customer-revenue-opportunities {
+  border-color: #c9d8cf;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(65, 112, 88, 0.12), transparent 28%),
+    linear-gradient(135deg, #fbfcf9 0%, #eef5f0 100%);
+}
+
+.customer-revenue-opportunities .customer-card-list {
+  margin-top: var(--space-3);
+}
+
+.customer-revenue-opportunity {
+  border-left: 4px solid #47735d !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+}
+
+.customer-revenue-opportunity[data-opportunity-type="anniversary_rebooking"] {
+  border-left-color: #9b7022 !important;
+}
+
+.customer-revenue-opportunity-type {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 0.35rem;
+  padding: 0.17rem 0.42rem;
+  border-radius: 999px;
+  background: #e6efe9;
+  color: #315b46;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.customer-revenue-opportunity[data-opportunity-type="anniversary_rebooking"] .customer-revenue-opportunity-type {
+  background: #f3ead8;
+  color: #705018;
+}
+
+.customer-revenue-opportunity ul {
+  margin: 0.5rem 0;
+  padding-left: 1.1rem;
+  color: #514b40;
+}
+
 .customer-overview-grid article,
 .customer-next-action,
 .customer-card-list > article {
