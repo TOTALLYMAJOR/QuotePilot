@@ -1474,6 +1474,40 @@ hr {
   font-size: 0.84rem;
 }
 
+.rebook-review-banner {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid #d8bd82;
+  border-left: 4px solid #9b7022;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #fffaf0 0%, #f6eddc 100%);
+}
+
+.rebook-review-banner.source-note {
+  border-color: #a9c7b4;
+  border-left-color: #47735d;
+  background: linear-gradient(135deg, #f7fbf8 0%, #eaf3ed 100%);
+}
+
+.rebook-review-banner > * {
+  margin: 0;
+}
+
+.rebook-review-banner .eyebrow {
+  color: inherit;
+}
+
+.rebook-review-banner .source-note {
+  color: #625b50;
+}
+
+.rebook-review-banner button {
+  justify-self: start;
+  margin-top: 0.15rem;
+}
+
 .auth-shell,
 .portal-shell {
   min-height: 100vh;
@@ -6421,6 +6455,70 @@ hr {
   margin: 0.5rem 0;
   padding-left: 1.1rem;
   color: #514b40;
+}
+
+.customer-rebook-draft-action {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid #d6c7a7;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 252, 244, 0.9);
+}
+
+.customer-rebook-draft-action[data-capability-state="receipt"] {
+  border-color: #9fc1aa;
+  background: rgba(241, 249, 244, 0.96);
+}
+
+.customer-rebook-draft-action[data-capability-state="uncertain"],
+.customer-rebook-draft-action[data-capability-state="error"] {
+  border-color: #d5ad67;
+  background: rgba(255, 247, 230, 0.96);
+}
+
+.customer-rebook-draft-action > div,
+.customer-rebook-draft-action p {
+  margin: 0;
+}
+
+.customer-rebook-draft-action button {
+  justify-self: start;
+}
+
+.quote-change-impact-preview {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid #c8d0d8;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(145deg, #fbfcfd 0%, #eef2f5 100%);
+}
+
+.quote-change-impact-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.quote-change-impact-preview-head h3,
+.quote-change-impact-preview-head p {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .quote-change-impact-preview-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quote-change-impact-preview-head button,
+  .customer-rebook-draft-action button {
+    width: 100%;
+  }
 }
 
 .customer-overview-grid article,

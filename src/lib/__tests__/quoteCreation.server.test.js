@@ -20,6 +20,13 @@ const {
   sanitizeQuoteCreationRequest,
   sanitizeStoredStripePaymentLink
 } = require("../../../functions/quoteCreation.js");
+const { buildRebookingRequestId } = require("../../../functions/rebookQuoteDraft.js");
+const REBOOK_TEST_REQUEST_ID = buildRebookingRequestId({
+  organizationId: "org-a",
+  sourceQuoteId: "quote-booked",
+  sourceVersionId: "v0003",
+  acceptanceReceiptId: "acceptance-1234567890"
+});
 
 function buildPricing(overrides = {}) {
   return {
@@ -886,6 +893,162 @@ describe("trusted server quote creation documents", () => {
         portalKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     });
+  });
+
+  test("binds reviewed rebook provenance to canonical and immutable records only", () => {
+    const form = sanitizeQuoteCreationRequest({ form: buildForm() }).form;
+    const rebooking = {
+      schemaVersion: 1,
+      sourceOrganizationId: "org-a",
+      sourceQuoteId: "quote-booked",
+      sourceVersionId: "v0003",
+      sourceCustomerId: "customer-henderson",
+      sourceEventDate: "2026-09-12",
+      acceptanceReceiptId: "acceptance-1234567890",
+      sourceAcceptedAtISO: "2025-08-10T18:30:00.000Z",
+      rebookingRequestId: REBOOK_TEST_REQUEST_ID,
+      draftCreatedAtISO: "2026-08-09T18:00:00.000Z",
+      state: "draft_created_for_staff_review"
+    };
+    const documents = buildTrustedQuoteCreationDocuments({
+      quoteId: "rebook-created",
+      quoteNumber: "Q-260809-1800-ABCDEF12",
+      portalKey: "0123456789abcdef0123456789abcdef",
+      organizationId: "org-a",
+      staff: {
+        uid: "staff-a",
+        email: "staff@example.com",
+        role: "sales"
+      },
+      form,
+      pricing: buildPricing(),
+      catalogSource: "firebase-org",
+      settings: { businessTimeZone: "America/Chicago" },
+      nowISO: "2026-08-09T18:00:00.000Z",
+      creationReason: "rebook_quote_create",
+      sourceQuoteId: "quote-booked",
+      rebooking
+    });
+
+    expect(documents.quote).toMatchObject({
+      duplicatedFromQuoteId: "quote-booked",
+      rebooking
+    });
+    expect(documents.version.snapshot.rebooking).toEqual(rebooking);
+    expect(documents.result.rebooking).toEqual({
+      sourceQuoteId: "quote-booked",
+      sourceVersionId: "v0003",
+      sourceEventDate: "2026-09-12",
+      acceptanceReceiptId: "acceptance-1234567890",
+      rebookingRequestId: REBOOK_TEST_REQUEST_ID,
+      state: "draft_created_for_staff_review"
+    });
+    expect(documents.portal).not.toHaveProperty("rebooking");
+  });
+
+  test("rejects rebook creation without exact trusted provenance", () => {
+    const base = {
+      quoteId: "rebook-created",
+      quoteNumber: "Q-260809-1800-ABCDEF12",
+      portalKey: "0123456789abcdef0123456789abcdef",
+      organizationId: "org-a",
+      staff: { uid: "staff-a", email: "staff@example.com", role: "sales" },
+      form: sanitizeQuoteCreationRequest({ form: buildForm() }).form,
+      pricing: buildPricing(),
+      catalogSource: "firebase-org",
+      settings: { businessTimeZone: "America/Chicago" },
+      nowISO: "2026-08-09T18:00:00.000Z",
+      sourceQuoteId: "quote-booked"
+    };
+    expect(() => buildTrustedQuoteCreationDocuments({
+      ...base,
+      creationReason: "rebook_quote_create"
+    })).toThrow(/requires matching trusted source provenance/i);
+    expect(() => buildTrustedQuoteCreationDocuments({
+      ...base,
+      creationReason: "duplicate_quote_create",
+      rebooking: {
+        schemaVersion: 1,
+        sourceOrganizationId: "org-a",
+        sourceQuoteId: "quote-booked",
+        sourceVersionId: "v0003",
+        sourceCustomerId: "customer-henderson",
+        sourceEventDate: "2026-09-12",
+        acceptanceReceiptId: "acceptance-1234567890",
+        sourceAcceptedAtISO: "2025-08-10T18:30:00.000Z",
+        rebookingRequestId: REBOOK_TEST_REQUEST_ID,
+        draftCreatedAtISO: "2026-08-09T18:00:00.000Z",
+        state: "draft_created_for_staff_review"
+      }
+    })).toThrow(/requires matching trusted source provenance/i);
+  });
+
+  test("turns a rebook review gate into immutable evidence only after a trusted future-date edit", () => {
+    const rebooking = {
+      schemaVersion: 1,
+      sourceOrganizationId: "org-a",
+      sourceQuoteId: "quote-booked",
+      sourceVersionId: "v0003",
+      sourceCustomerId: "customer-henderson",
+      sourceEventDate: "2026-09-12",
+      acceptanceReceiptId: "acceptance-1234567890",
+      sourceAcceptedAtISO: "2026-08-01T18:30:00.000Z",
+      rebookingRequestId: REBOOK_TEST_REQUEST_ID,
+      draftCreatedAtISO: "2026-08-09T18:00:00.000Z",
+      state: "draft_created_for_staff_review"
+    };
+    const created = buildTrustedQuoteCreationDocuments({
+      quoteId: "rebook-created",
+      quoteNumber: "Q-260809-1800-ABCDEF12",
+      portalKey: "0123456789abcdef0123456789abcdef",
+      organizationId: "org-a",
+      staff: { uid: "staff-a", email: "staff@example.com", role: "sales" },
+      form: sanitizeQuoteCreationRequest({ form: buildForm() }).form,
+      pricing: buildPricing(),
+      catalogSource: "firebase-org",
+      settings: {},
+      nowISO: "2026-08-09T18:00:00.000Z",
+      creationReason: "rebook_quote_create",
+      sourceQuoteId: "quote-booked",
+      rebooking
+    });
+    const sourceQuote = {
+      ...created.quote,
+      customerId: "customer-henderson"
+    };
+    expect(() => buildTrustedQuoteEditDocuments({
+      quoteId: "rebook-created",
+      quote: sourceQuote,
+      staff: { uid: "staff-a", email: "staff@example.com", role: "sales" },
+      form: sanitizeQuoteCreationRequest({ form: buildForm() }).form,
+      pricing: buildPricing(),
+      catalogSource: "firebase-org",
+      settings: { businessTimeZone: "America/Chicago" },
+      nowISO: "2026-08-10T18:00:00.000Z"
+    })).toThrow(/current-or-future event date later/i);
+
+    const futurePricing = buildPricing();
+    futurePricing.inputs.event.date = "2027-09-12";
+    const edited = buildTrustedQuoteEditDocuments({
+      quoteId: "rebook-created",
+      quote: sourceQuote,
+      staff: { uid: "staff-a", email: "staff@example.com", role: "sales" },
+      form: sanitizeQuoteCreationRequest({ form: buildForm({ date: "2027-09-12" }) }).form,
+      pricing: futurePricing,
+      catalogSource: "firebase-org",
+      settings: { businessTimeZone: "America/Chicago" },
+      nowISO: "2026-08-10T18:00:00.000Z"
+    });
+    expect(edited.quotePatch.rebooking).toMatchObject({
+      state: "staff_review_completed",
+      reviewedEventDate: "2027-09-12",
+      reviewedAtISO: "2026-08-10T18:00:00.000Z",
+      reviewedBy: { uid: "staff-a", email: "staff@example.com", role: "sales" },
+      reviewCalendar: { date: "2026-08-10", timeZone: "America/Chicago" }
+    });
+    expect(edited.version.snapshot.rebooking).toEqual(edited.quotePatch.rebooking);
+    expect(edited.result.rebooking).toEqual(edited.quotePatch.rebooking);
+    expect(edited.portal).not.toHaveProperty("rebooking");
   });
 
   test("rejects non-admin, closed-state, and expired pre-acceptance portal rotations", () => {

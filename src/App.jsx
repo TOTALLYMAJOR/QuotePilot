@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "./components/CustomerPortalView";
+import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import {
@@ -65,6 +66,7 @@ import {
   WORKSPACE_ROUTE_IDS
 } from "./lib/workspaceRoutes";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
+import { createRebookQuoteDraft } from "./lib/rebookQuoteClient";
 import { clearTenantContextCache } from "./lib/tenantDomainService";
 import {
   beginWizardAnalyticsSession,
@@ -86,6 +88,10 @@ const CommandCenterHome = createRecoverableLazy(
 const CommercialSearchPalette = createRecoverableLazy(
   () => import("./components/CommercialSearchPalette"),
   "CommercialSearchPalette"
+);
+const CommercialChangeImpactPanel = createRecoverableLazy(
+  () => import("./components/CommercialChangeImpactPanel"),
+  "CommercialChangeImpactPanel"
 );
 const CustomerDirectoryView = createRecoverableLazy(
   () => import("./components/CustomerDirectoryView"),
@@ -198,6 +204,24 @@ const INITIAL_FORM = {
   includeDisposables: true,
   payMethod: "card"
 };
+
+const EMPTY_EDITING_QUOTE = Object.freeze({
+  id: "",
+  quoteNumber: "",
+  activeVersionId: "",
+  customerId: "",
+  organizationId: "",
+  rebooking: null
+});
+
+const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
+  requested: false,
+  loading: false,
+  recovering: false,
+  error: "",
+  model: null,
+  formKey: ""
+});
 
 function readPortalKeyFromUrl() {
   if (typeof window === "undefined") return "";
@@ -587,6 +611,7 @@ export default function App({ tenantContext, authSession }) {
   const menuSelectionValidationRef = useRef(null);
   const autopilotAppliedRef = useRef(new Set());
   const directEditLoadRef = useRef({ key: "", generation: 0 });
+  const changeImpactPreviewGenerationRef = useRef(0);
   const catalogReconciliationNoticeRef = useRef("");
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { organization, setOrganizationId } = useOrganization();
@@ -898,7 +923,8 @@ export default function App({ tenantContext, authSession }) {
   });
   const [availabilityNotice, setAvailabilityNotice] = useState("");
   const [availabilityBlock, setAvailabilityBlock] = useState(null);
-  const [editingQuote, setEditingQuote] = useState({ id: "", quoteNumber: "" });
+  const [editingQuote, setEditingQuote] = useState(EMPTY_EDITING_QUOTE);
+  const [changeImpactPreview, setChangeImpactPreview] = useState(EMPTY_CHANGE_IMPACT_PREVIEW);
   const [quoteEditLoadState, setQuoteEditLoadState] = useState({
     quoteId: "",
     loading: false,
@@ -917,6 +943,10 @@ export default function App({ tenantContext, authSession }) {
     stepValidation: buildStepValidation(INITIAL_FORM)
   }));
   const [templateDefaultsNotice, setTemplateDefaultsNotice] = useState(null);
+  const resetChangeImpactPreview = () => {
+    changeImpactPreviewGenerationRef.current += 1;
+    setChangeImpactPreview(EMPTY_CHANGE_IMPACT_PREVIEW);
+  };
 
   useEffect(() => {
     if (!quoteDirty || typeof window === "undefined") return undefined;
@@ -1187,6 +1217,16 @@ export default function App({ tenantContext, authSession }) {
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  const currentChangeImpactFormKey = JSON.stringify(form);
+  const changeImpactPresentationError = changeImpactPreview.error || (
+    changeImpactPreview.model
+    && changeImpactPreview.formKey
+    && changeImpactPreview.formKey !== currentChangeImpactFormKey
+      ? "Quote inputs changed after this preview. The retained result is stale; refresh it before relying on the comparison."
+      : ""
+  );
+  const changeImpactPreviewAvailable = isEditingQuote
+    && String(catalog.source || "").trim().toLowerCase().startsWith("firebase");
   const organizationName = String(organization?.name || "").trim();
   const tenantBrandName = String(catalog.settings?.brandName || "").trim();
   const tenantBrandTagline = String(catalog.settings?.brandTagline || "").trim();
@@ -1198,6 +1238,7 @@ export default function App({ tenantContext, authSession }) {
     || "Organization workspace"
   ).trim();
   const brandName = tenantBrandName || organizationName || "Catering workspace";
+  const tenantTimeZone = String(effectiveSettings.businessTimeZone || "").trim();
   const brandPrimaryColor = catalog.settings?.brandPrimaryColor || "#c99334";
   const brandAccentColor = catalog.settings?.brandAccentColor || "#f0d29a";
   const brandDarkAccentColor = catalog.settings?.brandDarkAccentColor || "#8d611a";
@@ -1645,6 +1686,73 @@ export default function App({ tenantContext, authSession }) {
     setStep((current) => Math.min(5, current + 1));
   };
 
+  const buildCurrentPricingInput = (source = catalog.source || "") => ({
+    organizationId: authSession.organizationId || "",
+    quoteId: isEditingQuote ? editingQuote.id : "",
+    quoteNumber: isEditingQuote ? editingQuote.quoteNumber || "" : "",
+    actor: {
+      uid: authSession.user?.uid || "",
+      email: authSession.user?.email || "",
+      role: authSession.role || "sales"
+    },
+    form,
+    metadata: {
+      source,
+      generatedAt: new Date().toISOString()
+    }
+  });
+
+  const handlePreviewChangeImpact = async ({ recovery = false } = {}) => {
+    if (!isEditingQuote || !editingQuote.id) return;
+    const generation = changeImpactPreviewGenerationRef.current + 1;
+    changeImpactPreviewGenerationRef.current = generation;
+    const formKey = JSON.stringify(form);
+    setChangeImpactPreview((current) => ({
+      ...current,
+      requested: true,
+      loading: true,
+      recovering: recovery === true,
+      error: ""
+    }));
+    try {
+      const pricingResult = await calculateQuotePricing({
+        organizationId: authSession.organizationId || "",
+        pricingInput: buildCurrentPricingInput("commercial_change_impact_preview"),
+        includeChangeImpactPreview: true,
+        expectedActiveVersionId: editingQuote.activeVersionId
+      });
+      const snapshots = pricingResult?.changeImpactPreview;
+      if (!snapshots || typeof snapshots !== "object") {
+        throw new Error("Authoritative change-impact snapshots were not returned.");
+      }
+      const { simulateCommercialChangeImpact } = await import("./lib/commercialChangeImpact");
+      const model = simulateCommercialChangeImpact(snapshots);
+      if (changeImpactPreviewGenerationRef.current !== generation) return;
+      setChangeImpactPreview({
+        requested: true,
+        loading: false,
+        recovering: false,
+        error: "",
+        model,
+        formKey
+      });
+    } catch (error) {
+      if (changeImpactPreviewGenerationRef.current !== generation) return;
+      recordDiagnosticError(error, {
+        surface: "quote-builder",
+        action: "preview-commercial-change-impact",
+        quoteId: editingQuote.id
+      });
+      setChangeImpactPreview((current) => ({
+        ...current,
+        requested: true,
+        loading: false,
+        recovering: false,
+        error: "Authoritative change impact is unavailable. Refresh the saved quote and retry; no change was authorized or applied."
+      }));
+    }
+  };
+
   const handleSubmitQuote = async () => {
     if (quoteEditRouteId && !quoteEditReady) {
       setSubmitState((current) => ({
@@ -1750,21 +1858,7 @@ export default function App({ tenantContext, authSession }) {
       const requiresAuthoritativePricing =
         !E2E_ALLOW_NON_AUTHORITATIVE_PRICING
         && String(catalog.source || "").trim().toLowerCase().startsWith("firebase");
-      const pricingInput = {
-        organizationId: authSession.organizationId || "",
-        quoteId: isEditingQuote ? editingQuote.id : "",
-        quoteNumber: isEditingQuote ? editingQuote.quoteNumber || "" : "",
-        actor: {
-          uid: authSession.user?.uid || "",
-          email: authSession.user?.email || "",
-          role: authSession.role || "sales"
-        },
-        form,
-        metadata: {
-          source: catalog.source || "",
-          generatedAt: new Date().toISOString()
-        }
-      };
+      const pricingInput = buildCurrentPricingInput();
       let totalsForPersistence = totals;
       let pricingSnapshot = null;
       let pricingAdjustmentNote = "";
@@ -1930,6 +2024,7 @@ export default function App({ tenantContext, authSession }) {
     const addonQuantities = selection.addonQuantities || {};
     const rentalQuantities = selection.rentalQuantities || {};
     const quoteEventTypeId = String(quote.eventTypeId || selection.eventTypeId || event.eventTypeId || "");
+    resetChangeImpactPreview();
     setGlobalEventTypeId(quoteEventTypeId);
 
     // Lock labor rates during editing by defaulting overrides to the applied snapshot.
@@ -1998,7 +2093,13 @@ export default function App({ tenantContext, authSession }) {
 
     setEditingQuote({
       id: quote.id,
-      quoteNumber: quote.quoteNumber || quote.id
+      quoteNumber: quote.quoteNumber || quote.id,
+      activeVersionId: quote.activeVersionId || quote.versionMeta?.versionId || "",
+      customerId: quote.customerId || "",
+      organizationId: quote.organizationId || authSession.organizationId || "",
+      rebooking: quote.rebooking && typeof quote.rebooking === "object"
+        ? quote.rebooking
+        : null
     });
     setQuoteDirty(false);
     setTouchedFields({});
@@ -2014,12 +2115,50 @@ export default function App({ tenantContext, authSession }) {
       mode: "edit",
       force: true
     });
+    const rebookReviewRequired = quote.rebooking?.state === "draft_created_for_staff_review";
     setSubmitState({
       saving: false,
-      message: `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
+      message: rebookReviewRequired
+        ? `Rebook review required for ${quote.quoteNumber || quote.id}: choose a current-or-future event date, review the copied scope, then save. Delivery remains blocked until that trusted edit succeeds.`
+        : `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
+  };
+
+  const handleCreateCustomerRebook = async (reviewedAction, { mode = "create" } = {}) => {
+    const discardDirtyDraft = quoteDirty;
+    if (
+      mode === "create"
+      && discardDirtyDraft
+      && !window.confirm(
+        "Create this rebook draft? Your current unsaved quote changes will be discarded only after the trusted rebook receipt is confirmed."
+      )
+    ) {
+      const error = new Error("Rebook creation was cancelled before dispatch.");
+      error.code = "failed-precondition";
+      error.rebookDefinitive = true;
+      error.rebookCancelled = true;
+      throw error;
+    }
+    try {
+      const receipt = await createRebookQuoteDraft({
+        organizationId: authSession.organizationId,
+        reviewedAction
+      });
+      if (discardDirtyDraft) {
+        setQuoteDirty(false);
+        setEditingQuote(EMPTY_EDITING_QUOTE);
+        resetChangeImpactPreview();
+      }
+      return receipt;
+    } catch (error) {
+      recordDiagnosticError(error, {
+        surface: "customer-360",
+        action: "create-rebook-draft"
+      });
+      throw error;
+    }
   };
 
   useEffect(() => {
@@ -2030,7 +2169,8 @@ export default function App({ tenantContext, authSession }) {
           key: "",
           generation: directEditLoadRef.current.generation + 1
         };
-        setEditingQuote({ id: "", quoteNumber: "" });
+        setEditingQuote(EMPTY_EDITING_QUOTE);
+        resetChangeImpactPreview();
         setQuoteDirty(true);
         setSubmitState((current) => ({
           ...current,
@@ -2108,7 +2248,8 @@ export default function App({ tenantContext, authSession }) {
     }
     directEditLoadRef.current = { key: "", generation: directEditLoadRef.current.generation + 1 };
     navigateWorkspace(WORKSPACE_PATHS.quoteNew);
-    setEditingQuote({ id: "", quoteNumber: "" });
+    setEditingQuote(EMPTY_EDITING_QUOTE);
+    resetChangeImpactPreview();
     setQuoteDirty(false);
     setForm({
       ...INITIAL_FORM,
@@ -2772,9 +2913,12 @@ export default function App({ tenantContext, authSession }) {
             onBack={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
             onOpenQuotes={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
             onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+            onOpenQuoteEdit={(quoteId) => navigateWorkspace(buildQuoteEditPath(quoteId))}
+            onCreateRebook={handleCreateCustomerRebook}
             onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
             onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
             scheduleAvailable={eventScheduleEnabled}
+            tenantTimeZone={tenantTimeZone}
           />
         </WorkspaceLazyRoute>
       )}
@@ -2966,6 +3110,20 @@ export default function App({ tenantContext, authSession }) {
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
         <section className="panel wizard-panel">
+          <RebookQuoteReviewBanner
+            quoteNumber={editingQuote.quoteNumber}
+            organizationId={editingQuote.organizationId || authSession.organizationId}
+            customerId={editingQuote.customerId}
+            eventDate={form.date}
+            tenantTimeZone={tenantTimeZone}
+            rebooking={editingQuote.rebooking}
+            onFocusEventDate={() => {
+              setStep(1);
+              window.requestAnimationFrame(() => {
+                wizardRef.current?.querySelector('input[type="date"]')?.focus({ preventScroll: true });
+              });
+            }}
+          />
           <ol className="stepper" ref={stepperRef}>
             {stepperModel.map((stepMeta) => {
               const stepOneMissing = stepMeta.stepNumber === 1 && !step1Validation.valid;
@@ -3117,6 +3275,73 @@ export default function App({ tenantContext, authSession }) {
                     <p className="muted">Saving will keep a version snapshot for edits and lifecycle changes.</p>
                   </article>
                 </div>
+                {isEditingQuote && (
+                  <section
+                    className="quote-change-impact-preview"
+                    data-capability-id="cwf-15b-commercial-change-impact-preview"
+                  >
+                    <div className="quote-change-impact-preview-head">
+                      <div>
+                        <p className="eyebrow">Commercial dependency graph</p>
+                        <h3>Preview change blast radius</h3>
+                        <p className="source-note">
+                          Read-only comparison of the saved canonical revision and a server-authoritative repricing of the current form. It does not authorize, save, invalidate, regenerate, or publish anything.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="ghost compact"
+                        onClick={() => handlePreviewChangeImpact({
+                          recovery: Boolean(changeImpactPresentationError)
+                        })}
+                        disabled={!changeImpactPreviewAvailable || changeImpactPreview.loading}
+                        title={changeImpactPreviewAvailable
+                          ? "Build a new read-only authoritative change-impact preview."
+                          : "Change impact requires a Firebase-backed canonical quote and trusted pricing."}
+                      >
+                        {changeImpactPreview.recovering
+                          ? "Retrying preview…"
+                          : changeImpactPreview.loading
+                            ? "Building preview…"
+                          : changeImpactPreview.model
+                            ? "Refresh impact preview"
+                            : "Preview change impact"}
+                      </button>
+                    </div>
+                    {!changeImpactPreviewAvailable && (
+                      <p className="warning-note">
+                        Authoritative change impact is unavailable in browser-local mode. No client-calculated substitute is shown.
+                      </p>
+                    )}
+                    {changeImpactPreview.requested && (
+                      <RecoverableErrorBoundary
+                        active
+                        surfaceName="Commercial change impact"
+                        surfaceKind="tool"
+                        onRetry={CommercialChangeImpactPanel.retry}
+                        onClose={() => resetChangeImpactPreview()}
+                        hasUnsavedWorkspaceChanges={quoteDirty}
+                      >
+                        <Suspense fallback={<p className="source-note" role="status">Loading change-impact presentation…</p>}>
+                          <CommercialChangeImpactPanel
+                            model={changeImpactPreview.model}
+                            loading={changeImpactPreview.loading}
+                            recovering={changeImpactPreview.recovering}
+                            error={changeImpactPresentationError}
+                            partial={false}
+                            onRetry={() => handlePreviewChangeImpact({ recovery: true })}
+                            onReturnToEdit={() => {
+                              setStep(1);
+                              window.requestAnimationFrame(() => {
+                                wizardRef.current?.focus({ preventScroll: true });
+                              });
+                            }}
+                          />
+                        </Suspense>
+                      </RecoverableErrorBoundary>
+                    )}
+                  </section>
+                )}
               </>
             )}
           </div>
@@ -3296,6 +3521,7 @@ export default function App({ tenantContext, authSession }) {
             currentUserUid={authSession.user?.uid || ""}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
+            tenantTimeZone={tenantTimeZone}
             focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
             focusAction={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.action : ""}
             focusReason={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.reason : ""}
@@ -3338,6 +3564,7 @@ export default function App({ tenantContext, authSession }) {
             organizationId={authSession.organizationId}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
+            tenantTimeZone={tenantTimeZone}
             focusQuoteId={browserRoute.workflowFocus?.quoteId || ""}
             focusAttentionType={browserRoute.workflowFocus?.attentionType || ""}
             focusRequestId={browserRoute.workflowFocus?.requestId || ""}

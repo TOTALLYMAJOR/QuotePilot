@@ -1,5 +1,8 @@
+const { createHash } = require("node:crypto");
+
 const PRICING_VERSION = "pricing-v1";
 const PRICING_AUTHORITY = "server_authoritative";
+const PRICING_CATALOG_AUTHORITY_SCHEMA_VERSION = "pricing-catalog-authority-v1";
 const PRICING_MODES = new Set(["per_person", "per_item", "per_event"]);
 const STAFFING_CHARGE_MODES = new Set(["per_hour", "per_event_per_staff"]);
 const MAX_RATE_MIX_CSV_LENGTH = 300;
@@ -403,15 +406,17 @@ function normalizeSelectionList(input, fallbackPricingMode) {
     .filter(Boolean);
 }
 
-function normalizeActor(source = {}, staff = {}) {
+function normalizeActor(_source = {}, staff = {}) {
   return {
-    uid: toText(source?.uid || staff?.uid),
-    email: toLowerText(source?.email || staff?.email || ""),
-    role: toText(source?.role || staff?.role)
+    uid: toText(staff?.uid),
+    email: toLowerText(staff?.email || ""),
+    role: toText(staff?.role)
   };
 }
 
-function normalizePricingInputPayload(data = {}, staff = {}) {
+function normalizePricingInputPayload(data = {}, staff = {}, {
+  calculatedAtISO = ""
+} = {}) {
   const root = data && typeof data === "object" ? data : {};
   const source = root.pricingInput && typeof root.pricingInput === "object" ? root.pricingInput : root;
   const event = source.event && typeof source.event === "object" ? source.event : {};
@@ -509,7 +514,7 @@ function normalizePricingInputPayload(data = {}, staff = {}) {
     },
     metadata: {
       source: toText(source.metadata?.source || root.source || source.source),
-      generatedAt: normalizeISO(source.metadata?.generatedAt || source.generatedAt || root.generatedAt || "", "")
+      generatedAt: normalizeISO(calculatedAtISO, "")
     }
   };
 }
@@ -844,6 +849,95 @@ function buildRulesSettingsSnapshot(settings = {}) {
   };
 }
 
+function buildPricingSettingsIdentity(settings = {}) {
+  const normalizedSettings = normalizePricingSettings(settings);
+  const settingsSnapshot = buildRulesSettingsSnapshot(normalizedSettings);
+  const catalogRevision = Number(settingsSnapshot.catalogRevision);
+  const rawConfirmedCatalogRevision = Number(
+    settingsSnapshot.pricingConfirmation?.confirmedCatalogRevision
+  );
+  const confirmedCatalogRevision = Number.isSafeInteger(rawConfirmedCatalogRevision)
+    ? rawConfirmedCatalogRevision
+    : -1;
+  const settingsFingerprintSha256 = createHash("sha256")
+    .update(JSON.stringify(settingsSnapshot))
+    .digest("hex");
+  return {
+    normalizedSettings,
+    catalogRevision,
+    confirmedCatalogRevision,
+    settingsFingerprintSha256
+  };
+}
+
+function buildPricingCatalogAuthority({
+  organizationId = "",
+  catalogSource = "",
+  settings = {}
+} = {}) {
+  const orgId = normalizeOrganizationId(organizationId);
+  const source = toText(catalogSource);
+  const identity = buildPricingSettingsIdentity(settings);
+  if (!orgId || !source || !isCatalogPricingConfirmationCurrent(identity.normalizedSettings)) {
+    throw new PricingEngineError(
+      "failed-precondition",
+      "A current confirmed pricing catalog is required for authoritative pricing."
+    );
+  }
+  return Object.freeze({
+    schemaVersion: PRICING_CATALOG_AUTHORITY_SCHEMA_VERSION,
+    organizationId: orgId,
+    catalogSource: source,
+    catalogRevision: identity.catalogRevision,
+    confirmedCatalogRevision: identity.confirmedCatalogRevision,
+    settingsFingerprintSha256: identity.settingsFingerprintSha256
+  });
+}
+
+function assertPricingCatalogAuthorityCurrent(authority = {}, {
+  organizationId = "",
+  catalogSource = "",
+  settings = {}
+} = {}) {
+  const orgId = normalizeOrganizationId(organizationId);
+  const source = toText(catalogSource);
+  if (!orgId || !source) {
+    throw new PricingEngineError(
+      "failed-precondition",
+      "Pricing catalog authority cannot be validated without its organization and source."
+    );
+  }
+  const identity = buildPricingSettingsIdentity(settings);
+  const expected = {
+    schemaVersion: PRICING_CATALOG_AUTHORITY_SCHEMA_VERSION,
+    organizationId: orgId,
+    catalogSource: source,
+    catalogRevision: identity.catalogRevision,
+    confirmedCatalogRevision: identity.confirmedCatalogRevision,
+    settingsFingerprintSha256: identity.settingsFingerprintSha256
+  };
+  if (
+    authority?.schemaVersion !== expected.schemaVersion
+    || normalizeOrganizationId(authority?.organizationId) !== expected.organizationId
+    || toText(authority?.catalogSource) !== expected.catalogSource
+    || Number(authority?.catalogRevision) !== expected.catalogRevision
+    || Number(authority?.confirmedCatalogRevision) !== expected.confirmedCatalogRevision
+    || toText(authority?.settingsFingerprintSha256) !== expected.settingsFingerprintSha256
+  ) {
+    throw new PricingEngineError(
+      "aborted",
+      "Pricing catalog authority changed while this quote was being prepared. Recalculate and retry."
+    );
+  }
+  if (!isCatalogPricingConfirmationCurrent(identity.normalizedSettings)) {
+    throw new PricingEngineError(
+      "failed-precondition",
+      "A current confirmed pricing catalog is required for authoritative pricing."
+    );
+  }
+  return true;
+}
+
 function normalizeCatalogBundle(bundle = {}) {
   const rawPackages = Array.isArray(bundle?.packages) ? bundle.packages : [];
   const rawAddons = Array.isArray(bundle?.addons) ? bundle.addons : [];
@@ -887,20 +981,38 @@ async function readCatalogBundle(db, organizationsCollection, organizationId = "
     throw new PricingEngineError("invalid-argument", "organizationId is required for authoritative pricing.");
   }
 
-  const [pkgSnap, addSnap, rentSnap, menuItemSnap, settingsSnap] = await Promise.all([
-    db.collection(organizationsCollection).doc(orgId).collection("catalogPackages").get(),
-    db.collection(organizationsCollection).doc(orgId).collection("catalogAddons").get(),
-    db.collection(organizationsCollection).doc(orgId).collection("catalogRentals").get(),
-    db.collection(organizationsCollection).doc(orgId).collection("menuItems").get(),
-    db.collection(organizationsCollection).doc(orgId).collection("settings").doc("config").get()
+  const organizationRef = db.collection(organizationsCollection).doc(orgId);
+  const settingsRef = organizationRef.collection("settings").doc("config");
+  const settingsBeforeSnap = await settingsRef.get();
+  const settingsBefore = settingsBeforeSnap.exists ? settingsBeforeSnap.data() : {};
+  const authorityBefore = buildPricingSettingsIdentity(settingsBefore);
+  const [pkgSnap, addSnap, rentSnap, menuItemSnap] = await Promise.all([
+    organizationRef.collection("catalogPackages").get(),
+    organizationRef.collection("catalogAddons").get(),
+    organizationRef.collection("catalogRentals").get(),
+    organizationRef.collection("menuItems").get()
   ]);
+  const settingsAfterSnap = await settingsRef.get();
+  const settingsAfter = settingsAfterSnap.exists ? settingsAfterSnap.data() : {};
+  const authorityAfter = buildPricingSettingsIdentity(settingsAfter);
+  if (
+    settingsBeforeSnap.exists !== settingsAfterSnap.exists
+    || authorityBefore.catalogRevision !== authorityAfter.catalogRevision
+    || authorityBefore.confirmedCatalogRevision !== authorityAfter.confirmedCatalogRevision
+    || authorityBefore.settingsFingerprintSha256 !== authorityAfter.settingsFingerprintSha256
+  ) {
+    throw new PricingEngineError(
+      "aborted",
+      "Pricing catalog authority changed during the authoritative catalog read. Recalculate and retry."
+    );
+  }
 
   return normalizeCatalogBundle({
     packages: pkgSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
     addons: addSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
     rentals: rentSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
     menuItems: menuItemSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id })),
-    settings: settingsSnap.exists ? settingsSnap.data() : {}
+    settings: settingsAfter
   });
 }
 
@@ -1614,13 +1726,21 @@ async function calculateQuotePricingAuthoritative({
   db,
   data = {},
   staff = {},
-  organizationsCollection = "organizations"
+  organizationsCollection = "organizations",
+  nowISO = ""
 } = {}) {
   if (!db) {
     throw new PricingEngineError("failed-precondition", "Firestore instance is required.");
   }
 
-  const normalizedInput = normalizePricingInputPayload(data, staff);
+  const requestedNow = nowISO ? new Date(nowISO) : new Date();
+  if (Number.isNaN(requestedNow.getTime())) {
+    throw new PricingEngineError("invalid-argument", "Authoritative pricing timestamp is invalid.");
+  }
+  const calculatedAtISO = requestedNow.toISOString();
+  const normalizedInput = normalizePricingInputPayload(data, staff, {
+    calculatedAtISO
+  });
   const catalogBundle = await loadCatalogAndSettings(db, organizationsCollection, {
     organizationId: normalizedInput.organizationId
   });
@@ -1642,10 +1762,16 @@ async function calculateQuotePricingAuthoritative({
     catalogBundle.settings,
     catalogBundle.source
   );
+  const catalogAuthority = buildPricingCatalogAuthority({
+    organizationId: catalogBundle.organizationId,
+    catalogSource: catalogBundle.source,
+    settings: catalogBundle.settings
+  });
 
   return {
     organizationId: catalogBundle.organizationId,
     catalogSource: catalogBundle.source,
+    catalogAuthority,
     pricing
   };
 }
@@ -1653,7 +1779,10 @@ async function calculateQuotePricingAuthoritative({
 module.exports = {
   PRICING_VERSION,
   PRICING_AUTHORITY,
+  PRICING_CATALOG_AUTHORITY_SCHEMA_VERSION,
   PricingEngineError,
+  assertPricingCatalogAuthorityCurrent,
+  buildPricingCatalogAuthority,
   calculateQuotePricingAuthoritative,
   isCatalogPricingConfirmationCurrent
 };

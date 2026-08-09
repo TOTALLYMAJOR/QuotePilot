@@ -977,7 +977,7 @@ test("portal decision center records a customer change request", async ({ page }
   await expect(workflow.getByRole("tab", { name: "Attention (1)" })).toHaveAttribute("aria-selected", "true");
 
   await workflow.getByRole("button", { name: `Acknowledge internally — ${quoteLabel}` }).click();
-  await expect(workflow.getByText("Acknowledged change request")).toBeVisible();
+  await expect(workflow.getByText("Acknowledged change request", { exact: true })).toBeVisible();
   await expect(workflow.getByText(/No customer message was sent/i)).toBeVisible();
   await expect(workflow.locator(".workflow-attention-row")).toBeFocused();
   await workflow.getByLabel(`Internal handling note (required to mark handled) — ${quoteLabel}`).fill(
@@ -1034,11 +1034,24 @@ test("portal acceptance requires typed consent and shows the signed revision rec
   await page.getByRole("button", { name: "Open Proposal" }).click();
 
   const signButton = page.getByRole("button", { name: "Sign and Accept Proposal" });
-  await expect(signButton).toBeDisabled();
-  await page.getByLabel("Full legal name").fill("E2E Portal Customer");
-  await expect(signButton).toBeDisabled();
-  await page.getByLabel(/consent to use my typed name as my electronic signature/i).check();
-  await expect(signButton).toBeEnabled();
+  const signerName = page.getByLabel("Full legal name");
+  const signatureConsent = page.getByLabel(
+    /consent to use my typed name as my electronic signature/i
+  );
+
+  await signButton.click();
+  await expect(page.getByText("Enter the signer’s full legal name.", { exact: true })).toBeVisible();
+  await expect(signerName).toBeFocused();
+
+  await signerName.fill("E2E Portal Customer");
+  await signButton.click();
+  await expect(page.getByText(
+    "Confirm the electronic-signature statement before accepting.",
+    { exact: true }
+  )).toBeVisible();
+  await expect(signatureConsent).toBeFocused();
+
+  await signatureConsent.check();
   await signButton.click();
 
   await expect(page.getByText("Thank you—we have your approval", { exact: true })).toBeVisible();
@@ -1307,8 +1320,10 @@ test("accepted event production checklist persists completion", async ({ page })
   await openOperationsItem(page, "Event Schedule");
 
   const schedule = page.getByRole("dialog");
-  await expect(schedule.getByText("E2E Production Event")).toBeVisible();
-  const eventDetail = schedule.locator(".schedule-event-card").first();
+  await expect(schedule.getByText("E2E Production Event", { exact: true })).toBeVisible();
+  const eventDetail = schedule.locator("article.schedule-event-card").filter({
+    hasText: "E2E Production Event"
+  });
   await schedule.getByRole("button", { name: /Focus event details for/i }).click();
   await expect(eventDetail).toBeFocused();
   const eventBrief = schedule.getByLabel("Event brief reviewed");

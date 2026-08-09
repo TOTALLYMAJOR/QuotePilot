@@ -1,13 +1,20 @@
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 
 const require = createRequire(import.meta.url);
 const {
   PRICING_AUTHORITY,
+  PRICING_CATALOG_AUTHORITY_SCHEMA_VERSION,
   PricingEngineError,
+  assertPricingCatalogAuthorityCurrent,
   calculateQuotePricingAuthoritative,
   isCatalogPricingConfirmationCurrent
 } = require("../../../functions/pricingEngine.js");
+const FUNCTIONS_SOURCE = readFileSync(
+  new URL("../../../functions/index.js", import.meta.url),
+  "utf8"
+);
 
 function collectionSnapshot(records = []) {
   return {
@@ -21,6 +28,7 @@ function collectionSnapshot(records = []) {
 function buildPricingDb({
   settings,
   settingsExists = true,
+  settingsReads = null,
   packages = [{ id: "package-a", name: "Package A", ppp: 10 }],
   addons = [],
   rentals = [],
@@ -32,6 +40,7 @@ function buildPricingDb({
     catalogRentals: collectionSnapshot(rentals),
     menuItems: collectionSnapshot(menuItems)
   };
+  let settingsReadIndex = 0;
 
   return {
     collection(collectionName) {
@@ -50,9 +59,13 @@ function buildPricingDb({
                     }
                     return {
                       async get() {
+                        const configuredRead = Array.isArray(settingsReads) && settingsReads.length > 0
+                          ? settingsReads[Math.min(settingsReadIndex, settingsReads.length - 1)]
+                          : null;
+                        settingsReadIndex += 1;
                         return {
-                          exists: settingsExists,
-                          data: () => settings
+                          exists: configuredRead ? configuredRead.exists !== false : settingsExists,
+                          data: () => configuredRead ? configuredRead.data : settings
                         };
                       }
                     };
@@ -165,6 +178,150 @@ describe("server-authoritative pricing setup safety", () => {
         message: expect.stringMatching(/current catalog revision/i)
       });
     }
+  });
+
+  test("owns actor and calculation time on the server and carries a pinned catalog authority", async () => {
+    const settings = confirmedPricingSettings({
+      pricingSettingsVersion: 7,
+      serviceFeePct: 0.17
+    });
+    const request = buildPricingRequest();
+    request.pricingInput.actor = {
+      uid: "spoofed-browser-user",
+      email: "spoofed@example.test",
+      role: "owner"
+    };
+    request.pricingInput.metadata = {
+      source: "authority-unit-test",
+      generatedAt: "2000-01-01T00:00:00.000Z"
+    };
+
+    const result = await calculateQuotePricingAuthoritative({
+      db: buildPricingDb({ settings }),
+      data: request,
+      staff: pricingStaff,
+      nowISO: "2026-08-09T18:30:00.000Z"
+    });
+
+    expect(result.pricing.calculatedAt).toBe("2026-08-09T18:30:00.000Z");
+    expect(result.pricing.inputs.metadata).toEqual({
+      source: "authority-unit-test",
+      generatedAt: "2026-08-09T18:30:00.000Z"
+    });
+    expect(result.pricing.inputs.actor).toEqual({
+      uid: pricingStaff.uid,
+      email: pricingStaff.email,
+      role: pricingStaff.role
+    });
+    expect(result.catalogAuthority).toMatchObject({
+      schemaVersion: PRICING_CATALOG_AUTHORITY_SCHEMA_VERSION,
+      organizationId: "org-a",
+      catalogSource: "firebase-org",
+      catalogRevision: 4,
+      confirmedCatalogRevision: 4,
+      settingsFingerprintSha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+    });
+    expect(assertPricingCatalogAuthorityCurrent(result.catalogAuthority, {
+      organizationId: "org-a",
+      catalogSource: "firebase-org",
+      settings
+    })).toBe(true);
+    expect(() => assertPricingCatalogAuthorityCurrent(result.catalogAuthority, {
+      organizationId: "org-a",
+      catalogSource: "firebase-org",
+      settings: {
+        ...settings,
+        serviceFeePct: 0.18
+      }
+    })).toThrow(expect.objectContaining({
+      name: PricingEngineError.name,
+      code: "aborted"
+    }));
+    expect(() => assertPricingCatalogAuthorityCurrent(result.catalogAuthority, {
+      organizationId: "org-a",
+      catalogSource: "firebase-org",
+      settings: {
+        ...settings,
+        pricingConfirmation: {
+          ...settings.pricingConfirmation,
+          actorUid: "different-confirming-staff"
+        }
+      }
+    })).toThrow(expect.objectContaining({
+      name: PricingEngineError.name,
+      code: "aborted"
+    }));
+    expect(() => assertPricingCatalogAuthorityCurrent(result.catalogAuthority, {
+      organizationId: "org-a",
+      catalogSource: "firebase-org",
+      settings: {
+        ...settings,
+        catalogRevision: 5,
+        pricingSetupConfirmed: false,
+        pricingConfirmation: null
+      }
+    })).toThrow(expect.objectContaining({
+      name: PricingEngineError.name,
+      code: "aborted"
+    }));
+  });
+
+  test("fails closed when catalog settings change across the parallel catalog read fence", async () => {
+    const settingsBefore = confirmedPricingSettings();
+    const settingsAfter = confirmedPricingSettings({
+      catalogRevision: 5,
+      pricingConfirmation: {
+        ...confirmedPricingSettings().pricingConfirmation,
+        confirmedAtISO: "2026-08-09T18:31:00.000Z",
+        confirmedCatalogRevision: 5
+      }
+    });
+
+    await expect(calculateQuotePricingAuthoritative({
+      db: buildPricingDb({
+        settingsReads: [
+          { exists: true, data: settingsBefore },
+          { exists: true, data: settingsAfter }
+        ]
+      }),
+      data: buildPricingRequest(),
+      staff: pricingStaff,
+      nowISO: "2026-08-09T18:30:00.000Z"
+    })).rejects.toMatchObject({
+      name: PricingEngineError.name,
+      code: "aborted",
+      message: expect.stringMatching(/changed during the authoritative catalog read/i)
+    });
+  });
+
+  test("binds the public pricing callable and trusted quote writes to server time and catalog authority", () => {
+    const callableStart = FUNCTIONS_SOURCE.indexOf("exports.calculateQuotePricing =");
+    const callableEnd = FUNCTIONS_SOURCE.indexOf("\nexports.getPortalRecoveryContact =", callableStart);
+    const callable = FUNCTIONS_SOURCE.slice(callableStart, callableEnd);
+    expect(callableStart).toBeGreaterThan(-1);
+    expect(callableEnd).toBeGreaterThan(callableStart);
+    expect(callable).toContain("const calculatedAtISO = new Date().toISOString()");
+    expect(callable).toContain("nowISO: calculatedAtISO");
+    expect(callable).toContain("assertPricingCatalogAuthorityCurrent(result.catalogAuthority");
+
+    const createStart = FUNCTIONS_SOURCE.indexOf("async function createTrustedQuoteDraftInternal({");
+    const createEnd = FUNCTIONS_SOURCE.indexOf("\nasync function updateTrustedQuoteDraftInternal({", createStart);
+    const createInternal = FUNCTIONS_SOURCE.slice(createStart, createEnd);
+    expect(createInternal).toContain("nowISO");
+    expect(createInternal).toContain("tx.get(settingsRef)");
+    expect(createInternal).toContain("assertPricingCatalogAuthorityCurrent(pricingResult.catalogAuthority");
+    expect(createInternal.indexOf("tx.get(settingsRef)"))
+      .toBeLessThan(createInternal.indexOf("tx.create(quoteRef"));
+
+    const editStart = createEnd + 1;
+    const editEnd = FUNCTIONS_SOURCE.indexOf("\nexports.createQuoteDraft =", editStart);
+    const editInternal = FUNCTIONS_SOURCE.slice(editStart, editEnd);
+    expect(editInternal).toContain("nowISO");
+    expect(editInternal).toContain("tx.get(settingsRef)");
+    expect(editInternal).toContain("assertPricingCatalogAuthorityCurrent(pricingResult.catalogAuthority");
+    expect(editInternal).toContain("...(transactionPricingSettingsSnapshot.data() || {})");
+    expect(editInternal.indexOf("tx.get(settingsRef)"))
+      .toBeLessThan(editInternal.indexOf("tx.update(quoteRef"));
   });
 
   test("keeps explicit empty pricing arrays empty and uses only explicit neutral scalar rates", async () => {

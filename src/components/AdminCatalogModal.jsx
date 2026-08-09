@@ -2224,6 +2224,30 @@ export function AdminCatalogView({
               />
             </label>
             <label>
+              Business time zone
+              <input
+                type="text"
+                list="quote-pilot-iana-time-zones"
+                placeholder="America/Chicago"
+                value={draft.settings.businessTimeZone || ""}
+                onChange={(e) => patchTextSetting("businessTimeZone", e.target.value)}
+                aria-describedby="business-time-zone-help"
+              />
+              <small id="business-time-zone-help">
+                Use an IANA time zone. Revenue timing stays blocked until this is valid.
+              </small>
+              <datalist id="quote-pilot-iana-time-zones">
+                <option value="America/New_York" />
+                <option value="America/Chicago" />
+                <option value="America/Denver" />
+                <option value="America/Phoenix" />
+                <option value="America/Los_Angeles" />
+                <option value="America/Anchorage" />
+                <option value="Pacific/Honolulu" />
+                <option value="UTC" />
+              </datalist>
+            </label>
+            <label>
               Acceptance email
               <input
                 type="text"

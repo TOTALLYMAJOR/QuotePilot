@@ -35,6 +35,7 @@
     "test:portal-backfill:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-portal-backfill emulators:exec --only firestore \"vitest run src/lib/__tests__/portalSnapshotBackfill.emulator.test.js\"",
     "test:proposal-acceptance:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-proposal-acceptance emulators:exec --only firestore,functions \"node scripts/proposal-acceptance-emulator.mjs\"",
     "test:catalog-import:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-catalog-import emulators:exec --only auth,firestore,functions \"node scripts/catalog-import-emulator.mjs\"",
+    "test:rebook-quote:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-rebook-quote emulators:exec --only auth,firestore,functions \"node scripts/rebook-quote-emulator-acceptance.mjs\"",
     "check:secrets": "node ./scripts/check-secret-assets.mjs",
     "check:docs:governance": "node ./scripts/check-doc-governance.mjs",
     "check:capability-surfaces": "node ./scripts/check-capability-surfacing.mjs",

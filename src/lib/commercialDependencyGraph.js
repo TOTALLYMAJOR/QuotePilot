@@ -1,4 +1,4 @@
-import commercialDependencyGraphCore from "./commercialDependencyGraphCore.cjs";
+import commercialDependencyGraphCore from "commercial-dependency-graph-core";
 
 export const COMMERCIAL_DEPENDENCY_GRAPH_ID = commercialDependencyGraphCore
   .COMMERCIAL_DEPENDENCY_GRAPH_ID;

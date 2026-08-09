@@ -1,6 +1,10 @@
 "use strict";
 
 const { createHash } = require("node:crypto");
+const {
+  completeRebookStaffReview,
+  normalizeStoredRebookingProvenance
+} = require("./rebookQuoteDraft");
 
 const QUOTE_VERSION_ID = "v0001";
 const QUOTE_VALIDITY_DAYS_DEFAULT = 30;
@@ -324,6 +328,35 @@ function boundedBoolean(value, fallback = false) {
 
 function sanitizeIdentifier(value, maxLength = 128) {
   return text(value, maxLength);
+}
+
+function sanitizeTrustedRebookingProvenance(value, {
+  organizationId = "",
+  sourceQuoteId = "",
+  nowISO = ""
+} = {}) {
+  if (value == null) return null;
+  if (!isRecord(value)) {
+    throw new QuoteCreationError("failed-precondition", "Trusted rebook provenance is invalid.");
+  }
+  let normalized;
+  try {
+    normalized = normalizeStoredRebookingProvenance(value);
+  } catch {
+    throw new QuoteCreationError("failed-precondition", "Trusted rebook provenance is invalid.");
+  }
+  if (
+    normalized.sourceOrganizationId !== sanitizeIdentifier(organizationId)
+    || normalized.sourceQuoteId !== sanitizeIdentifier(sourceQuoteId)
+    || normalized.draftCreatedAtISO !== normalizeISO(nowISO, "")
+    || normalized.state !== "draft_created_for_staff_review"
+  ) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Trusted rebook provenance is incomplete or does not match quote creation scope."
+    );
+  }
+  return normalized;
 }
 
 function sanitizeIdentifierList(value) {
@@ -1308,7 +1341,8 @@ function buildTrustedQuoteCreationDocuments({
   settings,
   nowISO,
   creationReason = "initial_quote_create",
-  sourceQuoteId = ""
+  sourceQuoteId = "",
+  rebooking = null
 } = {}) {
   const id = sanitizeIdentifier(quoteId);
   const number = text(quoteNumber, 80);
@@ -1320,6 +1354,11 @@ function buildTrustedQuoteCreationDocuments({
   const createdAtISO = normalizeISO(nowISO, "");
   const normalizedCreationReason = text(creationReason, 120) || "initial_quote_create";
   const normalizedSourceQuoteId = sanitizeIdentifier(sourceQuoteId);
+  const normalizedRebooking = sanitizeTrustedRebookingProvenance(rebooking, {
+    organizationId: orgId,
+    sourceQuoteId: normalizedSourceQuoteId,
+    nowISO: createdAtISO
+  });
 
   if (!id || !number || token.length < 20 || !orgId || !actorUid || !createdAtISO) {
     throw new QuoteCreationError("failed-precondition", "Server quote identity is incomplete.");
@@ -1330,11 +1369,28 @@ function buildTrustedQuoteCreationDocuments({
   if (pricing.inputs?.organizationId !== orgId) {
     throw new QuoteCreationError("permission-denied", "Pricing organization does not match quote scope.");
   }
+  if (
+    (normalizedCreationReason === "rebook_quote_create") !== Boolean(normalizedRebooking)
+  ) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Rebook quote creation requires matching trusted source provenance."
+    );
+  }
 
   const customerEmail = email(form.email);
   const customerName = text(form.name, 160);
   const inputs = isRecord(pricing.inputs) ? pricing.inputs : {};
   const pricingEvent = isRecord(inputs.event) ? inputs.event : {};
+  if (
+    normalizedRebooking
+    && text(pricingEvent.date, 10) !== normalizedRebooking.sourceEventDate
+  ) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "The reviewed accepted source event date does not match authoritative pricing input."
+    );
+  }
   const pricingSelection = isRecord(inputs.selection) ? inputs.selection : {};
   const packageSelection = sanitizeSelectedItem(pricingSelection.package, "per_person");
   const addonSnapshots = sanitizeSelectedItems(pricingSelection.addons, "per_person");
@@ -1398,6 +1454,7 @@ function buildTrustedQuoteCreationDocuments({
     ownerEmail: actorEmail,
     organizationId: orgId,
     ...(normalizedSourceQuoteId ? { duplicatedFromQuoteId: normalizedSourceQuoteId } : {}),
+    ...(normalizedRebooking ? { rebooking: normalizedRebooking } : {}),
     portalKey: token,
     portalIssuedAtISO: createdAtISO,
     portalExpiresAtISO,
@@ -1545,7 +1602,19 @@ function buildTrustedQuoteCreationDocuments({
       portalIssuedAtISO: createdAtISO,
       portalExpiresAtISO,
       activeVersionId: QUOTE_VERSION_ID,
-      latestVersionNumber: 1
+      latestVersionNumber: 1,
+      ...(normalizedRebooking
+        ? {
+          rebooking: {
+            sourceQuoteId: normalizedRebooking.sourceQuoteId,
+            sourceVersionId: normalizedRebooking.sourceVersionId,
+            sourceEventDate: normalizedRebooking.sourceEventDate,
+            acceptanceReceiptId: normalizedRebooking.acceptanceReceiptId,
+            rebookingRequestId: normalizedRebooking.rebookingRequestId,
+            state: normalizedRebooking.state
+          }
+        }
+        : {})
     }
   };
 }
@@ -1670,6 +1739,19 @@ function buildTrustedQuoteEditDocuments({
   const ownerUid = sanitizeIdentifier(source.ownerUid);
   const ownerEmail = email(source.ownerEmail);
   const createdAtISO = normalizeISO(source.createdAtISO, canonical.quote.createdAtISO);
+  const rebooking = isRecord(source.rebooking)
+    ? completeRebookStaffReview({
+      rebooking: source.rebooking,
+      eventDate: canonical.quote.event?.date,
+      reviewedAtISO: editedAtISO,
+      tenantTimeZone: settings?.businessTimeZone,
+      reviewedBy: {
+        uid: actorUid,
+        email: actorEmail,
+        role: actorRole
+      }
+    })
+    : null;
   const editedQuote = {
     ...source,
     ...canonical.quote,
@@ -1693,6 +1775,7 @@ function buildTrustedQuoteEditDocuments({
     activeVersionId: versionId,
     latestVersionNumber: nextVersionNumber,
     versionMeta,
+    ...(rebooking ? { rebooking } : {}),
     updatedAtISO: editedAtISO
   };
   const quotePatch = {
@@ -1725,7 +1808,8 @@ function buildTrustedQuoteEditDocuments({
     lifecycle,
     activeVersionId: versionId,
     latestVersionNumber: nextVersionNumber,
-    versionMeta
+    versionMeta,
+    ...(rebooking ? { rebooking } : {})
   };
   const version = {
     versionId,
@@ -1759,7 +1843,8 @@ function buildTrustedQuoteEditDocuments({
       activeVersionId: versionId,
       latestVersionNumber: nextVersionNumber,
       versionId,
-      versionNumber: nextVersionNumber
+      versionNumber: nextVersionNumber,
+      ...(rebooking ? { rebooking } : {})
     }
   };
 }

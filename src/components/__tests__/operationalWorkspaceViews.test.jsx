@@ -129,7 +129,10 @@ describe("reporting commercial-state totals", () => {
         status: "accepted",
         createdAtISO: "2026-08-02T12:00:00.000Z",
         totals: { total: 4000, deposit: 1000 },
-        payment: { depositStatus: "paid" }
+        payment: {
+          depositStatus: "paid",
+          depositConfirmedAtISO: "2026-08-02T12:05:00.000Z"
+        }
       },
       {
         status: "booked",
@@ -143,7 +146,10 @@ describe("reporting commercial-state totals", () => {
         totals: { total: 2000, deposit: 500 },
         payment: { depositStatus: "unpaid" }
       }
-    ], { nowDate: new Date("2026-08-08T12:00:00.000Z") });
+    ], {
+      nowDate: new Date("2026-08-08T12:00:00.000Z"),
+      source: "firebase"
+    });
 
     expect(metrics.wonValue).toBe(10_000);
     expect(metrics.paidDepositValue).toBe(1_000);

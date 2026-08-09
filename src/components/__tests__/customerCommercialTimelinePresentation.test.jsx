@@ -51,6 +51,26 @@ describe("Customer commercial timeline presentation", () => {
     expect(markup).toContain("delivery and bounce milestones are not shown");
   });
 
+  test("renders a completed timeline as a successful bounded read", () => {
+    const markup = renderToStaticMarkup(
+      <CustomerCommercialTimelinePresentation timeline={{
+        ...BASE_TIMELINE,
+        items: [{
+          id: "quote-1:quote_created:2026-08-09T12:00:00.000Z",
+          label: "Quote created",
+          atISO: "2026-08-09T12:00:00.000Z",
+          quoteId: "quote-1",
+          quoteNumber: "QP-1001",
+          sourceLabel: "Customer-scoped quote record"
+        }]
+      }} />
+    );
+
+    expect(markup).toContain('data-capability-state="success"');
+    expect(markup).toContain("Quote created");
+    expect(markup).toContain("QP-1001");
+  });
+
   test("renders bounded partial evidence and keeps recorded rows actionable", () => {
     const onOpenQuote = vi.fn();
     const timeline = {

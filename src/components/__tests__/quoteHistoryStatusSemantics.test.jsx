@@ -86,6 +86,9 @@ describe("Quote History status semantics", () => {
       "onChange={(e) => handleConfirmationUpdate(quote.id, e.target.value)}"
     );
     expect(QUOTE_HISTORY_SOURCE).toContain("Delivery readiness: Review required");
+    expect(QUOTE_HISTORY_SOURCE).toContain("&& rebookDeliveryGate.ready");
+    expect(QUOTE_HISTORY_SOURCE).toContain("Rebook review: {rebookDeliveryGate.ready ? \"Completed\" : \"Required before delivery\"}");
+    expect(QUOTE_HISTORY_SOURCE).toContain("Open edit and complete review");
     expect(QUOTE_HISTORY_SOURCE).not.toContain("<strong>{quote.status || \"draft\"}</strong>");
     expect(QUOTE_HISTORY_SOURCE).not.toContain("Deposit: {quote.payment?.depositStatus");
   });
