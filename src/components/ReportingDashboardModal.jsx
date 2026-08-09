@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { currency } from "../lib/quoteCalculator";
 import { getQuoteHistory } from "../lib/quoteStore";
@@ -16,9 +16,9 @@ function monthLabel(monthKey) {
   return dt.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
-function recentMonthKeys(count) {
+function recentMonthKeys(count, nowDate = new Date()) {
   const out = [];
-  const now = new Date();
+  const now = new Date(nowDate);
   for (let i = count - 1; i >= 0; i -= 1) {
     const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
     out.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`);
@@ -26,13 +26,101 @@ function recentMonthKeys(count) {
   return out;
 }
 
-export default function ReportingDashboardModal({
+export function buildReportingMetrics(quotes = [], { nowDate = new Date() } = {}) {
+  const sourceQuotes = Array.isArray(quotes) ? quotes : [];
+  const totals = {
+    quotes: sourceQuotes.length,
+    draft: 0,
+    sent: 0,
+    viewed: 0,
+    accepted: 0,
+    booked: 0,
+    declined: 0,
+    expired: 0,
+    paymentUnpaid: 0,
+    paymentSent: 0,
+    paymentPaid: 0,
+    paymentRefunded: 0,
+    quotedValue: 0,
+    pipelineValue: 0,
+    wonValue: 0,
+    paidDepositValue: 0
+  };
+
+  sourceQuotes.forEach((quote) => {
+    const status = quote.status || "draft";
+    const value = Number(quote.totals?.total || 0);
+    const depositValue = Number(quote.totals?.deposit || 0);
+    const paymentStatus = quote.payment?.depositStatus || "unpaid";
+    totals.quotedValue += value;
+    if (Object.prototype.hasOwnProperty.call(totals, status)) {
+      totals[status] += 1;
+    }
+    if (paymentStatus === "paid") {
+      totals.paymentPaid += 1;
+      totals.paidDepositValue += depositValue;
+    } else if (paymentStatus === "sent") {
+      totals.paymentSent += 1;
+    } else if (paymentStatus === "refunded") {
+      totals.paymentRefunded += 1;
+    } else {
+      totals.paymentUnpaid += 1;
+    }
+    if (["draft", "sent", "viewed"].includes(status)) {
+      totals.pipelineValue += value;
+    }
+    if (status === "accepted" || status === "booked") {
+      totals.wonValue += value;
+    }
+  });
+
+  const wins = totals.accepted + totals.booked;
+  const decisionPool = wins + totals.declined + totals.expired;
+  const closeRate = decisionPool > 0 ? (wins / decisionPool) * 100 : 0;
+  const conversionRate = totals.quotes > 0 ? (wins / totals.quotes) * 100 : 0;
+
+  const monthKeys = recentMonthKeys(6, nowDate);
+  const months = monthKeys.map((monthKey) => ({
+    monthKey,
+    label: monthLabel(monthKey),
+    quotes: 0,
+    sent: 0,
+    won: 0,
+    wonValue: 0
+  }));
+
+  sourceQuotes.forEach((quote) => {
+    const key = monthKeyFromISO(quote.createdAtISO);
+    const row = months.find((item) => item.monthKey === key);
+    if (!row) return;
+    row.quotes += 1;
+    if (["sent", "viewed", "accepted", "booked"].includes(quote.status)) {
+      row.sent += 1;
+    }
+    if (quote.status === "accepted" || quote.status === "booked") {
+      row.won += 1;
+      row.wonValue += Number(quote.totals?.total || 0);
+    }
+  });
+
+  return {
+    ...totals,
+    closeRate,
+    conversionRate,
+    months
+  };
+}
+
+export function ReportingDashboardView({
   open,
   onClose,
+  presentation = "embedded",
   organizationId = "",
   addons = [],
   returnFocusRef = null
 }) {
+  const embedded = presentation === "embedded";
+  const routeHeadingRef = useRef(null);
   const [state, setState] = useState({
     loading: false,
     error: "",
@@ -79,89 +167,7 @@ export default function ReportingDashboardModal({
     }
   }, [open, organizationId]);
 
-  const metrics = useMemo(() => {
-    const totals = {
-      quotes: state.quotes.length,
-      draft: 0,
-      sent: 0,
-      viewed: 0,
-      accepted: 0,
-      booked: 0,
-      declined: 0,
-      expired: 0,
-      paymentUnpaid: 0,
-      paymentSent: 0,
-      paymentPaid: 0,
-      paymentRefunded: 0,
-      quotedValue: 0,
-      pipelineValue: 0,
-      wonValue: 0,
-      paidDepositValue: 0
-    };
-
-    state.quotes.forEach((quote) => {
-      const status = quote.status || "draft";
-      const value = Number(quote.totals?.total || 0);
-      const depositValue = Number(quote.totals?.deposit || 0);
-      const paymentStatus = quote.payment?.depositStatus || "unpaid";
-      totals.quotedValue += value;
-      if (Object.prototype.hasOwnProperty.call(totals, status)) {
-        totals[status] += 1;
-      }
-      if (paymentStatus === "paid") {
-        totals.paymentPaid += 1;
-        totals.paidDepositValue += depositValue;
-      } else if (paymentStatus === "sent") {
-        totals.paymentSent += 1;
-      } else if (paymentStatus === "refunded") {
-        totals.paymentRefunded += 1;
-      } else {
-        totals.paymentUnpaid += 1;
-      }
-      if (["draft", "sent", "viewed"].includes(status)) {
-        totals.pipelineValue += value;
-      }
-      if (status === "accepted" || status === "booked") {
-        totals.wonValue += value;
-      }
-    });
-
-    const wins = totals.accepted + totals.booked;
-    const decisionPool = wins + totals.declined + totals.expired;
-    const closeRate = decisionPool > 0 ? (wins / decisionPool) * 100 : 0;
-    const conversionRate = totals.quotes > 0 ? (wins / totals.quotes) * 100 : 0;
-
-    const monthKeys = recentMonthKeys(6);
-    const months = monthKeys.map((monthKey) => ({
-      monthKey,
-      label: monthLabel(monthKey),
-      quotes: 0,
-      sent: 0,
-      won: 0,
-      wonValue: 0
-    }));
-
-    state.quotes.forEach((quote) => {
-      const key = monthKeyFromISO(quote.createdAtISO);
-      const row = months.find((item) => item.monthKey === key);
-      if (!row) return;
-      row.quotes += 1;
-      if (["sent", "viewed", "accepted", "booked"].includes(quote.status)) {
-        row.sent += 1;
-      }
-      if (quote.status === "accepted" || quote.status === "booked") {
-        row.won += 1;
-        row.wonValue += Number(quote.totals?.total || 0);
-      }
-    });
-
-    return {
-      ...totals,
-      closeRate,
-      conversionRate,
-      months
-    };
-  }, [state.quotes]);
+  const metrics = useMemo(() => buildReportingMetrics(state.quotes), [state.quotes]);
 
   const addonNames = useMemo(() => new Map(
     (Array.isArray(addons) ? addons : []).map((item) => [
@@ -171,30 +177,53 @@ export default function ReportingDashboardModal({
   ), [addons]);
 
   const { dialogRef } = useModalDialog({
-    open,
+    open: Boolean(open && !embedded),
     onRequestClose: onClose,
     returnFocusRef
   });
+
+  useEffect(() => {
+    if (!open || !embedded || typeof window === "undefined") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      routeHeadingRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [embedded, open]);
 
   if (!open) return null;
 
   return (
     <div
-      className="modal-overlay"
-      role="dialog"
-      aria-modal="true"
+      className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
       aria-labelledby="reporting-dashboard-title"
-      ref={dialogRef}
-      tabIndex={-1}
     >
-      <div className="modal-card dashboard-card">
+      <div
+        className={`modal-card dashboard-card${embedded ? " workspace-route-card" : ""}`}
+        ref={dialogRef}
+        tabIndex={-1}
+      >
         <div className="modal-head">
-          <h2 id="reporting-dashboard-title">Reporting Dashboard</h2>
+          <h2
+            id="reporting-dashboard-title"
+            ref={routeHeadingRef}
+            tabIndex={embedded ? -1 : undefined}
+          >
+            Reporting Dashboard
+          </h2>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
             </button>
-            <button type="button" className="ghost" onClick={onClose} data-modal-initial-focus>Close</button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={onClose}
+              data-modal-initial-focus={embedded ? undefined : true}
+            >
+              {embedded ? "Back to Home" : "Close"}
+            </button>
           </div>
         </div>
 
@@ -206,11 +235,12 @@ export default function ReportingDashboardModal({
           <div className="metric-card"><span>Total Quotes</span><strong>{metrics.quotes}</strong></div>
           <div className="metric-card"><span>Total Quoted</span><strong>{currency(metrics.quotedValue)}</strong></div>
           <div className="metric-card"><span>Pipeline Value</span><strong>{currency(metrics.pipelineValue)}</strong></div>
-          <div className="metric-card"><span>Won Revenue</span><strong>{currency(metrics.wonValue)}</strong></div>
-          <div className="metric-card"><span>Paid Deposits</span><strong>{currency(metrics.paidDepositValue)}</strong></div>
+          <div className="metric-card"><span>Accepted / Booked Quote Value</span><strong>{currency(metrics.wonValue)}</strong></div>
+          <div className="metric-card"><span>Verified Paid-Deposit Total</span><strong>{currency(metrics.paidDepositValue)}</strong></div>
           <div className="metric-card"><span>Close Rate</span><strong>{metrics.closeRate.toFixed(1)}%</strong></div>
           <div className="metric-card"><span>Conversion Rate</span><strong>{metrics.conversionRate.toFixed(1)}%</strong></div>
         </div>
+        <p className="source-note">Commercial quote and provider-confirmed deposit states only; these figures are not accounting revenue.</p>
 
         <div className="status-strip">
           <span>Draft: {metrics.draft}</span>
@@ -279,7 +309,7 @@ export default function ReportingDashboardModal({
                 <th>Quotes</th>
                 <th>Sent/Viewed/Accepted/Booked</th>
                 <th>Accepted/Booked</th>
-                <th>Won Revenue</th>
+                <th>Accepted / Booked Quote Value</th>
               </tr>
             </thead>
             <tbody>
@@ -298,4 +328,8 @@ export default function ReportingDashboardModal({
       </div>
     </div>
   );
+}
+
+export default function ReportingDashboardModal(props) {
+  return <ReportingDashboardView {...props} presentation="modal" />;
 }

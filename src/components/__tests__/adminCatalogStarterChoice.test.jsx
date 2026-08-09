@@ -21,6 +21,7 @@ vi.mock("../../lib/menuService", () => ({
 }));
 
 import AdminCatalogModal, {
+  AdminCatalogView,
   blurManagedMenuItemOnEnter,
   eventTemplateMenuItemReferences,
   hasUnrelatedManagedMenuDraft,
@@ -49,6 +50,37 @@ function renderCatalog(catalog, props = {}) {
 }
 
 describe("Admin Catalog starter choice", () => {
+  test("preserves modal compatibility while exposing an embedded route presentation", () => {
+    const catalog = {
+      packages: [],
+      addons: [],
+      rentals: [],
+      settings: { pricingSetupConfirmed: false }
+    };
+    const embeddedHtml = renderToStaticMarkup(
+      <AdminCatalogView
+        open
+        catalog={catalog}
+        organizationId="test-org"
+        onClose={() => {}}
+        onSave={async () => ({ ok: true })}
+        onApplyStarterPack={async () => ({ ok: true })}
+        saving={false}
+      />
+    );
+    const modalHtml = renderCatalog(catalog);
+
+    expect(embeddedHtml).toContain("container workspace-route-main embedded-workspace-route");
+    expect(embeddedHtml).toContain('role="region"');
+    expect(embeddedHtml).toContain("workspace-route-card");
+    expect(embeddedHtml).not.toContain('aria-modal="true"');
+    expect(embeddedHtml).toContain(">Back to Home</button>");
+    expect(modalHtml).toContain("modal-overlay");
+    expect(modalHtml).toContain('role="dialog"');
+    expect(modalHtml).toContain('aria-modal="true"');
+    expect(modalHtml).toContain(">Close</button>");
+  });
+
   test("blank setup shows only meaningful pack choices and one manual escape hatch", () => {
     const html = renderCatalog({
       packages: [],

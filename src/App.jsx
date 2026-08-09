@@ -71,6 +71,10 @@ const AdminCatalogModal = createRecoverableLazy(
   () => import("./components/AdminCatalogModal"),
   "AdminCatalogModal"
 );
+const AdminCatalogView = createRecoverableLazy(
+  () => import("./components/AdminCatalogModal").then((module) => ({ default: module.AdminCatalogView })),
+  "AdminCatalogView"
+);
 const CommandCenterHome = createRecoverableLazy(
   () => import("./components/CommandCenterHome"),
   "CommandCenterHome"
@@ -91,17 +95,33 @@ const EventScheduleModal = createRecoverableLazy(
   () => import("./components/EventScheduleModal"),
   "EventScheduleModal"
 );
+const EventScheduleView = createRecoverableLazy(
+  () => import("./components/EventScheduleModal").then((module) => ({ default: module.EventScheduleView })),
+  "EventScheduleView"
+);
 const IntegrationOpsModal = createRecoverableLazy(
   () => import("./components/IntegrationOpsModal"),
   "IntegrationOpsModal"
+);
+const IntegrationOpsView = createRecoverableLazy(
+  () => import("./components/IntegrationOpsModal").then((module) => ({ default: module.IntegrationOpsView })),
+  "IntegrationOpsView"
 );
 const ImportStudioModal = createRecoverableLazy(
   () => import("./components/ImportStudioModal"),
   "ImportStudioModal"
 );
+const ImportStudioView = createRecoverableLazy(
+  () => import("./components/ImportStudioModal").then((module) => ({ default: module.ImportStudioView })),
+  "ImportStudioView"
+);
 const DiagnosticsModal = createRecoverableLazy(
   () => import("./components/DiagnosticsModal"),
   "DiagnosticsModal"
+);
+const DiagnosticsView = createRecoverableLazy(
+  () => import("./components/DiagnosticsModal").then((module) => ({ default: module.DiagnosticsView })),
+  "DiagnosticsView"
 );
 const QuoteCompareModal = createRecoverableLazy(
   () => import("./components/QuoteCompareModal"),
@@ -114,6 +134,10 @@ const QuoteHistoryView = createRecoverableLazy(
 const ReportingDashboardModal = createRecoverableLazy(
   () => import("./components/ReportingDashboardModal"),
   "ReportingDashboardModal"
+);
+const ReportingDashboardView = createRecoverableLazy(
+  () => import("./components/ReportingDashboardModal").then((module) => ({ default: module.ReportingDashboardView })),
+  "ReportingDashboardView"
 );
 const SalesWorkflowView = createRecoverableLazy(
   () => import("./components/SalesWorkflowModal").then((module) => ({ default: module.SalesWorkflowView })),
@@ -276,16 +300,22 @@ function WorkspaceLazyTool({
   );
 }
 
-function WorkspaceLazyRoute({ surfaceName, component: LazyComponent, children }) {
+function WorkspaceLazyRoute({
+  active = true,
+  surfaceName,
+  component: LazyComponent,
+  onClose = () => window.location.assign(WORKSPACE_PATHS.home),
+  children
+}) {
   return (
     <RecoverableErrorBoundary
-      active
+      active={active}
       surfaceName={surfaceName}
       surfaceKind="route"
       onRetry={LazyComponent.retry}
-      onClose={() => window.location.assign(WORKSPACE_PATHS.home)}
+      onClose={onClose}
     >
-      <Suspense fallback={<div className="qp-route-loading" role="status">Loading {surfaceName}...</div>}>
+      <Suspense fallback={active ? <div className="qp-route-loading" role="status">Loading {surfaceName}...</div> : null}>
         {children}
       </Suspense>
     </RecoverableErrorBoundary>
@@ -731,6 +761,36 @@ export default function App({ tenantContext, authSession }) {
   ) ? WORKSPACE_ROUTE_IDS.QUOTE_NEW : browserRoute.routeId;
   const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL].includes(resolvedWorkspaceRouteId);
   const salesWorkflowOpen = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.WORKFLOW;
+  const scheduleRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE;
+  const reportingRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING;
+  const integrationsRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS;
+  const importsRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS;
+  const catalogRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG;
+  const diagnosticsRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS;
+  const legacyScheduleRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE;
+  const legacyReportingRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING;
+  const legacyIntegrationsRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS;
+  const legacyImportsRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS;
+  const legacyCatalogRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG;
+  const legacyDiagnosticsRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS;
+  const scheduleModalOpen = scheduleOpen || legacyScheduleRouteOpen;
+  const reportingModalOpen = dashboardOpen || legacyReportingRouteOpen;
+  const integrationsModalOpen = integrationsOpen || legacyIntegrationsRouteOpen;
+  const importsModalOpen = importStudioOpen || legacyImportsRouteOpen;
+  const catalogModalOpen = adminOpen || legacyCatalogRouteOpen;
+  const diagnosticsModalOpen = diagnosticsOpen || legacyDiagnosticsRouteOpen;
   const closeWorkspaceToolRoute = (routeId, setOpen) => {
     setOpen(false);
     if (resolvedWorkspaceRouteId === routeId) navigateWorkspace(WORKSPACE_PATHS.home);
@@ -757,15 +817,13 @@ export default function App({ tenantContext, authSession }) {
     menuTriggerRef = null,
     beforeOpen = null
   } = {}) => {
-    openWorkspaceTool(setOpen, {
-      menuTriggerRef,
-      beforeOpen: () => {
-        beforeOpen?.();
-        if (CUSTOMER_CENTERED_WORKSPACE_ENABLED) {
-          navigateWorkspace(path);
-        }
-      }
-    });
+    if (CUSTOMER_CENTERED_WORKSPACE_ENABLED) {
+      setOpenHeaderMenu("");
+      beforeOpen?.();
+      navigateWorkspace(path);
+      return;
+    }
+    openWorkspaceTool(setOpen, { menuTriggerRef, beforeOpen });
   };
   const commercialSnapshot = useCommercialWorkspaceSnapshot({
     enabled: Boolean(authSession.isStaff && authSession.organizationId),
@@ -778,13 +836,19 @@ export default function App({ tenantContext, authSession }) {
     if (String(summary?.organizationId || "").trim() !== String(authSession.organizationId || "").trim()) return;
     commercialSnapshot.refresh({ force: true });
   }, [authSession.organizationId, commercialSnapshot.refresh]);
-  const adminMounted = useStickyMount(adminOpen);
-  const scheduleMounted = useStickyMount(scheduleOpen);
-  const integrationsMounted = useStickyMount(integrationsOpen);
-  const importStudioMounted = useStickyMount(importStudioOpen);
-  const diagnosticsMounted = useStickyMount(diagnosticsOpen);
+  const adminMounted = useStickyMount(catalogModalOpen);
+  const scheduleMounted = useStickyMount(scheduleModalOpen);
+  const integrationsMounted = useStickyMount(integrationsModalOpen);
+  const importStudioMounted = useStickyMount(importsModalOpen);
+  const diagnosticsMounted = useStickyMount(diagnosticsModalOpen);
   const historyMounted = useStickyMount(historyOpen);
-  const dashboardMounted = useStickyMount(dashboardOpen);
+  const dashboardMounted = useStickyMount(reportingModalOpen);
+  const catalogRouteMounted = useStickyMount(catalogRouteOpen);
+  const scheduleRouteMounted = useStickyMount(scheduleRouteOpen);
+  const reportingRouteMounted = useStickyMount(reportingRouteOpen);
+  const integrationsRouteMounted = useStickyMount(integrationsRouteOpen);
+  const importsRouteMounted = useStickyMount(importsRouteOpen);
+  const diagnosticsRouteMounted = useStickyMount(diagnosticsRouteOpen);
   const compareMounted = useStickyMount(compareOpen);
   const salesWorkflowMounted = useStickyMount(salesWorkflowOpen);
   const quoteBuilderActive = [WORKSPACE_ROUTE_IDS.QUOTE_NEW, WORKSPACE_ROUTE_IDS.QUOTE_EDIT]
@@ -996,22 +1060,6 @@ export default function App({ tenantContext, authSession }) {
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && authSession.isAdmin)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS && authSession.isAdmin)
   );
-
-  useEffect(() => {
-    setScheduleOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled);
-    setDashboardOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled);
-    setIntegrationsOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled);
-    setDiagnosticsOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS && diagnosticsEnabled);
-    setAdminOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && authSession.isAdmin);
-    setImportStudioOpen(resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS && authSession.isAdmin);
-  }, [
-    authSession.isAdmin,
-    dashboardEnabled,
-    diagnosticsEnabled,
-    eventScheduleEnabled,
-    integrationsEnabled,
-    resolvedWorkspaceRouteId
-  ]);
 
   useEffect(() => {
     setStepValidation(buildStepValidation(form));
@@ -2095,6 +2143,26 @@ export default function App({ tenantContext, authSession }) {
     replace(WORKSPACE_PATHS.home, { preserveSearch: false, preserveHash: false });
   };
 
+  const closeHistoryWorkspace = () => {
+    const returnTarget = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+      ? historyTarget.returnFocus === "workflow"
+        ? workflowTriggerRef.current
+        : historyTarget.quoteId
+          ? saveQuoteButtonRef.current
+          : historyTriggerRef.current
+      : null;
+    setHistoryTarget({ quoteId: "", reason: "" });
+    requestWorkflowAttentionRefresh({ force: true });
+    navigateWorkspace(WORKSPACE_PATHS.home);
+    if (returnTarget) {
+      window.requestAnimationFrame(() => returnTarget.focus());
+    }
+  };
+
+  const closeSalesWorkflowWorkspace = () => {
+    navigateWorkspace(WORKSPACE_PATHS.home);
+  };
+
   const saveCatalogDuringSetup = async (nextCatalog) => {
     if (!hasConfiguredEventType) {
       return {
@@ -2606,6 +2674,127 @@ export default function App({ tenantContext, authSession }) {
         </WorkspaceLazyRoute>
       )}
 
+      {authSession.isAdmin && catalogRouteMounted && (
+        <WorkspaceLazyRoute
+          active={catalogRouteOpen}
+          surfaceName="Catalog Admin"
+          component={AdminCatalogView}
+          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+        >
+          <AdminCatalogView
+            open={catalogRouteOpen}
+            catalog={catalog}
+            organizationId={authSession.organizationId}
+            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+            onSave={catalog.saveCatalog}
+            onApplyStarterPack={catalog.stageStarterPack}
+            onCatalogMutation={handleCatalogMutation}
+            onReload={catalog.reload}
+            saving={catalog.saving}
+            initialTab={adminInitialTab}
+            selectedEventType={globalEventTypeId}
+            onEventTypeChange={setGlobalEventTypeId}
+            onToast={pushToast}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
+      {authSession.isAdmin && importsRouteMounted && (
+        <WorkspaceLazyRoute
+          active={importsRouteOpen}
+          surfaceName="Import Studio"
+          component={ImportStudioView}
+          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+        >
+          <ImportStudioView
+            open={importsRouteOpen}
+            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+            organizationId={authSession.organizationId}
+            organizationName={workspaceName}
+            currentUserUid={authSession.user?.uid || ""}
+            currentUserEmail={authSession.user?.email || ""}
+            catalogRevision={Math.max(0, Number(catalog.settings?.catalogRevision || 0))}
+            onReload={() => catalog.reload({ background: true })}
+            onImported={(result) => {
+              catalog.reload({ background: true });
+              if (result?.status === "rolled_back") {
+                pushToast(`Import ${result.importBatchId} was undone.`, "info");
+              } else {
+                pushToast(`Imported ${result?.createdCount || 0} record(s) into ${authSession.organizationId}.`, "success");
+              }
+            }}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
+      {eventScheduleEnabled && scheduleRouteMounted && (
+        <WorkspaceLazyRoute
+          active={scheduleRouteOpen}
+          surfaceName="Event Schedule"
+          component={EventScheduleView}
+          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+        >
+          <EventScheduleView
+            open={scheduleRouteOpen}
+            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+            organizationId={authSession.organizationId}
+            staffLeads={scheduleStaffLeads}
+            capacityLimit={scheduleCapacityLimit}
+            currentUserEmail={authSession.user?.email || ""}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
+      {dashboardEnabled && reportingRouteMounted && (
+        <WorkspaceLazyRoute
+          active={reportingRouteOpen}
+          surfaceName="Reporting Dashboard"
+          component={ReportingDashboardView}
+          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+        >
+          <ReportingDashboardView
+            open={reportingRouteOpen}
+            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+            organizationId={authSession.organizationId}
+            addons={catalog.addons}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
+      {integrationsEnabled && integrationsRouteMounted && (
+        <WorkspaceLazyRoute
+          active={integrationsRouteOpen}
+          surfaceName="Integrations Ops"
+          component={IntegrationOpsView}
+          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+        >
+          <IntegrationOpsView
+            open={integrationsRouteOpen}
+            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+            organizationId={authSession.organizationId}
+            settings={effectiveSettings}
+            currentUserEmail={authSession.user?.email || ""}
+            currentUserUid={authSession.user?.uid || ""}
+            canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
+            canManageProviders={authSession.isAdmin}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
+      {diagnosticsEnabled && diagnosticsRouteMounted && (
+        <WorkspaceLazyRoute
+          active={diagnosticsRouteOpen}
+          surfaceName="Session Diagnostics"
+          component={DiagnosticsView}
+          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+        >
+          <DiagnosticsView
+            open={diagnosticsRouteOpen}
+            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
       {(browserRoute.routeId === WORKSPACE_ROUTE_IDS.NOT_FOUND
         || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
         || ([
@@ -2927,7 +3116,7 @@ export default function App({ tenantContext, authSession }) {
 
       {authSession.isAdmin && adminMounted && (
         <WorkspaceLazyTool
-          open={adminOpen}
+          open={catalogModalOpen}
           surfaceName="Catalog Admin"
           component={AdminCatalogModal}
           onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
@@ -2935,7 +3124,7 @@ export default function App({ tenantContext, authSession }) {
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <AdminCatalogModal
-            open={adminOpen}
+            open={catalogModalOpen}
             catalog={catalog}
             organizationId={authSession.organizationId}
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
@@ -2953,7 +3142,7 @@ export default function App({ tenantContext, authSession }) {
 
       {authSession.isAdmin && importStudioMounted && (
         <WorkspaceLazyTool
-          open={importStudioOpen}
+          open={importsModalOpen}
           surfaceName="Import Studio"
           component={ImportStudioModal}
           onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.IMPORTS, setImportStudioOpen)}
@@ -2961,7 +3150,7 @@ export default function App({ tenantContext, authSession }) {
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <ImportStudioModal
-            open={importStudioOpen}
+            open={importsModalOpen}
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.IMPORTS, setImportStudioOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
@@ -2983,25 +3172,16 @@ export default function App({ tenantContext, authSession }) {
       )}
 
       {historyMounted && (
-        <WorkspaceLazyRoute surfaceName="Quotes" component={QuoteHistoryView}>
+        <WorkspaceLazyRoute
+          active={historyOpen}
+          surfaceName="Quotes"
+          component={QuoteHistoryView}
+          onClose={closeHistoryWorkspace}
+        >
           <QuoteHistoryView
             open={historyOpen}
             presentation={CUSTOMER_CENTERED_WORKSPACE_ENABLED ? "embedded" : "modal"}
-            onClose={() => {
-              const returnTarget = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
-                ? historyTarget.returnFocus === "workflow"
-                  ? workflowTriggerRef.current
-                  : historyTarget.quoteId
-                    ? saveQuoteButtonRef.current
-                    : historyTriggerRef.current
-                : null;
-              setHistoryTarget({ quoteId: "", reason: "" });
-              requestWorkflowAttentionRefresh({ force: true });
-              navigateWorkspace(WORKSPACE_PATHS.home);
-              if (returnTarget) {
-                window.requestAnimationFrame(() => returnTarget.focus());
-              }
-            }}
+            onClose={closeHistoryWorkspace}
             basePortalUrl={`${window.location.origin}${WORKSPACE_PATHS.home}`}
             organizationId={authSession.organizationId}
             currentUserUid={authSession.user?.uid || ""}
@@ -3026,11 +3206,16 @@ export default function App({ tenantContext, authSession }) {
       )}
 
       {salesWorkflowMounted && (
-        <WorkspaceLazyRoute surfaceName="Workflow" component={SalesWorkflowView}>
+        <WorkspaceLazyRoute
+          active={salesWorkflowOpen}
+          surfaceName="Workflow"
+          component={SalesWorkflowView}
+          onClose={closeSalesWorkflowWorkspace}
+        >
           <SalesWorkflowView
             open={salesWorkflowOpen}
             presentation={CUSTOMER_CENTERED_WORKSPACE_ENABLED ? "embedded" : "modal"}
-            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+            onClose={closeSalesWorkflowWorkspace}
             onOpenQuoteHistory={({ quoteId = "", action = "" } = {}) => {
               const actionLabel = String(action || "approved action").replaceAll("_", " ");
               setHistoryTarget({
@@ -3058,7 +3243,7 @@ export default function App({ tenantContext, authSession }) {
 
       {eventScheduleEnabled && scheduleMounted && (
         <WorkspaceLazyTool
-          open={scheduleOpen}
+          open={scheduleModalOpen}
           surfaceName="Event Schedule"
           component={EventScheduleModal}
           onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
@@ -3066,7 +3251,7 @@ export default function App({ tenantContext, authSession }) {
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <EventScheduleModal
-            open={scheduleOpen}
+            open={scheduleModalOpen}
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
@@ -3079,7 +3264,7 @@ export default function App({ tenantContext, authSession }) {
 
       {integrationsEnabled && integrationsMounted && (
         <WorkspaceLazyTool
-          open={integrationsOpen}
+          open={integrationsModalOpen}
           surfaceName="Integrations Ops"
           component={IntegrationOpsModal}
           onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
@@ -3087,7 +3272,7 @@ export default function App({ tenantContext, authSession }) {
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <IntegrationOpsModal
-            open={integrationsOpen}
+            open={integrationsModalOpen}
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
@@ -3102,7 +3287,7 @@ export default function App({ tenantContext, authSession }) {
 
       {diagnosticsEnabled && diagnosticsMounted && (
         <WorkspaceLazyTool
-          open={diagnosticsOpen}
+          open={diagnosticsModalOpen}
           surfaceName="Session Diagnostics"
           component={DiagnosticsModal}
           onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.DIAGNOSTICS, setDiagnosticsOpen)}
@@ -3110,7 +3295,7 @@ export default function App({ tenantContext, authSession }) {
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <DiagnosticsModal
-            open={diagnosticsOpen}
+            open={diagnosticsModalOpen}
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.DIAGNOSTICS, setDiagnosticsOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
           />
@@ -3145,7 +3330,7 @@ export default function App({ tenantContext, authSession }) {
 
       {dashboardEnabled && dashboardMounted && (
         <WorkspaceLazyTool
-          open={dashboardOpen}
+          open={reportingModalOpen}
           surfaceName="Reporting Dashboard"
           component={ReportingDashboardModal}
           onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.REPORTING, setDashboardOpen)}
@@ -3153,7 +3338,7 @@ export default function App({ tenantContext, authSession }) {
           hasUnsavedWorkspaceChanges={quoteDirty}
         >
           <ReportingDashboardModal
-            open={dashboardOpen}
+            open={reportingModalOpen}
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.REPORTING, setDashboardOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}

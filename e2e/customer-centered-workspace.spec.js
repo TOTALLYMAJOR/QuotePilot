@@ -4,6 +4,22 @@ const CUSTOMER_CENTERED_WORKSPACE_ENABLED = ["1", "true", "yes", "on"].includes(
   String(process.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED || "").trim().toLowerCase()
 );
 
+async function fillRequiredQuoteFields(page) {
+  const eventType = page.getByLabel(/Event type/i);
+  await expect(eventType).toBeVisible();
+  await eventType.selectOption({ index: 1 });
+  await page.getByLabel(/Event date/i).fill("2027-06-12");
+  await page.getByLabel(/Start time/i).fill("18:00");
+  await page.getByRole("spinbutton", { name: /Event hours/i }).fill("4");
+  await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("72");
+  await page.getByLabel("Event name").fill("Context Catalog Dinner");
+  await page.getByRole("textbox", { name: /Venue/i }).first().fill("Context Hall");
+  await page.getByRole("textbox", { name: /Venue address/i }).fill("100 Context Way");
+  await page.getByRole("textbox", { name: /Your name/i }).fill("Context Customer");
+  await page.getByRole("textbox", { name: /Phone/i }).fill("205-555-0101");
+  await page.getByRole("textbox", { name: /Email/i }).fill("context@example.test");
+}
+
 test.describe("customer-centered workspace", () => {
   test.skip(
     !CUSTOMER_CENTERED_WORKSPACE_ENABLED,
@@ -56,12 +72,271 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
   });
 
+  test("explicit New quote discard and browser-exit protection remain attached to a dirty routed draft", async ({ page }) => {
+    await page.goto("/app/quotes/new");
+    const eventName = page.getByLabel("Event name");
+    await eventName.fill("Protected routed draft");
+
+    expect(await page.evaluate(() => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    })).toBe(true);
+
+    page.once("dialog", async (dialog) => {
+      expect(dialog.message()).toContain("Your unsaved changes will be discarded");
+      await dialog.dismiss();
+    });
+    await page.locator(".site-header").getByRole("button", { name: "New quote", exact: true }).click();
+    await expect(eventName).toHaveValue("Protected routed draft");
+
+    page.once("dialog", async (dialog) => dialog.accept());
+    await page.locator(".site-header").getByRole("button", { name: "New quote", exact: true }).click();
+    await expect(eventName).toHaveValue("");
+    await expect(page.getByText("Ready for a new quote", { exact: true })).toBeVisible();
+  });
+
+  test("primary workspace navigation remains visible and overflow-safe at mobile width", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/app");
+
+    const header = page.locator(".site-header");
+    for (const name of ["Home", "Customers", "Quotes", "Schedule"]) {
+      await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
+    }
+    await expect(header.getByRole("button", { name: /^Workflow/ })).toBeVisible();
+    await expect(header.getByRole("button", { name: "More", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+    await header.getByRole("button", { name: "Schedule", exact: true }).click();
+    await expect(page).toHaveURL(/\/app\/schedule$/);
+    await expect(page.getByRole("region", { name: "Event Schedule" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  });
+
+  test("desktop workspace navigation keeps Account with the primary actions across nearby widths", async ({ page }) => {
+    for (const width of [1440, 1366, 1280, 1024]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/app");
+
+      const header = page.locator(".site-header");
+      for (const name of ["Home", "Customers", "Quotes", "Schedule", "Operations", "Account"]) {
+        await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
+      }
+      await expect(header.getByRole("button", { name: /^Workflow/ })).toBeVisible();
+      await expect(header.getByRole("button", { name: "More", exact: true })).toBeHidden();
+
+      const [homeBox, accountBox] = await Promise.all([
+        header.getByRole("button", { name: "Home", exact: true }).boundingBox(),
+        header.getByRole("button", { name: "Account", exact: true }).boundingBox()
+      ]);
+      expect(homeBox).not.toBeNull();
+      expect(accountBox).not.toBeNull();
+      expect(Math.abs(accountBox.y - homeBox.y)).toBeLessThanOrEqual(2);
+      await expect(header.locator(".header-actions")).toHaveCSS("flex-wrap", "nowrap");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    }
+  });
+
   test("unknown staff paths render an authenticated in-shell 404", async ({ page }) => {
     await page.goto("/app/not-a-workspace-route");
 
     await expect(page.getByRole("heading", { name: "Workspace page not found" })).toBeVisible();
     await expect(page.getByText("/app/not-a-workspace-route is not a QuotePilot staff workspace route.")).toBeVisible();
     await expect(page.locator(".site-header").getByRole("button", { name: "Home", exact: true })).toBeVisible();
+  });
+
+  test("operational paths render as embedded workspaces and preserve browser history", async ({ page }) => {
+    const surfaces = [
+      ["/app/schedule", "Event Schedule"],
+      ["/app/reporting", "Reporting Dashboard"],
+      ["/app/catalog", "Catalog Admin"],
+      ["/app/imports", "Import Studio"],
+      ["/app/integrations", "Integrations Ops"],
+      ["/app/diagnostics", "Session Diagnostics"]
+    ];
+
+    for (const [path, name] of surfaces) {
+      await page.goto(path);
+      const route = page.getByRole("region", { name });
+      await expect(route).toBeVisible();
+      await expect(route).toHaveClass(/embedded-workspace-route/);
+      const heading = route.getByRole("heading", { name });
+      await expect(heading).toBeVisible();
+      if (path === "/app/schedule") {
+        await expect(heading).toBeFocused();
+        await expect(heading).toHaveCSS("outline-style", "solid");
+        await expect(heading).toHaveCSS("outline-width", "3px");
+      }
+      await expect(route.getByRole("button", { name: "Back to Home", exact: true })).toBeVisible();
+      await expect(route.getByRole("button", { name: "Close", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("dialog", { name })).toHaveCount(0);
+    }
+
+    await page.goto("/app");
+    const operations = page.locator(".desktop-header-menu").getByRole("button", { name: "Operations" });
+    await operations.click();
+    await page.getByRole("menuitem", { name: "Reporting Dashboard" }).click();
+    await expect(page).toHaveURL(/\/app\/reporting$/);
+    await expect(page.getByRole("region", { name: "Reporting Dashboard" })).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+
+    await page.goForward();
+    await expect(page).toHaveURL(/\/app\/reporting$/);
+    await expect(page.getByRole("region", { name: "Reporting Dashboard" })).toBeVisible();
+  });
+
+  test("quote-builder Catalog work stays contextual and modal while routed Catalog stays embedded", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__quotePilotE2eFunctions = { loadMenuByEvent: async () => [] };
+    });
+    await page.goto("/app/quotes/new");
+    await fillRequiredQuoteFields(page);
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(page.getByText(/No menu items are configured for/i)).toBeVisible();
+    await page.getByRole("button", { name: "Add menu items", exact: true }).click();
+
+    const catalogDialog = page.getByRole("dialog", { name: "Catalog Admin" });
+    await expect(catalogDialog).toBeVisible();
+    await expect(catalogDialog).toHaveAttribute("aria-modal", "true");
+    await expect(page).toHaveURL(/\/app\/quotes\/new$/);
+    await expect(page.getByRole("region", { name: "Catalog Admin" })).toHaveCount(0);
+
+    await catalogDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(catalogDialog).toHaveCount(0);
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await expect(page.getByLabel("Event name")).toHaveValue("Context Catalog Dinner");
+  });
+
+  test("an operational route chunk failure recovers in-shell without becoming a modal", async ({ page }) => {
+    await page.route("**/src/components/DiagnosticsModal.jsx*", (route) => route.abort("failed"));
+    await page.goto("/app/diagnostics");
+
+    const recovery = page.locator(".ui-recovery-route");
+    await expect(recovery.getByRole("heading", { name: "Session Diagnostics did not load" })).toBeVisible();
+    await expect(recovery.getByRole("button", { name: "Try again" })).toBeFocused();
+    await expect(recovery.getByRole("button", { name: "Reload page" })).toBeVisible();
+    await expect(recovery.getByRole("button", { name: "Back to QuotePilot" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Session Diagnostics did not load" })).toHaveCount(0);
+
+    await recovery.getByRole("button", { name: "Back to QuotePilot" }).click();
+    await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+  });
+
+  test("sticky Quotes and Workflow failures stay route-scoped without losing the dirty quote draft", async ({ page }) => {
+    await page.route("**/src/components/QuoteHistoryModal.jsx*", (route) => route.abort("failed"));
+    await page.route("**/src/components/SalesWorkflowModal.jsx*", (route) => route.abort("failed"));
+    await page.goto("/app/quotes/new");
+
+    const eventName = page.getByLabel("Event name");
+    await eventName.fill("Recovery-safe routed draft");
+    const header = page.locator(".site-header");
+
+    const exerciseFailure = async ({ trigger, path, heading }) => {
+      await header.getByRole("button", {
+        name: trigger,
+        exact: typeof trigger === "string"
+      }).click();
+      await expect(page).toHaveURL(path);
+      const recovery = page.locator(".ui-recovery-route");
+      await expect(recovery.getByRole("heading", { name: heading })).toBeVisible();
+      await recovery.getByRole("button", { name: "Back to QuotePilot" }).click();
+
+      await expect(page).toHaveURL(/\/app$/);
+      await expect(page.getByRole("heading", { name: heading })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+
+      await page.goBack();
+      await expect(page).toHaveURL(path);
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await page.goBack();
+      await expect(page).toHaveURL(/\/app\/quotes\/new$/);
+      await expect(eventName).toHaveValue("Recovery-safe routed draft");
+    };
+
+    await exerciseFailure({
+      trigger: "Quotes",
+      path: /\/app\/quotes$/,
+      heading: "Quotes did not load"
+    });
+    await exerciseFailure({
+      trigger: /^Workflow/,
+      path: /\/app\/workflow$/,
+      heading: "Workflow did not load"
+    });
+  });
+
+  test("Home targets the exact customer, Workflow attention item, and quote record", async ({ page }) => {
+    await page.addInitScript(() => {
+      const createdAtISO = "2026-08-08T10:00:00.000Z";
+      localStorage.setItem("quoteWizard.quotes", JSON.stringify([
+        {
+          id: "home-attention-quote",
+          organizationId: "e2e-org",
+          customerId: "home-attention-customer",
+          quoteNumber: "Q-HOME-ATTENTION",
+          status: "sent",
+          createdAtISO,
+          updatedAtISO: "2026-08-08T11:00:00.000Z",
+          expiresAtISO: "2099-12-31T23:59:59.000Z",
+          customer: { name: "Home Attention Customer", email: "attention@example.test" },
+          event: { name: "Attention Dinner", date: "2027-03-12", guests: 40 },
+          totals: { total: 4000, deposit: 1000 },
+          payment: { depositStatus: "unpaid" },
+          portalDecision: {
+            decision: "changes_requested",
+            requestId: "home-request-1",
+            message: "Please revise the service timing.",
+            submittedAtISO: "2026-08-08T11:00:00.000Z"
+          }
+        },
+        {
+          id: "home-money-quote",
+          organizationId: "e2e-org",
+          customerId: "home-money-customer",
+          quoteNumber: "Q-HOME-MONEY",
+          status: "accepted",
+          createdAtISO,
+          updatedAtISO: "2026-08-08T12:00:00.000Z",
+          expiresAtISO: "2099-12-31T23:59:59.000Z",
+          customer: { name: "Home Money Customer", email: "money@example.test" },
+          event: { name: "Money Dinner", date: "2027-03-13", guests: 55 },
+          totals: { total: 5000, deposit: 1500 },
+          payment: { depositStatus: "unpaid" },
+          lifecycle: { acceptedAtISO: "2026-08-08T12:00:00.000Z" }
+        }
+      ]));
+    });
+
+    await page.goto("/app");
+    const attentionRow = page.locator(".command-center-row").filter({ hasText: "Please revise the service timing." });
+    await expect(attentionRow).toBeVisible();
+
+    await attentionRow.getByRole("button", { name: "Home Attention Customer", exact: true }).click();
+    await expect(page).toHaveURL(/\/app\/customers\/home-attention-customer$/);
+    await expect(page.getByRole("heading", { name: "Home Attention Customer", level: 1 })).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+
+    await page.locator(".command-center-row").filter({ hasText: "Please revise the service timing." })
+      .getByRole("button", { name: "Open in Workflow" }).click();
+    await expect(page).toHaveURL(/\/app\/workflow\?quoteId=home-attention-quote&attentionType=change_request&requestId=home-request-1$/);
+    const focusedAttention = page.locator('[data-attention-id="change-request:home-attention-quote:2026-08-08T11:00:00.000Z"]');
+    await expect(focusedAttention).toBeVisible();
+    await expect(focusedAttention).toBeFocused();
+
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+    const moneyRow = page.locator(".command-center-row").filter({ hasText: "Q-HOME-MONEY" });
+    await moneyRow.getByRole("button", { name: "Open", exact: true }).click();
+    await expect(page).toHaveURL(/\/app\/quotes\/home-money-quote$/);
+    const focusedQuote = page.locator('.saved-quote-handoff[data-quote-id="home-money-quote"]');
+    await expect(focusedQuote).toBeVisible();
+    await expect(focusedQuote).toBeFocused();
   });
 
   test("a portal token takes precedence over the staff surface on a nested workspace path", async ({ page }) => {
@@ -180,13 +455,10 @@ test.describe("customer-centered workspace", () => {
             signedAtISO: acceptedAt
           }
         },
-        conversation: {
+        conversationSummary: {
           messageCount: 2,
-          lastMessageAtISO: acceptedAt,
-          messages: [
-            { id: "message-customer", sender: "customer", body: "Can you confirm final guest timing?" },
-            { id: "message-staff", sender: "staff", body: "Yes, dinner service starts at 6:30 PM." }
-          ]
+          latestMessageAtISO: acceptedAt,
+          latestActorType: "customer"
         },
         lifecycle: {
           draftAtISO: createdAt,
@@ -246,17 +518,28 @@ test.describe("customer-centered workspace", () => {
     await expect(quotesPanel.getByRole("heading", { name: "Quotes & proposals" })).toBeVisible();
     await expect(quotesPanel.getByRole("heading", { name: "Q-C360-ACCEPTED" })).toBeVisible();
     await expect(quotesPanel.getByText("Customer viewed evidence is never inferred here.", { exact: false })).toBeVisible();
-    await quotesPanel.getByRole("button", { name: "Preview", exact: true }).click();
+    await expect(quotesPanel).toContainText("1 most recent retained version");
+    await quotesPanel.getByText("Review proposal versions", { exact: true }).click();
+    await expect(quotesPanel).toContainText("Version 2");
+    await expect(quotesPanel).toContainText("Customer accepted revision");
+
+    const previewButton = quotesPanel.getByRole("button", { name: "Preview", exact: true });
+    await previewButton.click();
 
     const staffPreview = quotesPanel.locator(".staff-proposal-preview");
     const customerPresentation = staffPreview.locator('[data-customer-presentation="true"]');
     await expect(staffPreview).toBeVisible();
+    await expect(staffPreview.getByRole("heading", { name: "Proposal presentation" })).toBeFocused();
     await expect(staffPreview.getByRole("button", { name: "Close preview" })).toBeVisible();
     await expect(customerPresentation).toHaveAttribute("data-customer-presentation", "true");
     await expect(staffPreview).toContainText(
       "Built from canonical staff data. Opening this preview does not create customer viewed evidence."
     );
     await expect(customerPresentation).toContainText("Community Leadership Dinner");
+
+    await page.keyboard.press("Escape");
+    await expect(staffPreview).toHaveCount(0);
+    await expect(previewButton).toBeFocused();
 
     const evidenceAfterPreview = await page.evaluate((canonicalQuoteId) => {
       const quote = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]")
@@ -294,6 +577,8 @@ test.describe("customer-centered workspace", () => {
     const conversationsPanel = page.locator("#customer-panel-conversations");
     await expect(conversationsPanel.getByRole("heading", { name: "Conversations" })).toBeVisible();
     await expect(conversationsPanel).toContainText("Messages remain bound to each quote");
+    await expect(conversationsPanel).toContainText("2 messages recorded");
+    await expect(conversationsPanel).toContainText("latest from customer");
     const conversationAction = conversationsPanel.getByRole("button", { name: "Open quote conversation" });
     await expect(conversationAction).toBeVisible();
     await conversationAction.click();

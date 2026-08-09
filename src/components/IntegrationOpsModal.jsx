@@ -213,9 +213,10 @@ function flattenLogs(quotes) {
   return rows.sort((a, b) => b.occurredAtISO.localeCompare(a.occurredAtISO));
 }
 
-export default function IntegrationOpsModal({
+export function IntegrationOpsView({
   open,
   onClose,
+  presentation = "embedded",
   organizationId = "",
   settings = {},
   currentUserEmail = "",
@@ -225,6 +226,7 @@ export default function IntegrationOpsModal({
   provisioningOnly = false,
   returnFocusRef = null
 }) {
+  const embedded = presentation === "embedded";
   const defaultProvider = toProvider(settings.crmProvider || "crm");
   const [state, setState] = useState({
     loading: false,
@@ -256,6 +258,7 @@ export default function IntegrationOpsModal({
   const [provisionForm, setProvisionForm] = useState(
     () => createCustomerProvisioningForm(getCanonicalAppUrl())
   );
+  const routeRef = useRef(null);
   const wasOpenRef = useRef(false);
   const [cleanupState, setCleanupState] = useState({
     loading: false,
@@ -900,28 +903,36 @@ export default function IntegrationOpsModal({
       setFeedback("Wait for the current operation to finish before closing this tool.");
       return;
     }
-    onClose();
+    onClose?.();
   };
   const { dialogRef } = useModalDialog({
-    open,
+    open: open && !embedded,
     onRequestClose: handleClose,
     canClose: !closeBlocked,
     onCloseBlocked: () => setFeedback("Wait for the current operation to finish before closing this tool."),
     returnFocusRef
   });
 
+  useEffect(() => {
+    if (!open || !embedded || typeof window === "undefined") return undefined;
+    const focusFrame = window.requestAnimationFrame(() => {
+      routeRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [embedded, open]);
+
   if (!open) return null;
 
   return (
     <div
-      ref={dialogRef}
-      className="modal-overlay"
-      role="dialog"
-      aria-modal="true"
+      ref={embedded ? routeRef : dialogRef}
+      className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
       aria-labelledby="integration-ops-title"
       tabIndex={-1}
     >
-      <div className="modal-card integration-card">
+      <div className={`modal-card integration-card${embedded ? " workspace-route-card" : ""}`}>
         <div className="modal-head">
           <h2 id="integration-ops-title">{provisioningOnly ? "Customer Provisioning" : "Integrations Ops"}</h2>
           <div className="right-actions">
@@ -938,11 +949,11 @@ export default function IntegrationOpsModal({
             <button
               type="button"
               className="ghost"
-              data-modal-initial-focus
+              data-modal-initial-focus={embedded ? undefined : "true"}
               onClick={handleClose}
               disabled={closeBlocked}
             >
-              Close
+              {embedded ? "Back to Home" : "Close"}
             </button>
           </div>
         </div>
@@ -1703,4 +1714,8 @@ export default function IntegrationOpsModal({
       </div>
     </div>
   );
+}
+
+export default function IntegrationOpsModal(props) {
+  return <IntegrationOpsView {...props} presentation="modal" />;
 }
