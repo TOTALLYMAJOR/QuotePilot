@@ -7,6 +7,8 @@ import {
   REQUIRED_MUTATION_STATES,
   REQUIRED_READ_STATES,
   REQUIRED_USER_STATES,
+  findBackendDeliveryPaths,
+  hasDirectClientAuthoritySignals,
   isBackendDeliveryPath,
   parseFunctionExports,
   parseFunctionExportSegments,
@@ -170,10 +172,14 @@ describe("capability surfacing delivery gate", () => {
     expect(isBackendDeliveryPath("src/hooks/useFutureCustomerMutation.js")).toBe(true);
     expect(isBackendDeliveryPath("src/context/FutureAuthorityContext.tsx")).toBe(true);
     expect(isBackendDeliveryPath("src/services/futureAuthorityClient.ts")).toBe(true);
+    expect(isBackendDeliveryPath("src/future-data/futureAuthorityGateway.ts")).toBe(true);
+    expect(isBackendDeliveryPath("src/data/futureCommercialPolicy.js")).toBe(true);
     expect(isBackendDeliveryPath("src/context/WorkspaceNavigationContext.jsx")).toBe(false);
     expect(isBackendDeliveryPath("src/hooks/useBrowserLocation.js")).toBe(false);
     expect(isBackendDeliveryPath("src/hooks/useCommercialWorkspaceSnapshot.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/hooks/useWorkspaceRouteHeadingFocus.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/__tests__/quoteStore.test.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/workspacePresentation.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/workspaceRoutes.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/statusSemantics.js")).toBe(false);
     expect(isBackendDeliveryPath("functions/package.json")).toBe(false);
@@ -185,6 +191,43 @@ describe("capability surfacing delivery gate", () => {
       "functions/index.js#first",
       "functions/index.js#second"
     ]);
+  });
+
+  test("discovers client authority in future source folders while excluding presentation surfaces", () => {
+    expect(findBackendDeliveryPaths([
+      "src/components/FutureCard.jsx",
+      "src/new-runtime/FutureAuthority.js",
+      "src/future-data/FutureRepository.ts",
+      "src/hooks/useWorkspaceRouteHeadingFocus.js",
+      "src/lib/workspacePresentation.js"
+    ])).toEqual([
+      "src/new-runtime/FutureAuthority.js",
+      "src/future-data/FutureRepository.ts"
+    ]);
+  });
+
+  test("does not let a reviewed presentation exclusion hide newly introduced direct authority", () => {
+    const directAuthority = [
+      'import { doc, updateDoc } from "firebase/firestore";',
+      "export async function focusAndWrite(db, quoteId) {",
+      "  await updateDoc(doc(db, 'quotes', quoteId), { focused: true });",
+      "}"
+    ].join("\n");
+    const commentsAndStrings = [
+      '// import { updateDoc } from "firebase/firestore";',
+      'const example = "updateDoc(doc(db, id), payload)";',
+      "export function focusOnly() { return true; }"
+    ].join("\n");
+
+    expect(hasDirectClientAuthoritySignals(directAuthority)).toBe(true);
+    expect(hasDirectClientAuthoritySignals(commentsAndStrings)).toBe(false);
+    expect(findBackendDeliveryPaths([
+      "src/hooks/useWorkspaceRouteHeadingFocus.js",
+      "src/lib/workspacePresentation.js"
+    ], {
+      pathExists: () => true,
+      readPath: (file) => file.includes("HeadingFocus") ? directAuthority : commentsAndStrings
+    })).toEqual(["src/hooks/useWorkspaceRouteHeadingFocus.js"]);
   });
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
@@ -597,7 +640,17 @@ describe("capability surfacing delivery gate", () => {
 
     for (const mutationSource of [
       "exports.getExampleCapability = onCall(async () => { await db.collection('quotes').doc('quote-1').set({ active: true }); });",
-      "exports.getExampleCapability = onCall(async () => { await snapshot.ref.update({ active: true }); });"
+      "exports.getExampleCapability = onCall(async () => { await snapshot.ref.update({ active: true }); });",
+      [
+        "exports.getExampleCapability = onCall(async () => {",
+        "  await admin.firestore()",
+        "    .collection('quotes')",
+        "    .doc('quote-1')",
+        "    .set({ active: true });",
+        "});"
+      ].join("\n"),
+      "exports.getExampleCapability = onCall(async () => { await setDoc(doc(db, 'quotes', 'quote-1'), { active: true }); });",
+      "exports.getExampleCapability = onCall(async () => { const batch = writeBatch(db); batch.update(targetRef, { active: true }); await batch.commit(); });"
     ]) {
       const chainedWriteErrors = validateCapabilitySurfacing({
         changedFiles: changedFiles(),
@@ -924,32 +977,35 @@ describe("capability surfacing delivery gate", () => {
 
     const sharedHelperPath = "functions/exampleSharedHelper.js";
     const userRelevantExport = `${backendPath}#getExampleCapability`;
-    const userRelevantWithHelper = userContract({
-      backendPaths: [backendPath, sharedHelperPath],
-      affectedBackendExports: [userRelevantExport]
-    });
-    expect(validateCapabilitySurfacing({
-      changedFiles: changedFiles([sharedHelperPath]),
-      manifest: manifest(userRelevantWithHelper),
-      baseManifest: { schemaVersion: 1, catalogVersion: 0, contracts: [] },
-      pathExists: () => true,
-      readPath: readFixturePath,
-      currentBackendExports: [userRelevantExport],
-      baseBackendExports: [userRelevantExport]
-    })).toEqual([]);
+    for (const capabilityKind of ["read_surface", "mutation_surface", "mixed_surface"]) {
+      const userRelevantWithHelper = userContract({
+        capabilityKind,
+        backendPaths: [backendPath, sharedHelperPath],
+        affectedBackendExports: [userRelevantExport]
+      });
+      expect(validateCapabilitySurfacing({
+        changedFiles: changedFiles([sharedHelperPath]),
+        manifest: manifest(userRelevantWithHelper),
+        baseManifest: { schemaVersion: 1, catalogVersion: 0, contracts: [] },
+        pathExists: () => true,
+        readPath: readFixturePath,
+        currentBackendExports: [userRelevantExport],
+        baseBackendExports: [userRelevantExport]
+      })).toEqual([]);
 
-    const userRelevantMissingImpacts = validateCapabilitySurfacing({
-      changedFiles: changedFiles([sharedHelperPath]),
-      manifest: manifest({ ...userRelevantWithHelper, affectedBackendExports: [] }),
-      baseManifest: { schemaVersion: 1, catalogVersion: 0, contracts: [] },
-      pathExists: () => true,
-      readPath: readFixturePath,
-      currentBackendExports: [userRelevantExport],
-      baseBackendExports: [userRelevantExport]
-    });
-    expect(userRelevantMissingImpacts.join("\n")).toMatch(
-      /shared Functions helper work requires affectedBackendExports/i
-    );
+      const userRelevantMissingImpacts = validateCapabilitySurfacing({
+        changedFiles: changedFiles([sharedHelperPath]),
+        manifest: manifest({ ...userRelevantWithHelper, affectedBackendExports: [] }),
+        baseManifest: { schemaVersion: 1, catalogVersion: 0, contracts: [] },
+        pathExists: () => true,
+        readPath: readFixturePath,
+        currentBackendExports: [userRelevantExport],
+        baseBackendExports: [userRelevantExport]
+      });
+      expect(userRelevantMissingImpacts.join("\n")).toMatch(
+        /shared Functions helper work requires affectedBackendExports/i
+      );
+    }
 
     const nonFunctionsBackendPath = "src/lib/exampleCapability.js";
     const nonFunctionsOperational = {
