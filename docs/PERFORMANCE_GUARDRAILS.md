@@ -18,10 +18,23 @@ Measured metrics:
 - `largestJsChunkBytes`: largest single JavaScript asset in `dist/assets`
 
 Threshold policy:
-- Maximum allowed = baseline plus the allowance recorded in the baseline file.
-- The normal allowance is 5%. A temporary 5.5% branch allowance is active for
-  the customer-centered workspace convergence and is governed by
-  `docs/TECH_EXCEPTIONS.md`; the clean-main baseline is unchanged.
+- The clean-main maximum is the recorded baseline plus its normal 5% allowance.
+- A temporary exception, when present in
+  `docs/performance/bundle-exception.json`, supplies separate absolute ceilings
+  for aggregate JavaScript and the largest chunk. The guard accepts it only
+  when its ID is active and its pinned baseline date and metrics exactly match
+  `bundle-budget.json`.
+- The customer-centered workspace exception is currently capped at 2,331,934
+  aggregate JavaScript bytes and a 413,275-byte largest chunk. These are the
+  larger exact measurements from the August 9 disabled- and enabled-flag source
+  builds, so the exception provides no
+  additional growth headroom. Against the unchanged clean-main baseline, they
+  represent 334,569 bytes (16.75%) aggregate growth and 25,346 bytes (6.53%)
+  largest-chunk growth.
+- An active exception prevents `--update-baseline`; remove it before producing
+  a new clean-main baseline. Passing under an exception is branch budget
+  compliance, not Core Web Vitals, hosted, production, or human-acceptance
+  evidence.
 
 Regenerate baseline (intentional only):
 ```bash
@@ -32,12 +45,13 @@ npm run check:perf:bundle -- --update-baseline
 ```
 
 The current baseline was regenerated from the fully converged clean `main`
-checkout on August 6, 2026. It captures 1,997,365 total JavaScript bytes and a
+checkout on August 7, 2026. It captures 1,997,365 total JavaScript bytes and a
 387,929-byte largest chunk; the prior temporary 15% allowance was tightened to
 5% when that exception closed.
 
 Baseline updates must include a brief reason in PR notes.
-Run baseline updates only from a clean `main` checkout unless an exception is recorded.
+Run baseline updates only from a clean `main` checkout. A temporary exception
+must stay separate from the baseline and must be removed before recalibration.
 
 ## CWV Smoke Policy
 Lighthouse CI config: `.lighthouserc.json`
