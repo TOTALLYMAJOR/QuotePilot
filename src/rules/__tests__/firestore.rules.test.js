@@ -100,6 +100,7 @@ const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
   ["organizations", "org-a", "commercialChangeApprovalRequests", "ccar-request-1"],
   ["organizations", "org-a", "commercialChangeAuthorizations", "cca-receipt-1"],
   ["organizations", "org-a", "commercialChangeApplyReceipts", "ccp-receipt-1"],
+  ["organizations", "org-a", "commercialChangeApplyOutcomes", "ccor-receipt-1"],
   ["organizations", "org-a", "commercialChangeReconciliationReceipts", "ccr-receipt-1"],
   ["organizations", "org-a", "commercialDependencyState", "q1"],
   [

@@ -26,6 +26,7 @@ describe("Commercial Change Authority callable integration", () => {
       "requestCommercialQuoteChangeAuthorization",
       "getCommercialQuoteChangeAuthorizationState",
       "authorizeCommercialQuoteChange",
+      "reconcileCommercialQuoteChangeApplyOutcome",
       "getCommercialDependencyState",
       "reconcileCommercialDependencyState"
     ]) {
@@ -43,6 +44,13 @@ describe("Commercial Change Authority callable integration", () => {
     expect(simulation).toContain("tx.create(receiptRef");
     expect(simulation).toContain("simulation: projectCommercialChangeSimulation");
 
+    const approvalRequest = sourceBetween(
+      "exports.requestCommercialQuoteChangeAuthorization =",
+      "exports.getCommercialQuoteChangeAuthorizationState ="
+    );
+    expect(approvalRequest).toContain("normalizeText(existing.requestId).toLowerCase() !== requestId");
+    expect(approvalRequest).toContain("different request or immutable simulation evidence");
+
     const authorization = sourceBetween(
       "exports.authorizeCommercialQuoteChange =",
       "function commercialChangeDecisionMetadata"
@@ -51,6 +59,17 @@ describe("Commercial Change Authority callable integration", () => {
     expect(authorization).toContain("assertCommercialChangeSimulationCurrent({");
     expect(authorization).toContain("commercialChangeAuthority.authorize({");
     expect(authorization).toContain('state: "authorized"');
+
+    const outcome = sourceBetween(
+      "exports.reconcileCommercialQuoteChangeApplyOutcome =",
+      "function commercialChangeDecisionMetadata"
+    );
+    expect(outcome).toContain("commercialChangeAuthority.applyIdentity({");
+    expect(outcome).toContain("tx.get(applyRef)");
+    expect(outcome).toContain("tx.get(outcomeRef)");
+    expect(outcome).toContain("commercialChangeAuthority.reconcileApplyOutcome({");
+    expect(outcome).toContain("tx.create(outcomeRef");
+    expect(outcome).toContain("projectCommercialChangeApplyCommit(applyReceipt)");
   });
 
   test("keeps enforcement server-dormant until both independent gates are true", () => {
@@ -69,6 +88,8 @@ describe("Commercial Change Authority callable integration", () => {
     );
     expect(update).toContain('if (enforcement.authorityState === "enforced")');
     expect(update).toContain("persistCommercialChangeApply({");
+    expect(update).toContain("tx.get(refs.applyOutcomesRef.doc(applyOutcomeIdentity.outcomeReceiptId))");
+    expect(update).toContain("was reconciled as not committed and is permanently fenced");
     const persistence = sourceBetween(
       "function persistCommercialChangeApply",
       "async function updateTrustedQuoteDraftInternal"
@@ -115,6 +136,10 @@ describe("Commercial Change Authority callable integration", () => {
     expect(callable).toContain("openInvalidationCount");
     expect(callable).toContain("Generate a current Kitchen BEO");
     expect(callable).toContain("noArtifactEvidence(");
+    expect(callable).toContain("const requestFingerprint = commercialReconciliationRequestFingerprint({");
+    expect(callable).toContain("reconciliationSnap.data()?.requestFingerprint");
+    expect(callable).toContain("requestFingerprint,");
+    expect(callable).toContain("resolutionNote");
   });
 
   test("keeps every authority collection and the tenant promotion setting browser-denied", () => {
@@ -123,6 +148,7 @@ describe("Commercial Change Authority callable integration", () => {
       "commercialChangeApprovalRequests",
       "commercialChangeAuthorizations",
       "commercialChangeApplyReceipts",
+      "commercialChangeApplyOutcomes",
       "commercialChangeReconciliationReceipts",
       "commercialDependencyState"
     ]) {

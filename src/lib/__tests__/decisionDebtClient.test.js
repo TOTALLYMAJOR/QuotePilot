@@ -95,6 +95,7 @@ function debtItem(overrides = {}) {
     },
     rawScore: 375,
     score: 60,
+    scoreState: "KNOWN",
     urgency: "high",
     explanation: [
       "2 graph dependencies remain exposed.",
@@ -229,6 +230,84 @@ describe("Decision Debt client read contract", () => {
       quoteId: "quote-42",
       snapshot: { authority: "server_derived", predictive: false }
     });
+  });
+
+  test("accepts explicit UNKNOWN priority without inventing exposure, score, or urgency", async () => {
+    const input = { organizationId: "org-read-unknown", limit: 50 };
+    const known = debtItem();
+    const unknown = debtItem({
+      commercialExposureCents: null,
+      factors: {
+        ...known.factors,
+        exposure: {
+          ...known.factors.exposure,
+          value: null,
+          bucket: "unavailable",
+          known: false,
+          cents: null
+        }
+      },
+      rawScore: null,
+      score: null,
+      scoreState: "UNKNOWN",
+      urgency: null
+    });
+    mockState.callable.mockResolvedValue({
+      data: readResponse(input, { snapshot: snapshot([unknown]) })
+    });
+
+    await expect(getDecisionDebtSnapshot(input)).resolves.toMatchObject({
+      snapshot: {
+        items: [{
+          commercialExposureCents: null,
+          rawScore: null,
+          score: null,
+          scoreState: "UNKNOWN",
+          urgency: null,
+          factors: { exposure: { value: null, known: false, cents: null } }
+        }]
+      }
+    });
+  });
+
+  test("rejects UNKNOWN priority carrying a guessed exposure factor or score", async () => {
+    const input = { organizationId: "org-read-unknown-invalid", limit: 50 };
+    const known = debtItem();
+    const unknown = debtItem({
+      commercialExposureCents: null,
+      factors: {
+        ...known.factors,
+        exposure: {
+          ...known.factors.exposure,
+          value: 1,
+          bucket: "unavailable",
+          known: false,
+          cents: null
+        }
+      },
+      rawScore: null,
+      score: null,
+      scoreState: "UNKNOWN",
+      urgency: null
+    });
+    mockState.callable.mockResolvedValueOnce({
+      data: readResponse(input, { snapshot: snapshot([unknown]) })
+    });
+    await expect(getDecisionDebtSnapshot(input)).rejects.toThrow(/must not carry a guessed factor/i);
+
+    mockState.callable.mockResolvedValueOnce({
+      data: readResponse(input, {
+        snapshot: snapshot([{
+          ...unknown,
+          factors: {
+            ...unknown.factors,
+            exposure: { ...unknown.factors.exposure, value: null }
+          },
+          score: 1
+        }])
+      })
+    });
+    await expect(getDecisionDebtSnapshot(input)).rejects.toThrow(/must not carry a guessed score/i);
   });
 
   test("rejects browser-supplied candidate contents and out-of-range reads", async () => {

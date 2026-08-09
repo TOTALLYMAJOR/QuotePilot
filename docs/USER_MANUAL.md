@@ -101,14 +101,16 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   Selecting a quote or payment row opens the authoritative quote record. When
   a row has a stable `customerId`, selecting the customer name opens Customer
   360 instead.
-- Home uses the existing quote-history and workflow-attention contracts. It
-  introduces no new read contracts or data sources, creates no records, and
-  cannot request payment, approve a request, or change a quote's status by
-  itself.
+- Home uses the existing quote-history, workflow-attention, and bounded Revenue
+  Autopilot operations contracts. The third read projects unread customer-reply
+  Attention into the shared queue; it introduces no new read contract or data
+  source, creates no records, and cannot request payment, approve a request, or
+  change a quote's status by itself.
 - `Staff read context` identifies the organization profile name and exact tenant key, the Workflow
-  Attention plus latest-200 quote-history contract, the read source, and the
-  time when both reads last completed together. `Incomplete read` means only
-  one contract completed; `Last complete read retained` means a later refresh
+  Attention, latest-200 quote-history, and latest-50 unread customer-reply
+  Attention contracts, the read source, and the time when all three reads last
+  completed together. `Incomplete read` means at least one contract did not
+  complete; `Last complete read retained` means a later refresh
   failed while older complete data remains visible; `Bounded snapshot` means
   Home reached its 200-record quote-history cap. The timestamp describes the
   browser's read, not when every record changed. Home cards and totals are a
@@ -167,6 +169,13 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   delivery attempt. Creating or reviewing the draft sends no message and does
   not accept, book, or collect payment. If the outcome is uncertain, reconcile
   the same request; do not create another rebook.
+- Home and Workflow also scan the latest 200 current quote records for booked
+  events whose first anniversary falls in the tenant-local week. `Repeat-event
+  review` is a read-only reminder, not accepted-version verification or a new
+  lead. If the quote read reached its bound, the cue says the scan is incomplete.
+  Select `Review rebook` or `Review exact-version rebook` to open that stable
+  customer's Customer 360 record. QuotePilot performs the immutable-version
+  check there; the central queue never creates a draft by itself.
 - A successfully governed booking also creates one internal `Closeout review
   record` for seven calendar days after the event. If it says `Configuration
   blocked`, an admin must set `Pricing` -> `Quote Meta` -> `Business time zone`;
@@ -546,12 +555,14 @@ unchanged.
   receipt, dependency state, and named invalidations. It does not regenerate,
   reconcile, publish, deliver, accept, book, charge, pay, or complete anything.
 - `Submitting` means do not repeat the action. `Outcome uncertain` is not a
-  saved quote and must remain unresolved. The current source does not yet offer
-  a dedicated exact apply-outcome read/reconcile control, so do not repeat,
-  reset, or describe the change as committed after transport ambiguity. That
-  reliability contract must ship before either enforcement gate is enabled. A
-  definitive server rejection may be reset only before preparing a corrected
-  new request.
+  saved quote. Select `Reconcile exact outcome` to retain the original apply
+  identity: QuotePilot either validates its deterministic apply receipt and
+  immutable target version, or records a `not committed` receipt that fences
+  the timed-out request from committing later. Only then may you open the
+  committed quote or start a fresh simulation. If the active source changed,
+  open the authoritative quote before further editing. A second transport
+  ambiguity keeps the same reconciliation identity and never resubmits the
+  quote edit.
 
 ## Commercial Dependency State and reconciliation
 
@@ -577,10 +588,13 @@ unchanged.
 - Open `Workflow` and select the Decision Debt view. It appears only from
   server-owned unresolved dependency state; an empty result does not infer that
   every operational task or customer decision is complete.
-- Each item shows the exact quote/source revision, event and lock dates,
-  affected dependencies, a bounded 0–100 score, and the deterministic factors:
-  dependency weight × event proximity × commercial-exposure factor ×
-  reversibility. Missing authority stays unavailable instead of becoming zero.
+- Each item shows the exact quote/source revision, event and lock dates, and
+  affected dependencies. When authoritative commercial exposure exists, it also
+  shows a bounded 0–100 score and the deterministic factors: dependency weight
+  × event proximity × commercial-exposure factor × reversibility. When that
+  exposure is unavailable, the UI says `Priority unknown` and leaves exposure,
+  raw score, normalized score, and urgency unset instead of guessing a factor or
+  coercing missing authority to zero.
   Decision Debt is priority, not predictive AI, likelihood, a receivable,
   recovered revenue, or accounting revenue.
 - Any same-tenant staff member may review priority and open the exact quote.
@@ -598,10 +612,12 @@ unchanged.
   the persisted operations surface are deliberately separate. Operations reads
   at most 100 private job projections and 50 unread-reply Attention projections
   and shows source, capture time, bounds/truncation, policy, and provider
-  outcomes. A failed refresh retains prior evidence only as stale.
-- Review the three visible activation families—release/runtime, tenant policy,
-  and email provider—plus each lane. The server also keeps runtime enablement
-  and outbound-send enablement as independent default-off release gates. A
+  outcomes. The Attention bound contains only currently open unread customer-
+  reply records; resolved history remains private and the independent job-history
+  bound is unchanged. A failed refresh retains prior evidence only as stale.
+- Review the four visible activation families—release/runtime, tenant policy,
+  outbound sends, and email provider—plus each lane. Runtime enablement and
+  outbound-send enablement remain independent default-off release gates. A
   configured policy, prepared job, or locally passing test does not imply that
   either gate, provider, scheduler, or production delivery is active.
 - The five lanes are Quote follow-up, Deposit reminder, Final-balance reminder,
@@ -618,16 +634,30 @@ unchanged.
 - Staff may select one authoritative quote and `Prepare governed records` only
   when the current bounded operations read permits it. The server reloads
   canonical evidence and creates, updates, blocks, or stops stable occurrences.
-  A materialization receipt does not prove scheduling execution or a send.
+  The receipt shows bounded new/updated counts and one outcome for each email
+  lane. When outbound sends or the provider are off, eligible records may still
+  be prepared and appear as `Preparation only`; dispatch remains disabled. A
+  materialization receipt does not prove scheduling execution or a send.
 - Job states remain distinct: scheduled, dispatch lease, bounded retry,
   ambiguous outcome, provider accepted, delivered, bounced, complained,
   stopped, and definite failure. `Provider accepted` is not delivery; delivery
   is not portal view. Reconcile an ambiguous job with its exact frozen provider
-  identity rather than creating a replacement.
+  identity rather than creating a replacement. Reconciliation reloads current
+  quote, stop, customer-control, tenant, send-gate, and provider authority before
+  any provider retry. If authority is no longer clear, the retry is withheld and
+  the original ambiguous/provider evidence remains visible instead of becoming
+  a false stopped or failed outcome. Workflow labels that receipt `Dispatch
+  withheld` and states that no provider acceptance or delivery was established;
+  a true provider-accepted receipt is labeled separately and still does not
+  establish delivery, customer viewing, payment, or recovered revenue.
 - An unread customer reply becomes Attention only for the exact latest
   quote-scoped customer message. `Open conversation` and `Acknowledge exact
   reply` are separate actions. Acknowledgement records an internal receipt; it
-  does not prove that staff read or answered the message content.
+  does not prove that staff read or answered the message content. A newer
+  customer message supersedes the older open item, a staff reply resolves the
+  prior item, and the bounded scheduler repairs an exact latest-message item
+  that was missed while the lane was unavailable. Message histories remain in
+  their quote conversations.
 - Customer 360 shows `Customer email controls`. Any staff member may review the
   safe consent/subscription projection; only tenant administrators may record
   exact customer-specific evidence. Consent and subscription are separate.

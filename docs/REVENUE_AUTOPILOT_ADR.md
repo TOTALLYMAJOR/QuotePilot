@@ -30,8 +30,8 @@ flowchart LR
   P[Tenant policy, consent, quiet hours, templates] --> E
   E --> M[Idempotent occurrence materialization]
   M --> Q[Private job and Attention records]
-  Q --> D{Global and send gates?}
-  D -->|No| X[Dormant or blocked]
+  Q --> D{Send gate and provider ready?}
+  D -->|No| X[Prepared; dispatch dormant]
   D -->|Yes| R[Resend dispatch lease]
   R --> A[Provider accepted]
   A --> W[Signed webhook: delivered, bounced, complained]
@@ -90,6 +90,8 @@ delivery state.
   hash; it does not expose a customer account or portal token.
 - Staff can inspect bounded policy, jobs, provider outcomes, Attention, and
   mutation receipts without reading provider/customer secrets.
+- The runtime gate may permit deterministic preparation while the independent
+  send gate/provider remain off; this creates no provider claim.
 
 ### Negative
 
@@ -157,6 +159,16 @@ gates by implication.
 - Stop or block jobs when scope expires or authority changes. The post-event
   lane may outlive portal expiry, but only while its exact accepted revision and
   private completed closeout remain valid; reopening the closeout self-stops it.
+- Apply one evidence-preserving stop transition across manual preparation,
+  scheduled preparation, and dispatch. A sending, provider-accepted, or
+  outcome-ambiguous record receives future-dispatch suppression without losing
+  its unresolved provider evidence.
+- Re-read canonical quote, stop, recipient, tenant, send, and provider authority
+  before an ambiguous provider retry. Withhold the retry when any current gate
+  is no longer clear.
+- Bind unread-reply Attention to the exact latest message: supersede the older
+  customer item, resolve it when staff becomes the latest actor, and let the
+  bounded scheduler repair a missed exact latest-message item.
 - Keep provider accepted, delivered, bounced, and complained as distinct states.
 - Make every customer control and unsubscribe mutation idempotent and
   receipt-safe; ambiguous outcomes reconcile the same request identity.

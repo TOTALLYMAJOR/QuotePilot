@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getQuoteHistory, getWorkflowAttentionSnapshot } from "../lib/quoteStore";
-import { buildWorkflowAttentionSummary } from "../lib/quoteWorkflow";
+import {
+  buildWorkflowAttentionSummary,
+  mergeUnreadReplyAttention
+} from "../lib/quoteWorkflow";
+import {
+  mergeAnniversaryRebookingAttention,
+  resolveAnniversaryAttentionCalendar
+} from "../lib/anniversaryRebookingAttention";
 
 const REFRESH_TTL_MS = 60_000;
 const COMMAND_CENTER_HISTORY_LIMIT = 200;
+const COMMAND_CENTER_UNREAD_REPLY_LIMIT = 50;
 
 function emptyReadState() {
   return { status: "idle", source: "", error: "" };
@@ -33,7 +41,8 @@ function emptySnapshot({ loading = false } = {}) {
     source: "",
     reads: {
       attention: emptyReadState(),
-      history: emptyReadState()
+      history: emptyReadState(),
+      unreadReplies: emptyReadState()
     },
     partial: false,
     stale: false,
@@ -60,19 +69,48 @@ function settledReadState(result) {
   };
 }
 
+function emptyUnreadReplyRead({ boundsKnown = false } = {}) {
+  return {
+    source: "",
+    attention: [],
+    bounds: { complete: true, truncated: false, known: boundsKnown }
+  };
+}
+
+function sourceFamily(value) {
+  const source = String(value || "").trim().toLowerCase();
+  if (source.startsWith("firebase")) return "firebase";
+  return source;
+}
+
+async function readUnreadReplyAttention(organizationId) {
+  const { getRevenueAutopilotOperations } = await import("../lib/revenueAutopilotClient");
+  return getRevenueAutopilotOperations({
+    organizationId,
+    jobLimit: 1,
+    attentionLimit: COMMAND_CENTER_UNREAD_REPLY_LIMIT
+  });
+}
+
 export function buildCommercialSnapshotResult({
   current = emptySnapshot(),
   attentionResult,
   historyResult,
+  unreadReplyResult = { status: "fulfilled", value: emptyUnreadReplyRead() },
+  tenantTimeZone = "",
   nowMs = Date.now()
 } = {}) {
   const attentionRead = settledReadState(attentionResult);
   const historyRead = settledReadState(historyResult);
-  const errors = [attentionRead.error, historyRead.error].filter(Boolean);
-  const requestSucceeded = attentionResult.status === "fulfilled"
-    && historyResult.status === "fulfilled";
-  const partial = attentionResult.status !== historyResult.status;
-  const successfulSources = [attentionRead.source, historyRead.source].filter(Boolean);
+  const unreadRepliesRead = settledReadState(unreadReplyResult);
+  const readResults = [attentionResult, historyResult, unreadReplyResult];
+  const errors = [attentionRead.error, historyRead.error, unreadRepliesRead.error].filter(Boolean);
+  const requestSucceeded = readResults.every((result) => result.status === "fulfilled");
+  const partial = !requestSucceeded
+    && readResults.some((result) => result.status === "fulfilled");
+  const successfulSources = [attentionRead.source, historyRead.source, unreadRepliesRead.source]
+    .map(sourceFamily)
+    .filter(Boolean);
   const sourceSet = new Set(successfulSources);
   const source = sourceSet.size > 1
     ? "mixed"
@@ -80,6 +118,44 @@ export function buildCommercialSnapshotResult({
   const loadedAt = requestSucceeded ? nowMs : current.loadedAt;
   const hasPriorCompleteRead = Number(current.loadedAt) > 0;
   const retainCompleteSnapshot = !requestSucceeded && hasPriorCompleteRead;
+  const freshQuotes = historyResult.status === "fulfilled"
+    ? historyResult.value.quotes
+    : attentionResult.status === "fulfilled"
+      ? attentionResult.value.quotes
+      : current.quotes;
+  const quoteAttentionSummary = attentionResult.status === "fulfilled"
+    ? buildWorkflowAttentionSummary(attentionResult.value.quotes)
+    : current.attentionSummary || buildWorkflowAttentionSummary([]);
+  const anniversaryAttentionSummary = historyResult.status === "fulfilled"
+    ? mergeAnniversaryRebookingAttention(quoteAttentionSummary, {
+        quotes: freshQuotes,
+        calendarContext: resolveAnniversaryAttentionCalendar({
+          instant: new Date(nowMs),
+          tenantTimeZone
+        }),
+        sourceLimit: COMMAND_CENTER_HISTORY_LIMIT,
+        sourceTruncated: historyResult.value?.truncated === true
+      })
+    : quoteAttentionSummary;
+  const freshAttentionSummary = unreadReplyResult.status === "fulfilled"
+    ? mergeUnreadReplyAttention(anniversaryAttentionSummary, {
+        attention: unreadReplyResult.value?.attention,
+        quotes: freshQuotes
+      })
+    : anniversaryAttentionSummary;
+  const freshHistoryTruncated = historyResult.status === "fulfilled"
+    ? historyResult.value.truncated === true
+    : false;
+  const freshUnreadReplyCount = unreadReplyResult.status === "fulfilled"
+    && Array.isArray(unreadReplyResult.value?.attention)
+    ? unreadReplyResult.value.attention.length
+    : 0;
+  const freshUnreadReplyTotal = Number(unreadReplyResult.value?.bounds?.totalAttention);
+  const freshUnreadRepliesTruncated = unreadReplyResult.status === "fulfilled"
+    && Number.isSafeInteger(freshUnreadReplyTotal)
+    && freshUnreadReplyTotal > freshUnreadReplyCount;
+  const freshUnreadReplyBoundsKnown = unreadReplyResult.status === "fulfilled"
+    && unreadReplyResult.value?.bounds?.known !== false;
 
   return {
     loading: false,
@@ -87,15 +163,14 @@ export function buildCommercialSnapshotResult({
     source: retainCompleteSnapshot ? current.source : source,
     reads: {
       attention: attentionRead,
-      history: historyRead
+      history: historyRead,
+      unreadReplies: unreadRepliesRead
     },
     partial,
     stale: !requestSucceeded && Number(current.loadedAt) > 0,
     attentionSummary: retainCompleteSnapshot
       ? current.attentionSummary
-      : attentionResult.status === "fulfilled"
-      ? buildWorkflowAttentionSummary(attentionResult.value.quotes)
-      : current.attentionSummary,
+      : freshAttentionSummary,
     quotes: retainCompleteSnapshot
       ? current.quotes
       : historyResult.status === "fulfilled"
@@ -103,12 +178,12 @@ export function buildCommercialSnapshotResult({
       : current.quotes,
     truncated: retainCompleteSnapshot
       ? current.truncated
-      : historyResult.status === "fulfilled"
-      ? historyResult.value.truncated === true
-      : current.truncated,
+      : freshHistoryTruncated || freshUnreadRepliesTruncated,
     truncationKnown: retainCompleteSnapshot
       ? current.truncationKnown === true
-      : historyResult.status === "fulfilled" || current.truncationKnown === true,
+      : historyResult.status === "fulfilled"
+        || freshUnreadReplyBoundsKnown
+        || current.truncationKnown === true,
     loadedAt
   };
 }
@@ -116,6 +191,8 @@ export function buildCommercialSnapshotResult({
 export function useCommercialWorkspaceSnapshot({
   enabled = true,
   includeHistory = true,
+  includeRevenueAttention = includeHistory,
+  tenantTimeZone = "",
   organizationId = ""
 } = {}) {
   const normalizedOrganizationId = String(organizationId || "").trim();
@@ -154,7 +231,8 @@ export function useCommercialWorkspaceSnapshot({
           error: "",
           reads: {
             attention: loadingReadState(),
-            history: loadingReadState()
+            history: loadingReadState(),
+            unreadReplies: loadingReadState()
           },
           partial: false,
           stale: false
@@ -166,8 +244,11 @@ export function useCommercialWorkspaceSnapshot({
             organizationId: normalizedOrganizationId,
             limitCount: COMMAND_CENTER_HISTORY_LIMIT
           })
-        : Promise.resolve({ source: "", quotes: [], truncated: false })
-    ]).then(([attentionResult, historyResult]) => {
+        : Promise.resolve({ source: "", quotes: [], truncated: false }),
+      includeRevenueAttention
+        ? readUnreadReplyAttention(normalizedOrganizationId)
+        : Promise.resolve(emptyUnreadReplyRead())
+    ]).then(([attentionResult, historyResult, unreadReplyResult]) => {
       if (!generationRef.current.isCurrent(generation)) return;
       const nowMs = Date.now();
       setState((current) => {
@@ -175,6 +256,8 @@ export function useCommercialWorkspaceSnapshot({
           current,
           attentionResult,
           historyResult,
+          unreadReplyResult,
+          tenantTimeZone,
           nowMs
         });
         if (next.loadedAt > 0) loadedAtRef.current = next.loadedAt;
@@ -185,7 +268,14 @@ export function useCommercialWorkspaceSnapshot({
     return () => {
       generationRef.current.begin();
     };
-  }, [enabled, includeHistory, normalizedOrganizationId, refreshToken]);
+  }, [
+    enabled,
+    includeHistory,
+    includeRevenueAttention,
+    normalizedOrganizationId,
+    refreshToken,
+    tenantTimeZone
+  ]);
 
   useEffect(() => {
     if (!enabled || !normalizedOrganizationId || typeof window === "undefined") return undefined;

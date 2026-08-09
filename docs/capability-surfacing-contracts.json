@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 5,
+  "catalogVersion": 6,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -1212,19 +1212,20 @@
     },
     {
       "id": "exact-version-rebook-and-delivery-gate",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Customer 360 can request one deterministic draft from an exact booked and accepted immutable version, preserve stable customer identity, reprice from the current catalog, and block customer delivery until staff saves a reviewed current-or-future event date.",
+      "summary": "Home and Workflow surface bounded tenant-calendar anniversary cues that hand staff to Customer 360, where one deterministic draft can be requested from an exact booked and accepted immutable version, stable customer identity is preserved, current-catalog repricing is authoritative, and customer delivery remains blocked until staff saves a reviewed current-or-future event date.",
       "backendPaths": [
         "functions/index.js",
         "functions/quoteCreation.js",
         "functions/rebookQuoteDraft.js",
         "scripts/rebook-quote-emulator-acceptance.mjs",
+        "src/lib/anniversaryRebookingAttention.js",
         "src/lib/customerRebookingRadar.js",
         "src/lib/rebookQuoteClient.js"
       ],
@@ -1240,10 +1241,13 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
+        "src/components/CommandCenterHome.jsx",
         "src/components/CustomerRebookDraftAction.jsx",
         "src/components/CustomerRevenueOpportunities.jsx",
         "src/components/CustomerWorkspaceView.jsx",
-        "src/components/QuoteHistoryModal.jsx"
+        "src/components/QuoteHistoryModal.jsx",
+        "src/components/SalesWorkflowModal.jsx",
+        "src/hooks/useCommercialWorkspaceSnapshot.js"
       ],
       "entryPointLocators": [
         {
@@ -1253,13 +1257,24 @@
         {
           "path": "src/components/CustomerRebookDraftAction.jsx",
           "locator": "data-capability-id=\"cwf-11-rebook-staff-review\""
+        },
+        {
+          "path": "src/components/CommandCenterHome.jsx",
+          "locator": "\"data-capability-id\": \"cwf-11-central-anniversary-attention\""
+        },
+        {
+          "path": "src/components/SalesWorkflowModal.jsx",
+          "locator": "data-capability-action=\"open-exact-version-rebook-review\""
         }
       ],
       "testPaths": [
         "e2e/customer-centered-workspace.spec.js",
+        "src/components/__tests__/commandCenterAttentionRouting.test.jsx",
         "src/components/__tests__/customerRebookDraftAction.test.jsx",
         "src/components/__tests__/customerRevenueOpportunities.test.jsx",
         "src/components/__tests__/quoteHistoryPermissions.test.jsx",
+        "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+        "src/lib/__tests__/anniversaryRebookingAttention.test.js",
         "src/lib/__tests__/customerRebookingRadar.test.js",
         "src/lib/__tests__/quoteCreation.server.test.js",
         "src/lib/__tests__/rebookQuoteClient.test.js",
@@ -1269,6 +1284,18 @@
         {
           "path": "e2e/customer-centered-workspace.spec.js",
           "locator": "Customer 360 surfaces an exact-version anniversary rebook cue without inventing a local draft"
+        },
+        {
+          "path": "src/lib/__tests__/anniversaryRebookingAttention.test.js",
+          "locator": "turns only a recorded booked event from this week last year into a verification cue"
+        },
+        {
+          "path": "src/components/__tests__/commandCenterAttentionRouting.test.jsx",
+          "locator": "opens the stable customer record for an anniversary cue without creating a draft"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "surfaces a bounded repeat-event cue and opens Customer 360 for exact-version verification"
         },
         {
           "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
@@ -1306,7 +1333,7 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "CWF-11 exact-version rebook draft:"
+          "locator": "CWF-11 anniversary Attention and exact-version rebook draft:"
         },
         {
           "path": "docs/USER_MANUAL.md",
@@ -1314,7 +1341,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The Customer 360 anniversary entry, exact immutable source labels, deterministic submission identity, uncertainty and reconciliation copy, new-draft handoff, staff review banner, and delivery gate were reviewed together.",
+      "surfaceReviewNote": "The bounded Home and Workflow anniversary cues, tenant-calendar and truncation evidence, stable Customer 360 handoff, Customer 360 anniversary entry, exact immutable source labels, deterministic submission identity, uncertainty and reconciliation copy, new-draft handoff, staff review banner, and delivery gate were reviewed together.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -1360,11 +1387,11 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can create or reconcile exactly one review-required rebook draft and open it for editing, while no message, acceptance, booking, payment, or revenue outcome is inferred and outbound delivery remains blocked until trusted review evidence is saved."
+      "safeOutcome": "Staff can discover a bounded anniversary cue, open the stable Customer 360 record, create or reconcile exactly one review-required rebook draft, and open it for editing, while the cue itself verifies no accepted source and no message, lead, acceptance, booking, payment, or revenue outcome is inferred; outbound delivery remains blocked until trusted review evidence is saved."
     },
     {
       "id": "authoritative-post-event-closeout",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -1398,6 +1425,7 @@
         "src/components/CustomerWorkspaceView.jsx",
         "src/components/PostEventCloseoutReviewAction.jsx",
         "src/components/SalesWorkflowModal.jsx",
+        "src/lib/workspaceRoutes.js",
         "src/styles.css"
       ],
       "entryPointLocators": [
@@ -1421,6 +1449,7 @@
         "src/lib/__tests__/postEventCloseout.server.test.js",
         "src/lib/__tests__/postEventCloseoutClient.test.js",
         "src/lib/__tests__/quoteWorkflow.test.js",
+        "src/lib/__tests__/workspaceRoutes.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
@@ -1443,6 +1472,10 @@
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
           "locator": "post-event closeout records and action receipts are callable-only"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceRoutes.test.js",
+          "locator": "round-trips every shipped workflow focus type without customer or quote contents"
         }
       ],
       "documentationPaths": [
@@ -1733,8 +1766,9 @@
         "staff",
         "administrators"
       ],
-      "summary": "Receipt-bound commercial change simulation, approval handoff, authorization, and atomic application are exposed inside the trusted quote-edit path; uncertain apply outcomes remain explicitly blocked pending a dedicated read-only reconciliation contract.",
+      "summary": "Receipt-bound commercial change simulation, approval handoff, authorization, atomic application, and exact transport-ambiguous outcome reconciliation are exposed inside the trusted quote-edit path; a proven absence is transactionally fenced against late commit.",
       "backendPaths": [
+        "firestore.rules",
         "functions/index.js",
         "functions/commercialChangeAuthority.js",
         "functions/commercialChangeImpactEvaluator.js",
@@ -1744,13 +1778,15 @@
         "functions/index.js#simulateCommercialQuoteChange",
         "functions/index.js#requestCommercialQuoteChangeAuthorization",
         "functions/index.js#getCommercialQuoteChangeAuthorizationState",
-        "functions/index.js#authorizeCommercialQuoteChange"
+        "functions/index.js#authorizeCommercialQuoteChange",
+        "functions/index.js#reconcileCommercialQuoteChangeApplyOutcome"
       ],
       "affectedBackendExports": [
         "functions/index.js#simulateCommercialQuoteChange",
         "functions/index.js#requestCommercialQuoteChangeAuthorization",
         "functions/index.js#getCommercialQuoteChangeAuthorizationState",
         "functions/index.js#authorizeCommercialQuoteChange",
+        "functions/index.js#reconcileCommercialQuoteChangeApplyOutcome",
         "functions/index.js#getCommercialDependencyState",
         "functions/index.js#reconcileCommercialDependencyState",
         "functions/index.js#updateQuoteDraft"
@@ -1769,7 +1805,9 @@
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
         "src/lib/__tests__/commercialChangeAuthority.server.test.js",
         "src/lib/__tests__/commercialChangeAuthorityClient.test.js",
-        "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js"
+        "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js",
+        "scripts/customer-centered-authority-emulator-acceptance.mjs"
       ],
       "testLocators": [
         {
@@ -1779,6 +1817,14 @@
         {
           "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
           "locator": "is mechanically bound to the trusted quote edit and authoritative pricing path"
+        },
+        {
+          "path": "src/lib/__tests__/commercialChangeAuthority.server.test.js",
+          "locator": "creates a definitive not-committed outcome without inventing apply evidence"
+        },
+        {
+          "path": "src/lib/__tests__/commercialChangeAuthorityClient.test.js",
+          "locator": "reconciles the exact request as committed and validates its apply projection"
         }
       ],
       "documentationPaths": [
@@ -1796,7 +1842,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The quote-edit simulation, staff approval handoff, administrator authorization, exact receipt application, request-identity lock, pre-apply uncertainty controls, definitive rejection, and recovery controls were reviewed together; post-commit apply uncertainty is retained and blocked because no read-only outcome lookup exists yet.",
+      "surfaceReviewNote": "The quote-edit simulation, staff approval handoff, administrator authorization, exact receipt application, request-identity lock, transport uncertainty, exact committed-receipt reconciliation, fenced not-committed recovery, changed-source handling, definitive rejection, and recovery controls were reviewed together.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -1842,7 +1888,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can simulate and route an exact commercial change, while only an authorized administrator can issue the bound authorization receipt required for atomic application. An uncertain apply disables repeat application and remains blocked; this source does not claim read-only apply-outcome reconciliation."
+      "safeOutcome": "Staff can simulate and route an exact commercial change, while only an authorized administrator can issue the bound authorization receipt required for atomic application. An uncertain apply is never resubmitted: exact reconciliation proves the immutable commit or atomically fences the request as not committed before a fresh simulation."
     },
     {
       "id": "commercial-dependency-state-and-reconciliation",
@@ -2003,7 +2049,7 @@
     },
     {
       "id": "trusted-kitchen-beo-authority",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -2025,7 +2071,8 @@
       "affectedBackendExports": [
         "functions/index.js#getKitchenBeoArtifactStatus",
         "functions/index.js#downloadKitchenBeoReceipt",
-        "functions/index.js#generateKitchenBeo"
+        "functions/index.js#generateKitchenBeo",
+        "functions/index.js#reconcileCommercialDependencyState"
       ],
       "frontendPaths": [
         "src/components/QuoteHistoryModal.jsx",
@@ -2162,7 +2209,7 @@
     },
     {
       "id": "decision-debt-and-policy-controls",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -2187,7 +2234,8 @@
       "frontendPaths": [
         "src/components/SalesWorkflowModal.jsx",
         "src/components/DecisionDebtPanel.jsx",
-        "src/components/QuoteDecisionDebtPanel.jsx"
+        "src/components/QuoteDecisionDebtPanel.jsx",
+        "src/lib/workspaceRoutes.js"
       ],
       "entryPointLocators": [
         {
@@ -2206,9 +2254,12 @@
       "testPaths": [
         "src/components/__tests__/decisionDebtPanel.test.jsx",
         "src/components/__tests__/quoteDecisionDebtPanel.test.jsx",
+        "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+        "src/components/__tests__/salesWorkflowRevenueAutopilot.test.jsx",
         "src/lib/__tests__/decisionDebt.server.test.js",
         "src/lib/__tests__/decisionDebtClient.test.js",
-        "src/lib/__tests__/decisionDebtIntegration.server.test.js"
+        "src/lib/__tests__/decisionDebtIntegration.server.test.js",
+        "src/lib/__tests__/workspaceRoutes.test.js"
       ],
       "testLocators": [
         {
@@ -2222,6 +2273,18 @@
         {
           "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
           "locator": "keeps configuration admin-only and saves an edited policy against the displayed server version"
+        },
+        {
+          "path": "src/components/__tests__/quoteDecisionDebtPanel.test.jsx",
+          "locator": "opens Workflow with the exact Decision Debt quote and item identity"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "selects and focuses the exact Decision Debt item instead of searching primary Attention"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceRoutes.test.js",
+          "locator": "round-trips every shipped workflow focus type without customer or quote contents"
         }
       ],
       "documentationPaths": [
@@ -2319,7 +2382,7 @@
     },
     {
       "id": "revenue-autopilot-operations",
-      "reviewRevision": 1,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -2327,13 +2390,14 @@
         "staff",
         "administrators"
       ],
-      "summary": "Revenue Autopilot exposes bounded policy, job, provider-outcome, attention, and post-event review operations with tenant gates, exact receipts, and truthful dormant or incomplete states.",
+      "summary": "Revenue Autopilot independently prepares bounded jobs, gates provider dispatch, preserves uncertain delivery evidence, distinguishes withheld retries from provider acceptance, repairs exact unread-reply Attention, and exposes per-lane record outcomes with truthful dormant or incomplete states.",
       "backendPaths": [
         "functions/index.js",
         "functions/revenueAutopilot.js",
         "functions/revenueAutopilotAuthority.js",
         "functions/revenueAutopilotTemplates.js",
         "scripts/customer-centered-authority-emulator-acceptance.mjs",
+        "src/lib/quoteWorkflow.js",
         "src/lib/revenueAutopilotClient.js"
       ],
       "backendExports": [
@@ -2352,6 +2416,7 @@
         "functions/index.js#configureRevenueAutopilotCustomerControls",
         "functions/index.js#materializeRevenueAutopilotJobs",
         "functions/index.js#acknowledgeRevenueAutopilotReply",
+        "functions/index.js#sendQuotePortalConversationMessage",
         "functions/index.js#reconcileRevenueAutopilotJob",
         "functions/index.js#getRevenueAutopilotUnsubscribeContext",
         "functions/index.js#unsubscribeRevenueAutopilotEmail",
@@ -2359,8 +2424,13 @@
         "functions/index.js#revenueAutopilotResendWebhook"
       ],
       "frontendPaths": [
+        "src/components/CommandCenterHome.jsx",
         "src/components/SalesWorkflowModal.jsx",
-        "src/components/RevenueAutopilotOperations.jsx"
+        "src/components/RevenueAutopilotOperations.jsx",
+        "src/components/StaffEvidenceRail.jsx",
+        "src/hooks/useCommercialWorkspaceSnapshot.js",
+        "src/lib/statusSemantics.js",
+        "src/lib/workspaceRoutes.js"
       ],
       "entryPointLocators": [
         {
@@ -2374,16 +2444,34 @@
         {
           "path": "src/components/SalesWorkflowModal.jsx",
           "locator": "data-capability-id=\"cwf-12-post-event-review-policy\""
+        },
+        {
+          "path": "src/components/CommandCenterHome.jsx",
+          "locator": "data-capability-id=\"cwf-12-central-attention\""
+        },
+        {
+          "path": "src/components/SalesWorkflowModal.jsx",
+          "locator": "data-capability-id=\"cwf-12-workflow-attention\""
         }
       ],
       "testPaths": [
+        "scripts/customer-centered-authority-emulator-acceptance.mjs",
+        "src/components/__tests__/commandCenterAttentionRouting.test.jsx",
         "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+        "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
         "src/components/__tests__/salesWorkflowRevenueAutopilot.test.jsx",
+        "src/components/__tests__/staffEvidenceRail.test.jsx",
+        "src/hooks/__tests__/useCommercialWorkspaceSnapshot.test.js",
+        "src/lib/__tests__/quoteWorkflow.test.js",
+        "src/lib/__tests__/portalConversation.server.test.js",
         "src/lib/__tests__/revenueAutopilot.server.test.js",
         "src/lib/__tests__/revenueAutopilotAuthority.server.test.js",
         "src/lib/__tests__/revenueAutopilotClient.test.js",
+        "src/lib/__tests__/revenueAutopilotOperationsIntegration.server.test.js",
         "src/lib/__tests__/revenueAutopilotSchedule.server.test.js",
-        "src/lib/__tests__/revenueAutopilotTemplates.server.test.js"
+        "src/lib/__tests__/revenueAutopilotTemplates.server.test.js",
+        "src/lib/__tests__/statusSemantics.test.js",
+        "src/lib/__tests__/workspaceRoutes.test.js"
       ],
       "testLocators": [
         {
@@ -2395,8 +2483,40 @@
           "locator": "renders every literal canonical Revenue Autopilot operation mutation marker"
         },
         {
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "keeps preparation available while the separate send and provider gates are dormant"
+        },
+        {
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders the bounded per-lane preparation receipt without private lane detail"
+        },
+        {
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders a withheld reconciliation as a visible non-provider outcome"
+        },
+        {
+          "path": "src/lib/__tests__/revenueAutopilotSchedule.server.test.js",
+          "locator": "rechecks canonical authority before an ambiguous provider retry"
+        },
+        {
+          "path": "src/lib/__tests__/revenueAutopilotOperationsIntegration.server.test.js",
+          "locator": "server-filters bounded Attention to open unread customer replies without narrowing job history"
+        },
+        {
           "path": "src/components/__tests__/salesWorkflowRevenueAutopilot.test.jsx",
           "locator": "renders the admin post-event toggle, required URL field, and proof-safe configuration copy"
+        },
+        {
+          "path": "src/lib/__tests__/quoteWorkflow.test.js",
+          "locator": "merges exact unread customer replies into the shared Home and Workflow Attention projection"
+        },
+        {
+          "path": "src/components/__tests__/commandCenterAttentionRouting.test.jsx",
+          "locator": "routes an unread customer reply with its exact quote and Attention identity"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "focuses the exact unread reply in primary Attention and keeps conversation and acknowledgement actions distinct"
         }
       ],
       "documentationPaths": [
@@ -2418,7 +2538,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The workflow operations read, tenant/provider activation gates, bounded queue evidence, policy and record mutations, post-event review lane, provider outcomes, reply attention, exact receipts, uncertain reconciliation, and safe recovery states were reviewed together.",
+      "surfaceReviewNote": "The workflow operations read, four independent activation gates, preparation-only lane states, bounded per-lane receipts, evidence-preserving stops, visibly distinct withheld and provider-accepted reconciliation outcomes, repaired reply Attention, exact reconciliation, and safe recovery states were reviewed together.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -2494,7 +2614,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can see which automated lane is eligible, dormant, suppressed, queued, sent, delivered, bounced, complained, replied to, or reconciled, while incomplete provider evidence and failed reads never become delivery, payment, acceptance, or recovered-revenue claims."
+      "safeOutcome": "Staff can see whether each lane is dormant, preparation-only, queued, suppressed, provider accepted, delivered, bounced, complained, replied to, or reconciled; stop evidence never erases an in-flight or uncertain provider outcome, and incomplete evidence never becomes a delivery, payment, acceptance, or recovered-revenue claim."
     },
     {
       "id": "revenue-autopilot-customer-controls",

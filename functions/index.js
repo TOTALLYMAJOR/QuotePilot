@@ -81,14 +81,17 @@ const {
 const {
   REVENUE_AUTOPILOT_JOB_STATES,
   RevenueAutopilotError,
+  buildRevenueAutopilotAttentionIdentity,
   buildRevenueAutopilotOccurrences,
   claimRevenueAutopilotJob,
   evaluateRevenueAutopilotQuoteActivity,
   planRevenueAutopilotDispatchFailure,
   planRevenueAutopilotExecution,
+  planRevenueAutopilotJobStops,
   planRevenueAutopilotMaterialization,
   planRevenueAutopilotOutcomeResolution,
-  planUnreadCustomerReplyAttention,
+  planRevenueAutopilotScheduleMode,
+  planUnreadCustomerReplyAttentionTransition,
   recordRevenueAutopilotProviderAcceptance,
   recordRevenueAutopilotProviderEvent,
   tenantCalendarContext
@@ -325,9 +328,12 @@ const PORTAL_CONVERSATION_STATE_COLLECTION = "portalConversationState";
 const POST_EVENT_CLOSEOUTS_COLLECTION = "postEventCloseouts";
 const KITCHEN_BEO_ARTIFACTS_COLLECTION = "kitchenBeoArtifacts";
 const KITCHEN_BEO_RECEIPTS_COLLECTION = "kitchenBeoGenerationReceipts";
+const KITCHEN_BEO_RECEIPT_HISTORY_SCHEMA_VERSION = 1;
+const KITCHEN_BEO_RECEIPT_HISTORY_LIMIT = 10;
 const COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION = "commercialChangeSimulations";
 const COMMERCIAL_CHANGE_AUTHORIZATIONS_COLLECTION = "commercialChangeAuthorizations";
 const COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION = "commercialChangeApplyReceipts";
+const COMMERCIAL_CHANGE_APPLY_OUTCOMES_COLLECTION = "commercialChangeApplyOutcomes";
 const COMMERCIAL_CHANGE_RECONCILIATION_RECEIPTS_COLLECTION = "commercialChangeReconciliationReceipts";
 const COMMERCIAL_CHANGE_APPROVAL_REQUESTS_COLLECTION = "commercialChangeApprovalRequests";
 const COMMERCIAL_DEPENDENCY_STATE_COLLECTION = "commercialDependencyState";
@@ -1523,6 +1529,8 @@ function projectRevenueAutopilotJobForStaff(job = {}) {
     bouncedAtISO: normalizeText(job.bouncedAtISO),
     complainedAtISO: normalizeText(job.complainedAtISO),
     outcomeReason: normalizeText(job.outcomeReason),
+    dispatchSuppressedAtISO: normalizeText(job.dispatchSuppressedAtISO),
+    dispatchSuppressionReason: normalizeText(job.dispatchSuppressionReason),
     createdAtISO: normalizeText(job.createdAtISO)
   };
 }
@@ -1856,7 +1864,7 @@ async function readRevenueAutopilotExecutionAuthority({
     recipientKey: controls.recipientKey,
     nowISO
   });
-  return planRevenueAutopilotMaterializationFromCanonical({
+  const planned = planRevenueAutopilotMaterializationFromCanonical({
     request: { organizationId, quoteId, kind },
     canonical,
     policy,
@@ -1866,6 +1874,139 @@ async function readRevenueAutopilotExecutionAuthority({
     global: { enabled: global.enabled, sendsEnabled: global.sendsEnabled },
     existingJobs
   }, { nowISO });
+  return {
+    ...planned,
+    quoteActivity: evaluateRevenueAutopilotQuoteActivity({
+      quoteExists: true,
+      quote,
+      organizationId,
+      nowISO,
+      ignorePortalExpiry: kind === "post_event_review_request"
+    })
+  };
+}
+
+async function reconcileRevenueAutopilotReplyAttentionForQuote({
+  organizationId,
+  quote,
+  tenantPolicy,
+  nowISO
+} = {}) {
+  const quoteId = normalizeText(quote?.id || quote?.quoteId);
+  const conversationRefs = portalConversationRefs(organizationId, quoteId);
+  const attentionCollection = db.collection(ORGANIZATIONS_COLLECTION)
+    .doc(organizationId)
+    .collection(REVENUE_AUTOPILOT_ATTENTION_COLLECTION);
+  return db.runTransaction(async (tx) => {
+    const stateSnap = await tx.get(conversationRefs.stateRef);
+    if (!stateSnap.exists) {
+      return { state: "conversation_missing", createdCount: 0, updatedCount: 0 };
+    }
+    const state = stateSnap.data() || {};
+    if (
+      normalizeText(state.organizationId) !== organizationId
+      || normalizeText(state.quoteId) !== quoteId
+    ) {
+      throw new RevenueAutopilotAuthorityError(
+        "permission-denied",
+        "Conversation Attention state is outside this quote scope."
+      );
+    }
+    const latestMessageId = normalizeText(state.latestMessageId);
+    if (!latestMessageId) {
+      return { state: "message_missing", createdCount: 0, updatedCount: 0 };
+    }
+    const storedPointer = state.revenueAutopilotAttention || {};
+    const activeMessageId = normalizeText(
+      storedPointer.messageId
+      || (normalizeText(state.latestActorType).toLowerCase() === "customer"
+        ? latestMessageId
+        : "")
+    );
+    const activeIdentity = activeMessageId
+      ? buildRevenueAutopilotAttentionIdentity({ organizationId, quoteId, messageId: activeMessageId })
+      : null;
+    const latestIdentity = normalizeText(state.latestActorType).toLowerCase() === "customer"
+      ? buildRevenueAutopilotAttentionIdentity({ organizationId, quoteId, messageId: latestMessageId })
+      : null;
+    const latestMessageRef = conversationRefs.messagesRef.doc(latestMessageId);
+    const activeAttentionRef = activeIdentity
+      ? attentionCollection.doc(activeIdentity.attentionId)
+      : null;
+    const latestAttentionRef = latestIdentity
+      ? attentionCollection.doc(latestIdentity.attentionId)
+      : null;
+    const [latestMessageSnap, activeAttentionSnap, latestAttentionSnap] = await Promise.all([
+      tx.get(latestMessageRef),
+      activeAttentionRef ? tx.get(activeAttentionRef) : Promise.resolve(null),
+      latestAttentionRef ? tx.get(latestAttentionRef) : Promise.resolve(null)
+    ]);
+    if (!latestMessageSnap.exists) {
+      throw new RevenueAutopilotAuthorityError(
+        "failed-precondition",
+        "The exact latest quote conversation message is unavailable."
+      );
+    }
+    const latestMessage = { id: latestMessageSnap.id, ...(latestMessageSnap.data() || {}) };
+    const latestActorType = normalizeText(latestMessage.actorType).toLowerCase();
+    const acknowledgement = state.staffAcknowledged || {};
+    const evidence = buildRevenueAutopilotConversationEvidence({
+      quote,
+      conversationState: state,
+      latestMessage,
+      staffAcknowledgementReceipt: (
+        latestActorType === "customer"
+        && normalizeText(acknowledgement.latestMessageId) === latestMessageId
+      ) ? {
+          organizationId,
+          quoteId,
+          ...acknowledgement
+        } : null
+    });
+    const transition = planUnreadCustomerReplyAttentionTransition({
+      organizationId,
+      quoteId,
+      evidence: { conversation: evidence },
+      global: getRevenueAutopilotGlobalControl(nowISO),
+      tenantPolicy,
+      activeAttention: activeAttentionSnap?.exists
+        ? { attentionId: activeAttentionSnap.id, ...(activeAttentionSnap.data() || {}) }
+        : null,
+      latestAttention: latestAttentionSnap?.exists
+        ? { attentionId: latestAttentionSnap.id, ...(latestAttentionSnap.data() || {}) }
+        : null,
+      nowISO
+    });
+    for (const update of transition.updates) {
+      tx.set(attentionCollection.doc(update.attentionId), {
+        ...update,
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    let createdCount = 0;
+    if (transition.create && latestAttentionRef && !latestAttentionSnap?.exists) {
+      tx.create(latestAttentionRef, {
+        ...transition.create,
+        customerId: normalizeText(quote.customerId),
+        quoteLabel: normalizeText(quote.quoteNumber) || quoteId,
+        customerLabel: normalizeText(quote.customer?.name),
+        receivedAtISO: evidence.latestMessageAtISO,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      createdCount = 1;
+    }
+    tx.set(conversationRefs.stateRef, {
+      revenueAutopilotAttention: transition.activePointer || FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return {
+      state: transition.state,
+      createdCount,
+      updatedCount: transition.updates.length
+    };
+  });
 }
 
 async function dispatchRevenueAutopilotJob({ organizationId, jobId } = {}) {
@@ -1896,15 +2037,24 @@ async function dispatchRevenueAutopilotJob({ organizationId, jobId } = {}) {
     ignorePortalExpiry: jobKind === "post_event_review_request"
   });
   if (!quoteActivity.active) {
-    await jobRef.set({
-      state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
-      stoppedAtISO: nowISO,
-      completedAtISO: nowISO,
-      outcomeReason: quoteActivity.reason,
-      updatedAtISO: nowISO,
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
-    return { action: "stop", reason: quoteActivity.reason };
+    const [update] = planRevenueAutopilotJobStops({
+      jobs: [initialRaw],
+      reason: quoteActivity.reason,
+      nowISO
+    });
+    if (update) {
+      await jobRef.set({
+        ...update,
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    return {
+      action: update?.state === REVENUE_AUTOPILOT_JOB_STATES.STOPPED
+        ? "stop"
+        : "suppress",
+      reason: quoteActivity.reason
+    };
   }
   const authority = await readRevenueAutopilotExecutionAuthority({
     organizationId,
@@ -1922,7 +2072,14 @@ async function dispatchRevenueAutopilotJob({ organizationId, jobId } = {}) {
     evidence: authority.input.evidence,
     nowISO
   });
-  if (["none", "wait", "block", "reconcile", "wait_for_provider_event"].includes(planned.action)) {
+  if ([
+    "none",
+    "wait",
+    "block",
+    "reconcile",
+    "reconcile_blocked",
+    "wait_for_provider_event"
+  ].includes(planned.action)) {
     if (planned.job && commercialDependencyGraphCore.canonicalSerialize(planned.job)
       !== commercialDependencyGraphCore.canonicalSerialize(initialRaw)) {
       await jobRef.set({
@@ -1977,7 +2134,8 @@ async function dispatchRevenueAutopilotJob({ organizationId, jobId } = {}) {
       controls: recheckedAuthority.input.controls,
       stopScope: recheckedAuthority.input.stopScope,
       evidence: recheckedAuthority.input.evidence,
-      nowISO: recheckedAtISO
+      nowISO: recheckedAtISO,
+      ownedAttemptId: attemptId
     });
     if (rechecked.action === "stop") {
       await jobRef.set({
@@ -2129,27 +2287,22 @@ async function materializeScheduledRevenueAutopilotQuote({
   const portalExpired = Boolean(portalExpiresAtISO && portalExpiresAtISO <= nowISO);
   let expiryStopsApplied = 0;
   if (portalExpired) {
-    const activeJobs = existingSnap.docs.filter((snapshot) => (
-      normalizeText(snapshot.data()?.kind).toLowerCase() !== "post_event_review_request"
-      && !new Set([
-      REVENUE_AUTOPILOT_JOB_STATES.DELIVERED,
-      REVENUE_AUTOPILOT_JOB_STATES.BOUNCED,
-      REVENUE_AUTOPILOT_JOB_STATES.COMPLAINED,
-      REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
-      REVENUE_AUTOPILOT_JOB_STATES.DEFINITE_FAILURE
-      ]).has(normalizeText(snapshot.data()?.state))
-    ));
+    const expiringJobs = existingSnap.docs
+      .map((snapshot) => ({ jobId: snapshot.id, ...(snapshot.data() || {}) }))
+      .filter((job) => normalizeText(job.kind).toLowerCase() !== "post_event_review_request");
+    const expiryUpdates = planRevenueAutopilotJobStops({
+      jobs: expiringJobs,
+      reason: "portal_expired",
+      nowISO
+    });
     const batch = db.batch();
-    activeJobs.forEach((snapshot) => batch.set(snapshot.ref, {
-      state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
-      stoppedAtISO: nowISO,
-      completedAtISO: nowISO,
-      outcomeReason: "portal_expired",
+    expiryUpdates.forEach((update) => batch.set(refs.jobsRef.doc(update.jobId), {
+      ...update,
       updatedAtISO: nowISO,
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true }));
-    if (activeJobs.length) await batch.commit();
-    expiryStopsApplied = activeJobs.length;
+    if (expiryUpdates.length) await batch.commit();
+    expiryStopsApplied = expiryUpdates.length;
   }
   const customerId = normalizeText(quote.customerId);
   if (!customerId) {
@@ -2172,6 +2325,31 @@ async function materializeScheduledRevenueAutopilotQuote({
     jobId: snapshot.id,
     ...(snapshot.data() || {})
   }));
+  let attentionResult = {
+    state: "not_observed",
+    createdCount: 0,
+    updatedCount: 0
+  };
+  try {
+    attentionResult = await reconcileRevenueAutopilotReplyAttentionForQuote({
+      organizationId,
+      quote,
+      tenantPolicy: policy,
+      nowISO
+    });
+  } catch (error) {
+    attentionResult = {
+      state: "blocked",
+      createdCount: 0,
+      updatedCount: 0,
+      reason: normalizeText(error?.code) || "attention_reconciliation_failed"
+    };
+    functions.logger.warn("Revenue Autopilot reply Attention reconciliation skipped", {
+      organizationId,
+      quoteId,
+      error: normalizeText(error?.message).slice(0, 200)
+    });
+  }
   const portalUrl = resolvePortalLink(quote);
   let createdCount = 0;
   let updatedCount = expiryStopsApplied;
@@ -2259,7 +2437,12 @@ async function materializeScheduledRevenueAutopilotQuote({
       throw error;
     }
   }
-  return { createdCount, updatedCount, state: "materialized" };
+  return {
+    createdCount,
+    updatedCount,
+    state: "materialized",
+    attention: attentionResult
+  };
 }
 
 function throwDecisionDebtFailure(error, operation) {
@@ -8877,62 +9060,76 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
         nowMs
       });
       const message = projectPortalConversationMessage(messageRecord);
-      let attentionPlan = null;
-      let attentionRef = null;
-      if (message.actorType === "customer") {
-        const tenantPolicy = normalizeRevenueAutopilotTenantPolicy(
+      let tenantPolicy;
+      try {
+        tenantPolicy = normalizeRevenueAutopilotTenantPolicy(
           revenuePolicySnap.exists ? revenuePolicySnap.data() || {} : null
         );
-        const preliminary = planUnreadCustomerReplyAttention({
+      } catch {
+        tenantPolicy = dormantRevenueAutopilotTenantPolicy({
           organizationId: binding.organizationId,
-          quoteId: binding.quoteId,
-          messageId: generatedMessageId,
-          evidence: {
-            conversation: {
-              source: "quote_conversation_attention_state",
-              organizationId: binding.organizationId,
-              quoteId: binding.quoteId,
-              latestMessageId: generatedMessageId,
-              latestMessageAtISO: nowISO,
-              latestActorType: "customer",
-              staffAcknowledged: {}
-            }
-          },
-          global: getRevenueAutopilotGlobalControl(nowISO),
-          tenantPolicy,
-          existingAttention: null,
-          nowISO
+          authorityState: "invalid_blocked"
         });
-        if (preliminary.create?.attentionId) {
-          attentionRef = db.collection(ORGANIZATIONS_COLLECTION)
-            .doc(binding.organizationId)
-            .collection(REVENUE_AUTOPILOT_ATTENTION_COLLECTION)
-            .doc(preliminary.create.attentionId);
-          const attentionSnap = await tx.get(attentionRef);
-          attentionPlan = planUnreadCustomerReplyAttention({
+      }
+      const storedAttentionPointer = state.revenueAutopilotAttention || {};
+      const priorMessageId = normalizeText(
+        storedAttentionPointer.messageId
+        || (normalizeText(state.latestActorType).toLowerCase() === "customer"
+          ? state.latestMessageId
+          : "")
+      );
+      const priorAttentionIdentity = priorMessageId
+        ? buildRevenueAutopilotAttentionIdentity({
             organizationId: binding.organizationId,
             quoteId: binding.quoteId,
-            messageId: generatedMessageId,
-            evidence: {
-              conversation: {
-                source: "quote_conversation_attention_state",
-                organizationId: binding.organizationId,
-                quoteId: binding.quoteId,
-                latestMessageId: generatedMessageId,
-                latestMessageAtISO: nowISO,
-                latestActorType: "customer",
-                staffAcknowledged: {}
-              }
-            },
-            global: getRevenueAutopilotGlobalControl(nowISO),
-            tenantPolicy,
-            existingAttention: attentionSnap.exists
-              ? { attentionId: attentionSnap.id, ...(attentionSnap.data() || {}) }
-              : null,
-            nowISO
-          });
+            messageId: priorMessageId
+          })
+        : null;
+      const latestAttentionIdentity = message.actorType === "customer"
+        ? buildRevenueAutopilotAttentionIdentity({
+            organizationId: binding.organizationId,
+            quoteId: binding.quoteId,
+            messageId: generatedMessageId
+          })
+        : null;
+      const attentionCollection = db.collection(ORGANIZATIONS_COLLECTION)
+        .doc(binding.organizationId)
+        .collection(REVENUE_AUTOPILOT_ATTENTION_COLLECTION);
+      const priorAttentionRef = priorAttentionIdentity
+        ? attentionCollection.doc(priorAttentionIdentity.attentionId)
+        : null;
+      const latestAttentionRef = latestAttentionIdentity
+        ? attentionCollection.doc(latestAttentionIdentity.attentionId)
+        : null;
+      const [priorAttentionSnap, latestAttentionSnap] = await Promise.all([
+        priorAttentionRef ? tx.get(priorAttentionRef) : Promise.resolve(null),
+        latestAttentionRef ? tx.get(latestAttentionRef) : Promise.resolve(null)
+      ]);
+      const conversationEvidence = {
+        conversation: {
+          source: "quote_conversation_attention_state",
+          organizationId: binding.organizationId,
+          quoteId: binding.quoteId,
+          latestMessageId: generatedMessageId,
+          latestMessageAtISO: nowISO,
+          latestActorType: message.actorType,
+          staffAcknowledged: {}
         }
-      }
+      };
+      const attentionPlan = planUnreadCustomerReplyAttentionTransition({
+        organizationId: binding.organizationId,
+        quoteId: binding.quoteId,
+        evidence: conversationEvidence,
+        global: getRevenueAutopilotGlobalControl(nowISO),
+        tenantPolicy,
+        activeAttention: priorAttentionSnap?.exists
+          ? { attentionId: priorAttentionSnap.id, ...(priorAttentionSnap.data() || {}) }
+          : null,
+        latestAttention: latestAttentionSnap?.exists
+          ? { attentionId: latestAttentionSnap.id, ...(latestAttentionSnap.data() || {}) }
+          : null,
+        nowISO
+      });
 
       tx.create(generatedMessageRef, {
         ...messageRecord,
@@ -8965,6 +9162,9 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
         latestMessageId: generatedMessageId,
         latestMessageAtISO: nowISO,
         latestActorType: message.actorType,
+        ...(attentionPlan.activePointer ? {
+          revenueAutopilotAttention: attentionPlan.activePointer
+        } : {}),
         updatedAt: FieldValue.serverTimestamp()
       });
       tx.set(scope.refs.quoteRef, {
@@ -8977,8 +9177,15 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
           updatedAt: FieldValue.serverTimestamp()
         }
       }, { merge: true });
-      if (attentionPlan?.create && attentionRef) {
-        tx.create(attentionRef, {
+      for (const attentionUpdate of attentionPlan.updates) {
+        tx.set(attentionCollection.doc(attentionUpdate.attentionId), {
+          ...attentionUpdate,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+      if (attentionPlan.create && latestAttentionRef && !latestAttentionSnap?.exists) {
+        tx.create(latestAttentionRef, {
           ...attentionPlan.create,
           customerId: normalizeText(scope.quote.customerId),
           quoteLabel: normalizeText(scope.quote.quoteNumber) || binding.quoteId,
@@ -9069,6 +9276,17 @@ function exactCommercialChangeApprovalRequestId(value) {
   return normalized;
 }
 
+function exactCommercialChangeApplyRequestId(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (!/^change_apply_[a-f0-9]{32}$/u.test(normalized)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "A valid commercial change apply request identity is required."
+    );
+  }
+  return normalized;
+}
+
 function commercialChangeApprovalId(simulationReceiptId) {
   return `ccar_${createHash("sha256")
     .update(`commercial-change-approval|${simulationReceiptId}`)
@@ -9088,6 +9306,7 @@ function commercialChangeRefs(organizationId, quoteId = "") {
     authorizationsRef: organizationRef.collection(COMMERCIAL_CHANGE_AUTHORIZATIONS_COLLECTION),
     approvalRequestsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPROVAL_REQUESTS_COLLECTION),
     applyReceiptsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION),
+    applyOutcomesRef: organizationRef.collection(COMMERCIAL_CHANGE_APPLY_OUTCOMES_COLLECTION),
     reconciliationReceiptsRef: organizationRef
       .collection(COMMERCIAL_CHANGE_RECONCILIATION_RECEIPTS_COLLECTION),
     dependencyStateRef: quoteId
@@ -9234,6 +9453,21 @@ function projectCommercialChangeApproval(raw = null) {
     },
     authorizationReceiptId: normalizeText(raw.authorizationReceiptId),
     expiresAtISO: normalizeText(raw.expiresAtISO)
+  };
+}
+
+function projectCommercialChangeApplyCommit(applyReceipt = null) {
+  const applied = commercialChangeAuthority.validateApplyReceipt(applyReceipt);
+  const totalInvalidationCount = Array.isArray(applied.invalidationReceipts)
+    ? applied.invalidationReceipts.length
+    : 0;
+  return {
+    authorityState: "enforced",
+    applyReceiptId: applied.receiptId,
+    state: totalInvalidationCount === 0 ? "READY" : "BLOCKED",
+    safeToPublish: totalInvalidationCount === 0,
+    openInvalidationCount: totalInvalidationCount,
+    totalInvalidationCount
   };
 }
 
@@ -9449,12 +9683,13 @@ exports.requestCommercialQuoteChangeAuthorization = functions.region(REGION).htt
       if (approvalSnap.exists) {
         const existing = approvalSnap.data() || {};
         if (
-          normalizeText(existing.simulationReceiptId) !== simulation.receiptId
+          normalizeText(existing.requestId).toLowerCase() !== requestId
+          || normalizeText(existing.simulationReceiptId) !== simulation.receiptId
           || normalizeText(existing.simulationDigest) !== simulation.receiptDigest
         ) {
           throw new CommercialChangeAuthorityError(
             "already-exists",
-            "The approval identity is bound to different immutable simulation evidence."
+            "The approval identity is bound to a different request or immutable simulation evidence."
           );
         }
         return { record: existing, idempotent: true };
@@ -9703,6 +9938,181 @@ exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(a
   }
 });
 
+exports.reconcileCommercialQuoteChangeApplyOutcome = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const simulationReceiptId = exactCommercialChangeReceiptId(
+    data?.simulationReceiptId,
+    "simulation"
+  );
+  const authorizationReceiptId = normalizeText(data?.authorizationReceiptId)
+    ? exactCommercialChangeReceiptId(data.authorizationReceiptId, "authorization")
+    : "";
+  const applyRequestId = exactCommercialChangeApplyRequestId(data?.applyRequestId);
+  const expectedBaseRevisionId = normalizeText(data?.expectedBaseRevisionId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || !quoteId
+    || !expectedBaseRevisionId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Commercial change apply-outcome reconciliation requires same-organization staff authority and exact quote scope."
+    );
+  }
+
+  try {
+    const refs = commercialChangeRefs(organizationId, quoteId);
+    const identity = commercialChangeAuthority.applyIdentity({
+      requestId: applyRequestId,
+      organizationId,
+      quoteId
+    });
+    const simulationRef = refs.simulationsRef.doc(simulationReceiptId);
+    const authorizationRef = authorizationReceiptId
+      ? refs.authorizationsRef.doc(authorizationReceiptId)
+      : null;
+    const applyRef = refs.applyReceiptsRef.doc(identity.applyReceiptId);
+    const outcomeRef = refs.applyOutcomesRef.doc(identity.outcomeReceiptId);
+    const reconciledAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [simulationSnap, authorizationSnap, applySnap, outcomeSnap, quoteSnap] =
+        await Promise.all([
+          tx.get(simulationRef),
+          authorizationRef ? tx.get(authorizationRef) : Promise.resolve(null),
+          tx.get(applyRef),
+          tx.get(outcomeRef),
+          tx.get(refs.quoteRef)
+        ]);
+      if (!simulationSnap.exists || !quoteSnap.exists) {
+        throw new CommercialChangeAuthorityError(
+          "not-found",
+          "The exact commercial change simulation or quote is unavailable."
+        );
+      }
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      assertCommercialChangeQuoteScope(quote, organizationId, quoteId);
+      const simulationReceipt = commercialChangeAuthority.validateSimulationReceipt(
+        simulationSnap.data()?.receipt
+      );
+      if (
+        simulationReceipt.organizationId !== organizationId
+        || simulationReceipt.quoteId !== quoteId
+        || simulationReceipt.receiptId !== simulationReceiptId
+        || simulationReceipt.baseRevisionId !== expectedBaseRevisionId
+      ) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "Apply-outcome reconciliation is outside the exact simulation and base revision."
+        );
+      }
+      if (simulationReceipt.simulatedBy?.uid !== staff.uid && staff.role !== "admin") {
+        throw new CommercialChangeAuthorityError(
+          "permission-denied",
+          "Only the simulation requester or an administrator may reconcile this apply outcome."
+        );
+      }
+      if (simulationReceipt.authorizationRequired && !authorizationSnap?.exists) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "The exact administrator authorization is required to reconcile this apply outcome."
+        );
+      }
+      if (!simulationReceipt.authorizationRequired && authorizationReceiptId) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "A no-impact apply outcome cannot consume unrelated authorization evidence."
+        );
+      }
+
+      const applyReceipt = applySnap.exists ? applySnap.data()?.receipt : null;
+      if (applyReceipt) {
+        const applied = commercialChangeAuthority.validateApplyReceipt(applyReceipt);
+        const versionSnap = await tx.get(
+          refs.quoteRef.collection("versions").doc(applied.newRevisionId)
+        );
+        const version = versionSnap.exists ? versionSnap.data() || {} : null;
+        if (
+          !version
+          || normalizeOrganizationId(version.organizationId) !== organizationId
+          || normalizeText(version.quoteId) !== quoteId
+          || normalizeText(version.versionId) !== applied.newRevisionId
+          || normalizeText(version.snapshot?.activeVersionId) !== applied.newRevisionId
+        ) {
+          throw new CommercialChangeAuthorityError(
+            "failed-precondition",
+            "The committed apply receipt is missing its exact immutable quote revision."
+          );
+        }
+      }
+
+      const planned = commercialChangeAuthority.reconcileApplyOutcome({
+        simulationReceipt,
+        authorizationReceipt: authorizationSnap?.exists
+          ? authorizationSnap.data()?.receipt
+          : null,
+        applyReceipt,
+        request: {
+          requestId: applyRequestId,
+          organizationId,
+          quoteId,
+          simulationReceiptId,
+          authorizationReceiptId,
+          expectedBaseRevisionId
+        },
+        trustedContext: {
+          actor: commercialChangeActor(staff),
+          nowISO: reconciledAtISO
+        },
+        current: {
+          activeRevisionId: normalizeText(
+            quote.activeVersionId || quote.versionMeta?.versionId
+          )
+        },
+        existingReceipt: outcomeSnap.exists ? outcomeSnap.data()?.receipt : null
+      });
+      if (!outcomeSnap.exists) {
+        tx.create(outcomeRef, {
+          organizationId,
+          quoteId,
+          requestId: applyRequestId,
+          operationId: identity.operationId,
+          simulationReceiptId,
+          authorizationReceiptId,
+          expectedBaseRevisionId,
+          state: planned.receipt.state,
+          receipt: planned.receipt,
+          createdAtISO: planned.receipt.reconciledAtISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      return {
+        planned,
+        commercialChange: applyReceipt
+          ? projectCommercialChangeApplyCommit(applyReceipt)
+          : null
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      idempotent: result.planned.idempotent,
+      outcomeReceipt: result.planned.receipt,
+      commercialChange: result.commercialChange
+    };
+  } catch (error) {
+    return throwCommercialChangeFailure(
+      error,
+      "reconcileCommercialQuoteChangeApplyOutcome",
+      { organizationId, quoteId, actorUid: staff.uid }
+    );
+  }
+});
+
 function commercialChangeDecisionMetadata(invalidation = {}, decisionOpening = null) {
   const directTypes = {
     "artifact.kitchen_beo": "beo_finalization",
@@ -9938,6 +10348,25 @@ function exactCommercialReconciliationRequestId(value) {
   return requestId;
 }
 
+function commercialReconciliationRequestFingerprint({
+  organizationId,
+  quoteId,
+  applyReceiptId,
+  invalidationIds,
+  resolutionNote
+}) {
+  return createHash("sha256")
+    .update(commercialDependencyGraphCore.canonicalSerialize({
+      schemaVersion: "commercial-change-reconciliation-request-v1",
+      organizationId,
+      quoteId,
+      applyReceiptId,
+      invalidationIds: [...invalidationIds].sort(),
+      resolutionNote: normalizeText(resolutionNote)
+    }))
+    .digest("hex");
+}
+
 function normalizeCommercialInvalidationIds(values) {
   if (
     !Array.isArray(values)
@@ -9982,6 +10411,13 @@ exports.reconcileCommercialDependencyState = functions.region(REGION).https.onCa
   const requestId = exactCommercialReconciliationRequestId(data?.requestId);
   const invalidationIds = normalizeCommercialInvalidationIds(data?.invalidationIds);
   const resolutionNote = normalizeText(data?.resolutionNote);
+  const requestFingerprint = commercialReconciliationRequestFingerprint({
+    organizationId,
+    quoteId,
+    applyReceiptId,
+    invalidationIds,
+    resolutionNote
+  });
   const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
   if (
     !organizationId
@@ -10064,15 +10500,11 @@ exports.reconcileCommercialDependencyState = functions.region(REGION).https.onCa
         const existing = commercialChangeAuthority.validateReconciliationReceipt(
           reconciliationSnap.data()?.receipt
         );
-        const existingIds = existing.resolutions
-          .map((item) => normalizeText(item.invalidationId))
-          .sort();
         if (
           existing.organizationId !== organizationId
           || existing.quoteId !== quoteId
           || existing.applyReceiptId !== applyReceiptId
-          || commercialDependencyGraphCore.canonicalSerialize(existingIds)
-            !== commercialDependencyGraphCore.canonicalSerialize([...invalidationIds].sort())
+          || normalizeText(reconciliationSnap.data()?.requestFingerprint) !== requestFingerprint
         ) {
           throw new CommercialChangeAuthorityError(
             "already-exists",
@@ -10276,6 +10708,7 @@ exports.reconcileCommercialDependencyState = functions.region(REGION).https.onCa
         organizationId,
         quoteId,
         applyReceiptId,
+        requestFingerprint,
         receipt: planned.receipt,
         createdAtISO: observedAtISO,
         createdAt: FieldValue.serverTimestamp()
@@ -10762,11 +11195,13 @@ function normalizeCommercialChangeApplyEnvelope(raw = null) {
       "Commercial change authority must be an exact receipt envelope."
     );
   }
-  const applyRequestId = normalizeText(raw.applyRequestId).toLowerCase();
-  if (!/^change_apply_[a-f0-9]{32}$/u.test(applyRequestId)) {
+  let applyRequestId;
+  try {
+    applyRequestId = exactCommercialChangeApplyRequestId(raw.applyRequestId);
+  } catch (error) {
     throw new CommercialChangeAuthorityError(
-      "invalid-argument",
-      "A valid commercial change apply request identity is required."
+      normalizeText(error?.code).replace(/^functions\//u, "") || "invalid-argument",
+      error?.message || "A valid commercial change apply request identity is required."
     );
   }
   return {
@@ -11066,15 +11501,26 @@ async function updateTrustedQuoteDraftInternal({
       }
       const implicitIds = implicitCommercialChangeRequestIds(preview);
       const refs = commercialChangeRefs(organizationId, quoteId);
+      const applyOutcomeIdentity = envelope
+        ? commercialChangeAuthority.applyIdentity({
+          requestId: envelope.applyRequestId,
+          organizationId,
+          quoteId
+        })
+        : null;
       const simulationRef = envelope
         ? refs.simulationsRef.doc(envelope.simulationReceiptId)
         : null;
       const [
         suppliedSimulationSnap,
+        applyOutcomeSnap,
         dependencyStateSnap,
         priorInvalidationsSnap
       ] = await Promise.all([
         simulationRef ? tx.get(simulationRef) : Promise.resolve(null),
+        applyOutcomeIdentity
+          ? tx.get(refs.applyOutcomesRef.doc(applyOutcomeIdentity.outcomeReceiptId))
+          : Promise.resolve(null),
         tx.get(refs.dependencyStateRef),
         tx.get(refs.invalidationsRef.orderBy(FieldPath.documentId())
           .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1))
@@ -11090,6 +11536,30 @@ async function updateTrustedQuoteDraftInternal({
         id: snapshot.id,
         ...(snapshot.data() || {})
       }));
+      if (applyOutcomeSnap?.exists) {
+        const outcome = commercialChangeAuthority.validateApplyOutcomeReceipt(
+          applyOutcomeSnap.data()?.receipt
+        );
+        if (
+          outcome.organizationId !== organizationId
+          || outcome.quoteId !== quoteId
+          || outcome.requestId !== envelope.applyRequestId
+          || outcome.operationId !== applyOutcomeIdentity.operationId
+          || outcome.simulationReceiptId !== envelope.simulationReceiptId
+          || outcome.authorizationReceiptId !== envelope.authorizationReceiptId
+        ) {
+          throw new CommercialChangeAuthorityError(
+            "already-exists",
+            "The apply request identity is fenced by different immutable outcome evidence."
+          );
+        }
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          outcome.state === "committed"
+            ? "This exact commercial change apply already committed; reconcile its outcome instead of submitting it again."
+            : "This exact commercial change apply was reconciled as not committed and is permanently fenced. Start a new simulation and apply request."
+        );
+      }
       const dependencyState = dependencyStateSnap.exists
         ? dependencyStateSnap.data() || {}
         : null;
@@ -12822,23 +13292,31 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
 function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
   const artifactRef = organizationRef.collection(KITCHEN_BEO_ARTIFACTS_COLLECTION).doc(quoteId);
+  const dependencyStateRef = organizationRef
+    .collection(COMMERCIAL_DEPENDENCY_STATE_COLLECTION)
+    .doc(quoteId);
   return {
     organizationRef,
     quoteRef: organizationRef.collection(QUOTES_COLLECTION).doc(quoteId),
     artifactRef,
+    receiptsRef: organizationRef.collection(KITCHEN_BEO_RECEIPTS_COLLECTION),
     receiptRef: receiptId
       ? organizationRef.collection(KITCHEN_BEO_RECEIPTS_COLLECTION).doc(receiptId)
       : null,
-    invalidationsRef: organizationRef
-      .collection(COMMERCIAL_DEPENDENCY_STATE_COLLECTION)
-      .doc(quoteId)
-      .collection(COMMERCIAL_DEPENDENCY_INVALIDATIONS_COLLECTION)
+    dependencyStateRef,
+    invalidationsRef: dependencyStateRef.collection(COMMERCIAL_DEPENDENCY_INVALIDATIONS_COLLECTION),
+    applyReceiptsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION),
+    reconciliationReceiptsRef: organizationRef
+      .collection(COMMERCIAL_CHANGE_RECONCILIATION_RECEIPTS_COLLECTION)
   };
 }
 
 function throwKitchenBeoFailure(error, operation) {
   if (error instanceof functions.https.HttpsError) throw error;
-  if (error instanceof KitchenBeoAuthorityError) {
+  if (
+    error instanceof KitchenBeoAuthorityError
+    || error instanceof CommercialChangeAuthorityError
+  ) {
     throw new functions.https.HttpsError(error.code, error.message);
   }
   functions.logger.error(`${operation} failed`, {
@@ -12912,6 +13390,201 @@ function projectStoredKitchenBeoArtifact(record = {}, {
   };
 }
 
+function projectKitchenBeoReceiptHistory({
+  state = "UNKNOWN",
+  receipts = [],
+  truncated = false,
+  reasonCodes = []
+} = {}) {
+  const normalizedState = new Set(["COMPLETE", "PARTIAL", "UNKNOWN"]).has(state)
+    ? state
+    : "UNKNOWN";
+  const projectedReceipts = normalizedState === "UNKNOWN" ? [] : receipts.slice(0, 10);
+  return {
+    schemaVersion: KITCHEN_BEO_RECEIPT_HISTORY_SCHEMA_VERSION,
+    authority: "server_projection",
+    state: normalizedState,
+    bounds: {
+      limit: KITCHEN_BEO_RECEIPT_HISTORY_LIMIT,
+      returnedCount: projectedReceipts.length,
+      truncated: truncated === true
+    },
+    reasonCodes: reasonCodes.map((value) => normalizeText(value)).filter(Boolean).slice(0, 8),
+    receipts: projectedReceipts
+  };
+}
+
+function planKitchenBeoReceiptHistory(artifactPointer, newReceiptId) {
+  const pointer = artifactPointer && typeof artifactPointer === "object"
+    ? artifactPointer
+    : null;
+  if (!pointer) {
+    return {
+      receiptHistorySchemaVersion: KITCHEN_BEO_RECEIPT_HISTORY_SCHEMA_VERSION,
+      recentReceiptIds: [newReceiptId],
+      receiptHistoryTruncated: false
+    };
+  }
+  const priorLatestReceiptId = normalizeText(pointer.latestReceiptId).toLowerCase();
+  const embeddedLatestReceiptId = normalizeText(pointer.latestReceipt?.receiptId).toLowerCase();
+  if (
+    !/^beo_[a-f0-9]{48}$/u.test(priorLatestReceiptId)
+    || embeddedLatestReceiptId !== priorLatestReceiptId
+  ) {
+    throw new KitchenBeoAuthorityError(
+      "failed-precondition",
+      "The existing Kitchen BEO pointer is invalid and must be repaired before generation."
+    );
+  }
+  let priorReceiptIds;
+  let truncated;
+  if (Number(pointer.receiptHistorySchemaVersion) === KITCHEN_BEO_RECEIPT_HISTORY_SCHEMA_VERSION) {
+    priorReceiptIds = Array.isArray(pointer.recentReceiptIds)
+      ? pointer.recentReceiptIds.map((value) => normalizeText(value).toLowerCase())
+      : [];
+    if (
+      !priorReceiptIds.length
+      || priorReceiptIds.length > KITCHEN_BEO_RECEIPT_HISTORY_LIMIT
+      || priorReceiptIds[0] !== priorLatestReceiptId
+      || priorReceiptIds.some((value) => !/^beo_[a-f0-9]{48}$/u.test(value))
+      || new Set(priorReceiptIds).size !== priorReceiptIds.length
+      || typeof pointer.receiptHistoryTruncated !== "boolean"
+    ) {
+      throw new KitchenBeoAuthorityError(
+        "failed-precondition",
+        "The existing Kitchen BEO receipt history is invalid and must be repaired before generation."
+      );
+    }
+    truncated = pointer.receiptHistoryTruncated;
+  } else {
+    if (
+      pointer.receiptHistorySchemaVersion !== undefined
+      || pointer.recentReceiptIds !== undefined
+      || pointer.receiptHistoryTruncated !== undefined
+    ) {
+      throw new KitchenBeoAuthorityError(
+        "failed-precondition",
+        "The existing Kitchen BEO receipt history schema is unsupported."
+      );
+    }
+    priorReceiptIds = [priorLatestReceiptId];
+    // A legacy pointer proves only its latest receipt, not that older receipts
+    // never existed. Preserve that evidence as an explicitly partial history.
+    truncated = true;
+  }
+  const combined = [newReceiptId, ...priorReceiptIds.filter((value) => value !== newReceiptId)];
+  return {
+    receiptHistorySchemaVersion: KITCHEN_BEO_RECEIPT_HISTORY_SCHEMA_VERSION,
+    recentReceiptIds: combined.slice(0, KITCHEN_BEO_RECEIPT_HISTORY_LIMIT),
+    receiptHistoryTruncated: truncated || combined.length > KITCHEN_BEO_RECEIPT_HISTORY_LIMIT
+  };
+}
+
+async function readKitchenBeoReceiptHistory({
+  refs,
+  artifactExists,
+  artifactPointer,
+  organizationId,
+  quoteId
+}) {
+  if (!artifactExists) {
+    return {
+      trustedCurrentReceipt: null,
+      projection: projectKitchenBeoReceiptHistory({
+        state: "COMPLETE",
+        receipts: [],
+        truncated: false,
+        reasonCodes: ["no_generation_receipts"]
+      })
+    };
+  }
+  const pointer = artifactPointer || {};
+  const latestReceiptId = normalizeText(pointer.latestReceiptId).toLowerCase();
+  const embeddedLatestReceiptId = normalizeText(pointer.latestReceipt?.receiptId).toLowerCase();
+  const unknown = (reasonCode) => ({
+    trustedCurrentReceipt: {},
+    projection: projectKitchenBeoReceiptHistory({
+      state: "UNKNOWN",
+      receipts: [],
+      truncated: true,
+      reasonCodes: [reasonCode]
+    })
+  });
+  if (
+    !/^beo_[a-f0-9]{48}$/u.test(latestReceiptId)
+    || embeddedLatestReceiptId !== latestReceiptId
+  ) {
+    return unknown("receipt_history_pointer_invalid");
+  }
+  const modern = Number(pointer.receiptHistorySchemaVersion)
+    === KITCHEN_BEO_RECEIPT_HISTORY_SCHEMA_VERSION;
+  let receiptIds;
+  let truncated;
+  if (modern) {
+    receiptIds = Array.isArray(pointer.recentReceiptIds)
+      ? pointer.recentReceiptIds.map((value) => normalizeText(value).toLowerCase())
+      : [];
+    truncated = pointer.receiptHistoryTruncated;
+    if (
+      !receiptIds.length
+      || receiptIds.length > KITCHEN_BEO_RECEIPT_HISTORY_LIMIT
+      || receiptIds[0] !== latestReceiptId
+      || receiptIds.some((value) => !/^beo_[a-f0-9]{48}$/u.test(value))
+      || new Set(receiptIds).size !== receiptIds.length
+      || typeof truncated !== "boolean"
+    ) {
+      return unknown("receipt_history_contract_invalid");
+    }
+  } else {
+    if (
+      pointer.receiptHistorySchemaVersion !== undefined
+      || pointer.recentReceiptIds !== undefined
+      || pointer.receiptHistoryTruncated !== undefined
+    ) {
+      return unknown("receipt_history_schema_unsupported");
+    }
+    receiptIds = [latestReceiptId];
+    truncated = true;
+  }
+  const receiptSnapshots = await Promise.all(
+    receiptIds.map((receiptId) => refs.receiptsRef.doc(receiptId).get())
+  );
+  const projected = [];
+  let trustedCurrentReceipt = null;
+  try {
+    receiptSnapshots.forEach((snapshot, index) => {
+      if (!snapshot.exists) {
+        throw new KitchenBeoAuthorityError(
+          "failed-precondition",
+          "A declared Kitchen BEO receipt is unavailable."
+        );
+      }
+      const receiptId = receiptIds[index];
+      const record = snapshot.data() || {};
+      const stored = projectStoredKitchenBeoArtifact(record, {
+        organizationId,
+        quoteId,
+        receiptId
+      });
+      if (index === 0) trustedCurrentReceipt = record;
+      projected.push({ ...stored.receipt, current: index === 0 });
+    });
+  } catch {
+    return unknown("receipt_history_evidence_invalid");
+  }
+  return {
+    trustedCurrentReceipt,
+    projection: projectKitchenBeoReceiptHistory({
+      state: modern ? (truncated ? "PARTIAL" : "COMPLETE") : "PARTIAL",
+      receipts: projected,
+      truncated,
+      reasonCodes: modern
+        ? (truncated ? ["receipt_history_bound_reached"] : ["receipt_history_complete"])
+        : ["prior_receipt_history_unavailable"]
+    })
+  };
+}
+
 async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
   const refs = kitchenBeoRefs(organizationId, quoteId);
   const [quoteSnap, artifactSnap, invalidationsSnap] = await Promise.all([
@@ -12926,6 +13599,14 @@ async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
   if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
     throw new functions.https.HttpsError("permission-denied", "Quote is outside your organization.");
   }
+  const artifactPointer = artifactSnap.exists ? artifactSnap.data() || {} : null;
+  const receiptHistory = await readKitchenBeoReceiptHistory({
+    refs,
+    artifactExists: artifactSnap.exists,
+    artifactPointer,
+    organizationId,
+    quoteId
+  });
   if (invalidationsSnap.size > 100) {
     return {
       quote,
@@ -12934,46 +13615,21 @@ async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
         authority: "server_derived",
         state: KITCHEN_BEO_FRESHNESS_STATES.UNKNOWN,
         observedAtISO: nowISO,
-        reasonCodes: ["invalidation_evidence_truncated"]
-      })
+        reasonCodes: ["invalidation_evidence_truncated"],
+        receiptId: normalizeText(receiptHistory.trustedCurrentReceipt?.receiptId),
+        receiptDependencyFingerprint: normalizeText(
+          receiptHistory.trustedCurrentReceipt?.dependencyFingerprint
+        ),
+        commercialSourceRevisionId: normalizeText(
+          receiptHistory.trustedCurrentReceipt?.commercialSourceRevisionId
+        )
+      }),
+      receiptHistory: receiptHistory.projection
     };
-  }
-  let trustedReceipt = null;
-  if (artifactSnap.exists) {
-    const artifactPointer = artifactSnap.data() || {};
-    const receiptId = normalizeText(artifactPointer.latestReceiptId).toLowerCase();
-    const pointerReceiptId = normalizeText(
-      artifactPointer.latestReceipt?.receiptId
-    ).toLowerCase();
-    if (/^beo_[a-f0-9]{48}$/u.test(receiptId) && pointerReceiptId === receiptId) {
-      const receiptSnap = await refs.organizationRef
-        .collection(KITCHEN_BEO_RECEIPTS_COLLECTION)
-        .doc(receiptId)
-        .get();
-      if (receiptSnap.exists) {
-        const receiptRecord = receiptSnap.data() || {};
-        try {
-          projectStoredKitchenBeoArtifact(receiptRecord, {
-            organizationId,
-            quoteId,
-            receiptId
-          });
-          trustedReceipt = receiptRecord;
-        } catch {
-          // A pointer without matching immutable bytes cannot establish
-          // freshness. The authority adapter maps this sentinel to UNKNOWN.
-          trustedReceipt = {};
-        }
-      } else {
-        trustedReceipt = {};
-      }
-    } else {
-      trustedReceipt = {};
-    }
   }
   const status = kitchenBeoAuthority.deriveArtifactStatus({
     canonicalQuote: quote,
-    trustedReceipt,
+    trustedReceipt: receiptHistory.trustedCurrentReceipt,
     invalidations: invalidationsSnap.docs
       .map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) }))
       .filter((item) => normalizeText(item.artifactNodeId || item.nodeId) === "artifact.kitchen_beo")
@@ -12988,7 +13644,8 @@ async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
   });
   return {
     quote,
-    status: projectKitchenBeoStatus(status)
+    status: projectKitchenBeoStatus(status),
+    receiptHistory: receiptHistory.projection
   };
 }
 
@@ -13016,7 +13673,8 @@ exports.getKitchenBeoArtifactStatus = functions.region(REGION).https.onCall(asyn
       storage: "firebase",
       organizationId,
       quoteId,
-      status: result.status
+      status: result.status,
+      receiptHistory: result.receiptHistory
     };
   } catch (error) {
     return throwKitchenBeoFailure(error, "getKitchenBeoArtifactStatus");
@@ -13080,6 +13738,18 @@ exports.downloadKitchenBeoReceipt = functions.region(REGION).https.onCall(async 
   }
 });
 
+function kitchenBeoReconciliationRequestId({ receiptId, applyReceiptId, invalidationIds }) {
+  const digest = createHash("sha256")
+    .update(commercialDependencyGraphCore.canonicalSerialize({
+      schemaVersion: "kitchen-beo-reconciliation-request-v1",
+      receiptId,
+      applyReceiptId,
+      invalidationIds: [...invalidationIds].sort()
+    }))
+    .digest("hex");
+  return `change_reconcile_${digest.slice(0, 32)}`;
+}
+
 exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, context) => {
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
@@ -13119,96 +13789,350 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
     });
     const refs = kitchenBeoRefs(organizationId, quoteId, claim.receiptId);
     const existingReceiptSnap = await refs.receiptRef.get();
-    if (existingReceiptSnap.exists) {
-      const existing = existingReceiptSnap.data() || {};
-      if (normalizeText(existing.requestId) !== requestId) {
-        throw new KitchenBeoAuthorityError(
-          "failed-precondition",
-          "The prior Kitchen BEO receipt is bound to another request identity."
-        );
-      }
-      const projected = projectStoredKitchenBeoArtifact(existing, {
-        organizationId,
-        quoteId,
-        receiptId: claim.receiptId
+    let generatedAtISO = "";
+    let proposedRecord = null;
+    if (!existingReceiptSnap.exists) {
+      generatedAtISO = new Date().toISOString();
+      const artifact = renderKitchenBeoPdf({
+        payload: claim.payload,
+        provenance: { ...claim, generatedAtISO }
       });
-      const current = await readKitchenBeoStatus({
-        organizationId,
-        quoteId,
-        nowISO: new Date().toISOString()
+      const proposedReceipt = kitchenBeoAuthority.buildGenerationReceipt({
+        claim,
+        artifact,
+        trustedCompletion: { generatedAtISO }
       });
-      return {
-        ok: true,
-        storage: "firebase",
-        organizationId,
-        quoteId,
-        idempotent: true,
-        receipt: projected.receipt,
-        status: current.status,
-        artifact: projected.artifact
+      proposedRecord = {
+        ...proposedReceipt,
+        artifactBase64: artifact.bytes.toString("base64")
       };
     }
 
-    const generatedAtISO = new Date().toISOString();
-    const artifact = renderKitchenBeoPdf({
-      payload: claim.payload,
-      provenance: { ...claim, generatedAtISO }
-    });
-    const proposedReceipt = kitchenBeoAuthority.buildGenerationReceipt({
-      claim,
-      artifact,
-      trustedCompletion: { generatedAtISO }
-    });
-    const artifactBase64 = artifact.bytes.toString("base64");
-
     const persisted = await db.runTransaction(async (tx) => {
-      const [transactionQuoteSnap, transactionReceiptSnap] = await Promise.all([
+      const [
+        transactionQuoteSnap,
+        transactionReceiptSnap,
+        artifactSnap,
+        dependencyStateSnap,
+        invalidationsSnap
+      ] = await Promise.all([
         tx.get(refs.quoteRef),
-        tx.get(refs.receiptRef)
+        tx.get(refs.receiptRef),
+        tx.get(refs.artifactRef),
+        tx.get(refs.dependencyStateRef),
+        tx.get(refs.invalidationsRef.orderBy(FieldPath.documentId())
+          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1))
       ]);
       if (!transactionQuoteSnap.exists) {
         throw new KitchenBeoAuthorityError("not-found", "Quote not found.");
       }
-      if (transactionReceiptSnap.exists) {
-        const existing = transactionReceiptSnap.data() || {};
-        if (normalizeText(existing.requestId) !== requestId || !normalizeText(existing.artifactBase64)) {
-          throw new KitchenBeoAuthorityError(
-            "already-exists",
-            "Kitchen BEO request identity is already bound to different evidence."
-          );
-        }
-        return { idempotent: true, record: existing };
+      if (invalidationsSnap.size > COMMERCIAL_CHANGE_INVALIDATION_LIMIT) {
+        throw new KitchenBeoAuthorityError(
+          "resource-exhausted",
+          "Kitchen BEO dependency evidence exceeds the bounded complete set."
+        );
       }
       const transactionQuote = { id: quoteId, ...(transactionQuoteSnap.data() || {}) };
+      if (normalizeOrganizationId(transactionQuote.organizationId) !== organizationId) {
+        throw new KitchenBeoAuthorityError(
+          "permission-denied",
+          "The Kitchen BEO quote is outside the requested organization."
+        );
+      }
       const transactionClaim = kitchenBeoAuthority.buildGenerationClaim({
         canonicalQuote: transactionQuote,
         request: { requestId },
         trustedContext
       });
-      if (
-        commercialDependencyGraphCore.canonicalSerialize(transactionClaim)
-        !== commercialDependencyGraphCore.canonicalSerialize(claim)
-      ) {
-        throw new KitchenBeoAuthorityError(
-          "aborted",
-          "The canonical quote changed while the Kitchen BEO was generated. Retry from the current record."
-        );
+      let record;
+      let idempotent = false;
+      if (transactionReceiptSnap.exists) {
+        record = transactionReceiptSnap.data() || {};
+        if (normalizeText(record.requestId) !== requestId || !normalizeText(record.artifactBase64)) {
+          throw new KitchenBeoAuthorityError(
+            "already-exists",
+            "Kitchen BEO request identity is already bound to different evidence."
+          );
+        }
+        projectStoredKitchenBeoArtifact(record, {
+          organizationId,
+          quoteId,
+          receiptId: claim.receiptId
+        });
+        idempotent = true;
+      } else {
+        if (
+          !proposedRecord
+          || commercialDependencyGraphCore.canonicalSerialize(transactionClaim)
+            !== commercialDependencyGraphCore.canonicalSerialize(claim)
+        ) {
+          throw new KitchenBeoAuthorityError(
+            "aborted",
+            "The canonical quote changed while the Kitchen BEO was generated. Retry from the current record."
+          );
+        }
+        projectStoredKitchenBeoArtifact(proposedRecord, {
+          organizationId,
+          quoteId,
+          receiptId: claim.receiptId
+        });
+        record = proposedRecord;
       }
-      const record = {
-        ...proposedReceipt,
-        artifactBase64,
-        createdAt: FieldValue.serverTimestamp()
-      };
-      tx.create(refs.receiptRef, record);
-      tx.set(refs.artifactRef, {
+
+      const invalidationRecords = invalidationsSnap.docs.map((snapshot) => ({
+        id: snapshot.id,
+        ...(snapshot.data() || {})
+      }));
+      const dependencyStateRecord = dependencyStateSnap.exists
+        ? dependencyStateSnap.data() || {}
+        : null;
+      const dependencyProjection = projectCommercialDependencyState({
         organizationId,
         quoteId,
-        latestReceipt: proposedReceipt,
-        latestReceiptId: proposedReceipt.receiptId,
-        updatedAtISO: generatedAtISO,
-        updatedAt: FieldValue.serverTimestamp()
-      }, { merge: true });
-      return { idempotent: false, record };
+        quote: transactionQuote,
+        stateRecord: dependencyStateRecord,
+        invalidationRecords,
+        observedAtISO: generatedAtISO || claimedAtISO
+      });
+      if (
+        (!dependencyStateRecord && invalidationRecords.length > 0)
+        || (dependencyStateRecord && dependencyProjection.state === "UNKNOWN")
+      ) {
+        throw new KitchenBeoAuthorityError(
+          "failed-precondition",
+          "Kitchen BEO dependency evidence is incomplete and must be repaired before generation."
+        );
+      }
+      const activeRevisionId = normalizeText(
+        transactionQuote.activeVersionId || transactionQuote.versionMeta?.versionId
+      );
+      const openKitchenBeoInvalidations = invalidationRecords.filter((item) => (
+        normalizeText(item.state).toLowerCase() === "open"
+        && normalizeText(item.artifactNodeId || item.nodeId) === "artifact.kitchen_beo"
+      ));
+      const latestApplyReceiptId = normalizeText(dependencyStateRecord?.latestApplyReceiptId);
+      const qualifyingInvalidations = openKitchenBeoInvalidations.filter((item) => (
+        normalizeText(item.nodeId) === "artifact.kitchen_beo"
+        && normalizeText(item.artifactNodeId) === "artifact.kitchen_beo"
+        && normalizeText(item.nodeKind) === "artifact"
+        && normalizeText(item.targetRevisionId) === activeRevisionId
+        && normalizeText(item.applyReceiptId) === latestApplyReceiptId
+      ));
+      if (qualifyingInvalidations.length !== openKitchenBeoInvalidations.length) {
+        throw new KitchenBeoAuthorityError(
+          "failed-precondition",
+          "An open Kitchen BEO invalidation is outside the exact active dependency scope."
+        );
+      }
+
+      let dependencyReconciliation = null;
+      let plannedReconciliation = null;
+      let nextDependencyState = null;
+      let resolutionById = new Map();
+      let reconciliationRef = null;
+      let reconciliationRequestFingerprint = "";
+      let resolutionNote = "";
+      if (qualifyingInvalidations.length > 0) {
+        const pointerReceiptId = normalizeText(artifactSnap.data()?.latestReceiptId).toLowerCase();
+        if (transactionReceiptSnap.exists && pointerReceiptId !== claim.receiptId) {
+          throw new KitchenBeoAuthorityError(
+            "failed-precondition",
+            "Only the current Kitchen BEO receipt can resolve active dependency evidence."
+          );
+        }
+        const remainingKitchenBeoInvalidations = invalidationRecords
+          .filter((item) => !qualifyingInvalidations.some((candidate) => (
+            normalizeText(candidate.invalidationId || candidate.id)
+              === normalizeText(item.invalidationId || item.id)
+          )))
+          .filter((item) => (
+            normalizeText(item.artifactNodeId || item.nodeId) === "artifact.kitchen_beo"
+          ))
+          .map((item) => ({
+            id: normalizeText(item.invalidationId || item.id),
+            artifactNodeId: "artifact.kitchen_beo",
+            state: normalizeText(item.state),
+            classification: normalizeText(item.classification)
+          }));
+        const postGenerationStatus = kitchenBeoAuthority.deriveArtifactStatus({
+          canonicalQuote: transactionQuote,
+          trustedReceipt: record,
+          invalidations: remainingKitchenBeoInvalidations,
+          sourceState: "available",
+          trustedContext: { organizationId, quoteId, nowISO: generatedAtISO || claimedAtISO }
+        });
+        if (postGenerationStatus.state !== KITCHEN_BEO_FRESHNESS_STATES.CURRENT) {
+          throw new KitchenBeoAuthorityError(
+            "failed-precondition",
+            "The generated Kitchen BEO does not establish current evidence for the active quote revision."
+          );
+        }
+        const invalidationIds = qualifyingInvalidations
+          .map((item) => normalizeText(item.invalidationId || item.id))
+          .sort();
+        const reconciliationRequestId = kitchenBeoReconciliationRequestId({
+          receiptId: claim.receiptId,
+          applyReceiptId: latestApplyReceiptId,
+          invalidationIds
+        });
+        reconciliationRef = refs.reconciliationReceiptsRef.doc(reconciliationRequestId);
+        const [applySnap, priorReconciliationsSnap, existingReconciliationSnap] = await Promise.all([
+          tx.get(refs.applyReceiptsRef.doc(latestApplyReceiptId)),
+          tx.get(refs.reconciliationReceiptsRef
+            .where("applyReceiptId", "==", latestApplyReceiptId)
+            .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1)),
+          tx.get(reconciliationRef)
+        ]);
+        if (
+          !applySnap.exists
+          || existingReconciliationSnap.exists
+          || priorReconciliationsSnap.size > COMMERCIAL_CHANGE_INVALIDATION_LIMIT
+        ) {
+          throw new KitchenBeoAuthorityError(
+            "failed-precondition",
+            "The exact bounded commercial apply evidence is unavailable for Kitchen BEO reconciliation."
+          );
+        }
+        const applyReceipt = commercialChangeAuthority.validateApplyReceipt(
+          applySnap.data()?.receipt
+        );
+        if (
+          applyReceipt.organizationId !== organizationId
+          || applyReceipt.quoteId !== quoteId
+          || applyReceipt.receiptId !== latestApplyReceiptId
+          || applyReceipt.newRevisionId !== activeRevisionId
+          || applyReceipt.receiptDigest
+            !== normalizeText(dependencyStateRecord?.latestApplyReceiptDigest)
+        ) {
+          throw new KitchenBeoAuthorityError(
+            "failed-precondition",
+            "The Kitchen BEO reconciliation apply receipt is stale or outside quote scope."
+          );
+        }
+        const evidenceByInvalidationId = Object.fromEntries(
+          qualifyingInvalidations.map((item) => {
+            const invalidationId = normalizeText(item.invalidationId || item.id);
+            return [invalidationId, {
+              schemaVersion: COMMERCIAL_CHANGE_RECONCILIATION_EVIDENCE_VERSION,
+              authority: "server_authoritative",
+              evidenceId: claim.receiptId,
+              invalidationId,
+              nodeId: "artifact.kitchen_beo",
+              sourceRevisionId: activeRevisionId,
+              resolution: "artifact_current",
+              state: "CURRENT"
+            }];
+          })
+        );
+        plannedReconciliation = commercialChangeAuthority.reconcile({
+          applyReceipt,
+          request: {
+            requestId: reconciliationRequestId,
+            organizationId,
+            quoteId,
+            invalidationIds
+          },
+          evidenceByInvalidationId,
+          priorReconciliationReceipts: priorReconciliationsSnap.docs
+            .map((snapshot) => snapshot.data()?.receipt)
+            .filter(Boolean),
+          trustedContext: {
+            actor: commercialChangeActor(staff),
+            nowISO: generatedAtISO || claimedAtISO,
+            catalogAuthorityDigest: normalizeText(dependencyStateRecord.catalogAuthorityDigest),
+            policyVersion: COMMERCIAL_CHANGE_POLICY_VERSION
+          },
+          current: { activeRevisionId }
+        });
+        resolutionById = new Map(plannedReconciliation.receipt.resolutions.map((item) => [
+          item.invalidationId,
+          item
+        ]));
+        resolutionNote = `Resolved automatically by exact current Kitchen BEO generation receipt ${claim.receiptId}.`;
+        reconciliationRequestFingerprint = commercialReconciliationRequestFingerprint({
+          organizationId,
+          quoteId,
+          applyReceiptId: latestApplyReceiptId,
+          invalidationIds,
+          resolutionNote
+        });
+        const nextInvalidations = invalidationRecords.map((item) => (
+          invalidationIds.includes(normalizeText(item.invalidationId || item.id))
+            ? { ...item, state: "resolved" }
+            : item
+        ));
+        const openInvalidationCount = nextInvalidations.filter((item) => (
+          normalizeText(item.state).toLowerCase() === "open"
+        )).length;
+        nextDependencyState = {
+          ...dependencyStateRecord,
+          state: openInvalidationCount === 0 ? "READY" : "BLOCKED",
+          safeToPublish: openInvalidationCount === 0,
+          openInvalidationCount,
+          resolvedInvalidationCount: nextInvalidations.length - openInvalidationCount,
+          lastReconciliationReceiptId: plannedReconciliation.receipt.receiptId,
+          updatedAtISO: generatedAtISO || claimedAtISO
+        };
+        dependencyReconciliation = {
+          receiptId: plannedReconciliation.receipt.receiptId,
+          applyReceiptId: latestApplyReceiptId,
+          resolvedInvalidationIds: invalidationIds,
+          resolvedCount: invalidationIds.length
+        };
+      }
+
+      if (!transactionReceiptSnap.exists) {
+        const history = planKitchenBeoReceiptHistory(
+          artifactSnap.exists ? artifactSnap.data() || {} : null,
+          claim.receiptId
+        );
+        tx.create(refs.receiptRef, {
+          ...record,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        tx.set(refs.artifactRef, {
+          organizationId,
+          quoteId,
+          latestReceipt: kitchenBeoAuthority.validateGenerationReceipt(record),
+          latestReceiptId: record.receiptId,
+          ...history,
+          updatedAtISO: generatedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+      if (plannedReconciliation) {
+        const resolvedBy = commercialChangeActor(staff);
+        qualifyingInvalidations.forEach((invalidation) => {
+          const invalidationId = normalizeText(invalidation.invalidationId || invalidation.id);
+          const resolution = resolutionById.get(invalidationId);
+          tx.update(refs.invalidationsRef.doc(invalidationId), {
+            state: "resolved",
+            resolution: normalizeText(resolution?.resolution),
+            resolutionReceiptId: plannedReconciliation.receipt.receiptId,
+            resolutionReceiptDigest: plannedReconciliation.receipt.receiptDigest,
+            evidenceId: normalizeText(resolution?.evidenceId),
+            evidenceDigest: normalizeText(resolution?.evidenceDigest),
+            resolutionNote,
+            resolvedAtISO: generatedAtISO || claimedAtISO,
+            resolvedBy,
+            updatedAt: FieldValue.serverTimestamp()
+          });
+        });
+        tx.create(reconciliationRef, {
+          organizationId,
+          quoteId,
+          applyReceiptId: latestApplyReceiptId,
+          requestFingerprint: reconciliationRequestFingerprint,
+          receipt: plannedReconciliation.receipt,
+          createdAtISO: generatedAtISO || claimedAtISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        tx.update(refs.dependencyStateRef, {
+          ...nextDependencyState,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      return { idempotent, record, dependencyReconciliation };
     });
 
     const current = await readKitchenBeoStatus({
@@ -13229,6 +14153,8 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
       idempotent: persisted.idempotent,
       receipt: projected.receipt,
       status: current.status,
+      receiptHistory: current.receiptHistory,
+      dependencyReconciliation: persisted.dependencyReconciliation,
       artifact: projected.artifact
     };
   } catch (error) {
@@ -13567,7 +14493,9 @@ exports.getRevenueAutopilotOperations = functions.region(REGION).https.onCall(as
     const refs = revenueAutopilotRefs(organizationId, { quoteId });
     const observedAtISO = new Date().toISOString();
     let jobsQuery = refs.jobsRef;
-    let attentionQuery = refs.attentionRef;
+    let attentionQuery = refs.attentionRef
+      .where("type", "==", "unread_customer_reply")
+      .where("state", "==", "open");
     if (quoteId) {
       jobsQuery = jobsQuery.where("quoteId", "==", quoteId);
       attentionQuery = attentionQuery.where("quoteId", "==", quoteId);
@@ -14021,7 +14949,16 @@ exports.materializeRevenueAutopilotJobs = functions
               organizationId,
               quoteId,
               recordedAtISO: normalizeText(prior.recordedAtISO)
-            })
+            }),
+            createdCount: Number.isSafeInteger(Number(prior.createdCount))
+              ? Math.max(0, Number(prior.createdCount))
+              : 0,
+            updatedCount: Number.isSafeInteger(Number(prior.updatedCount))
+              ? Math.max(0, Number(prior.updatedCount))
+              : 0,
+            laneResults: prior.laneResults && typeof prior.laneResults === "object"
+              ? prior.laneResults
+              : {}
           };
         }
         if (!quoteSnap.exists || !organizationSnap.exists) {
@@ -14173,13 +15110,26 @@ exports.materializeRevenueAutopilotJobs = functions
         ]) {
           try {
             if (portalExpired && kind !== "post_event_review_request") {
+              const expiryUpdates = planRevenueAutopilotJobStops({
+                jobs: existingJobs.filter((job) => normalizeText(job.kind).toLowerCase() === kind),
+                reason: "portal_expired",
+                nowISO
+              });
               laneResults[kind] = {
                 state: "stopped",
                 createCount: 0,
-                updateCount: 0,
+                updateCount: expiryUpdates.length,
                 conflictCount: 0,
                 reasonCodes: ["portal_expired"]
               };
+              for (const update of expiryUpdates) {
+                tx.set(refs.jobsRef.doc(update.jobId), {
+                  ...update,
+                  updatedAtISO: nowISO,
+                  updatedAt: FieldValue.serverTimestamp()
+                }, { merge: true });
+                updatedCount += 1;
+              }
               continue;
             }
             const canonical = { ...canonicalBase };
@@ -14439,6 +15389,7 @@ exports.acknowledgeRevenueAutopilotReply = functions.region(REGION).https.onCall
             receiptId: requestId
           },
           latestActorType: "customer",
+          revenueAutopilotAttention: FieldValue.delete(),
           updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
         tx.set(attentionRef, {
@@ -14557,6 +15508,8 @@ exports.reconcileRevenueAutopilotJob = functions
           quoteId,
           jobId,
           idempotent: true,
+          reconciliationState: normalizeText(claimed.receipt.reconciliationState)
+            || "provider_accepted",
           receipt: revenueAutopilotReceipt({
             requestId,
             operation: "reconcile_job",
@@ -14564,6 +15517,122 @@ exports.reconcileRevenueAutopilotJob = functions
             quoteId,
             jobId,
             recordedAtISO
+          })
+        };
+      }
+      let recheckedAuthority;
+      let rechecked;
+      const recheckedAtISO = new Date().toISOString();
+      try {
+        recheckedAuthority = await readRevenueAutopilotExecutionAuthority({
+          organizationId,
+          quoteId,
+          kind: normalizeText(claimed.raw?.kind).toLowerCase(),
+          existingJobs: [claimed.raw],
+          nowISO: recheckedAtISO
+        });
+        if (!recheckedAuthority.quoteActivity.active) {
+          const [suppressionUpdate] = planRevenueAutopilotJobStops({
+            jobs: [claimed.raw],
+            reason: recheckedAuthority.quoteActivity.reason,
+            nowISO: recheckedAtISO
+          });
+          rechecked = {
+            action: "reconcile_blocked",
+            reason: recheckedAuthority.quoteActivity.reason,
+            job: { ...claimed.raw, ...(suppressionUpdate || {}) }
+          };
+        } else {
+          rechecked = planRevenueAutopilotExecution({
+            job: claimed.raw,
+            global: recheckedAuthority.input.global,
+            tenantPolicy: recheckedAuthority.input.tenantPolicy,
+            controls: recheckedAuthority.input.controls,
+            stopScope: recheckedAuthority.input.stopScope,
+            evidence: recheckedAuthority.input.evidence,
+            nowISO: recheckedAtISO
+          });
+        }
+      } catch (authorityError) {
+        await db.runTransaction(async (tx) => {
+          const currentSnap = await tx.get(jobRef);
+          if (!currentSnap.exists) return;
+          const current = currentSnap.data() || {};
+          if (normalizeText(current.reconciliation?.requestId) !== requestId) return;
+          tx.set(jobRef, {
+            reconciliation: FieldValue.delete(),
+            updatedAtISO: recheckedAtISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+        throw authorityError;
+      }
+      if (rechecked.action !== "reconcile") {
+        const withheldAtISO = new Date().toISOString();
+        const reason = normalizeText(rechecked.reason) || "reconciliation_authority_withheld";
+        const publicReceipt = revenueAutopilotReceipt({
+          requestId,
+          operation: "reconcile_job",
+          organizationId,
+          quoteId,
+          jobId,
+          recordedAtISO: withheldAtISO
+        });
+        const withheld = await db.runTransaction(async (tx) => {
+          const [jobSnap, receiptSnap] = await Promise.all([
+            tx.get(jobRef),
+            tx.get(receiptRef)
+          ]);
+          if (receiptSnap.exists) {
+            return { idempotent: true, receipt: receiptSnap.data() || {} };
+          }
+          if (!jobSnap.exists) {
+            throw new RevenueAutopilotAuthorityError(
+              "not-found",
+              "Revenue Autopilot job not found."
+            );
+          }
+          const current = { jobId, ...(jobSnap.data() || {}) };
+          if (
+            normalizeText(current.state) !== REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS
+            || normalizeText(current.reconciliation?.requestId) !== requestId
+          ) {
+            throw new RevenueAutopilotAuthorityError(
+              "aborted",
+              "Revenue Autopilot reconciliation authority changed before it was withheld."
+            );
+          }
+          tx.set(jobRef, {
+            ...current,
+            ...(rechecked.job || {}),
+            reconciliation: FieldValue.delete(),
+            updatedAtISO: withheldAtISO,
+            updatedAt: FieldValue.serverTimestamp()
+          });
+          tx.create(receiptRef, {
+            ...publicReceipt,
+            reconciliationState: "withheld",
+            outcomeReason: reason,
+            createdAt: FieldValue.serverTimestamp()
+          });
+          return { idempotent: false, receipt: publicReceipt };
+        });
+        return {
+          ok: true,
+          storage: "firebase",
+          organizationId,
+          quoteId,
+          jobId,
+          idempotent: withheld.idempotent,
+          reconciliationState: "withheld",
+          reason,
+          receipt: revenueAutopilotReceipt({
+            requestId,
+            operation: "reconcile_job",
+            organizationId,
+            quoteId,
+            jobId,
+            recordedAtISO: normalizeText(withheld.receipt.recordedAtISO) || withheldAtISO
           })
         };
       }
@@ -14647,6 +15716,7 @@ exports.reconcileRevenueAutopilotJob = functions
         });
         tx.create(receiptRef, {
           ...publicReceipt,
+          reconciliationState: "provider_accepted",
           provider: "resend",
           providerMessageId: providerResult.id,
           createdAt: FieldValue.serverTimestamp()
@@ -14672,6 +15742,7 @@ exports.reconcileRevenueAutopilotJob = functions
         quoteId,
         jobId,
         idempotent: false,
+        reconciliationState: "provider_accepted",
         receipt: publicReceipt
       };
     } catch (error) {
@@ -14912,11 +15983,13 @@ exports.runRevenueAutopilotSchedule = functions
   .onRun(async () => {
     const startedAtISO = new Date().toISOString();
     const global = getRevenueAutopilotGlobalControl(startedAtISO);
-    if (!global.enabled || !global.sendsEnabled || global.provider.state !== "configured") {
+    const scheduleMode = planRevenueAutopilotScheduleMode(global);
+    if (!scheduleMode.materialize) {
       functions.logger.info("Revenue Autopilot schedule remained dormant", {
         enabled: global.enabled,
         sendsEnabled: global.sendsEnabled,
-        providerState: global.provider.state
+        providerState: global.provider.state,
+        reason: scheduleMode.reason
       });
       return { ok: true, state: "dormant", startedAtISO };
     }
@@ -14925,6 +15998,8 @@ exports.runRevenueAutopilotSchedule = functions
     let quotesObserved = 0;
     let jobsCreated = 0;
     let jobsUpdated = 0;
+    let attentionCreated = 0;
+    let attentionUpdated = 0;
     let dispatchesObserved = 0;
     let failures = 0;
     const perTenantQuoteLimit = 10;
@@ -14935,6 +16010,7 @@ exports.runRevenueAutopilotSchedule = functions
         tenantDoc.data()?.organizationId || tenantDoc.id
       );
       if (!organizationId) continue;
+      try {
       const policyRef = db.collection(ORGANIZATIONS_COLLECTION)
         .doc(organizationId)
         .collection(REVENUE_AUTOPILOT_POLICY_COLLECTION)
@@ -14972,6 +16048,8 @@ exports.runRevenueAutopilotSchedule = functions
           });
           jobsCreated += materialized.createdCount;
           jobsUpdated += materialized.updatedCount;
+          attentionCreated += Number(materialized.attention?.createdCount) || 0;
+          attentionUpdated += Number(materialized.attention?.updatedCount) || 0;
         } catch (error) {
           failures += 1;
           functions.logger.warn("Revenue Autopilot quote materialization skipped", {
@@ -14981,36 +16059,46 @@ exports.runRevenueAutopilotSchedule = functions
           });
         }
       }
-      const jobPage = await readRevenueAutopilotTenantWorkPage({
-        collectionRef: organizationRef.collection(REVENUE_AUTOPILOT_JOBS_COLLECTION),
-        cursor: normalizeText(tenantRegistry.schedulerJobCursor),
-        limit: perTenantDispatchLimit
-      });
-      const jobsSnap = jobPage.snapshot;
-      for (const jobDoc of jobsSnap.docs) {
-        try {
-          const outcome = await dispatchRevenueAutopilotJob({
-            organizationId,
-            jobId: jobDoc.id
-          });
-          if (!new Set(["none", "wait", "block", "missing"]).has(outcome.action)) {
-            dispatchesObserved += 1;
+      let jobPage = null;
+      if (scheduleMode.dispatch) {
+        jobPage = await readRevenueAutopilotTenantWorkPage({
+          collectionRef: organizationRef.collection(REVENUE_AUTOPILOT_JOBS_COLLECTION),
+          cursor: normalizeText(tenantRegistry.schedulerJobCursor),
+          limit: perTenantDispatchLimit
+        });
+        const jobsSnap = jobPage.snapshot;
+        for (const jobDoc of jobsSnap.docs) {
+          try {
+            const outcome = await dispatchRevenueAutopilotJob({
+              organizationId,
+              jobId: jobDoc.id
+            });
+            if (!new Set(["none", "wait", "block", "missing"]).has(outcome.action)) {
+              dispatchesObserved += 1;
+            }
+          } catch (error) {
+            failures += 1;
+            functions.logger.warn("Revenue Autopilot job dispatch skipped", {
+              organizationId,
+              jobId: jobDoc.id,
+              error: normalizeText(error?.message).slice(0, 200)
+            });
           }
-        } catch (error) {
-          failures += 1;
-          functions.logger.warn("Revenue Autopilot job dispatch skipped", {
-            organizationId,
-            jobId: jobDoc.id,
-            error: normalizeText(error?.message).slice(0, 200)
-          });
         }
       }
       await tenantDoc.ref.set({
         schedulerQuoteCursor: quotePage.nextCursor,
-        schedulerJobCursor: jobPage.nextCursor,
+        ...(jobPage ? { schedulerJobCursor: jobPage.nextCursor } : {}),
         schedulerCursorUpdatedAtISO: new Date().toISOString(),
         schedulerCursorUpdatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
+      } catch (error) {
+        failures += 1;
+        functions.logger.warn("Revenue Autopilot tenant schedule page skipped", {
+          organizationId,
+          error: normalizeText(error?.message).slice(0, 200)
+        });
+      }
     }
     await tenantPage.stateRef.set({
       tenantCursor: tenantPage.nextCursor,
@@ -15025,6 +16113,8 @@ exports.runRevenueAutopilotSchedule = functions
       quotesObserved,
       jobsCreated,
       jobsUpdated,
+      attentionCreated,
+      attentionUpdated,
       dispatchesObserved,
       failures,
       startedAtISO,
@@ -15032,11 +16122,13 @@ exports.runRevenueAutopilotSchedule = functions
     });
     return {
       ok: true,
-      state: "completed",
+      state: scheduleMode.state,
       tenantCount: tenantSnap.docs.length,
       quotesObserved,
       jobsCreated,
       jobsUpdated,
+      attentionCreated,
+      attentionUpdated,
       dispatchesObserved,
       failures,
       startedAtISO,

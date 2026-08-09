@@ -215,6 +215,28 @@ function makeApply(simulationReceipt, authorizationReceipt, overrides = {}) {
   });
 }
 
+function makeApplyOutcome(simulationReceipt, authorizationReceipt, overrides = {}) {
+  return authority.reconcileApplyOutcome({
+    simulationReceipt,
+    authorizationReceipt,
+    applyReceipt: null,
+    request: {
+      requestId: APPLY_REQUEST_ID,
+      organizationId: ORGANIZATION_ID,
+      quoteId: QUOTE_ID,
+      simulationReceiptId: simulationReceipt.receiptId,
+      authorizationReceiptId: authorizationReceipt?.receiptId || "",
+      expectedBaseRevisionId: BASE_REVISION_ID
+    },
+    trustedContext: {
+      actor: SALES_ACTOR,
+      nowISO: "2026-08-09T12:04:00.000Z"
+    },
+    current: { activeRevisionId: BASE_REVISION_ID },
+    ...overrides
+  });
+}
+
 function reconciliationEvidence(invalidation, index = 0, overrides = {}) {
   const artifactLike = ["artifact", "projection"].includes(invalidation.nodeKind);
   const resolution = invalidation.nodeKind === "artifact"
@@ -490,6 +512,96 @@ describe("server Commercial Change Authority foundation", () => {
       }),
       "already-exists"
     );
+  });
+
+  test("reconciles an exact apply as committed only with its immutable receipt and revision", () => {
+    const simulation = makeSimulation().receipt;
+    const authorization = makeAuthorization(simulation).receipt;
+    const applied = makeApply(simulation, authorization).receipt;
+    const result = makeApplyOutcome(simulation, authorization, {
+      applyReceipt: applied,
+      current: { activeRevisionId: TARGET_REVISION_ID }
+    });
+
+    expect(result.idempotent).toBe(false);
+    expect(result.receipt).toMatchObject({
+      receiptType: "outcome",
+      state: "committed",
+      requestId: APPLY_REQUEST_ID,
+      operationId: applied.operationId,
+      simulationReceiptId: simulation.receiptId,
+      authorizationReceiptId: authorization.receiptId,
+      baseRevisionId: BASE_REVISION_ID,
+      activeRevisionId: TARGET_REVISION_ID,
+      sourceChanged: true,
+      applyReceiptId: applied.receiptId,
+      applyReceiptDigest: applied.receiptDigest,
+      newRevisionId: TARGET_REVISION_ID,
+      appliedRevisionIsActive: true
+    });
+    expect(result.receipt.receiptId).toMatch(/^ccor_[a-f0-9]{48}$/u);
+    expect(result.receipt.receiptDigest).toMatch(/^[a-f0-9]{64}$/u);
+    expect(authority.reconcileApplyOutcome({
+      simulationReceipt: simulation,
+      authorizationReceipt: authorization,
+      applyReceipt: applied,
+      request: {
+        requestId: APPLY_REQUEST_ID,
+        organizationId: ORGANIZATION_ID,
+        quoteId: QUOTE_ID,
+        simulationReceiptId: simulation.receiptId,
+        authorizationReceiptId: authorization.receiptId,
+        expectedBaseRevisionId: BASE_REVISION_ID
+      },
+      trustedContext: {
+        actor: SALES_ACTOR,
+        nowISO: "2026-08-09T12:05:00.000Z"
+      },
+      current: { activeRevisionId: TARGET_REVISION_ID },
+      existingReceipt: result.receipt
+    })).toEqual({ receipt: result.receipt, idempotent: true });
+  });
+
+  test("creates a definitive not-committed outcome without inventing apply evidence", () => {
+    const simulation = makeSimulation().receipt;
+    const authorization = makeAuthorization(simulation).receipt;
+    const result = makeApplyOutcome(simulation, authorization);
+
+    expect(result.receipt).toMatchObject({
+      state: "not_committed",
+      sourceChanged: false,
+      activeRevisionId: BASE_REVISION_ID,
+      expectedApplyReceiptId: expect.stringMatching(/^ccp_[a-f0-9]{48}$/u),
+      applyReceiptId: "",
+      applyReceiptDigest: "",
+      newRevisionId: "",
+      appliedRevisionIsActive: false
+    });
+    expect(JSON.stringify(result.receipt)).toContain("fences that request identity");
+  });
+
+  test("rejects apply outcome evidence outside the exact request and authorization scope", () => {
+    const simulation = makeSimulation().receipt;
+    const authorization = makeAuthorization(simulation).receipt;
+    const applied = makeApply(simulation, authorization).receipt;
+
+    expectAuthorityError(() => makeApplyOutcome(simulation, authorization, {
+      request: {
+        requestId: APPLY_REQUEST_ID,
+        organizationId: ORGANIZATION_ID,
+        quoteId: QUOTE_ID,
+        simulationReceiptId: simulation.receiptId,
+        authorizationReceiptId: authorization.receiptId,
+        expectedBaseRevisionId: "v0099"
+      }
+    }), "failed-precondition");
+    expectAuthorityError(() => makeApplyOutcome(simulation, authorization, {
+      applyReceipt: {
+        ...applied,
+        requestId: `change_apply_${"f".repeat(32)}`
+      },
+      current: { activeRevisionId: TARGET_REVISION_ID }
+    }), "failed-precondition");
   });
 
   test("reconciles only explicitly named dependencies with trusted revision-bound evidence", () => {

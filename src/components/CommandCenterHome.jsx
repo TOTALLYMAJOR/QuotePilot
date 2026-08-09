@@ -52,6 +52,29 @@ export function attentionRowCopy(item) {
         : "Due today";
     return { detail, meta, customerName, quoteLabel };
   }
+  if (item.type === "unread_customer_reply") {
+    return {
+      detail: "A customer reply is waiting in the quote conversation.",
+      meta,
+      customerName,
+      quoteLabel
+    };
+  }
+  if (item.type === "anniversary_rebooking") {
+    const eventName = formatWorkspaceText(item.eventName, { emptyLabel: "Prior event" });
+    const boundWarning = item.sourceBound?.truncated
+      ? " The latest quote-history scan is incomplete; Customer 360 must check for older or matching records."
+      : "";
+    const calendarWarning = item.calendarContext?.source === "tenant"
+      ? ""
+      : ` ${formatWorkspaceText(item.calendarContext?.label, { emptyLabel: "Fallback anniversary calendar" })}.`;
+    return {
+      detail: `${eventName} was booked this week last year. Review the exact accepted source before creating or resuming a rebook draft.${boundWarning}${calendarWarning}`,
+      meta,
+      customerName,
+      quoteLabel
+    };
+  }
   const count = Array.isArray(item.pendingRequests) ? item.pendingRequests.length : 0;
   return { detail: `${count} pending approval${count === 1 ? "" : "s"}`, meta, customerName, quoteLabel };
 }
@@ -223,14 +246,19 @@ export default function CommandCenterHome({
       {state.error && <p className="error-note" role="alert">{state.error}</p>}
 
       <div className="command-center-grid">
-        <div className="command-center-inbox">
+        <div
+          className="command-center-inbox"
+          data-capability-id="cwf-12-central-attention"
+        >
           <h3>Needs your attention</h3>
           {state.loading && !state.attentionSummary && (
             <p className="source-note">Loading attention items...</p>
           )}
           {!state.loading && !hasAnyAttention && !state.error && (
             <p className="source-note">
-              Nothing needs you right now. New change requests, overdue follow-ups, post-event closeouts, and pending approvals will appear here.
+              {state.truncated
+                ? "No attention appears in this bounded snapshot. Additional records may remain outside the completed reads."
+                : "Nothing needs you right now. New customer replies, change requests, overdue follow-ups, post-event closeouts, repeat-event opportunities, and pending approvals will appear here."}
             </p>
           )}
           {hasAnyAttention && (
@@ -240,7 +268,14 @@ export default function CommandCenterHome({
                 const attentionQuote = state.quotes.find((quote) => quote.id === item.quoteId) || item.quote || {};
                 const { detail, customerName, quoteLabel } = attentionRowCopy({ ...item, quote: attentionQuote });
                 return (
-                  <li key={item.id} className="command-center-row">
+                  <li
+                    key={item.id}
+                    className="command-center-row"
+                    {...(item.type === "anniversary_rebooking" ? {
+                      "data-capability-id": "cwf-11-central-anniversary-attention",
+                      "data-capability-state": "verification_required"
+                    } : {})}
+                  >
                     <div className="command-center-row-main">
                       <StatusChip family={family} label={label} />
                       <p className="command-center-row-detail">{detail}</p>
@@ -249,8 +284,25 @@ export default function CommandCenterHome({
                         {quoteLabel ? <> · {quoteLabel}</> : null}
                       </p>
                     </div>
-                    <button type="button" className="ghost" onClick={() => openWorkflowItem(item)}>
-                      Open in Workflow
+                    <button
+                      type="button"
+                      className="ghost"
+                      data-capability-action={item.type === "anniversary_rebooking"
+                        ? "open-exact-version-rebook-review"
+                        : undefined}
+                      onClick={() => {
+                        if (
+                          item.type === "anniversary_rebooking"
+                          && attentionQuote.customerId
+                          && typeof onOpenCustomer === "function"
+                        ) {
+                          onOpenCustomer(attentionQuote.customerId);
+                          return;
+                        }
+                        openWorkflowItem(item);
+                      }}
+                    >
+                      {item.type === "anniversary_rebooking" ? "Review rebook" : "Open in Workflow"}
                     </button>
                   </li>
                 );

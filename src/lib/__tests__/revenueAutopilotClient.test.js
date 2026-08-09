@@ -100,6 +100,27 @@ function mutationResponse(operation, input, overrides = {}) {
       ...scope,
       recordedAtISO: "2026-08-09T16:30:00.000Z"
     },
+    ...(operation === REVENUE_AUTOPILOT_MUTATION_OPERATIONS.materializeJobs
+      ? {
+          createdCount: 0,
+          updatedCount: 0,
+          laneResults: Object.fromEntries([
+            "quote_follow_up",
+            "deposit_reminder",
+            "final_balance_reminder",
+            "post_event_review_request"
+          ].map((kind) => [kind, {
+            state: "ready",
+            createCount: 0,
+            updateCount: 0,
+            conflictCount: 0,
+            reasonCodes: []
+          }]))
+        }
+      : {}),
+    ...(operation === REVENUE_AUTOPILOT_MUTATION_OPERATIONS.reconcileJob
+      ? { reconciliationState: "provider_accepted" }
+      : {}),
     ...overrides
   };
 }
@@ -116,6 +137,7 @@ function operationsResponse(input, overrides = {}) {
       attentionId: IDS.attentionId,
       quoteId: IDS.quoteId,
       messageId: IDS.messageId,
+      kind: "unread_customer_reply",
       state: "open"
     }],
     bounds: {
@@ -349,6 +371,31 @@ describe("Revenue Autopilot read contracts", () => {
     })).rejects.toThrow(/scoped attention/i);
   });
 
+  test.each([
+    ["a resolved historical reply", { kind: "unread_customer_reply", state: "resolved" }],
+    ["another Attention kind", { kind: "deposit_reminder", state: "open" }]
+  ])("rejects %s outside the exact open unread-reply operations contract", async (_label, override) => {
+    const payload = {
+      organizationId: IDS.organizationId,
+      jobLimit: MAX_REVENUE_AUTOPILOT_JOB_READS,
+      attentionLimit: MAX_REVENUE_AUTOPILOT_ATTENTION_READS
+    };
+    mockState.callable.mockResolvedValue({
+      data: operationsResponse(payload, {
+        attention: [{
+          attentionId: IDS.attentionId,
+          quoteId: IDS.quoteId,
+          messageId: IDS.messageId,
+          ...override
+        }]
+      })
+    });
+
+    await expect(getRevenueAutopilotOperations({
+      organizationId: IDS.organizationId
+    })).rejects.toThrow(/only open unread customer replies/i);
+  });
+
   test("reads public unsubscribe context with only the opaque token and strips it from output", async () => {
     mockState.callable.mockResolvedValue({
       data: {
@@ -535,6 +582,152 @@ describe("Revenue Autopilot exact mutation payloads and receipts", () => {
     expect(mockState.httpsCallable).toHaveBeenCalledWith(mockState.cloudFunctions, callableName);
     expect(mockState.callable).toHaveBeenCalledWith(input);
     expect(readPending(input)).toBeNull();
+  });
+
+  test("returns only bounded materialization counts and lane outcomes", async () => {
+    const input = {
+      organizationId: IDS.organizationId,
+      quoteId: IDS.quoteId,
+      requestId: requestId("6")
+    };
+    mockState.callable.mockResolvedValue({
+      data: mutationResponse(
+        REVENUE_AUTOPILOT_MUTATION_OPERATIONS.materializeJobs,
+        input,
+        {
+          createdCount: 2,
+          updatedCount: 1,
+          laneResults: {
+            quote_follow_up: {
+              state: "ready",
+              createCount: 2,
+              updateCount: 0,
+              conflictCount: 0,
+              reasonCodes: []
+            },
+            deposit_reminder: {
+              state: "stopped",
+              createCount: 0,
+              updateCount: 1,
+              conflictCount: 0,
+              reasonCodes: ["deposit_paid_recorded"],
+              detail: "private source detail must not cross the client boundary"
+            },
+            final_balance_reminder: {
+              state: "blocked",
+              createCount: 0,
+              updateCount: 0,
+              conflictCount: 0,
+              reasonCodes: ["failed_precondition"]
+            },
+            post_event_review_request: {
+              state: "deferred",
+              createCount: 0,
+              updateCount: 0,
+              conflictCount: 0,
+              reasonCodes: ["post_event_closeout_not_due"]
+            }
+          }
+        }
+      )
+    });
+
+    const result = await materializeRevenueAutopilotJobs(input);
+    expect(result.materializationSummary).toMatchObject({
+      createdCount: 2,
+      updatedCount: 1,
+      lanes: {
+        quote_follow_up: { state: "ready", createCount: 2 },
+        deposit_reminder: { state: "stopped", updateCount: 1 }
+      }
+    });
+    expect(JSON.stringify(result)).not.toContain("private source detail");
+  });
+
+  test("preserves a withheld reconciliation as a strict non-provider outcome", async () => {
+    const input = {
+      organizationId: IDS.organizationId,
+      quoteId: IDS.quoteId,
+      jobId: IDS.jobId,
+      requestId: requestId("7")
+    };
+    mockState.callable.mockResolvedValue({
+      data: mutationResponse(
+        REVENUE_AUTOPILOT_MUTATION_OPERATIONS.reconcileJob,
+        input,
+        {
+          reconciliationState: "withheld",
+          reason: "portal_viewed_recorded",
+          providerMessageId: "private-provider-id"
+        }
+      )
+    });
+
+    const result = await reconcileRevenueAutopilotJob(input);
+    expect(result).toEqual(expect.objectContaining({
+      reconciliationState: "withheld",
+      reason: "portal_viewed_recorded"
+    }));
+    expect(result).not.toHaveProperty("providerMessageId");
+  });
+
+  test.each([
+    [{ reconciliationState: "unknown" }, /exact outcome/i],
+    [{ reconciliationState: "provider_accepted", reason: "portal_viewed_recorded" }, /outcome reason/i],
+    [{ reconciliationState: "withheld", reason: "private reason with spaces" }, /outcome reason/i]
+  ])("rejects an invalid reconciliation outcome without clearing the exact attempt", async (overrides, expected) => {
+    const input = {
+      organizationId: IDS.organizationId,
+      quoteId: IDS.quoteId,
+      jobId: IDS.jobId,
+      requestId: requestId("9")
+    };
+    mockState.callable.mockResolvedValue({
+      data: mutationResponse(
+        REVENUE_AUTOPILOT_MUTATION_OPERATIONS.reconcileJob,
+        input,
+        overrides
+      )
+    });
+
+    await expect(reconcileRevenueAutopilotJob(input)).rejects.toThrow(expected);
+    expect(readPendingRevenueAutopilotJobAttempt(input)).toMatchObject({
+      requestId: input.requestId,
+      state: "uncertain"
+    });
+    mockState.callable.mockResolvedValue({
+      data: mutationResponse(
+        REVENUE_AUTOPILOT_MUTATION_OPERATIONS.reconcileJob,
+        input,
+        { reconciliationState: "withheld", reason: "authority_recheck_required" }
+      )
+    });
+    await expect(reconcileRevenueAutopilotJob(input)).resolves.toMatchObject({
+      mutationMode: "reconciliation",
+      reconciliationState: "withheld"
+    });
+  });
+
+  test("rejects unbounded or unknown materialization lane evidence", async () => {
+    const input = {
+      organizationId: IDS.organizationId,
+      quoteId: IDS.quoteId,
+      requestId: requestId("7")
+    };
+    mockState.callable.mockResolvedValue({
+      data: mutationResponse(
+        REVENUE_AUTOPILOT_MUTATION_OPERATIONS.materializeJobs,
+        input,
+        { createdCount: 101 }
+      )
+    });
+    await expect(materializeRevenueAutopilotJobs(input)).rejects.toThrow(/invalid createdCount/i);
+    mockState.callable.mockResolvedValue({
+      data: mutationResponse(REVENUE_AUTOPILOT_MUTATION_OPERATIONS.materializeJobs, input)
+    });
+    await expect(materializeRevenueAutopilotJobs(input)).resolves.toMatchObject({
+      mutationMode: "reconciliation"
+    });
   });
 
   test("unsubscribes through one public exact-token mutation and does not return the token", async () => {

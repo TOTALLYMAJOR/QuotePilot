@@ -7,7 +7,8 @@ import {
   buildRevenueAutopilotReviewRequestConfiguration,
   buildWorkflowRevenueAutopilotInput,
   buildWorkflowRevenueAutopilotRead,
-  isRevenueAutopilotPolicySaveBlocked
+  isRevenueAutopilotPolicySaveBlocked,
+  resolveWorkflowFocusTarget
 } from "../SalesWorkflowModal";
 
 function quote(overrides = {}) {
@@ -35,6 +36,53 @@ function quote(overrides = {}) {
 }
 
 describe("Sales Workflow revenue autopilot integration", () => {
+  test("resolves post-event, unread-reply, and Decision Debt route focus to their exact tabs and rows", () => {
+    const attentionItems = [
+      {
+        id: "post-event-closeout:quote-closeout:closeout-one",
+        quoteId: "quote-closeout",
+        type: "post_event_closeout"
+      },
+      {
+        id: "unread-reply:attention-one",
+        quoteId: "quote-reply",
+        type: "unread_customer_reply",
+        sourceRequestId: "attention-one",
+        attentionId: "attention-one",
+        messageId: "message-one"
+      }
+    ];
+    expect(resolveWorkflowFocusTarget({
+      focusQuoteId: "quote-closeout",
+      focusAttentionType: "post_event_closeout",
+      attentionItems
+    })).toEqual({
+      tab: "attention",
+      itemId: "post-event-closeout:quote-closeout:closeout-one"
+    });
+    expect(resolveWorkflowFocusTarget({
+      focusQuoteId: "quote-reply",
+      focusAttentionType: "unread_customer_reply",
+      focusRequestId: "attention-one",
+      attentionItems
+    })).toEqual({
+      tab: "attention",
+      itemId: "unread-reply:attention-one"
+    });
+    expect(resolveWorkflowFocusTarget({
+      focusQuoteId: "quote-debt",
+      focusAttentionType: "decision_debt",
+      focusRequestId: "debt-one",
+      decisionDebtItems: [{ id: "debt-one", quoteId: "quote-debt" }]
+    })).toEqual({ tab: "debt", itemId: "debt-one" });
+    expect(resolveWorkflowFocusTarget({
+      focusQuoteId: "quote-reply",
+      focusAttentionType: "unread_customer_reply",
+      focusRequestId: "different-attention",
+      attentionItems
+    })).toBeNull();
+  });
+
   test("binds the post-event lane toggle to a strict tenant review-destination state", () => {
     expect(buildRevenueAutopilotReviewRequestConfiguration({
       enabled: false,

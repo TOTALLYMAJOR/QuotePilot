@@ -87,10 +87,11 @@ present. Browser principals cannot promote either gate.
 - Apply and invalidation are one transaction; no dependent record is silently
   regenerated, published, delivered, accepted, booked, charged, or completed.
 - Exact request identities support idempotent replay. Simulation,
-  authorization, BEO generation, dependency reconciliation, and policy changes
-  expose governed recovery; a dedicated exact apply-outcome read is still
-  required before an ambiguous quote-edit transport result can be called
-  reconciled.
+  authorization, BEO generation, dependency reconciliation, policy changes,
+  and governed quote apply now expose operation-specific recovery. Apply-
+  outcome reconciliation either validates the deterministic apply receipt and
+  immutable target revision or atomically records a not-committed fence that a
+  late apply transaction must observe.
 - Private authority records remain callable-owned; staff receive bounded,
   human-readable projections.
 
@@ -102,10 +103,11 @@ present. Browser principals cannot promote either gate.
   can support a strong reconciliation result.
 - Runtime promotion requires a coordinated Functions, Firestore rules, index,
   frontend, and hosted-acceptance release.
-- The current source does not yet expose a dedicated read contract for an
-  uncertain governed apply outcome. The UI must not infer success after a
-  transport ambiguity; exact apply-outcome reconciliation is next work and a
-  prerequisite to enabling either enforcement gate.
+- Apply-outcome reconciliation is a trusted mutation rather than a passive
+  browser read because proving absence safely requires fencing the exact request
+  against late commit. A transport failure of reconciliation itself retains the
+  same request identity and remains uncertain until its deterministic receipt
+  is replayed.
 
 ### Neutral
 
@@ -142,8 +144,8 @@ present. Browser principals cannot promote either gate.
   catalog, policy, receipt, or scope drift.
 - Use exact opaque request identities. An ambiguous result retains the same
   identity; a definitive rejection must be explicitly reset before a changed
-  request begins. For governed quote apply, retain that identity and show
-  unresolved until the open exact outcome-read/reconcile contract ships.
+  request begins. For governed quote apply, reconcile that exact identity; a
+  not-committed outcome fences it permanently before a fresh simulation begins.
 - Permit reconciliation only for the named open invalidations and allowed
   evidence class for their node kind. A note alone is never artifact freshness.
 - Treat `safeToPublish` as eligibility text, never as an action or evidence that

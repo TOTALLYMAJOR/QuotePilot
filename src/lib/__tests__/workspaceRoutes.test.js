@@ -128,14 +128,29 @@ describe("workspace location precedence", () => {
     expect(buildPortalPath(" token/+value ")).toBe("/app?portal=token%2F%2Bvalue");
   });
 
-  test("round-trips workflow focus identifiers without customer or quote contents", () => {
-    const path = buildWorkflowPath({
-      quoteId: "q-123",
-      attentionType: "change_request",
-      requestId: "request:456"
-    });
-    expect(path).toBe("/app/workflow?quoteId=q-123&attentionType=change_request&requestId=request%3A456");
-    expect(parseWorkspaceLocation({ pathname: "/app/workflow", search: path.slice(path.indexOf("?")) }).workflowFocus)
-      .toEqual({ quoteId: "q-123", attentionType: "change_request", requestId: "request:456" });
+  test("round-trips every shipped workflow focus type without customer or quote contents", () => {
+    for (const attentionType of [
+      "change_request",
+      "follow_up",
+      "approval",
+      "post_event_closeout",
+      "decision_debt",
+      "unread_customer_reply",
+      "anniversary_rebooking"
+    ]) {
+      const path = buildWorkflowPath({
+        quoteId: "q-123",
+        attentionType,
+        requestId: "request:456"
+      });
+      expect(path).toBe(`/app/workflow?quoteId=q-123&attentionType=${attentionType}&requestId=request%3A456`);
+      expect(parseWorkspaceLocation({ pathname: "/app/workflow", search: path.slice(path.indexOf("?")) }).workflowFocus)
+        .toEqual({ quoteId: "q-123", attentionType, requestId: "request:456" });
+    }
+  });
+
+  test("rejects an unsupported workflow focus type instead of reflecting it into the route", () => {
+    expect(() => buildWorkflowPath({ quoteId: "q-123", attentionType: "customer_email" }))
+      .toThrow(/not a supported workflow attention type/i);
   });
 });

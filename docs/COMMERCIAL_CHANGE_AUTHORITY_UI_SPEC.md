@@ -80,7 +80,7 @@ Workflow
 |---|---|---|---|---|
 | CCA-AC-01 | When staff changes governed quote inputs | Select Change Impact | Simulate against the exact current revision and server pricing | Retry the same simulation or return to edit |
 | CCA-AC-02 | While governed impact exists | Request or grant authorization | Bind the exact simulation; admin authority remains distinct from sales request | Refresh exact authorization state |
-| CCA-AC-03 | When an exact authorization is current | Apply authorized change | Record quote/version/apply/invalidation evidence atomically | A transport-ambiguous result remains unresolved; never repeat blindly. A dedicated exact apply-outcome read/reconcile contract is required before either enforcement gate is enabled. |
+| CCA-AC-03 | When an exact authorization is current | Apply authorized change | Record quote/version/apply/invalidation evidence atomically | A transport-ambiguous result remains unresolved and is never repeated blindly. `Reconcile exact outcome` validates the immutable committed revision/receipt or atomically fences that request as not committed before recovery. |
 
 ### Component: CommercialDependencyStatePanel
 
@@ -209,8 +209,11 @@ after server-owned unresolved dependency state exists. Every row shows:
 
 - the unresolved decision and affected downstream count;
 - tenant-local event date and days to its configured lock;
-- dependency weight, commercial-exposure bucket, and reversibility factor;
-- the versioned deterministic formula and bounded 0-100 score;
+- dependency weight, commercial-exposure bucket, and reversibility factor when
+  their authoritative values exist;
+- the versioned deterministic formula and bounded 0-100 score only when
+  authoritative commercial exposure is available; otherwise `Priority unknown`
+  with null exposure factor, raw score, normalized score, and urgency;
 - the exact next safe action and source/truncation state.
 
 It is not predictive AI, revenue, likelihood, customer intent, or accounting
@@ -245,16 +248,17 @@ Functions exports, frontend entry points, focused tests, Feature Matrix row, and
 User Manual section. Read surfaces cover loading, empty, success, stale,
 partial, error, and recovery. Implemented operation-specific mutations cover
 ready, submitting, uncertain, reconciliation, receipt, error, and recovery;
-governed apply uncertainty remains unresolved until its dedicated exact outcome
-read/reconcile contract is added. Browser and emulator evidence do
+governed apply uncertainty uses its dedicated exact outcome reconciliation and
+late-commit fence. Browser and emulator evidence do
 not satisfy deployment, hosted staff acceptance, production-data migration, or
 feature-gate promotion.
 
 ## Open items
 
-- Add the dedicated exact governed-apply outcome read/reconcile contract and
-  bind its uncertain, reconciliation, receipt, definitive-error, and recovery
-  states here before either enforcement gate is enabled.
+- Qualify the exact governed-apply outcome reconciliation and not-committed
+  fence across response loss, replay, race, role, tenant, revision drift,
+  keyboard focus, and narrow responsive layouts before either enforcement gate
+  is enabled.
 - Deployment, gate promotion, hosted operator acceptance, and customer/
   production data remain separate release work.
 
@@ -262,5 +266,6 @@ feature-gate promotion.
 
 | Date | Version | Change |
 |---|---|---|
+| August 9, 2026 | 1.2 | Bound uncertain governed apply to exact committed-receipt reconciliation or an immutable not-committed late-commit fence |
 | August 9, 2026 | 1.1 | Recorded exact governed-apply outcome reconciliation as an open pre-activation UI contract |
 | August 9, 2026 | 1.0 | Accepted source contract for impact, generation, freshness, reconciliation, and Decision Debt |

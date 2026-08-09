@@ -102,4 +102,43 @@ describe("exact quote Decision Debt surface", () => {
     expect(container.querySelector('[data-capability-state="error"]')).toBeTruthy();
     expect(container.textContent).toContain("connected same-tenant quote record");
   });
+
+  test("opens Workflow with the exact Decision Debt quote and item identity", async () => {
+    const onOpenWorkflow = vi.fn();
+    mocks.getDecisionDebtSnapshot.mockResolvedValue(result([{
+      id: "debt-guest-count",
+      quoteId: "quote-a",
+      decisionType: "guest_count",
+      label: "Final guest count",
+      urgency: "high",
+      eventDate: "2026-08-20",
+      lockDate: "2026-08-13",
+      daysUntilLock: 4,
+      score: 84,
+      rawScore: 84,
+      commercialExposureCents: 110000,
+      affectedNodeIds: ["artifact.kitchen_beo"],
+      factors: {},
+      explanation: [],
+      sourceRevisionId: "version-1"
+    }]));
+    await act(async () => {
+      root.render(
+        <QuoteDecisionDebtPanel
+          organizationId="org-a"
+          quoteId="quote-a"
+          onOpenWorkflow={onOpenWorkflow}
+        />
+      );
+    });
+
+    const button = container.querySelector('[data-capability-action="open-decision-debt-workflow"]');
+    expect(button).toBeTruthy();
+    act(() => button.click());
+    expect(onOpenWorkflow).toHaveBeenCalledWith({
+      quoteId: "quote-a",
+      attentionType: "decision_debt",
+      requestId: "debt-guest-count"
+    });
+  });
 });

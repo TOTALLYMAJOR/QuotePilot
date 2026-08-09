@@ -611,6 +611,98 @@ export function buildWorkflowAttentionSummary(quotes = [], options = {}) {
   };
 }
 
+export function mergeUnreadReplyAttention(
+  attentionSummary = {},
+  { attention = [], quotes = [] } = {}
+) {
+  const quoteById = new Map(
+    (Array.isArray(quotes) ? quotes : [])
+      .filter((quote) => text(quote?.id))
+      .map((quote) => [text(quote.id), quote])
+  );
+  const seenAttentionIds = new Set();
+  const unreadItems = (Array.isArray(attention) ? attention : []).flatMap((record) => {
+    const attentionId = text(record?.attentionId);
+    const quoteId = text(record?.quoteId);
+    const messageId = text(record?.messageId);
+    const kind = text(record?.kind).toLowerCase();
+    const state = text(record?.state).toLowerCase();
+    if (
+      !attentionId
+      || !quoteId
+      || !messageId
+      || kind !== "unread_customer_reply"
+      || state !== "open"
+      || seenAttentionIds.has(attentionId)
+    ) {
+      return [];
+    }
+    seenAttentionIds.add(attentionId);
+
+    const canonicalQuote = quoteById.get(quoteId);
+    const customerId = text(canonicalQuote?.customerId || record?.customerId);
+    const customerName = text(
+      canonicalQuote?.customer?.name
+      || canonicalQuote?.customer?.email
+      || record?.customerLabel
+    );
+    const quote = canonicalQuote
+      ? {
+          ...canonicalQuote,
+          ...(customerId ? { customerId } : {}),
+          customer: {
+            ...(canonicalQuote.customer || {}),
+            ...(!text(canonicalQuote?.customer?.name) && customerName ? { name: customerName } : {})
+          }
+        }
+      : {
+          id: quoteId,
+          ...(customerId ? { customerId } : {}),
+          quoteNumber: text(record?.quoteLabel),
+          customer: customerName ? { name: customerName } : {}
+        };
+    const dateISO = safeIso(record?.receivedAtISO || record?.openedAtISO);
+    return [{
+      id: `unread-reply:${attentionId}`,
+      type: "unread_customer_reply",
+      state: "open",
+      priority: WORKFLOW_ATTENTION_PRIORITY.new_change_request,
+      dateISO,
+      quote,
+      quoteId,
+      customerId,
+      attentionId,
+      messageId,
+      sourceRequestId: attentionId
+    }];
+  });
+
+  const baseItems = Array.isArray(attentionSummary?.items) ? attentionSummary.items : [];
+  const items = [...baseItems, ...unreadItems].sort((left, right) => (
+    number(left?.priority) - number(right?.priority)
+    || text(left?.dateISO).localeCompare(text(right?.dateISO))
+    || text(left?.quote?.quoteNumber || left?.quoteId)
+      .localeCompare(text(right?.quote?.quoteNumber || right?.quoteId))
+    || text(left?.type).localeCompare(text(right?.type))
+  ));
+  const counts = {
+    ...(attentionSummary?.counts || {}),
+    changeRequests: Number(attentionSummary?.counts?.changeRequests) || 0,
+    followUps: Number(attentionSummary?.counts?.followUps) || 0,
+    approvals: Number(attentionSummary?.counts?.approvals) || 0,
+    postEventCloseouts: Number(attentionSummary?.counts?.postEventCloseouts) || 0,
+    unreadCustomerReplies: unreadItems.length
+  };
+
+  return {
+    ...attentionSummary,
+    quoteCount: new Set(items.map((item) => text(item?.quoteId)).filter(Boolean)).size,
+    itemCount: items.length,
+    counts,
+    items
+  };
+}
+
 function cloneForm(form = {}) {
   return {
     ...form,

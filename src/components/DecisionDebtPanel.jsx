@@ -47,6 +47,7 @@ const MUTATION_COPY = Object.freeze({
 });
 
 const URGENCY_PRESENTATION = Object.freeze({
+  unknown: Object.freeze({ family: "action", label: "Priority unknown" }),
   low: Object.freeze({ family: "info", label: "Low urgency" }),
   medium: Object.freeze({ family: "pending", label: "Medium urgency" }),
   high: Object.freeze({ family: "action", label: "High urgency" }),
@@ -168,10 +169,13 @@ function factorDetail(factorId, factor) {
 }
 
 function FactorCard({ factorId, label, factor }) {
+  const factorValue = Number.isFinite(factor?.value)
+    ? `${formatWorkspaceInteger(factor.value)}×`
+    : "Unavailable";
   return (
     <article className="commercial-measure-card" data-decision-debt-factor={factorId}>
       <span>{label}</span>
-      <strong>{formatWorkspaceInteger(factor?.value, { emptyLabel: "Unknown" })}×</strong>
+      <strong>{factorValue}</strong>
       <small>{factorDetail(factorId, factor)}</small>
       <small className="source-note">{formatFactorSource(factor?.source)}</small>
     </article>
@@ -201,7 +205,8 @@ function AffectedDependencies({ item }) {
 }
 
 function DecisionDebtItem({ item, onOpenQuote }) {
-  const urgency = text(item?.urgency).toLowerCase();
+  const scoreKnown = text(item?.scoreState).toUpperCase() === "KNOWN";
+  const urgency = scoreKnown ? text(item?.urgency).toLowerCase() : "unknown";
   const urgencyPresentation = URGENCY_PRESENTATION[urgency]
     || { family: "failed", label: "Urgency unverified" };
   const factors = isRecord(item?.factors) ? item.factors : {};
@@ -209,6 +214,7 @@ function DecisionDebtItem({ item, onOpenQuote }) {
   return (
     <article
       className="customer-revenue-opportunity"
+      tabIndex={-1}
       data-decision-debt-id={text(item?.id) || "unidentified"}
       data-decision-debt-urgency={urgency || "unverified"}
     >
@@ -226,8 +232,12 @@ function DecisionDebtItem({ item, onOpenQuote }) {
       <div className="customer-revenue-metrics" aria-label={`${text(item?.label) || "Decision"} deterministic score`}>
         <article className="commercial-measure-card" data-decision-debt-score={item?.score}>
           <span>Decision Debt score</span>
-          <strong>{formatWorkspaceInteger(item?.score)} / 100</strong>
-          <small>Deterministic priority, not a prediction</small>
+          <strong>{scoreKnown ? `${formatWorkspaceInteger(item?.score)} / 100` : "Unavailable"}</strong>
+          <small>
+            {scoreKnown
+              ? "Deterministic priority, not a prediction"
+              : "Authoritative commercial exposure is required before scoring"}
+          </small>
         </article>
         <article className="commercial-measure-card">
           <span>Commercial exposure</span>
@@ -248,7 +258,9 @@ function DecisionDebtItem({ item, onOpenQuote }) {
       </div>
 
       <p className="source-note" data-decision-debt-formula>
-        {formatWorkspaceInteger(factors.dependency?.value)} × {formatWorkspaceInteger(factors.proximity?.value)} × {formatWorkspaceInteger(factors.exposure?.value)} × {formatWorkspaceInteger(factors.reversibility?.value)} = raw {formatWorkspaceInteger(item?.rawScore)} → normalized {formatWorkspaceInteger(item?.score)}/100
+        {scoreKnown
+          ? `${formatWorkspaceInteger(factors.dependency?.value)} × ${formatWorkspaceInteger(factors.proximity?.value)} × ${formatWorkspaceInteger(factors.exposure?.value)} × ${formatWorkspaceInteger(factors.reversibility?.value)} = raw ${formatWorkspaceInteger(item?.rawScore)} → normalized ${formatWorkspaceInteger(item?.score)}/100`
+          : "Priority remains unknown: no exposure factor, raw score, normalized score, or urgency has been guessed."}
       </p>
 
       <AffectedDependencies item={item} />

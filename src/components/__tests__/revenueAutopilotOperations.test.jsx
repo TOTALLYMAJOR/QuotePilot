@@ -16,6 +16,7 @@ const POLICY = Object.freeze({
   version: "policy-v7",
   tenantTimeZone: "America/Chicago",
   globalEnabled: true,
+  sendsEnabled: true,
   tenantEnabled: true,
   provider: Object.freeze({ state: "configured" }),
   reviewRequestUrl: "https://reviews.example.test/collect",
@@ -155,6 +156,7 @@ describe("buildRevenueAutopilotOperationsPresentation", () => {
 
     expect(view.policy.global.enabled).toBe(false);
     expect(view.policy.tenant.enabled).toBe(false);
+    expect(view.policy.sends.enabled).toBe(false);
     expect(view.policy.provider.enabled).toBe(false);
     expect(view.lanes.map((lane) => lane.state)).toEqual([
       "dormant",
@@ -196,6 +198,35 @@ describe("buildRevenueAutopilotOperationsPresentation", () => {
     expect(view.materializeAllowed).toBe(false);
   });
 
+  test("keeps preparation available while the separate send and provider gates are dormant", () => {
+    const view = buildRevenueAutopilotOperationsPresentation({
+      snapshot: operationsSnapshot({
+        policy: {
+          ...POLICY,
+          sendsEnabled: false,
+          provider: { state: "unconfigured" }
+        },
+        jobs: [],
+        attention: [],
+        readState: "empty",
+        bounds: { totalJobs: 0, totalAttention: 0, complete: true }
+      })
+    });
+
+    expect(view.policy.sends.enabled).toBe(false);
+    expect(view.policy.provider.enabled).toBe(false);
+    expect(view.lanes.find((lane) => lane.id === "quote_follow_up")).toMatchObject({
+      state: "preparation_only",
+      preparable: true,
+      presentation: { label: "Preparation only" }
+    });
+    expect(view.lanes.find((lane) => lane.id === "unread_reply")).toMatchObject({
+      state: "enabled",
+      preparable: true
+    });
+    expect(view.materializeAllowed).toBe(true);
+  });
+
   test.each([
     "ready",
     "submitting",
@@ -210,6 +241,39 @@ describe("buildRevenueAutopilotOperationsPresentation", () => {
     });
     expect(view.mutationState).toBe(state);
     expect(view.mutationDetail).toBeTruthy();
+  });
+
+  test("keeps withheld and provider-accepted reconciliation receipts semantically distinct", () => {
+    const withheld = buildRevenueAutopilotOperationsPresentation({
+      snapshot: operationsSnapshot({
+        mutation: {
+          state: "receipt",
+          operation: "reconcile_job",
+          reconciliationState: "withheld",
+          reconciliationReason: "portal_viewed_recorded"
+        }
+      })
+    });
+    const providerAccepted = buildRevenueAutopilotOperationsPresentation({
+      snapshot: operationsSnapshot({
+        mutation: {
+          state: "receipt",
+          operation: "reconcile_job",
+          reconciliationState: "provider_accepted"
+        }
+      })
+    });
+
+    expect(withheld).toMatchObject({
+      mutationPresentation: { family: "blocked", label: "Dispatch withheld" },
+      reconciliationOutcome: { state: "withheld", reason: "portal_viewed_recorded" }
+    });
+    expect(withheld.mutationDetail).toMatch(/before any provider call/i);
+    expect(providerAccepted).toMatchObject({
+      mutationPresentation: { family: "provider", label: "Provider accepted" },
+      reconciliationOutcome: { state: "provider_accepted", reason: "" }
+    });
+    expect(providerAccepted.mutationDetail).toMatch(/delivery.*remain.*separate evidence/i);
   });
 });
 
@@ -266,6 +330,7 @@ describe("RevenueAutopilotOperations", () => {
     expect(markup).toContain("Dormant by default. No automated email can run");
     expect(markup).toContain('data-automation-gate="global"');
     expect(markup).toContain('data-automation-gate="tenant"');
+    expect(markup).toContain('data-automation-gate="sends"');
     expect(markup).toContain('data-automation-gate="provider"');
     for (const kind of REVENUE_AUTOPILOT_OPERATION_KINDS) {
       expect(markup).toContain(`data-automation-kind="${kind.id}"`);
@@ -304,6 +369,25 @@ describe("RevenueAutopilotOperations", () => {
     expect(markup).not.toContain("message body");
   });
 
+  test("shows dispatch suppression without rewriting the recorded provider state", () => {
+    const suppressed = job("outcome_ambiguous", "quote_follow_up", "suppressed", {
+      dispatchSuppressedAtISO: "2026-08-09T16:10:00.000Z",
+      dispatchSuppressionReason: "portal_viewed_recorded"
+    });
+    const markup = renderToStaticMarkup(
+      <RevenueAutopilotOperations snapshot={operationsSnapshot({
+        jobs: [suppressed],
+        attention: [],
+        bounds: { totalJobs: 1, totalAttention: 0, complete: true }
+      })} />
+    );
+
+    expect(markup).toContain('data-job-state="outcome_ambiguous"');
+    expect(markup).toContain('data-dispatch-suppressed="true"');
+    expect(markup).toContain("Future dispatch suppressed");
+    expect(markup).toContain("recorded provider outcome remains unchanged");
+  });
+
   test.each([
     ["ready", "No staff operation is currently in flight."],
     ["submitting", "Do not repeat the action."],
@@ -322,6 +406,25 @@ describe("RevenueAutopilotOperations", () => {
     expect(markup).toContain(expectedCopy);
   });
 
+  test("renders a withheld reconciliation as a visible non-provider outcome", () => {
+    const markup = renderToStaticMarkup(
+      <RevenueAutopilotOperations snapshot={operationsSnapshot({
+        mutation: {
+          state: "receipt",
+          operation: "reconcile_job",
+          reconciliationState: "withheld",
+          reconciliationReason: "portal_viewed_recorded"
+        }
+      })} />
+    );
+
+    expect(markup).toContain('data-reconciliation-state="withheld"');
+    expect(markup).toContain('data-reconciliation-reason="portal_viewed_recorded"');
+    expect(markup).toContain("Dispatch withheld");
+    expect(markup).toContain("before any provider call");
+    expect(markup).toContain("No provider acceptance or delivery is established");
+  });
+
   test("renders every literal canonical Revenue Autopilot operation mutation marker", () => {
     const renderMutation = (state) => renderToStaticMarkup(
       <RevenueAutopilotOperations snapshot={operationsSnapshot({ mutation: { state } })} />
@@ -334,6 +437,36 @@ describe("RevenueAutopilotOperations", () => {
     expect(renderMutation("receipt")).toContain('data-capability-state="receipt"');
     expect(renderMutation("error")).toContain('data-capability-state="error"');
     expect(renderMutation("recovery")).toContain('data-capability-state="recovery"');
+  });
+
+  test("renders the bounded per-lane preparation receipt without private lane detail", () => {
+    const summary = {
+      createdCount: 2,
+      updatedCount: 1,
+      lanes: Object.fromEntries(REVENUE_AUTOPILOT_OPERATION_KINDS
+        .filter((kind) => kind.outbound)
+        .map((kind) => [kind.id, {
+          state: kind.id === "quote_follow_up" ? "ready" : "blocked",
+          createCount: kind.id === "quote_follow_up" ? 2 : 0,
+          updateCount: kind.id === "deposit_reminder" ? 1 : 0,
+          conflictCount: 0,
+          reasonCodes: []
+        }]))
+    };
+    const markup = renderToStaticMarkup(
+      <RevenueAutopilotOperations snapshot={operationsSnapshot({
+        mutation: {
+          state: "receipt",
+          operation: "materialize_jobs",
+          materializationSummary: summary
+        }
+      })} />
+    );
+
+    expect(markup).toContain('data-materialization-summary="bounded"');
+    expect(markup).toContain('data-materialization-lane="quote_follow_up"');
+    expect(markup).toContain("Prepared 2 new records");
+    expect(markup).toContain("Quote follow-up");
   });
 
   test("routes exact conversation opening separately from truthful manual acknowledgement", () => {

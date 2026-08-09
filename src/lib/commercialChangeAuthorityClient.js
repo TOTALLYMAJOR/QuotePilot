@@ -10,6 +10,7 @@ export const COMMERCIAL_CHANGE_AUTHORITY_CALLABLES = Object.freeze({
   requestApproval: "requestCommercialQuoteChangeAuthorization",
   getApprovalState: "getCommercialQuoteChangeAuthorizationState",
   authorize: "authorizeCommercialQuoteChange",
+  reconcileApplyOutcome: "reconcileCommercialQuoteChangeApplyOutcome",
   getDependencyState: "getCommercialDependencyState",
   reconcile: "reconcileCommercialDependencyState"
 });
@@ -31,6 +32,7 @@ const RECEIPT_ID_PATTERNS = Object.freeze({
   simulation: /^ccs_[a-f0-9]{48}$/u,
   authorization: /^cca_[a-f0-9]{48}$/u,
   apply: /^ccp_[a-f0-9]{48}$/u,
+  outcome: /^ccor_[a-f0-9]{48}$/u,
   invalidation: /^cci_[a-f0-9]{48}$/u,
   reconciliation: /^ccr_[a-f0-9]{48}$/u,
   approval: /^ccar_[a-f0-9]{48}$/u,
@@ -39,6 +41,7 @@ const RECEIPT_ID_PATTERNS = Object.freeze({
 const RECEIPT_SCHEMA_VERSIONS = Object.freeze({
   simulation: "commercial-change-simulation-receipt-v1",
   authorization: "commercial-change-authorization-receipt-v1",
+  outcome: "commercial-change-apply-outcome-receipt-v1",
   reconciliation: "commercial-change-reconciliation-receipt-v1"
 });
 const MAX_INVALIDATIONS = 64;
@@ -794,6 +797,170 @@ function normalizeAuthorizationReceipt(value, scope, simulationReceiptId, reques
   };
 }
 
+function normalizeCommercialChangeCommit(value) {
+  if (value === null) return null;
+  exactKeys(value, [
+    "authorityState",
+    "applyReceiptId",
+    "state",
+    "safeToPublish",
+    "openInvalidationCount",
+    "totalInvalidationCount"
+  ], "Commercial change apply commit");
+  const authorityState = text(value.authorityState).toLowerCase();
+  const state = text(value.state).toUpperCase();
+  const safeToPublish = exactBoolean(value.safeToPublish, "Apply publish eligibility");
+  const openInvalidationCount = boundedInteger(
+    value.openInvalidationCount,
+    "Apply open invalidation count",
+    MAX_INVALIDATIONS
+  );
+  const totalInvalidationCount = boundedInteger(
+    value.totalInvalidationCount,
+    "Apply total invalidation count",
+    MAX_INVALIDATIONS
+  );
+  if (
+    authorityState !== "enforced"
+    || !["READY", "BLOCKED"].includes(state)
+    || totalInvalidationCount < openInvalidationCount
+    || safeToPublish !== (state === "READY" && openInvalidationCount === 0)
+  ) {
+    fail("Commercial change apply commit is inconsistent.");
+  }
+  return {
+    authorityState,
+    applyReceiptId: receiptId(value.applyReceiptId, "apply"),
+    state,
+    safeToPublish,
+    openInvalidationCount,
+    totalInvalidationCount
+  };
+}
+
+function normalizeApplyOutcomeReceipt(value, scope, request) {
+  exactKeys(value, [
+    "schemaVersion",
+    "authority",
+    "receiptType",
+    "receiptId",
+    "outcomeReceiptId",
+    "requestId",
+    "operationId",
+    "organizationId",
+    "quoteId",
+    "simulationReceiptId",
+    "simulationDigest",
+    "authorizationReceiptId",
+    "authorizationReceiptDigest",
+    "baseRevisionId",
+    "expectedApplyReceiptId",
+    "state",
+    "activeRevisionId",
+    "sourceChanged",
+    "applyReceiptId",
+    "applyReceiptDigest",
+    "newRevisionId",
+    "appliedRevisionIsActive",
+    "reconciledAtISO",
+    "reconciledBy",
+    "boundary",
+    "receiptDigest"
+  ], "Commercial change apply outcome receipt");
+  const outcomeReceiptId = receiptId(value.outcomeReceiptId, "outcome");
+  const state = text(value.state).toLowerCase();
+  const activeRevisionId = exactOpaqueId(
+    value.activeRevisionId,
+    "Apply outcome activeRevisionId",
+    256,
+    "invalid-server-response"
+  );
+  const baseRevisionId = exactOpaqueId(
+    value.baseRevisionId,
+    "Apply outcome baseRevisionId",
+    256,
+    "invalid-server-response"
+  );
+  const sourceChanged = exactBoolean(value.sourceChanged, "Apply outcome source state");
+  const appliedRevisionIsActive = exactBoolean(
+    value.appliedRevisionIsActive,
+    "Apply outcome active applied revision state"
+  );
+  const authorizationReceiptId = receiptId(value.authorizationReceiptId, "authorization", {
+    optional: true
+  });
+  const authorizationReceiptDigest = text(value.authorizationReceiptDigest)
+    ? digest(value.authorizationReceiptDigest, "Apply outcome authorization digest")
+    : "";
+  if (
+    value.schemaVersion !== RECEIPT_SCHEMA_VERSIONS.outcome
+    || value.authority !== "server_authoritative"
+    || value.receiptType !== "outcome"
+    || value.organizationId !== scope.organizationId
+    || value.quoteId !== scope.quoteId
+    || value.requestId !== request.applyRequestId
+    || value.simulationReceiptId !== request.simulationReceiptId
+    || authorizationReceiptId !== request.authorizationReceiptId
+    || baseRevisionId !== request.expectedBaseRevisionId
+    || value.receiptId !== outcomeReceiptId
+    || !["committed", "not_committed"].includes(state)
+    || sourceChanged !== (activeRevisionId !== baseRevisionId)
+    || Boolean(authorizationReceiptId) !== Boolean(authorizationReceiptDigest)
+  ) {
+    fail("Commercial change apply outcome is outside the exact request scope.");
+  }
+  const expectedApplyReceiptId = receiptId(value.expectedApplyReceiptId, "apply");
+  const applyReceiptId = receiptId(value.applyReceiptId, "apply", { optional: true });
+  const applyReceiptDigest = text(value.applyReceiptDigest)
+    ? digest(value.applyReceiptDigest, "Apply outcome apply digest")
+    : "";
+  const newRevisionId = optionalOpaqueId(
+    value.newRevisionId,
+    "Apply outcome newRevisionId",
+    256
+  );
+  if (state === "committed") {
+    if (
+      applyReceiptId !== expectedApplyReceiptId
+      || !applyReceiptDigest
+      || !newRevisionId
+      || appliedRevisionIsActive !== (activeRevisionId === newRevisionId)
+    ) {
+      fail("Committed commercial change apply outcome is incomplete.");
+    }
+  } else if (applyReceiptId || applyReceiptDigest || newRevisionId || appliedRevisionIsActive) {
+    fail("Not-committed commercial change outcome claims apply evidence.");
+  }
+  return {
+    schemaVersion: value.schemaVersion,
+    authority: value.authority,
+    receiptType: value.receiptType,
+    receiptId: outcomeReceiptId,
+    outcomeReceiptId,
+    requestId: exactRequestId(value.requestId, "apply"),
+    operationId: receiptId(value.operationId, "operation"),
+    organizationId: scope.organizationId,
+    quoteId: scope.quoteId,
+    simulationReceiptId: receiptId(value.simulationReceiptId, "simulation"),
+    simulationDigest: digest(value.simulationDigest, "Apply outcome simulation digest"),
+    authorizationReceiptId,
+    authorizationReceiptDigest,
+    baseRevisionId,
+    expectedApplyReceiptId,
+    state,
+    activeRevisionId,
+    sourceChanged,
+    applyReceiptId,
+    applyReceiptDigest,
+    newRevisionId,
+    appliedRevisionIsActive,
+    reconciledAtISO: exactISO(value.reconciledAtISO, "Apply outcome reconciliation time"),
+    reconciledBy: exactActor(value.reconciledBy, "Apply outcome reconciliation actor"),
+    boundary: exactText(value.boundary, "Apply outcome boundary", 2_000),
+    receiptDigest: digest(value.receiptDigest, "Apply outcome receipt digest")
+  };
+}
+
 function normalizeInvalidation(value, index) {
   exactKeys(value, [
     "invalidationId",
@@ -1353,6 +1520,62 @@ export async function authorizeCommercialQuoteChange(input = {}) {
     idempotent: exactBoolean(result.idempotent, "Authorization idempotency state"),
     authorizationReceipt,
     approval
+  });
+}
+
+export async function reconcileCommercialQuoteChangeApplyOutcome(input = {}) {
+  const scope = normalizeScope(input);
+  const request = {
+    simulationReceiptId: inputReceiptId(input.simulationReceiptId, "simulation"),
+    authorizationReceiptId: text(input.authorizationReceiptId)
+      ? inputReceiptId(input.authorizationReceiptId, "authorization")
+      : "",
+    applyRequestId: exactRequestId(input.applyRequestId, "apply"),
+    expectedBaseRevisionId: exactOpaqueId(
+      input.expectedBaseRevisionId,
+      "expectedBaseRevisionId"
+    )
+  };
+  const response = await callable(
+    COMMERCIAL_CHANGE_AUTHORITY_CALLABLES.reconcileApplyOutcome
+  )({
+    organizationId: scope.organizationId,
+    quoteId: scope.quoteId,
+    ...request
+  });
+  const result = response?.data;
+  exactEnvelope(result, scope, [
+    "ok",
+    "storage",
+    "organizationId",
+    "quoteId",
+    "idempotent",
+    "outcomeReceipt",
+    "commercialChange"
+  ], "Commercial change apply outcome response");
+  const outcomeReceipt = normalizeApplyOutcomeReceipt(
+    result.outcomeReceipt,
+    scope,
+    request
+  );
+  const commercialChange = normalizeCommercialChangeCommit(result.commercialChange);
+  if (
+    (outcomeReceipt.state === "committed") !== Boolean(commercialChange)
+    || (
+      commercialChange
+      && commercialChange.applyReceiptId !== outcomeReceipt.applyReceiptId
+    )
+  ) {
+    fail("Commercial change apply outcome and commit projection do not agree.");
+  }
+  return deepFreeze({
+    ok: true,
+    storage: "firebase",
+    organizationId: scope.organizationId,
+    quoteId: scope.quoteId,
+    idempotent: exactBoolean(result.idempotent, "Apply outcome idempotency state"),
+    outcomeReceipt,
+    commercialChange
   });
 }
 

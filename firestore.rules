@@ -1028,6 +1028,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /organizations/{orgId}/commercialChangeApplyOutcomes/{receiptId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/commercialChangeReconciliationReceipts/{receiptId} {
       allow read, write: if false;
     }

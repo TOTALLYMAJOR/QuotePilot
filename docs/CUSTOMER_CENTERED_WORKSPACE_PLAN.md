@@ -148,15 +148,17 @@ separate boolean does not compete with the active route.
 
 ## Command Center contract
 
-The Command Center reuses the existing workflow-attention and quote-history
-contracts. It introduces no new read contracts or data sources. It may change
-how those existing reads are coordinated, bounded, cached, and presented.
+The Command Center reuses the existing workflow-attention, quote-history, and
+bounded Revenue Autopilot operations contracts. It introduces no new read
+contract or data source. The third read adds I/O so unread customer-reply
+Attention can be represented in the same Home/header/Workflow queue; all three
+reads remain generation-guarded, bounded, and evidence-labeled.
 
 The Home surface must:
 
 - start in a real loading state rather than briefly showing an empty result;
 - ignore stale request generations after tenant, auth, or route changes;
-- share one attention/history snapshot with the header badge;
+- share one attention/history/unread-reply snapshot with the header badge;
 - pass quote ID, attention type, and request ID when opening Workflow so the
   exact row can be focused;
 - keep quote lifecycle, proposal acceptance, booking, deposit, final balance,
@@ -388,8 +390,10 @@ without reopening the customer/account or commercial-authority boundary.
   dependency nodes, tenant-local event proximity, bounded commercial exposure,
   dependency weight, and reversibility. Tenant-configurable lock windows for
   guests, menu, rentals, staffing, and BEO finalization require validated,
-  versioned organization settings and explicit defaults. The score explains
-  its factors and affected decisions; it is neither predictive AI nor proof
+  versioned organization settings and explicit defaults. When authoritative
+  commercial exposure is available, the score explains its factors and affected
+  decisions. Without it, priority remains explicitly unknown—no fallback factor,
+  score, or urgency is invented. Decision Debt is neither predictive AI nor proof
   that a customer, provider, or staff member took an action. Current source
   derives it only from persisted unresolved dependency state and exposes the
   deterministic factors/bounds in Workflow. Tenant admins edit the versioned
@@ -419,10 +423,79 @@ without reopening the customer/account or commercial-authority boundary.
   staff may reconcile only named open dependencies; BEO generation may resolve
   only qualifying BEO invalidations; and Workflow exposes Decision Debt. The
   derived `safeToPublish` result remains eligibility only—no automatic publish
-  action exists. A dedicated exact read/reconcile contract for a transport-
-  ambiguous governed apply outcome remains open and is required before either
-  gate may be enabled. `COMMERCIAL_CHANGE_AUTHORITY_ENABLED` and the trusted tenant
-  gate must both remain off until separately authorized hosted acceptance.
+  action exists. Transport-ambiguous governed apply now reconciles the retained
+  exact request to either a validated immutable commit receipt/version or an
+  atomic not-committed late-commit fence.
+  `COMMERCIAL_CHANGE_AUTHORITY_ENABLED` and the trusted tenant gate must both
+  remain off until separately authorized hosted acceptance.
+
+### Earliest post-stabilization program — Event Workspace and intelligence
+
+The Event Workspace + Intelligence synthesis is accepted as the earliest new
+source program after the current convergence checkpoint. It does not need to
+wait for production promotion, but it remains behind the existing workspace and
+authority gates until separately qualified. The backlog below and in
+`DEV_TASKS.md` own its pre-code audit and specification gates.
+
+The canonical operator model becomes:
+
+```mermaid
+flowchart LR
+  Facts[Bounded authoritative facts] --> Signals[Deterministic derived signals]
+  Signals --> Synthesis[Event intelligence selector]
+  Synthesis --> Operator[Condition, Readiness, Flexibility, Needs You, Change Impact, Alignment]
+  Operator --> Why[Reason and impact]
+  Why --> Evidence[Receipts, revisions, deadlines, dependencies, and bounds]
+```
+
+- **CWF-16 — Event / Transaction Workspace.** Recompose the focused quote route
+  as one calm event record rather than another quote-history row. The first
+  viewport establishes event/customer identity, what was sold, lifecycle,
+  current condition, the top human decision, the next safe action, and an
+  unmistakable **Edit quote** path that reuses the trusted edit route. Drafts
+  use normal editing; customer-visible scope communicates revision/delivery
+  consequences; accepted/booked scope uses the governed change path when
+  enabled and otherwise explains that a governed revision is required. Context
+  navigation exposes only real Schedule, Staffing, Rentals & Equipment,
+  Production/BEO, and Customer capabilities. It must not call selected rental
+  quantities Inventory or imply payroll, attendance, capacity, or reservation
+  authority that does not exist.
+- **CWF-17 — Event Intelligence synthesis and universal explanation.** One pure
+  domain boundary owns the translation from raw facts through lower-level
+  signals to **Condition**, **Readiness**, **Flexibility**, **Needs You**,
+  **Change Impact**, and **Alignment**. It ranks one highest-leverage unresolved
+  decision from declared dependency reach, deadline pressure, authoritative
+  financial exposure, blocking severity, and reversibility without opaque prose
+  or UI-authored math. Lower-level Optionality, Debt, commitment pressure,
+  leverage, reversibility, slack, fragility, freshness, and integrity remain
+  evidence. Every conclusion carries a state, machine-stable reason codes,
+  bounded evidence, and an explicit insufficient-evidence outcome. The same
+  **Conclusion → Reason → Impact → Evidence** interaction grammar applies at
+  every depth.
+- **CWF-18 — Flexibility and change windows.** Flexibility remains separate from
+  readiness and requires a versioned deterministic contract over tenant lock
+  policy, event proximity, and only proven commitments. Guest, menu, staffing,
+  rentals, special orders, and BEO windows render as Open, Closing, Locked, or
+  Unavailable with coverage and reasons. Existing Decision Debt reversibility
+  may be an input, but it is not itself a complete Flexibility score. A
+  constrained/commitment-trap condition can be emitted only after both
+  readiness and flexibility inputs meet their declared evidence contract.
+- **CWF-19 — Change absorption and sensitivity.** Operational Slack/Change Fit
+  and Execution Fragility/Sensitivity are conditional on authoritative
+  capacity, scarcity, external-dependency, compression, and critical-path
+  inputs. The current product must not guess these conclusions. Until those
+  prerequisites exist, return unavailable or omit the view. A later program may
+  show whether a proposed change can be absorbed and which constraint makes an
+  otherwise ready event sensitive.
+
+Before CWF-16 code, the implementation session must publish a repository-cited
+capability classification, UX problem map, intelligence synthesis map, exact
+workspace hierarchy, component/function reuse map, expected path list,
+authority-risk review, and repository-native test plan. Because this program
+crosses UI, domain contracts, and data flow, its PRD/UI specification/ADR/design/
+work-plan set must be approved before implementation. Slice 1 is the workspace
+shell, edit discoverability, and synthesis presentation over facts that already
+exist; absent intelligence returns Unavailable rather than being invented.
 
 ### First follow-on
 
@@ -503,8 +576,11 @@ without reopening the customer/account or commercial-authority boundary.
   a booked event, create a bounded staff closeout sequence for internal review,
   a tenant-branded thank-you/review opportunity, and unresolved operational
   follow-up. Add anniversary attention such as a same-week-last-year repeat-event
-  cue. The first source tranche now exposes those bounded cues in Customer 360
-  and lets staff create one deterministic rebook draft only when the booked
+  cue. Home and Workflow now derive that reminder from the bounded latest-200
+  canonical quote-history read, retain tenant-calendar and truncation context,
+  and open the stable Customer 360 record without creating a lead or draft.
+  The first source tranche exposes the fully verified cue in Customer 360 and
+  lets staff create one deterministic rebook draft only when the booked
   source, acceptance receipt, stable customer, and retained accepted immutable
   version still match. It overlays current customer contact, uses the current
   catalog with server-authoritative repricing, and records source provenance.

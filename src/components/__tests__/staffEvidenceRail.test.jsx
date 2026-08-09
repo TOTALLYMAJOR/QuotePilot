@@ -128,4 +128,39 @@ describe("StaffEvidenceRail", () => {
     expect(markup).toContain('data-read-truncation="unknown"');
     expect(markup).toContain("Waiting for the tenant reads to complete.");
   });
+
+  test("names the central unread-reply read as part of the complete snapshot contract", () => {
+    const completeMarkup = renderToStaticMarkup(
+      <StaffEvidenceRail
+        organizationName="Northstar Catering"
+        organizationId="org-northstar"
+        source="firebase"
+        loadedAt={1}
+        reads={{
+          attention: { status: "success" },
+          history: { status: "success" },
+          unreadReplies: { status: "success" }
+        }}
+      />
+    );
+    const partialMarkup = renderToStaticMarkup(
+      <StaffEvidenceRail
+        organizationName="Northstar Catering"
+        organizationId="org-northstar"
+        source="firebase"
+        partial
+        error="Unread customer-reply Attention failed."
+        reads={{
+          attention: { status: "success" },
+          history: { status: "success" },
+          unreadReplies: { status: "error" }
+        }}
+      />
+    );
+
+    expect(completeMarkup).toContain("All three tenant reads completed.");
+    expect(completeMarkup).toContain("unread customer-reply Attention projection");
+    expect(partialMarkup).toContain("unread customer-reply Attention did not complete.");
+    expect(partialMarkup).toContain('data-capability-state="partial"');
+  });
 });

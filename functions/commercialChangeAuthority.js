@@ -9,6 +9,8 @@ const COMMERCIAL_CHANGE_AUTHORIZATION_RECEIPT_VERSION =
   "commercial-change-authorization-receipt-v1";
 const COMMERCIAL_CHANGE_APPLY_RECEIPT_VERSION =
   "commercial-change-apply-receipt-v1";
+const COMMERCIAL_CHANGE_APPLY_OUTCOME_RECEIPT_VERSION =
+  "commercial-change-apply-outcome-receipt-v1";
 const COMMERCIAL_CHANGE_INVALIDATION_RECEIPT_VERSION =
   "commercial-change-invalidation-receipt-v1";
 const COMMERCIAL_CHANGE_RECONCILIATION_RECEIPT_VERSION =
@@ -31,6 +33,8 @@ const COMMERCIAL_CHANGE_AUTHORITY_BOUNDARY =
   "This receipt records only the named server-side commercial change operation. It does not publish, regenerate, deliver, accept, book, charge, pay, or complete any dependent artifact or decision.";
 const COMMERCIAL_CHANGE_PUBLISH_BOUNDARY =
   "safeToPublish is deterministic eligibility only. It does not publish a proposal, BEO, payment request, portal revision, provider message, or any other artifact.";
+const COMMERCIAL_CHANGE_APPLY_OUTCOME_BOUNDARY =
+  "This receipt proves only whether the exact governed quote apply committed. A not-committed receipt fences that request identity from any later apply; neither outcome publishes, delivers, accepts, books, charges, pays, regenerates, or completes dependent work.";
 
 const REQUEST_PATTERNS = Object.freeze({
   simulation: /^change_sim_[a-f0-9]{32}$/u,
@@ -43,6 +47,7 @@ const RECEIPT_SCHEMAS = Object.freeze({
   simulation: COMMERCIAL_CHANGE_SIMULATION_RECEIPT_VERSION,
   authorization: COMMERCIAL_CHANGE_AUTHORIZATION_RECEIPT_VERSION,
   apply: COMMERCIAL_CHANGE_APPLY_RECEIPT_VERSION,
+  outcome: COMMERCIAL_CHANGE_APPLY_OUTCOME_RECEIPT_VERSION,
   invalidation: COMMERCIAL_CHANGE_INVALIDATION_RECEIPT_VERSION,
   reconciliation: COMMERCIAL_CHANGE_RECONCILIATION_RECEIPT_VERSION
 });
@@ -51,6 +56,7 @@ const RECEIPT_ID_PREFIXES = Object.freeze({
   simulation: "ccs",
   authorization: "cca",
   apply: "ccp",
+  outcome: "ccor",
   invalidation: "cci",
   reconciliation: "ccr"
 });
@@ -219,6 +225,21 @@ function receiptIdentity(type, { organizationId, quoteId, requestId, discriminat
     requestId,
     discriminator
   }, graphCore, `${type} receipt identity`);
+}
+
+function applyIdentity(request, graphCore) {
+  const scope = requestScope(request, "apply");
+  return deepFreeze({
+    ...scope,
+    applyReceiptId: receiptIdentity("apply", scope, graphCore),
+    operationId: deterministicId("cco", {
+      schemaVersion: COMMERCIAL_CHANGE_APPLY_RECEIPT_VERSION,
+      organizationId: scope.organizationId,
+      quoteId: scope.quoteId,
+      requestId: scope.requestId
+    }, graphCore, "Commercial change operation identity"),
+    outcomeReceiptId: receiptIdentity("outcome", scope, graphCore)
+  });
 }
 
 function addReceiptDigest(payload, graphCore) {
@@ -467,15 +488,23 @@ function validateInvalidationReceipt(receipt, graphCore) {
 
 function validateApplyReceipt(receipt, graphCore) {
   const normalized = assertReceiptIntegrity(receipt, "apply", graphCore);
-  exactRequestId(normalized.requestId, "apply");
+  const requestId = exactRequestId(normalized.requestId, "apply");
   const organizationId = exactOpaqueId(normalized.organizationId, "organizationId");
   const quoteId = exactOpaqueId(normalized.quoteId, "quoteId");
-  exactOpaqueId(normalized.operationId, "operationId");
+  const operationId = exactOpaqueId(normalized.operationId, "operationId");
   exactOpaqueId(normalized.baseRevisionId, "baseRevisionId");
   exactOpaqueId(normalized.newRevisionId, "newRevisionId");
   exactOpaqueId(normalized.simulationReceiptId, "simulationReceiptId");
   exactDigest(normalized.simulationDigest, "Simulation digest");
   exactDigest(normalized.proposalDigest, "Proposed change digest");
+  const authorizationReceiptId = text(normalized.authorizationReceiptId);
+  const authorizationReceiptDigest = text(normalized.authorizationReceiptDigest);
+  if (authorizationReceiptId) {
+    exactOpaqueId(authorizationReceiptId, "authorizationReceiptId");
+    exactDigest(authorizationReceiptDigest, "Authorization receipt digest");
+  } else if (authorizationReceiptDigest) {
+    fail("failed-precondition", "Apply authorization evidence is inconsistent.");
+  }
   exactISO(normalized.appliedAtISO, "Apply time");
   normalizeActor(normalized.appliedBy);
   if (!Array.isArray(normalized.invalidationReceipts)) {
@@ -497,6 +526,40 @@ function validateApplyReceipt(receipt, graphCore) {
       fail("failed-precondition", "Apply invalidation scope is invalid.");
     }
   });
+  const invalidationIds = normalized.invalidationReceipts.map((item) => item.invalidationId);
+  if (new Set(invalidationIds).size !== invalidationIds.length) {
+    fail("failed-precondition", "Apply invalidation receipts contain duplicate identities.");
+  }
+  if (
+    !Array.isArray(normalized.decisionOpenings)
+    || normalized.decisionOpenings.length > MAX_INVALIDATIONS
+  ) {
+    fail("failed-precondition", "Apply decision openings are invalid.");
+  }
+  const reviewInvalidations = new Map(normalized.invalidationReceipts
+    .filter((item) => item.classification === "REVIEW")
+    .map((item) => [item.invalidationId, item]));
+  const decisionIds = new Set();
+  const decisionInvalidationIds = new Set();
+  normalized.decisionOpenings.forEach((decision) => {
+    const decisionId = exactOpaqueId(decision?.decisionId, "decisionId");
+    const invalidationId = exactOpaqueId(decision?.invalidationId, "decision invalidationId");
+    const nodeId = exactOpaqueId(decision?.nodeId, "decision nodeId");
+    if (
+      decision?.state !== "open"
+      || !reviewInvalidations.has(invalidationId)
+      || reviewInvalidations.get(invalidationId).nodeId !== nodeId
+      || decisionIds.has(decisionId)
+      || decisionInvalidationIds.has(invalidationId)
+    ) {
+      fail("failed-precondition", "Apply decision opening scope is invalid.");
+    }
+    decisionIds.add(decisionId);
+    decisionInvalidationIds.add(invalidationId);
+  });
+  if (decisionInvalidationIds.size !== reviewInvalidations.size) {
+    fail("failed-precondition", "Apply decision openings do not cover the exact REVIEW set.");
+  }
   if (
     normalized.safeToPublish !== (normalized.invalidationReceipts.length === 0)
     || normalized.authorizationConsumed !== Boolean(normalized.authorizationReceiptId)
@@ -506,10 +569,73 @@ function validateApplyReceipt(receipt, graphCore) {
   const expectedId = receiptIdentity("apply", {
     organizationId,
     quoteId,
-    requestId: normalized.requestId
+    requestId
   }, graphCore);
-  if (normalized.receiptId !== expectedId) {
+  const expectedOperationId = deterministicId("cco", {
+    schemaVersion: COMMERCIAL_CHANGE_APPLY_RECEIPT_VERSION,
+    organizationId,
+    quoteId,
+    requestId
+  }, graphCore, "Commercial change operation identity");
+  if (normalized.receiptId !== expectedId || operationId !== expectedOperationId) {
     fail("failed-precondition", "Apply receipt identity is invalid.");
+  }
+  return normalized;
+}
+
+function validateApplyOutcomeReceipt(receipt, graphCore) {
+  const normalized = assertReceiptIntegrity(receipt, "outcome", graphCore);
+  const requestId = exactRequestId(normalized.requestId, "apply");
+  const organizationId = exactOpaqueId(normalized.organizationId, "organizationId");
+  const quoteId = exactOpaqueId(normalized.quoteId, "quoteId");
+  const identity = applyIdentity({ requestId, organizationId, quoteId }, graphCore);
+  exactOpaqueId(normalized.operationId, "operationId");
+  exactOpaqueId(normalized.simulationReceiptId, "simulationReceiptId");
+  exactDigest(normalized.simulationDigest, "Simulation digest");
+  exactOpaqueId(normalized.baseRevisionId, "baseRevisionId");
+  exactOpaqueId(normalized.activeRevisionId, "activeRevisionId");
+  exactISO(normalized.reconciledAtISO, "Apply outcome reconciliation time");
+  normalizeActor(normalized.reconciledBy);
+  const authorizationReceiptId = text(normalized.authorizationReceiptId);
+  const authorizationReceiptDigest = text(normalized.authorizationReceiptDigest);
+  if (authorizationReceiptId) {
+    exactOpaqueId(authorizationReceiptId, "authorizationReceiptId");
+    exactDigest(authorizationReceiptDigest, "Authorization receipt digest");
+  } else if (authorizationReceiptDigest) {
+    fail("failed-precondition", "Apply outcome authorization evidence is inconsistent.");
+  }
+  if (
+    normalized.receiptId !== identity.outcomeReceiptId
+    || normalized.outcomeReceiptId !== identity.outcomeReceiptId
+    || normalized.operationId !== identity.operationId
+    || normalized.expectedApplyReceiptId !== identity.applyReceiptId
+    || !["committed", "not_committed"].includes(normalized.state)
+    || normalized.sourceChanged !== (normalized.activeRevisionId !== normalized.baseRevisionId)
+  ) {
+    fail("failed-precondition", "Apply outcome receipt identity or state is invalid.");
+  }
+  if (normalized.state === "committed") {
+    if (
+      normalized.applyReceiptId !== identity.applyReceiptId
+      || !text(normalized.applyReceiptDigest)
+      || !text(normalized.newRevisionId)
+    ) {
+      fail("failed-precondition", "Committed apply outcome evidence is incomplete.");
+    }
+    exactDigest(normalized.applyReceiptDigest, "Apply receipt digest");
+    exactOpaqueId(normalized.newRevisionId, "newRevisionId");
+    if (normalized.appliedRevisionIsActive !== (
+      normalized.activeRevisionId === normalized.newRevisionId
+    )) {
+      fail("failed-precondition", "Committed apply outcome active-revision evidence is invalid.");
+    }
+  } else if (
+    text(normalized.applyReceiptId)
+    || text(normalized.applyReceiptDigest)
+    || text(normalized.newRevisionId)
+    || normalized.appliedRevisionIsActive !== false
+  ) {
+    fail("failed-precondition", "Not-committed apply outcome must not claim apply evidence.");
   }
   return normalized;
 }
@@ -835,10 +961,8 @@ function createCommercialChangeAuthority({
     const trusted = normalizeTrustedContext(trustedContext);
     assertScope(simulation, scope, "Simulation receipt");
     const currentAuthority = normalizeCurrentAuthority(current);
-    const receiptId = receiptIdentity("apply", {
-      ...scope,
-      requestId: scope.requestId
-    }, graphCore);
+    const identity = applyIdentity(scope, graphCore);
+    const receiptId = identity.applyReceiptId;
 
     if (existingReceipt) {
       const existing = validateApplyReceipt(existingReceipt, graphCore);
@@ -897,12 +1021,7 @@ function createCommercialChangeAuthority({
       fail("failed-precondition", "A no-impact commercial change must not consume an unrelated authorization.");
     }
 
-    const operationId = deterministicId("cco", {
-      schemaVersion: COMMERCIAL_CHANGE_APPLY_RECEIPT_VERSION,
-      organizationId: scope.organizationId,
-      quoteId: scope.quoteId,
-      requestId: scope.requestId
-    }, graphCore, "Commercial change operation identity");
+    const operationId = identity.operationId;
     const invalidationReceipts = simulation.impact.dependentNodes.map((node) => {
       const invalidationId = deterministicId(RECEIPT_ID_PREFIXES.invalidation, {
         schemaVersion: COMMERCIAL_CHANGE_INVALIDATION_RECEIPT_VERSION,
@@ -977,6 +1096,157 @@ function createCommercialChangeAuthority({
       decisionOpenings: receipt.decisionOpenings,
       idempotent: false
     });
+  };
+
+  const reconcileApplyOutcome = ({
+    simulationReceipt,
+    authorizationReceipt = null,
+    applyReceipt = null,
+    request,
+    trustedContext,
+    current,
+    existingReceipt = null
+  } = {}) => {
+    const simulation = validateSimulationReceipt(simulationReceipt, graphCore);
+    const scope = requestScope(request, "apply");
+    const identity = applyIdentity(scope, graphCore);
+    const simulationReceiptId = exactOpaqueId(
+      request?.simulationReceiptId,
+      "simulationReceiptId"
+    );
+    const expectedBaseRevisionId = exactOpaqueId(
+      request?.expectedBaseRevisionId,
+      "expectedBaseRevisionId"
+    );
+    const requestedAuthorizationReceiptId = text(request?.authorizationReceiptId);
+    const activeRevisionId = exactOpaqueId(
+      current?.activeRevisionId,
+      "current activeRevisionId"
+    );
+    const reconciledBy = normalizeActor(trustedContext?.actor);
+    const reconciledAtISO = exactISO(
+      trustedContext?.nowISO,
+      "Apply outcome reconciliation time"
+    );
+    assertScope(simulation, scope, "Simulation receipt");
+    if (
+      simulation.receiptId !== simulationReceiptId
+      || simulation.baseRevisionId !== expectedBaseRevisionId
+    ) {
+      fail(
+        "failed-precondition",
+        "Apply outcome request does not match the exact simulation and base revision."
+      );
+    }
+
+    let authorization = null;
+    if (simulation.authorizationRequired) {
+      authorization = validateAuthorizationReceipt(authorizationReceipt, graphCore);
+      assertScope(authorization, scope, "Authorization receipt");
+      if (
+        !requestedAuthorizationReceiptId
+        || authorization.receiptId !== requestedAuthorizationReceiptId
+        || authorization.simulationReceiptId !== simulation.receiptId
+        || authorization.simulationDigest !== simulation.receiptDigest
+        || authorization.baseRevisionId !== simulation.baseRevisionId
+        || authorization.proposedRevisionId !== simulation.proposedRevisionId
+        || authorization.proposalDigest !== simulation.proposalDigest
+        || authorization.catalogAuthorityDigest !== simulation.catalogAuthorityDigest
+        || authorization.policyVersion !== simulation.policyVersion
+        || authorization.authorizedFor?.uid !== simulation.simulatedBy?.uid
+        || authorization.authorizedFor?.email !== simulation.simulatedBy?.email
+        || authorization.authorizedFor?.role !== simulation.simulatedBy?.role
+      ) {
+        fail(
+          "failed-precondition",
+          "Apply outcome authorization does not match the exact simulation."
+        );
+      }
+    } else if (requestedAuthorizationReceiptId || authorizationReceipt) {
+      fail(
+        "failed-precondition",
+        "A no-impact apply outcome must not consume unrelated authorization evidence."
+      );
+    }
+
+    let applied = null;
+    if (applyReceipt) {
+      applied = validateApplyReceipt(applyReceipt, graphCore);
+      assertScope(applied, scope, "Apply receipt");
+      if (
+        applied.receiptId !== identity.applyReceiptId
+        || applied.operationId !== identity.operationId
+        || applied.requestId !== scope.requestId
+        || applied.simulationReceiptId !== simulation.receiptId
+        || applied.simulationDigest !== simulation.receiptDigest
+        || applied.authorizationReceiptId !== (authorization?.receiptId || "")
+        || applied.authorizationReceiptDigest !== (authorization?.receiptDigest || "")
+        || applied.baseRevisionId !== simulation.baseRevisionId
+        || applied.proposalDigest !== simulation.proposalDigest
+      ) {
+        fail(
+          "failed-precondition",
+          "Apply outcome receipt is not bound to the exact authorized request."
+        );
+      }
+    }
+
+    const payload = {
+      schemaVersion: COMMERCIAL_CHANGE_APPLY_OUTCOME_RECEIPT_VERSION,
+      authority: COMMERCIAL_CHANGE_AUTHORITY,
+      receiptType: "outcome",
+      receiptId: identity.outcomeReceiptId,
+      outcomeReceiptId: identity.outcomeReceiptId,
+      requestId: scope.requestId,
+      operationId: identity.operationId,
+      organizationId: scope.organizationId,
+      quoteId: scope.quoteId,
+      simulationReceiptId: simulation.receiptId,
+      simulationDigest: simulation.receiptDigest,
+      authorizationReceiptId: authorization?.receiptId || "",
+      authorizationReceiptDigest: authorization?.receiptDigest || "",
+      baseRevisionId: simulation.baseRevisionId,
+      expectedApplyReceiptId: identity.applyReceiptId,
+      state: applied ? "committed" : "not_committed",
+      activeRevisionId,
+      sourceChanged: activeRevisionId !== simulation.baseRevisionId,
+      applyReceiptId: applied?.receiptId || "",
+      applyReceiptDigest: applied?.receiptDigest || "",
+      newRevisionId: applied?.newRevisionId || "",
+      appliedRevisionIsActive: Boolean(applied && activeRevisionId === applied.newRevisionId),
+      reconciledAtISO,
+      reconciledBy,
+      boundary: COMMERCIAL_CHANGE_APPLY_OUTCOME_BOUNDARY
+    };
+    const receipt = addReceiptDigest(payload, graphCore);
+    validateApplyOutcomeReceipt(receipt, graphCore);
+
+    if (existingReceipt) {
+      const existing = validateApplyOutcomeReceipt(existingReceipt, graphCore);
+      assertScope(existing, scope, "Apply outcome receipt");
+      if (
+        existing.receiptId !== receipt.receiptId
+        || existing.operationId !== receipt.operationId
+        || existing.simulationReceiptId !== receipt.simulationReceiptId
+        || existing.simulationDigest !== receipt.simulationDigest
+        || existing.authorizationReceiptId !== receipt.authorizationReceiptId
+        || existing.authorizationReceiptDigest !== receipt.authorizationReceiptDigest
+        || existing.baseRevisionId !== receipt.baseRevisionId
+        || existing.expectedApplyReceiptId !== receipt.expectedApplyReceiptId
+        || existing.state !== receipt.state
+        || existing.applyReceiptId !== receipt.applyReceiptId
+        || existing.applyReceiptDigest !== receipt.applyReceiptDigest
+        || existing.newRevisionId !== receipt.newRevisionId
+      ) {
+        fail(
+          "already-exists",
+          "Apply outcome request identity is bound to different immutable evidence."
+        );
+      }
+      return deepFreeze({ receipt: existing, idempotent: true });
+    }
+
+    return deepFreeze({ receipt, idempotent: false });
   };
 
   const reconcile = ({
@@ -1182,11 +1452,14 @@ function createCommercialChangeAuthority({
     simulate,
     authorize,
     buildApply,
+    reconcileApplyOutcome,
     reconcile,
     evaluatePublishGate,
+    applyIdentity: (request) => applyIdentity(request, graphCore),
     validateSimulationReceipt: (receipt) => validateSimulationReceipt(receipt, graphCore),
     validateAuthorizationReceipt: (receipt) => validateAuthorizationReceipt(receipt, graphCore),
     validateApplyReceipt: (receipt) => validateApplyReceipt(receipt, graphCore),
+    validateApplyOutcomeReceipt: (receipt) => validateApplyOutcomeReceipt(receipt, graphCore),
     validateReconciliationReceipt: (receipt) => validateReconciliationReceipt(receipt, graphCore),
     reconcileReceiptReplay: (input) => reconcileReceiptReplay({ ...input, graphCore })
   });
@@ -1194,6 +1467,8 @@ function createCommercialChangeAuthority({
 
 module.exports = {
   COMMERCIAL_CHANGE_APPLY_RECEIPT_VERSION,
+  COMMERCIAL_CHANGE_APPLY_OUTCOME_BOUNDARY,
+  COMMERCIAL_CHANGE_APPLY_OUTCOME_RECEIPT_VERSION,
   COMMERCIAL_CHANGE_AUTHORITY,
   COMMERCIAL_CHANGE_AUTHORITY_BOUNDARY,
   COMMERCIAL_CHANGE_AUTHORITY_VERSION,
