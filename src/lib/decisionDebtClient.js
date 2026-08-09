@@ -260,6 +260,38 @@ function exactFactor(value, label) {
   };
 }
 
+function exactExposureFactor(value, label) {
+  const factor = requireRecord(value, label);
+  const known = boolean(factor.known, `${label}.known`);
+  const cents = factor.cents;
+  if (known) {
+    if (!Number.isSafeInteger(cents) || cents < 0) {
+      throw clientError("unknown", "Decision Debt commercial exposure is invalid.", false);
+    }
+    return {
+      ...factor,
+      value: integer(factor.value, `${label}.value`, 1, 5),
+      known,
+      cents,
+      source: text(factor.source)
+    };
+  }
+  if (factor.value !== null || cents !== null) {
+    throw clientError(
+      "unknown",
+      "Decision Debt unknown exposure must not carry a guessed factor or amount.",
+      false
+    );
+  }
+  return {
+    ...factor,
+    value: null,
+    known: false,
+    cents: null,
+    source: text(factor.source)
+  };
+}
+
 function exactDebtItem(value) {
   const item = requireRecord(value, "Decision Debt item");
   const id = text(item.id);
@@ -277,21 +309,34 @@ function exactDebtItem(value) {
   const factors = requireRecord(item.factors, "Decision Debt item factors");
   const dependency = exactFactor(factors.dependency, "Decision Debt dependency factor");
   const proximity = exactFactor(factors.proximity, "Decision Debt proximity factor");
-  const exposure = exactFactor(factors.exposure, "Decision Debt exposure factor");
+  const exposure = exactExposureFactor(factors.exposure, "Decision Debt exposure factor");
   const reversibility = exactFactor(factors.reversibility, "Decision Debt reversibility factor");
-  if (typeof factors.exposure.known !== "boolean") {
-    throw clientError("unknown", "Decision Debt exposure evidence is invalid.", false);
+  const cents = exposure.cents;
+  const scoreState = text(item.scoreState).toUpperCase();
+  if (!new Set(["KNOWN", "UNKNOWN"]).has(scoreState)) {
+    throw clientError("unknown", "Decision Debt score state is invalid.", false);
   }
-  const cents = factors.exposure.cents;
-  if (cents !== null && (!Number.isSafeInteger(cents) || cents < 0)) {
-    throw clientError("unknown", "Decision Debt commercial exposure is invalid.", false);
+  const scoreKnown = scoreState === "KNOWN";
+  if (scoreKnown !== exposure.known) {
+    throw clientError("unknown", "Decision Debt score state conflicts with exposure evidence.", false);
   }
-  const urgency = text(item.urgency).toLowerCase();
-  if (!URGENCY.has(urgency)) {
-    throw clientError("unknown", "Decision Debt urgency is invalid.", false);
+  let urgency = null;
+  let score = null;
+  let rawScore = null;
+  if (scoreKnown) {
+    urgency = text(item.urgency).toLowerCase();
+    if (!URGENCY.has(urgency)) {
+      throw clientError("unknown", "Decision Debt urgency is invalid.", false);
+    }
+    score = integer(item.score, "Decision Debt score", 0, 100);
+    rawScore = integer(item.rawScore, "Decision Debt raw score", 0, 625);
+  } else if (item.urgency !== null || item.score !== null || item.rawScore !== null) {
+    throw clientError(
+      "unknown",
+      "Decision Debt unknown priority must not carry a guessed score or urgency.",
+      false
+    );
   }
-  const score = integer(item.score, "Decision Debt score", 0, 100);
-  const rawScore = integer(item.rawScore, "Decision Debt raw score", 0, 625);
   const affectedDependencyCount = integer(
     item.affectedDependencyCount,
     "Decision Debt affected dependency count",
@@ -320,20 +365,22 @@ function exactDebtItem(value) {
   if (item.commercialExposureCents !== cents) {
     throw clientError("unknown", "Decision Debt commercial exposure evidence is inconsistent.", false);
   }
-  const expectedRawScore = dependency.value
-    * proximity.value
-    * exposure.value
-    * reversibility.value;
-  const expectedScore = Math.min(100, Math.max(0, Math.round((expectedRawScore / 625) * 100)));
-  const expectedUrgency = expectedScore >= 80
-    ? "critical"
-    : expectedScore >= 50
-      ? "high"
-      : expectedScore >= 25
-        ? "medium"
-        : "low";
-  if (rawScore !== expectedRawScore || score !== expectedScore || urgency !== expectedUrgency) {
-    throw clientError("unknown", "Decision Debt deterministic score is inconsistent.", false);
+  if (scoreKnown) {
+    const expectedRawScore = dependency.value
+      * proximity.value
+      * exposure.value
+      * reversibility.value;
+    const expectedScore = Math.min(100, Math.max(0, Math.round((expectedRawScore / 625) * 100)));
+    const expectedUrgency = expectedScore >= 80
+      ? "critical"
+      : expectedScore >= 50
+        ? "high"
+        : expectedScore >= 25
+          ? "medium"
+          : "low";
+    if (rawScore !== expectedRawScore || score !== expectedScore || urgency !== expectedUrgency) {
+      throw clientError("unknown", "Decision Debt deterministic score is inconsistent.", false);
+    }
   }
   return Object.freeze({
     ...item,
@@ -353,6 +400,7 @@ function exactDebtItem(value) {
     commercialExposureCents: cents,
     rawScore,
     score,
+    scoreState,
     urgency,
     factors: Object.freeze({
       dependency: Object.freeze(dependency),

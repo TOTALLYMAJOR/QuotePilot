@@ -14,7 +14,8 @@ import {
   FOLLOW_UP_STAGES,
   getApprovalActionEligibility,
   getApprovalRequestExecutionEligibility,
-  getRequestableApprovalActions
+  getRequestableApprovalActions,
+  mergeUnreadReplyAttention
 } from "../lib/quoteWorkflow";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
 import {
@@ -53,12 +54,57 @@ import {
   formatWorkspaceText,
   humanizeWorkspaceValue
 } from "../lib/workspacePresentation";
+import {
+  mergeAnniversaryRebookingAttention,
+  resolveAnniversaryAttentionCalendar
+} from "../lib/anniversaryRebookingAttention";
 
 const WORKFLOW_TABS = ["attention", "followups", "autopilot", "debt", "approvals"];
 const PROVIDER_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
   "send_final_balance_request"
 ]);
+
+export function resolveWorkflowFocusTarget({
+  focusQuoteId = "",
+  focusAttentionType = "",
+  focusRequestId = "",
+  attentionItems = [],
+  decisionDebtItems = []
+} = {}) {
+  const quoteId = String(focusQuoteId || "").trim();
+  const attentionType = String(focusAttentionType || "").trim();
+  const requestId = String(focusRequestId || "").trim();
+  if (!quoteId) return null;
+
+  if (attentionType === "decision_debt") {
+    const item = (Array.isArray(decisionDebtItems) ? decisionDebtItems : []).find((candidate) => (
+      String(candidate?.quoteId || "").trim() === quoteId
+      && (!requestId || String(candidate?.id || "").trim() === requestId)
+    ));
+    return {
+      tab: "debt",
+      itemId: String(item?.id || "").trim()
+    };
+  }
+
+  const item = (Array.isArray(attentionItems) ? attentionItems : []).find((candidate) => (
+    String(candidate?.quoteId || "").trim() === quoteId
+    && (!attentionType || String(candidate?.type || "").trim() === attentionType)
+    && (
+      !requestId
+      || String(candidate?.sourceRequestId || "").trim() === requestId
+      || String(candidate?.attentionId || "").trim() === requestId
+      || String(candidate?.messageId || "").trim() === requestId
+      || candidate?.pendingRequests?.some((request) => (
+        String(request?.id || "").trim() === requestId
+      ))
+    )
+  ));
+  return item
+    ? { tab: "attention", itemId: String(item.id || "").trim() }
+    : null;
+}
 
 function fmtDateTime(value) {
   return formatWorkspaceDateTime(value);
@@ -553,10 +599,18 @@ export function SalesWorkflowView({
         return result.quotes.some((item) => item.id === current) ? current : result.quotes[0]?.id || "";
       });
       if (selectDefaultTab && !tabInteractedRef.current) {
-        setActiveTab(buildWorkflowAttentionSummary(result.quotes, {
-          todayISO: snapshotContext.snapshotTodayISO,
-          nowISO: snapshotContext.snapshotAtISO
-        }).quoteCount > 0 ? "attention" : "followups");
+        setActiveTab(
+          focusAttentionType === "decision_debt"
+            ? "debt"
+            : focusAttentionType
+              ? "attention"
+              : buildWorkflowAttentionSummary(result.quotes, {
+                  todayISO: snapshotContext.snapshotTodayISO,
+                  nowISO: snapshotContext.snapshotAtISO
+                }).quoteCount > 0
+                ? "attention"
+                : "followups"
+        );
       }
     } catch (err) {
       if (generation !== loadGenerationRef.current || workflowScopeRef.current !== loadScope) return;
@@ -704,11 +758,35 @@ export function SalesWorkflowView({
   );
 
   const attentionSummary = useMemo(
-    () => buildWorkflowAttentionSummary(state.quotes, {
-      todayISO: state.snapshotTodayISO || undefined,
-      nowISO: state.snapshotAtISO || undefined
-    }),
-    [state.quotes, state.snapshotTodayISO]
+    () => mergeUnreadReplyAttention(
+      mergeAnniversaryRebookingAttention(
+        buildWorkflowAttentionSummary(state.quotes, {
+          todayISO: state.snapshotTodayISO || undefined,
+          nowISO: state.snapshotAtISO || undefined
+        }),
+        {
+          quotes: state.quotes,
+          calendarContext: resolveAnniversaryAttentionCalendar({
+            instant: state.snapshotAtISO || undefined,
+            tenantTimeZone
+          }),
+          sourceLimit: WORKFLOW_TIMING_INPUT_SCAN_LIMIT,
+          sourceTruncated: state.truncated
+        }
+      ),
+      {
+        attention: autopilotOperations.snapshot?.attention || [],
+        quotes: state.quotes
+      }
+    ),
+    [
+      autopilotOperations.snapshot?.attention,
+      state.quotes,
+      state.snapshotAtISO,
+      state.snapshotTodayISO,
+      state.truncated,
+      tenantTimeZone
+    ]
   );
 
   const timingRead = useMemo(() => {
@@ -751,26 +829,32 @@ export function SalesWorkflowView({
   const quoteSnapshotBound = state.snapshotAtISO
     ? (state.truncated ? "truncated" : "complete")
     : "unknown";
+  const displayedAutopilotAttentionCount = Array.isArray(autopilotOperations.snapshot?.attention)
+    ? autopilotOperations.snapshot.attention.length
+    : 0;
+  const totalAutopilotAttentionCount = Number(
+    autopilotOperations.snapshot?.bounds?.totalAttention
+  );
+  const autopilotAttentionTruncated = Number.isSafeInteger(totalAutopilotAttentionCount)
+    && totalAutopilotAttentionCount > displayedAutopilotAttentionCount;
 
   useEffect(() => {
     if (!open || state.loading || !focusQuoteId) return undefined;
+    if (focusAttentionType === "decision_debt") return undefined;
     setSelectedQuoteId((current) => (
       state.quotes.some((quote) => quote.id === focusQuoteId) ? focusQuoteId : current
     ));
-    const attentionItem = attentionSummary.items.find((item) => (
-      item.quoteId === focusQuoteId
-      && (!focusAttentionType || item.type === focusAttentionType)
-      && (
-        !focusRequestId
-        || item.sourceRequestId === focusRequestId
-        || item.pendingRequests?.some((request) => request.id === focusRequestId)
-      )
-    ));
-    if (!attentionItem) return undefined;
+    const focusTarget = resolveWorkflowFocusTarget({
+      focusQuoteId,
+      focusAttentionType,
+      focusRequestId,
+      attentionItems: attentionSummary.items
+    });
+    if (!focusTarget?.itemId) return undefined;
     setActiveTab("attention");
     const frame = window.requestAnimationFrame(() => {
       const row = Array.from(dialogRef.current?.querySelectorAll("[data-attention-id]") || [])
-        .find((element) => element.dataset.attentionId === attentionItem.id);
+        .find((element) => element.dataset.attentionId === focusTarget.itemId);
       row?.scrollIntoView({ behavior: "smooth", block: "center" });
       row?.focus({ preventScroll: true });
     });
@@ -783,6 +867,55 @@ export function SalesWorkflowView({
     open,
     state.loading,
     state.quotes
+  ]);
+
+  useEffect(() => {
+    if (!open || focusAttentionType !== "decision_debt" || !focusQuoteId) return undefined;
+    setSelectedQuoteId((current) => (
+      state.quotes.some((quote) => quote.id === focusQuoteId) ? focusQuoteId : current
+    ));
+    setActiveTab("debt");
+    if (decisionDebt.loading || !decisionDebt.snapshot) return undefined;
+    const focusTarget = resolveWorkflowFocusTarget({
+      focusQuoteId,
+      focusAttentionType,
+      focusRequestId,
+      decisionDebtItems: decisionDebt.snapshot?.items
+    });
+    if (!focusTarget?.itemId) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const row = Array.from(dialogRef.current?.querySelectorAll("[data-decision-debt-id]") || [])
+        .find((element) => element.dataset.decisionDebtId === focusTarget.itemId);
+      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+      row?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    decisionDebt.loading,
+    decisionDebt.snapshot,
+    focusAttentionType,
+    focusQuoteId,
+    focusRequestId,
+    open,
+    state.quotes
+  ]);
+
+  useEffect(() => {
+    if (
+      !open
+      || state.loading
+      || autopilotOperations.loading
+      || tabInteractedRef.current
+      || activeTab !== "followups"
+      || attentionSummary.quoteCount < 1
+    ) return;
+    setActiveTab("attention");
+  }, [
+    activeTab,
+    attentionSummary.quoteCount,
+    autopilotOperations.loading,
+    open,
+    state.loading
   ]);
 
   useEffect(() => {
@@ -1172,6 +1305,7 @@ export function SalesWorkflowView({
         operation: "materialize_jobs",
         error: "",
         receipt: result.receipt,
+        materializationSummary: result.materializationSummary,
         quoteId: selectedQuoteId
       });
       await loadRevenueAutopilotOperations();
@@ -1213,6 +1347,8 @@ export function SalesWorkflowView({
         operation: "reconcile_job",
         error: "",
         receipt: result.receipt,
+        reconciliationState: result.reconciliationState,
+        reconciliationReason: result.reason || "",
         jobId: targetJobId
       });
       await loadRevenueAutopilotOperations();
@@ -1593,10 +1729,16 @@ export function SalesWorkflowView({
           aria-labelledby="workflow-tab-attention"
           tabIndex={0}
           hidden={activeTab !== "attention"}
+          data-capability-id="cwf-12-workflow-attention"
         >
             <p className="workflow-attention-boundary">
               This is an in-app queue. Acknowledging or marking work handled does not edit a quote or send email or SMS.
             </p>
+            {autopilotAttentionTruncated && (
+              <p className="warning-note" data-unread-attention-bound="truncated">
+                Customer-reply Attention reached the operations read bound. This queue is incomplete; review the Revenue autopilot tab for the bounded source details.
+              </p>
+            )}
             <WorkflowTimingPanel
               model={timingRead.model}
               loading={state.loading}
@@ -1614,7 +1756,7 @@ export function SalesWorkflowView({
               && state.snapshotAtISO && (
               <div className="workflow-attention-empty">
                 <h3 ref={attentionEmptyHeadingRef} tabIndex={-1}>No workflow attention needed</h3>
-                <p>Due follow-ups, post-event closeouts, customer change requests, and pending approvals will appear here.</p>
+                <p>Unread customer replies, due follow-ups, post-event closeouts, repeat-event opportunities, customer change requests, and pending approvals will appear here.</p>
               </div>
             )}
             <ol className="workflow-attention-list" aria-label="Quotes needing workflow attention">
@@ -1650,6 +1792,10 @@ export function SalesWorkflowView({
                                 ? item.state === "overdue"
                                   ? `Overdue follow-up${item.daysOverdue ? ` · ${item.daysOverdue}d` : ""}`
                                   : "Follow-up due today"
+                                : item.type === "unread_customer_reply"
+                                  ? "Unread customer reply"
+                                : item.type === "anniversary_rebooking"
+                                  ? "Repeat-event opportunity"
                                 : item.type === "post_event_closeout"
                                   ? item.state === "blocked_source"
                                     ? "Post-event closeout source review needed"
@@ -1663,7 +1809,7 @@ export function SalesWorkflowView({
                           <h3 id={`${itemDomId}-quote`}>{quoteLabel}</h3>
                           <p>{customerLabel}</p>
                         </div>
-                        <time dateTime={item.dateISO}>{["follow_up", "post_event_closeout"].includes(item.type) ? fmtDueDate(item.dateISO) : fmtDateTime(item.dateISO)}</time>
+                        <time dateTime={item.dateISO}>{["follow_up", "post_event_closeout", "anniversary_rebooking"].includes(item.type) ? fmtDueDate(item.dateISO) : fmtDateTime(item.dateISO)}</time>
                       </div>
 
                       {item.type === "change_request" && (
@@ -1758,6 +1904,69 @@ export function SalesWorkflowView({
                             Review approvals
                           </button>
                         </div>
+                      )}
+
+                      {item.type === "unread_customer_reply" && (
+                        <>
+                          <p className="workflow-attention-message">
+                            A customer reply is waiting in the authoritative quote conversation. Message content remains quote-scoped and is not copied into this queue.
+                          </p>
+                          <div className="workflow-attention-actions">
+                            <button
+                              type="button"
+                              className="cta compact"
+                              onClick={() => handleOpenAutopilotConversation(item)}
+                              disabled={!item.quoteId}
+                              data-capability-action="open-central-unread-reply"
+                              aria-label={`Open unread customer reply — ${quoteLabel}`}
+                            >
+                              Open conversation
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost compact"
+                              onClick={() => handleAcknowledgeAutopilotReply(item)}
+                              disabled={
+                                !item.attentionId
+                                || !item.messageId
+                                || ["submitting", "reconciliation"].includes(autopilotOperations.mutation.state)
+                              }
+                              data-capability-action="acknowledge-central-unread-reply"
+                              aria-label={`Mark unread customer reply handled manually — ${quoteLabel}`}
+                            >
+                              Mark handled manually
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {item.type === "anniversary_rebooking" && (
+                        <>
+                          <p
+                            className="workflow-attention-message"
+                            data-capability-id="cwf-11-central-anniversary-attention"
+                            data-capability-state="verification_required"
+                          >
+                            {formatWorkspaceText(item.eventName, { emptyLabel: "Prior event" })} was recorded as booked for this week last year. Open Customer 360 to verify the retained accepted proposal version and create or resume one governed rebook draft.
+                          </p>
+                          <p className="source-note">
+                            {item.evidenceBoundary} {item.sourceBound?.truncated
+                              ? "The bounded quote-history scan is incomplete, so older or matching rebook records may exist outside this view."
+                              : "The cue comes from the bounded current quote-history read."} Calendar: {formatWorkspaceText(item.calendarContext?.label, { emptyLabel: "Calendar source unavailable" })} ({formatWorkspaceText(item.calendarContext?.timeZone, { emptyLabel: "time zone unavailable" })}).
+                          </p>
+                          <div className="workflow-attention-actions">
+                            <button
+                              type="button"
+                              className="cta compact"
+                              onClick={() => handleOpenCloseoutWorkspace(quote)}
+                              disabled={!quote.customerId || typeof onOpenCustomer !== "function"}
+                              data-capability-action="open-exact-version-rebook-review"
+                              aria-label={`Review exact-version rebook for ${quoteLabel}`}
+                            >
+                              Review exact-version rebook
+                            </button>
+                          </div>
+                        </>
                       )}
 
                       {item.type === "post_event_closeout" && (

@@ -243,7 +243,12 @@ Commercial Change additionally requires the trusted tenant setting
 Revenue Autopilot evaluation/job authority and outbound sends are separate, so
 keep both flags false and the provider `none` until an exact coordinated release
 and provider acceptance. The scheduler runs every 15 minutes in UTC but derives
-eligibility on the tenant's validated IANA calendar. No command here deploys,
+eligibility on the tenant's validated IANA calendar. If a reviewed environment
+later enables runtime while leaving sends/provider off, the scheduler enters
+preparation-only mode: it may create deterministic private records and repair
+currently open unread-reply Attention, but it does not scan dispatch work or
+contact the provider. Workflow exposes all four gates and bounded per-lane
+preparation receipts. No command here deploys,
 configures production, promotes a gate, creates production data, or proves email
 acceptance/delivery.
 

@@ -74,6 +74,7 @@ function item(overrides = {}) {
     },
     rawScore: 375,
     score: 60,
+    scoreState: "KNOWN",
     urgency: "high",
     explanation: [
       "3 graph dependencies remain exposed.",
@@ -249,18 +250,24 @@ describe("Decision Debt deterministic explanation", () => {
       factors: {
         ...item().factors,
         exposure: {
-          value: 1,
+          value: null,
           known: false,
           cents: null,
           source: "bounded_authoritative_commercial_delta"
         }
       },
-      rawScore: 75,
-      score: 12
+      rawScore: null,
+      score: null,
+      scoreState: "UNKNOWN",
+      urgency: null
     });
     const markup = renderToStaticMarkup(<DecisionDebtPanel snapshot={snapshot([unknown])} />);
     expect(markup).toContain("Commercial exposure unavailable—not zero");
     expect(markup).toContain("<strong>Unavailable</strong>");
+    expect(markup).toContain("Priority unknown");
+    expect(markup).toContain("no exposure factor, raw score, normalized score, or urgency has been guessed");
+    expect(markup).not.toContain("Unknown×");
+    expect(markup).not.toContain(" / 100");
     expect(markup).not.toContain("$0.00");
   });
 

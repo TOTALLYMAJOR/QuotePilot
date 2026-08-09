@@ -104,7 +104,8 @@ independently block or stop an occurrence.
 - RA-FR-02: Admin records customer-specific consent and subscription evidence;
   missing or contradictory controls fail closed.
 - RA-FR-03: Stable occurrences are materialized from canonical evidence and do
-  not duplicate when templates change or the scheduler retries.
+  not duplicate when templates change or the scheduler retries; send/provider
+  readiness gates dispatch rather than deterministic preparation.
 - RA-FR-04: Quote follow-up stops on exact current portal view/accept/decline or
   terminal quote evidence; payment lanes use exact acceptance and verified
   payment authority.
@@ -118,7 +119,12 @@ independently block or stop an occurrence.
 - RA-FR-08: Customer can idempotently unsubscribe through an opaque signed token;
   no customer identity or token hash appears in public/staff projections.
 - RA-FR-09: Exact unread latest customer message creates one internal Attention
-  item and an exact staff acknowledgement resolves only that message.
+  item; a newer customer message supersedes it, a staff reply or exact staff
+  acknowledgement resolves it, and bounded scheduled repair covers missed
+  event-time creation.
+- RA-FR-10: Stop evidence preserves sending, provider-accepted, and ambiguous
+  provider evidence, and an ambiguous retry re-reads current authority before
+  any provider call.
 
 ### Non-functional requirements
 
@@ -133,14 +139,19 @@ independently block or stop an occurrence.
 
 ## Acceptance criteria (EARS)
 
-- [ ] **While** either global gate is false, the scheduler shall be dormant and
-  shall create no provider send claim.
+- [ ] **While** runtime is false, the scheduler shall be dormant; **while**
+  runtime is true but sends/provider are unavailable, it may materialize exact
+  records but shall create no provider send claim.
 - [ ] **When** policy or recipient authority is absent/contradictory, the
   affected lane shall be blocked without creating an eligible outbound job.
 - [ ] **When** the same occurrence is materialized again, the system shall reuse
   its stable identity and update/stop it without duplicating a send.
 - [ ] **When** a job enters provider uncertainty, retry/reconciliation shall use
-  the same job, attempt scope, and provider idempotency identity.
+  the same job, attempt scope, and provider idempotency identity, and shall
+  re-read all current dispatch authority before contacting the provider.
+- [ ] **When** later stop evidence reaches a sending, provider-accepted, or
+  ambiguous job, the system shall retain that evidence and record suppression
+  instead of rewriting the provider outcome as stopped.
 - [ ] **When** Resend reports an event, only a valid raw-body signature and known
   provider-message index may update the exact job; replay shall be idempotent.
 - [ ] **When** a customer unsubscribes with a valid current token, the system
@@ -316,7 +327,7 @@ Controls: consent granted|revoked; subscription subscribed|unsubscribed
 | Read operations | `getRevenueAutopilotOperations` | <=100 jobs, <=50 Attention, source/bounds/policy/outcomes; retained read marked stale |
 | Configure tenant policy | `configureRevenueAutopilotPolicy` | admin exact-version receipt; uncertain repeats request |
 | Read/configure controls | `getRevenueAutopilotCustomerControls`, `configureRevenueAutopilotCustomerControls` | safe projection/admin receipt; no browser fallback |
-| Prepare quote jobs | `materializeRevenueAutopilotJobs` | exact quote receipt and created/updated/stopped counts |
+| Prepare quote jobs | `materializeRevenueAutopilotJobs` | exact quote receipt, bounded created/updated counts, and per-lane outcomes |
 | Acknowledge reply | `acknowledgeRevenueAutopilotReply` | exact latest-message receipt only |
 | Reconcile job | `reconcileRevenueAutopilotJob` | exact ambiguous job/provider outcome; no replacement job |
 | Public preferences | `getRevenueAutopilotUnsubscribeContext`, `unsubscribeRevenueAutopilotEmail` | minimal context/idempotent receipt |
@@ -358,7 +369,7 @@ Required order:
 | Missing gate/policy/control/evidence | Dormant, blocked, stopped, or not due | Correct exact authority; rematerialize/re-read |
 | Quiet hours | `retry_wait`/next clear tenant window | Scheduler retries within bounded policy |
 | Definite provider failure | `definite_failure` | Operator review; no automatic new occurrence |
-| Ambiguous provider outcome/expired lease | `outcome_ambiguous` | Exact job reconciliation with same provider identity |
+| Ambiguous provider outcome/expired lease | `outcome_ambiguous` | Re-read current authority, then exact job reconciliation with the same provider identity or a visible withheld retry |
 | Invalid/replayed webhook | reject or idempotently ignore | Inspect redacted logs/provider configuration |
 | Invalid unsubscribe token | public safe error | No identity disclosure; newer governed message required |
 

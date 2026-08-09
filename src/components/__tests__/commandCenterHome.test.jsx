@@ -235,6 +235,26 @@ describe("CommandCenterHome static shell", () => {
     expect(html).toContain("New quote");
   });
 
+  test("does not claim the attention queue is empty when the shared snapshot is truncated", () => {
+    const html = renderToStaticMarkup(
+      <CommandCenterHome
+        snapshot={{
+          loading: false,
+          error: "",
+          attentionSummary: { items: [] },
+          quotes: [],
+          truncated: true
+        }}
+        onOpenWorkflow={() => {}}
+        onOpenQuote={() => {}}
+        onNewQuote={() => {}}
+      />
+    );
+
+    expect(html).toContain("No attention appears in this bounded snapshot");
+    expect(html).not.toContain("Nothing needs you right now");
+  });
+
   test("links an attention-row customer to Customer 360 without changing the Workflow action", () => {
     const html = renderToStaticMarkup(
       <CommandCenterHome

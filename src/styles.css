@@ -5832,7 +5832,7 @@ hr {
 :root {
   --sem-info: #4a6fa5;
   --sem-pending: #8a6a15;
-  --sem-action: #b4530a;
+  --sem-action: #984406;
   --sem-customer: #6c4fa1;
   --sem-provider: #33608c;
   --sem-confirmed: #1e6b44;
@@ -5846,7 +5846,7 @@ hr {
   display: inline-flex;
   align-items: center;
   gap: 0.4em;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   padding: 0.16em 0.6em;
   border-radius: 999px;
@@ -5957,7 +5957,7 @@ hr {
 
 .staff-evidence-details dt {
   color: #716654;
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.055em;
   text-transform: uppercase;
@@ -5976,7 +5976,7 @@ hr {
   display: block;
   margin-top: 0.1rem;
   color: #776c5b;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 500;
 }
 
@@ -5984,7 +5984,7 @@ hr {
 .staff-evidence-bounds-note,
 .staff-evidence-caveat {
   margin: 0;
-  font-size: 0.73rem;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 
@@ -6942,6 +6942,10 @@ hr {
   background: #f6f3ed;
 }
 
+.app-shell-neutral .eyebrow:not([data-customer-presentation="true"] *) {
+  color: #6f561c;
+}
+
 .app-shell-neutral::before {
   content: none;
 }
@@ -7107,7 +7111,7 @@ hr {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.72);
   font: inherit;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   line-height: 1.15;
 }
 

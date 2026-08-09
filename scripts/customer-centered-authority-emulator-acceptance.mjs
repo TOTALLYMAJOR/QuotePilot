@@ -48,7 +48,7 @@ const ORGANIZATION_ID = "customer-centered-authority-org";
 const OTHER_ORGANIZATION_ID = "customer-centered-authority-other-org";
 const ADMIN_EMAIL = "authority-admin@local.test";
 const OTHER_ADMIN_EMAIL = "authority-other-admin@local.test";
-const PASSWORD = "Authority-Emulator-Only-2026!";
+const STAFF_PASSWORD = "Authority-Emulator-Only-2026!";
 const PACKAGE_ID = "authority-package";
 const MENU_ITEM_ID = "authority-menu-item";
 const EVENT_TYPE_ID = "authority-event-type";
@@ -71,7 +71,7 @@ function requestId(prefix, character) {
 async function createPrincipal({ email, organizationId }) {
   const user = await auth.createUser({
     email,
-    password: PASSWORD,
+    password: STAFF_PASSWORD,
     emailVerified: true
   });
   await Promise.all([
@@ -94,7 +94,7 @@ async function createPrincipal({ email, organizationId }) {
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: PASSWORD, returnSecureToken: true })
+      body: JSON.stringify({ email, password: STAFF_PASSWORD, returnSecureToken: true })
     }
   );
   assert.equal(response.ok, true, `Auth emulator sign-in failed for ${email}.`);
@@ -374,6 +374,7 @@ const authorization = await callFunction(
 assert.equal(authorization.approval.state, "authorized");
 assert.match(authorization.authorizationReceipt.receiptId, /^cca_[a-f0-9]{48}$/u);
 
+const committedApplyRequestId = requestId("change_apply", "d");
 const applied = await callFunction("updateQuoteDraft", primaryAdmin.idToken, {
   organizationId: ORGANIZATION_ID,
   quoteId,
@@ -381,13 +382,106 @@ const applied = await callFunction("updateQuoteDraft", primaryAdmin.idToken, {
   commercialChangeAuthority: {
     simulationReceiptId: simulation.simulationReceipt.receiptId,
     authorizationReceiptId: authorization.authorizationReceipt.receiptId,
-    applyRequestId: requestId("change_apply", "d")
+    applyRequestId: committedApplyRequestId
   }
 });
 assert.equal(applied.activeVersionId, "v0002");
 assert.equal(applied.commercialChange.authorityState, "enforced");
 assert.equal(applied.commercialChange.state, "BLOCKED");
 assert.match(applied.commercialChange.applyReceiptId, /^ccp_[a-f0-9]{48}$/u);
+
+const committedApplyOutcome = await callFunction(
+  "reconcileCommercialQuoteChangeApplyOutcome",
+  primaryAdmin.idToken,
+  {
+    organizationId: ORGANIZATION_ID,
+    quoteId,
+    simulationReceiptId: simulation.simulationReceipt.receiptId,
+    authorizationReceiptId: authorization.authorizationReceipt.receiptId,
+    applyRequestId: committedApplyRequestId,
+    expectedBaseRevisionId: created.activeVersionId
+  }
+);
+assert.equal(committedApplyOutcome.outcomeReceipt.state, "committed");
+assert.equal(committedApplyOutcome.outcomeReceipt.newRevisionId, "v0002");
+assert.equal(
+  committedApplyOutcome.outcomeReceipt.applyReceiptId,
+  applied.commercialChange.applyReceiptId
+);
+assert.match(committedApplyOutcome.outcomeReceipt.receiptId, /^ccor_[a-f0-9]{48}$/u);
+assert.equal(committedApplyOutcome.commercialChange.applyReceiptId, applied.commercialChange.applyReceiptId);
+const committedApplyOutcomeReplay = await callFunction(
+  "reconcileCommercialQuoteChangeApplyOutcome",
+  primaryAdmin.idToken,
+  {
+    organizationId: ORGANIZATION_ID,
+    quoteId,
+    simulationReceiptId: simulation.simulationReceipt.receiptId,
+    authorizationReceiptId: authorization.authorizationReceipt.receiptId,
+    applyRequestId: committedApplyRequestId,
+    expectedBaseRevisionId: created.activeVersionId
+  }
+);
+assert.equal(committedApplyOutcomeReplay.idempotent, true);
+assert.deepEqual(committedApplyOutcomeReplay.outcomeReceipt, committedApplyOutcome.outcomeReceipt);
+
+const fencedForm = { ...changedForm, guests: 127 };
+const fencedSimulation = await callFunction(
+  "simulateCommercialQuoteChange",
+  primaryAdmin.idToken,
+  {
+    organizationId: ORGANIZATION_ID,
+    quoteId,
+    expectedActiveVersionId: applied.activeVersionId,
+    requestId: requestId("change_sim", "e"),
+    form: fencedForm
+  }
+);
+const fencedAuthorization = await callFunction(
+  "authorizeCommercialQuoteChange",
+  primaryAdmin.idToken,
+  {
+    organizationId: ORGANIZATION_ID,
+    quoteId,
+    simulationReceiptId: fencedSimulation.simulationReceipt.receiptId,
+    requestId: requestId("change_auth", "f")
+  }
+);
+const fencedApplyRequestId = requestId("change_apply", "1");
+const fencedApplyOutcome = await callFunction(
+  "reconcileCommercialQuoteChangeApplyOutcome",
+  primaryAdmin.idToken,
+  {
+    organizationId: ORGANIZATION_ID,
+    quoteId,
+    simulationReceiptId: fencedSimulation.simulationReceipt.receiptId,
+    authorizationReceiptId: fencedAuthorization.authorizationReceipt.receiptId,
+    applyRequestId: fencedApplyRequestId,
+    expectedBaseRevisionId: applied.activeVersionId
+  }
+);
+assert.equal(fencedApplyOutcome.outcomeReceipt.state, "not_committed");
+assert.equal(fencedApplyOutcome.commercialChange, null);
+assert.match(fencedApplyOutcome.outcomeReceipt.receiptId, /^ccor_[a-f0-9]{48}$/u);
+const fencedApplyError = await expectCallableError(
+  () => callFunction("updateQuoteDraft", primaryAdmin.idToken, {
+    organizationId: ORGANIZATION_ID,
+    quoteId,
+    form: fencedForm,
+    commercialChangeAuthority: {
+      simulationReceiptId: fencedSimulation.simulationReceipt.receiptId,
+      authorizationReceiptId: fencedAuthorization.authorizationReceipt.receiptId,
+      applyRequestId: fencedApplyRequestId
+    }
+  }),
+  "FAILED_PRECONDITION"
+);
+assert.match(fencedApplyError.message, /permanently fenced/u);
+const quoteAfterFenceRef = db.collection("organizations").doc(ORGANIZATION_ID)
+  .collection("quotes").doc(quoteId);
+const quoteAfterFence = (await quoteAfterFenceRef.get()).data() || {};
+assert.equal(quoteAfterFence.activeVersionId, "v0002");
+assert.equal((await quoteAfterFenceRef.collection("versions").doc("v0003").get()).exists, false);
 
 const blockedDependency = await callFunction(
   "getCommercialDependencyState",
@@ -421,7 +515,51 @@ const regeneratedBeo = await callFunction("generateKitchenBeo", primaryAdmin.idT
 });
 assert.equal(regeneratedBeo.receipt.commercialSourceRevisionId, "v0002");
 assert.notEqual(regeneratedBeo.receipt.receiptId, initialBeo.receipt.receiptId);
-assert.equal(regeneratedBeo.status.state, "STALE");
+assert.equal(regeneratedBeo.status.state, "CURRENT");
+assert.deepEqual(
+  regeneratedBeo.dependencyReconciliation.resolvedInvalidationIds,
+  [beoInvalidation.invalidationId]
+);
+assert.equal(regeneratedBeo.dependencyReconciliation.resolvedCount, 1);
+assert.equal(regeneratedBeo.receiptHistory.state, "COMPLETE");
+assert.deepEqual(
+  regeneratedBeo.receiptHistory.receipts.map((receipt) => receipt.receiptId),
+  [regeneratedBeo.receipt.receiptId, initialBeo.receipt.receiptId]
+);
+const priorBeoDownload = await callFunction(
+  "downloadKitchenBeoReceipt",
+  primaryAdmin.idToken,
+  {
+    organizationId: ORGANIZATION_ID,
+    quoteId,
+    receiptId: regeneratedBeo.receiptHistory.receipts[1].receiptId
+  }
+);
+assert.equal(priorBeoDownload.receipt.receiptId, initialBeo.receipt.receiptId);
+assert.equal(priorBeoDownload.artifact.base64, initialBeo.artifact.base64);
+
+const dependencyAfterBeoGeneration = await callFunction(
+  "getCommercialDependencyState",
+  primaryAdmin.idToken,
+  { organizationId: ORGANIZATION_ID, quoteId }
+);
+assert.ok(
+  dependencyAfterBeoGeneration.dependencyState.openInvalidationCount
+    < blockedDependency.dependencyState.openInvalidationCount
+);
+assert.equal(dependencyAfterBeoGeneration.dependencyState.safeToPublish, false);
+assert.equal(
+  dependencyAfterBeoGeneration.dependencyState.invalidations.find(
+    (item) => item.invalidationId === beoInvalidation.invalidationId
+  )?.state,
+  "resolved"
+);
+assert.equal(
+  dependencyAfterBeoGeneration.dependencyState.invalidations.find(
+    (item) => item.invalidationId === outputInvalidation.invalidationId
+  )?.state,
+  "open"
+);
 
 const configuredDebt = await callFunction(
   "configureDecisionDebtPolicy",
@@ -445,11 +583,9 @@ assert.equal(debtBeforeReconciliation.snapshot.authority, "server_derived");
 assert.equal(debtBeforeReconciliation.snapshot.predictive, false);
 assert.ok(debtBeforeReconciliation.snapshot.items.length > 0);
 assert.match(debtBeforeReconciliation.snapshot.snapshotDigest, /^[a-f0-9]{64}$/u);
-assert.ok(
-  debtBeforeReconciliation.snapshot.items.some((item) => (
-    item.affectedNodeIds.includes("artifact.kitchen_beo")
-  ))
-);
+assert.ok(debtBeforeReconciliation.snapshot.items.every((item) => (
+  !item.affectedNodeIds.includes("artifact.kitchen_beo")
+)));
 
 const reconciliation = await callFunction(
   "reconcileCommercialDependencyState",
@@ -459,16 +595,31 @@ const reconciliation = await callFunction(
     quoteId,
     applyReceiptId: applied.commercialChange.applyReceiptId,
     requestId: requestId("change_reconcile", "f"),
-    invalidationIds: [beoInvalidation.invalidationId, outputInvalidation.invalidationId],
-    resolutionNote: "Reviewed the guest-count decision and regenerated the current Kitchen BEO."
+    invalidationIds: [outputInvalidation.invalidationId],
+    resolutionNote: "Reviewed and resolved the selected guest-count decision."
   }
 );
 assert.match(reconciliation.reconciliationReceipt.receiptId, /^ccr_[a-f0-9]{48}$/u);
 assert.ok(
   reconciliation.dependencyState.openInvalidationCount
-    < blockedDependency.dependencyState.openInvalidationCount
+    < dependencyAfterBeoGeneration.dependencyState.openInvalidationCount
 );
 assert.equal(reconciliation.dependencyState.safeToPublish, false);
+await expectCallableError(
+  () => callFunction(
+    "reconcileCommercialDependencyState",
+    primaryAdmin.idToken,
+    {
+      organizationId: ORGANIZATION_ID,
+      quoteId,
+      applyReceiptId: applied.commercialChange.applyReceiptId,
+      requestId: requestId("change_reconcile", "f"),
+      invalidationIds: [outputInvalidation.invalidationId],
+      resolutionNote: "Changed note must not replay under the same request identity."
+    }
+  ),
+  "ALREADY_EXISTS"
+);
 
 const currentBeo = await callFunction(
   "getKitchenBeoArtifactStatus",
@@ -594,9 +745,14 @@ const materialized = await callFunction(
 assert.equal(materialized.createdCount, 0);
 assert.equal(materialized.updatedCount, 0);
 assert.equal(materialized.laneResults.quote_follow_up.state, "blocked");
+const materializationReasonCodes =
+  materialized.laneResults.quote_follow_up.reasonCodes;
 assert.ok(
-  materialized.laneResults.quote_follow_up.reasonCodes.includes("global_sends_disabled")
+  materializationReasonCodes.length > 0,
+  "Expected the quote follow-up lane to retain its independent materialization blocker."
 );
+assert.ok(!materializationReasonCodes.includes("global_sends_disabled"));
+assert.ok(!materializationReasonCodes.includes("provider_configuration_missing"));
 const materializedRetry = await callFunction(
   "materializeRevenueAutopilotJobs",
   primaryAdmin.idToken,
@@ -607,6 +763,9 @@ const materializedRetry = await callFunction(
   }
 );
 assert.equal(materializedRetry.idempotent, true);
+assert.equal(materializedRetry.createdCount, materialized.createdCount);
+assert.equal(materializedRetry.updatedCount, materialized.updatedCount);
+assert.deepEqual(materializedRetry.laneResults, materialized.laneResults);
 
 const customerMessage = await callFunction(
   "sendQuotePortalConversationMessage",
@@ -630,6 +789,7 @@ assert.equal(operationsWithAttention.policy.global.sendsEnabled, false);
 assert.equal(operationsWithAttention.policy.tenant.enabled, true);
 assert.equal(operationsWithAttention.jobs.length, 0);
 assert.equal(operationsWithAttention.attention.length, 1);
+assert.equal(operationsWithAttention.attention[0].kind, "unread_customer_reply");
 assert.equal(operationsWithAttention.attention[0].state, "open");
 assert.equal(operationsWithAttention.attention[0].messageId, customerMessage.message.messageId);
 
@@ -652,9 +812,18 @@ const operationsAfterAcknowledgement = await callFunction(
   primaryAdmin.idToken,
   { organizationId: ORGANIZATION_ID, quoteId, jobLimit: 20, attentionLimit: 20 }
 );
-assert.equal(operationsAfterAcknowledgement.attention[0].state, "resolved");
+assert.equal(operationsAfterAcknowledgement.attention.length, 0);
+assert.equal(operationsAfterAcknowledgement.bounds.totalAttention, 0);
+const resolvedAttention = await db.collection("organizations")
+  .doc(ORGANIZATION_ID)
+  .collection("revenueAutopilotAttention")
+  .doc(attention.attentionId)
+  .get();
+assert.equal(resolvedAttention.exists, true);
+assert.equal(resolvedAttention.data()?.type, "unread_customer_reply");
+assert.equal(resolvedAttention.data()?.state, "resolved");
 assert.equal(
-  operationsAfterAcknowledgement.attention[0].resolutionReason,
+  resolvedAttention.data()?.resolutionReason,
   "customer_reply_acknowledged"
 );
 

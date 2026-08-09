@@ -106,10 +106,10 @@ same canonical revision and trusted transaction.
 
 ### Non-functional requirements
 
-- Reliability: every mutation is idempotent by exact request identity. Existing
-  mutations retain scope for their implemented recovery paths; governed quote
-  apply still needs a dedicated exact outcome-read/reconcile contract before a
-  transport-ambiguous result can be proven committed or rejected.
+- Reliability: every mutation is idempotent by exact request identity. Governed
+  quote apply reconciliation validates a committed receipt plus immutable
+  target revision, or atomically records a not-committed fence that prevents a
+  late transaction from changing the result after the operator recovers.
 - Security: all authority records/bytes are callable-only and tenant-bound.
 - Maintainability: every schema/formula/graph/receipt is versioned and validated.
 - Privacy: no quote/customer contents are added to URLs or browser storage.
@@ -280,7 +280,7 @@ Server guarantees: server_derived, predictive=false, versioned policy/formula/gr
 ```yaml
 Simulation/authorization/apply mutation: ready -> submitting -> uncertain|receipt|error
 Implemented uncertain recovery: uncertain -> reconciliation -> receipt|uncertain|error
-Governed apply exception: uncertain remains unresolved until the open exact apply-outcome read/reconcile contract ships
+Governed apply recovery: uncertain -> reconciliation -> committed receipt|fenced recovery|uncertain|definitive error
 Definitive recovery: error -> recovery -> ready
 Dependency read: loading -> empty|success|partial|error; retained failure -> stale
 BEO freshness: CURRENT|STALE|REVIEW|NOT_GENERATED|UNKNOWN; CURRENT follows the exact current-receipt pointer and validates retained bytes before derivation
@@ -294,7 +294,7 @@ Publication eligibility: READY|BLOCKED|UNKNOWN
 | Simulate | `simulateCommercialQuoteChange` | simulation receipt/projection | retry exact request or resimulate after drift |
 | Request/refresh authorization | `requestCommercialQuoteChangeAuthorization`, `getCommercialQuoteChangeAuthorizationState` | approval projection | no apply until exact authorized state |
 | Admin authorize | `authorizeCommercialQuoteChange` | authorization receipt | stale/expired evidence requires new simulation |
-| Apply | `updateQuoteDraft` | quote/version/apply/invalidation receipt | do not assume save after transport ambiguity; dedicated exact apply-outcome read/reconcile remains required |
+| Apply | `updateQuoteDraft`, `reconcileCommercialQuoteChangeApplyOutcome` | quote/version/apply/invalidation receipt or immutable not-committed fence | never repeat the quote edit after ambiguity; reconcile the retained exact request, then open the committed revision or begin a fresh simulation only after a fenced not-committed receipt |
 | Read/reconcile dependencies | `getCommercialDependencyState`, `reconcileCommercialDependencyState` | bounded state/receipt | exact retained request |
 | BEO status/generate/download | `getKitchenBeoArtifactStatus`, `generateKitchenBeo`, `downloadKitchenBeoReceipt` | status or immutable PDF artifact | strict retained-byte integrity failure fails closed; browser download failure alone does not invalidate a receipt |
 | Decision Debt read/configure | `getDecisionDebtSnapshot`, `configureDecisionDebtPolicy` | bounded snapshot/policy receipt | same request/version recovery |
@@ -313,8 +313,8 @@ Required order:
 2. Server callables/private rules and atomic apply.
 3. Artifact-specific generation/freshness/download authority.
 4. Dependency reconciliation and Decision Debt derivation/policy.
-5. Exact ambiguous apply-outcome read/reconciliation before either enforcement
-   gate may be enabled.
+5. Exact ambiguous apply-outcome reconciliation and late-commit fencing before
+   either enforcement gate may be enabled.
 5. Client exact-attempt continuity and polished staff surfaces.
 6. Capability/docs/full local/emulator qualification.
 7. Separately authorized deployment, hosted acceptance, and gate promotion.

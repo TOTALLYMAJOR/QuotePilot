@@ -9,7 +9,8 @@ import {
   buildWorkflowAttentionSummary,
   getApprovalActionEligibility,
   getApprovalRequestExecutionEligibility,
-  getRequestableApprovalActions
+  getRequestableApprovalActions,
+  mergeUnreadReplyAttention
 } from "../quoteWorkflow";
 
 function completeForm() {
@@ -754,5 +755,67 @@ describe("quote workflow helpers", () => {
       state: "invalid",
       unhandleable: true
     });
+  });
+
+  test("merges exact unread customer replies into the shared Home and Workflow Attention projection", () => {
+    const quotes = [{
+      id: "quote-reply",
+      customerId: "customer-henderson",
+      quoteNumber: "QP-2088",
+      status: "sent",
+      customer: { name: "Henderson Industries" },
+      workflow: { followUp: { dueDate: "2026-08-08", completed: false } }
+    }];
+    const base = buildWorkflowAttentionSummary(quotes, { todayISO: "2026-08-09" });
+    const summary = mergeUnreadReplyAttention(base, {
+      quotes,
+      attention: [
+        {
+          attentionId: "raa-reply-open",
+          quoteId: "quote-reply",
+          customerId: "customer-henderson",
+          messageId: "message-open",
+          kind: "unread_customer_reply",
+          state: "open",
+          receivedAtISO: "2026-08-09T15:30:00.000Z"
+        },
+        {
+          attentionId: "raa-reply-handled",
+          quoteId: "quote-reply",
+          messageId: "message-handled",
+          kind: "unread_customer_reply",
+          state: "acknowledged",
+          receivedAtISO: "2026-08-09T14:30:00.000Z"
+        },
+        {
+          attentionId: "raa-reply-invalid",
+          quoteId: "quote-reply",
+          kind: "unread_customer_reply",
+          state: "open"
+        }
+      ]
+    });
+
+    expect(summary).toMatchObject({
+      quoteCount: 1,
+      itemCount: 2,
+      counts: {
+        followUps: 1,
+        unreadCustomerReplies: 1
+      }
+    });
+    expect(summary.items[0]).toMatchObject({
+      id: "unread-reply:raa-reply-open",
+      type: "unread_customer_reply",
+      state: "open",
+      quoteId: "quote-reply",
+      customerId: "customer-henderson",
+      attentionId: "raa-reply-open",
+      messageId: "message-open",
+      sourceRequestId: "raa-reply-open",
+      quote: { quoteNumber: "QP-2088", customer: { name: "Henderson Industries" } }
+    });
+    expect(summary.items.map((item) => item.id)).not.toContain("unread-reply:raa-reply-handled");
+    expect(quotes[0].customer.name).toBe("Henderson Industries");
   });
 });

@@ -320,7 +320,7 @@ function proximityFactor(daysUntilLock) {
 }
 
 function exposureFactor(cents) {
-  if (cents === null) return { value: 1, bucket: "unavailable", known: false };
+  if (cents === null) return { value: null, bucket: "unavailable", known: false };
   if (cents === 0) return { value: 1, bucket: "none_recorded", known: true };
   if (cents <= 100_000) return { value: 2, bucket: "up_to_1000", known: true };
   if (cents <= 500_000) return { value: 3, bucket: "up_to_5000", known: true };
@@ -610,11 +610,16 @@ function buildDebtItem(candidate, { today, graphCore }) {
   const proximity = proximityFactor(daysUntilLock);
   const exposure = exposureFactor(candidate.commercialExposureCents);
   const reversibilityValue = REVERSIBILITY_FACTORS[candidate.definition.reversibility];
-  const rawScore = candidate.definition.dependencyWeight
-    * proximity.value
-    * exposure.value
-    * reversibilityValue;
-  const score = Math.min(100, Math.max(0, Math.round((rawScore / 625) * 100)));
+  const scoreState = exposure.known ? "KNOWN" : "UNKNOWN";
+  const rawScore = exposure.known
+    ? candidate.definition.dependencyWeight
+      * proximity.value
+      * exposure.value
+      * reversibilityValue
+    : null;
+  const score = rawScore === null
+    ? null
+    : Math.min(100, Math.max(0, Math.round((rawScore / 625) * 100)));
   const affectedNodeIds = candidate.affectedNodes.map((node) => node.id);
   return {
     id: debtIdentity(candidate, graphCore),
@@ -664,7 +669,8 @@ function buildDebtItem(candidate, { today, graphCore }) {
     },
     rawScore,
     score,
-    urgency: urgencyForScore(score),
+    scoreState,
+    urgency: score === null ? null : urgencyForScore(score),
     explanation: [
       `${affectedNodeIds.length} graph dependenc${affectedNodeIds.length === 1 ? "y" : "ies"} remain exposed.`,
       daysUntilLock <= 0
@@ -673,13 +679,18 @@ function buildDebtItem(candidate, { today, graphCore }) {
       exposure.known
         ? `Recorded commercial exposure is ${candidate.commercialExposureCents} cents.`
         : "Commercial exposure is unavailable and is not coerced to zero.",
-      `Score ${score}/100 uses ${DECISION_DEBT_FORMULA_VERSION}; it is deterministic, not predictive AI.`
+      score === null
+        ? `No priority score is assigned until authoritative commercial exposure is available; ${DECISION_DEBT_FORMULA_VERSION} remains deterministic, not predictive AI.`
+        : `Score ${score}/100 uses ${DECISION_DEBT_FORMULA_VERSION}; it is deterministic, not predictive AI.`
     ]
   };
 }
 
 function compareDebtItems(left, right) {
-  return right.score - left.score
+  const leftKnown = left.scoreState === "KNOWN";
+  const rightKnown = right.scoreState === "KNOWN";
+  return Number(rightKnown) - Number(leftKnown)
+    || (leftKnown && rightKnown ? right.score - left.score : 0)
     || left.daysUntilLock - right.daysUntilLock
     || compareText(left.eventDate, right.eventDate)
     || compareText(left.quoteId, right.quoteId)

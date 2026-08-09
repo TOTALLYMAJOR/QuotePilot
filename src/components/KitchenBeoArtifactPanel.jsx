@@ -190,6 +190,14 @@ export function buildKitchenBeoFreshnessPresentation(status = null) {
   const reasonCodes = Array.isArray(status?.reasonCodes)
     ? status.reasonCodes.map((value) => text(value, 100)).filter(Boolean)
     : [];
+  const receiptHistory = status?.receiptHistory && typeof status.receiptHistory === "object"
+    ? status.receiptHistory
+    : {
+      state: "UNKNOWN",
+      bounds: { returnedCount: 0, truncated: true },
+      reasonCodes: ["receipt_history_unavailable"],
+      receipts: []
+    };
   return {
     state,
     ...FRESHNESS_PRESENTATION[state],
@@ -203,7 +211,8 @@ export function buildKitchenBeoFreshnessPresentation(status = null) {
     receiptFingerprint: text(status?.receiptDependencyFingerprint, 128),
     unresolvedInvalidationIds: Array.isArray(status?.unresolvedInvalidationIds)
       ? status.unresolvedInvalidationIds.map((value) => text(value, 180)).filter(Boolean)
-      : []
+      : [],
+    receiptHistory
   };
 }
 
@@ -250,31 +259,69 @@ function KitchenBeoFreshnessSummary({
           {" · "}Receipt fingerprint: <code title={view.receiptFingerprint}>{shortFingerprint(view.receiptFingerprint)}</code>
         </> : null}
       </p>
-      {view.receiptId ? (
-        <div className="right-actions">
-          <button
-            type="button"
-            className="ghost compact"
-            data-capability-action="download-receipt"
-            disabled={receiptDownload.state === "submitting"}
-            onClick={onDownloadReceipt}
+      <div className="workflow-form-section" data-beo-receipt-history-state={view.receiptHistory.state}>
+        <h4>Generation receipts</h4>
+        <p className={view.receiptHistory.state === "COMPLETE" ? "source-note" : "warning-note"}>
+          {view.receiptHistory.state === "COMPLETE"
+            ? "This bounded receipt history is complete for the recorded artifact pointer."
+            : view.receiptHistory.state === "PARTIAL"
+              ? "Showing the newest retained receipts. Older generation receipts may exist outside this bounded list."
+              : "Receipt history could not be validated. No prior download is offered from untrusted history."}
+        </p>
+        {Array.isArray(view.receiptHistory.receipts) && view.receiptHistory.receipts.length > 0 ? (
+          <ul
+            className="command-center-list"
+            aria-label="Kitchen BEO generation receipt history"
           >
-            {receiptDownload.state === "submitting"
-              ? "Fetching recorded PDF…"
-              : "Download recorded PDF"}
-          </button>
-          {receiptDownload.state === "receipt" ? (
-            <span className="source-note" role="status">
-              Exact receipt bytes downloaded. Opening or use is not proven.
-            </span>
-          ) : null}
-          {receiptDownload.state === "error" ? (
-            <span className="warning-note" role="alert">
-              The recorded PDF could not be downloaded. Its receipt and freshness state were not changed.
-            </span>
-          ) : null}
-        </div>
-      ) : null}
+            {view.receiptHistory.receipts.map((receipt) => {
+              const receiptId = text(receipt.receiptId, 180);
+              const fetching = receiptDownload.state === "submitting"
+                && receiptDownload.receiptId === receiptId;
+              return (
+                <li
+                  className="command-center-row"
+                  key={receiptId}
+                  data-beo-receipt-id={receiptId}
+                >
+                  <div className="command-center-row-main">
+                    <strong>{receipt.current ? "Current receipt" : "Prior receipt"}</strong>
+                    <p className="command-center-row-detail">
+                      Generated {formatWorkspaceDateTime(receipt.generatedAtISO)}
+                    </p>
+                    <p className="command-center-row-meta">
+                      Commercial source <code>{text(receipt.commercialSourceRevisionId, 180)}</code>
+                    </p>
+                  </div>
+                  <div className="right-actions">
+                    <button
+                      type="button"
+                      className="ghost compact"
+                      data-capability-action="download-receipt"
+                      data-receipt-id={receiptId}
+                      disabled={receiptDownload.state === "submitting"}
+                      onClick={() => onDownloadReceipt(receiptId)}
+                    >
+                      {fetching ? "Fetching recorded PDF…" : "Download recorded PDF"}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="source-note">No validated generation receipts are available.</p>
+        )}
+        {receiptDownload.state === "receipt" ? (
+          <span className="source-note" role="status">
+            Exact receipt bytes downloaded. Opening or use is not proven.
+          </span>
+        ) : null}
+        {receiptDownload.state === "error" ? (
+          <span className="warning-note" role="alert">
+            The selected recorded PDF could not be downloaded. Its receipt and freshness state were not changed.
+          </span>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -305,6 +352,11 @@ export function KitchenBeoMutationStatus({ mutation, onAction, headingId }) {
           Receipt <code>{mutation.receipt.receiptId}</code>
           {mutation.receipt.requestId ? <> · Request <code>{mutation.receipt.requestId}</code></> : null}
           {mutation.idempotent ? " · Existing matching receipt confirmed." : " · New receipt recorded."}
+        </p>
+      ) : null}
+      {mutation.dependencyReconciliation?.resolvedCount > 0 ? (
+        <p className="source-note" data-beo-dependency-reconciliation>
+          This exact generation also resolved {mutation.dependencyReconciliation.resolvedCount} current Kitchen BEO invalidation{mutation.dependencyReconciliation.resolvedCount === 1 ? "" : "s"}. Other commercial decisions remain independently governed.
         </p>
       ) : null}
       {mutation.downloadState === "started" ? (
@@ -369,12 +421,13 @@ export default function KitchenBeoArtifactPanel({
     pendingAttempt: null,
     receipt: null,
     artifact: null,
+    dependencyReconciliation: null,
     idempotent: false,
     error: "",
     downloadState: "",
     downloadError: ""
   });
-  const [receiptDownload, setReceiptDownload] = useState({ state: "ready" });
+  const [receiptDownload, setReceiptDownload] = useState({ state: "ready", receiptId: "" });
   const { dialogRef } = useModalDialog({
     open: open && !embedded,
     onRequestClose: onClose,
@@ -461,6 +514,7 @@ export default function KitchenBeoArtifactPanel({
       pendingAttempt,
       receipt: null,
       artifact: null,
+      dependencyReconciliation: null,
       idempotent: false,
       error: pendingAttempt
         ? pendingAttempt.definitive
@@ -470,7 +524,7 @@ export default function KitchenBeoArtifactPanel({
       downloadState: "",
       downloadError: ""
     });
-    setReceiptDownload({ state: "ready" });
+    setReceiptDownload({ state: "ready", receiptId: "" });
 
     if (!available) {
       setRead({
@@ -516,22 +570,26 @@ export default function KitchenBeoArtifactPanel({
     }
   };
 
-  const downloadRecordedReceipt = async () => {
-    const receiptId = text(readRef.current.status?.receiptId, 180);
+  const downloadRecordedReceipt = async (requestedReceiptId) => {
+    const receiptId = text(requestedReceiptId, 180);
+    const availableReceiptIds = Array.isArray(readRef.current.status?.receiptHistory?.receipts)
+      ? readRef.current.status.receiptHistory.receipts.map((receipt) => text(receipt.receiptId, 180))
+      : [];
+    if (!availableReceiptIds.includes(receiptId)) return;
     if (!available || !receiptId || receiptDownloadInFlightRef.current) return;
     const requestIdentity = identityRef.current;
     const generation = receiptDownloadGenerationRef.current + 1;
     receiptDownloadGenerationRef.current = generation;
     receiptDownloadInFlightRef.current = true;
-    setReceiptDownload({ state: "submitting" });
+    setReceiptDownload({ state: "submitting", receiptId });
     try {
       const result = await getKitchenBeoReceiptArtifact({ ...scope, receiptId });
       if (!isCurrentReceiptDownload(generation, requestIdentity)) return;
       downloadKitchenBeoArtifact(result.artifact);
-      setReceiptDownload({ state: "receipt" });
+      setReceiptDownload({ state: "receipt", receiptId });
     } catch {
       if (!isCurrentReceiptDownload(generation, requestIdentity)) return;
-      setReceiptDownload({ state: "error" });
+      setReceiptDownload({ state: "error", receiptId });
     } finally {
       if (isCurrentReceiptDownload(generation, requestIdentity)) {
         receiptDownloadInFlightRef.current = false;
@@ -565,6 +623,7 @@ export default function KitchenBeoArtifactPanel({
       pendingAttempt,
       receipt: null,
       artifact: null,
+      dependencyReconciliation: null,
       idempotent: false,
       error: "",
       downloadState: "",
@@ -580,6 +639,7 @@ export default function KitchenBeoArtifactPanel({
         pendingAttempt: null,
         receipt: result.receipt,
         artifact: result.artifact,
+        dependencyReconciliation: result.dependencyReconciliation,
         idempotent: result.idempotent === true,
         error: "",
         downloadState: "",
@@ -610,6 +670,7 @@ export default function KitchenBeoArtifactPanel({
         pendingAttempt: unresolvedAttempt,
         receipt: null,
         artifact: null,
+        dependencyReconciliation: null,
         idempotent: false,
         error: safeGenerationError(error),
         downloadState: "",
@@ -640,6 +701,7 @@ export default function KitchenBeoArtifactPanel({
       pendingAttempt: null,
       receipt: null,
       artifact: null,
+      dependencyReconciliation: null,
       idempotent: false,
       error: "",
       downloadState: "",
@@ -724,7 +786,7 @@ export default function KitchenBeoArtifactPanel({
           status={read.status}
           headingId={freshnessHeadingId}
           receiptDownload={receiptDownload}
-          onDownloadReceipt={() => void downloadRecordedReceipt()}
+          onDownloadReceipt={(receiptId) => void downloadRecordedReceipt(receiptId)}
         />
       ) : null}
 

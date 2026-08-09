@@ -33,6 +33,9 @@ export default defineConfig({
           ) {
             return "vendor-react";
           }
+          if (normalizedId.endsWith("/src/lib/quoteStore.js")) {
+            return "workspace-quote-store";
+          }
           return undefined;
         }
       }

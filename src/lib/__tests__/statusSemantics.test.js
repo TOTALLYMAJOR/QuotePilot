@@ -94,7 +94,13 @@ describe("classifyAttentionItem", () => {
       ["change_request", "invalid"],
       ["follow_up", "overdue"],
       ["follow_up", "due_today"],
-      ["approval", "pending"]
+      ["approval", "pending"],
+      ["unread_customer_reply", "open"],
+      ["anniversary_rebooking", "verification_required"],
+      ["post_event_closeout", "overdue"],
+      ["post_event_closeout", "due_today"],
+      ["post_event_closeout", "blocked_configuration"],
+      ["post_event_closeout", "blocked_source"]
     ];
     for (const [type, state] of pairs) {
       const result = classifyAttentionItem(type, state);
@@ -105,6 +111,9 @@ describe("classifyAttentionItem", () => {
   test("a new change request and an overdue follow-up both read as staff action items", () => {
     expect(classifyAttentionItem("change_request", "new").family).toBe(STATUS_FAMILY.ACTION);
     expect(classifyAttentionItem("follow_up", "overdue").family).toBe(STATUS_FAMILY.ACTION);
+    expect(classifyAttentionItem("unread_customer_reply", "open").family).toBe(STATUS_FAMILY.ACTION);
+    expect(classifyAttentionItem("anniversary_rebooking", "verification_required").family)
+      .toBe(STATUS_FAMILY.ACTION);
   });
 
   test("an invalid change request reads as blocked, not actionable", () => {

@@ -33,7 +33,7 @@ test.describe("customer-centered workspace", () => {
     await expect(homeHeading).toBeVisible();
     await expect(homeHeading).toBeFocused();
     const evidenceRail = page.getByRole("complementary", { name: "Staff read context" });
-    await expect(evidenceRail).toHaveAttribute("data-capability-state", /current|truncated/);
+    await expect(evidenceRail).toHaveAttribute("data-capability-state", /current|truncated|partial/);
     await expect(evidenceRail).toContainText("Tenant key: e2e-org");
     await expect(evidenceRail).toContainText("Browser-local workspace");
     await expect(evidenceRail).toContainText("does not prove provider delivery");

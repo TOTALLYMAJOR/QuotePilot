@@ -366,22 +366,41 @@ function CommercialChangeAuthorityControls({
   mutationKind = "",
   mutationMessage = "",
   applyResult = null,
+  applyOutcome = null,
   scopeCurrent = false,
   onRequestAuthorization,
   onRefreshAuthorization,
   onAuthorize,
-  onApply
+  onApply,
+  onReconcileApplyOutcome,
+  onRecoverApply
 }) {
   const normalizedAuthority = text(authorityState).toLowerCase();
   const normalizedMutation = text(mutationState).toLowerCase();
+  const outcomeReceiptRef = useRef(null);
+  const focusedOutcomeReceiptRef = useRef("");
   const mutationPresentation = AUTHORITY_MUTATION_PRESENTATION[normalizedMutation]
     || AUTHORITY_MUTATION_PRESENTATION.error;
   const approvalState = text(approval?.state).toLowerCase();
   const isAdmin = text(staffRole).toLowerCase() === "admin";
   const busy = ["submitting", "reconciliation", "applying", "recovery"].includes(normalizedMutation);
   const applyOutcomeUncertain = normalizedMutation === "uncertain" && mutationKind === "apply";
+  const applyOutcomeRecoverable = normalizedMutation === "recovery"
+    && mutationKind === "apply"
+    && applyOutcome?.state === "not_committed";
   const authorized = Boolean(authorizationReceiptId) || approvalState === "authorized";
   const canMutate = normalizedAuthority === "enforced" && scopeCurrent && !busy;
+
+  useEffect(() => {
+    const receiptId = text(applyOutcome?.outcomeReceiptId);
+    if (
+      !receiptId
+      || focusedOutcomeReceiptRef.current === receiptId
+      || !["receipt", "recovery"].includes(normalizedMutation)
+    ) return;
+    focusedOutcomeReceiptRef.current = receiptId;
+    outcomeReceiptRef.current?.focus({ preventScroll: true });
+  }, [applyOutcome?.outcomeReceiptId, normalizedMutation]);
 
   if (!normalizedAuthority) return null;
 
@@ -478,7 +497,7 @@ function CommercialChangeAuthorityControls({
                 onClick={onApply}
                 disabled={!canMutate || applyOutcomeUncertain || Boolean(applyResult)}
                 title={applyOutcomeUncertain
-                  ? "The prior outcome is unresolved. Refresh the authoritative quote record; this screen will not submit the edit again."
+                  ? "The prior outcome is unresolved. Reconcile this exact request; this screen will not submit the edit again."
                   : scopeCurrent
                     ? "Apply this authorized edit and create named invalidations atomically."
                     : "Re-simulate before applying."}
@@ -492,7 +511,54 @@ function CommercialChangeAuthorityControls({
                       : "Apply authorized change"}
               </button>
             )}
+            {applyOutcomeUncertain && typeof onReconcileApplyOutcome === "function" && (
+              <button
+                type="button"
+                className="ghost compact"
+                data-capability-action="reconcile-apply-outcome"
+                onClick={onReconcileApplyOutcome}
+              >
+                Reconcile exact outcome
+              </button>
+            )}
+            {applyOutcomeRecoverable && typeof onRecoverApply === "function" && (
+              <button
+                type="button"
+                className="cta compact"
+                data-capability-action="recover-not-committed-apply"
+                onClick={onRecoverApply}
+              >
+                {applyOutcome.sourceChanged
+                  ? "Open authoritative quote"
+                  : "Start fresh simulation"}
+              </button>
+            )}
           </div>
+
+          {applyOutcome && (
+            <article
+              ref={outcomeReceiptRef}
+              tabIndex={-1}
+              className="staff-evidence-outcome"
+              data-commercial-change-outcome-receipt={applyOutcome.outcomeReceiptId}
+            >
+              <strong>
+                {applyOutcome.state === "committed"
+                  ? "Exact apply proven committed"
+                  : "Exact apply proven not committed"}
+              </strong>
+              <p>
+                {applyOutcome.state === "committed"
+                  ? applyOutcome.appliedRevisionIsActive
+                    ? "The immutable applied revision is the active quote source."
+                    : "The apply committed, but a later quote revision is now active."
+                  : applyOutcome.sourceChanged
+                    ? "The request is fenced from late commit and the saved quote source has changed."
+                    : "The request is fenced from late commit; a fresh simulation may now begin."}
+              </p>
+              <code>{applyOutcome.outcomeReceiptId}</code>
+            </article>
+          )}
 
           {applyResult && (
             <article className="staff-evidence-outcome" data-commercial-change-apply-receipt={applyResult.applyReceiptId || "dormant"}>
@@ -528,6 +594,7 @@ export default function CommercialChangeImpactPanel({
   mutationKind = "",
   mutationMessage = "",
   applyResult = null,
+  applyOutcome = null,
   scopeCurrent = false,
   onRetry,
   onReturnToEdit,
@@ -535,6 +602,8 @@ export default function CommercialChangeImpactPanel({
   onRefreshAuthorization,
   onAuthorize,
   onApply,
+  onReconcileApplyOutcome,
+  onRecoverApply,
   titleId = "commercial-change-impact-title"
 }) {
   const view = buildCommercialChangeImpactPanelState({ model, loading, recovering, error, partial });
@@ -609,11 +678,14 @@ export default function CommercialChangeImpactPanel({
           mutationKind={mutationKind}
           mutationMessage={mutationMessage}
           applyResult={applyResult}
+          applyOutcome={applyOutcome}
           scopeCurrent={scopeCurrent && !partial && !error}
           onRequestAuthorization={onRequestAuthorization}
           onRefreshAuthorization={onRefreshAuthorization}
           onAuthorize={onAuthorize}
           onApply={onApply}
+          onReconcileApplyOutcome={onReconcileApplyOutcome}
+          onRecoverApply={onRecoverApply}
         />
       )}
     </section>

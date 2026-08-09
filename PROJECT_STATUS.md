@@ -17,24 +17,18 @@ Last updated: August 9, 2026
   portal branding. The legacy `tonicatering` Firebase project, hosting site,
   environment filename, deployment confirmations, and service URLs remain
   unchanged infrastructure identifiers.
-- The August 9 frozen-source workspace qualification passed 136 unit files with
-  1,659 tests (4 files / 57 tests skipped); default Playwright passed 58 tests
-  with 20 intentionally skipped, the complete flag-on workspace suite passed
-  18/18, and the focused Customer 360 route passed 1/1. Firestore rules passed
-  53/53, the Firebase staff/portal browser lane passed 4/4, and authoritative
-  quote-write coverage passed 3/3. Customer-import coverage passed 2/2;
-  customer-ID and portal-snapshot backfills each passed 1/1; and the dedicated
-  exact-version rebook, proposal-acceptance, and catalog-import emulator lanes
-  passed. The full provisioning, booking-conversion, quote-payment,
-  final-balance, buyer-access, and cleanup emulator matrix also passed under
-  explicit synthetic test-only Stripe settings. Default and flag-on production
-  builds each transformed 409 modules; the larger build emitted 2,331,934
-  aggregate JavaScript bytes and a 413,275-byte largest chunk, and both passed
-  the named bundle exception. Environment, workflow, capability-surfacing,
-  documentation-governance, secret, and diff checks passed. Local Lighthouse on
-  the public `/` route scored 0.90 performance with 3,292.5 ms LCP, 0 CLS, and
-  146.5 ms TBT; it is not authenticated `/app` performance evidence. All of
-  these are source/local/emulator results, not hosted tenant, provider,
+- The August 9 customer-centered convergence checkpoint passed 174 unit files
+  with 2,219 tests (4 files / 65 tests skipped). Default Playwright passed 58
+  tests with 20 intentionally flag-gated skips; the complete flag-on workspace
+  and accessibility run passed 21/21. Firestore rules passed 61/61 on isolated
+  ports, the Firebase staff/portal browser lane passed 4/4, and authoritative
+  quote-write coverage passed 3/3. The Firebase lane exposed and then verified
+  the fix for an invalid absent Attention-pointer delete sentinel during staff
+  conversation send. The production build transformed 433 modules and emitted
+  2,597,989 aggregate JavaScript bytes with a 390,494-byte largest chunk, within
+  the exact named temporary exception. Environment, workflow, capability-
+  surfacing, documentation-governance, secret, bundle, and diff checks passed.
+  All of these are source/local/emulator results, not hosted tenant, provider,
   deployment, production-data, flag-promotion, or human-acceptance evidence.
 - Functions runtime readiness: all 29 production Functions now run on Node.js
   22 with Firebase Admin 14 modular app, Auth, and Firestore APIs. The clean
@@ -43,14 +37,16 @@ Last updated: August 9, 2026
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current source uses a named temporary bundle exception while the
   customer-centered workspace convergence remains unmerged. Its no-headroom
-  ceilings match the August 9 commercial-authority and Revenue Autopilot
-  checkpoint build at 2,552,693 aggregate JavaScript bytes and a 426,521-byte
-  largest chunk, versus unchanged clean-main metrics of
+  ceilings match the August 9 completed source/local convergence build at
+  2,597,989 aggregate JavaScript bytes and a 390,494-byte largest chunk, versus
+  unchanged clean-main metrics of
   1,997,365 and 387,929 bytes. The normal allowance remains 5%, baseline updates
   are blocked while the exception is active, and closure requires the explicit
   optimization or reviewed clean-main recalibration path plus local bundle,
   browser, and CWV qualification. This is not hosted, production, or human-
-  acceptance evidence.
+  acceptance evidence. A targeted quote-store split reduced the authenticated
+  route chunk from 448,190 to 310,102 bytes, leaving Firebase as the largest
+  chunk at 390,494 bytes and under the normal per-chunk ceiling.
 - Current source delivery governance includes a required no-orphan-capability
   check in `lane:core`. It reviews the whole branch/PR backend diff, requires a
   versioned capability-surfacing contract manifest plus real frontend/Feature
@@ -63,6 +59,17 @@ Last updated: August 9, 2026
   authority tests, and no callable ownership. This is structural traceability
   evidence, not semantic completeness or proof of visual polish, hosted
   availability, provider behavior, production promotion, or human acceptance.
+- The newly accepted Event Workspace + Intelligence synthesis is roadmap input,
+  not implemented product state. A provisional source scan identifies the
+  focused quote route as only a partial transaction workspace and finds no
+  central Event Intelligence selector, formal Flexibility/change-window
+  contract, or authoritative Operational Slack/Execution Fragility model. It is
+  now sequenced as the earliest post-stabilization source program in
+  `DEV_TASKS.md` and `docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md`, where its
+  required pre-edit repository audit and specification gate remain explicit.
+  Existing proposal readiness, Decision Debt, BEO freshness, dependency
+  reconciliation, and Revenue Autopilot materialization must not be overstated
+  as satisfying that future synthesis.
 - Main release governance supports the repository's actual solo-owner
   operating model without inventing an independent reviewer. The explicit
   `solo-operator` policy retains exact-SHA CI/UAT, one allowlisted human,
@@ -90,9 +97,10 @@ Last updated: August 9, 2026
   modal wrappers. The customer portal query remains route-preemptive. A
   temporary build flag defaults the new shell off pending exact hosted
   acceptance. Home and the attention badge consume one loading-aware,
-  generation-guarded snapshot over the existing quote-history and
-  workflow-attention contracts; this introduces no new read contracts or data
-  sources and no new commercial write authority. Stable customer names in Home
+  generation-guarded snapshot over the existing quote-history,
+  workflow-attention, and bounded Revenue Autopilot operations contracts. The
+  third existing read adds unread customer-reply Attention without introducing
+  a new read contract, data source, or commercial write authority. Stable customer names in Home
   link to Customer 360, exact attention actions retain quote/type/request focus,
   and quote/payment actions retain exact quote focus. The neutral staff shell
   remains distinct from tenant-branded customer portal, proposal, and marketing
@@ -103,9 +111,10 @@ Last updated: August 9, 2026
   routed headings have scoped visible focus. First-release staff surfaces use
   human-readable date, money, enum, source, identifier-fallback, and empty-state
   copy without changing canonical values. Home also exposes a read-only
-  tenant/source/evidence rail over the same two existing reads, recording the
+  tenant/source/evidence rail over the same three existing reads, recording the
   last complete client read and distinguishing loading, refresh, incomplete,
-  retained-stale, unavailable, and latest-200 truncation states. The rail calls
+  retained-stale, unavailable, latest-200 quote-history truncation, and
+  latest-50 unread-reply Attention truncation states. The rail calls
   Home derived presentation and explicitly does not treat freshness as provider,
   customer, booking, payment, or completion evidence. The same surface-scoped
   trust pattern now covers Customer Directory and Customer 360 without retaining
@@ -119,8 +128,8 @@ Last updated: August 9, 2026
   provider delivery/bounce because the current DTO has no authoritative receipt
   fields for those milestones; version comparison reads stored version scope,
   schedule, server-pricing, and terms only and never recalculates history. This
-  is working-tree candidate source. The recorded qualification above predates
-  final convergence; hosted, deployment, production-data, and human-acceptance
+  is current candidate source. The closing qualification above covers this
+  local convergence; hosted, deployment, production-data, and human-acceptance
   evidence remain separate and must not be inferred from the source claim.
 - Current source quote-entry simplification: Step 1 keeps attendance and role
   counts in the primary flow while placing five exceptional staffing-rate
@@ -191,7 +200,7 @@ Last updated: August 9, 2026
   exact retry receipt or explicit safe reset, and writes neither value to
   browser storage. Focused unit/rules/emulator evidence is local only; this conversation source is not
   part of live `v0.2.3` and has no hosted staff/customer acceptance.
-- Current working-tree `CWF-15` authority candidate preserves the pure frozen
+- Current source `CWF-15` authority candidate preserves the pure frozen
   Commercial Dependency Graph while adding separate server-owned simulation,
   sales request/admin authorization, gated atomic quote/version apply plus
   immutable invalidations, bounded dependency-state reconciliation, and
@@ -200,21 +209,34 @@ Last updated: August 9, 2026
   Simulation presentation is reconstructed from the normalized immutable
   receipt and rejected client-side if scope or evidence diverges.
   `safeToPublish` is derived eligibility only and performs no publication.
-  Both global and tenant enforcement gates default off. A dedicated exact read/
-  reconcile contract for a transport-ambiguous governed apply is still missing;
-  the UI must not infer a save, and neither gate may be enabled until that gap is
-  closed and qualified.
-- Current working-tree trusted Kitchen BEO authority reloads canonical data,
+  Both global and tenant enforcement gates default off. Transport-ambiguous
+  governed apply now retains the exact request for a same-tenant reconciliation
+  transaction: a committed outcome requires the deterministic apply receipt and
+  immutable target version, while an absent apply writes a not-committed fence
+  that the original transaction must observe before recovery. The UI never
+  resubmits the edit and distinguishes reconciliation, committed receipt,
+  fenced recovery, changed source, uncertainty, and definitive rejection.
+  Refreshed local unit, rules, emulator, and browser qualification is complete;
+  hosted role acceptance remains required before either gate may be enabled.
+- Current source trusted Kitchen BEO authority reloads canonical data,
   generates server PDF bytes, records immutable actor/time/revision/schema/
   fingerprint/byte evidence, reports `CURRENT`, `STALE`, `REVIEW`,
   `NOT_GENERATED`, or `UNKNOWN`, and supports exact current and prior receipt
   download through `downloadKitchenBeoReceipt`. Generation replay, final
   response, status, and download validate strict base64 plus exact retained byte
   length/SHA-256. `CURRENT` follows the exact current-receipt pointer and
-  revalidates its stored bytes. This proves declared-input freshness only—not
+  revalidates its stored bytes. A successful current generation atomically
+  resolves only qualifying open Kitchen BEO invalidations and exposes that exact
+  reconciliation receipt; other commercial decisions remain open. The pointer
+  retains a validated bounded history of the current and up to nine prior exact
+  receipts for separate download. This proves declared-input freshness only—not
   kitchen review, publication, customer acceptance, booking, payment, delivery,
   or completion. The source/local invariant is not deployed or hosted-operator
   accepted.
+- Decision Debt no longer assigns a fallback exposure multiplier when canonical
+  commercial cents are unavailable. Those items remain visible with `UNKNOWN`
+  score state and null factor/raw score/score/urgency; known-exposure items keep
+  the same deterministic versioned formula and ordering.
 - Current source authoritative-pricing consistency: the server now owns pricing
   actor identity and calculation time, fingerprints the confirmed tenant
   settings around the catalog read, and rechecks that authority at the trusted
@@ -264,9 +286,13 @@ Last updated: August 9, 2026
   limited to loopback emulators and `demo-*` projects. This is working-tree
   candidate source and is neither a production data operation nor deployment/
   hosted acceptance evidence.
-- Working-tree candidate `CWF-11` rebooking continuation: Customer 360's
-  bounded Revenue opportunities view can identify a same-week anniversary from recorded booked
-  events and offer an exact-version rebook only when the booked quote, stable
+- Working-tree candidate `CWF-11` rebooking continuation: Home and Workflow now
+  derive tenant-calendar anniversary Attention from the latest-200 canonical
+  quote-history read, expose source/display incompleteness, and hand one click
+  to the stable Customer 360 record without creating a draft or claiming a
+  verified accepted source. Customer 360's bounded Revenue opportunities view
+  can identify a same-week anniversary from recorded booked events and offer an
+  exact-version rebook only when the booked quote, stable
   customer, acceptance receipt, and retained accepted immutable version all
   match. The trusted callable derives a deterministic identity, overlays current
   customer contact, and creates a current-catalog, server-authoritatively priced
@@ -310,13 +336,21 @@ Last updated: August 9, 2026
 - Working-tree `CWF-12` Revenue Autopilot authority candidate now includes
   tenant policy and Customer 360 controls, deterministic idempotent jobs, four
   reminder lanes plus completed-closeout post-event review requests, unread-
-  reply Attention escalation, a 15-minute UTC scheduler evaluated on tenant-
-  local calendar rules, bounded Workflow operations, durable signed/hash-bound
+  reply Attention escalation with latest-message supersession, staff-reply
+  resolution, and scheduled repair, a 15-minute UTC scheduler evaluated on tenant-
+  local calendar rules, bounded Workflow operations with four explicit gates and
+  per-lane preparation receipts, durable signed/hash-bound
   no-expiry customer unsubscribe, and raw Resend webhook verification through
   `standardwebhooks@1.0.0`. The API key, webhook secret, and unsubscribe-token
   secret have isolated Secret Manager ownership; the webhook binds only its
   webhook secret. `REVENUE_AUTOPILOT_ENABLED`,
   `REVENUE_AUTOPILOT_SENDS_ENABLED`, and email provider activation remain off.
+  With runtime and tenant policy enabled, deterministic records can be prepared
+  while sends/provider remain off; dispatch does not run. Stop evidence no longer
+  overwrites sending, provider-accepted, or ambiguous evidence, and ambiguous
+  reconciliation rechecks current authority before any provider call. The
+  staff receipt now exposes a withheld retry as a distinct non-provider outcome
+  rather than presenting every successful record mutation as provider accepted.
   No deployment, scheduler execution, secret provisioning, provider acceptance/
   delivery/bounce/complaint, hosted behavior, recovered value, or human
   acceptance is established by this source/local candidate.
@@ -498,12 +532,11 @@ Last updated: August 9, 2026
   `NOTIFICATIONS_SMS_PROVIDER=none` in the ignored project-scoped Functions
   environment.
 ## Active Risks
-- Commercial Change enforcement is default-off and must remain so. The current
-  source has no dedicated exact read/reconcile contract for a transport-
-  ambiguous governed apply outcome; atomic server intent and request identity do
-  not let the UI claim a save after an unknown transport result. Close that gap,
-  rerun the full authority qualification, and capture hosted role acceptance
-  before considering either the global or tenant gate.
+- Commercial Change enforcement is default-off and must remain so. The source
+  now has exact committed-versus-fenced-not-committed reconciliation for a
+  transport-ambiguous governed apply. The refreshed local unit/rules/emulator/
+  browser matrix is green; hosted role acceptance and a separately authorized
+  release remain required before considering either the global or tenant gate.
 - Revenue Autopilot evaluation and sends are independently default-off. The
   15-minute scheduler, Resend webhook, customer unsubscribe, post-event URL, and
   operations UI have source/local evidence only. `RESEND_API_KEY`,
@@ -514,10 +547,9 @@ Last updated: August 9, 2026
   `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED`, which defaults off. It still
   requires an exact hosted candidate plus signed-in deep-link, Back/Forward,
   mobile, portal-precedence, branding-isolation, and human acceptance before the
-  flag can be removed or enabled for production. The earlier route-shell
-  qualification does not qualify the current working-tree convergence; its exact
-  local/high-risk evidence must be refreshed as recorded above, and no local
-  result satisfies those hosted gates.
+  flag can be removed or enabled for production. The current convergence has
+  exact local/high-risk evidence, but no local result satisfies those hosted
+  gates.
 - The Home trust/freshness rail is a first surface-scoped CWF-03 slice, not a
   global evidence ledger. Directory and Customer 360 still expose their own
   bounded/source states rather than sharing a cross-surface freshness contract.

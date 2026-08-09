@@ -26,12 +26,11 @@ describe("Kitchen BEO callable source ownership", () => {
     expect(statusReader).toContain("refs.invalidationsRef.limit(101).get()");
     expect(statusReader).toContain("if (invalidationsSnap.size > 100)");
     expect(statusReader).toContain('reasonCodes: ["invalidation_evidence_truncated"]');
-    expect(statusReader).toContain("artifactPointer.latestReceiptId");
-    expect(statusReader).toContain(".collection(KITCHEN_BEO_RECEIPTS_COLLECTION)");
-    expect(statusReader).toContain("projectStoredKitchenBeoArtifact(receiptRecord");
+    expect(statusReader).toContain("readKitchenBeoReceiptHistory({");
+    expect(statusReader).toContain("trustedReceipt: receiptHistory.trustedCurrentReceipt");
+    expect(statusReader).toContain("receiptHistory: receiptHistory.projection");
     expect(statusReader).toContain("kitchenBeoAuthority.deriveArtifactStatus({");
     expect(statusReader).toContain("canonicalQuote: quote");
-    expect(statusReader).toContain("trustedReceipt,");
     expect(statusReader).toContain("invalidations: invalidationsSnap.docs");
     expect(statusReader).toContain('artifactNodeId || item.nodeId) === "artifact.kitchen_beo"');
 
@@ -82,6 +81,10 @@ describe("Kitchen BEO callable source ownership", () => {
     }
     expect(projection).not.toContain("status.currentFingerprint");
     expect(projection).not.toContain("status.receipt &&");
+    expect(projection).toContain("KITCHEN_BEO_RECEIPT_HISTORY_LIMIT");
+    expect(projection).toContain("recentReceiptIds");
+    expect(projection).toContain("receiptHistoryTruncated");
+    expect(projection).toContain("projectStoredKitchenBeoArtifact(record");
   });
 
   test("generates from a server-read quote and rechecks the same canonical claim before persistence", () => {
@@ -106,21 +109,45 @@ describe("Kitchen BEO callable source ownership", () => {
     const canonicalComparison = callable.indexOf(
       "commercialDependencyGraphCore.canonicalSerialize(transactionClaim)"
     );
-    const receiptCreate = callable.indexOf("tx.create(refs.receiptRef, record)");
+    const dependencyStateRead = callable.indexOf("tx.get(refs.dependencyStateRef)");
+    const reconciliationRead = callable.indexOf("tx.get(refs.applyReceiptsRef.doc(latestApplyReceiptId))");
+    const receiptCreate = callable.indexOf("tx.create(refs.receiptRef, {");
     expect(transactionRead).toBeGreaterThan(-1);
+    expect(dependencyStateRead).toBeGreaterThan(transactionRead);
     expect(transactionClaim).toBeGreaterThan(transactionRead);
     expect(canonicalComparison).toBeGreaterThan(transactionClaim);
+    expect(reconciliationRead).toBeGreaterThan(canonicalComparison);
     expect(receiptCreate).toBeGreaterThan(canonicalComparison);
+    expect(receiptCreate).toBeGreaterThan(reconciliationRead);
     expect(callable).toContain("The canonical quote changed while the Kitchen BEO was generated");
 
     expect(callable).not.toMatch(/data\?\.(payload|provenance|artifact|dependencyFingerprint)/u);
     expect(callable).not.toContain("data.payload");
     expect(callable).not.toContain("data.provenance");
     expect(callable).not.toContain("data.artifact");
-    expect(callable).toContain("projectStoredKitchenBeoArtifact(existing");
+    expect(callable).toContain("projectStoredKitchenBeoArtifact(record");
     expect(callable).toContain("projectStoredKitchenBeoArtifact(persisted.record");
     expect(callable).toContain("receipt: projected.receipt");
+    expect(callable).toContain("receiptHistory: current.receiptHistory");
     expect(callable).toContain("artifact: projected.artifact");
     expect(callable).not.toContain("projectKitchenBeoStatus({ receipt:");
+  });
+
+  test("atomically resolves only exact current Kitchen BEO invalidations", () => {
+    const callable = sourceBetween(
+      "exports.generateKitchenBeo =",
+      "exports.reopenQuote ="
+    );
+    expect(callable).toContain("const openKitchenBeoInvalidations = invalidationRecords.filter");
+    expect(callable).toContain('normalizeText(item.nodeKind) === "artifact"');
+    expect(callable).toContain("normalizeText(item.targetRevisionId) === activeRevisionId");
+    expect(callable).toContain("normalizeText(item.applyReceiptId) === latestApplyReceiptId");
+    expect(callable).toContain("postGenerationStatus.state !== KITCHEN_BEO_FRESHNESS_STATES.CURRENT");
+    expect(callable).toContain("commercialChangeAuthority.reconcile({");
+    expect(callable).toContain('resolution: "artifact_current"');
+    expect(callable).toContain("tx.update(refs.invalidationsRef.doc(invalidationId)");
+    expect(callable).toContain("tx.create(reconciliationRef");
+    expect(callable).toContain("tx.update(refs.dependencyStateRef");
+    expect(callable).toContain("dependencyReconciliation");
   });
 });

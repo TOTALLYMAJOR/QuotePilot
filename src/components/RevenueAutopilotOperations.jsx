@@ -241,6 +241,11 @@ function normalizePolicy(snapshot) {
     policy.tenantEnabled,
     policy.automationEnabled
   ) === true;
+  const sendsEnabled = firstBoolean(
+    policy.global?.sendsEnabled,
+    policy.sendsEnabled,
+    policy.outboundSendsEnabled
+  ) === true;
   const providerConfigured = firstBoolean(
     provider.configured,
     policy.providerConfigured
@@ -280,6 +285,7 @@ function normalizePolicy(snapshot) {
     timeZone: text(policy.tenantTimeZone || policy.timeZone, 100),
     global: normalizeGate(globalEnabled),
     tenant: normalizeGate(tenantEnabled),
+    sends: normalizeGate(sendsEnabled),
     provider: normalizeGate(providerConfigured, { configured: true }),
     reviewRequestUrl: reviewDestination.url,
     reviewRequestHost: reviewDestination.host,
@@ -293,21 +299,37 @@ function lanePresentation({ definition, policy, gates }) {
   if (!kind?.enabled) {
     return {
       state: kind?.configuredState || "dormant",
+      preparable: false,
       presentation: { family: "blocked", label: "Dormant" }
     };
   }
   if (definition.requiresReviewDestination && !policy.reviewRequestConfigured) {
     return {
       state: "configuration_required",
+      preparable: false,
       presentation: { family: "blocked", label: "Review URL needed" }
     };
   }
-  const gateReady = gates.global.enabled
-    && gates.tenant.enabled
-    && (!definition.outbound || gates.provider.enabled);
-  return gateReady
-    ? { state: "enabled", presentation: { family: "confirmed", label: "Enabled" } }
-    : { state: "gated", presentation: { family: "blocked", label: "Gated" } };
+  const preparable = gates.global.enabled && gates.tenant.enabled;
+  if (!preparable) {
+    return {
+      state: "gated",
+      preparable: false,
+      presentation: { family: "blocked", label: "Gated" }
+    };
+  }
+  if (definition.outbound && (!gates.sends.enabled || !gates.provider.enabled)) {
+    return {
+      state: "preparation_only",
+      preparable: true,
+      presentation: { family: "action", label: "Preparation only" }
+    };
+  }
+  return {
+    state: "enabled",
+    preparable: true,
+    presentation: { family: "confirmed", label: "Enabled" }
+  };
 }
 
 function normalizeBounds(snapshot, jobs, attention) {
@@ -364,6 +386,15 @@ function mutationTarget(snapshot, jobs) {
   return jobs.find((job) => text(job?.state, 32).toLowerCase() === "outcome_ambiguous") || mutation;
 }
 
+function reconciliationOutcome(snapshot) {
+  const mutation = isRecord(snapshot?.mutation) ? snapshot.mutation : {};
+  if (text(mutation.operation, 64).toLowerCase() !== "reconcile_job") return null;
+  const state = text(mutation.reconciliationState, 32).toLowerCase();
+  if (!new Set(["withheld", "provider_accepted"]).has(state)) return null;
+  const reason = text(mutation.reconciliationReason, 80).toLowerCase();
+  return { state, reason: /^[a-z][a-z0-9_]{0,79}$/u.test(reason) ? reason : "" };
+}
+
 export function buildRevenueAutopilotOperationsPresentation({
   snapshot = null,
   available = true
@@ -378,6 +409,7 @@ export function buildRevenueAutopilotOperationsPresentation({
     ? "partial"
     : explicitState;
   const mutationState = explicitMutationState(snapshot);
+  const reconciliation = reconciliationOutcome(snapshot);
   const policy = normalizePolicy(snapshot);
   const lanes = REVENUE_AUTOPILOT_OPERATION_KINDS.map((definition) => ({
     ...definition,
@@ -387,7 +419,7 @@ export function buildRevenueAutopilotOperationsPresentation({
       canonicalKind(item?.kind || "unread_reply") === definition.id
     )).length
   }));
-  const hasEnabledLane = lanes.some((lane) => lane.state === "enabled");
+  const hasPreparableLane = lanes.some((lane) => lane.preparable);
   const readAllowsMutation = new Set(["empty", "success"]).has(state);
   const mutationAllowsAction = new Set(["ready", "receipt", "recovery"]).has(mutationState);
 
@@ -398,8 +430,17 @@ export function buildRevenueAutopilotOperationsPresentation({
     retained: snapshotAvailable && new Set(["loading", "stale", "partial", "recovery"]).has(state),
     detail: READ_COPY[state],
     presentation: READ_PRESENTATION[state],
-    mutationDetail: MUTATION_COPY[mutationState],
-    mutationPresentation: MUTATION_PRESENTATION[mutationState],
+    mutationDetail: mutationState === "receipt" && reconciliation?.state === "withheld"
+      ? "Current authority withheld the retry before any provider call. No provider acceptance or delivery is established."
+      : mutationState === "receipt" && reconciliation?.state === "provider_accepted"
+        ? "The provider accepted the exact frozen request. Delivery, customer viewing, payment, and recovered revenue remain separate evidence."
+        : MUTATION_COPY[mutationState],
+    mutationPresentation: mutationState === "receipt" && reconciliation?.state === "withheld"
+      ? { family: "blocked", label: "Dispatch withheld" }
+      : mutationState === "receipt" && reconciliation?.state === "provider_accepted"
+        ? { family: "provider", label: "Provider accepted" }
+        : MUTATION_PRESENTATION[mutationState],
+    reconciliationOutcome: reconciliation,
     policy,
     lanes,
     jobs,
@@ -408,7 +449,7 @@ export function buildRevenueAutopilotOperationsPresentation({
     sourceLabel: resolveSourceLabel(snapshot?.source),
     observedAtISO: text(snapshot?.observedAtISO || snapshot?.read?.observedAtISO, 64),
     materializeAllowed: available !== false
-      && hasEnabledLane
+      && hasPreparableLane
       && readAllowsMutation
       && mutationAllowsAction,
     busy: new Set(["submitting", "reconciliation"]).has(mutationState),
@@ -432,13 +473,14 @@ function GateCard({ gateId, eyebrow, title, detail, gate }) {
 function PolicyGates({ view, onConfigure }) {
   const dormant = !view.policy.global.enabled
     || !view.policy.tenant.enabled
+    || !view.policy.sends.enabled
     || !view.policy.provider.enabled;
   return (
     <section className="workflow-form-section" aria-labelledby="revenue-autopilot-gates-title">
       <div className="workspace-route-head">
         <div>
           <p className="eyebrow">Activation controls</p>
-          <h3 id="revenue-autopilot-gates-title">Three explicit gates</h3>
+          <h3 id="revenue-autopilot-gates-title">Four explicit gates</h3>
           <p className="muted">Outbound automation is dormant by default and fails closed when a gate is missing.</p>
         </div>
         {typeof onConfigure === "function" && (
@@ -454,7 +496,7 @@ function PolicyGates({ view, onConfigure }) {
       </div>
       {dormant && (
         <p className="warning-note" role="status" data-automation-dormant="true">
-          Dormant by default. No automated email can run until its global, tenant, and provider gates are enabled.
+          Dormant by default. No automated email can run until its global, tenant, outbound-send, and provider gates are enabled.
         </p>
       )}
       <div className="customer-card-list">
@@ -473,10 +515,17 @@ function PolicyGates({ view, onConfigure }) {
           gate={view.policy.tenant}
         />
         <GateCard
+          gateId="sends"
+          eyebrow="Release kill switch"
+          title="Outbound sends"
+          detail="A separate release-controlled switch permits prepared records to reach the provider."
+          gate={view.policy.sends}
+        />
+        <GateCard
           gateId="provider"
           eyebrow="Delivery readiness"
           title="Email provider"
-          detail="A current tenant-scoped provider configuration is required for outbound kinds."
+          detail="A current approved provider configuration is required for outbound kinds."
           gate={view.policy.provider}
         />
       </div>
@@ -585,6 +634,13 @@ function JobCard({ job, index, view, onReconcile }) {
             ? ` of ${formatWorkspaceInteger(job.maxAttempts)}`
             : ""}
         </p>
+        {text(job?.dispatchSuppressedAtISO, 64) && (
+          <p className="warning-note" data-dispatch-suppressed="true">
+            Future dispatch suppressed: {humanizeWorkspaceValue(
+              job?.dispatchSuppressionReason || "current authority changed"
+            )}. The recorded provider outcome remains unchanged.
+          </p>
+        )}
       </div>
       <div className="right-actions">
         <StatusChip {...jobPresentation(state)} />
@@ -650,7 +706,13 @@ function AttentionQueue({ view, onOpenConversation, onAcknowledgeReply }) {
             const state = text(item?.state, 32).toLowerCase() || "open";
             const acknowledged = new Set(["acknowledged", "resolved", "closed"]).has(state);
             return (
-              <li className="command-center-row" key={identity} data-attention-id={identity} data-attention-state={state}>
+              <li
+                className="command-center-row"
+                key={identity}
+                tabIndex={-1}
+                data-attention-id={identity}
+                data-attention-state={state}
+              >
                 <div className="command-center-row-main">
                   <span className="customer-revenue-opportunity-type">Customer reply</span>
                   <strong>{formatWorkspaceText(item?.quoteLabel || item?.customerLabel, { emptyLabel: "Authoritative quote conversation" })}</strong>
@@ -753,6 +815,10 @@ function SnapshotEvidence({ view }) {
 
 function MutationRail({ snapshot, view, onMaterialize, onReconcile }) {
   const target = mutationTarget(snapshot, view.jobs);
+  const materializationSummary = (
+    snapshot?.mutation?.operation === "materialize_jobs"
+    && isRecord(snapshot?.mutation?.materializationSummary)
+  ) ? snapshot.mutation.materializationSummary : null;
   const canReconcile = new Set(["uncertain", "reconciliation"]).has(view.mutationState)
     && typeof onReconcile === "function";
   return (
@@ -764,6 +830,7 @@ function MutationRail({ snapshot, view, onMaterialize, onReconcile }) {
       data-capability-id="cwf-12-revenue-autopilot-mutation"
       data-capability-state={view.mutationState}
       data-mutation-state={view.mutationState}
+      data-reconciliation-state={view.reconciliationOutcome?.state || "not_applicable"}
     >
       <div className="staff-evidence-head">
         <div>
@@ -791,6 +858,47 @@ function MutationRail({ snapshot, view, onMaterialize, onReconcile }) {
       >
         {view.mutationDetail}
       </p>
+      {view.reconciliationOutcome?.state === "withheld" && view.reconciliationOutcome.reason && (
+        <p className="source-note" data-reconciliation-reason={view.reconciliationOutcome.reason}>
+          Authority reason: {humanizeWorkspaceValue(view.reconciliationOutcome.reason)}
+        </p>
+      )}
+      {materializationSummary && (
+        <div
+          className="workflow-policy-summary"
+          data-materialization-summary="bounded"
+          aria-label="Prepared record results"
+        >
+          <p className="source-note">
+            Prepared {formatWorkspaceInteger(materializationSummary.createdCount)} new records
+            {` · updated ${formatWorkspaceInteger(materializationSummary.updatedCount)}`}
+          </p>
+          <ul className="command-center-list">
+            {REVENUE_AUTOPILOT_OPERATION_KINDS
+              .filter((definition) => definition.outbound)
+              .map((definition) => {
+                const lane = materializationSummary.lanes?.[definition.id] || {};
+                return (
+                  <li
+                    className="command-center-row"
+                    key={definition.id}
+                    data-materialization-lane={definition.id}
+                    data-materialization-state={text(lane.state, 32) || "unavailable"}
+                  >
+                    <div className="command-center-row-main">
+                      <strong>{definition.label}</strong>
+                      <p className="command-center-row-detail">
+                        {humanizeWorkspaceValue(lane.state || "unavailable")}
+                        {` · ${formatWorkspaceInteger(lane.createCount)} new`}
+                        {` · ${formatWorkspaceInteger(lane.updateCount)} updated`}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
+      )}
       {typeof onMaterialize === "function" && (
         <div className="right-actions">
           <button

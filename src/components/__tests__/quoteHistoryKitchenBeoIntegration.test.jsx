@@ -76,7 +76,25 @@ const STATUS = Object.freeze({
   receiptId: `beo_${"b".repeat(48)}`,
   receiptDependencyFingerprint: "a".repeat(64),
   commercialSourceRevisionId: "v0001",
-  unresolvedInvalidationIds: Object.freeze([])
+  unresolvedInvalidationIds: Object.freeze([]),
+  receiptHistory: Object.freeze({
+    schemaVersion: 1,
+    authority: "server_projection",
+    state: "COMPLETE",
+    bounds: Object.freeze({ limit: 10, returnedCount: 1, truncated: false }),
+    reasonCodes: Object.freeze(["receipt_history_complete"]),
+    receipts: Object.freeze([Object.freeze({
+      receiptId: `beo_${"b".repeat(48)}`,
+      requestId: `beo_request_${"c".repeat(32)}`,
+      commercialSourceRevisionId: "v0001",
+      dependencyFingerprint: "a".repeat(64),
+      generatedAtISO: "2026-08-09T17:00:00.000Z",
+      filename: "Q-0042-kitchen-beo.pdf",
+      artifactByteLength: 12,
+      generatedBy: Object.freeze({ email: "sales@example.test", role: "sales" }),
+      current: true
+    })])
+  })
 });
 
 let container;

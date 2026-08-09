@@ -354,7 +354,8 @@ describe("CommercialChangeImpactPanel", () => {
     expect(staleMarkup).toContain("disabled=\"\"");
   });
 
-  test("fails an uncertain apply closed instead of submitting a second logical edit", () => {
+  test("fails an uncertain apply closed and exposes exact-outcome reconciliation", () => {
+    const onReconcileApplyOutcome = vi.fn();
     const markup = renderPanel({
       model: simulation(),
       authorityState: "enforced",
@@ -365,14 +366,55 @@ describe("CommercialChangeImpactPanel", () => {
       mutationState: "uncertain",
       mutationKind: "apply",
       mutationMessage: "Refresh the authoritative quote record before taking another action.",
-      onApply: vi.fn()
+      onApply: vi.fn(),
+      onReconcileApplyOutcome
     });
 
     expect(markup).toContain("Apply outcome unresolved");
-    expect(markup).toContain("disabled=\"\"");
+    expect(markup).toContain("Reconcile exact outcome");
+    expect(markup).toContain('data-capability-action="reconcile-apply-outcome"');
     expect(markup).toContain("this screen will not submit the edit again");
-    expect(APP_SOURCE).toContain("QuotePilot does not yet have a read-only apply-outcome lookup");
-    expect(APP_SOURCE).toContain("Do not create a second logical edit from this screen");
+    expect(APP_SOURCE).toContain("handleReconcileCommercialChangeApplyOutcome");
+    expect(APP_SOURCE).toContain("reconcileCommercialQuoteChangeApplyOutcome");
+  });
+
+  test("renders exact committed and fenced-not-committed outcome receipts", () => {
+    const common = {
+      model: simulation(),
+      authorityState: "enforced",
+      authorizationRequired: true,
+      staffRole: "admin",
+      authorizationReceiptId: `cca_${"a".repeat(48)}`,
+      scopeCurrent: true,
+      mutationKind: "apply"
+    };
+    const committed = renderPanel({
+      ...common,
+      mutationState: "receipt",
+      applyOutcome: {
+        state: "committed",
+        outcomeReceiptId: `ccor_${"b".repeat(48)}`,
+        appliedRevisionIsActive: true,
+        sourceChanged: true
+      }
+    });
+    const recoverable = renderPanel({
+      ...common,
+      mutationState: "recovery",
+      applyOutcome: {
+        state: "not_committed",
+        outcomeReceiptId: `ccor_${"c".repeat(48)}`,
+        appliedRevisionIsActive: false,
+        sourceChanged: false
+      },
+      onRecoverApply: vi.fn()
+    });
+
+    expect(committed).toContain("Exact apply proven committed");
+    expect(committed).toContain("immutable applied revision is the active quote source");
+    expect(recoverable).toContain("Exact apply proven not committed");
+    expect(recoverable).toContain("Start fresh simulation");
+    expect(recoverable).toContain('data-capability-action="recover-not-committed-apply"');
   });
 
   test("is mechanically bound to the trusted quote edit and authoritative pricing path", () => {
@@ -391,6 +433,7 @@ describe("CommercialChangeImpactPanel", () => {
     expect(FUNCTIONS_SOURCE).toContain("exports.simulateCommercialQuoteChange =");
     expect(FUNCTIONS_SOURCE).toContain("exports.requestCommercialQuoteChangeAuthorization =");
     expect(FUNCTIONS_SOURCE).toContain("exports.authorizeCommercialQuoteChange =");
+    expect(FUNCTIONS_SOURCE).toContain("exports.reconcileCommercialQuoteChangeApplyOutcome =");
     expect(FUNCTIONS_SOURCE).toContain("commercialChangeAuthority.buildApply(");
     expect(FUNCTIONS_SOURCE).toContain("persistCommercialChangeApply({");
   });

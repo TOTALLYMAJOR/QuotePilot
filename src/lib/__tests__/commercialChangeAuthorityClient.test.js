@@ -27,6 +27,7 @@ import {
   getCommercialDependencyState,
   getCommercialQuoteChangeAuthorizationState,
   isDefinitiveCommercialChangeError,
+  reconcileCommercialQuoteChangeApplyOutcome,
   reconcileCommercialDependencyState,
   requestCommercialQuoteChangeAuthorization,
   simulateCommercialQuoteChange
@@ -41,6 +42,7 @@ const TARGET_REVISION_ID = "v0015";
 const SIMULATION_REQUEST_ID = `change_sim_${"a".repeat(32)}`;
 const APPROVAL_REQUEST_ID = `change_auth_request_${"b".repeat(32)}`;
 const AUTHORIZATION_REQUEST_ID = `change_auth_${"c".repeat(32)}`;
+const APPLY_REQUEST_ID = `change_apply_${"e".repeat(32)}`;
 const RECONCILIATION_REQUEST_ID = `change_reconcile_${"d".repeat(32)}`;
 const SIMULATION_RECEIPT_ID = `ccs_${"1".repeat(48)}`;
 const AUTHORIZATION_RECEIPT_ID = `cca_${"2".repeat(48)}`;
@@ -49,6 +51,7 @@ const INVALIDATION_ID = `cci_${"4".repeat(48)}`;
 const RECONCILIATION_RECEIPT_ID = `ccr_${"5".repeat(48)}`;
 const APPROVAL_ID = `ccar_${"6".repeat(48)}`;
 const OPERATION_ID = `cco_${"7".repeat(48)}`;
+const OUTCOME_RECEIPT_ID = `ccor_${"9".repeat(48)}`;
 const DIGEST = "8".repeat(64);
 const BOUNDARY = "Server evidence only; no dependent artifact is published.";
 const SIMULATED_AT = "2026-08-09T12:00:00.000Z";
@@ -340,6 +343,39 @@ function reconciliationReceipt(overrides = {}) {
   };
 }
 
+function applyOutcomeReceipt(state = "committed", overrides = {}) {
+  const committed = state === "committed";
+  return {
+    schemaVersion: "commercial-change-apply-outcome-receipt-v1",
+    authority: "server_authoritative",
+    receiptType: "outcome",
+    receiptId: OUTCOME_RECEIPT_ID,
+    outcomeReceiptId: OUTCOME_RECEIPT_ID,
+    requestId: APPLY_REQUEST_ID,
+    operationId: OPERATION_ID,
+    organizationId: SCOPE.organizationId,
+    quoteId: SCOPE.quoteId,
+    simulationReceiptId: SIMULATION_RECEIPT_ID,
+    simulationDigest: DIGEST,
+    authorizationReceiptId: AUTHORIZATION_RECEIPT_ID,
+    authorizationReceiptDigest: DIGEST,
+    baseRevisionId: BASE_REVISION_ID,
+    expectedApplyReceiptId: APPLY_RECEIPT_ID,
+    state,
+    activeRevisionId: committed ? TARGET_REVISION_ID : BASE_REVISION_ID,
+    sourceChanged: committed,
+    applyReceiptId: committed ? APPLY_RECEIPT_ID : "",
+    applyReceiptDigest: committed ? DIGEST : "",
+    newRevisionId: committed ? TARGET_REVISION_ID : "",
+    appliedRevisionIsActive: committed,
+    reconciledAtISO: "2026-08-09T12:05:00.000Z",
+    reconciledBy: actor("sales"),
+    boundary: BOUNDARY,
+    receiptDigest: DIGEST,
+    ...overrides
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockState.httpsCallable.mockReturnValue(mockState.callable);
@@ -539,6 +575,99 @@ describe("Commercial Change Authority approval client", () => {
       simulationReceiptId: SIMULATION_RECEIPT_ID,
       requestId: AUTHORIZATION_REQUEST_ID
     });
+  });
+});
+
+describe("Commercial Change Authority apply outcome client", () => {
+  const input = {
+    ...SCOPE,
+    simulationReceiptId: SIMULATION_RECEIPT_ID,
+    authorizationReceiptId: AUTHORIZATION_RECEIPT_ID,
+    applyRequestId: APPLY_REQUEST_ID,
+    expectedBaseRevisionId: BASE_REVISION_ID
+  };
+
+  test("reconciles the exact request as committed and validates its apply projection", async () => {
+    mockState.callable.mockResolvedValue({
+      data: {
+        ok: true,
+        storage: "firebase",
+        ...SCOPE,
+        idempotent: false,
+        outcomeReceipt: applyOutcomeReceipt(),
+        commercialChange: {
+          authorityState: "enforced",
+          applyReceiptId: APPLY_RECEIPT_ID,
+          state: "BLOCKED",
+          safeToPublish: false,
+          openInvalidationCount: 1,
+          totalInvalidationCount: 1
+        }
+      }
+    });
+
+    await expect(reconcileCommercialQuoteChangeApplyOutcome({
+      ...input,
+      form: { must: "not cross" }
+    })).resolves.toMatchObject({
+      outcomeReceipt: {
+        receiptId: OUTCOME_RECEIPT_ID,
+        state: "committed",
+        applyReceiptId: APPLY_RECEIPT_ID,
+        newRevisionId: TARGET_REVISION_ID
+      },
+      commercialChange: {
+        state: "BLOCKED",
+        applyReceiptId: APPLY_RECEIPT_ID
+      }
+    });
+    expect(mockState.callable).toHaveBeenCalledWith(input);
+  });
+
+  test("accepts a fenced not-committed receipt only without apply evidence", async () => {
+    mockState.callable.mockResolvedValue({
+      data: {
+        ok: true,
+        storage: "firebase",
+        ...SCOPE,
+        idempotent: true,
+        outcomeReceipt: applyOutcomeReceipt("not_committed"),
+        commercialChange: null
+      }
+    });
+
+    await expect(reconcileCommercialQuoteChangeApplyOutcome(input)).resolves.toMatchObject({
+      idempotent: true,
+      outcomeReceipt: {
+        state: "not_committed",
+        sourceChanged: false,
+        applyReceiptId: ""
+      },
+      commercialChange: null
+    });
+  });
+
+  test("rejects mismatched outcome evidence and malformed identities", async () => {
+    mockState.callable.mockResolvedValue({
+      data: {
+        ok: true,
+        storage: "firebase",
+        ...SCOPE,
+        idempotent: false,
+        outcomeReceipt: applyOutcomeReceipt("not_committed", {
+          applyReceiptId: APPLY_RECEIPT_ID,
+          applyReceiptDigest: DIGEST
+        }),
+        commercialChange: null
+      }
+    });
+    await expect(reconcileCommercialQuoteChangeApplyOutcome(input))
+      .rejects.toThrow(/not-committed|claims apply evidence/i);
+
+    await expect(reconcileCommercialQuoteChangeApplyOutcome({
+      ...input,
+      applyRequestId: "customer@example.test"
+    })).rejects.toMatchObject({ code: "invalid-argument" });
   });
 });
 

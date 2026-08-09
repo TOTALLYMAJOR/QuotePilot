@@ -55,6 +55,8 @@ const ATTENTION_ITEM_MAP = {
   "follow_up:overdue": { family: STATUS_FAMILY.ACTION, label: "Overdue follow-up" },
   "follow_up:due_today": { family: STATUS_FAMILY.ACTION, label: "Follow-up due today" },
   "approval:pending": { family: STATUS_FAMILY.ACTION, label: "Pending approval" },
+  "unread_customer_reply:open": { family: STATUS_FAMILY.ACTION, label: "Unread customer reply" },
+  "anniversary_rebooking:verification_required": { family: STATUS_FAMILY.ACTION, label: "Repeat-event review" },
   "post_event_closeout:overdue": { family: STATUS_FAMILY.ACTION, label: "Post-event closeout overdue" },
   "post_event_closeout:due_today": { family: STATUS_FAMILY.ACTION, label: "Post-event closeout due" },
   "post_event_closeout:blocked_configuration": { family: STATUS_FAMILY.BLOCKED, label: "Closeout configuration blocked" },

@@ -53,6 +53,10 @@ describe("Revenue Autopilot scheduler fairness contract", () => {
     expect(schedule).toContain("const perTenantDispatchLimit = 4");
     expect(schedule).toContain("schedulerQuoteCursor: quotePage.nextCursor");
     expect(schedule).toContain("schedulerJobCursor: jobPage.nextCursor");
+    expect(schedule).toContain("const scheduleMode = planRevenueAutopilotScheduleMode(global)");
+    expect(schedule).toContain("if (scheduleMode.dispatch)");
+    expect(schedule).toContain('state: scheduleMode.state');
+    expect(schedule).toContain("Revenue Autopilot tenant schedule page skipped");
     expect(schedule).not.toContain("remainingQuoteBudget");
     expect(schedule).not.toContain("remainingDispatchBudget");
   });
@@ -81,8 +85,9 @@ describe("Revenue Autopilot scheduler fairness contract", () => {
       "function throwDecisionDebtFailure"
     );
     expect(scheduledMaterialization).toContain(
-      'normalizeText(snapshot.data()?.kind).toLowerCase() !== "post_event_review_request"'
+      'normalizeText(job.kind).toLowerCase() !== "post_event_review_request"'
     );
+    expect(scheduledMaterialization).toContain("planRevenueAutopilotJobStops");
     expect(scheduledMaterialization).toContain(
       'if (portalExpired && kind !== "post_event_review_request") continue;'
     );
@@ -99,5 +104,48 @@ describe("Revenue Autopilot scheduler fairness contract", () => {
       'if (portalExpired && kind !== "post_event_review_request")'
     );
     expect(staffMaterialization).toContain("reviewUrl: policy.reviewRequestUrl");
+  });
+
+  test("rechecks canonical authority before an ambiguous provider retry", () => {
+    const reconciliation = sourceBetween(
+      "exports.reconcileRevenueAutopilotJob =",
+      "async function readRevenueAutopilotUnsubscribeContext"
+    );
+    const authorityRead = reconciliation.indexOf("readRevenueAutopilotExecutionAuthority");
+    const executionPlan = reconciliation.indexOf("planRevenueAutopilotExecution");
+    const providerCall = reconciliation.indexOf("sendEmailViaResend");
+    expect(authorityRead).toBeGreaterThan(0);
+    expect(executionPlan).toBeGreaterThan(authorityRead);
+    expect(providerCall).toBeGreaterThan(executionPlan);
+    expect(reconciliation).toContain('rechecked.action !== "reconcile"');
+    expect(reconciliation).toContain('reconciliationState: "withheld"');
+
+    const staffJobProjection = sourceBetween(
+      "function projectRevenueAutopilotJobForStaff",
+      "function projectRevenueAutopilotAttentionForStaff"
+    );
+    expect(staffJobProjection).toContain("dispatchSuppressedAtISO");
+    expect(staffJobProjection).toContain("dispatchSuppressionReason");
+  });
+
+  test("binds unread-reply Attention to latest-message transitions and scheduled repair", () => {
+    const conversationSend = sourceBetween(
+      "exports.sendQuotePortalConversationMessage =",
+      "const COMMERCIAL_CHANGE_POLICY_VERSION"
+    );
+    expect(conversationSend).toContain("planUnreadCustomerReplyAttentionTransition");
+    expect(conversationSend).toContain("revenueAutopilotAttention: attentionPlan.activePointer");
+    expect(conversationSend).not.toContain(
+      "revenueAutopilotAttention: attentionPlan.activePointer || FieldValue.delete()"
+    );
+    expect(conversationSend).toContain("for (const attentionUpdate of attentionPlan.updates)");
+
+    const repair = sourceBetween(
+      "async function reconcileRevenueAutopilotReplyAttentionForQuote",
+      "async function dispatchRevenueAutopilotJob"
+    );
+    expect(repair).toContain("buildRevenueAutopilotConversationEvidence");
+    expect(repair).toContain("planUnreadCustomerReplyAttentionTransition");
+    expect(repair).toContain("transition.activePointer");
   });
 });

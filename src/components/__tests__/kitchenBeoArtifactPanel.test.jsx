@@ -31,7 +31,23 @@ const ARTIFACT = Object.freeze({
   base64: "JVBERi0xLjQ="
 });
 
+function historyReceipt(receiptId = `beo_${"b".repeat(48)}`, overrides = {}) {
+  return {
+    receiptId,
+    requestId: `beo_request_${"c".repeat(32)}`,
+    commercialSourceRevisionId: "v0007",
+    dependencyFingerprint: "b".repeat(64),
+    generatedAtISO: "2026-08-09T17:30:00.000Z",
+    filename: ARTIFACT.filename,
+    artifactByteLength: 12,
+    generatedBy: { email: "sales@example.test", role: "sales" },
+    current: true,
+    ...overrides
+  };
+}
+
 function status(state = "CURRENT", overrides = {}) {
+  const generated = state !== "NOT_GENERATED";
   return {
     schemaVersion: "kitchen-beo-artifact-status-v1",
     authority: "server_derived",
@@ -47,6 +63,23 @@ function status(state = "CURRENT", overrides = {}) {
     receiptDependencyFingerprint: state === "NOT_GENERATED" ? "" : "b".repeat(64),
     commercialSourceRevisionId: state === "NOT_GENERATED" ? "" : "v0007",
     unresolvedInvalidationIds: [],
+    receiptHistory: generated
+      ? {
+        schemaVersion: 1,
+        authority: "server_projection",
+        state: "COMPLETE",
+        bounds: { limit: 10, returnedCount: 1, truncated: false },
+        reasonCodes: ["receipt_history_complete"],
+        receipts: [historyReceipt()]
+      }
+      : {
+        schemaVersion: 1,
+        authority: "server_projection",
+        state: "COMPLETE",
+        bounds: { limit: 10, returnedCount: 0, truncated: false },
+        reasonCodes: ["no_generation_receipts"],
+        receipts: []
+      },
     ...overrides
   };
 }
@@ -65,6 +98,7 @@ function result(overrides = {}) {
       generatedAtISO: "2026-08-09T17:30:00.000Z"
     },
     status: currentStatus,
+    dependencyReconciliation: null,
     artifact: ARTIFACT,
     ...overrides
   };
@@ -264,13 +298,44 @@ describe("KitchenBeoArtifactPanel", () => {
   });
 
   test("downloads exact prior receipt bytes without creating a new generation receipt", async () => {
+    const priorReceiptId = `beo_${"d".repeat(48)}`;
+    client.getKitchenBeoArtifactStatus.mockResolvedValueOnce(status("CURRENT", {
+      receiptHistory: {
+        schemaVersion: 1,
+        authority: "server_projection",
+        state: "PARTIAL",
+        bounds: { limit: 10, returnedCount: 2, truncated: true },
+        reasonCodes: ["receipt_history_bound_reached"],
+        receipts: [
+          historyReceipt(),
+          historyReceipt(priorReceiptId, {
+            requestId: `beo_request_${"d".repeat(32)}`,
+            generatedAtISO: "2026-08-08T17:30:00.000Z",
+            current: false
+          })
+        ]
+      }
+    }));
+    client.getKitchenBeoReceiptArtifact.mockResolvedValueOnce({
+      ok: true,
+      storage: "firebase",
+      ...SCOPE,
+      receipt: { receiptId: priorReceiptId, filename: ARTIFACT.filename },
+      artifact: ARTIFACT
+    });
     mount();
     await flush();
-    await clickAndFlush(action("download-receipt"));
+    const priorDownload = container.querySelector(
+      `[data-capability-action="download-receipt"][data-receipt-id="${priorReceiptId}"]`
+    );
+    expect(priorDownload).not.toBeNull();
+    expect(container.textContent).toContain("Prior receipt");
+    expect(container.textContent).toContain("Older generation receipts may exist");
+    await clickAndFlush(priorDownload);
 
     expect(client.getKitchenBeoReceiptArtifact).toHaveBeenCalledWith({
       ...SCOPE,
-      receiptId: status().receiptId
+      receiptId: priorReceiptId
     });
     expect(client.generateKitchenBeo).not.toHaveBeenCalled();
     expect(client.downloadKitchenBeoArtifact).toHaveBeenCalledWith(ARTIFACT);
@@ -303,6 +368,46 @@ describe("KitchenBeoArtifactPanel", () => {
     expect(client.downloadKitchenBeoArtifact).toHaveBeenCalledWith(ARTIFACT);
     expect(onGenerated).toHaveBeenCalledWith(generated);
     expect(onStatusChange).toHaveBeenLastCalledWith(generated.status);
+  });
+
+  test("shows the exact automatic Kitchen BEO dependency reconciliation outcome", async () => {
+    client.generateKitchenBeo.mockResolvedValueOnce(result({
+      dependencyReconciliation: {
+        receiptId: `ccr_${"a".repeat(48)}`,
+        applyReceiptId: `ccp_${"b".repeat(48)}`,
+        resolvedInvalidationIds: [`cci_${"c".repeat(48)}`],
+        resolvedCount: 1
+      }
+    }));
+    mount();
+    await flush();
+    await clickAndFlush(action("generate"));
+
+    expect(container.querySelector("[data-beo-dependency-reconciliation]")?.textContent)
+      .toContain("resolved 1 current Kitchen BEO invalidation");
+    expect(container.textContent).toContain("Other commercial decisions remain independently governed");
+  });
+
+  test("fails receipt history presentation closed without exposing download actions", async () => {
+    client.getKitchenBeoArtifactStatus.mockResolvedValueOnce(status("UNKNOWN", {
+      receiptId: "",
+      receiptDependencyFingerprint: "",
+      commercialSourceRevisionId: "",
+      receiptHistory: {
+        schemaVersion: 1,
+        authority: "server_projection",
+        state: "UNKNOWN",
+        bounds: { limit: 10, returnedCount: 0, truncated: true },
+        reasonCodes: ["receipt_history_evidence_invalid"],
+        receipts: []
+      }
+    }));
+    mount();
+    await flush();
+
+    expect(container.querySelector('[data-beo-receipt-history-state="UNKNOWN"]')).not.toBeNull();
+    expect(container.textContent).toContain("No prior download is offered from untrusted history");
+    expect(action("download-receipt")).toBeNull();
   });
 
   test("blocks duplicate dispatch before the busy render commits", async () => {

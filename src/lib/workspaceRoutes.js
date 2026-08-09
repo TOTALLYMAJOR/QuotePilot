@@ -81,7 +81,15 @@ const STATIC_ROUTES = new Map([
   [WORKSPACE_PATHS.diagnostics, WORKSPACE_ROUTE_IDS.DIAGNOSTICS]
 ]);
 
-const WORKFLOW_ATTENTION_TYPES = new Set(["change_request", "follow_up", "approval"]);
+const WORKFLOW_ATTENTION_TYPES = new Set([
+  "change_request",
+  "follow_up",
+  "approval",
+  "post_event_closeout",
+  "decision_debt",
+  "unread_customer_reply",
+  "anniversary_rebooking"
+]);
 const OPAQUE_ID_LIMIT = 256;
 
 function normalizePathname(pathname) {

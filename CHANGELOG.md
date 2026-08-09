@@ -31,8 +31,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   deployment, hosted staff acceptance, and outbound provider proof remain
   separate release work.
 - Source/local/emulator-qualified `CWF-11` exact-version rebooking in Customer
-  360. A bounded
-  anniversary cue can now invoke a same-tenant callable that revalidates the
+  360. Home and Workflow now derive a tenant-calendar, latest-200 quote-history
+  anniversary cue for recorded booked events and identify source/display
+  truncation before one click opens the stable Customer 360 record. That
+  central cue performs no mutation and does not claim that the accepted source
+  is verified. In Customer 360, the bounded anniversary cue can invoke a
+  same-tenant callable that revalidates the
   booked quote, matching acceptance receipt, stable customer, and exact retained
   immutable version before creating one deterministic draft. The draft overlays
   current customer contact and is repriced from the current trusted catalog;
@@ -66,7 +70,16 @@ This changelog is backfilled from git history and will be maintained going forwa
   unsubscribe receipt. Resend raw webhook verification uses
   `standardwebhooks@1.0.0`; `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, and
   `REVENUE_AUTOPILOT_TOKEN_SECRET` have separate Secret Manager ownership, and
-  the webhook binds only its webhook secret. Runtime/send/provider gates remain
+  the webhook binds only its webhook secret. The scheduler can now materialize
+  deterministic records while the separate outbound-send/provider gates remain
+  off, and Workflow shows those four gates plus bounded per-lane preparation
+  results. One evidence-preserving stop path covers manual expiry, scheduled
+  expiry, and dispatch inactivity; sending, provider-accepted, and ambiguous
+  evidence is suppressed without being rewritten. Ambiguous retry reloads
+  current authority before any provider call, and its strict client/UI receipt
+  now distinguishes `Dispatch withheld` from `Provider accepted`. Latest-message unread-reply
+  Attention now supersedes older customer replies, resolves on staff reply, and
+  is repaired by bounded scheduled reconciliation. Runtime/send/provider gates remain
   off. No deployment, scheduled execution, provider acceptance/delivery/
   bounce/complaint, production data, recovered revenue, or hosted/human
   acceptance is claimed.
@@ -77,17 +90,26 @@ This changelog is backfilled from git history and will be maintained going forwa
   deterministic Decision Debt with an admin-only policy editor. The staff
   simulation projection is reconstructed from the normalized immutable receipt,
   so reordered pre-normalization impact data cannot diverge from the evidence
-  the browser validates. Both global and tenant enforcement gates default off,
-  and `safeToPublish` remains eligibility only. A dedicated exact apply-outcome
-  read/reconcile contract is still missing for transport-ambiguous governed
-  edits and is required before gate activation.
+  the browser validates. Transport-ambiguous governed apply now retains its
+  exact request for reconciliation: the server validates the deterministic
+  apply receipt and immutable target revision when committed, or atomically
+  records a not-committed fence that prevents the timed-out request from
+  committing after recovery. The UI never resubmits the quote edit and exposes
+  committed receipt, changed-source, fenced recovery, repeated uncertainty, and
+  definitive-error states. Both global and tenant enforcement gates default
+  off, and `safeToPublish` remains eligibility only.
 - Source/local trusted Kitchen BEO generation and freshness. The server reloads
   canonical source, generates retained PDF bytes plus immutable actor/time/
   revision/schema/fingerprint evidence, reports five distinct freshness states,
   and supports exact current and prior receipt downloads through
   `downloadKitchenBeoReceipt`. Replay, final response, status, and download use
   strict base64 plus exact retained length/SHA-256 validation; `CURRENT` follows
-  the current-artifact pointer to the exact receipt and revalidates bytes. This
+  the current-artifact pointer to the exact receipt and revalidates bytes.
+  Current generation atomically resolves only its qualifying Kitchen BEO
+  invalidations, exposes the exact reconciliation receipt, and retains a bounded
+  current-plus-prior receipt history for separate downloads. Decision Debt now
+  leaves score, urgency, and exposure factor unknown when canonical commercial
+  cents are unavailable instead of applying a guessed multiplier. This
   is declared-input freshness, not publication, kitchen review, commercial,
   provider, or completion evidence.
 - Source/local `CWF-02`, `CWF-04`, `CWF-05`, and `CWF-06` workspace slices.
@@ -149,10 +171,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   actor, server-time, receipt, reconciliation, or publication evidence. It is
   source/local evidence only and is not deployed or hosted-operator accepted.
 - A named temporary bundle exception for the unmerged customer-centered
-  workspace convergence, with exact no-headroom ceilings of 2,552,693 aggregate
-  JavaScript bytes and a 426,521-byte largest chunk. The updated checkpoint
-  includes the governed commercial-change, artifact-freshness, Decision Debt,
-  and Revenue Autopilot surface slices. The machine-readable
+  workspace convergence, with exact no-headroom ceilings of 2,597,989 aggregate
+  JavaScript bytes and a 390,494-byte largest chunk. Targeted quote-store
+  splitting reduced the authenticated route chunk from 448,190 to 310,102 bytes
+  while preserving the unchanged clean-main baseline. The completed source/local
+  checkpoint includes governed commercial-change, artifact-freshness, Decision
+  Debt, Revenue Autopilot, central reply Attention, and anniversary radar
+  surfaces. The machine-readable
   exception is pinned to the unchanged clean-main metrics and blocks baseline
   updates while active; normal 5% limits resume when the exception is removed.
   Passing this branch gate is not CWV, hosted, production, or human-acceptance
@@ -160,9 +185,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 - A source-side `CWF-01`/`CWF-03` release-candidate slice for the flagged staff
   workspace. Home now exposes a compact read-context rail bound to the current
-  tenant, the existing Workflow Attention and latest-200 quote-history
-  contracts, each read outcome, the last complete client read, retained-stale
-  or incomplete state, source, and truncation. It explicitly labels Home as a
+  tenant, the existing Workflow Attention, latest-200 quote-history, and bounded
+  Revenue Autopilot operations contracts, each read outcome, the last complete
+  client read, retained-stale or incomplete state, source, and quote-history/
+  latest-50 unread-reply truncation. It explicitly labels Home as a
   derived presentation and says that freshness is not delivery, acceptance,
   booking, payment, or completion proof. The slice adds no read or write
   authority and never invokes the customer portal loader. First-release staff
@@ -171,8 +197,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   receive visible heading focus, while their true modal wrappers retain
   **Close**. Hosted signed-in, contrast, long-data, branding-isolation, and
   human acceptance remain separate gates.
-- The governed customer-workspace enhancement track now spans `CWF-01`
-  through `CWF-15`,
+- The implemented governed customer-workspace tranche spans `CWF-01` through
+  `CWF-15`,
   covering visual credibility, evidence/freshness, bounded search and timelines,
   proposal/workflow/event/reporting intelligence, post-event rebooking, email
   follow-up and payment dunning, Customer 360 activation, a no-orphan-capability
@@ -180,12 +206,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   change blast radius, artifact freshness, and decision debt. The track pairs
   user-relevant backend contracts with polished, discoverable, role-safe
   frontend states and keeps provider, payment, booking, pricing, customer-view,
-  and accounting authority distinct. CWF-15 is sequenced as the now
-  source-complete 15A registry/fingerprint, a separately governed 15B-a server
-  generation/receipt action, the source-complete 15B-b advisory simulation, then
-  15C UI-bound authorized invalidation/reconciliation. There is no existing
-  governed server BEO action,
-  and browser-supplied digest, source revision, actor, or time can never become
+  and accounting authority distinct. CWF-15 now combines the source-complete
+  registry/fingerprint and advisory simulation with separately governed server
+  simulation/authorization/apply, invalidation/reconciliation, trusted Kitchen
+  BEO generation and retained receipt download, and deterministic Decision Debt.
+  Browser-supplied digest, source revision, actor, or time can never become
   receipt truth.
 - A required diff-aware capability-surfacing check in `lane:core`, backed by a
   versioned capability-surfacing contract manifest. It inventories changed,
@@ -232,7 +257,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   into route state or storage.
 - A recoverably lazy Commercial Command Center at `/app` when the temporary
   customer-centered workspace build flag is enabled. One generation-guarded
-  quote/attention snapshot feeds Home and the header badge, and exact Workflow
+  quote/attention snapshot feeds Home and the header badge, including a bounded
+  projection of unread customer-reply Attention from the existing Revenue
+  Autopilot operations read, and exact Workflow
   actions carry quote ID, attention type, and request ID. Home introduces no
   new read contracts or data sources and no new commercial write authority. A
   shared status-semantics module and `StatusChip` keep quote lifecycle,
@@ -475,6 +502,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Quote-conversation staff sends now clear an absent Revenue Autopilot Attention
+  pointer through the conversation-state replacement itself instead of passing
+  an invalid nested Firestore delete sentinel. Customer-message pointers and
+  staff-reply Attention resolution retain their exact latest-message binding.
 - Starter-pack setup now retries the retained version 1 manifest only when an
   older deployed callable explicitly rejects the current manifest version. The
   compatibility retry preserves the exact catalog-revision precondition,

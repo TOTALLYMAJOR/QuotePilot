@@ -86,6 +86,7 @@ describe("deterministic Decision Debt authority", () => {
       daysUntilLock: 0,
       commercialExposureCents: 2_500_001,
       score: 60,
+      scoreState: "KNOWN",
       urgency: "high",
       factors: {
         dependency: {
@@ -164,9 +165,13 @@ describe("deterministic Decision Debt authority", () => {
     }));
     expect(unavailable.items[0]).toMatchObject({
       commercialExposureCents: null,
+      rawScore: null,
+      score: null,
+      scoreState: "UNKNOWN",
+      urgency: null,
       factors: {
         exposure: {
-          value: 1,
+          value: null,
           bucket: "unavailable",
           known: false,
           cents: null
@@ -175,6 +180,9 @@ describe("deterministic Decision Debt authority", () => {
     });
     expect(unavailable.items[0].explanation.join(" ")).toContain(
       "is unavailable and is not coerced to zero"
+    );
+    expect(unavailable.items[0].explanation.join(" ")).toContain(
+      "No priority score is assigned"
     );
   });
 

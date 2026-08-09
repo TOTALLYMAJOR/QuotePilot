@@ -62,7 +62,7 @@ test("customer portal query takes precedence over the public landing page", asyn
 test("staff route loads the workspace boundary rather than the public landing page", async ({ page }) => {
   await page.goto("/app");
 
-  const workspaceSurface = page.getByRole("button", { name: "New Quote" }).or(
+  const workspaceSurface = page.getByRole("button", { name: "New Quote" }).first().or(
     page.getByRole("heading", { name: "Catalog Unavailable" })
   );
   await expect(workspaceSurface).toBeVisible();

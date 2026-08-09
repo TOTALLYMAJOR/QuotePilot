@@ -163,10 +163,11 @@ flowchart TD
 
 ### Final phase: Quality assurance
 
-- [ ] Add a same-tenant exact apply-outcome read/reconcile contract bound to the
+- [x] Add a same-tenant exact apply-outcome reconciliation contract bound to the
   original request, simulation, authorization, quote, revision, and apply
-  receipt. Until it exists, an ambiguous `updateQuoteDraft` transport outcome
-  must remain unresolved and must never be presented as a confirmed save.
+  receipt. It proves a commit from the deterministic receipt plus immutable
+  target version, or writes a transaction fence that proves not committed and
+  prevents that exact timed-out request from committing later.
 
 - [ ] Re-run all focused tests after final source convergence.
 - [ ] Pass `npm run check:env`, full unit, Firestore/emulator and authoritative-

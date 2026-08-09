@@ -7,6 +7,7 @@ const {
   REVENUE_AUTOPILOT_JOB_STATES,
   RevenueAutopilotError,
   buildRevenueAutopilotAttributionProjection,
+  buildRevenueAutopilotAttentionIdentity,
   buildRevenueAutopilotJobIdentity,
   buildRevenueAutopilotOccurrences,
   buildRevenueAutopilotScopeKey,
@@ -19,9 +20,12 @@ const {
   normalizeRevenueAutopilotJob,
   planRevenueAutopilotDispatchFailure,
   planRevenueAutopilotExecution,
+  planRevenueAutopilotJobStops,
   planRevenueAutopilotMaterialization,
   planRevenueAutopilotOutcomeResolution,
+  planRevenueAutopilotScheduleMode,
   planUnreadCustomerReplyAttention,
+  planUnreadCustomerReplyAttentionTransition,
   recordRevenueAutopilotProviderAcceptance,
   recordRevenueAutopilotProviderEvent,
   tenantCalendarContext
@@ -105,6 +109,41 @@ describe("Revenue Autopilot canonical quote activity", () => {
       nowISO: NOW,
       ignorePortalExpiry: true
     })).toMatchObject({ active: false, reason: "quote_deleted" });
+  });
+});
+
+describe("Revenue Autopilot scheduler mode", () => {
+  test("separates deterministic materialization from outbound dispatch readiness", () => {
+    expect(planRevenueAutopilotScheduleMode({
+      enabled: false,
+      sendsEnabled: false,
+      provider: { state: "unconfigured" }
+    })).toEqual({
+      state: "dormant",
+      materialize: false,
+      dispatch: false,
+      reason: "global_automation_disabled"
+    });
+    expect(planRevenueAutopilotScheduleMode({
+      enabled: true,
+      sendsEnabled: false,
+      provider: { state: "unconfigured" }
+    })).toEqual({
+      state: "materialization_only",
+      materialize: true,
+      dispatch: false,
+      reason: "global_sends_disabled"
+    });
+    expect(planRevenueAutopilotScheduleMode({
+      enabled: true,
+      sendsEnabled: true,
+      provider: { state: "configured" }
+    })).toEqual({
+      state: "materialize_and_dispatch",
+      materialize: true,
+      dispatch: true,
+      reason: "dispatch_ready"
+    });
   });
 });
 
@@ -493,11 +532,37 @@ describe("Revenue Autopilot safety gates", () => {
 
     expect(evaluateRevenueAutopilotGates({
       global: { enabled: true, sendsEnabled: false },
-      tenantPolicy: policy({ quietHours: null }),
+      tenantPolicy: policy({ quietHours: { enabled: false } }),
       kind: "unread_customer_reply",
       nowISO: "2026-08-10T03:00:00.000Z",
       controls: {}
     })).toMatchObject({ state: "clear", eligible: true, channel: "attention" });
+  });
+
+  test("keeps materialization independent from outbound sends and provider readiness", () => {
+    const result = evaluateRevenueAutopilotGates({
+      global: { enabled: true, sendsEnabled: false },
+      tenantPolicy: policy({ quietHours: { enabled: false } }),
+      kind: "quote_follow_up",
+      nowISO: NOW,
+      controls: controls({
+        provider: {
+          evidenceId: "provider-none",
+          providerId: "none",
+          configurationId: "",
+          state: "unconfigured",
+          evaluatedAtISO: NOW
+        }
+      }),
+      phase: "materialization"
+    });
+    expect(result).toMatchObject({
+      state: "clear",
+      eligible: true,
+      channel: "email",
+      phase: "materialization"
+    });
+    expect(result.reasons).toEqual([]);
   });
 
   test("rejects future consent, provider none, and unbounded attempt policies", () => {
@@ -727,10 +792,19 @@ describe("Revenue Autopilot materialization and Attention plans", () => {
     expect(plan.create).toHaveLength(1);
   });
 
-  test("default-disabled sends create no jobs and exact portal stops cancel active ones", () => {
+  test("default-disabled sends still materialize one stable job and exact portal stops cancel unsent work", () => {
     expect(materialize({
-      global: { enabled: true, sendsEnabled: false }
-    })).toMatchObject({ state: "blocked", create: [] });
+      global: { enabled: true, sendsEnabled: false },
+      controls: controls({
+        provider: {
+          evidenceId: "provider-none",
+          providerId: "none",
+          configurationId: "",
+          state: "unconfigured",
+          evaluatedAtISO: NOW
+        }
+      })
+    })).toMatchObject({ state: "ready", create: [expect.objectContaining({ state: "scheduled" })] });
 
     const first = scheduledJob();
     const stopped = materialize({
@@ -743,6 +817,63 @@ describe("Revenue Autopilot materialization and Attention plans", () => {
         jobId: first.jobId,
         state: "stopped",
         outcomeReason: "portal_viewed_recorded"
+      })
+    ]);
+  });
+
+  test("records future suppression without erasing sending, ambiguous, or provider-accepted evidence", () => {
+    const source = scheduledJob();
+    const sending = claimRevenueAutopilotJob({
+      job: source,
+      attemptId: "attempt-protected-sending",
+      nowISO: NOW
+    });
+    const ambiguous = {
+      ...sending,
+      state: "outcome_ambiguous",
+      leaseExpiresAtISO: "",
+      lastOutcome: "ambiguous",
+      outcomeReason: "provider_network_error"
+    };
+    const accepted = recordRevenueAutopilotProviderAcceptance({
+      job: sending,
+      provider: "resend",
+      providerMessageId: "provider-protected-a",
+      nowISO: "2026-08-09T15:00:30.000Z"
+    }).job;
+
+    for (const protectedJob of [sending, ambiguous, accepted]) {
+      const stopped = materialize({
+        evidence: quoteFollowUpEvidence("viewed"),
+        existingJobs: [protectedJob]
+      });
+      expect(stopped.updates).toEqual([
+        expect.objectContaining({
+          jobId: source.jobId,
+          dispatchSuppressedAtISO: NOW,
+          dispatchSuppressionReason: "portal_viewed_recorded"
+        })
+      ]);
+      expect(stopped.updates[0]).not.toHaveProperty("state");
+      expect(stopped.updates[0]).not.toHaveProperty("completedAtISO");
+    }
+  });
+
+  test("uses the same evidence-preserving stop planner for portal expiry and other activity stops", () => {
+    const sending = claimRevenueAutopilotJob({
+      job: scheduledJob(),
+      attemptId: "attempt-portal-expiry",
+      nowISO: NOW
+    });
+    expect(planRevenueAutopilotJobStops({
+      jobs: [sending],
+      reason: "portal_expired",
+      nowISO: "2026-08-09T15:01:00.000Z"
+    })).toEqual([
+      expect.objectContaining({
+        jobId: sending.jobId,
+        dispatchSuppressedAtISO: "2026-08-09T15:01:00.000Z",
+        dispatchSuppressionReason: "portal_expired"
       })
     ]);
   });
@@ -802,6 +933,106 @@ describe("Revenue Autopilot materialization and Attention plans", () => {
         state: "resolved",
         resolutionReason: "customer_reply_acknowledged"
       }
+    });
+  });
+
+  test("supersedes an older customer Attention item and resolves it when staff becomes latest", () => {
+    const firstIdentity = buildRevenueAutopilotAttentionIdentity({
+      organizationId: ORG_ID,
+      quoteId: QUOTE_ID,
+      messageId: MESSAGE_ID
+    });
+    const first = {
+      schemaVersion: 1,
+      ...firstIdentity,
+      type: "unread_customer_reply",
+      state: "open",
+      openedAtISO: NOW,
+      updatedAtISO: NOW
+    };
+    const newerMessageId = "message-b";
+    const next = planUnreadCustomerReplyAttentionTransition({
+      organizationId: ORG_ID,
+      quoteId: QUOTE_ID,
+      evidence: {
+        conversation: conversation({
+          latestMessageId: newerMessageId,
+          latestMessageAtISO: "2026-08-09T15:01:00.000Z"
+        })
+      },
+      global: { enabled: true, sendsEnabled: false },
+      tenantPolicy: policy({ quietHours: null }),
+      activeAttention: first,
+      nowISO: "2026-08-09T15:01:00.000Z"
+    });
+    expect(next).toMatchObject({
+      state: "open",
+      create: { messageId: newerMessageId, state: "open" },
+      activePointer: { messageId: newerMessageId }
+    });
+    expect(next.updates).toEqual([
+      expect.objectContaining({
+        attentionId: first.attentionId,
+        state: "resolved",
+        resolutionReason: "superseded_by_newer_customer_reply"
+      })
+    ]);
+
+    const staffReply = planUnreadCustomerReplyAttentionTransition({
+      organizationId: ORG_ID,
+      quoteId: QUOTE_ID,
+      evidence: {
+        conversation: conversation({
+          latestMessageId: "message-staff-a",
+          latestMessageAtISO: "2026-08-09T15:02:00.000Z",
+          latestActorType: "staff"
+        })
+      },
+      global: { enabled: true, sendsEnabled: false },
+      tenantPolicy: policy({ quietHours: null }),
+      activeAttention: next.create,
+      nowISO: "2026-08-09T15:02:00.000Z"
+    });
+    expect(staffReply).toMatchObject({ state: "resolved", create: null, activePointer: null });
+    expect(staffReply.updates).toEqual([
+      expect.objectContaining({
+        attentionId: next.create.attentionId,
+        state: "resolved",
+        resolutionReason: "latest_reply_not_customer"
+      })
+    ]);
+  });
+
+  test("retains an existing unread-reply pointer when later policy gates are unavailable", () => {
+    const identity = buildRevenueAutopilotAttentionIdentity({
+      organizationId: ORG_ID,
+      quoteId: QUOTE_ID,
+      messageId: MESSAGE_ID
+    });
+    const existing = {
+      schemaVersion: 1,
+      ...identity,
+      type: "unread_customer_reply",
+      state: "open",
+      openedAtISO: NOW,
+      updatedAtISO: NOW
+    };
+    const transition = planUnreadCustomerReplyAttentionTransition({
+      organizationId: ORG_ID,
+      quoteId: QUOTE_ID,
+      evidence: { conversation: conversation() },
+      global: { enabled: false, sendsEnabled: false },
+      tenantPolicy: policy({ enabled: false }),
+      activeAttention: existing,
+      latestAttention: existing,
+      nowISO: "2026-08-09T15:03:00.000Z"
+    });
+
+    expect(transition).toMatchObject({
+      state: "blocked",
+      create: null,
+      updates: [],
+      activePointer: { attentionId: identity.attentionId, messageId: MESSAGE_ID }
     });
   });
 });
@@ -1272,6 +1503,43 @@ describe("Revenue Autopilot bounded dispatch state", () => {
         deliveredAtISO: ""
       }
     });
+  });
+
+  test("re-reads stop authority before ambiguous retry without erasing provider uncertainty", () => {
+    const claimed = claimRevenueAutopilotJob({
+      job: scheduledJob(),
+      attemptId: "attempt-recheck",
+      nowISO: NOW,
+      leaseMs: 60_000
+    });
+    const ambiguous = {
+      ...claimed,
+      state: "outcome_ambiguous",
+      leaseExpiresAtISO: "",
+      lastOutcome: "ambiguous",
+      outcomeReason: "provider_network_error"
+    };
+    const planned = planRevenueAutopilotExecution({
+      job: ambiguous,
+      global: { enabled: true, sendsEnabled: true },
+      tenantPolicy: policy(),
+      controls: controls({
+        subscription: { ...controls().subscription, state: "unsubscribed" }
+      }),
+      stopScope: scope(),
+      evidence: quoteFollowUpEvidence(),
+      nowISO: "2026-08-09T15:02:00.000Z"
+    });
+
+    expect(planned).toMatchObject({
+      action: "reconcile_blocked",
+      reason: "recipient_unsubscribed",
+      job: {
+        state: "outcome_ambiguous",
+        dispatchSuppressionReason: "recipient_unsubscribed"
+      }
+    });
+    expect(planned.job.completedAtISO).toBe("");
   });
 
   test("keeps provider acceptance distinct from delivered and bounced webhook evidence", () => {

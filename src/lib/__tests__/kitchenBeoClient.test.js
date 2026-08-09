@@ -48,6 +48,33 @@ function status(state = "CURRENT", overrides = {}) {
   };
 }
 
+function receiptMetadata(receiptId = `beo_${"f".repeat(48)}`, overrides = {}) {
+  return {
+    receiptId,
+    requestId: `beo_request_${"1".repeat(32)}`,
+    commercialSourceRevisionId: "v0014",
+    dependencyFingerprint: "b".repeat(64),
+    generatedAtISO: "2026-08-09T19:00:00.000Z",
+    filename: "QP-2042-2026-08-16-rev14-kitchen-beo.pdf",
+    artifactByteLength: 128,
+    generatedBy: { email: "sales@example.test", role: "sales" },
+    current: true,
+    ...overrides
+  };
+}
+
+function receiptHistory(receipts = [receiptMetadata()], overrides = {}) {
+  return {
+    schemaVersion: 1,
+    authority: "server_projection",
+    state: "COMPLETE",
+    bounds: { limit: 10, returnedCount: receipts.length, truncated: false },
+    reasonCodes: ["receipt_history_complete"],
+    receipts,
+    ...overrides
+  };
+}
+
 function request(suffix = "a", scopeSuffix = suffix) {
   return {
     ...scope(scopeSuffix),
@@ -70,6 +97,8 @@ function generationResponse(input, overrides = {}) {
       generatedAtISO: "2026-08-09T18:42:00.000Z"
     },
     status: status(),
+    receiptHistory: receiptHistory(),
+    dependencyReconciliation: null,
     artifact: {
       mimeType: "application/pdf",
       filename: "QP-2042-2026-08-16-rev14-kitchen-beo.pdf",
@@ -95,7 +124,8 @@ describe("Kitchen BEO client read contract", () => {
         status: status("STALE", {
           reasonCodes: ["declared_inputs_changed"],
           unresolvedInvalidationIds: ["invalidation-beo"]
-        })
+        }),
+        receiptHistory: receiptHistory()
       }
     });
 
@@ -176,6 +206,52 @@ describe("Kitchen BEO client read contract", () => {
     expect(mockState.callable).toHaveBeenCalledWith(input);
     expect(readPendingKitchenBeoAttempt(input)).toBeNull();
   });
+
+  test("accepts a bounded current-and-prior receipt history and rejects corrupt history", async () => {
+    const input = scope("history");
+    const priorReceiptId = `beo_${"d".repeat(48)}`;
+    mockState.callable.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        storage: "firebase",
+        ...input,
+        status: status(),
+        receiptHistory: receiptHistory([
+          receiptMetadata(),
+          receiptMetadata(priorReceiptId, {
+            requestId: `beo_request_${"2".repeat(32)}`,
+            generatedAtISO: "2026-08-08T19:00:00.000Z",
+            current: false
+          })
+        ])
+      }
+    });
+
+    await expect(getKitchenBeoArtifactStatus(input)).resolves.toMatchObject({
+      receiptHistory: {
+        state: "COMPLETE",
+        bounds: { returnedCount: 2, truncated: false },
+        receipts: [
+          { receiptId: `beo_${"f".repeat(48)}`, current: true },
+          { receiptId: priorReceiptId, current: false }
+        ]
+      }
+    });
+
+    mockState.callable.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        storage: "firebase",
+        ...input,
+        status: status(),
+        receiptHistory: receiptHistory([
+          receiptMetadata(),
+          receiptMetadata(`beo_${"f".repeat(48)}`, { current: false })
+        ])
+      }
+    });
+    await expect(getKitchenBeoArtifactStatus(input)).rejects.toThrow(/does not match|bounded projection/i);
+  });
 });
 
 describe("Kitchen BEO client mutation receipts", () => {
@@ -195,6 +271,7 @@ describe("Kitchen BEO client mutation receipts", () => {
       mutationMode: "submitting",
       receipt: { requestId: input.requestId },
       status: { state: "CURRENT" },
+      dependencyReconciliation: null,
       artifact: { mimeType: "application/pdf" }
     });
     expect(mockState.httpsCallable).toHaveBeenCalledWith(
@@ -203,6 +280,35 @@ describe("Kitchen BEO client mutation receipts", () => {
     );
     expect(mockState.callable).toHaveBeenCalledWith(input);
     expect(readPendingKitchenBeoAttempt(input)).toBeNull();
+  });
+
+  test("accepts exact ccp apply reconciliation evidence and rejects authorization IDs in its place", async () => {
+    const input = request("1", "dependency-reconciliation");
+    const dependencyReconciliation = {
+      receiptId: `ccr_${"a".repeat(48)}`,
+      applyReceiptId: `ccp_${"b".repeat(48)}`,
+      resolvedInvalidationIds: [`cci_${"c".repeat(48)}`],
+      resolvedCount: 1
+    };
+    mockState.callable.mockResolvedValueOnce({
+      data: generationResponse(input, { dependencyReconciliation })
+    });
+    await expect(generateKitchenBeo(input)).resolves.toMatchObject({
+      dependencyReconciliation
+    });
+
+    const invalid = request("2", "dependency-reconciliation-invalid");
+    mockState.callable.mockResolvedValueOnce({
+      data: generationResponse(invalid, {
+        dependencyReconciliation: {
+          ...dependencyReconciliation,
+          applyReceiptId: `cca_${"b".repeat(48)}`
+        }
+      })
+    });
+    await expect(generateKitchenBeo(invalid)).rejects.toThrow(
+      /invalid dependency reconciliation evidence/i
+    );
   });
 
   test("retains an uncertain outcome and reconciles the unchanged request identity", async () => {

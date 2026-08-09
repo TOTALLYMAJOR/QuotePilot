@@ -801,8 +801,13 @@ test("quote history supports export and hides an unapproved payment link", async
   const pdfDownload = await downloadPromise;
   expect(pdfDownload.suggestedFilename()).toMatch(/\.pdf$/i);
 
+  const localBeoButton = firstQuoteRow.getByRole("button", {
+    name: "Local BEO — no receipt",
+    exact: true
+  });
+  await expect(localBeoButton).toBeEnabled();
   const kitchenSheetDownloadPromise = page.waitForEvent("download");
-  await firstQuoteRow.getByRole("button", { name: "Kitchen sheet" }).click();
+  await localBeoButton.click();
   const kitchenSheetDownload = await kitchenSheetDownloadPromise;
   expect(kitchenSheetDownload.suggestedFilename()).toMatch(/kitchen-beo\.pdf$/i);
 

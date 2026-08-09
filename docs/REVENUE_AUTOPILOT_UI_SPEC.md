@@ -59,15 +59,15 @@ Public route
 
 | State | Default/success | Loading | Empty | Error | Partial/stale |
 |---|---|---|---|---|---|
-| Display | Three activation gates, five lane states, bounded jobs/Attention, provider outcomes, source/time, and exact controls | Read tenant policy/jobs/Attention with no outcome assumed | No materialized jobs or unread-reply Attention in the bounded view | Safe unavailable state plus retry; no retained data implied current | Show caps/truncation, or retain prior evidence as stale and disable unsafe mutations |
+| Display | Four activation gates, five lane states, bounded jobs/Attention, provider outcomes, source/time, per-lane preparation receipts, and exact controls | Read tenant policy/jobs/Attention with no outcome assumed | No materialized jobs or unread-reply Attention in the bounded view | Safe unavailable state plus retry; no retained data implied current | Show caps/truncation, or retain prior evidence as stale and disable unsafe mutations |
 
 | AC | EARS condition | User action | System response | Recovery |
 |---|---|---|---|---|
-| RA-AC-01 | When staff opens Workflow | Review operations | Show global, tenant, provider, lane, source, bounds, and provider-outcome states separately | Retry bounded read |
+| RA-AC-01 | When staff opens Workflow | Review operations | Show global runtime, tenant, outbound-send, provider, lane, source, bounds, and provider-outcome states separately | Retry bounded read |
 | RA-AC-02 | When an admin records policy | Save policy | Persist exact versioned tenant intent; do not imply global/provider activation | Reconcile same request; reset definitive rejection |
-| RA-AC-03 | When staff prepares one quote | Materialize governed records | Create/update exact eligible occurrences or stop/block them from current authority | Reconcile same materialization identity |
-| RA-AC-04 | When a job is outcome-ambiguous | Reconcile provider outcome | Reuse exact job/provider request identity; do not create a replacement send | Keep uncertainty visible until definitive receipt |
-| RA-AC-05 | When unread customer-reply Attention exists | Open conversation or acknowledge exact reply | Opening and acknowledgement remain distinct; receipt covers only exact latest message | Retry/reconcile exact acknowledgement |
+| RA-AC-03 | When staff prepares one quote | Materialize governed records | Create/update exact eligible occurrences or stop/block them from current authority; show bounded counts and one result per email lane | Reconcile same materialization identity |
+| RA-AC-04 | When a job is outcome-ambiguous | Reconcile provider outcome | Re-read current authority and reuse the exact job/provider request identity; withhold when blocked and never create a replacement send | Keep uncertainty visible until definitive receipt |
+| RA-AC-05 | When unread customer-reply Attention exists | Open conversation or acknowledge exact reply | Opening and acknowledgement remain distinct; exact latest-message supersession, staff-reply resolution, and bounded repair prevent stranded duplicates | Retry/reconcile exact acknowledgement |
 
 ### Component: RevenueAutopilotPolicyForm
 
@@ -133,7 +133,7 @@ families, and reduced-motion rules apply.
 
 Golden states:
 
-1. Dormant: all three activation gates and five lanes explain exactly why no
+1. Dormant: all four activation gates and five lanes explain exactly why no
    outbound operation can run.
 2. Active bounded operations: source, captured time, bounds, jobs, provider
    outcomes, and Attention are visible without implying recovered revenue.

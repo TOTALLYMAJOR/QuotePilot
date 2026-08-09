@@ -39,6 +39,20 @@ const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,255}$/u;
 const PUBLIC_TOKEN_PATTERN = /^[A-Za-z0-9_-]{20,256}$/u;
 const LOCAL_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
 const FINAL_BALANCE_DAY_OFFSETS = Object.freeze([14, 7, 3]);
+const MATERIALIZATION_KINDS = Object.freeze([
+  "quote_follow_up",
+  "deposit_reminder",
+  "final_balance_reminder",
+  "post_event_review_request"
+]);
+const MATERIALIZATION_STATES = new Set([
+  "ready",
+  "deferred",
+  "blocked",
+  "stopped",
+  "conflict"
+]);
+const RECONCILIATION_STATES = new Set(["withheld", "provider_accepted"]);
 const PRIVATE_IPV4_PATTERN = /^(?:10\.|127\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/u;
 const PRIVATE_IPV6_PATTERN = /^(?:::1$|f[cd][0-9a-f]{2}:|fe[89ab][0-9a-f]:)/u;
 const DEFINITIVE_ERROR_CODES = new Set([
@@ -734,14 +748,119 @@ function exactMutationResult(result, attempt, definition) {
     }
     safeReceipt.policyVersion = policyVersion;
   }
+  const materializationSummary = attempt.operation
+    === REVENUE_AUTOPILOT_MUTATION_OPERATIONS.materializeJobs
+    ? normalizeMaterializationSummary(result)
+    : null;
+  const reconciliationOutcome = attempt.operation
+    === REVENUE_AUTOPILOT_MUTATION_OPERATIONS.reconcileJob
+    ? normalizeReconciliationOutcome(result)
+    : null;
   return Object.freeze({
     ok: true,
     storage: "firebase",
     ...Object.fromEntries(definition.returnFields.map((field) => [field, attempt.scope[field]])),
     receipt: Object.freeze(safeReceipt),
     idempotent: result.idempotent === true,
-    mutationMode: attempt.publicAttempt.mode
+    mutationMode: attempt.publicAttempt.mode,
+    ...(materializationSummary
+      ? { materializationSummary }
+      : {}),
+    ...(reconciliationOutcome || {})
   });
+}
+
+function normalizeReconciliationOutcome(result) {
+  const reconciliationState = text(result.reconciliationState).toLowerCase();
+  if (!RECONCILIATION_STATES.has(reconciliationState)) {
+    throw clientError(
+      "unknown",
+      "The Revenue Autopilot reconciliation receipt omitted its exact outcome.",
+      false
+    );
+  }
+  const reason = text(result.reason).toLowerCase();
+  if (
+    (reason && !/^[a-z][a-z0-9_]{0,79}$/u.test(reason))
+    || (reconciliationState === "provider_accepted" && reason)
+  ) {
+    throw clientError(
+      "unknown",
+      "The Revenue Autopilot reconciliation receipt included an invalid outcome reason.",
+      false
+    );
+  }
+  return Object.freeze({
+    reconciliationState,
+    ...(reason ? { reason } : {})
+  });
+}
+
+function normalizeMaterializationSummary(result) {
+  const createdCount = safeResultCount(result.createdCount, "createdCount");
+  const updatedCount = safeResultCount(result.updatedCount, "updatedCount");
+  const rawLanes = isRecord(result.laneResults) ? result.laneResults : null;
+  if (!rawLanes) {
+    throw clientError(
+      "unknown",
+      "The Revenue Autopilot materialization receipt omitted its bounded lane results.",
+      false
+    );
+  }
+  const unsupported = Object.keys(rawLanes).filter((kind) => !MATERIALIZATION_KINDS.includes(kind));
+  if (unsupported.length) {
+    throw clientError(
+      "unknown",
+      "The Revenue Autopilot materialization receipt included an unknown lane.",
+      false
+    );
+  }
+  const lanes = Object.fromEntries(MATERIALIZATION_KINDS.map((kind) => {
+    const lane = isRecord(rawLanes[kind]) ? rawLanes[kind] : null;
+    const state = text(lane?.state).toLowerCase();
+    if (!lane || !MATERIALIZATION_STATES.has(state)) {
+      throw clientError(
+        "unknown",
+        "The Revenue Autopilot materialization receipt included an invalid lane state.",
+        false
+      );
+    }
+    const rawReasonCodes = Array.isArray(lane.reasonCodes) ? lane.reasonCodes : [];
+    if (
+      rawReasonCodes.length > 10
+      || rawReasonCodes.some((code) => !/^[a-z][a-z0-9_]{0,79}$/u.test(text(code)))
+    ) {
+      throw clientError(
+        "unknown",
+        "The Revenue Autopilot materialization receipt included invalid lane reasons.",
+        false
+      );
+    }
+    return [kind, Object.freeze({
+      state,
+      createCount: safeResultCount(lane.createCount, `${kind}.createCount`),
+      updateCount: safeResultCount(lane.updateCount, `${kind}.updateCount`),
+      conflictCount: safeResultCount(lane.conflictCount, `${kind}.conflictCount`),
+      reasonCodes: Object.freeze(rawReasonCodes.map((code) => text(code)))
+    })];
+  }));
+  return Object.freeze({
+    createdCount,
+    updatedCount,
+    lanes: Object.freeze(lanes)
+  });
+}
+
+function safeResultCount(value, label) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 0 || number > MAX_REVENUE_AUTOPILOT_JOB_READS) {
+    throw clientError(
+      "unknown",
+      `The Revenue Autopilot materialization receipt included an invalid ${label}.`,
+      false
+    );
+  }
+  return number;
 }
 
 function requireConnectedWorkspace(label) {
@@ -792,6 +911,8 @@ function exactOperationsRead(result, payload) {
     || !isOpaqueId(item.attentionId)
     || !isOpaqueId(item.quoteId)
     || !isOpaqueId(item.messageId)
+    || text(item.kind).toLowerCase() !== "unread_customer_reply"
+    || text(item.state).toLowerCase() !== "open"
     || (payload.quoteId && text(item.quoteId) !== payload.quoteId)
   ));
   if (
@@ -810,7 +931,7 @@ function exactOperationsRead(result, payload) {
   ) {
     throw clientError(
       "unknown",
-      "Revenue Autopilot operations returned invalid scoped attention or read bounds.",
+      "Revenue Autopilot operations returned invalid scoped attention; only open unread customer replies are permitted, and read bounds must match.",
       false
     );
   }

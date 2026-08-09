@@ -108,44 +108,69 @@ Detailed contracts and invariants:
   while preserving the contained desktop action row, mobile More hierarchy,
   modal **Close** wording, and distinct canonical state.
 - **CWF-03:** Qualify the Home-first staff trust/freshness/evidence rail on an
-  exact hosted candidate. It now names tenant scope, the two existing read
+  exact hosted candidate. It now names tenant scope, the three existing read
   contracts and their outcomes, source, last complete client read,
   loading/refresh/incomplete/retained-stale/error/truncation state, and
-  canonical-versus-derived authority without adding I/O. Keep expansion to
+  canonical-versus-derived authority. The third bounded read projects up to 50
+  unread customer-reply Attention records into the same Home/header/Workflow
+  queue; it adds no new read contract or data source. Keep expansion to
   Directory/Customer 360 surface-scoped and read-only; treat a global evidence
   ledger as separate work. Never invoke the portal loader, create `viewed`
   evidence, or infer provider/commercial truth.
 
 ### Platform Primitive - Next Governed Slices
 
-- **CWF-15 source/local candidate is implemented behind dormant authority.**
-  Preserve the pure CWF-15A graph; the newer server authority separately adds
-  exact-revision simulation, sales request/admin authorization, atomic governed
-  apply/invalidation receipts, bounded dependency-state reconciliation,
-  trusted Kitchen BEO generation/freshness/current-and-prior receipt download,
-  and deterministic Decision Debt with admin-only lock-policy controls.
-  `COMMERCIAL_CHANGE_AUTHORITY_ENABLED` and the trusted tenant gate both remain
-  off until a separately authorized release. `safeToPublish` is eligibility,
-  never publication.
-- **Next source correction — exact apply-outcome reconciliation.** An uncertain
-  commercial apply does not yet have a dedicated read/reconcile contract that
-  can prove whether that exact apply request committed. Keep the edit surface
-  from claiming resolved success on transport ambiguity. Add a same-tenant,
-  exact-request outcome read bound to the simulation, authorization, quote,
-  active revision, and apply receipt; then wire submitting, uncertain,
-  reconciliation, receipt, definitive-error, and recovery UI-state tests before
-  enabling either enforcement gate.
-- Qualify strict Kitchen BEO receipt integrity across generation replay, final
-  response, status, and download. Retained bytes must pass strict base64 plus
-  exact stored length/SHA-256 checks; `CURRENT` must follow the current-artifact
-  pointer to that exact immutable receipt and revalidate bytes. Verify current
-  and prior `downloadKitchenBeoReceipt` behavior, corruption denial, role/scope,
-  long-data, keyboard, and kitchen-operator presentation.
-- Run the full source/local/emulator and documentation qualification for these
-  authority paths, then promote frontend, Functions, and Firestore rules only
-  through the governed exact-SHA release. Deployment, hosted role acceptance,
-  production gate configuration/data, and human acceptance remain separate
-  unchecked work.
+- **CWF-15 governed release and hosted acceptance (high risk).** Keep
+  `COMMERCIAL_CHANGE_AUTHORITY_ENABLED` and the trusted tenant gate off. Promote
+  the qualified frontend, Functions, and Firestore rules only through one
+  governed exact-SHA release, then capture signed-in sales/admin hosted
+  acceptance for simulation, authorization, committed-versus-fenced apply
+  reconciliation, named dependency reconciliation, Decision Debt, and role
+  denial. `safeToPublish` remains eligibility, never publication; production
+  gate configuration/data and human acceptance require separate authorization.
+- **Trusted Kitchen BEO hosted acceptance.** On the immutable hosted candidate,
+  verify role/scope denial, current and prior receipt download, corrupted-byte
+  refusal, long-data containment, keyboard flow, and kitchen-operator
+  presentation. A server receipt proves declared-input freshness only; it does
+  not prove kitchen review, publication, delivery, booking, payment, or event
+  completion.
+
+### Earliest Post-Stabilization Source Turn - Event Workspace and Intelligence
+
+- **CWF-16 — Canonical Event / Transaction Workspace (high).** Immediately
+  after the current working-tree convergence is validated and committed,
+  recompose `/app/quotes/:quoteId` into the commercial core of one event. Reuse
+  `/app/quotes/:quoteId/edit` and make **Edit quote** unmistakable; preserve
+  draft, customer-visible, accepted, and booked authority differences. Show
+  event/customer identity, sold scope, lifecycle, current attention, and only
+  repository-supported Schedule, Staffing, Rentals & Equipment, Production/BEO,
+  and Customer entry points. True inventory availability stays absent until a
+  reservation model exists. Complete the required capability-truth, UX,
+  intelligence, information-architecture, reuse, file-impact, authority-risk,
+  and test plan before code changes.
+- **CWF-17 — Deterministic Event Intelligence synthesis (high).** Add one pure,
+  centrally tested selector from bounded authoritative facts to operator-facing
+  **Condition**, **Readiness**, **Flexibility**, **Needs You**, **Change Impact**,
+  and **Alignment**. Readiness and Flexibility remain orthogonal. Raw
+  Optionality, Debt, pressure, leverage, reversibility, slack, fragility,
+  freshness, and integrity stay behind one progressive **Why?** grammar. Every
+  conclusion owns its state, machine-stable reason codes, evidence bounds, and
+  explicit unavailable/insufficient-evidence result; UI components never infer
+  labels independently or manufacture precision.
+- **CWF-18 — Flexibility and change-window authority (high prerequisite for a
+  complete CWF-17).** Define versioned guest, menu, staffing, rental, special-
+  order, and BEO windows from declared tenant policy plus proven commitments and
+  event proximity. Reuse compatible Decision Debt lock-policy evidence without
+  equating a reversibility factor with a complete Flexibility score. Closed or
+  unknown inputs fail closed, and the presentation uses Open/Closing/Locked or
+  Unavailable language with coverage and reasons.
+- **CWF-19 — Change absorption and sensitivity evidence (later conditional
+  slice).** Operational Slack/Change Fit and Execution Fragility/Sensitivity
+  require authoritative capacity, resource, constraint, and critical-path facts.
+  Until those contracts exist, do not claim kitchen, staffing, rental, inventory,
+  or schedule capacity. The Event Workspace must omit the conclusion or say
+  insufficient evidence. If pursued, specify the backend facts and no-orphan UI
+  contract before implementation.
 
 ### First Follow-On
 
@@ -209,6 +234,10 @@ Detailed contracts and invariants:
 
 - **CWF-11:** Qualify and promote the source-complete bounded post-event and
   anniversary radar plus exact-version rebook-draft path. The current trusted
+  source derives a tenant-calendar anniversary Attention cue in Home and
+  Workflow from the latest-200 canonical quote-history read, marks incomplete
+  source/display bounds, and opens the stable Customer 360 record without
+  mutating data or claiming accepted-source verification. The trusted
   callable accepts only a booked quote with matching acceptance receipt and
   retained immutable version, creates one deterministic current-catalog-priced
   draft for the same stable customer, and requires staff to save a new
@@ -234,6 +263,11 @@ Detailed contracts and invariants:
   Resend webhook verification through `standardwebhooks@1.0.0`. Keep
   `REVENUE_AUTOPILOT_ENABLED=false`, `REVENUE_AUTOPILOT_SENDS_ENABLED=false`,
   and email provider disabled until exact deployment and provider acceptance.
+  Preserve the source/local invariants already added: materialization may run
+  independently of outbound sends/provider readiness; manual, scheduled, and
+  dispatch stops use one evidence-preserving planner; ambiguous retry must
+  re-read current authority before any provider call; and unread-reply Attention
+  must remain bound to the exact latest quote message with bounded repair.
   Provision `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, and
   `REVENUE_AUTOPILOT_TOKEN_SECRET` only through Secret Manager; the webhook must
   bind only its webhook secret. Prove accepted, delivered, bounced, complained,

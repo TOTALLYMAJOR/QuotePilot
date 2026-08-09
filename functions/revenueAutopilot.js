@@ -38,6 +38,12 @@ const TERMINAL_JOB_STATES = new Set([
   REVENUE_AUTOPILOT_JOB_STATES.DEFINITE_FAILURE
 ]);
 
+const DELIVERY_EVIDENCE_PENDING_JOB_STATES = new Set([
+  REVENUE_AUTOPILOT_JOB_STATES.SENDING,
+  REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS,
+  REVENUE_AUTOPILOT_JOB_STATES.PROVIDER_ACCEPTED
+]);
+
 const RETRYABLE_HTTP_STATUSES = new Set([408, 409, 425, 429]);
 const DEFINITE_LOCAL_ERROR_CODES = new Set([
   "already-exists",
@@ -219,6 +225,34 @@ function evaluateRevenueAutopilotQuoteActivity({
     }
   }
   return Object.freeze({ active: true, reason: "active", observedAtISO });
+}
+
+function planRevenueAutopilotScheduleMode(global = {}) {
+  const runtimeEnabled = global.enabled === true;
+  const sendsEnabled = global.sendsEnabled === true;
+  const providerConfigured = text(global.provider?.state, 32).toLowerCase() === "configured";
+  if (!runtimeEnabled) {
+    return Object.freeze({
+      state: "dormant",
+      materialize: false,
+      dispatch: false,
+      reason: "global_automation_disabled"
+    });
+  }
+  if (!sendsEnabled || !providerConfigured) {
+    return Object.freeze({
+      state: "materialization_only",
+      materialize: true,
+      dispatch: false,
+      reason: !sendsEnabled ? "global_sends_disabled" : "provider_not_configured"
+    });
+  }
+  return Object.freeze({
+    state: "materialize_and_dispatch",
+    materialize: true,
+    dispatch: true,
+    reason: "dispatch_ready"
+  });
 }
 
 function calendarPartsAt(instant, timeZone) {
@@ -510,13 +544,21 @@ function evaluateRevenueAutopilotGates({
   kind,
   nowISO,
   controls = {},
-  channel = ""
+  channel = "",
+  phase = "execution"
 } = {}) {
   const normalizedKind = normalizeKind(kind);
   const resolvedChannel = text(channel, 32).toLowerCase()
     || (OUTBOUND_REVENUE_AUTOPILOT_KINDS.has(normalizedKind) ? "email" : "attention");
   if (!new Set(["email", "attention"]).has(resolvedChannel)) {
     throw new RevenueAutopilotError("invalid-argument", "Revenue Autopilot channel is invalid.");
+  }
+  const normalizedPhase = text(phase, 32).toLowerCase() || "execution";
+  if (!new Set(["materialization", "execution"]).has(normalizedPhase)) {
+    throw new RevenueAutopilotError(
+      "invalid-argument",
+      "Revenue Autopilot gate phase is invalid."
+    );
   }
   const reasons = [];
   const stopped = [];
@@ -563,7 +605,7 @@ function evaluateRevenueAutopilotGates({
   }
 
   if (resolvedChannel === "email") {
-    if (global.sendsEnabled !== true) {
+    if (normalizedPhase === "execution" && global.sendsEnabled !== true) {
       reasons.push(gateReason(
         "global_sends_disabled",
         "Automated email sends are disabled by the global runtime gate."
@@ -634,22 +676,24 @@ function evaluateRevenueAutopilotGates({
       }
     }
 
-    const provider = controls.provider;
-    if (
-      !validControlEvidence(provider, ["evaluatedAtISO", "updatedAtISO"])
-      || !text(provider.providerId, 64)
-      || text(provider.providerId, 64).toLowerCase() === "none"
-      || !text(provider.configurationId, 160)
-    ) {
-      reasons.push(gateReason(
-        "provider_configuration_missing",
-        "Current email-provider configuration evidence is required."
-      ));
-    } else if (text(provider.state, 32).toLowerCase() !== "configured") {
-      reasons.push(gateReason(
-        "provider_not_configured",
-        "The email provider is not configured."
-      ));
+    if (normalizedPhase === "execution") {
+      const provider = controls.provider;
+      if (
+        !validControlEvidence(provider, ["evaluatedAtISO", "updatedAtISO"])
+        || !text(provider.providerId, 64)
+        || text(provider.providerId, 64).toLowerCase() === "none"
+        || !text(provider.configurationId, 160)
+      ) {
+        reasons.push(gateReason(
+          "provider_configuration_missing",
+          "Current email-provider configuration evidence is required."
+        ));
+      } else if (text(provider.state, 32).toLowerCase() !== "configured") {
+        reasons.push(gateReason(
+          "provider_not_configured",
+          "The email provider is not configured."
+        ));
+      }
     }
 
     if (timeZone && calendar) {
@@ -678,6 +722,7 @@ function evaluateRevenueAutopilotGates({
     state,
     eligible: state === "clear",
     channel: resolvedChannel,
+    phase: normalizedPhase,
     kind: normalizedKind,
     calendar,
     reasons: Object.freeze([...stopped, ...reasons, ...deferred])
@@ -1216,6 +1261,42 @@ function normalizeExistingJobs(existingJobs) {
   return existingJobs.map(normalizeRevenueAutopilotJob);
 }
 
+function revenueAutopilotStopUpdate(job, reason, nowISO) {
+  const current = normalizeRevenueAutopilotJob(job);
+  const stoppedAtISO = requireISO(nowISO, "Revenue Autopilot stop planning");
+  const outcomeReason = text(reason, 160).toLowerCase() || "automation_stopped";
+  if (TERMINAL_JOB_STATES.has(current.state)) return null;
+  if (DELIVERY_EVIDENCE_PENDING_JOB_STATES.has(current.state)) {
+    return {
+      jobId: current.jobId,
+      dispatchSuppressedAtISO: current.dispatchSuppressedAtISO || stoppedAtISO,
+      dispatchSuppressionReason: outcomeReason
+    };
+  }
+  return {
+    jobId: current.jobId,
+    state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
+    stoppedAtISO,
+    completedAtISO: stoppedAtISO,
+    outcomeReason,
+    leaseExpiresAtISO: "",
+    nextAttemptAtISO: ""
+  };
+}
+
+function planRevenueAutopilotJobStops({ jobs = [], reason, nowISO } = {}) {
+  if (!Array.isArray(jobs) || jobs.length > 100) {
+    throw new RevenueAutopilotError(
+      "invalid-argument",
+      "Revenue Autopilot stop planning requires at most 100 bounded jobs."
+    );
+  }
+  return Object.freeze(jobs
+    .map((job) => revenueAutopilotStopUpdate(job, reason, nowISO))
+    .filter(Boolean)
+    .map((update) => Object.freeze(update)));
+}
+
 function planRevenueAutopilotMaterialization({
   organizationId,
   quoteId,
@@ -1277,7 +1358,8 @@ function planRevenueAutopilotMaterialization({
     controls,
     kind: normalizedKind,
     nowISO: now,
-    channel: "email"
+    channel: "email",
+    phase: "materialization"
   });
   const relevantExisting = normalizeExistingJobs(existingJobs).filter((job) => (
     job.organizationId === normalizedOrganizationId
@@ -1287,15 +1369,11 @@ function planRevenueAutopilotMaterialization({
   const existing = relevantExisting.filter((job) => job.scopeKey === canonicalScopeKey);
   const staleScopeExisting = relevantExisting.filter((job) => job.scopeKey !== canonicalScopeKey);
   const activeExisting = existing.filter((job) => !TERMINAL_JOB_STATES.has(job.state));
-  const staleScopeUpdates = staleScopeExisting
-    .filter((job) => !TERMINAL_JOB_STATES.has(job.state))
-    .map((job) => ({
-      jobId: job.jobId,
-      state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
-      stoppedAtISO: now,
-      completedAtISO: now,
-      outcomeReason: "authoritative_scope_changed"
-    }));
+  const staleScopeUpdates = planRevenueAutopilotJobStops({
+    jobs: staleScopeExisting,
+    reason: "authoritative_scope_changed",
+    nowISO: now
+  });
   if (stop.state === "stopped" || gate.state === "stopped") {
     const reason = [...stop.reasons, ...gate.reasons][0];
     return Object.freeze({
@@ -1306,13 +1384,14 @@ function planRevenueAutopilotMaterialization({
       keep: Object.freeze([]),
       skip: Object.freeze([]),
       conflicts: Object.freeze([]),
-      updates: Object.freeze([...staleScopeUpdates, ...activeExisting.map((job) => ({
-        jobId: job.jobId,
-        state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
-        stoppedAtISO: now,
-        completedAtISO: now,
-        outcomeReason: reason?.code || "automation_stopped"
-      }))])
+      updates: Object.freeze([
+        ...staleScopeUpdates,
+        ...planRevenueAutopilotJobStops({
+          jobs: activeExisting,
+          reason: reason?.code || "automation_stopped",
+          nowISO: now
+        })
+      ])
     });
   }
   if (stop.state !== "eligible" || !["clear", "deferred"].includes(gate.state)) {
@@ -1422,7 +1501,9 @@ function planRevenueAutopilotMaterialization({
       lastOutcome: "",
       outcomeReason: "",
       lastError: "",
-      providerEventIds: []
+      providerEventIds: [],
+      dispatchSuppressedAtISO: "",
+      dispatchSuppressionReason: ""
     });
   }
   return Object.freeze({
@@ -1437,7 +1518,7 @@ function planRevenueAutopilotMaterialization({
   });
 }
 
-function attentionIdentity({ organizationId, quoteId, messageId }) {
+function buildRevenueAutopilotAttentionIdentity({ organizationId, quoteId, messageId }) {
   const scope = buildRevenueAutopilotJobIdentity({
     organizationId,
     quoteId,
@@ -1464,7 +1545,7 @@ function planUnreadCustomerReplyAttention({
   nowISO
 } = {}) {
   const now = requireISO(nowISO, "Unread customer reply Attention planning");
-  const identity = attentionIdentity({ organizationId, quoteId, messageId });
+  const identity = buildRevenueAutopilotAttentionIdentity({ organizationId, quoteId, messageId });
   const stop = evaluateRevenueAutopilotStopEvidence({
     kind: "unread_customer_reply",
     scope: { organizationId, quoteId, messageId },
@@ -1543,6 +1624,106 @@ function planUnreadCustomerReplyAttention({
   });
 }
 
+function planUnreadCustomerReplyAttentionTransition({
+  organizationId,
+  quoteId,
+  evidence,
+  global,
+  tenantPolicy,
+  activeAttention = null,
+  latestAttention = null,
+  nowISO
+} = {}) {
+  const now = requireISO(nowISO, "Unread customer reply Attention transition");
+  const conversation = record(evidence?.conversation) ? evidence.conversation : {};
+  const latestMessageId = text(conversation.latestMessageId, 256);
+  const latestActorType = text(conversation.latestActorType, 32).toLowerCase();
+  const normalizeAttention = (value, label) => {
+    if (!record(value)) return null;
+    const messageId = normalizeIdentifier(value.messageId, `${label} message identity`);
+    const identity = buildRevenueAutopilotAttentionIdentity({ organizationId, quoteId, messageId });
+    if (
+      text(value.attentionId, 80) !== identity.attentionId
+      || text(value.organizationId, 256) !== identity.organizationId
+      || text(value.quoteId, 256) !== identity.quoteId
+    ) {
+      throw new RevenueAutopilotError(
+        "aborted",
+        `${label} is outside the exact quote conversation scope.`
+      );
+    }
+    const state = text(value.state, 32).toLowerCase();
+    if (!new Set(["open", "handled", "resolved"]).has(state)) {
+      throw new RevenueAutopilotError(
+        "failed-precondition",
+        `${label} state is invalid.`
+      );
+    }
+    return { ...value, ...identity, state };
+  };
+  const active = normalizeAttention(activeAttention, "Active Attention");
+  const latest = normalizeAttention(latestAttention, "Latest-message Attention");
+  const updates = [];
+  const activeIsSuperseded = active?.state === "open" && (
+    latestActorType === "staff"
+    || (latestActorType === "customer" && active.messageId !== latestMessageId)
+  );
+  if (activeIsSuperseded) {
+    updates.push({
+      attentionId: active.attentionId,
+      organizationId: active.organizationId,
+      quoteId: active.quoteId,
+      messageId: active.messageId,
+      state: "resolved",
+      resolvedAtISO: now,
+      resolutionReason: latestActorType === "staff"
+        ? "latest_reply_not_customer"
+        : "superseded_by_newer_customer_reply"
+    });
+  }
+  if (latestActorType !== "customer" || !latestMessageId) {
+    return Object.freeze({
+      state: activeIsSuperseded ? "resolved" : "none",
+      create: null,
+      updates: Object.freeze(updates.map((update) => Object.freeze(update))),
+      activePointer: null
+    });
+  }
+  const exactExisting = latest?.messageId === latestMessageId
+    ? latest
+    : active?.messageId === latestMessageId
+      ? active
+      : null;
+  const planned = planUnreadCustomerReplyAttention({
+    organizationId,
+    quoteId,
+    messageId: latestMessageId,
+    evidence,
+    global,
+    tenantPolicy,
+    existingAttention: exactExisting,
+    nowISO: now
+  });
+  if (planned.update) updates.push(planned.update);
+  const remainsOpen = !planned.update
+    && Boolean(planned.create || exactExisting?.state === "open");
+  const identity = buildRevenueAutopilotAttentionIdentity({
+    organizationId,
+    quoteId,
+    messageId: latestMessageId
+  });
+  return Object.freeze({
+    state: planned.state,
+    create: planned.create ? Object.freeze(planned.create) : null,
+    updates: Object.freeze(updates.map((update) => Object.freeze(update))),
+    activePointer: remainsOpen
+      ? Object.freeze({ attentionId: identity.attentionId, messageId: latestMessageId })
+      : null,
+    stop: planned.stop,
+    gate: planned.gate
+  });
+}
+
 function normalizeMaxAttempts(value) {
   if (value == null || value === "") return DEFAULT_MAX_ATTEMPTS;
   const parsed = Number(value);
@@ -1603,6 +1784,8 @@ function normalizeRevenueAutopilotJob(input = {}) {
     completedAtISO: normalizeISO(input.completedAtISO),
     lastOutcome: text(input.lastOutcome, 32).toLowerCase(),
     outcomeReason: text(input.outcomeReason, 160).toLowerCase(),
+    dispatchSuppressedAtISO: normalizeISO(input.dispatchSuppressedAtISO),
+    dispatchSuppressionReason: text(input.dispatchSuppressionReason, 160).toLowerCase(),
     lastError: text(input.lastError, 500),
     providerEventIds: Array.isArray(input.providerEventIds)
       ? [...new Set(input.providerEventIds.map((value) => text(value, 160)).filter(Boolean))]
@@ -1994,10 +2177,58 @@ function planRevenueAutopilotExecution({
   controls,
   stopScope,
   evidence,
-  nowISO
+  nowISO,
+  ownedAttemptId = ""
 } = {}) {
   const current = normalizeRevenueAutopilotJob(job);
   const now = requireISO(nowISO, "Revenue Autopilot execution");
+  const normalizedOwnedAttemptId = text(ownedAttemptId, 256)
+    ? normalizeIdentifier(ownedAttemptId, "Owned attempt identity")
+    : "";
+  const ownsActiveSendingAttempt = current.state === REVENUE_AUTOPILOT_JOB_STATES.SENDING
+    && normalizedOwnedAttemptId === current.attemptId
+    && current.leaseExpiresAtISO > now;
+  const preservePendingEvidence = (reason, details = {}) => {
+    const update = revenueAutopilotStopUpdate(current, reason, now) || {};
+    const expiredSending = current.state === REVENUE_AUTOPILOT_JOB_STATES.SENDING
+      && current.leaseExpiresAtISO <= now;
+    const nextJob = {
+      ...current,
+      ...update,
+      ...(expiredSending
+        ? {
+            state: REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS,
+            leaseExpiresAtISO: "",
+            lastOutcome: "ambiguous",
+            outcomeReason: "expired_send_lease_provider_outcome_unknown"
+          }
+        : {})
+    };
+    return {
+      action: expiredSending || current.state === REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS
+        ? "reconcile_blocked"
+        : "wait",
+      reason,
+      ...details,
+      job: nextJob
+    };
+  };
+  const stopUnsentJob = (reason, details = {}) => {
+    return {
+      action: "stop",
+      reason,
+      ...details,
+      job: {
+        ...current,
+        state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
+        stoppedAtISO: now,
+        completedAtISO: now,
+        outcomeReason: reason,
+        leaseExpiresAtISO: "",
+        nextAttemptAtISO: ""
+      }
+    };
+  };
   if (TERMINAL_JOB_STATES.has(current.state)) {
     return { action: "none", reason: "job_terminal", job: current };
   }
@@ -2026,22 +2257,19 @@ function planRevenueAutopilotExecution({
     );
   }
   if (stop.state === "stopped") {
-    return {
-      action: "stop",
-      reason: stop.reasons[0]?.code || "stop_evidence_recorded",
-      stop,
-      job: {
-        ...current,
-        state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
-        stoppedAtISO: now,
-        completedAtISO: now,
-        outcomeReason: stop.reasons[0]?.code || "stop_evidence_recorded",
-        leaseExpiresAtISO: "",
-        nextAttemptAtISO: ""
-      }
-    };
+    const reason = stop.reasons[0]?.code || "stop_evidence_recorded";
+    if (DELIVERY_EVIDENCE_PENDING_JOB_STATES.has(current.state) && !ownsActiveSendingAttempt) {
+      return preservePendingEvidence(reason, { stop });
+    }
+    return stopUnsentJob(reason, { stop });
   }
   if (stop.state !== "eligible") {
+    if (DELIVERY_EVIDENCE_PENDING_JOB_STATES.has(current.state) && !ownsActiveSendingAttempt) {
+      return preservePendingEvidence(
+        stop.reasons[0]?.code || "stop_evidence_blocked",
+        { stop }
+      );
+    }
     return { action: "block", reason: stop.reasons[0]?.code || "stop_evidence_blocked", stop, job: current };
   }
   const gate = evaluateRevenueAutopilotGates({
@@ -2053,25 +2281,22 @@ function planRevenueAutopilotExecution({
     channel: "email"
   });
   if (gate.state === "stopped") {
-    return {
-      action: "stop",
-      reason: gate.reasons[0]?.code || "recipient_stopped",
-      gate,
-      job: {
-        ...current,
-        state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
-        stoppedAtISO: now,
-        completedAtISO: now,
-        outcomeReason: gate.reasons[0]?.code || "recipient_stopped",
-        leaseExpiresAtISO: "",
-        nextAttemptAtISO: ""
-      }
-    };
+    const reason = gate.reasons[0]?.code || "recipient_stopped";
+    if (DELIVERY_EVIDENCE_PENDING_JOB_STATES.has(current.state) && !ownsActiveSendingAttempt) {
+      return preservePendingEvidence(reason, { gate });
+    }
+    return stopUnsentJob(reason, { gate });
   }
   if (gate.state === "blocked") {
+    if (DELIVERY_EVIDENCE_PENDING_JOB_STATES.has(current.state) && !ownsActiveSendingAttempt) {
+      return preservePendingEvidence(gate.reasons[0]?.code || "execution_blocked", { gate });
+    }
     return { action: "block", reason: gate.reasons[0]?.code || "execution_blocked", gate, job: current };
   }
   if (gate.state === "deferred") {
+    if (DELIVERY_EVIDENCE_PENDING_JOB_STATES.has(current.state) && !ownsActiveSendingAttempt) {
+      return preservePendingEvidence("inside_quiet_hours", { gate });
+    }
     return {
       action: "wait",
       reason: "inside_quiet_hours",
@@ -2080,6 +2305,31 @@ function planRevenueAutopilotExecution({
         ...current,
         quietHoursDeferredAtISO: current.quietHoursDeferredAtISO || now
       }
+    };
+  }
+  if (current.state === REVENUE_AUTOPILOT_JOB_STATES.SENDING) {
+    if (current.leaseExpiresAtISO > now) {
+      return { action: "wait", reason: "active_send_lease", gate, job: current };
+    }
+    return {
+      action: "reconcile",
+      reason: "expired_send_lease_provider_outcome_unknown",
+      gate,
+      job: {
+        ...current,
+        state: REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS,
+        leaseExpiresAtISO: "",
+        lastOutcome: "ambiguous",
+        outcomeReason: "expired_send_lease_provider_outcome_unknown"
+      }
+    };
+  }
+  if (current.state === REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS) {
+    return {
+      action: "reconcile",
+      reason: current.outcomeReason || "provider_outcome_ambiguous",
+      gate,
+      job: current
     };
   }
   const calendar = gate.calendar;
@@ -2115,26 +2365,6 @@ function planRevenueAutopilotExecution({
   }
   if (current.nextAttemptAtISO && current.nextAttemptAtISO > now) {
     return { action: "wait", reason: "retry_not_due", gate, job: current };
-  }
-  if (current.state === REVENUE_AUTOPILOT_JOB_STATES.SENDING) {
-    if (current.leaseExpiresAtISO > now) {
-      return { action: "wait", reason: "active_send_lease", gate, job: current };
-    }
-    return {
-      action: "reconcile",
-      reason: "expired_send_lease_provider_outcome_unknown",
-      gate,
-      job: {
-        ...current,
-        state: REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS,
-        leaseExpiresAtISO: "",
-        lastOutcome: "ambiguous",
-        outcomeReason: "expired_send_lease_provider_outcome_unknown"
-      }
-    };
-  }
-  if (current.state === REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS) {
-    return { action: "reconcile", reason: current.outcomeReason || "provider_outcome_ambiguous", gate, job: current };
   }
   if (current.attemptCount >= current.maxAttempts) {
     return {
@@ -2585,6 +2815,7 @@ module.exports = {
   REVENUE_AUTOPILOT_KINDS,
   RevenueAutopilotError,
   buildRevenueAutopilotAttributionProjection,
+  buildRevenueAutopilotAttentionIdentity,
   buildRevenueAutopilotJobIdentity,
   buildRevenueAutopilotOccurrences,
   buildRevenueAutopilotScopeKey,
@@ -2595,11 +2826,14 @@ module.exports = {
   evaluateRevenueAutopilotGates,
   evaluateRevenueAutopilotStopEvidence,
   normalizeRevenueAutopilotJob,
+  planRevenueAutopilotJobStops,
+  planRevenueAutopilotScheduleMode,
   planRevenueAutopilotDispatchFailure,
   planRevenueAutopilotExecution,
   planRevenueAutopilotMaterialization,
   planRevenueAutopilotOutcomeResolution,
   planUnreadCustomerReplyAttention,
+  planUnreadCustomerReplyAttentionTransition,
   recordRevenueAutopilotProviderAcceptance,
   recordRevenueAutopilotProviderEvent,
   tenantCalendarContext

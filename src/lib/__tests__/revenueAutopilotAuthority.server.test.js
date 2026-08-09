@@ -743,13 +743,14 @@ describe("canonical quote-to-core materialization authority", () => {
       global: { enabled: true, sendsEnabled: false }
     }, { nowISO: NOW, coreApi: core, templatesApi });
 
-    expect(result.plan.state).toBe("blocked");
-    expect(result.plan.gate.reasons.map((reason) => reason.code)).toEqual(
-      expect.arrayContaining([
-        "global_sends_disabled",
-        "provider_configuration_missing"
-      ])
-    );
+    expect(result.plan.state).toBe("ready");
+    expect(result.plan.gate).toMatchObject({
+      state: "clear",
+      eligible: true,
+      phase: "materialization"
+    });
+    expect(result.plan.gate.reasons).toEqual([]);
+    expect(result.plan.create).toHaveLength(2);
   });
 
   test.each([

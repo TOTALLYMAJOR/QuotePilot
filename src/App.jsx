@@ -233,7 +233,8 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   mutationState: "ready",
   mutationKind: "",
   mutationMessage: "",
-  applyResult: null
+  applyResult: null,
+  applyOutcome: null
 });
 
 function readPortalKeyFromUrl() {
@@ -918,6 +919,7 @@ export default function App({ tenantContext, authSession }) {
   const commercialSnapshot = useCommercialWorkspaceSnapshot({
     enabled: Boolean(authSession.isStaff && authSession.organizationId),
     includeHistory: CUSTOMER_CENTERED_WORKSPACE_ENABLED,
+    tenantTimeZone: String(catalog.settings?.businessTimeZone || "").trim(),
     organizationId: authSession.organizationId
   });
   const workflowAttentionCount = commercialSnapshot.attentionSummary?.quoteCount ?? null;
@@ -1785,7 +1787,8 @@ export default function App({ tenantContext, authSession }) {
         mutationMessage: result.authorityState === "enforced"
           ? "The exact simulation receipt is ready for governed authorization."
           : "The exact simulation receipt is ready; enforcement remains dormant for this workspace.",
-        applyResult: null
+        applyResult: null,
+        applyOutcome: null
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;
@@ -1967,16 +1970,112 @@ export default function App({ tenantContext, authSession }) {
     }
   };
 
+  const handleReconcileCommercialChangeApplyOutcome = async () => {
+    if (
+      !editingQuote.id
+      || !changeImpactPreview.applyRequestId
+      || !changeImpactPreview.simulationReceiptId
+    ) return;
+    setChangeImpactPreview((current) => ({
+      ...current,
+      error: "",
+      mutationState: "reconciliation",
+      mutationKind: "apply",
+      mutationMessage: "Reconciling the exact apply request against its immutable quote revision and server receipt."
+    }));
+    try {
+      const { reconcileCommercialQuoteChangeApplyOutcome } = await import(
+        "./lib/commercialChangeAuthorityClient"
+      );
+      const result = await reconcileCommercialQuoteChangeApplyOutcome({
+        organizationId: authSession.organizationId || "",
+        quoteId: editingQuote.id,
+        simulationReceiptId: changeImpactPreview.simulationReceiptId,
+        authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
+        applyRequestId: changeImpactPreview.applyRequestId,
+        expectedBaseRevisionId:
+          changeImpactPreview.model?.identity?.beforeRevisionId || editingQuote.activeVersionId
+      });
+      if (result.outcomeReceipt.state === "committed") {
+        setQuoteDirty(false);
+        setSubmitState({
+          saving: false,
+          message: `Quote ${editingQuote.quoteNumber || editingQuote.id} was proven committed by its exact apply-outcome receipt.`
+        });
+        setChangeImpactPreview((current) => ({
+          ...current,
+          error: "",
+          applyOutcome: result.outcomeReceipt,
+          applyResult: result.commercialChange,
+          mutationState: "receipt",
+          mutationKind: "apply",
+          mutationMessage: result.outcomeReceipt.appliedRevisionIsActive
+            ? "The exact quote revision and apply receipt prove this authorized edit committed."
+            : "This authorized edit committed, but a later quote revision is now active. Open the authoritative quote record before further work."
+        }));
+        pushToast("Authorized quote change reconciled as committed.", "success");
+        requestWorkflowAttentionRefresh({ force: true });
+        setHistoryTarget({ quoteId: editingQuote.id, reason: "updated" });
+        navigateWorkspace(buildQuotePath(editingQuote.id));
+        return;
+      }
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: "",
+        applyOutcome: result.outcomeReceipt,
+        applyResult: null,
+        mutationState: "recovery",
+        mutationKind: "apply",
+        mutationMessage: result.outcomeReceipt.sourceChanged
+          ? "The server proved this request did not commit and permanently fenced it. The saved quote has since changed; reload it before starting a new simulation."
+          : "The server proved this request did not commit and permanently fenced it. Start a fresh simulation before applying again."
+      }));
+    } catch (error) {
+      const { isDefinitiveCommercialChangeError } = await import(
+        "./lib/commercialChangeAuthorityClient"
+      );
+      const definitive = isDefinitiveCommercialChangeError(error);
+      recordDiagnosticError(error, {
+        surface: "quote-builder",
+        action: "reconcile-commercial-change-apply-outcome",
+        quoteId: editingQuote.id
+      });
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: error?.message || "The exact commercial change apply outcome could not be reconciled.",
+        mutationState: definitive ? "error" : "uncertain",
+        mutationKind: "apply",
+        mutationMessage: definitive
+          ? "The outcome request was definitively rejected. Recover from the authoritative saved quote before starting a new simulation."
+          : "The outcome lookup is still uncertain. Retry this same apply request identity; do not submit the quote edit again."
+      }));
+    }
+  };
+
+  const handleRecoverCommercialChangeApply = () => {
+    if (changeImpactPreview.applyOutcome?.sourceChanged) {
+      setHistoryTarget({ quoteId: editingQuote.id, reason: "updated" });
+      navigateWorkspace(buildQuotePath(editingQuote.id));
+      return;
+    }
+    setChangeImpactPreview((current) => ({
+      ...current,
+      approval: null,
+      authorizationReceiptId: "",
+      applyRequestId: "",
+      applyResult: null,
+      applyOutcome: null,
+      mutationState: "recovery",
+      mutationKind: "simulation",
+      mutationMessage: "Starting a fresh simulation after the prior apply request was safely fenced."
+    }));
+    void handlePreviewChangeImpact({ recovery: false });
+  };
+
   const handleApplyCommercialChange = async () => {
     if (!changeImpactScopeIsCurrent() || !changeImpactPreview.authorizationReceiptId) return;
     if (changeImpactPreview.applyRequestId) {
-      setChangeImpactPreview((current) => ({
-        ...current,
-        error: "The prior apply outcome is unresolved. QuotePilot does not yet have a read-only apply-outcome lookup, so it will not submit this edit again.",
-        mutationState: "uncertain",
-        mutationKind: "apply",
-        mutationMessage: "Refresh the authoritative quote record before taking another action. Do not create a second logical edit from this screen."
-      }));
+      await handleReconcileCommercialChangeApplyOutcome();
       return;
     }
     const {
@@ -2006,6 +2105,7 @@ export default function App({ tenantContext, authSession }) {
       setChangeImpactPreview((current) => ({
         ...current,
         applyResult: result.commercialChange,
+        applyOutcome: null,
         mutationState: "receipt",
         mutationKind: "apply",
         mutationMessage: result.commercialChange?.authorityState === "enforced"
@@ -2016,6 +2116,7 @@ export default function App({ tenantContext, authSession }) {
       const definitive = isDefinitiveCommercialChangeError(error);
       setChangeImpactPreview((current) => ({
         ...current,
+        applyOutcome: null,
         error: error?.message || "The commercial change apply did not return a receipt.",
         mutationState: definitive ? "error" : "uncertain",
         mutationKind: "apply",
@@ -3645,12 +3746,15 @@ export default function App({ tenantContext, authSession }) {
                             mutationKind={changeImpactPreview.mutationKind}
                             mutationMessage={changeImpactPreview.mutationMessage}
                             applyResult={changeImpactPreview.applyResult}
+                            applyOutcome={changeImpactPreview.applyOutcome}
                             scopeCurrent={!changeImpactPresentationError}
                             onRetry={() => handlePreviewChangeImpact({ recovery: true })}
                             onRequestAuthorization={handleRequestChangeAuthorization}
                             onRefreshAuthorization={handleRefreshChangeAuthorization}
                             onAuthorize={handleAuthorizeChange}
                             onApply={handleApplyCommercialChange}
+                            onReconcileApplyOutcome={handleReconcileCommercialChangeApplyOutcome}
+                            onRecoverApply={handleRecoverCommercialChangeApply}
                             onReturnToEdit={() => {
                               setStep(1);
                               window.requestAnimationFrame(() => {

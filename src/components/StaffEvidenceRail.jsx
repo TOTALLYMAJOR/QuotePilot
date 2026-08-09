@@ -22,6 +22,27 @@ function readStatus(reads, key) {
 function contractOutcome(reads = {}, { retained = false } = {}) {
   const attention = readStatus(reads, "attention");
   const history = readStatus(reads, "history");
+  const unreadReplies = readStatus(reads, "unreadReplies");
+  if (reads?.unreadReplies) {
+    const definitions = [
+      ["Workflow attention", attention],
+      ["quote history", history],
+      ["unread customer-reply Attention", unreadReplies]
+    ];
+    if (definitions.every(([, status]) => status === "success")) {
+      return "All three tenant reads completed.";
+    }
+    const completed = definitions.filter(([, status]) => status === "success").map(([label]) => label);
+    const failed = definitions.filter(([, status]) => status === "error").map(([label]) => label);
+    if (failed.length > 0) {
+      const completedCopy = completed.length > 0 ? `${completed.join(" and ")} completed; ` : "";
+      const failureCopy = `${failed.join(" and ")} did not complete.`;
+      return retained
+        ? `${completedCopy}${failureCopy} Fresh results were not applied; the prior complete snapshot remains visible.`
+        : `${completedCopy}${failureCopy}`;
+    }
+    return "Waiting for the tenant reads to complete.";
+  }
   if (attention === "success" && history === "success") return "Both tenant reads completed.";
   if (attention === "success" && history === "error") {
     return retained
@@ -181,7 +202,7 @@ export default function StaffEvidenceRail({
   truncationKnown = false,
   reads = {},
   historyLimit = 200,
-  readContract = "Tenant-scoped Workflow Attention quote read plus the latest 200 staff quote records"
+  readContract = "Tenant-scoped Workflow Attention quote read, unread customer-reply Attention projection, plus the latest 200 staff quote records"
 }) {
   const model = buildStaffEvidenceRailModel({
     loading,
@@ -207,7 +228,7 @@ export default function StaffEvidenceRail({
       historyLimit={historyLimit}
       readContract={readContract}
       outcome={contractOutcome(reads, { retained: model.state === "stale" })}
-      boundsNote={`Quote history is capped at the latest ${historyLimit} records; open Quotes for full history.`}
+      boundsNote={`Quote history is capped at the latest ${historyLimit} records and unread customer-reply Attention at 50 records; open Quotes or Workflow for the authoritative records.`}
     />
   );
 }

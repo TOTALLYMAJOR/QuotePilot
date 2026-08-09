@@ -20,8 +20,8 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 9, 2026
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute branch ceilings of 2,552,693 aggregate
-  JavaScript bytes and 426,521 bytes for the largest chunk while the
+- Change: Apply named, absolute branch ceilings of 2,597,989 aggregate
+  JavaScript bytes and 390,494 bytes for the largest chunk while the
   customer-centered workspace converges. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.
@@ -33,18 +33,21 @@ Use this log when a change intentionally departs from stable-first policy or req
   unmerged source branch. Resetting the baseline from that branch would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 555,328 bytes (27.80%) above the
-  clean-main aggregate baseline. The 426,521-byte `WorkspaceRoute` chunk is
-  38,592 bytes (9.95%) above the clean-main largest-chunk baseline and 19,196
-  bytes above the normal 5% ceiling. Lazy route boundaries keep the new staff
-  route bodies out of the public entry chunk, but staff who enter affected
+- Risk impact: The emitted asset set is 600,624 bytes (30.07%) above the
+  clean-main aggregate baseline. A targeted `quoteStore` manual chunk reduces
+  `WorkspaceRoute` from 448,190 to 310,102 bytes; Firebase is now the largest
+  chunk at 390,494 bytes, only 2,565 bytes (0.66%) above the clean-main largest-
+  chunk baseline and 16,831 bytes below the normal 5% ceiling. Lazy route
+  boundaries keep the new staff route bodies out of the public entry chunk,
+  but staff who enter affected
   routes can still incur added download, parse, and execution cost, especially
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
-- Performance impact: The August 9 commercial-authority and Revenue Autopilot
-  checkpoint build emitted 2,552,693 aggregate JavaScript bytes and a
-  426,521-byte largest chunk. The other largest emitted
-  chunks were Firebase at 390,494 bytes and jsPDF at 385,630 bytes. These are
+- Performance impact: The August 9 completed source/local convergence build
+  emitted 2,597,989 aggregate JavaScript bytes and a 390,494-byte largest
+  chunk. The other largest emitted chunks were jsPDF at 385,630 bytes,
+  `WorkspaceRoute` at 310,102 bytes, and the isolated quote store at 146,067
+  bytes. These are
   local source-build measurements, not Core Web Vitals, hosted, production, or
   human-acceptance evidence.
 - Rollback plan: Delete `docs/performance/bundle-exception.json` and remove,

@@ -31,7 +31,8 @@ evidence, while keeping all runtime/sends default-off until separately accepted.
 - Early target: with sends off, one eligible quote materializes one stable job
   and exact stop evidence retires it with zero provider calls.
 - Failure response: keep both gates false, correct the authority/identity/stop
-  rule, and rerun the same occurrence matrix.
+  rule, and rerun the same occurrence matrix. Runtime-off is fully dormant;
+  runtime-on with sends/provider off is preparation-only and makes no provider call.
 
 ```mermaid
 flowchart TD
@@ -140,6 +141,8 @@ flowchart TD
 
 - [x] Add bounded Workflow operations with gates, five lanes, jobs, provider
   outcomes, Attention, receipts, and recovery.
+- [x] Expose runtime, tenant, outbound-send, and provider gates separately and
+  show bounded per-lane materialization receipts.
 - [x] Add admin policy form in Workflow.
 - [x] Add Customer 360 consent/subscription review and admin mutation.
 - [x] Add portal-preempted public unsubscribe route and exact recovery.
@@ -152,6 +155,10 @@ flowchart TD
 - [x] Pin `standardwebhooks@1.0.0` and verify raw Resend events using only
   `RESEND_WEBHOOK_SECRET`; keep `RESEND_API_KEY` off the webhook.
 - [x] Keep runtime and sends independently default-off in materialized config.
+- [x] Preserve sending/provider-accepted/ambiguous evidence across every stop
+  path and re-read current authority before an ambiguous provider retry.
+- [x] Supersede and resolve latest-message Attention deterministically, with a
+  bounded scheduled repair path for missed event-time creation.
 
 ### Final phase: Quality assurance
 
