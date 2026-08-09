@@ -84,8 +84,9 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   and due-today follow-ups, and quotes with a pending approval, using the
   same prioritized attention snapshot as the `Workflow` header badge, so the
   counts agree. Selecting a row opens `Workflow` with its quote, attention
-  type, and request identity focused; Home itself performs no
-  acknowledge/handled/approve actions.
+  type, and request identity focused. When the quote has a stable `customerId`,
+  select the customer name to open Customer 360 without changing the row's
+  Workflow action. Home itself performs no acknowledge/handled/approve actions.
 - `Next 7 days` lists accepted or booked quotes with an event date in the
   coming week. `Money at a glance` lists deposits that are unpaid or
   requested and final balances that are eligible to request or already
@@ -111,20 +112,29 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   customer and offers a safe return to the directory.
 - `Overview` shows active quote, accepted/booked-event, and attention counts,
   the next safe staff action, and recent lifecycle activity.
-- `Quotes & Proposals` lists canonical staff records and retained versions.
-  `Preview` uses a read-only staff adapter; it never opens the public token
-  portal or records customer `viewed` evidence. `Open record` continues to the
-  authoritative quote surface.
+- `Quotes & Proposals` lists canonical staff records and up to the 10 most
+  recent retained versions for each displayed quote. Expand `Review proposal
+  versions` for version number, saved reason, and timestamp. QuotePilot labels
+  the list when older versions exist beyond that bound; use `Open record` for
+  the authoritative quote surface. `Preview` uses a read-only staff adapter,
+  never opens the public token portal, and never records customer `viewed`
+  evidence. Escape or `Close preview` returns focus to the Preview control.
 - `Events` lists accepted and booked events and provides the existing Schedule
   or quote/BEO entry points. Acceptance, booking, and operational readiness are
-  separate facts.
+  separate facts. Contract conversion preserves the same server-owned customer
+  identity on its immutable source version; that linkage does not itself prove
+  booking confirmation, payment, or customer acceptance.
 - `Money` shows deposit and final-balance states derived from canonical payment
   evidence. These are operational states, not an accounting revenue report.
-- `Conversations` links to each quote's existing conversation. Customer 360
-  does not merge messages into a customer-wide thread.
-- Customer 360 reads are bounded. For high-volume customers, use the
-  authoritative Quotes surface for the complete operational record rather than
-  treating the 360 summary as an accounting or archive export.
+- `Conversations` links to each quote's existing conversation. When a
+  server-owned summary exists, the row shows the message count, latest activity,
+  and whether the latest actor was staff or customer. Legacy quotes may report
+  that a summary is unavailable. Customer 360 never merges or exposes message
+  bodies as a customer-wide thread.
+- Customer 360 reads are bounded to 25 current quote summaries and 10 retained
+  versions per displayed quote. For high-volume customers, use the authoritative
+  Quotes surface for the complete operational record rather than treating the
+  360 summary as an accounting or archive export.
 
 The exact-token customer decision center remains the only customer-facing
 experience. A `?portal=<token>` query takes precedence on any pathname, and
@@ -149,12 +159,32 @@ newly generated links use `/app?portal=...`.
 ## Quote History Operations
 - Select `Quotes` in the top navigation. The routed workspace uses
   `/app/quotes`; a focused `/app/quotes/<quoteId>` opens that exact record.
+- Read the quote/proposal lifecycle, booking confirmation, deposit, final
+  balance, and delivery readiness as separate labeled facts. Matching colors do
+  not make them the same state: for example, `Accepted`, `Confirmation pending`,
+  `Deposit paid`, and `Balance requested` may coexist. Authorized select
+  controls still mutate only their named authoritative field.
 - Available actions per quote:
   - Edit an eligible draft, sent, or viewed quote. Firebase re-prices the edit
     from current tenant settings and atomically updates the quote/portal while
     creating the next version; terminal customer, booking, or payment evidence
     blocks the edit.
   - Duplicate to a new draft
+  - Admin-only contract conversion remains bound to the exact approved
+    Workflow request. An eligible row first says whether it is ready or still
+    needs approval. While the request is running, QuotePilot reports submission
+    without assuming a contract exists. If no trusted result returns, use
+    `Reconcile conversion`; it retries the same approval request identity rather
+    than discovering or substituting another approval. A confirmed receipt may
+    name the trusted contract number, returned quote status, and immutable
+    version. It does not prove deposit or final-balance settlement, customer
+    booking confirmation, or operational readiness. A definitive rejection
+    makes no success claim; use `Refresh history` to recover from the canonical
+    quote before starting a new attempt. Quotes blocks Close, Escape, and routed
+    navigation while a conversion is submitting, uncertain, reconciling, or
+    recovering so the exact approval identity is not discarded. Contract
+    conversion preserves the
+    canonical `customerId` on the immutable source version and its snapshot.
   - Permanently delete through the admin-only cleanup callable. Direct quote or
     portal document deletion is denied.
   - Admin-only `Reopen` for an expired quote. It restores the last eligible
@@ -170,12 +200,18 @@ newly generated links use `/app?portal=...`.
     rotated-but-unsent, and legacy portals without that evidence fail closed.
   - Open `Conversation` for a provider-accepted current portal. The panel loads
     the quote's canonical message history and supports `Refresh conversation`,
-    `Send message`, and same-request `Retry message` recovery. Messages are
-    limited to 1,200 characters. A declined quote keeps its history visible but
-    removes the composer; an expired, deleted, rotated, or otherwise inactive
-    portal cannot be used. When a portal is safely rotated and delivered again,
-    its new link sees the existing quote conversation while the old link stays
-    invalid.
+    `Send message`, and same-request reconciliation when a send returns no
+    server receipt. `Message recorded` proves only the canonical QuotePilot
+    conversation receipt, not external delivery. While a message outcome is
+    uncertain, the composer and close controls remain locked so the request
+    identity cannot be lost. Use `Reconcile message` to retry the unchanged
+    message with that same identity; Quotes also blocks route closure while the
+    conversation remains open, and refreshing the history does not by itself
+    resolve the pending receipt. Messages are limited to 1,200 characters. A
+    declined quote keeps its history visible but removes the composer; an
+    expired, deleted, rotated, or otherwise inactive portal cannot be used. When
+    a portal is safely rotated and delivered again, its new link sees the
+    existing quote conversation while the old link stays invalid.
   - Admin only: submit customer email to the configured provider, copy a
     verified Stripe payment link, send an approved Stripe deposit request,
     send or reconcile an approved final-balance request for an eligible booked
@@ -296,17 +332,24 @@ newly generated links use `/app?portal=...`.
 
 ## Workspace Tool and Recovery Controls
 
-- Opening a tool from `Operations`, `More`, or another workspace action loads
-  only that tool. Keyboard focus starts inside the dialog, Tab and Shift+Tab
-  remain within it, and focus returns to the persistent trigger after closing.
+- In a customer-centered workspace build, selecting Schedule, Reporting,
+  Catalog, Imports, Integrations, or Diagnostics navigates to its `/app/*`
+  workspace route and loads only that embedded view. Ordinary navigation keeps
+  a previously opened operational view mounted so its filters or in-progress
+  local state can survive; use the view's explicit close/return action when you
+  intend to leave through its existing busy or unsaved-work guard.
+- Contextual Catalog entry points and the flag-off/legacy workspace retain
+  their modal presentation. In those dialogs, keyboard focus starts inside the
+  dialog, Tab and Shift+Tab remain within it, and focus returns to the trigger
+  after closing.
 - Press `Escape` to close a dialog when it is safe. Catalog drafts keep their
   discard confirmation, and an in-progress save, import, schedule update, or
   provider operation keeps the dialog open with visible guidance until the
   action finishes.
 - If a workspace tool cannot load, use `Try again` for a fresh tool import,
-  `Reload workspace` for a full reload, or `Close tool` to return to the intact
-  quote workspace. Public-route recovery similarly offers `Try again`, `Reload
-  page`, and `Back to QuotePilot`.
+  `Reload workspace` for a full reload, or `Close tool`/the route back action to
+  return to the intact staff shell. Public-route recovery similarly offers `Try
+  again`, `Reload page`, and `Back to QuotePilot`.
 - `Reload workspace` asks for confirmation when the current quote has unsaved
   changes. Cancel to keep working, or use `Close tool` to leave the failed tool
   without discarding the quote.
@@ -314,12 +357,12 @@ newly generated links use `/app?portal=...`.
   check the most recent stored work or provider evidence. The recovery screen
   deliberately shows safe guidance rather than internal error paths or stacks.
 
-## Sales Workflow
-- Open `Sales Workflow` from the top navigation.
+## Workflow
+- Open `Workflow` from the top navigation or `/app/workflow`.
 - When active quotes need action, the navigation control shows the number of
   affected quotes. One quote counts once even when it has multiple attention
   reasons. The count loads after the main workspace becomes interactive and
-  does not eagerly load the Sales Workflow modal.
+  does not eagerly load the routed Workflow view.
 - Summary metrics show active opportunities, readiness gaps, follow-ups due, and pending approval requests.
 - `Attention` opens first when work is present. It consolidates new or
   acknowledged customer change requests, overdue or due-today follow-ups, and
@@ -335,8 +378,8 @@ newly generated links use `/app?portal=...`.
 - The `Follow-ups` view supports lead stage, due date, note, completion state, proposal readiness, and a lifecycle timeline for each quote.
 - Sales staff can request approval for sensitive actions such as payment requests, contract conversion, portal-link rotation, or quote deletion.
 - Admins can approve or reject those requests with a resolution note. Approval
-  records authority but does not execute the action; select `Open Quote
-  History` and complete the matching operation there. Firebase-backed actions
+  records authority but does not execute the action; select `Execute in Quotes`
+  and complete the matching operation there. Firebase-backed actions
   consume that exact approval once and display awaiting, in-progress,
   completed, or failed execution evidence. A failed provider action requires a
   new approval request.
@@ -350,8 +393,9 @@ newly generated links use `/app?portal=...`.
   still require a coordinated release before they alter production behavior.
 
 ## Reporting Dashboard
-- Open `Dashboard` to review quote pipeline, status, deposit, and monthly won
-  revenue metrics.
+- Open `Reporting` or `/app/reporting` to review quote pipeline, conversion,
+  accepted/booked quote value, and the separately verified paid-deposit total.
+  These operational values are not accounting revenue.
 - `Quote wizard funnel` shows anonymous staff sessions that reached each step
   and the share that saved a draft during the last 30 days. A session is not a
   customer or unique person count.
@@ -362,7 +406,8 @@ newly generated links use `/app?portal=...`.
   quote creation continues and the dashboard still loads its quote metrics.
 
 ## Operations Audit
-- Organization admins can open `Integrations` and use `Operations Audit` to
+- Organization admins can open `Integrations` or `/app/integrations` and use
+  `Operations Audit` to
   review quote-delivery retry candidates, outcomes requiring provider review,
   and the last seven days of recorded integration success/error activity.
 - The role totals reflect current authoritative admin and sales assignments.
@@ -376,7 +421,10 @@ newly generated links use `/app?portal=...`.
   or accounting provider accepted or applied a change.
 
 ## Event Schedule and Production Checklist
-- Open `Schedule` to review accepted and booked events by month or week, inspect conflicts, and assign a staff lead.
+- Open `Schedule` or `/app/schedule` to review accepted and booked events by
+  month or week, inspect conflicts, and assign a staff lead. Quote/proposal
+  lifecycle and booking confirmation are separately labeled; an accepted quote
+  with confirmation pending is not displayed as a confirmed booking.
 - Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.
 - Checklist completion is an operational task record only. The app does not track inventory, so checklist state does not confirm stock counts or item availability.
 - From `Quotes`, staff can select `Kitchen sheet` on a saved quote to download
@@ -391,7 +439,8 @@ newly generated links use `/app?portal=...`.
   review.
 
 ## Admin Catalog Operations
-- Open `Admin Catalog` (admin users only).
+- Open `Catalog` or `/app/catalog` (admin users only). Contextual catalog setup
+  from the quote builder may still open the guarded dialog wrapper.
 - A blank organization starts on one guided screen with four clearly described
   industry packs. Empty Packages, Addons, Rentals, Menu, and Pricing tabs stay
   hidden until a pack is populated or the admin explicitly chooses
@@ -454,7 +503,7 @@ newly generated links use `/app?portal=...`.
 - To change what is included/locked, update entitlements through customer provisioning, then reopen `Admin Catalog`.
 
 ## Import Studio
-- Open `Import Studio` from the top navigation. Admin access is required.
+- Open `Imports` or `/app/imports`. Admin access is required.
 - The destination organization is locked to the authenticated admin's organization and cannot be supplied or changed by uploaded data.
 - The first release accepts CSV files up to 2 MB and supports:
   - Customers
@@ -467,20 +516,26 @@ newly generated links use `/app?portal=...`.
 - Import creates ready records only, skips existing duplicate emails/names, sends no outbound messages, and saves an organization-scoped receipt.
 - Customer and catalog imports run through the signed-in organization's
   admin-only server operations. For customers, the server owns the opaque
-  customer ID, normalized name/email directory keys, duplicate/collision
-  decision, actor receipt, and rollback check; browser code cannot create or
-  mutate customer/import-receipt documents directly. For package, add-on,
+  customer ID, normalized name/email directory keys, private normalized-email
+  ownership claim, duplicate/collision decision, actor receipt, and rollback
+  check; browser code cannot read or write the email claim or create/mutate
+  customer/import-receipt documents directly. For package, add-on,
   rental, and menu records, the server also stores prices in integer minor
   units and, when a record is created, advances the catalog revision once and
   clears prior pricing confirmation so an owner reviews the resulting catalog
   again. An all-duplicate receipt does not disturb confirmed pricing.
 - An import retry keeps the same batch identity. Customer retries are accepted
   only for the exact same normalized input; a mismatched retry fails closed.
-  If another catalog save,
+  If a request returns without a server receipt, Import Studio labels the
+  outcome uncertain and offers reconciliation of that same batch instead of
+  assuming success or failure. A confirmed receipt is the only completed-state
+  evidence and never implies outbound messages. If another catalog save,
   import, pack action, rollback, or confirmation advanced the revision first,
-  the stale operation makes no writes; Import Studio refreshes the catalog in
-  the background while keeping the file, visible error, or receipt available
-  so the admin can review and retry.
+  the server returns a definitive conflict and makes no writes; Import Studio
+  refreshes the catalog in the background and labels the action as recovery
+  while keeping the file, visible error, or receipt available. Review the
+  refreshed source before retrying the same batch identity; no completed write
+  is assumed.
 - `Undo this import` removes only unchanged documents whose `importBatchId` and
   baseline hash match that receipt. Records edited after import, package
   inclusions, and records still selected by persistent templates are protected

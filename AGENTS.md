@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: July 27, 2026
+Last updated: August 8, 2026
 
 ## Mission
 Maintain QuotePilot as a reliable production system.
@@ -20,6 +20,7 @@ Ship safe changes with validation evidence and canonical documentation sync.
 3. Run required checks:
    - `npm run check:env`
    - `npm run build`
+   - `npm run check:capability-surfaces` when backend/data authority changes
    - plus scope-specific tests (`test:unit`, `test:e2e`, governance/perf checks) as needed.
 4. Update canonical docs per trigger rules in `docs/DOC_SYSTEM.md`.
 5. Report changed files, validations, and residual risks.
@@ -30,6 +31,12 @@ Ship safe changes with validation evidence and canonical documentation sync.
 - Preserve local fallback behavior when Firebase config is missing.
 - Keep customer-facing quote/proposal outputs accurate.
 - Keep role-gated controls restricted to authorized users.
+- Do not ship an orphan user-relevant backend capability: bind it to a
+  discoverable role-safe frontend surface, UI-state tests, Feature Matrix, and
+  User Manual through `docs/capability-surfacing-contracts.json`. Keep private
+  security primitives hidden and surface only their safe operational outcome.
+  Direct callable ownership and shared-helper callable impacts must be declared;
+  each claimed UI state must have an assertion-bearing canonical component marker.
 
 ## High-Risk Files
 - `src/lib/quoteCalculator.js`

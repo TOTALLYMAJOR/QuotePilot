@@ -12,6 +12,7 @@ const TARGET_FILES = new Set([
   ".firebaserc.example",
   "Dockerfile",
   "docker-compose.yml",
+  "docs/capability-surfacing-contracts.json",
   "firebase.json",
   "firestore.indexes.json",
   "firestore.rules",

@@ -17,17 +17,36 @@ Last updated: August 8, 2026
   portal branding. The legacy `tonicatering` Firebase project, hosting site,
   environment filename, deployment confirmations, and service URLs remain
   unchanged infrastructure identifiers.
-- Local validation: focused unit, browser, Firebase emulator, environment,
-  secret, documentation-governance, production-build, bundle, Docker, and
-  Lighthouse checks cover the convergence source. Exact final counts belong in
-  the merge evidence after all parallel slices settle; this statement is local
-  and emulator evidence only, not hosted tenant, provider, deployment, or human
-  acceptance.
+- Exact-source workspace qualification is complete locally: 103 unit files
+  passed with 1,320 tests (4 files / 57 tests skipped); default Playwright passed
+  58 tests with 17 intentionally skipped and the flag-on workspace suite passed
+  15/15. Firestore rules passed 53/53, the Firebase staff/portal browser lane
+  passed 4/4, authoritative quote-write coverage passed 3/3, customer-import
+  emulator coverage passed 2/2, and customer-ID backfill emulator coverage
+  passed 1/1. The full provisioning, booking-conversion, payment, buyer-access,
+  and cleanup emulator matrix also passed. Default and flag-on production builds
+  each transformed 381 modules, both bundle checks passed, and environment,
+  documentation governance, secret, and diff checks passed. These are
+  source/local/emulator results, not
+  hosted tenant, provider, deployment, production-data, flag-promotion, or
+  human-acceptance evidence.
 - Functions runtime readiness: all 29 production Functions now run on Node.js
   22 with Firebase Admin 14 modular app, Auth, and Firestore APIs. The clean
   cloud install and each function update completed successfully from `v0.2.3`;
   the local authoritative and provisioning matrices also pass.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
+- Current source delivery governance includes a required no-orphan-capability
+  check in `lane:core`. It reviews the whole branch/PR backend diff, requires a
+  versioned capability-surfacing contract manifest plus real frontend/Feature
+  Matrix/User Manual locators and assertion-bearing canonical per-state
+  read/mutation tests,
+  owns directly changed, new, or removed Firebase Functions by exact symbol,
+  and records declared callable impacts from shared helpers. Git comparisons
+  and merge-base resolution fail closed, deleted authority paths remain in
+  scope, and narrow headless classifications require safe outcomes, executable
+  authority tests, and no callable ownership. This is structural traceability
+  evidence, not semantic completeness or proof of visual polish, hosted
+  availability, provider behavior, production promotion, or human acceptance.
 - Main release governance supports the repository's actual solo-owner
   operating model without inventing an independent reviewer. The explicit
   `solo-operator` policy retains exact-SHA CI/UAT, one allowlisted human,
@@ -47,17 +66,26 @@ Last updated: August 8, 2026
   only and never edits customer decision evidence or sends email/SMS.
 - Current candidate customer-centered workspace: a dependency-free History API
   route layer defines `/app` Home, Customers, Quotes, the sticky-mounted quote
-  builder, focused quote/edit records, Workflow focus, `/app/home`
-  canonicalization, and authenticated in-shell 404 behavior. The customer
-  portal query remains route-preemptive. A temporary build flag defaults the
-  new shell off pending exact hosted acceptance. Home and the attention badge
-  consume one loading-aware, generation-guarded snapshot over the existing
-  quote-history and workflow-attention contracts; this introduces no new read
-  contracts or data sources and no new commercial write authority. The neutral
-  staff shell remains distinct from tenant-branded customer portal, proposal,
-  and marketing surfaces. This is current branch source; integrated local,
-  emulator, hosted, deployment, and human-acceptance evidence are reported
-  separately and must not be inferred from the source claim.
+  builder, focused quote/edit records, Workflow focus, Schedule, Reporting,
+  Catalog, Imports, Integrations, Diagnostics, `/app/home` canonicalization,
+  and authenticated in-shell 404 behavior. The six operational routes are
+  recoverably lazy embedded views with their existing role/feature gates and
+  sticky state continuity; contextual and legacy callers retain the guarded
+  modal wrappers. The customer portal query remains route-preemptive. A
+  temporary build flag defaults the new shell off pending exact hosted
+  acceptance. Home and the attention badge consume one loading-aware,
+  generation-guarded snapshot over the existing quote-history and
+  workflow-attention contracts; this introduces no new read contracts or data
+  sources and no new commercial write authority. Stable customer names in Home
+  link to Customer 360, exact attention actions retain quote/type/request focus,
+  and quote/payment actions retain exact quote focus. The neutral staff shell
+  remains distinct from tenant-branded customer portal, proposal, and marketing
+  surfaces. Covered desktop widths keep the action row contained; embedded
+  operational routes use route-appropriate return wording while true modals
+  retain Close; accepted calendar facts stay distinct from booking holds; and
+  routed headings have scoped visible focus. This is current branch source with the local/emulator qualification
+  recorded above; hosted, deployment, production-data, and human-acceptance
+  evidence remain separate and must not be inferred from the source claim.
 - Current source quote-entry simplification: Step 1 keeps attendance and role
   counts in the primary flow while placing five exceptional staffing-rate
   values in Advanced Pricing. Existing saved/template values trigger a visible
@@ -103,8 +131,10 @@ Last updated: August 8, 2026
   discard confirmation while Close tool preserves it; Import Studio catalog
   refreshes keep receipts, Undo, and errors mounted; revisioned menu removal
   waits until unrelated Catalog Admin drafts are saved or discarded; and the
-  seven core workspace dialogs share contained
-  focus, safe Escape, body-scroll lock, close guards, and trigger restoration.
+  contextual and legacy workspace dialogs share contained focus, safe Escape,
+  body-scroll lock, close guards, and trigger restoration. In the flagged
+  workspace, routed operational views use embedded-region focus and retain
+  their busy/unsaved guards without applying dialog semantics.
   New-quote resets preserve canonical defaults without treating automatic
   values as unsaved user work. Focused unit, real chunk-failure browser, and
   dialog accessibility checks are local evidence only; these are not yet hosted
@@ -145,19 +175,26 @@ Last updated: August 8, 2026
   source/local evidence and is not yet deployed or owner-accepted.
 - Current candidate customer continuity and Internal Customer 360:
   authoritative create, duplicate, and edit transactions bind a server-owned
-  stable `customerId` to new canonical quotes and immutable versions, add
-  normalized customer-directory search fields, retain identity on edit, and
-  reject a collision with another same-tenant customer rather than silently
-  reassigning it. Paginated directory reads and bounded Customer 360 reads
-  derive Overview, Quotes & Proposals, Events, Money, Conversations, attention,
-  and next-action projections without a persisted `commercialSummary` cache.
-  Customer IDs remain absent from the public portal projection, and staff
-  preview does not establish `viewed`. Canonical quotes are staff-readable
-  only, and browser self-creation of a customer role is retired while exact-
-  token portal behavior remains intact. A dry-run-first legacy binding tool is
-  present, but apply is limited to loopback emulators and `demo-*` projects.
-  This is current branch source and is neither a production data operation nor
-  deployment/hosted acceptance evidence.
+  stable `customerId` to new canonical quotes and immutable versions. New
+  quote-projected customers receive generated opaque IDs; a private,
+  browser-inaccessible normalized-email claim serializes same-tenant ownership
+  for trusted quote and import transactions. Edits retain identity and reject
+  a claim or record collision rather than silently reassigning it. Customer
+  list rules require same-tenant staff plus an explicit limit of at most 101,
+  matching the 100-record maximum page plus one pagination sentinel. Bounded
+  Customer 360 reads derive Overview, Quotes & Proposals, Events, Money,
+  Conversations, attention, and next-action projections without a persisted
+  `commercialSummary` cache. They include up to 25 current quote summaries, up
+  to 10 most-recent immutable versions per quote with explicit truncation, and
+  server-owned per-quote conversation count/latest-actor summaries when
+  available; histories remain quote-scoped. Customer IDs and email claims
+  remain absent from the public portal projection, and staff preview does not
+  establish `viewed`. Canonical quotes are staff-readable only, and browser
+  self-creation of a customer role is retired while exact-token portal behavior
+  remains intact. A dry-run-first legacy binding tool is present, but apply is
+  limited to loopback emulators and `demo-*` projects. This is current branch
+  source and is neither a production data operation nor deployment/hosted
+  acceptance evidence.
 - Production `v0.2.3` starter catalog delivery: the existing post-login blank-catalog
   gate now offers four one-click industry drafts in Catalog Admin. Versioned
   manifests populate tenant-scoped catalog and menu records with suggested
@@ -310,9 +347,10 @@ Last updated: August 8, 2026
 ## Active Risks
 - The customer-centered staff shell is behind
   `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED`, which defaults off. It still
-  requires complete local/high-risk qualification plus hosted signed-in deep-
-  link, Back/Forward, mobile, portal-precedence, branding-isolation, and human
-  acceptance before the flag can be removed or enabled for production.
+  requires an exact hosted candidate plus signed-in deep-link, Back/Forward,
+  mobile, portal-precedence, branding-isolation, and human acceptance before the
+  flag can be removed or enabled for production. Local/high-risk qualification
+  is complete and does not satisfy those hosted gates.
 - The customer-ID backfill has no authorized production apply path in this
   release. A production mutation requires a separately approved, tenant-scoped
   dry-run artifact, exact confirmation contract, release record, and rollback
@@ -380,9 +418,10 @@ Last updated: August 8, 2026
   sheet with background isolation, Close/Escape recovery, and one concise live
   announcement. The 320px Save action remains unobstructed. The source is live;
   hosted mobile acceptance is pending.
-- Authenticated workspace modal chunks now load on first use instead of during
-  initial `/app` startup; local request-level browser coverage verifies the
-  boundary, while hosted authenticated transfer evidence remains pending.
+- Authenticated workspace route views and retained contextual/legacy modal
+  wrappers load on first use instead of during initial `/app` startup. Current
+  exact-source local coverage is qualified; hosted authenticated transfer
+  evidence remains pending.
 - Functions integrations (Stripe, Twilio, and Resend) remain optional and require secure runtime configuration plus provider-level acceptance/delivery proof; committed placeholder templates are not provider configuration.
 - CRM outbound synchronization is intentionally disabled until a
   server-authorized connector with provider acceptance evidence is implemented.

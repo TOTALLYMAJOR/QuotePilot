@@ -28,6 +28,12 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   focused record, and trusted edit entry points.
 - `/app/workflow`: routed attention, follow-up, and approval surface; optional
   query parameters focus an exact quote, attention type, and request.
+- `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
+  schedule and proof-safe commercial reporting workspaces.
+- `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
+  workspaces; the existing admin gate remains authoritative.
+- `/app/integrations` and `/app/diagnostics`: temporary-flagged embedded
+  operational workspaces with their existing role and feature gates.
 - `/app/home`: compatibility path that replaces to `/app`.
 - `/start`: public invoice-first $1 Stripe test buyer flow when the reviewed
   browser flags and Turnstile site key are present; the independently disabled
@@ -36,11 +42,14 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   token takes precedence on every pathname, existing links remain compatible,
   and newly generated canonical links use `/app?portal=...`.
 
-Schedule, Reporting, Catalog, Imports, Integrations, and Diagnostics retain
-their existing modal/tool behavior until their planned `/app/*` route
-extractions ship. See the
+When `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`, the six operational paths
+above render as recoverably lazy embedded workspace regions and preserve their
+mounted state during ordinary staff navigation. Contextual Catalog entry points
+and the flag-off/legacy shell retain the existing focus-contained modal wrappers
+and close guards. These are current source routes, not evidence of deployment,
+hosted deep-link acceptance, or flag promotion. See the
 [customer-centered workspace plan](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
-for that delivery contract.
+for the delivery and evidence contract.
 
 ## Product Scope
 The app supports a 5-step quote wizard, dynamic event-type menus, pricing
@@ -125,9 +134,10 @@ Optional:
   accepted only for local development)
 - `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED` (temporary build-time gate for
   the native staff route shell, `/app` Command Center landing, customer
-  directory, and Customer 360; defaults off. The flag does not bypass staff
-  authentication or exact-token portal precedence, and enabling it is not a
-  deployment or production-acceptance decision.)
+  directory, Customer 360, and embedded Schedule/Reporting/Catalog/Imports/
+  Integrations/Diagnostics routes; defaults off. The flag does not bypass staff
+  authentication, existing role/feature gates, or exact-token portal precedence,
+  and enabling it is not a deployment or production-acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   preparation workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human
@@ -209,6 +219,7 @@ npm run build
 npm run check:secrets
 npm run check:workflows
 npm run check:docs:governance
+npm run check:capability-surfaces
 npm run check:perf:bundle
 npm run check:perf:cwv
 ```
@@ -218,6 +229,22 @@ v1.7.12 archive, verifies its repository-pinned SHA-256, and checks every
 tracked GitHub Actions workflow. The required `lane:quick` runs this gate before
 dependency installation and disables host-provided shellcheck/pyflakes
 integrations so runner tool versions cannot change the result.
+
+`check:capability-surfaces` is the mechanical no-orphan-capability gate. For a
+backend delivery it requires a revision-bumped contract in
+`docs/capability-surfacing-contracts.json`, owns directly changed, new, or
+removed Functions by exact symbol, and requires explicit affected-export review
+when shared helpers change callable behavior. It verifies real route/control,
+assertion-bearing test-title, Feature Matrix, and User Manual locators. Read and
+mutation states must be bound to canonical `data-capability-state` assertions in
+always-on component/unit tests; only a read surface's not-yet-contracted stale
+state may use the narrow separate-program exception. PR/push ranges and
+merge-base baselines fail closed, a same-commit branch upstream falls back to
+`origin/main`, deleted authority paths remain reviewable, and narrowly
+classified headless security/operational/infrastructure work still requires
+tests and a safe outcome. A headless contract cannot own a callable export. The
+gate proves structural traceability, not semantic completeness, hosted/provider
+behavior, production promotion, visual acceptance, or human acceptance.
 
 ## Orchestration Lanes
 ```bash
@@ -416,7 +443,9 @@ npm run customer:id:backfill -- \
 The report separates already-bound quotes, unique normalized-email matches,
 missing email/customer matches, duplicate matches, and foreign-organization
 records. It does not create delivery, portal-view, acceptance, booking, or
-payment evidence.
+payment evidence. It also does not create or repair private customer-email
+ownership claims; legacy identity/claim normalization remains a separately
+reviewed data operation.
 
 Apply mode in the current source is emulator-only: it fails closed unless
 `FIRESTORE_EMULATOR_HOST` resolves to loopback and the project ID begins with

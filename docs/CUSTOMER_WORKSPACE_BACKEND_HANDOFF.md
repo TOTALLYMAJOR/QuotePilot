@@ -1,8 +1,10 @@
 # Customer Workspace Backend Handoff
 
-Status: approved contract for the customer-identity and Customer 360 source
-slice. This handoff does not authorize a production backfill, deployment,
-Stripe Connect work, or persistent customer accounts.
+Status: approved backend contract for stable customer identity and Customer 360.
+Current qualification belongs in `PROJECT_STATUS.md`; remaining rollout work
+belongs in `DEV_TASKS.md`. This handoff does not authorize production
+normalization/backfill, deployment, flag promotion, Stripe Connect work,
+structured change requests, or persistent customer accounts.
 
 Last updated: August 8, 2026
 
@@ -19,7 +21,8 @@ The sequence is identity first, derived workspace second:
 ```mermaid
 flowchart LR
   TrustedQuote[Trusted quote create, duplicate, or edit] --> Resolve[Resolve same-tenant customer]
-  Resolve --> Transaction[Atomic quote, version, portal-safe projection, customer projection]
+  Resolve --> Claim[Resolve private normalized-email claim]
+  Claim --> Transaction[Atomic quote, version, portal-safe projection, customer projection, email claim]
   Transaction --> CustomerId[Server-owned customerId]
   CustomerId --> Directory[Paginated customer directory]
   CustomerId --> ScopedQuotes[Customer-scoped quote reads]
@@ -41,9 +44,15 @@ commercial truth.
   the canonical quote, version, and public portal projection together.
 - The organization customer projection is server-owned and already reuses
   normalized-email matches without erasing richer imported optional fields.
+  Current source gives new quote-projected customers generated opaque document
+  IDs and serializes normalized-email ownership in a private server-only claim
+  collection. Existing deterministic IDs remain a compatibility seam for
+  legacy/imported records, not the identity format for a new quote-projected
+  customer.
 - Current source routes customer CSV create and rollback through admin-only
   callables so new imports receive stable IDs and server-owned `nameKey` and
-  `emailKey` fields. Previously deployed imported-only records still require a
+  `emailKey` fields plus a trusted import-provenance email claim when an email
+  is present. Previously deployed imported-only records still require a
   reviewed normalization/migration before the directory flag is enabled for a
   tenant; source availability is not migration evidence.
 - `customerPortalQuotes` is the customer-safe, exact-token projection. List
@@ -94,6 +103,27 @@ organizations/{organizationId}/customers/{customerId}
   updatedAtISO
 ```
 
+Current source also owns a private uniqueness record:
+
+```text
+organizations/{organizationId}/customerEmailClaims/{normalizedEmailHash}
+  schemaVersion
+  organizationId
+  customerId
+  emailKey
+  recordSource
+  createdBySource
+  importBatchId?  // required only for Import Studio provenance
+  createdAtISO
+  updatedAtISO
+```
+
+The claim document ID is a deterministic hash of the normalized email so a
+trusted transaction has one serialization point. The customer ID referenced by
+the claim remains opaque and generated for a new quote-projected customer. The
+claim is not directory data: every browser principal, including same-tenant
+admins, is denied direct reads and writes.
+
 Exact field naming may follow existing normalization helpers, but the following
 properties are required:
 
@@ -102,20 +132,24 @@ properties are required:
 - search material contains no tenant-external lookup key;
 - IDs are treated as opaque and URL-encoded by the frontend;
 - blank quote fields do not erase richer imported customer data;
-- a directory query is bounded and deterministic.
+- a directory query is bounded and deterministic;
+- one normalized email cannot be claimed by two customer identities, and a
+  malformed/orphaned claim fails closed for trusted quote/import writes.
 
 ### Create and duplicate
 
 Inside the existing trusted Firestore transaction:
 
 1. Normalize the submitted contact identity.
-2. Resolve a unique same-tenant customer or create one using the existing
-   collision-safe identity rule.
-3. Write that customer's opaque ID to the canonical quote and version.
-4. Update the customer projection without replacing richer optional data with
+2. Read the exact private email claim and bounded compatibility matches inside
+   the transaction.
+3. Resolve the claimed unique same-tenant customer or create a generated opaque
+   customer plus its private claim.
+4. Write that customer's opaque ID to the canonical quote and version.
+5. Update the customer projection without replacing richer optional data with
    blanks.
-5. Write the existing customer-safe portal projection without exposing the
-   internal ID.
+6. Write the existing customer-safe portal projection without exposing the
+   internal ID or claim.
 
 The quote/version/customer writes are one atomic operation. A retry must remain
 idempotent and must not create a second identity for the same normalized email.
@@ -127,10 +161,12 @@ For a quote that already has `customerId`:
 1. Load that exact same-tenant customer in the trusted transaction.
 2. Retain the existing `customerId` on the quote and new version.
 3. If contact fields changed, update that customer projection.
-4. Before accepting a changed normalized email, check whether another customer
-   owns it in the organization.
+4. Before accepting a changed normalized email, check its private claim and
+   bounded customer-record matches for another owner.
 5. Reject a collision with a stable conflict error. Never silently bind the
    quote to the other customer.
+6. Move the trusted claim to the new email only inside the successful quote,
+   version, portal, and customer transaction.
 
 For a legacy unbound quote, the edit path may resolve a unique same-tenant
 identity only if the implementation makes that compatibility behavior explicit
@@ -141,9 +177,11 @@ and covers duplicate/missing cases. It must never guess between conflicts.
 - Create and duplicate atomically persist one same-tenant `customerId` on the
   canonical quote and version.
 - Edit retains that identity across contact changes.
-- An email collision with a different customer fails without partial writes.
+- An email claim or customer-record collision with a different customer fails
+  without partial writes.
 - Cross-tenant IDs are rejected even if their contact fields match.
-- The public portal projection remains customer-safe and omits `customerId`.
+- The public portal projection remains customer-safe and omits `customerId` and
+  all email-claim data.
 - Existing delivery, proposal-acceptance, pricing, payment, and booking tests do
   not change meaning.
 
@@ -176,11 +214,16 @@ A compatible response shape is:
 Requirements:
 
 - same-tenant authenticated staff only;
-- stable ordering and bounded `limit` with a server-enforced maximum;
+- stable ordering with a maximum 100-row page plus one pagination sentinel;
+- Firestore rules deny unbounded list queries and any explicit limit above 101;
 - cursor validation that cannot escape the organization;
 - no email address in route params;
 - a clear empty state and recoverable error state;
 - any required composite index lands with source and emulator coverage.
+
+The compatibility helper that looks up a customer by exact normalized email is
+also explicitly bounded to one record. That helper is not uniqueness authority;
+the private email claim owns serialization for trusted writes.
 
 ## Slice C: Customer 360 read model
 
@@ -195,9 +238,12 @@ A compatible DTO is:
   customer: { customerId, name, email, phone, company, updatedAtISO },
   quotes: [{
     quoteId, quoteNumber, status, eventName, eventDate,
-    currentRevisionId, versions[], proposalState,
+    currentRevisionId, proposalState,
     bookingState, depositState, finalBalanceState,
     attention[], conversationSummary, recentActivity[]
+  }],
+  proposalVersions: [{
+    id, quoteId, quoteNumber, versionNumber, reason, createdAtISO
   }],
   events: [],
   money: {
@@ -207,17 +253,23 @@ A compatible DTO is:
   attention: [],
   nextSafeAction,
   recentActivity: [],
-  pageInfo
+  quotePageInfo: { limit: 25, truncated },
+  versionPageInfo: { perQuoteLimit: 10, truncatedQuoteIds[] }
 }
 ```
 
 DTO rules:
 
+- Read at most 25 current quote summaries and the 10 most-recent immutable
+  versions per displayed quote; return explicit quote/version truncation
+  metadata rather than implying the history is complete.
 - Proposal accepted, booked, deposit paid, final balance paid, and operational
   readiness remain separate fields.
 - Money totals are operational payment-state summaries, not accounting revenue.
-- Conversation summaries remain per quote and link to the quote-scoped panel;
-  message histories are not merged.
+- Conversation summaries are server-owned per quote and expose only bounded
+  count/latest-time/latest-actor metadata to this DTO. They link to the
+  quote-scoped panel; message bodies and histories are not merged. A legacy
+  quote without that summary reports `summaryAvailable=false`.
 - BEO and Schedule entry points are references/actions, not new copies of event
   truth.
 - Recent activity is bounded and derived from records the staff principal may
@@ -235,6 +287,8 @@ activity, rotate a token, or establish `viewed`.
   events, payment states, attention, conversation links, and recent activity.
 - Cross-tenant and unassigned principals cannot enumerate or load a customer.
 - Pagination prevents an unbounded organization quote scan.
+- Quote/version truncation and unavailable legacy conversation summaries are
+  visible rather than presented as complete history.
 - A missing/deleted customer and a customer with no quotes have distinct,
   recoverable states.
 - Previewing a proposal as staff leaves portal `viewed` evidence unchanged.
@@ -262,11 +316,23 @@ dry-run artifact, exact project/organization targeting, a production-specific
 confirmation contract, and a release/audit record. Neither dry run nor apply
 may create delivery, viewed, acceptance, booking, or payment evidence.
 
+The current customer-ID binding tool does not create or repair
+`customerEmailClaims`. Before enabling the directory for a tenant with legacy or
+previously browser-imported customers, a separate dry-run normalization plan
+must inventory missing, orphaned, and conflicting claims as well as missing
+directory keys. No production apply for that work is authorized here.
+
 ## Slice E: legacy authority retirement
 
 Update Firestore rules so canonical organization quote documents are
 staff-readable only. Retire the legacy verified-email read branch for a
 matching `customerEmailKey`.
+
+Treat `customerEmailClaims` as a trusted transaction primitive: deny browser
+get, list, create, update, and delete to unauthenticated, unassigned,
+same-tenant staff/customer, and cross-tenant principals. Customer directory get
+remains same-tenant staff-only; list additionally requires an explicit limit no
+greater than 101.
 
 Remove browser self-creation of `userRoles/{uid}` with role `customer`. Customer
 membership/bootstrap remains server-authoritative. Do not replace that grant
@@ -304,7 +370,39 @@ Run the repository's high-risk maintainer lane plus focused coverage for:
 Record source, local, emulator, hosted, provider, production, and human evidence
 separately. A passing emulator backfill does not authorize a production apply.
 
+Current qualification evidence and its proof boundary are recorded only in
+`PROJECT_STATUS.md`; this handoff intentionally does not duplicate mutable test
+counts or release status.
+
 ## Deferred programs
+
+### Commercial Dependency Graph
+
+The Customer 360 read model is a consumer of the planned `CWF-15` Commercial
+Dependency Graph, not its authority or persistence layer. Before CWF-15A source
+work, accept a dedicated ADR covering registry ownership/schema evolution,
+canonical serialization and hashing, browser/server parity, cycle/version
+compatibility, and simulation/invalidation transaction authority. The graph may
+consume server-authoritative pricing outputs but must never recalculate them as
+a second pricing engine.
+
+Before CWF-15C source work, accept a UI specification with a component
+state/display matrix for Change Impact, Current/Stale/Review, authorization,
+invalidation, reconciliation, receipt, error, and recovery states, plus
+acceptance-criteria traceability to each role-safe control and Attention outcome.
+
+CWF-15A may compute and embed a versioned BEO dependency fingerprint, but that
+alone is not retained freshness evidence. CWF-15B must introduce a server-owned
+immutable artifact-generation receipt with artifact type, quote/revision
+identity, fingerprint schema version, dependency fingerprint, generation time,
+and actor only through already governed existing artifact-generation actions,
+plus read-only impact simulation. It introduces no independent authorization,
+invalidation, reconciliation, or publication mutation. CWF-15C may then compare
+the trusted receipt, surface change blast radius and explainable Decision Debt,
+and introduce the UI-bound, role-gated authorized invalidation, reconciliation,
+and publication workflow plus its atomic audit receipts through the CWF-14
+productization contract. No dependency-graph runtime capability is authorized
+or claimed by this handoff.
 
 ### Structured change requests
 

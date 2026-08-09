@@ -13,7 +13,7 @@ Usage: orchestration-lanes.sh <lane> [--with-cwv]
 
 Lanes:
   lane:quick               check:env + check:secrets + check:workflows
-  lane:core                test:unit + build + docs governance + bundle budget
+  lane:core                capability surfacing + test:unit + build + docs governance + bundle budget
   lane:firebase-auth-rules test:rules:firestore + test:e2e:firebase
   lane:authoritative-pricing
                            test:e2e:firebase:authoritative
@@ -67,6 +67,7 @@ case "$lane" in
     ;;
   lane:core)
     echo "==> lane:core"
+    npm run check:capability-surfaces
     npm run test:unit
     npm run build
     npm run check:docs:governance
