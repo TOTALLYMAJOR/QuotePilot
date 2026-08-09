@@ -26,11 +26,27 @@ function text(value) {
   return String(value || "").trim();
 }
 
+function finiteNumberOrNull(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function toIso(value) {
   if (!value) return "";
   if (typeof value?.toDate === "function") return value.toDate().toISOString();
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
+function localCalendarDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function addDaysIso(baseISO, days = DEFAULT_QUOTE_VALIDITY_DAYS) {
@@ -173,7 +189,8 @@ export async function getCustomerDirectoryPage({
 
   if (!firebaseReady || !db) {
     const history = await getQuoteHistory({ organizationId: orgId });
-    const customers = localCustomersFromQuotes(history.quotes)
+    const tenantQuotes = history.quotes.filter((quote) => text(quote?.organizationId) === orgId);
+    const customers = localCustomersFromQuotes(tenantQuotes)
       .filter((customer) => customerMatchesSearch(customer, normalizedSearch));
     const cursorIndex = normalizedCursor
       ? customers.findIndex((customer) => customer.id === normalizedCursor)
@@ -218,23 +235,25 @@ export async function getCustomerDirectoryPage({
 function paymentRowsForQuote(quote) {
   const rows = [];
   const depositStatus = text(quote?.payment?.depositStatus || "unpaid").toLowerCase();
+  const depositAmount = finiteNumberOrNull(quote?.totals?.deposit);
   rows.push({
     quoteId: quote.id,
     quoteNumber: quote.quoteNumber,
     kind: "deposit",
     status: depositStatus,
-    amount: Number(quote?.totals?.deposit || 0),
+    amount: depositAmount,
     evidenceAtISO: toIso(quote?.payment?.depositConfirmedAtISO)
   });
   const finalBalance = quote?.payment?.finalBalance || {};
   const finalStatus = getFinalBalanceDisplayStatus(finalBalance);
-  if (Number(finalBalance.amountCents || 0) > 0 || finalStatus !== "unpaid") {
+  const finalAmountCents = finiteNumberOrNull(finalBalance.amountCents);
+  if (finalAmountCents !== null || finalStatus !== "unpaid") {
     rows.push({
       quoteId: quote.id,
       quoteNumber: quote.quoteNumber,
       kind: "final_balance",
       status: finalStatus,
-      amount: Number(finalBalance.amountCents || 0) / 100,
+      amount: finalAmountCents === null ? null : finalAmountCents / 100,
       evidenceAtISO: toIso(finalBalance.paidAtISO)
     });
   }
@@ -301,6 +320,51 @@ function nextSafeAction(attentionSummary, quotes) {
   return { kind: "none", label: "No immediate staff action" };
 }
 
+export function buildCustomerBriefing({
+  quotes = [],
+  activeQuotes = [],
+  events = [],
+  attention = {},
+  recentActivity = [],
+  nextAction = { kind: "none", label: "No immediate staff action" },
+  quotePageInfo = { limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT, truncated: false },
+  nowISO = "",
+  todayDate = ""
+} = {}) {
+  const explicitDate = text(todayDate);
+  const sourceDate = text(nowISO).slice(0, 10);
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(explicitDate)
+    ? explicitDate
+    : /^\d{4}-\d{2}-\d{2}$/.test(sourceDate)
+      ? sourceDate
+      : localCalendarDate();
+  const nextEvent = [...events]
+    .filter((event) => /^\d{4}-\d{2}-\d{2}$/.test(text(event?.date)) && text(event.date) >= today)
+    .sort((left, right) => (
+      text(left.date).localeCompare(text(right.date))
+      || text(left.time).localeCompare(text(right.time))
+      || text(left.quoteId).localeCompare(text(right.quoteId))
+    ))[0] || null;
+  const latestActivity = recentActivity[0] || null;
+  const itemCount = Number(attention?.itemCount);
+  const limitValue = Number(quotePageInfo?.limit);
+
+  return {
+    activeQuoteCount: activeQuotes.length,
+    displayedQuoteCount: quotes.length,
+    attentionCount: Number.isFinite(itemCount) && itemCount >= 0 ? Math.floor(itemCount) : 0,
+    nextEvent: nextEvent ? { ...nextEvent } : null,
+    latestActivity: latestActivity ? { ...latestActivity } : null,
+    nextAction: { ...nextAction },
+    scope: {
+      truncated: quotePageInfo?.truncated === true,
+      limit: Number.isFinite(limitValue) && limitValue > 0
+        ? Math.floor(limitValue)
+        : CUSTOMER_WORKSPACE_QUOTE_LIMIT
+    }
+  };
+}
+
 export function buildStaffProposalPreview(quote = {}) {
   const quoteMeta = quote?.quoteMeta || {};
   const organizationName = text(quoteMeta.organizationName);
@@ -312,11 +376,11 @@ export function buildStaffProposalPreview(quote = {}) {
     eventName: text(quote?.event?.name),
     eventDate: text(quote?.event?.date),
     venue: text(quote?.event?.venue),
-    guests: Number(quote?.event?.guests || 0),
-    subtotal: Number(quote?.totals?.subtotal || 0),
-    tax: Number(quote?.totals?.tax || 0),
-    total: Number(quote?.totals?.total || 0),
-    deposit: Number(quote?.totals?.deposit || 0),
+    guests: finiteNumberOrNull(quote?.event?.guests),
+    subtotal: finiteNumberOrNull(quote?.totals?.subtotal),
+    tax: finiteNumberOrNull(quote?.totals?.tax),
+    total: finiteNumberOrNull(quote?.totals?.total),
+    deposit: finiteNumberOrNull(quote?.totals?.deposit),
     branding: {
       organizationName,
       brandName: text(quoteMeta.brandName || organizationName),
@@ -345,7 +409,8 @@ export function buildCustomerWorkspaceDto({
   versionsByQuote = {},
   versionTruncatedQuoteIds = [],
   quotePageInfo = { limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT, truncated: false },
-  nowISO = new Date().toISOString()
+  nowISO = new Date().toISOString(),
+  todayDate = localCalendarDate()
 } = {}) {
   const effectiveNowISO = toIso(nowISO) || new Date().toISOString();
   const normalizedQuotes = quotes.map((quote) => (
@@ -365,7 +430,7 @@ export function buildCustomerWorkspaceDto({
       date: quote?.event?.date || "",
       time: quote?.event?.time || "",
       venue: quote?.event?.venue || "",
-      guests: Number(quote?.event?.guests || 0),
+      guests: finiteNumberOrNull(quote?.event?.guests),
       contractNumber: text(quote?.booking?.contractNumber),
       beoAvailable: text(quote.status).toLowerCase() === "booked"
     }))
@@ -377,6 +442,30 @@ export function buildCustomerWorkspaceDto({
       quoteNumber: quote.quoteNumber
     }))
   ));
+  const money = normalizedQuotes.flatMap(paymentRowsForQuote);
+  const conversations = normalizedQuotes.map((quote) => {
+    const summary = quote?.conversationSummary && typeof quote.conversationSummary === "object"
+      ? quote.conversationSummary
+      : null;
+    const messageCount = Number(summary?.messageCount);
+    return {
+      quoteId: quote.id,
+      quoteNumber: quote.quoteNumber,
+      status: quote.status,
+      summaryAvailable: Boolean(summary && Number.isFinite(messageCount) && messageCount >= 0),
+      messageCount: Number.isFinite(messageCount) && messageCount >= 0 ? Math.floor(messageCount) : null,
+      latestMessageAtISO: toIso(summary?.latestMessageAtISO),
+      latestActorType: ["staff", "customer"].includes(text(summary?.latestActorType).toLowerCase())
+        ? text(summary.latestActorType).toLowerCase()
+        : ""
+    };
+  });
+  const recentActivity = lifecycleActivity(normalizedQuotes);
+  const resolvedNextAction = nextSafeAction(attention, normalizedQuotes);
+  const resolvedQuotePageInfo = {
+    limit: Number(quotePageInfo.limit || CUSTOMER_WORKSPACE_QUOTE_LIMIT),
+    truncated: quotePageInfo.truncated === true
+  };
 
   return {
     customer: normalizeCustomerRecord(customer?.id || customer?.customerId, customer),
@@ -384,31 +473,23 @@ export function buildCustomerWorkspaceDto({
     activeQuotes,
     proposalVersions: versions,
     events,
-    money: normalizedQuotes.flatMap(paymentRowsForQuote),
-    conversations: normalizedQuotes.map((quote) => {
-      const summary = quote?.conversationSummary && typeof quote.conversationSummary === "object"
-        ? quote.conversationSummary
-        : null;
-      const messageCount = Number(summary?.messageCount);
-      return {
-        quoteId: quote.id,
-        quoteNumber: quote.quoteNumber,
-        status: quote.status,
-        summaryAvailable: Boolean(summary && Number.isFinite(messageCount) && messageCount >= 0),
-        messageCount: Number.isFinite(messageCount) && messageCount >= 0 ? Math.floor(messageCount) : null,
-        latestMessageAtISO: toIso(summary?.latestMessageAtISO),
-        latestActorType: ["staff", "customer"].includes(text(summary?.latestActorType).toLowerCase())
-          ? text(summary.latestActorType).toLowerCase()
-          : ""
-      };
-    }),
-    recentActivity: lifecycleActivity(normalizedQuotes),
+    money,
+    conversations,
+    recentActivity,
     attention,
-    nextAction: nextSafeAction(attention, normalizedQuotes),
-    quotePageInfo: {
-      limit: Number(quotePageInfo.limit || CUSTOMER_WORKSPACE_QUOTE_LIMIT),
-      truncated: quotePageInfo.truncated === true
-    },
+    nextAction: resolvedNextAction,
+    briefing: buildCustomerBriefing({
+      quotes: normalizedQuotes,
+      activeQuotes,
+      events,
+      attention,
+      recentActivity,
+      nextAction: resolvedNextAction,
+      quotePageInfo: resolvedQuotePageInfo,
+      nowISO: effectiveNowISO,
+      todayDate
+    }),
+    quotePageInfo: resolvedQuotePageInfo,
     versionPageInfo: {
       perQuoteLimit: VERSION_LIMIT_PER_QUOTE,
       truncatedQuoteIds: [...new Set(versionTruncatedQuoteIds.map(text).filter(Boolean))]
@@ -440,14 +521,17 @@ export async function getCustomerWorkspace({ organizationId = "", customerId = "
 
   if (!firebaseReady || !db) {
     const history = await getQuoteHistory({ organizationId: orgId });
-    const matchingQuotes = history.quotes.filter((quote) => text(quote.customerId) === id);
+    const matchingQuotes = history.quotes.filter((quote) => (
+      text(quote?.organizationId) === orgId
+      && text(quote?.customerId) === id
+    ));
     const quotes = matchingQuotes.slice(0, CUSTOMER_WORKSPACE_QUOTE_LIMIT);
     const customer = localCustomersFromQuotes(quotes).find((entry) => entry.id === id);
     if (!customer) return null;
     const versionResults = await Promise.all(quotes.map(async (quote) => {
       const result = await getQuoteVersionHistory(quote.id, { organizationId: orgId });
       const scopedVersions = result.versions.filter((version) => (
-        !text(version.organizationId) || text(version.organizationId) === orgId
+        text(version?.organizationId) === orgId
       ));
       return [quote.id, {
         items: scopedVersions.slice(0, VERSION_LIMIT_PER_QUOTE).map((version) => ({

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
 import { buildStaffProposalPreview, getCustomerWorkspace } from "../lib/customerWorkspace";
 import { classifyDepositStatus, classifyFinalBalanceDisplayStatus, classifyQuoteStatus } from "../lib/statusSemantics";
 import { buildPortalThemeStyle } from "../data/portalThemePresets";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { StaffReadContextRail } from "./StaffEvidenceRail";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
@@ -22,6 +23,17 @@ const TABS = [
   ["conversations", "Conversations"]
 ];
 
+const TAB_IDS = TABS.map(([id]) => id);
+
+const EMPTY_WORKSPACE_STATE = {
+  loading: true,
+  error: "",
+  stale: false,
+  loadedAt: 0,
+  scopeKey: "",
+  workspace: null
+};
+
 function safeLogoUrl(value) {
   const normalized = String(value || "").trim();
   if (!normalized) return "";
@@ -35,6 +47,82 @@ function safeLogoUrl(value) {
 
 function readableReason(value) {
   return humanizeWorkspaceValue(value, { emptyLabel: "Saved proposal snapshot" });
+}
+
+export function resolveCustomerWorkspaceTabKey(currentId, key) {
+  const index = TAB_IDS.indexOf(currentId);
+  if (index < 0) return currentId;
+  if (key === "ArrowRight") return TAB_IDS[(index + 1) % TAB_IDS.length];
+  if (key === "ArrowLeft") return TAB_IDS[(index - 1 + TAB_IDS.length) % TAB_IDS.length];
+  if (key === "Home") return TAB_IDS[0];
+  if (key === "End") return TAB_IDS.at(-1);
+  return currentId;
+}
+
+export function CustomerWorkspaceReadState({
+  state,
+  organizationName,
+  organizationId,
+  source = "",
+  loadedAt = 0,
+  errorMessage = "",
+  onBack,
+  onRetry
+}) {
+  const isLoading = state === "loading";
+  const isError = state === "error";
+  const title = isLoading
+    ? "Loading Customer 360"
+    : isError
+      ? "Customer 360 unavailable"
+      : "Customer not found";
+  const outcome = isLoading
+    ? "Waiting for the tenant-scoped customer and linked quote reads to complete."
+    : isError
+      ? "The Customer 360 read did not complete; no retained customer record is being shown."
+      : "The bounded tenant-scoped read completed without a matching customer record.";
+
+  return (
+    <main className="container workspace-route-main" data-capability-state={state}>
+      <section className="panel customer-workspace">
+        <h1>{title}</h1>
+        {isLoading && <p role="status">Loading Customer 360...</p>}
+        {isError && <p role="alert" className="error-note">{errorMessage || "Customer 360 could not be loaded."}</p>}
+        {state === "empty" && (
+          <p className="muted">This customer ID is not available in the current organization.</p>
+        )}
+        <StaffReadContextRail
+          organizationName={organizationName}
+          organizationId={organizationId}
+          source={source}
+          loadedAt={loadedAt}
+          loading={isLoading}
+          error={isError ? "Customer 360 read failed." : ""}
+          truncationKnown={state === "empty"}
+          readContract="Tenant-scoped customer record with bounded linked quote and retained-version reads"
+          outcome={outcome}
+          title="Customer 360 read context"
+          titleId="customer-workspace-state-read-context-title"
+          caveat="This staff read does not establish proposal delivery, customer viewing or acceptance, booking, payment, or operational completion."
+        />
+        {isError && (
+          <button type="button" className="ghost" data-capability-state="recovery" onClick={onRetry}>Retry</button>
+        )}
+        {state === "empty" && <button type="button" className="ghost" onClick={onBack}>Back to customers</button>}
+      </section>
+    </main>
+  );
+}
+
+export function CustomerEventsHeader({ scheduleAvailable = true, onOpenSchedule }) {
+  return (
+    <div className="workspace-route-head">
+      <h2>Events</h2>
+      {scheduleAvailable
+        ? <button type="button" className="ghost" onClick={onOpenSchedule}>Open Schedule</button>
+        : <span className="source-note">Schedule is not enabled for this organization.</span>}
+    </div>
+  );
 }
 
 export function StaffProposalPreview({ quote, onClose }) {
@@ -128,95 +216,228 @@ export function CustomerWorkspacePartialNotice({ quotePageInfo = {}, onOpenQuote
   );
 }
 
+export function CustomerRelationshipBriefing({
+  briefing = {},
+  onOpenQuote,
+  onOpenWorkflow
+}) {
+  const nextEvent = briefing.nextEvent || null;
+  const latestActivity = briefing.latestActivity || null;
+  const nextAction = briefing.nextAction || { kind: "none", label: "No immediate staff action" };
+  const truncated = briefing.scope?.truncated === true;
+  return (
+    <section
+      className="customer-relationship-briefing"
+      aria-labelledby="customer-relationship-briefing-title"
+      data-capability-state={truncated ? "partial" : "success"}
+    >
+      <div className="workspace-route-head">
+        <div>
+          <p className="eyebrow">Relationship briefing</p>
+          <h2 id="customer-relationship-briefing-title">What matters next</h2>
+        </div>
+        <span className="source-note">
+          {truncated
+            ? `Derived from ${formatWorkspaceInteger(briefing.displayedQuoteCount)} displayed records; older linked quotes exist.`
+            : `Derived from ${formatWorkspaceInteger(briefing.displayedQuoteCount)} linked records in this bounded read.`}
+        </span>
+      </div>
+      <div className="customer-overview-grid">
+        <article>
+          <span>Active quotes{truncated ? " shown" : ""}</span>
+          <strong>{formatWorkspaceInteger(briefing.activeQuoteCount)}</strong>
+        </article>
+        <article>
+          <span>Needs attention{truncated ? " in this view" : ""}</span>
+          <strong>{formatWorkspaceInteger(briefing.attentionCount)}</strong>
+        </article>
+        <article>
+          <span>Next dated event</span>
+          <strong>
+            {nextEvent
+              ? formatWorkspaceDate(nextEvent.date)
+              : truncated
+                ? "No dated event in this bounded view"
+                : "No dated event recorded"}
+          </strong>
+          {nextEvent && (
+            <button type="button" className="workspace-text-link" onClick={() => onOpenQuote?.(nextEvent.quoteId)}>
+              {formatWorkspaceText(nextEvent.eventName, { emptyLabel: "Untitled event" })}
+            </button>
+          )}
+        </article>
+        <article>
+          <span>Latest recorded activity</span>
+          <strong>
+            {latestActivity
+              ? latestActivity.label
+              : truncated
+                ? "No activity in this bounded view"
+                : "No activity recorded"}
+          </strong>
+          {latestActivity && <time dateTime={latestActivity.atISO}>{formatWorkspaceDateTime(latestActivity.atISO)}</time>}
+        </article>
+      </div>
+      <article className="customer-next-action">
+        <p className="eyebrow">Next safe staff action</p>
+        <h3>{nextAction.label}</h3>
+        {nextAction.kind === "workflow" && (
+          <button type="button" className="cta" onClick={() => onOpenWorkflow?.(nextAction)}>Open in Workflow</button>
+        )}
+        {nextAction.kind === "quote" && (
+          <button type="button" className="cta" onClick={() => onOpenQuote?.(nextAction.quoteId)}>Open quote</button>
+        )}
+      </article>
+    </section>
+  );
+}
+
 export default function CustomerWorkspaceView({
   organizationId = "",
+  organizationName = "",
   customerId = "",
   onBack,
   onOpenQuotes,
   onOpenQuote,
   onOpenWorkflow,
-  onOpenSchedule
+  onOpenSchedule,
+  scheduleAvailable = true
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [previewQuoteId, setPreviewQuoteId] = useState("");
   const [refreshToken, setRefreshToken] = useState(0);
-  const [state, setState] = useState({ loading: true, error: "", workspace: null });
+  const [state, setState] = useState(EMPTY_WORKSPACE_STATE);
   const generationRef = useRef(0);
   const tabRefs = useRef({});
   const previewTriggerRef = useRef(null);
-  const headingRef = useWorkspaceRouteHeadingFocus(Boolean(
-    !state.loading && !state.error && state.workspace
-  ));
+  const requestedScopeKey = `${String(organizationId || "").trim()}\u0000${String(customerId || "").trim()}`;
+  const workspaceForScope = state.scopeKey === requestedScopeKey ? state.workspace : null;
+  const headingRef = useWorkspaceRouteHeadingFocus(Boolean(workspaceForScope));
 
   useEffect(() => {
     const generation = generationRef.current + 1;
     generationRef.current = generation;
-    setState({ loading: true, error: "", workspace: null });
+    setState((current) => current.scopeKey === requestedScopeKey
+      ? { ...current, loading: true, error: "", stale: false }
+      : { ...EMPTY_WORKSPACE_STATE, scopeKey: requestedScopeKey });
     getCustomerWorkspace({ organizationId, customerId })
       .then((workspace) => {
         if (generation !== generationRef.current) return;
-        setState({ loading: false, error: "", workspace });
+        setState({
+          loading: false,
+          error: "",
+          stale: false,
+          loadedAt: Date.now(),
+          scopeKey: requestedScopeKey,
+          workspace
+        });
       })
       .catch((error) => {
         if (generation !== generationRef.current) return;
-        setState({ loading: false, error: error?.message || "Failed to load Customer 360.", workspace: null });
+        setState((current) => ({
+          ...current,
+          loading: false,
+          stale: current.scopeKey === requestedScopeKey && Number(current.loadedAt) > 0,
+          error: error?.message || "Failed to load Customer 360.",
+          scopeKey: requestedScopeKey,
+          workspace: current.scopeKey === requestedScopeKey ? current.workspace : null
+        }));
       });
     return () => {
       generationRef.current += 1;
     };
-  }, [customerId, organizationId, refreshToken]);
+  }, [customerId, organizationId, refreshToken, requestedScopeKey]);
 
   const previewQuote = useMemo(
-    () => state.workspace?.quotes.find((quote) => quote.id === previewQuoteId) || null,
-    [previewQuoteId, state.workspace?.quotes]
+    () => workspaceForScope?.quotes.find((quote) => quote.id === previewQuoteId) || null,
+    [previewQuoteId, workspaceForScope?.quotes]
   );
 
-  const closePreview = () => {
+  const closePreview = useCallback(() => {
     setPreviewQuoteId("");
     const returnTarget = previewTriggerRef.current;
     window.requestAnimationFrame(() => returnTarget?.focus());
-  };
+  }, []);
+
+  useEffect(() => {
+    setActiveTab("overview");
+    setPreviewQuoteId("");
+    previewTriggerRef.current = null;
+  }, [customerId]);
+
+  useEffect(() => {
+    if (activeTab === "quotes") return;
+    setPreviewQuoteId("");
+    previewTriggerRef.current = null;
+  }, [activeTab]);
 
   const handleTabKeyDown = (event, tabId) => {
-    const index = TABS.findIndex(([id]) => id === tabId);
-    let next = index;
-    if (event.key === "ArrowRight") next = (index + 1) % TABS.length;
-    if (event.key === "ArrowLeft") next = (index - 1 + TABS.length) % TABS.length;
-    if (event.key === "Home") next = 0;
-    if (event.key === "End") next = TABS.length - 1;
-    if (next === index) return;
+    const nextId = resolveCustomerWorkspaceTabKey(tabId, event.key);
+    if (nextId === tabId) return;
     event.preventDefault();
-    const nextId = TABS[next][0];
     setActiveTab(nextId);
     window.requestAnimationFrame(() => tabRefs.current[nextId]?.focus());
   };
 
-  if (state.loading) {
-    return <main className="container workspace-route-main"><section className="panel"><p role="status">Loading Customer 360...</p></section></main>;
-  }
-  if (state.error) {
+  if (state.scopeKey !== requestedScopeKey || (state.loading && !workspaceForScope)) {
     return (
-      <main className="container workspace-route-main"><section className="panel">
-        <h1>Customer 360 unavailable</h1>
-        <p role="alert" className="error-note">{state.error}</p>
-        <button type="button" className="ghost" onClick={() => setRefreshToken((value) => value + 1)}>Retry</button>
-      </section></main>
+      <CustomerWorkspaceReadState
+        state="loading"
+        organizationName={organizationName}
+        organizationId={organizationId}
+      />
     );
   }
-  if (!state.workspace) {
+  if (state.error && !workspaceForScope) {
     return (
-      <main className="container workspace-route-main"><section className="panel">
-        <h1>Customer not found</h1>
-        <p className="muted">This customer ID is not available in the current organization.</p>
-        <button type="button" className="ghost" onClick={onBack}>Back to customers</button>
-      </section></main>
+      <CustomerWorkspaceReadState
+        state="error"
+        organizationName={organizationName}
+        organizationId={organizationId}
+        source={state.source}
+        loadedAt={state.loadedAt}
+        errorMessage={state.error}
+        onRetry={() => setRefreshToken((value) => value + 1)}
+      />
+    );
+  }
+  if (!workspaceForScope) {
+    return (
+      <CustomerWorkspaceReadState
+        state="empty"
+        organizationName={organizationName}
+        organizationId={organizationId}
+        source={state.source}
+        loadedAt={state.loadedAt}
+        onBack={onBack}
+      />
     );
   }
 
-  const workspace = state.workspace;
+  const workspace = workspaceForScope;
   const customer = workspace.customer;
+  const workspaceTruncated = workspace.quotePageInfo.truncated
+    || workspace.versionPageInfo.truncatedQuoteIds.length > 0;
+  const readOutcome = state.loading
+    ? "Refreshing Customer 360; the prior completed customer view remains visible."
+    : state.error
+      ? "The latest Customer 360 read failed; the prior completed customer view remains visible."
+      : workspaceTruncated
+        ? "The customer record read completed within its declared quote or version bounds."
+        : "The customer record, linked quote page, and retained version reads completed within their declared bounds.";
+  const rootReadState = state.stale
+    ? "stale"
+    : state.loading
+      ? "loading"
+      : workspaceTruncated
+        ? "partial"
+        : "success";
   return (
-    <main className="container workspace-route-main" aria-labelledby="customer-workspace-title">
+    <main
+      className="container workspace-route-main"
+      aria-labelledby="customer-workspace-title"
+      data-capability-state={rootReadState}
+    >
       <section className="panel customer-workspace">
         <div className="workspace-route-head">
           <div>
@@ -235,6 +456,38 @@ export default function CustomerWorkspaceView({
           <button type="button" className="ghost" onClick={() => setRefreshToken((value) => value + 1)}>Refresh</button>
         </div>
 
+        <StaffReadContextRail
+          organizationName={organizationName}
+          organizationId={organizationId}
+          source={workspace.source}
+          loadedAt={state.loadedAt}
+          loading={state.loading}
+          error={state.error}
+          stale={state.stale}
+          truncated={workspaceTruncated}
+          truncationKnown
+          readContract="Canonical customer record, up to 25 linked quotes, and up to 10 retained proposal versions per displayed quote"
+          outcome={readOutcome}
+          boundsNote="Customer 360 is bounded to 25 linked quotes and 10 retained proposal versions per displayed quote; use Quotes for broader quote history."
+          title="Customer 360 read context"
+          titleId="customer-workspace-read-context-title"
+          caveat="Freshness describes these staff reads only. It does not establish proposal delivery, customer viewing or acceptance, booking, payment, or operational completion."
+        />
+
+        <CustomerRelationshipBriefing
+          briefing={workspace.briefing || {
+            activeQuoteCount: workspace.activeQuotes.length,
+            displayedQuoteCount: workspace.quotes.length,
+            attentionCount: workspace.attention.itemCount,
+            nextEvent: workspace.events[0] || null,
+            latestActivity: workspace.recentActivity[0] || null,
+            nextAction: workspace.nextAction,
+            scope: workspace.quotePageInfo
+          }}
+          onOpenQuote={onOpenQuote}
+          onOpenWorkflow={onOpenWorkflow}
+        />
+
         <div className="customer-workspace-tabs" role="tablist" aria-label="Customer workspace sections">
           {TABS.map(([id, label]) => (
             <button
@@ -242,6 +495,7 @@ export default function CustomerWorkspaceView({
               type="button"
               role="tab"
               ref={(node) => { tabRefs.current[id] = node; }}
+              id={`customer-tab-${id}`}
               aria-selected={activeTab === id}
               aria-controls={`customer-panel-${id}`}
               tabIndex={activeTab === id ? 0 : -1}
@@ -259,22 +513,7 @@ export default function CustomerWorkspaceView({
           onOpenQuotes={onOpenQuotes}
         />
 
-        <section id="customer-panel-overview" role="tabpanel" tabIndex={0} hidden={activeTab !== "overview"}>
-          <div className="customer-overview-grid">
-            <article><span>Active quotes{workspace.quotePageInfo.truncated ? " shown" : ""}</span><strong>{formatWorkspaceInteger(workspace.activeQuotes.length)}</strong></article>
-            <article><span>Accepted / booked events{workspace.quotePageInfo.truncated ? " shown" : ""}</span><strong>{formatWorkspaceInteger(workspace.events.length)}</strong></article>
-            <article><span>Needs attention{workspace.quotePageInfo.truncated ? " in this view" : ""}</span><strong>{formatWorkspaceInteger(workspace.attention.itemCount)}</strong></article>
-          </div>
-          <article className="customer-next-action">
-            <p className="eyebrow">Next safe staff action</p>
-            <h3>{workspace.nextAction.label}</h3>
-            {workspace.nextAction.kind === "workflow" && (
-              <button type="button" className="cta" onClick={() => onOpenWorkflow?.(workspace.nextAction)}>Open in Workflow</button>
-            )}
-            {workspace.nextAction.kind === "quote" && (
-              <button type="button" className="cta" onClick={() => onOpenQuote?.(workspace.nextAction.quoteId)}>Open quote</button>
-            )}
-          </article>
+        <section id="customer-panel-overview" role="tabpanel" aria-labelledby="customer-tab-overview" tabIndex={0} hidden={activeTab !== "overview"}>
           <h2>Recent activity</h2>
           {workspace.recentActivity.length === 0 ? <p className="source-note">No lifecycle activity is recorded yet.</p> : (
             <ol className="customer-activity-list">
@@ -290,7 +529,7 @@ export default function CustomerWorkspaceView({
           )}
         </section>
 
-        <section id="customer-panel-quotes" role="tabpanel" tabIndex={0} hidden={activeTab !== "quotes"}>
+        <section id="customer-panel-quotes" role="tabpanel" aria-labelledby="customer-tab-quotes" tabIndex={0} hidden={activeTab !== "quotes"}>
           <h2>Quotes &amp; proposals</h2>
           <p className="source-note">Canonical staff records and immutable version snapshots. Customer viewed evidence is never inferred here.</p>
           {workspace.quotes.length === 0 ? <p className="source-note">No customer-linked quotes.</p> : (
@@ -349,8 +588,8 @@ export default function CustomerWorkspaceView({
           {previewQuote && <StaffProposalPreview quote={previewQuote} onClose={closePreview} />}
         </section>
 
-        <section id="customer-panel-events" role="tabpanel" tabIndex={0} hidden={activeTab !== "events"}>
-          <div className="workspace-route-head"><h2>Events</h2><button type="button" className="ghost" onClick={onOpenSchedule}>Open Schedule</button></div>
+        <section id="customer-panel-events" role="tabpanel" aria-labelledby="customer-tab-events" tabIndex={0} hidden={activeTab !== "events"}>
+          <CustomerEventsHeader scheduleAvailable={scheduleAvailable} onOpenSchedule={onOpenSchedule} />
           {workspace.events.length === 0 ? <p className="source-note">No accepted or booked events.</p> : (
             <div className="customer-card-list">
               {workspace.events.map((event) => (
@@ -371,7 +610,7 @@ export default function CustomerWorkspaceView({
           )}
         </section>
 
-        <section id="customer-panel-money" role="tabpanel" tabIndex={0} hidden={activeTab !== "money"}>
+        <section id="customer-panel-money" role="tabpanel" aria-labelledby="customer-tab-money" tabIndex={0} hidden={activeTab !== "money"}>
           <h2>Money</h2>
           <p className="warning-note">Operational payment states only. These amounts are not an accounting revenue report.</p>
           {workspace.money.length === 0 && <p className="source-note">No deposit or final-balance state is recorded for this customer.</p>}
@@ -388,7 +627,7 @@ export default function CustomerWorkspaceView({
           </div>
         </section>
 
-        <section id="customer-panel-conversations" role="tabpanel" tabIndex={0} hidden={activeTab !== "conversations"}>
+        <section id="customer-panel-conversations" role="tabpanel" aria-labelledby="customer-tab-conversations" tabIndex={0} hidden={activeTab !== "conversations"}>
           <h2>Conversations</h2>
           <p className="source-note">Messages remain bound to each quote. Customer 360 links them without merging their histories.</p>
           {workspace.conversations.length === 0 && <p className="source-note">No quote conversations are linked to this customer.</p>}
