@@ -113,6 +113,20 @@ export function StaffProposalPreview({ quote, onClose }) {
   );
 }
 
+export function CustomerWorkspacePartialNotice({ quotePageInfo = {}, onOpenQuotes }) {
+  if (!quotePageInfo.truncated) return null;
+  return (
+    <div
+      className="warning-note customer-partial-results"
+      data-capability-state="partial"
+      role="status"
+    >
+      <span>Customer 360 is a partial view capped at {quotePageInfo.limit} linked quotes; counts and money below are not complete.</span>
+      <button type="button" className="ghost compact" onClick={onOpenQuotes}>Open complete Quotes history</button>
+    </div>
+  );
+}
+
 export default function CustomerWorkspaceView({
   organizationId = "",
   customerId = "",
@@ -229,12 +243,10 @@ export default function CustomerWorkspaceView({
           ))}
         </div>
 
-        {workspace.quotePageInfo.truncated && (
-          <div className="warning-note customer-partial-results" role="status">
-            <span>Customer 360 is a partial view capped at {workspace.quotePageInfo.limit} linked quotes; counts and money below are not complete.</span>
-            <button type="button" className="ghost compact" onClick={onOpenQuotes}>Open complete Quotes history</button>
-          </div>
-        )}
+        <CustomerWorkspacePartialNotice
+          quotePageInfo={workspace.quotePageInfo}
+          onOpenQuotes={onOpenQuotes}
+        />
 
         <section id="customer-panel-overview" role="tabpanel" tabIndex={0} hidden={activeTab !== "overview"}>
           <div className="customer-overview-grid">

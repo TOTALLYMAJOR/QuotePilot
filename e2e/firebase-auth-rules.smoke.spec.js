@@ -159,7 +159,7 @@ test("staff and the exact customer portal share one quote-scoped conversation", 
   await expect(staffConversation.getByText(/No messages yet/i)).toBeVisible();
   await staffConversation.getByLabel("Message").fill("Staff confirms load-in begins at 4:30 PM.");
   await staffConversation.getByRole("button", { name: "Send message" }).click();
-  await expect(staffConversation.getByRole("status")).toContainText("Message sent");
+  await expect(staffConversation.getByRole("status")).toContainText("Message recorded");
   await expect(staffConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
   await staffConversation.getByRole("button", { name: "Close conversation" }).click();
   await quotesDialog.getByRole("button", { name: "Close" }).click();
@@ -172,7 +172,7 @@ test("staff and the exact customer portal share one quote-scoped conversation", 
   await expect(customerConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
   await customerConversation.getByLabel("Message").fill("Thank you. The venue door will be open.");
   await customerConversation.getByRole("button", { name: "Send message" }).click();
-  await expect(customerConversation.getByRole("status")).toContainText("Message sent");
+  await expect(customerConversation.getByRole("status")).toContainText("Message recorded");
 
   await customerConversation.getByRole("button", { name: "Close conversation" }).click();
   await page.getByRole("button", { name: "Staff sign in" }).click();
@@ -194,7 +194,7 @@ test("staff and the exact customer portal share one quote-scoped conversation", 
   await expect(reopenedConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
   await expect(reopenedConversation).toContainText("Thank you. The venue door will be open.");
   await reopenedConversation.getByRole("button", { name: "Refresh conversation" }).click();
-  await expect(reopenedConversation.getByRole("status")).toContainText("Conversation refreshed");
+  await expect(reopenedConversation.getByText("Conversation refreshed.", { exact: true })).toBeVisible();
 });
 
 test("email-password staff can complete account recovery with the same on-screen confirmation", async ({ page, request }) => {

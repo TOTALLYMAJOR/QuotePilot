@@ -23,6 +23,7 @@ const {
   buildTrustedQuoteEditDocuments,
   customerEmailClaimDocumentId,
   customerProjectionDocumentId,
+  projectCustomerIdentityToImmutableVersion,
   sanitizeQuoteCreationRequest
 } = require("./quoteCreation");
 const {
@@ -8578,13 +8579,10 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         versionNumber: nextVersionNumber
       };
 
-      tx.create(versionRef, {
+      tx.create(versionRef, projectCustomerIdentityToImmutableVersion({
         versionId,
         quoteId,
         organizationId,
-        ...(normalizeText(quote.customerId)
-          ? { customerId: normalizeText(quote.customerId) }
-          : {}),
         versionNumber: nextVersionNumber,
         createdAtISO: convertedAtISO,
         reason: versionMeta.reason,
@@ -8596,7 +8594,7 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
           id: quoteId
         },
         createdAt: FieldValue.serverTimestamp()
-      });
+      }, quote));
       tx.update(quoteRef, {
         ...quotePatch,
         updatedAt: FieldValue.serverTimestamp()

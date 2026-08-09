@@ -667,7 +667,28 @@ try {
     "menuItems",
     acceptanceMenuItemId
   );
-  await updateDoc(ownerSettingsRef, {
+  const writeOwnerCatalogRecord = async (targetRef, record, settingsPatch = {}) => {
+    const settingsSnapshot = await getDoc(ownerSettingsRef);
+    assert.equal(settingsSnapshot.exists(), true);
+    const currentCatalogRevision = Number(settingsSnapshot.data()?.catalogRevision || 0);
+    assert.ok(Number.isInteger(currentCatalogRevision) && currentCatalogRevision >= 0);
+    const batch = writeBatch(ownerSession.db);
+    batch.update(ownerSettingsRef, {
+      ...settingsPatch,
+      catalogRevision: currentCatalogRevision + 1,
+      pricingSetupConfirmed: false,
+      pricingConfirmation: null
+    });
+    batch.set(targetRef, record);
+    await batch.commit();
+  };
+  await writeOwnerCatalogRecord(ownerPackageRef, {
+    name: "Customer-Owned Package",
+    description: "Acceptance package configured by the invited tenant owner.",
+    ppp: 42,
+    active: true,
+    updatedAtISO: catalogConfiguredAtISO
+  }, {
     brandName: "Customer-Owned Brand",
     brandTagline: "Acceptance events, clearly quoted.",
     businessEmail: "customer-owned@example.test",
@@ -692,24 +713,17 @@ try {
     defaultTaxRegion: "owner-local",
     depositPct: 0.25
   });
-  await setDoc(ownerPackageRef, {
-    name: "Customer-Owned Package",
-    description: "Acceptance package configured by the invited tenant owner.",
-    ppp: 42,
-    active: true,
-    updatedAtISO: catalogConfiguredAtISO
-  });
-  await setDoc(ownerEventTypeRef, {
+  await writeOwnerCatalogRecord(ownerEventTypeRef, {
     name: "Customer-Owned Event Type",
     active: true,
     createdAtISO: catalogConfiguredAtISO
   });
-  await setDoc(ownerCategoryRef, {
+  await writeOwnerCatalogRecord(ownerCategoryRef, {
     name: "Customer-Owned Entrées",
     eventTypeId: acceptanceEventTypeId,
     createdAtISO: catalogConfiguredAtISO
   });
-  await setDoc(ownerMenuItemRef, {
+  await writeOwnerCatalogRecord(ownerMenuItemRef, {
     name: "Customer-Owned Entrée",
     eventTypeId: acceptanceEventTypeId,
     categoryId: acceptanceCategoryId,
@@ -719,16 +733,21 @@ try {
     active: true,
     createdAtISO: catalogConfiguredAtISO
   });
+  const configuredSettingsSnapshot = await getDoc(ownerSettingsRef);
+  const configuredCatalogRevision = Number(
+    configuredSettingsSnapshot.data()?.catalogRevision || 0
+  );
+  assert.ok(Number.isInteger(configuredCatalogRevision) && configuredCatalogRevision > 0);
   const confirmedPricing = await callFunction(
     "confirmCatalogPricing",
     bootstrapToken,
     {
       organizationId,
-      expectedCatalogRevision: 0
+      expectedCatalogRevision: configuredCatalogRevision
     }
   );
   assert.equal(confirmedPricing.ok, true);
-  assert.equal(confirmedPricing.confirmedCatalogRevision, 0);
+  assert.equal(confirmedPricing.confirmedCatalogRevision, configuredCatalogRevision);
 
   const trustedCreation = await callFunction(
     "createQuoteDraft",
@@ -756,10 +775,12 @@ try {
         pkg: acceptancePackageId,
         addons: [],
         rentals: [],
-        menuItems: [],
+        menuItems: [acceptanceMenuItemId],
         addonQuantities: {},
         rentalQuantities: {},
-        menuItemQuantities: {},
+        menuItemQuantities: {
+          [acceptanceMenuItemId]: 1
+        },
         milesRT: 0,
         payMethod: "card",
         eventTemplateId: "custom",
@@ -808,12 +829,15 @@ try {
   assert.equal(configuredSettings.data()?.brandName, "Customer-Owned Brand");
   assert.equal(configuredSettings.data()?.pricingSetupConfirmed, true);
   assert.equal(configuredSettings.data()?.pricingConfirmation?.actorUid, invitedOwner.uid);
-  assert.equal(configuredSettings.data()?.pricingConfirmation?.confirmedCatalogRevision, 0);
+  assert.equal(
+    configuredSettings.data()?.pricingConfirmation?.confirmedCatalogRevision,
+    configuredCatalogRevision
+  );
   assert.equal(configuredSettings.data()?.serviceFeePct, 0.15);
   assert.equal(configuredSettings.data()?.taxRate, 0.08);
   assert.equal(configuredSettings.data()?.depositPct, 0.25);
-  assert.equal(configuredPackage.data()?.ppp, 42);
-  assert.ok(Number(configuredPackage.data()?.ppp) > 0);
+  assert.equal(configuredPackage.data()?.pppMinor, 4200);
+  assert.equal(configuredPackage.data()?.ppp, undefined);
   assert.equal(configuredEventType.data()?.name, "Customer-Owned Event Type");
   assert.equal(createdQuote.data()?.status, "draft");
   assert.equal(createdQuote.data()?.ownerUid, invitedOwner.uid);
@@ -1148,9 +1172,29 @@ const contractConverted = await callFunction("convertQuoteToContract", bootstrap
 assert.equal(contractConverted.ok, true);
 assert.equal(contractConverted.status, "booked");
 assert.equal(contractConverted.approvalRequest?.executionState, "succeeded");
+const convertedCanonicalQuoteSnap = await orgRef
+  .collection("quotes")
+  .doc(acceptanceQuoteId)
+  .get();
+const convertedCanonicalQuote = convertedCanonicalQuoteSnap.data();
+const convertedVersionSnap = await orgRef
+  .collection("quotes")
+  .doc(acceptanceQuoteId)
+  .collection("versions")
+  .doc(contractConverted.versionId)
+  .get();
+assert.equal(convertedVersionSnap.exists, true);
+assert.ok(convertedCanonicalQuote?.customerId);
 assert.equal(
-  (await orgRef.collection("quotes").doc(acceptanceQuoteId).get())
-    .data()?.workflow?.approvalRequests
+  convertedVersionSnap.data()?.customerId,
+  convertedCanonicalQuote.customerId
+);
+assert.equal(
+  convertedVersionSnap.data()?.snapshot?.customerId,
+  convertedCanonicalQuote.customerId
+);
+assert.equal(
+  convertedCanonicalQuote?.workflow?.approvalRequests
     ?.find((item) => item.id === contractApproval.id)
     ?.executionState,
   "succeeded"

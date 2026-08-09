@@ -16,6 +16,7 @@ const {
   buildTrustedQuoteEditDocuments,
   customerEmailClaimDocumentId,
   customerProjectionDocumentId,
+  projectCustomerIdentityToImmutableVersion,
   sanitizeQuoteCreationRequest,
   sanitizeStoredStripePaymentLink
 } = require("../../../functions/quoteCreation.js");
@@ -1403,6 +1404,32 @@ describe("trusted server quote creation documents", () => {
       snapshot: { customerId: "customer-a" }
     });
     expect(boundEdit.portal).not.toHaveProperty("customerId");
+  });
+
+  test("contract conversion preserves customer identity on the immutable source version", () => {
+    const version = projectCustomerIdentityToImmutableVersion({
+      versionId: "v0014",
+      quoteId: "quote-customer-linked",
+      organizationId: "org-a",
+      snapshot: {
+        id: "quote-customer-linked",
+        status: "accepted"
+      }
+    }, {
+      id: "quote-customer-linked",
+      organizationId: "org-a",
+      customerId: "customer-a"
+    });
+
+    expect(version).toMatchObject({
+      customerId: "customer-a",
+      snapshot: {
+        customerId: "customer-a"
+      }
+    });
+    expect(projectCustomerIdentityToImmutableVersion({ versionId: "v0014" }, {
+      id: "legacy-quote"
+    })).not.toHaveProperty("customerId");
   });
 
   test("rejects trusted edits that could overwrite terminal evidence or lack staff authority", () => {

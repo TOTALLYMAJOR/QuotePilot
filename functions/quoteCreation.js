@@ -289,6 +289,25 @@ function bindCustomerIdentityToQuoteDocuments(documents, customerId) {
   };
 }
 
+function projectCustomerIdentityToImmutableVersion(version, quote) {
+  if (!isRecord(version) || !isRecord(quote)) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "An immutable version and canonical quote are required for customer projection."
+    );
+  }
+  const customerId = sanitizeIdentifier(quote.customerId, 500);
+  if (!customerId) return { ...version };
+  return {
+    ...version,
+    customerId,
+    snapshot: {
+      ...(isRecord(version.snapshot) ? version.snapshot : {}),
+      customerId
+    }
+  };
+}
+
 function numberInRange(value, fallback = 0, min = 0, max = Number.MAX_SAFE_INTEGER) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
@@ -1776,6 +1795,7 @@ module.exports = {
   customerEmailClaimDocumentId,
   customerProjectionDocumentId,
   customerNameSearchKey,
+  projectCustomerIdentityToImmutableVersion,
   sanitizeQuoteCreationRequest,
   sanitizeStoredStripePaymentLink
 };
