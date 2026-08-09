@@ -3491,6 +3491,52 @@ hr {
   gap: 0.6rem;
 }
 
+.reporting-evidence-rail {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid #d8cfbb;
+  border-left: 4px solid #557568;
+  border-radius: 10px;
+  background: #f7faf8;
+}
+
+.reporting-evidence-partial,
+.reporting-evidence-stale {
+  border-left-color: #a87520;
+  background: #fffaf0;
+}
+
+.reporting-evidence-error {
+  border-left-color: #a43f33;
+  background: #fff6f4;
+}
+
+.reporting-evidence-copy {
+  min-width: 0;
+}
+
+.reporting-evidence-copy h3,
+.reporting-evidence-copy p {
+  margin: 0;
+}
+
+.reporting-evidence-copy h3 {
+  margin-bottom: 0.25rem;
+  color: #30291f;
+}
+
+.reporting-evidence-copy p + p {
+  margin-top: 0.28rem;
+}
+
+.reporting-evidence-rail > button {
+  flex: 0 0 auto;
+}
+
 .metric-card {
   border: 1px solid #d8b86f;
   border-radius: 12px;
@@ -3508,6 +3554,12 @@ hr {
 .metric-card strong {
   font-size: 1.1rem;
   color: #2d230f;
+}
+
+.metric-card small {
+  color: #756b5d;
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
 .status-strip {
@@ -5255,6 +5307,14 @@ hr {
 
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  .reporting-evidence-rail {
+    display: grid;
+  }
+
+  .reporting-evidence-rail > button {
+    width: 100%;
   }
 
   .schedule-range {
