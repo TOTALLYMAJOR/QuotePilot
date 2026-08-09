@@ -18,8 +18,8 @@ Last updated: August 9, 2026
   environment filename, deployment confirmations, and service URLs remain
   unchanged infrastructure identifiers.
 - Exact-source workspace qualification is complete locally: 106 unit files
-  passed with 1,344 tests (4 files / 57 tests skipped); default Playwright passed
-  58 tests with 17 intentionally skipped and the flag-on workspace suite passed
+  passed with 1,350 tests (4 files / 57 tests skipped); default Playwright passed
+  58 tests with 18 intentionally skipped and the flag-on workspace suite passed
   16/16. Firestore rules passed 53/53, the Firebase staff/portal browser lane
   passed 4/4, authoritative quote-write coverage passed 3/3, customer-import
   emulator coverage passed 2/2, and customer-ID backfill emulator coverage
