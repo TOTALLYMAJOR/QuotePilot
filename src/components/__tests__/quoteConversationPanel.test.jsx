@@ -3,12 +3,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
   QuoteConversationMutationStatus,
+  beginConversationPendingAttempt,
   buildConversationCloseGuard,
   buildConversationMutationPresentation,
+  clearConversationPendingAttempt,
   formatConversationTimestamp,
   isDefinitiveConversationSendError,
   isConversationRequestGenerationCurrent,
-  mergeConversationMessages
+  markConversationPendingAttemptError,
+  readConversationPendingAttempt,
+  mergeConversationMessages,
+  syncConversationPendingAttemptUnloadGuard
 } from "../QuoteConversationPanel";
 
 function renderConversationMutationState(props) {
@@ -38,6 +43,7 @@ describe("quote conversation panel states", () => {
 
   test("separates definitive conversation rejection from an uncertain dispatched request", () => {
     expect(isDefinitiveConversationSendError({ code: "functions/invalid-argument" })).toBe(true);
+    expect(isDefinitiveConversationSendError({ code: "functions/already-exists" })).toBe(true);
     expect(isDefinitiveConversationSendError({ code: "permission-denied" })).toBe(true);
     expect(isDefinitiveConversationSendError({
       message: "Conversation requires a connected QuotePilot workspace."
@@ -48,24 +54,152 @@ describe("quote conversation panel states", () => {
     })).toBe(false);
   });
 
-  test("blocks close and editing while a message identity still needs a receipt", () => {
+  test("allows panel close while protecting page unload for an unresolved request", () => {
     expect(buildConversationCloseGuard({
       phase: "sending",
       pendingRequestId: "conversation:request-0001"
-    })).toMatchObject({
-      blocked: true
+    })).toEqual({
+      blocked: false,
+      protectsUnload: true,
+      message: "The unresolved request will be kept for exact reconciliation when this conversation is reopened."
     });
     expect(buildConversationCloseGuard({
       phase: "send_error",
       pendingRequestId: "conversation:request-0001"
     })).toEqual({
-      blocked: true,
-      message: "Reconcile the unresolved message request before closing this conversation."
+      blocked: false,
+      protectsUnload: true,
+      message: "The unresolved request will be kept for exact reconciliation when this conversation is reopened."
     });
     expect(buildConversationCloseGuard({
       phase: "send_error",
       pendingRequestId: ""
-    })).toEqual({ blocked: false, message: "" });
+    })).toEqual({ blocked: false, protectsUnload: false, message: "" });
+  });
+
+  test("restores the exact unresolved request identity and body after a simulated unmount", () => {
+    const identity = "staff:org-a:quote-a::staff-a";
+    const first = beginConversationPendingAttempt({
+      identity,
+      body: "Please confirm the loading dock.",
+      createRequestId: () => "conversation:request-preserved"
+    });
+    markConversationPendingAttemptError({
+      identity,
+      clientRequestId: first.clientRequestId,
+      error: "Connection closed before a receipt returned."
+    });
+
+    const reopened = readConversationPendingAttempt(identity);
+    const reconciliation = beginConversationPendingAttempt({
+      identity,
+      body: reopened.body,
+      createRequestId: () => {
+        throw new Error("A reopened request must not allocate a replacement identity.");
+      }
+    });
+
+    expect(reopened).toMatchObject({
+      clientRequestId: "conversation:request-preserved",
+      body: "Please confirm the loading dock.",
+      resetAllowed: false
+    });
+    expect(reconciliation).toMatchObject({
+      clientRequestId: "conversation:request-preserved",
+      body: "Please confirm the loading dock.",
+      sendMode: "reconcile"
+    });
+    expect(() => beginConversationPendingAttempt({
+      identity,
+      body: "Changed text must use a new request.",
+      clientRequestId: reconciliation.clientRequestId
+    })).toThrow(/retried unchanged/i);
+    expect(clearConversationPendingAttempt({
+      identity,
+      clientRequestId: reconciliation.clientRequestId,
+      resolution: "unknown"
+    })).toBe(false);
+    expect(readConversationPendingAttempt(identity)).not.toBeNull();
+    expect(clearConversationPendingAttempt({
+      identity,
+      clientRequestId: reconciliation.clientRequestId,
+      resolution: "receipt"
+    })).toBe(true);
+    expect(readConversationPendingAttempt(identity)).toBeNull();
+  });
+
+  test("clears a definitively rejected request only through an explicit safe reset", () => {
+    const identity = "portal:::portal-token-safe-reset:";
+    const attempt = beginConversationPendingAttempt({
+      identity,
+      body: "Please confirm dietary restrictions.",
+      createRequestId: () => "conversation:request-safe-reset"
+    });
+    expect(markConversationPendingAttemptError({
+      identity,
+      clientRequestId: attempt.clientRequestId,
+      error: "The portal is no longer active.",
+      resetAllowed: true
+    })).toBe(true);
+    expect(readConversationPendingAttempt(identity)?.resetAllowed).toBe(true);
+    expect(clearConversationPendingAttempt({
+      identity,
+      clientRequestId: attempt.clientRequestId,
+      resolution: "safe_reset"
+    })).toBe(true);
+    expect(readConversationPendingAttempt(identity)).toBeNull();
+  });
+
+  test("keeps one global unload guard after panel unmount until the final attempt resolves", () => {
+    const listeners = new Map();
+    const target = {
+      addCalls: 0,
+      removeCalls: 0,
+      addEventListener(type, listener) {
+        this.addCalls += 1;
+        listeners.set(type, listener);
+      },
+      removeEventListener(type, listener) {
+        this.removeCalls += 1;
+        if (listeners.get(type) === listener) listeners.delete(type);
+      }
+    };
+    const identity = "staff:org-a:quote-unload::staff-a";
+    const attempt = beginConversationPendingAttempt({
+      identity,
+      body: "Preserve this request while the panel is closed.",
+      createRequestId: () => "conversation:request-unload"
+    });
+
+    expect(syncConversationPendingAttemptUnloadGuard(target)).toEqual({
+      active: true,
+      pendingCount: 1
+    });
+    expect(syncConversationPendingAttemptUnloadGuard(target).active).toBe(true);
+    expect(target.addCalls).toBe(1);
+
+    const event = {
+      returnValue: undefined,
+      preventDefaultCalled: false,
+      preventDefault() {
+        this.preventDefaultCalled = true;
+      }
+    };
+    listeners.get("beforeunload")(event);
+    expect(event.preventDefaultCalled).toBe(true);
+    expect(event.returnValue).toBe("");
+
+    expect(clearConversationPendingAttempt({
+      identity,
+      clientRequestId: attempt.clientRequestId,
+      resolution: "receipt"
+    })).toBe(true);
+    expect(target.removeCalls).toBe(1);
+    expect(listeners.has("beforeunload")).toBe(false);
+    expect(syncConversationPendingAttemptUnloadGuard(target)).toEqual({
+      active: false,
+      pendingCount: 0
+    });
   });
 
   test("rejects stale conversation results after a newer load or access identity takes over", () => {
@@ -132,6 +266,12 @@ describe("quote conversation panel states", () => {
       phase: "ready",
       sendMode: "recovery"
     });
+    const safeResetHtml = renderConversationMutationState({
+      phase: "send_error",
+      pendingRequestId: "conversation:request-rejected",
+      sendMode: "safe_reset",
+      error: "The portal is no longer active."
+    });
 
     expect(reconciliationHtml).toContain('data-mutation-state="reconciliation"');
     expect(reconciliationHtml).toContain('data-capability-state="reconciliation"');
@@ -145,9 +285,12 @@ describe("quote conversation panel states", () => {
     expect(errorHtml).toContain('data-capability-state="error"');
     expect(errorHtml).toContain("No recorded message is assumed.");
     expect(errorHtml).toContain(">Retry message</button>");
+    expect(safeResetHtml).toContain('data-mutation-state="error"');
+    expect(safeResetHtml).toContain("Reset rejected attempt");
+    expect(safeResetHtml).toContain("definitive rejection");
     expect(recoveryHtml).toContain('data-mutation-state="recovery"');
     expect(recoveryHtml).toContain('data-capability-state="recovery"');
-    expect(recoveryHtml).toContain("earlier request remains unconfirmed");
+    expect(recoveryHtml).toContain("explicitly cleared");
     expect(recoveryHtml).toContain(">Send revised message</button>");
   });
 });
