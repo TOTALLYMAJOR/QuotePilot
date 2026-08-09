@@ -19,6 +19,10 @@ import {
   calculateQuotePricing,
   notifyOwnerNewQuote
 } from "./lib/commerceOps";
+import {
+  isCommercialSearchAvailable,
+  resolveCommercialSearchShortcutAction
+} from "./lib/commercialSearchShell";
 import { setActiveOrganizationId } from "./lib/organizationService";
 import { isCatalogPricingConfirmationCurrent } from "./lib/catalogPricingConfirmation";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
@@ -78,6 +82,10 @@ const AdminCatalogView = createRecoverableLazy(
 const CommandCenterHome = createRecoverableLazy(
   () => import("./components/CommandCenterHome"),
   "CommandCenterHome"
+);
+const CommercialSearchPalette = createRecoverableLazy(
+  () => import("./components/CommercialSearchPalette"),
+  "CommercialSearchPalette"
 );
 const CustomerDirectoryView = createRecoverableLazy(
   () => import("./components/CustomerDirectoryView"),
@@ -572,6 +580,8 @@ export default function App({ tenantContext, authSession }) {
   const operationsMenuTriggerRef = useRef(null);
   const accountMenuTriggerRef = useRef(null);
   const moreMenuTriggerRef = useRef(null);
+  const commercialSearchTriggerRef = useRef(null);
+  const commercialSearchReturnFocusRef = useRef(null);
   const workspaceToolReturnFocusRef = useRef(null);
   const saveQuoteButtonRef = useRef(null);
   const menuSelectionValidationRef = useRef(null);
@@ -755,6 +765,7 @@ export default function App({ tenantContext, authSession }) {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [openHeaderMenu, setOpenHeaderMenu] = useState("");
+  const [commercialSearchOpen, setCommercialSearchOpen] = useState(false);
   const resolvedWorkspaceRouteId = (
     !CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && browserRoute.routeId === WORKSPACE_ROUTE_IDS.HOME
@@ -791,6 +802,33 @@ export default function App({ tenantContext, authSession }) {
   const importsModalOpen = importStudioOpen || legacyImportsRouteOpen;
   const catalogModalOpen = adminOpen || legacyCatalogRouteOpen;
   const diagnosticsModalOpen = diagnosticsOpen || legacyDiagnosticsRouteOpen;
+  const commercialSearchAvailable = isCommercialSearchAvailable({
+    enabled: CUSTOMER_CENTERED_WORKSPACE_ENABLED,
+    isStaff: authSession.isStaff,
+    organizationId: authSession.organizationId,
+    portalMode,
+    workspaceReady: catalogSetupComplete,
+    isUnscopedPlatformOperator,
+    isWorkspaceRoute: browserRoute.surface === "workspace"
+  });
+  const closeCommercialSearch = useCallback(() => {
+    setCommercialSearchOpen(false);
+  }, []);
+  const openCommercialSearch = useCallback((returnTarget = null) => {
+    if (!commercialSearchAvailable || typeof document === "undefined") return;
+    const existingDialog = document.querySelector('[role="dialog"][aria-modal="true"]');
+    if (existingDialog) return;
+    const activeElement = typeof HTMLElement !== "undefined"
+      && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    commercialSearchReturnFocusRef.current = returnTarget
+      || activeElement
+      || commercialSearchTriggerRef.current
+      || null;
+    setOpenHeaderMenu("");
+    setCommercialSearchOpen(true);
+  }, [commercialSearchAvailable]);
   const closeWorkspaceToolRoute = (routeId, setOpen) => {
     setOpen(false);
     if (resolvedWorkspaceRouteId === routeId) navigateWorkspace(WORKSPACE_PATHS.home);
@@ -889,6 +927,35 @@ export default function App({ tenantContext, authSession }) {
     window.addEventListener("beforeunload", protectDirtyQuote);
     return () => window.removeEventListener("beforeunload", protectDirtyQuote);
   }, [quoteDirty]);
+
+  useEffect(() => {
+    if (!commercialSearchAvailable || typeof document === "undefined") {
+      setCommercialSearchOpen(false);
+      return undefined;
+    }
+    const handleCommercialSearchShortcut = (event) => {
+      const paletteSurface = document.querySelector('[data-commercial-search-surface="true"]');
+      const paletteDialog = paletteSurface?.querySelector('[role="dialog"][aria-modal="true"]');
+      const existingDialog = document.querySelector('[role="dialog"][aria-modal="true"]');
+      const action = resolveCommercialSearchShortcutAction({
+        event,
+        paletteOpen: Boolean(commercialSearchOpen && paletteSurface),
+        anotherModalOpen: Boolean(existingDialog && !paletteSurface?.contains(existingDialog))
+      });
+      if (!action) return;
+      event.preventDefault();
+      if (action === "refocus") {
+        const paletteFocusTarget = paletteDialog?.querySelector("#commercial-search-query")
+          || paletteDialog?.querySelector("button:not([disabled])")
+          || paletteDialog;
+        paletteFocusTarget?.focus({ preventScroll: true });
+        return;
+      }
+      openCommercialSearch();
+    };
+    document.addEventListener("keydown", handleCommercialSearchShortcut);
+    return () => document.removeEventListener("keydown", handleCommercialSearchShortcut);
+  }, [commercialSearchAvailable, commercialSearchOpen, openCommercialSearch]);
 
   useEffect(() => {
     if (!openHeaderMenu || typeof document === "undefined") return undefined;
@@ -2497,6 +2564,18 @@ export default function App({ tenantContext, authSession }) {
                 >
                   Customers
                 </button>
+                <button
+                  className="ghost commercial-search-trigger"
+                  type="button"
+                  ref={commercialSearchTriggerRef}
+                  aria-haspopup="dialog"
+                  aria-keyshortcuts="Meta+K Control+K"
+                  title="Search customers and quotes (Ctrl or Command K)"
+                  onClick={(event) => openCommercialSearch(event.currentTarget)}
+                >
+                  <span>Search</span>
+                  <kbd aria-hidden="true">⌘K</kbd>
+                </button>
               </>
             )}
             <button className="cta header-quick-cta" type="button" onClick={handleGetInstantQuote}>New quote</button>
@@ -2624,6 +2703,27 @@ export default function App({ tenantContext, authSession }) {
         </div>
       </header>
 
+      {commercialSearchAvailable && commercialSearchOpen && (
+        <div data-commercial-search-surface="true">
+          <WorkspaceLazyTool
+            open
+            surfaceName="Commercial search"
+            component={CommercialSearchPalette}
+            onClose={closeCommercialSearch}
+            returnFocusRef={commercialSearchReturnFocusRef}
+          >
+            <CommercialSearchPalette
+              open
+              organizationId={authSession.organizationId}
+              onClose={closeCommercialSearch}
+              onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+              onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+              returnFocusRef={commercialSearchReturnFocusRef}
+            />
+          </WorkspaceLazyTool>
+        </div>
+      )}
+
       <section className="workspace-intro container">
         <p><strong>{String(organization?.name || brandName || "Catering workspace").trim()}</strong></p>
         <p className={quoteDirty ? "workspace-save-state is-dirty" : "workspace-save-state"} aria-live="polite">
@@ -2656,6 +2756,7 @@ export default function App({ tenantContext, authSession }) {
         <WorkspaceLazyRoute surfaceName="Customer directory" component={CustomerDirectoryView}>
           <CustomerDirectoryView
             organizationId={authSession.organizationId}
+            organizationName={organizationName}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onNewQuote={handleGetInstantQuote}
           />
@@ -2666,12 +2767,14 @@ export default function App({ tenantContext, authSession }) {
         <WorkspaceLazyRoute surfaceName="Customer 360" component={CustomerWorkspaceView}>
           <CustomerWorkspaceView
             organizationId={authSession.organizationId}
+            organizationName={organizationName}
             customerId={browserRoute.params?.customerId || ""}
             onBack={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
             onOpenQuotes={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
             onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
             onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
             onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
+            scheduleAvailable={eventScheduleEnabled}
           />
         </WorkspaceLazyRoute>
       )}

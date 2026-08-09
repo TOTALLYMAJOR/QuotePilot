@@ -6,10 +6,12 @@ vi.mock("../firebase", () => ({
 }));
 
 import {
+  buildCustomerBriefing,
   buildCustomerWorkspaceDto,
   buildStaffProposalPreview,
   decodeCustomerPathId,
   encodeCustomerPathId,
+  getCustomerDirectoryPage,
   getCustomerWorkspace,
   normalizeCustomerSearchKey
 } from "../customerWorkspace";
@@ -52,6 +54,7 @@ describe("customer workspace identity helpers", () => {
 describe("buildCustomerWorkspaceDto", () => {
   const quote = {
     id: "quote-1",
+    organizationId: "org-1",
     customerId: "customer-1",
     quoteNumber: "Q-1001",
     status: "accepted",
@@ -188,6 +191,56 @@ describe("buildCustomerWorkspaceDto", () => {
       .toBe("2026-08-08T09:00:00.000Z");
   });
 
+  test("preserves unknown commercial numbers as null and genuine zeroes as zero", () => {
+    const dto = buildCustomerWorkspaceDto({
+      customer: { id: "customer-1" },
+      quotes: [
+        {
+          ...quote,
+          id: "unknown-values",
+          quoteNumber: "Q-UNKNOWN",
+          event: { ...quote.event, guests: undefined },
+          totals: {
+            subtotal: undefined,
+            tax: Number.NaN,
+            total: Number.POSITIVE_INFINITY,
+            deposit: ""
+          },
+          payment: {
+            depositStatus: "unpaid",
+            finalBalance: { status: "sent", amountCents: "not-a-number" }
+          }
+        },
+        {
+          ...quote,
+          id: "zero-values",
+          quoteNumber: "Q-ZERO",
+          event: { ...quote.event, guests: 0 },
+          totals: { subtotal: 0, tax: 0, total: 0, deposit: 0 },
+          payment: {
+            depositStatus: "unpaid",
+            finalBalance: { status: "unpaid", amountCents: 0 }
+          }
+        }
+      ]
+    });
+
+    expect(dto.events.find((event) => event.quoteId === "unknown-values")?.guests).toBeNull();
+    expect(dto.events.find((event) => event.quoteId === "zero-values")?.guests).toBe(0);
+    expect(dto.money.find((row) => (
+      row.quoteId === "unknown-values" && row.kind === "deposit"
+    ))?.amount).toBeNull();
+    expect(dto.money.find((row) => (
+      row.quoteId === "unknown-values" && row.kind === "final_balance"
+    ))?.amount).toBeNull();
+    expect(dto.money.find((row) => (
+      row.quoteId === "zero-values" && row.kind === "deposit"
+    ))?.amount).toBe(0);
+    expect(dto.money.find((row) => (
+      row.quoteId === "zero-values" && row.kind === "final_balance"
+    ))?.amount).toBe(0);
+  });
+
   test("loads retained local proposal versions for Customer 360", async () => {
     localStorage.setItem("quoteWizard.quotes", JSON.stringify([quote]));
     localStorage.setItem("quoteWizard.quoteHistory", JSON.stringify([
@@ -220,6 +273,121 @@ describe("buildCustomerWorkspaceDto", () => {
       quoteId: "quote-1",
       createdAtISO: "2026-08-08T11:00:00.000Z"
     });
+  });
+
+  test("fails closed across local tenant, customer, quote, and version collisions", async () => {
+    localStorage.setItem("quoteWizard.quotes", JSON.stringify([
+      {
+        ...quote,
+        id: "colliding-quote",
+        organizationId: "org-1",
+        customerId: "colliding-customer",
+        customer: { name: "Org One Customer", email: "one@example.test" }
+      },
+      {
+        ...quote,
+        id: "colliding-quote",
+        organizationId: "org-2",
+        customerId: "colliding-customer",
+        customer: { name: "Org Two Customer", email: "two@example.test" }
+      },
+      {
+        ...quote,
+        id: "unscoped-quote",
+        organizationId: "",
+        customerId: "unscoped-customer",
+        customer: { name: "Unscoped Customer", email: "legacy@example.test" }
+      }
+    ]));
+    localStorage.setItem("quoteWizard.quoteHistory", JSON.stringify([
+      {
+        id: "org-2-version",
+        versionId: "org-2-version",
+        quoteId: "colliding-quote",
+        organizationId: "org-2",
+        timestamp: "2026-08-08T12:00:00.000Z"
+      },
+      {
+        id: "unscoped-version",
+        versionId: "unscoped-version",
+        quoteId: "colliding-quote",
+        timestamp: "2026-08-08T11:30:00.000Z"
+      },
+      {
+        id: "org-1-version",
+        versionId: "org-1-version",
+        quoteId: "colliding-quote",
+        organizationId: "org-1",
+        timestamp: "2026-08-08T11:00:00.000Z"
+      }
+    ]));
+
+    const directory = await getCustomerDirectoryPage({ organizationId: "org-1" });
+    expect(directory.items).toHaveLength(1);
+    expect(directory.items[0]).toMatchObject({
+      id: "colliding-customer",
+      name: "Org One Customer",
+      email: "one@example.test"
+    });
+
+    const workspace = await getCustomerWorkspace({
+      organizationId: "org-1",
+      customerId: "colliding-customer"
+    });
+    expect(workspace?.quotes).toHaveLength(1);
+    expect(workspace?.quotes[0]).toMatchObject({
+      id: "colliding-quote",
+      organizationId: "org-1"
+    });
+    expect(workspace?.proposalVersions.map((version) => version.versionId))
+      .toEqual(["org-1-version"]);
+    await expect(getCustomerWorkspace({
+      organizationId: "org-1",
+      customerId: "unscoped-customer"
+    })).resolves.toBeNull();
+  });
+});
+
+describe("buildCustomerBriefing", () => {
+  test("selects bounded relationship context without manufacturing future activity", () => {
+    const briefing = buildCustomerBriefing({
+      quotes: [{ id: "q1" }, { id: "q2" }],
+      activeQuotes: [{ id: "q2" }],
+      events: [
+        { quoteId: "past", eventName: "Past dinner", date: "2026-08-01", time: "18:00" },
+        { quoteId: "later", eventName: "Holiday party", date: "2026-12-10", time: "19:00" },
+        { quoteId: "next", eventName: "Board dinner", date: "2026-09-01", time: "17:00" }
+      ],
+      attention: { itemCount: 2 },
+      recentActivity: [{ quoteId: "q2", label: "Proposal accepted", atISO: "2026-08-08T10:00:00.000Z" }],
+      nextAction: { kind: "workflow", label: "Review the customer change request", quoteId: "q2" },
+      quotePageInfo: { limit: 25, truncated: true },
+      nowISO: "2026-08-09T12:00:00.000Z",
+      todayDate: "2026-08-09"
+    });
+
+    expect(briefing).toEqual({
+      activeQuoteCount: 1,
+      displayedQuoteCount: 2,
+      attentionCount: 2,
+      nextEvent: expect.objectContaining({ quoteId: "next", eventName: "Board dinner" }),
+      latestActivity: expect.objectContaining({ quoteId: "q2", label: "Proposal accepted" }),
+      nextAction: expect.objectContaining({ kind: "workflow", quoteId: "q2" }),
+      scope: { limit: 25, truncated: true }
+    });
+  });
+
+  test("uses an explicit workspace calendar date across UTC date boundaries", () => {
+    const briefing = buildCustomerBriefing({
+      events: [
+        { quoteId: "same-day", date: "2026-08-09", time: "19:00" },
+        { quoteId: "tomorrow", date: "2026-08-10", time: "09:00" }
+      ],
+      nowISO: "2026-08-10T04:30:00.000Z",
+      todayDate: "2026-08-09"
+    });
+
+    expect(briefing.nextEvent?.quoteId).toBe("same-day");
   });
 });
 
@@ -263,5 +431,36 @@ describe("buildStaffProposalPreview", () => {
       { label: "Culinary lead", imageUrl: "https://cdn.example.test/chef.png" }
     ]);
     expect(preview).not.toHaveProperty("portalKey");
+  });
+
+  test("distinguishes absent and non-finite values from genuine zeroes", () => {
+    const unknown = buildStaffProposalPreview({
+      event: { guests: undefined },
+      totals: {
+        subtotal: undefined,
+        tax: Number.NaN,
+        total: Number.POSITIVE_INFINITY,
+        deposit: ""
+      }
+    });
+    const zero = buildStaffProposalPreview({
+      event: { guests: 0 },
+      totals: { subtotal: 0, tax: 0, total: 0, deposit: 0 }
+    });
+
+    expect(unknown).toMatchObject({
+      guests: null,
+      subtotal: null,
+      tax: null,
+      total: null,
+      deposit: null
+    });
+    expect(zero).toMatchObject({
+      guests: 0,
+      subtotal: 0,
+      tax: 0,
+      total: 0,
+      deposit: 0
+    });
   });
 });

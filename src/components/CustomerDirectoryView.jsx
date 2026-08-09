@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getCustomerDirectoryPage } from "../lib/customerWorkspace";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { StaffReadContextRail } from "./StaffEvidenceRail";
 import {
   formatWorkspaceDate,
   formatWorkspaceSource,
@@ -12,7 +13,10 @@ const INITIAL_STATE = {
   error: "",
   source: "",
   items: [],
-  nextCursor: ""
+  nextCursor: "",
+  loadedAt: 0,
+  stale: false,
+  readKey: ""
 };
 
 export function CustomerDirectoryPresentation({
@@ -27,16 +31,31 @@ export function CustomerDirectoryPresentation({
   onNewQuote,
   onPreviousPage,
   onNextPage,
+  organizationName = "",
+  organizationId = "",
   headingRef = null
 }) {
   const items = Array.isArray(state.items) ? state.items : [];
-  const readState = state.loading
-    ? "loading"
+  const readState = state.stale
+    ? "stale"
+    : state.loading
+      ? "loading"
     : state.error
       ? "error"
       : items.length
         ? "success"
         : "empty";
+  const readOutcome = state.loading
+    ? state.loadedAt
+      ? "Refreshing the bounded directory page; the prior page remains visible."
+      : "Waiting for the bounded customer-directory read to complete."
+    : state.error
+      ? state.stale
+        ? "The latest directory read failed; the prior completed page remains visible."
+        : "The customer-directory read did not complete."
+      : state.nextCursor
+        ? "This directory page completed; another bounded page is available."
+        : "This directory page completed with no additional page reported.";
 
   return (
     <main
@@ -80,6 +99,24 @@ export function CustomerDirectoryPresentation({
           </button>
         </form>
 
+        <StaffReadContextRail
+          organizationName={organizationName}
+          organizationId={organizationId}
+          source={state.source}
+          loadedAt={state.loadedAt}
+          loading={state.loading}
+          error={state.error}
+          stale={state.stale}
+          truncated={Boolean(state.nextCursor)}
+          truncationKnown={Number(state.loadedAt) > 0}
+          readContract="Tenant-scoped customer directory page capped at 25 records plus one pagination sentinel"
+          outcome={readOutcome}
+          boundsNote="This page shows at most 25 customer records; use Next to request the following bounded page."
+          title="Customer directory read context"
+          titleId="customer-directory-read-context-title"
+          caveat="Freshness describes this staff directory read only. It does not prove customer activity, proposal delivery, acceptance, booking, payment, or operational completion."
+        />
+
         <p className="source-note">
           Source: {state.loading && !state.source ? "Loading tenant records" : formatWorkspaceSource(state.source)}
         </p>
@@ -90,7 +127,12 @@ export function CustomerDirectoryPresentation({
         )}
 
         {items.length > 0 && (
-          <div className="table-wrap">
+          <div
+            className="table-wrap customer-directory-results-region"
+            role="region"
+            aria-label="Customer directory results"
+            tabIndex={0}
+          >
             <table className="customer-directory-table">
               <thead>
                 <tr>
@@ -148,7 +190,12 @@ export function CustomerDirectoryPresentation({
   );
 }
 
-export default function CustomerDirectoryView({ organizationId = "", onOpenCustomer, onNewQuote }) {
+export default function CustomerDirectoryView({
+  organizationId = "",
+  organizationName = "",
+  onOpenCustomer,
+  onNewQuote
+}) {
   const headingRef = useWorkspaceRouteHeadingFocus(true);
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
@@ -157,28 +204,41 @@ export default function CustomerDirectoryView({ organizationId = "", onOpenCusto
   const [refreshToken, setRefreshToken] = useState(0);
   const [state, setState] = useState(INITIAL_STATE);
   const generationRef = useRef(0);
+  const requestedReadKey = `${String(organizationId || "").trim()}\u0000${search}\u0000${cursor}`;
 
   useEffect(() => {
     const generation = generationRef.current + 1;
     generationRef.current = generation;
-    setState((current) => ({ ...current, loading: true, error: "" }));
+    setState((current) => current.readKey === requestedReadKey
+      ? { ...current, loading: true, error: "", stale: false }
+      : { ...INITIAL_STATE, loading: true, readKey: requestedReadKey });
     getCustomerDirectoryPage({ organizationId, search, cursor })
       .then((result) => {
         if (generation !== generationRef.current) return;
-        setState({ loading: false, error: "", ...result });
+        setState({
+          loading: false,
+          error: "",
+          stale: false,
+          loadedAt: Date.now(),
+          readKey: requestedReadKey,
+          ...result
+        });
       })
       .catch((error) => {
         if (generation !== generationRef.current) return;
         setState((current) => ({
-          ...current,
+          ...(current.readKey === requestedReadKey
+            ? current
+            : { ...INITIAL_STATE, readKey: requestedReadKey }),
           loading: false,
+          stale: current.readKey === requestedReadKey && Number(current.loadedAt) > 0,
           error: error?.message || "Failed to load customers."
         }));
       });
     return () => {
       generationRef.current += 1;
     };
-  }, [cursor, organizationId, refreshToken, search]);
+  }, [cursor, organizationId, refreshToken, requestedReadKey, search]);
 
   const applySearch = (event) => {
     event.preventDefault();
@@ -200,10 +260,13 @@ export default function CustomerDirectoryView({ organizationId = "", onOpenCusto
       return current.slice(0, -1);
     });
   };
+  const visibleState = state.readKey === requestedReadKey
+    ? state
+    : { ...INITIAL_STATE, loading: true, readKey: requestedReadKey };
 
   return (
     <CustomerDirectoryPresentation
-      state={state}
+      state={visibleState}
       searchDraft={searchDraft}
       cursorHistoryLength={cursorHistory.length}
       onSearchDraftChange={setSearchDraft}
@@ -219,6 +282,8 @@ export default function CustomerDirectoryView({ organizationId = "", onOpenCusto
       onNewQuote={onNewQuote}
       onPreviousPage={openPreviousPage}
       onNextPage={openNextPage}
+      organizationName={organizationName}
+      organizationId={organizationId}
       headingRef={headingRef}
     />
   );

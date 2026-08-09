@@ -80,7 +80,7 @@ export function buildStaffEvidenceRailModel({
   };
 }
 
-export default function StaffEvidenceRail({
+export function StaffReadContextRail({
   organizationName = "",
   organizationId = "",
   source = "",
@@ -91,9 +91,13 @@ export default function StaffEvidenceRail({
   stale = false,
   truncated = false,
   truncationKnown = false,
-  reads = {},
   historyLimit = 200,
-  readContract = "Tenant-scoped Workflow Attention quote read plus the latest 200 staff quote records"
+  readContract = "Tenant-scoped staff read",
+  outcome = "",
+  boundsNote = "",
+  caveat = "Freshness describes this staff read only. It does not prove provider delivery, customer acceptance, booking, payment, or operational completion.",
+  title = "Staff read context",
+  titleId = "staff-evidence-rail-title"
 }) {
   const model = buildStaffEvidenceRailModel({
     loading,
@@ -110,14 +114,14 @@ export default function StaffEvidenceRail({
   return (
     <aside
       className={`staff-evidence-rail staff-evidence-${model.state}`}
-      aria-labelledby="staff-evidence-rail-title"
+      aria-labelledby={titleId}
       data-capability-state={model.state}
       data-read-truncation={truncationKnown ? (truncated ? "truncated" : "complete") : "unknown"}
     >
       <div className="staff-evidence-head">
         <div>
           <p className="eyebrow">Data confidence</p>
-          <h3 id="staff-evidence-rail-title">Staff read context</h3>
+          <h3 id={titleId}>{title}</h3>
         </div>
         <StatusChip {...model.presentation} />
       </div>
@@ -150,16 +154,60 @@ export default function StaffEvidenceRail({
       </dl>
 
       <p className="staff-evidence-outcome" role="status" aria-live="polite" aria-atomic="true">
-        {model.detail} {contractOutcome(reads, { retained: model.state === "stale" })}
+        {model.detail} {outcome}
       </p>
-      {truncationKnown && truncated && (
+      {truncationKnown && truncated && boundsNote && (
         <p className="staff-evidence-bounds-note">
-          Quote history is capped at the latest {historyLimit} records; open Quotes for full history.
+          {boundsNote}
         </p>
       )}
       <p className="staff-evidence-caveat">
-        Freshness describes this staff read only. It does not prove provider delivery, customer acceptance, booking, payment, or operational completion.
+        {caveat}
       </p>
     </aside>
+  );
+}
+
+export default function StaffEvidenceRail({
+  organizationName = "",
+  organizationId = "",
+  source = "",
+  loadedAt = 0,
+  loading = false,
+  error = "",
+  partial = false,
+  stale = false,
+  truncated = false,
+  truncationKnown = false,
+  reads = {},
+  historyLimit = 200,
+  readContract = "Tenant-scoped Workflow Attention quote read plus the latest 200 staff quote records"
+}) {
+  const model = buildStaffEvidenceRailModel({
+    loading,
+    error,
+    loadedAt,
+    partial,
+    stale,
+    truncated,
+    historyLimit
+  });
+  return (
+    <StaffReadContextRail
+      organizationName={organizationName}
+      organizationId={organizationId}
+      source={source}
+      loadedAt={loadedAt}
+      loading={loading}
+      error={error}
+      partial={partial}
+      stale={stale}
+      truncated={truncated}
+      truncationKnown={truncationKnown}
+      historyLimit={historyLimit}
+      readContract={readContract}
+      outcome={contractOutcome(reads, { retained: model.state === "stale" })}
+      boundsNote={`Quote history is capped at the latest ${historyLimit} records; open Quotes for full history.`}
+    />
   );
 }
