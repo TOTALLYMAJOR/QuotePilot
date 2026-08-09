@@ -17,7 +17,12 @@ import {
   getRequestableApprovalActions
 } from "../lib/quoteWorkflow";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
+import {
+  WORKFLOW_TIMING_INPUT_SCAN_LIMIT,
+  buildWorkflowTimingCues
+} from "../lib/workflowTimingCues";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import WorkflowTimingPanel from "./WorkflowTimingPanel";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
@@ -40,12 +45,26 @@ function fmtDueDate(value) {
   return formatWorkspaceDate(value, { emptyLabel: "No due date" });
 }
 
-function todayIso() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function captureWorkflowSnapshotContext() {
+  const snapshotAtISO = new Date().toISOString();
+  let snapshotTimeZone = "UTC";
+  try {
+    snapshotTimeZone = new Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    snapshotTimeZone = "UTC";
+  }
+  const dateParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: snapshotTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(snapshotAtISO));
+  const dateValues = Object.fromEntries(dateParts.map((part) => [part.type, part.value]));
+  return {
+    snapshotAtISO,
+    snapshotTimeZone,
+    snapshotTodayISO: `${dateValues.year}-${dateValues.month}-${dateValues.day}`
+  };
 }
 
 function actionLabel(action) {
@@ -92,12 +111,16 @@ export function SalesWorkflowView({
 }) {
   const embedded = presentation === "embedded";
   const [state, setState] = useState({
-    loading: false,
+    loading: Boolean(open),
     error: "",
     feedback: "",
     source: "",
     organizationId: "",
-    quotes: []
+    quotes: [],
+    truncated: false,
+    snapshotAtISO: "",
+    snapshotTimeZone: "UTC",
+    snapshotTodayISO: ""
   });
   const [activeTab, setActiveTab] = useState("attention");
   const [selectedQuoteId, setSelectedQuoteId] = useState("");
@@ -144,22 +167,30 @@ export function SalesWorkflowView({
     loadGenerationRef.current = generation;
     setState((prev) => ({ ...prev, loading: true, error: "", feedback: "" }));
     try {
-      const result = await getQuoteHistory({ organizationId });
+      const result = await getQuoteHistory({
+        organizationId,
+        limitCount: WORKFLOW_TIMING_INPUT_SCAN_LIMIT
+      });
       if (generation !== loadGenerationRef.current || workflowScopeRef.current !== loadScope) return;
+      const snapshotContext = captureWorkflowSnapshotContext();
       setState({
         loading: false,
         error: "",
         feedback: "",
         source: result.source,
         organizationId: loadOrganizationId,
-        quotes: result.quotes
+        quotes: result.quotes,
+        truncated: result.truncated === true,
+        ...snapshotContext
       });
       setSelectedQuoteId((current) => {
         if (focusQuoteId && result.quotes.some((item) => item.id === focusQuoteId)) return focusQuoteId;
         return result.quotes.some((item) => item.id === current) ? current : result.quotes[0]?.id || "";
       });
       if (selectDefaultTab && !tabInteractedRef.current) {
-        setActiveTab(buildWorkflowAttentionSummary(result.quotes).quoteCount > 0 ? "attention" : "followups");
+        setActiveTab(buildWorkflowAttentionSummary(result.quotes, {
+          todayISO: snapshotContext.snapshotTodayISO
+        }).quoteCount > 0 ? "attention" : "followups");
       }
     } catch (err) {
       if (generation !== loadGenerationRef.current || workflowScopeRef.current !== loadScope) return;
@@ -177,12 +208,16 @@ export function SalesWorkflowView({
     skipReturnFocusRef.current = false;
     setState((prev) => ({
       ...prev,
-      loading: false,
+      loading: true,
       error: "",
       feedback: "",
       source: "",
       organizationId: "",
-      quotes: []
+      quotes: [],
+      truncated: false,
+      snapshotAtISO: "",
+      snapshotTimeZone: "UTC",
+      snapshotTodayISO: ""
     }));
     setActiveTab("attention");
     setApprovalNote("");
@@ -280,9 +315,31 @@ export function SalesWorkflowView({
   );
 
   const attentionSummary = useMemo(
-    () => buildWorkflowAttentionSummary(state.quotes),
-    [state.quotes]
+    () => buildWorkflowAttentionSummary(state.quotes, {
+      todayISO: state.snapshotTodayISO || undefined
+    }),
+    [state.quotes, state.snapshotTodayISO]
   );
+
+  const timingRead = useMemo(() => {
+    if (!state.snapshotAtISO) return { model: null, error: "" };
+    try {
+      return {
+        model: buildWorkflowTimingCues({
+          attentionSummary,
+          quotes: state.quotes,
+          nowISO: state.snapshotAtISO,
+          timeZone: state.snapshotTimeZone
+        }),
+        error: ""
+      };
+    } catch (error) {
+      return {
+        model: null,
+        error: error?.message || "Timing evidence could not be derived from this snapshot."
+      };
+    }
+  }, [attentionSummary, state.quotes, state.snapshotAtISO, state.snapshotTimeZone]);
 
   useEffect(() => {
     if (!open || state.loading || !focusQuoteId) return undefined;
@@ -543,6 +600,23 @@ export function SalesWorkflowView({
     });
   };
 
+  const handleReviewApprovalRecord = (quoteId, requestId = "") => {
+    selectTab("approvals");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const approvalRows = Array.from(dialogRef.current?.querySelectorAll(".approval-row") || []);
+        const exactRequest = requestId
+          ? approvalRows.find((element) => (
+            element.dataset.quoteId === quoteId
+            && element.dataset.requestId === requestId
+          ))
+          : null;
+        const quoteApproval = approvalRows.find((element) => element.dataset.quoteId === quoteId);
+        (exactRequest || quoteApproval || tabRefs.current.approvals)?.focus();
+      });
+    });
+  };
+
   const handleEditQuote = (quote) => {
     skipReturnFocusRef.current = true;
     onEditQuote?.(quote);
@@ -566,6 +640,34 @@ export function SalesWorkflowView({
         (target || attentionEmptyHeadingRef.current || tabRefs.current.attention)?.focus();
       });
     });
+  };
+
+  const handleReviewTimingCue = (cue) => {
+    if (!cue?.quoteId) return;
+    if (cue.type === "follow_up") {
+      handleReviewFollowUp(cue.quoteId);
+      return;
+    }
+    const attentionItem = attentionSummary.items.find((item) => (
+      item.id === cue.id
+      || (item.quoteId === cue.quoteId && item.type === cue.type)
+    ));
+    if (attentionItem) {
+      selectTab("attention");
+      focusAttentionItem([attentionItem.id]);
+      return;
+    }
+    if (cue.type === "approval") handleReviewApprovalRecord(cue.quoteId);
+    else handleReviewFollowUp(cue.quoteId);
+  };
+
+  const handleOpenTimingReceipt = (receipt) => {
+    if (!state.quotes.some((item) => item.id === receipt?.quoteId)) return;
+    if (receipt.kind === "approval_decision_recorded") {
+      handleReviewApprovalRecord(receipt.quoteId, receipt.requestId);
+      return;
+    }
+    handleReviewFollowUp(receipt.quoteId);
   };
 
   const handleChangeRequestAction = async (item, action) => {
@@ -730,7 +832,21 @@ export function SalesWorkflowView({
             <p className="workflow-attention-boundary">
               This is an in-app queue. Acknowledging or marking work handled does not edit a quote or send email or SMS.
             </p>
-            {attentionSummary.items.length === 0 && !state.loading && (
+            <WorkflowTimingPanel
+              model={timingRead.model}
+              loading={state.loading}
+              error={state.error || timingRead.error}
+              loadedAtISO={state.snapshotAtISO}
+              source={state.source}
+              sourceTruncated={state.truncated}
+              onRetry={() => load()}
+              onReviewCue={handleReviewTimingCue}
+              onOpenReceipt={handleOpenTimingReceipt}
+            />
+            {attentionSummary.items.length === 0
+              && !state.loading
+              && !state.error
+              && state.snapshotAtISO && (
               <div className="workflow-attention-empty">
                 <h3 ref={attentionEmptyHeadingRef} tabIndex={-1}>No workflow attention needed</h3>
                 <p>Due follow-ups, customer change requests, and pending approvals will appear here.</p>
@@ -888,7 +1004,10 @@ export function SalesWorkflowView({
             <section className="workflow-quote-list" aria-label="Quotes and follow-ups">
               {quoteSummaries.length === 0 && !state.loading && <p className="muted">No quotes saved yet.</p>}
               {quoteSummaries.map(({ quote, readiness: itemReadiness, followUp }) => {
-                const overdue = !followUp.completed && followUp.dueDate && followUp.dueDate <= todayIso();
+                const overdue = !followUp.completed
+                  && followUp.dueDate
+                  && state.snapshotTodayISO
+                  && followUp.dueDate < state.snapshotTodayISO;
                 return (
                   <button
                     type="button"
