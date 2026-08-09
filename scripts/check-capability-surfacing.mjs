@@ -77,21 +77,23 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FUNCTIONS_ENTRYPOINT_PATH = "functions/index.js";
 const FUNCTION_EXPORT_DECLARATION_PATTERN = /^[\t ]*exports\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=(?!=|>)/gm;
 const MUTATION_EXPORT_NAME_PATTERN = /^(?:accept|activate|apply|approve|archive|book|cancel|charge|claim|close|confirm|convert|create|deactivate|decline|delete|dispatch|duplicate|ensure|expire|finalize|hardDelete|invite|link|mark|mutate|notify|pay|persist|provision|publish|purge|reconcile|record|refund|reopen|repair|request|reschedule|rollback|rotate|save|schedule|send|set|sign|submit|sync|update|upsert|void|write)/i;
-const MUTATION_SOURCE_WRITE_PATTERN = /(?:\.\s*(?:add|commit|create|delete|set|update)\s*\(|\b(?:createUser|deleteUser|recursiveDelete|runTransaction|setCustomUserClaims|updateUser)\s*\()/;
-const PRESENTATION_ONLY_LIB_PATHS = new Set([
-  "src/lib/statusSemantics.js",
-  "src/lib/workspaceRoutes.js"
+const MUTATION_SOURCE_WRITE_PATTERN = /(?:\.\s*(?:add|commit|create|delete|set|update)\s*\(|\b(?:addDoc|createUser|deleteDoc|deleteUser|recursiveDelete|runTransaction|setCustomUserClaims|setDoc|updateDoc|updateUser|writeBatch)\s*\()/;
+const CLIENT_PRESENTATION_PREFIXES = Object.freeze([
+  "src/components/"
 ]);
-const AUTHORITY_CLIENT_PREFIXES = Object.freeze([
-  "src/context/",
-  "src/hooks/",
-  "src/services/"
-]);
-const PRESENTATION_ONLY_CLIENT_PATHS = new Set([
+const CLIENT_PRESENTATION_EXCLUSIONS = new Set([
+  "src/App.jsx",
+  "src/main.jsx",
   "src/context/WorkspaceNavigationContext.jsx",
   "src/hooks/useBrowserLocation.js",
-  "src/hooks/useCommercialWorkspaceSnapshot.js"
+  "src/hooks/useCommercialWorkspaceSnapshot.js",
+  "src/hooks/useWorkspaceRouteHeadingFocus.js",
+  "src/lib/statusSemantics.js",
+  "src/lib/workspacePresentation.js",
+  "src/lib/workspaceRoutes.js"
 ]);
+const DIRECT_CLIENT_AUTHORITY_IMPORT_PATTERN = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:firebase(?:\/|["'])|@google-cloud\/|@supabase\/|stripe(?:\/|["']))/;
+const DIRECT_CLIENT_AUTHORITY_CALL_PATTERN = /\b(?:addDoc|deleteDoc|fetch|getDoc|getDocs|httpsCallable|onSnapshot|runTransaction|setDoc|updateDoc|uploadBytes|writeBatch)\s*\(/;
 const AUTHORITY_SCRIPT_PATTERN = /(?:^|[-_.])(?:acceptance|backfill|bootstrap|cleanup|import|migrat(?:e|ion)|provision|purge|reconcil(?:e|iation)|repair|rotate|seed|sync)(?:[-_.]|$)/i;
 
 function normalizePath(value) {
@@ -101,33 +103,52 @@ function normalizePath(value) {
     .trim();
 }
 
-function isSourceFile(file) {
-  return /\.(?:cjs|js|jsx|mjs|ts|tsx|json)$/.test(file);
-}
-
 function isRuntimeCodeFile(file) {
   return /\.(?:cjs|js|jsx|mjs|ts|tsx)$/.test(file) && !file.endsWith(".d.ts");
 }
 
-export function isBackendDeliveryPath(value) {
+export function hasDirectClientAuthoritySignals(source) {
+  const input = String(source || "");
+  if (!input) return false;
+  return DIRECT_CLIENT_AUTHORITY_IMPORT_PATTERN.test(stripComments(input))
+    || DIRECT_CLIENT_AUTHORITY_CALL_PATTERN.test(executableCodeOnly(input));
+}
+
+export function isBackendDeliveryPath(value, { source = "" } = {}) {
   const file = normalizePath(value);
   if (!file || file.includes("/__tests__/") || /(?:^|\/)test(?:s)?\//.test(file)) {
     return false;
   }
   if (["firestore.rules", "firestore.indexes.json"].includes(file)) return true;
   if (file.startsWith("functions/") && isRuntimeCodeFile(file)) return true;
-  if (
-    isRuntimeCodeFile(file)
-    && AUTHORITY_CLIENT_PREFIXES.some((prefix) => file.startsWith(prefix))
-    && !PRESENTATION_ONLY_CLIENT_PATHS.has(file)
-  ) return true;
-  if (
-    file.startsWith("src/lib/")
-    && isSourceFile(file)
-    && !PRESENTATION_ONLY_LIB_PATHS.has(file)
-  ) return true;
+  if (file.startsWith("src/") && isRuntimeCodeFile(file)) {
+    // Client authority can appear in any future source folder, so default to
+    // review and keep the exclusion surface intentionally presentation-only.
+    if (CLIENT_PRESENTATION_EXCLUSIONS.has(file)) {
+      return hasDirectClientAuthoritySignals(source);
+    }
+    if (CLIENT_PRESENTATION_PREFIXES.some((prefix) => file.startsWith(prefix))) return false;
+    return true;
+  }
   if (!file.startsWith("scripts/") || !isRuntimeCodeFile(file)) return false;
   return AUTHORITY_SCRIPT_PATTERN.test(path.posix.basename(file));
+}
+
+export function findBackendDeliveryPaths(
+  changedFiles,
+  {
+    pathExists = (file) => fs.existsSync(path.join(ROOT, file)),
+    readPath = (file) => fs.readFileSync(path.join(ROOT, file), "utf8")
+  } = {}
+) {
+  return [...new Set((changedFiles || []).map(normalizePath).filter(Boolean))]
+    .filter((file) => {
+      let source = "";
+      if (CLIENT_PRESENTATION_EXCLUSIONS.has(file) && pathExists(file)) {
+        source = readPath(file);
+      }
+      return isBackendDeliveryPath(file, { source });
+    });
 }
 
 function validRelativePath(value) {
@@ -754,7 +775,7 @@ export function validateCapabilitySurfacing({
 } = {}) {
   const errors = [];
   const changed = new Set(changedFiles.map(normalizePath).filter(Boolean));
-  const backendChanges = [...changed].filter(isBackendDeliveryPath);
+  const backendChanges = findBackendDeliveryPaths([...changed], { pathExists, readPath });
 
   if (
     !manifest
@@ -1440,7 +1461,7 @@ export function checkCapabilitySurfacing() {
 
   console.log(`Capability surfacing diff: ${range || "working tree only"}`);
   console.log("Backend delivery paths:");
-  const backendPaths = changedFiles.filter(isBackendDeliveryPath);
+  const backendPaths = findBackendDeliveryPaths(changedFiles);
   if (!backendPaths.length) console.log("- none");
   backendPaths.forEach((file) => console.log(`- ${file}`));
   console.log("Changed backend exports:");
