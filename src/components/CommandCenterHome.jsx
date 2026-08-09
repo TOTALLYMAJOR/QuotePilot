@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import StatusChip from "./StatusChip";
-import { currency } from "../lib/quoteCalculator";
+import StaffEvidenceRail from "./StaffEvidenceRail";
+import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import {
   classifyAttentionItem,
   classifyDepositStatus,
@@ -8,6 +9,13 @@ import {
   classifyQuoteStatus,
   getFinalBalanceDisplayStatus
 } from "../lib/statusSemantics";
+import {
+  formatWorkspaceDate,
+  formatWorkspaceInteger,
+  formatWorkspaceMoney,
+  formatWorkspaceText,
+  hasWorkspaceNumber
+} from "../lib/workspacePresentation";
 
 const UPCOMING_WINDOW_DAYS = 7;
 const ATTENTION_ROW_LIMIT = 8;
@@ -21,7 +29,7 @@ function localDateIso(value = new Date()) {
 
 export function attentionRowCopy(item) {
   const customerName = String(item.quote?.customer?.name || item.quote?.customer?.email || "Customer").trim();
-  const quoteLabel = String(item.quote?.quoteNumber || item.quoteId || "").trim();
+  const quoteLabel = formatWorkspaceText(item.quote?.quoteNumber, { emptyLabel: "Quote number pending" });
   const meta = [customerName, quoteLabel].filter(Boolean).join(" · ");
 
   if (item.type === "change_request") {
@@ -62,7 +70,9 @@ export function buildMoneyRows(quotes = []) {
         quoteNumber: quote.quoteNumber,
         customerName: quote.customer?.name || quote.customer?.email || "Customer",
         kind: "Deposit",
-        amount: Number(quote.totals?.deposit || 0),
+        amount: hasWorkspaceNumber(quote.totals?.deposit)
+          ? Number(quote.totals.deposit)
+          : null,
         ...classifyDepositStatus(depositStatus)
       });
     }
@@ -89,14 +99,24 @@ export function buildMoneyRows(quotes = []) {
 }
 
 export function summarizeMoneyRows(rows = []) {
+  const requestedRows = rows.filter((row) => row.family === "pending");
+  const outstandingRows = rows.filter((row) => row.family === "action");
+  const sumKnown = (items) => items.reduce(
+    (sum, row) => sum + (hasWorkspaceNumber(row.amount) ? Number(row.amount) : 0),
+    0
+  );
   return {
-    requested: rows.filter((row) => row.family === "pending").reduce((sum, row) => sum + row.amount, 0),
-    outstanding: rows.filter((row) => row.family === "action").reduce((sum, row) => sum + row.amount, 0)
+    requested: sumKnown(requestedRows),
+    requestedUnknown: requestedRows.filter((row) => !hasWorkspaceNumber(row.amount)).length,
+    outstanding: sumKnown(outstandingRows),
+    outstandingUnknown: outstandingRows.filter((row) => !hasWorkspaceNumber(row.amount)).length
   };
 }
 
 export default function CommandCenterHome({
   snapshot,
+  organizationName = "",
+  organizationId = "",
   onRefresh,
   onOpenWorkflow,
   onOpenQuote,
@@ -123,6 +143,7 @@ export default function CommandCenterHome({
 
   const moneyRows = useMemo(() => buildMoneyRows(state.quotes), [state.quotes]);
   const moneyTotals = useMemo(() => summarizeMoneyRows(moneyRows), [moneyRows]);
+  const headingRef = useWorkspaceRouteHeadingFocus(true);
 
   const isRefreshing = state.loading;
 
@@ -153,7 +174,14 @@ export default function CommandCenterHome({
       <div className="command-center-head">
         <div>
           <p className="eyebrow">Home</p>
-          <h2 id="command-center-heading">What needs your attention</h2>
+          <h2
+            ref={headingRef}
+            id="command-center-heading"
+            className="workspace-route-heading"
+            tabIndex={-1}
+          >
+            What needs your attention
+          </h2>
         </div>
         <div className="right-actions">
           <button
@@ -168,10 +196,21 @@ export default function CommandCenterHome({
         </div>
       </div>
 
+      <StaffEvidenceRail
+        organizationName={organizationName}
+        organizationId={organizationId}
+        source={state.source}
+        loadedAt={state.loadedAt}
+        loading={state.loading}
+        error={state.error}
+        partial={state.partial}
+        stale={state.stale}
+        truncated={state.truncated}
+        truncationKnown={state.truncationKnown}
+        reads={state.reads}
+      />
+
       {state.error && <p className="error-note" role="alert">{state.error}</p>}
-      {state.truncated && (
-        <p className="source-note">Home uses the 200 most recent quote records. Open Quotes for the complete history.</p>
-      )}
 
       <div className="command-center-grid">
         <div className="command-center-inbox">
@@ -230,10 +269,13 @@ export default function CommandCenterHome({
                     <li key={quote.id} className="command-center-row">
                       <div className="command-center-row-main">
                         <p className="command-center-row-detail">
-                          <strong>{quote.event?.name || quote.quoteNumber}</strong> · {quote.event?.date}
+                          <strong>{formatWorkspaceText(quote.event?.name || quote.quoteNumber, { emptyLabel: "Untitled event" })}</strong>
+                          {" · "}{formatWorkspaceDate(quote.event?.date)}
                         </p>
                         <p className="command-center-row-meta">
-                          {customerLabel(quote)} · {quote.event?.venue || "Venue TBD"} · {Number(quote.event?.guests || 0)} guests
+                          {customerLabel(quote)} · {formatWorkspaceText(quote.event?.venue, { emptyLabel: "Venue not set" })}
+                          {" · "}{formatWorkspaceInteger(quote.event?.guests, { emptyLabel: "Guest count not set" })}
+                          {hasWorkspaceNumber(quote.event?.guests) ? " guests" : ""}
                         </p>
                         <StatusChip family={family} label={label} />
                       </div>
@@ -257,19 +299,32 @@ export default function CommandCenterHome({
                 <div className="command-center-money-summary">
                   <div>
                     <span>Requested, awaiting customer</span>
-                    <strong>{currency(moneyTotals.requested)}</strong>
+                    <strong>
+                      {formatWorkspaceMoney(moneyTotals.requested)}{moneyTotals.requestedUnknown > 0 ? " known" : ""}
+                    </strong>
+                    {moneyTotals.requestedUnknown > 0 && (
+                      <small>{moneyTotals.requestedUnknown} amount{moneyTotals.requestedUnknown === 1 ? "" : "s"} not recorded</small>
+                    )}
                   </div>
                   <div>
                     <span>Not yet requested</span>
-                    <strong>{currency(moneyTotals.outstanding)}</strong>
+                    <strong>
+                      {formatWorkspaceMoney(moneyTotals.outstanding)}{moneyTotals.outstandingUnknown > 0 ? " known" : ""}
+                    </strong>
+                    {moneyTotals.outstandingUnknown > 0 && (
+                      <small>{moneyTotals.outstandingUnknown} amount{moneyTotals.outstandingUnknown === 1 ? "" : "s"} not recorded</small>
+                    )}
                   </div>
                 </div>
                 <ul className="command-center-list">
                   {moneyRows.slice(0, 5).map((row, index) => (
                     <li key={`${row.quoteId}-${row.kind}-${index}`} className="command-center-row">
                       <div className="command-center-row-main">
-                        <p className="command-center-row-detail">{row.kind} · {currency(row.amount)}</p>
-                        <p className="command-center-row-meta">{customerLabel(state.quotes.find((quote) => quote.id === row.quoteId))} · {row.quoteNumber}</p>
+                        <p className="command-center-row-detail">{row.kind} · {formatWorkspaceMoney(row.amount)}</p>
+                        <p className="command-center-row-meta">
+                          {customerLabel(state.quotes.find((quote) => quote.id === row.quoteId))}
+                          {" · "}{formatWorkspaceText(row.quoteNumber, { emptyLabel: "Quote number pending" })}
+                        </p>
                         <StatusChip family={row.family} label={row.label} />
                       </div>
                       <button type="button" className="ghost" onClick={() => onOpenQuote(row.quoteId)}>

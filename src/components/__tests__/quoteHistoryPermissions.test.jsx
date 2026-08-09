@@ -6,6 +6,7 @@ import {
   getFinalBalanceDisplayStatus,
   filterQuoteHistoryQuotes,
   formatQuoteHistoryDate,
+  getQuoteHistoryFinancialCells,
   getExecutableApprovalRequest,
   isCustomerPortalShareable,
   isFinalBalanceRequestEligible,
@@ -44,7 +45,18 @@ describe("quote history presentation helpers", () => {
 
   test("formats both date-only and timestamp values as short human dates", () => {
     expect(formatQuoteHistoryDate("2026-01-05")).toMatch(/Jan\s+5,\s+2026/);
-    expect(formatQuoteHistoryDate("not-a-date")).toBe("-");
+    expect(formatQuoteHistoryDate("not-a-date")).toBe("Date not recorded");
+  });
+
+  test("distinguishes missing quote money from a legitimate zero", () => {
+    expect(getQuoteHistoryFinancialCells({ totals: {} })).toEqual({
+      total: "Amount not recorded",
+      deposit: "Amount not recorded"
+    });
+    expect(getQuoteHistoryFinancialCells({ totals: { total: 0, deposit: 0 } })).toEqual({
+      total: "$0.00",
+      deposit: "$0.00"
+    });
   });
 });
 

@@ -16,6 +16,15 @@ import {
   getApprovalRequestExecutionEligibility,
   getRequestableApprovalActions
 } from "../lib/quoteWorkflow";
+import { classifyQuoteStatus } from "../lib/statusSemantics";
+import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import {
+  formatWorkspaceDate,
+  formatWorkspaceDateTime,
+  formatWorkspaceSource,
+  formatWorkspaceText,
+  humanizeWorkspaceValue
+} from "../lib/workspacePresentation";
 
 const WORKFLOW_TABS = ["attention", "followups", "approvals"];
 const PROVIDER_APPROVAL_ACTIONS = new Set([
@@ -24,23 +33,11 @@ const PROVIDER_APPROVAL_ACTIONS = new Set([
 ]);
 
 function fmtDateTime(value) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  });
+  return formatWorkspaceDateTime(value);
 }
 
 function fmtDueDate(value) {
-  if (!value) return "No due date";
-  const parsed = new Date(`${value}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return "No due date";
-  return parsed.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  return formatWorkspaceDate(value, { emptyLabel: "No due date" });
 }
 
 function todayIso() {
@@ -111,6 +108,7 @@ export function SalesWorkflowView({
   const [handlingNotes, setHandlingNotes] = useState({});
   const [busyKey, setBusyKey] = useState("");
   const dialogRef = useRef(null);
+  const routeHeadingRef = useWorkspaceRouteHeadingFocus(Boolean(open && embedded));
   const detailHeadingRef = useRef(null);
   const attentionEmptyHeadingRef = useRef(null);
   const tabRefs = useRef({});
@@ -643,14 +641,23 @@ export function SalesWorkflowView({
       >
         <div className="modal-head">
           <div>
-            <h2 id="sales-workflow-title">Workflow</h2>
-            <p className="source-note">Source: {state.source || "-"}</p>
+            <h2
+              ref={routeHeadingRef}
+              id="sales-workflow-title"
+              className={embedded ? "workspace-route-heading" : undefined}
+              tabIndex={embedded ? -1 : undefined}
+            >
+              Workflow
+            </h2>
+            <p className="source-note">Source: {formatWorkspaceSource(state.source)}</p>
           </div>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
             </button>
-            <button type="button" className="ghost" onClick={onClose}>Close</button>
+            <button type="button" className="ghost" onClick={onClose}>
+              {embedded ? "Back to Home" : "Close"}
+            </button>
           </div>
         </div>
 
@@ -733,7 +740,7 @@ export function SalesWorkflowView({
               {attentionSummary.items.map((item) => {
                 const quote = item.quote;
                 const customerLabel = quote.customer?.name || quote.customer?.email || "Customer";
-                const quoteLabel = quote.quoteNumber || quote.id;
+                const quoteLabel = formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" });
                 const acknowledgeBusyKey = `change-request:${item.quoteId}:acknowledge`;
                 const handleBusyKey = `change-request:${item.quoteId}:mark_handled`;
                 const acknowledging = busyKey === acknowledgeBusyKey;
@@ -890,7 +897,7 @@ export function SalesWorkflowView({
                     onClick={() => setSelectedQuoteId(quote.id)}
                   >
                     <span>
-                      <strong>{quote.quoteNumber || quote.id}</strong>
+                      <strong>{formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })}</strong>
                       <small>{quote.customer?.name || quote.customer?.email || "Customer"}</small>
                     </span>
                     <span className="workflow-quote-meta">
@@ -916,14 +923,14 @@ export function SalesWorkflowView({
                   >
                     <div>
                       <p className="eyebrow" id={`workflow-detail-${safeDomId(selectedQuote.id)}-quote`}>
-                        {selectedQuote.quoteNumber || selectedQuote.id}
+                        {formatWorkspaceText(selectedQuote.quoteNumber, { emptyLabel: "Quote number pending" })}
                       </p>
                       <h3 id={`workflow-detail-${safeDomId(selectedQuote.id)}-customer`}>
                         {selectedQuote.customer?.name || selectedQuote.customer?.email || "Customer"}
                       </h3>
                     </div>
                     <span className={`status-badge status-${selectedQuote.status || "draft"}`}>
-                      {selectedQuote.status || "draft"}
+                      {classifyQuoteStatus(selectedQuote.status || "draft").label}
                     </span>
                   </header>
 
@@ -1063,7 +1070,7 @@ export function SalesWorkflowView({
             )}
             {approvalQueue.map(({ quote, request }) => {
               const approvalDomId = `workflow-approval-${safeDomId(quote.id)}-${safeDomId(request.id)}`;
-              const quoteLabel = quote.quoteNumber || quote.id;
+              const quoteLabel = formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" });
               const resolvingApproval = busyKey === `resolve:${request.id}:approved`;
               const resolvingRejection = busyKey === `resolve:${request.id}:rejected`;
               const requestResolving = resolvingApproval || resolvingRejection;
@@ -1087,7 +1094,7 @@ export function SalesWorkflowView({
               >
                 <div className="approval-row-main">
                   <div>
-                    <span className="approval-state">{request.state}</span>
+                    <span className="approval-state">{humanizeWorkspaceValue(request.state)}</span>
                     <h3 id={`${approvalDomId}-action`}>{actionLabel(request.action)}</h3>
                     <p id={`${approvalDomId}-quote`}>{quoteLabel} · {quote.customer?.name || quote.customer?.email || "Customer"}</p>
                   </div>

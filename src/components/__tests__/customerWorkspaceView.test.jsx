@@ -38,6 +38,9 @@ describe("StaffProposalPreview", () => {
     expect(markup).toContain('src="https://cdn.example.test/logo.png"');
     expect(markup).toContain("Northstar Catering");
     expect(markup).toContain("Gather beautifully");
+    expect(markup).toContain("Sep 1, 2026");
+    expect(markup).not.toContain(">2026-09-01<");
+    expect(markup).toContain("$9,720.00");
     expect(markup.indexOf("Close preview"))
       .toBeLessThan(markup.indexOf('data-customer-presentation="true"'));
   });

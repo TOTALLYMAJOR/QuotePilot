@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
-import { currency } from "../lib/quoteCalculator";
 import { buildStaffProposalPreview, getCustomerWorkspace } from "../lib/customerWorkspace";
 import { classifyDepositStatus, classifyFinalBalanceDisplayStatus, classifyQuoteStatus } from "../lib/statusSemantics";
 import { buildPortalThemeStyle } from "../data/portalThemePresets";
+import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import {
+  formatWorkspaceDate,
+  formatWorkspaceDateTime,
+  formatWorkspaceInteger,
+  formatWorkspaceMoney,
+  formatWorkspaceText,
+  hasWorkspaceNumber,
+  humanizeWorkspaceValue
+} from "../lib/workspacePresentation";
 
 const TABS = [
   ["overview", "Overview"],
@@ -12,13 +21,6 @@ const TABS = [
   ["money", "Money"],
   ["conversations", "Conversations"]
 ];
-
-function dateTime(value) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-}
 
 function safeLogoUrl(value) {
   const normalized = String(value || "").trim();
@@ -32,8 +34,7 @@ function safeLogoUrl(value) {
 }
 
 function readableReason(value) {
-  const normalized = String(value || "").trim().replaceAll("_", " ");
-  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : "Saved proposal snapshot";
+  return humanizeWorkspaceValue(value, { emptyLabel: "Saved proposal snapshot" });
 }
 
 export function StaffProposalPreview({ quote, onClose }) {
@@ -100,13 +101,13 @@ export function StaffProposalPreview({ quote, onClose }) {
           <p>Prepared for {preview.customerName || "the customer"}</p>
         </div>
         <dl className="staff-proposal-preview-grid">
-          <div><dt>Date</dt><dd>{preview.eventDate || "-"}</dd></div>
-          <div><dt>Venue</dt><dd>{preview.venue || "-"}</dd></div>
-          <div><dt>Guests</dt><dd>{preview.guests}</dd></div>
-          <div><dt>Subtotal</dt><dd>{currency(preview.subtotal)}</dd></div>
-          <div><dt>Tax</dt><dd>{currency(preview.tax)}</dd></div>
-          <div><dt>Total</dt><dd>{currency(preview.total)}</dd></div>
-          <div><dt>Deposit</dt><dd>{currency(preview.deposit)}</dd></div>
+          <div><dt>Date</dt><dd>{formatWorkspaceDate(preview.eventDate)}</dd></div>
+          <div><dt>Venue</dt><dd>{formatWorkspaceText(preview.venue, { emptyLabel: "Venue not set" })}</dd></div>
+          <div><dt>Guests</dt><dd>{formatWorkspaceInteger(preview.guests, { emptyLabel: "Guest count not set" })}</dd></div>
+          <div><dt>Subtotal</dt><dd>{formatWorkspaceMoney(preview.subtotal)}</dd></div>
+          <div><dt>Tax</dt><dd>{formatWorkspaceMoney(preview.tax)}</dd></div>
+          <div><dt>Total</dt><dd>{formatWorkspaceMoney(preview.total)}</dd></div>
+          <div><dt>Deposit</dt><dd>{formatWorkspaceMoney(preview.deposit)}</dd></div>
         </dl>
       </section>
     </aside>
@@ -143,6 +144,9 @@ export default function CustomerWorkspaceView({
   const generationRef = useRef(0);
   const tabRefs = useRef({});
   const previewTriggerRef = useRef(null);
+  const headingRef = useWorkspaceRouteHeadingFocus(Boolean(
+    !state.loading && !state.error && state.workspace
+  ));
 
   useEffect(() => {
     const generation = generationRef.current + 1;
@@ -218,7 +222,14 @@ export default function CustomerWorkspaceView({
           <div>
             <button type="button" className="workspace-text-link" onClick={onBack}>Customers</button>
             <p className="eyebrow">Internal Customer 360</p>
-            <h1 id="customer-workspace-title">{customer.name || customer.email || "Unnamed customer"}</h1>
+            <h1
+              ref={headingRef}
+              id="customer-workspace-title"
+              className="workspace-route-heading"
+              tabIndex={-1}
+            >
+              {formatWorkspaceText(customer.name || customer.email, { emptyLabel: "Unnamed customer" })}
+            </h1>
             <p className="muted">{[customer.company, customer.email, customer.phone].filter(Boolean).join(" · ") || "No contact details"}</p>
           </div>
           <button type="button" className="ghost" onClick={() => setRefreshToken((value) => value + 1)}>Refresh</button>
@@ -250,9 +261,9 @@ export default function CustomerWorkspaceView({
 
         <section id="customer-panel-overview" role="tabpanel" tabIndex={0} hidden={activeTab !== "overview"}>
           <div className="customer-overview-grid">
-            <article><span>Active quotes{workspace.quotePageInfo.truncated ? " shown" : ""}</span><strong>{workspace.activeQuotes.length}</strong></article>
-            <article><span>Accepted / booked events{workspace.quotePageInfo.truncated ? " shown" : ""}</span><strong>{workspace.events.length}</strong></article>
-            <article><span>Needs attention{workspace.quotePageInfo.truncated ? " in this view" : ""}</span><strong>{workspace.attention.itemCount}</strong></article>
+            <article><span>Active quotes{workspace.quotePageInfo.truncated ? " shown" : ""}</span><strong>{formatWorkspaceInteger(workspace.activeQuotes.length)}</strong></article>
+            <article><span>Accepted / booked events{workspace.quotePageInfo.truncated ? " shown" : ""}</span><strong>{formatWorkspaceInteger(workspace.events.length)}</strong></article>
+            <article><span>Needs attention{workspace.quotePageInfo.truncated ? " in this view" : ""}</span><strong>{formatWorkspaceInteger(workspace.attention.itemCount)}</strong></article>
           </div>
           <article className="customer-next-action">
             <p className="eyebrow">Next safe staff action</p>
@@ -269,8 +280,10 @@ export default function CustomerWorkspaceView({
             <ol className="customer-activity-list">
               {workspace.recentActivity.map((item, index) => (
                 <li key={`${item.quoteId}-${item.label}-${index}`}>
-                  <button type="button" className="workspace-text-link" onClick={() => onOpenQuote?.(item.quoteId)}>{item.quoteNumber || item.quoteId}</button>
-                  <span>{item.label}</span><time dateTime={item.atISO}>{dateTime(item.atISO)}</time>
+                  <button type="button" className="workspace-text-link" onClick={() => onOpenQuote?.(item.quoteId)}>
+                    {formatWorkspaceText(item.quoteNumber, { emptyLabel: "Quote number pending" })}
+                  </button>
+                  <span>{item.label}</span><time dateTime={item.atISO}>{formatWorkspaceDateTime(item.atISO)}</time>
                 </li>
               ))}
             </ol>
@@ -289,8 +302,11 @@ export default function CustomerWorkspaceView({
                 return (
                   <article key={quote.id}>
                     <div>
-                      <h3>{quote.quoteNumber || quote.id}</h3>
-                      <p>{quote.event?.name || "Untitled event"} · {quote.event?.date || "Date TBD"}</p>
+                      <h3>{formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })}</h3>
+                      <p>
+                        {formatWorkspaceText(quote.event?.name, { emptyLabel: "Untitled event" })}
+                        {" · "}{formatWorkspaceDate(quote.event?.date)}
+                      </p>
                       <StatusChip family={status.family} label={status.label} />
                       <small>
                         {versions.length} most recent retained version{versions.length === 1 ? "" : "s"}
@@ -304,7 +320,7 @@ export default function CustomerWorkspaceView({
                               <li key={version.id || version.versionId || `${quote.id}-${index}`}>
                                 <strong>Version {Number(version.versionNumber || 0) || versions.length - index}</strong>
                                 <span>{readableReason(version.reason)}</span>
-                                <time dateTime={version.createdAtISO}>{dateTime(version.createdAtISO)}</time>
+                                <time dateTime={version.createdAtISO}>{formatWorkspaceDateTime(version.createdAtISO)}</time>
                               </li>
                             ))}
                           </ol>
@@ -339,7 +355,15 @@ export default function CustomerWorkspaceView({
             <div className="customer-card-list">
               {workspace.events.map((event) => (
                 <article key={event.quoteId}>
-                  <div><h3>{event.eventName}</h3><p>{event.date || "Date TBD"} · {event.venue || "Venue TBD"} · {event.guests} guests</p><small>{event.contractNumber ? `Contract ${event.contractNumber}` : "Acceptance recorded; booking not yet recorded"}</small></div>
+                  <div>
+                    <h3>{formatWorkspaceText(event.eventName, { emptyLabel: "Untitled event" })}</h3>
+                    <p>
+                      {formatWorkspaceDate(event.date)} · {formatWorkspaceText(event.venue, { emptyLabel: "Venue not set" })}
+                      {" · "}{formatWorkspaceInteger(event.guests, { emptyLabel: "Guest count not set" })}
+                      {hasWorkspaceNumber(event.guests) ? " guests" : ""}
+                    </p>
+                    <small>{event.contractNumber ? `Contract ${event.contractNumber}` : "Acceptance recorded; booking not yet recorded"}</small>
+                  </div>
                   <button type="button" className="ghost compact" onClick={() => onOpenQuote?.(event.quoteId)}>{event.beoAvailable ? "Open BEO entry point" : "Open quote"}</button>
                 </article>
               ))}
@@ -350,12 +374,13 @@ export default function CustomerWorkspaceView({
         <section id="customer-panel-money" role="tabpanel" tabIndex={0} hidden={activeTab !== "money"}>
           <h2>Money</h2>
           <p className="warning-note">Operational payment states only. These amounts are not an accounting revenue report.</p>
+          {workspace.money.length === 0 && <p className="source-note">No deposit or final-balance state is recorded for this customer.</p>}
           <div className="customer-card-list">
             {workspace.money.map((row, index) => {
               const status = row.kind === "deposit" ? classifyDepositStatus(row.status) : classifyFinalBalanceDisplayStatus(row.status);
               return (
                 <article key={`${row.quoteId}-${row.kind}-${index}`}>
-                  <div><h3>{row.kind === "deposit" ? "Deposit" : "Final balance"} · {currency(row.amount)}</h3><p>{row.quoteNumber}</p><StatusChip family={status.family} label={status.label} /></div>
+                  <div><h3>{row.kind === "deposit" ? "Deposit" : "Final balance"} · {formatWorkspaceMoney(row.amount)}</h3><p>{formatWorkspaceText(row.quoteNumber, { emptyLabel: "Quote number pending" })}</p><StatusChip family={status.family} label={status.label} /></div>
                   <button type="button" className="ghost compact" onClick={() => onOpenQuote?.(row.quoteId)}>Open record</button>
                 </article>
               );
@@ -366,18 +391,21 @@ export default function CustomerWorkspaceView({
         <section id="customer-panel-conversations" role="tabpanel" tabIndex={0} hidden={activeTab !== "conversations"}>
           <h2>Conversations</h2>
           <p className="source-note">Messages remain bound to each quote. Customer 360 links them without merging their histories.</p>
+          {workspace.conversations.length === 0 && <p className="source-note">No quote conversations are linked to this customer.</p>}
           <div className="customer-card-list">
             {workspace.conversations.map((conversation) => (
               <article key={conversation.quoteId}>
                 <div>
-                  <h3>{conversation.quoteNumber || conversation.quoteId}</h3>
+                  <h3>{formatWorkspaceText(conversation.quoteNumber, { emptyLabel: "Quote number pending" })}</h3>
                   {conversation.summaryAvailable ? (
                     <p>
-                      {conversation.messageCount} message{conversation.messageCount === 1 ? "" : "s"} recorded
+                      {formatWorkspaceInteger(conversation.messageCount)} message{conversation.messageCount === 1 ? "" : "s"} recorded
                       {conversation.latestMessageAtISO
                         ? conversation.latestActorType
-                          ? ` · latest from ${conversation.latestActorType} ${dateTime(conversation.latestMessageAtISO)}`
-                          : ` · latest message ${dateTime(conversation.latestMessageAtISO)}`
+                          ? ` · latest from ${humanizeWorkspaceValue(conversation.latestActorType, {
+                              labels: { customer: "customer", staff: "staff" }
+                            })} ${formatWorkspaceDateTime(conversation.latestMessageAtISO)}`
+                          : ` · latest message ${formatWorkspaceDateTime(conversation.latestMessageAtISO)}`
                         : ""}
                     </p>
                   ) : (

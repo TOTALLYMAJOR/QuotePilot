@@ -2640,6 +2640,8 @@ export default function App({ tenantContext, authSession }) {
           <main className="container workspace-route-main">
             <CommandCenterHome
               snapshot={commercialSnapshot}
+              organizationName={organizationName}
+              organizationId={authSession.organizationId}
               onRefresh={commercialSnapshot.refresh}
               onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
               onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}

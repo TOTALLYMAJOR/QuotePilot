@@ -29,7 +29,14 @@ test.describe("customer-centered workspace", () => {
   test("/app is Home and a dirty quote draft survives routed Home, Back, and Forward navigation", async ({ page }) => {
     await page.goto("/app");
 
-    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+    const homeHeading = page.getByRole("heading", { name: "What needs your attention" });
+    await expect(homeHeading).toBeVisible();
+    await expect(homeHeading).toBeFocused();
+    const evidenceRail = page.getByRole("complementary", { name: "Staff read context" });
+    await expect(evidenceRail).toHaveAttribute("data-capability-state", /current|truncated/);
+    await expect(evidenceRail).toContainText("Tenant key: e2e-org");
+    await expect(evidenceRail).toContainText("Browser-local workspace");
+    await expect(evidenceRail).toContainText("does not prove provider delivery");
     const staffHeader = page.locator(".site-header");
     await expect(staffHeader.getByRole("button", { name: "Home", exact: true })).toHaveAttribute(
       "aria-current",
@@ -144,6 +151,26 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("heading", { name: "Workspace page not found" })).toBeVisible();
     await expect(page.getByText("/app/not-a-workspace-route is not a QuotePilot staff workspace route.")).toBeVisible();
     await expect(page.locator(".site-header").getByRole("button", { name: "Home", exact: true })).toBeVisible();
+  });
+
+  test("primary routed staff surfaces focus their heading and use route return language", async ({ page }) => {
+    const surfaces = [
+      ["/app/customers", "Customer directory", false],
+      ["/app/quotes", "Quotes", true],
+      ["/app/workflow", "Workflow", true]
+    ];
+
+    for (const [path, headingName, hasReturn] of surfaces) {
+      await page.goto(path);
+      const heading = page.getByRole("heading", { name: headingName, exact: true }).first();
+      await expect(heading).toBeVisible();
+      await expect(heading).toBeFocused();
+      await expect(heading).toHaveCSS("outline-style", "solid");
+      if (hasReturn) {
+        await expect(page.getByRole("button", { name: "Back to Home", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Close", exact: true })).toHaveCount(0);
+      }
+    }
   });
 
   test("operational paths render as embedded workspaces and preserve browser history", async ({ page }) => {
@@ -490,10 +517,12 @@ test.describe("customer-centered workspace", () => {
     await page.goto("/app/customers");
 
     await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
-    await expect(page.getByText("Source: local", { exact: true })).toBeVisible();
+    await expect(page.getByText("Source: Browser-local workspace", { exact: true })).toBeVisible();
     const customerRow = page.getByRole("row").filter({ hasText: "Avery O'Neil" });
     await expect(customerRow).toContainText("Q-C360-ACCEPTED");
     await expect(customerRow).toContainText("Community Leadership Dinner");
+    await expect(customerRow).toContainText("Apr 24, 2027");
+    await expect(customerRow).not.toContainText("2027-04-24");
     await customerRow.getByRole("button", { name: "Avery O'Neil", exact: true }).click();
 
     await expect(page).toHaveURL(/\/app\/customers\/customer%3A360%2Be2e$/);
