@@ -5849,16 +5849,30 @@ hr {
 }
 
 .embedded-workspace-route {
-  width: min(1180px, calc(100% - 2rem));
+  width: min(1320px, calc(100% - 2rem));
   max-width: calc(100% - 2rem);
+  min-width: 0;
+}
+
+.embedded-workspace-route :is(h1, h2, h3)[tabindex="-1"]:focus {
+  outline: 3px solid #76540d;
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
 .workspace-route-card {
   position: static;
   width: 100%;
+  min-width: 0;
   max-width: none;
   max-height: none;
   overflow: visible;
+}
+
+.embedded-workspace-route .admin-catalog-card .modal-head {
+  position: static;
+  top: auto;
+  margin: -1rem -1rem var(--space-3);
 }
 
 .customer-directory-search {
@@ -5904,6 +5918,36 @@ hr {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+.customer-version-history {
+  margin-top: var(--space-2);
+}
+
+.customer-version-history summary {
+  color: var(--tone-ink-2);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.customer-version-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.65rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.customer-version-list li {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.customer-version-list span,
+.customer-version-list time {
+  color: var(--tone-ink-3);
+  font-size: 0.76rem;
 }
 
 .workspace-text-link,
@@ -6214,6 +6258,24 @@ hr {
   border-bottom: 1px solid rgba(255, 255, 255, 0.09);
 }
 
+.app-shell-neutral .site-header .container {
+  width: min(1500px, calc(100% - 2rem));
+}
+
+@media (min-width: 981px) {
+  .app-shell-neutral .site-header .header-actions {
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+  }
+
+  .app-shell-neutral .site-header .header-actions > button,
+  .app-shell-neutral .site-header .header-menu-trigger {
+    flex: 0 0 auto;
+    padding-inline: 0.7rem;
+    white-space: nowrap;
+  }
+}
+
 .app-shell-neutral .site-header .ghost {
   background: rgba(255, 255, 255, 0.05);
   color: rgba(238, 234, 226, 0.92);
@@ -6224,7 +6286,19 @@ hr {
   background: rgba(255, 255, 255, 0.11);
 }
 
-.app-shell-neutral .cta:not([data-customer-presentation="true"] *) {
+.app-shell-neutral :where(
+  .site-header,
+  .workspace-intro,
+  .wizard-grid,
+  .command-center,
+  .customer-directory,
+  .customer-workspace,
+  .workspace-not-found,
+  .embedded-workspace-route,
+  .modal-overlay,
+  .auth-shell,
+  .toast-stack
+) .cta:not([data-customer-presentation="true"] *) {
   background: #8a6414;
   box-shadow: none;
 }
@@ -6277,7 +6351,19 @@ hr {
   box-shadow: 0 10px 26px -20px rgba(38, 28, 12, 0.35);
 }
 
-.app-shell-neutral .ghost:not([data-customer-presentation="true"] *) {
+.app-shell-neutral :where(
+  .site-header,
+  .workspace-intro,
+  .wizard-grid,
+  .command-center,
+  .customer-directory,
+  .customer-workspace,
+  .workspace-not-found,
+  .embedded-workspace-route,
+  .modal-overlay,
+  .auth-shell,
+  .toast-stack
+) .ghost:not([data-customer-presentation="true"] *) {
   background: #ffffff;
   border-color: #d9d0bd;
   color: #4a4234;

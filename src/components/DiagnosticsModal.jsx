@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   clearSessionDiagnostics,
   readSessionDiagnostics,
@@ -28,11 +28,18 @@ function eventTitle(event) {
   return event.message || "-";
 }
 
-export default function DiagnosticsModal({ open, onClose, returnFocusRef = null }) {
+export function DiagnosticsView({
+  open,
+  onClose,
+  presentation = "embedded",
+  returnFocusRef = null
+}) {
+  const embedded = presentation === "embedded";
   const [state, setState] = useState(() => readSessionDiagnostics());
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const routeRef = useRef(null);
 
   const refresh = () => {
     setState(readSessionDiagnostics());
@@ -46,9 +53,17 @@ export default function DiagnosticsModal({ open, onClose, returnFocusRef = null 
     recordDiagnosticEvent({
       level: "info",
       type: "diagnostics.open",
-      message: "Diagnostics modal opened"
+      message: "Diagnostics opened"
     });
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !embedded || typeof window === "undefined") return undefined;
+    const focusFrame = window.requestAnimationFrame(() => {
+      routeRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [embedded, open]);
 
   const filteredEvents = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -98,7 +113,7 @@ export default function DiagnosticsModal({ open, onClose, returnFocusRef = null 
     setFeedback("Diagnostics cleared.");
   };
   const { dialogRef } = useModalDialog({
-    open,
+    open: open && !embedded,
     onRequestClose: onClose,
     returnFocusRef
   });
@@ -107,19 +122,26 @@ export default function DiagnosticsModal({ open, onClose, returnFocusRef = null 
 
   return (
     <div
-      ref={dialogRef}
-      className="modal-overlay"
-      role="dialog"
-      aria-modal="true"
+      ref={embedded ? routeRef : dialogRef}
+      className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
       aria-labelledby="session-diagnostics-title"
       tabIndex={-1}
     >
-      <div className="modal-card diagnostics-card">
+      <div className={`modal-card diagnostics-card${embedded ? " workspace-route-card" : ""}`}>
         <div className="modal-head">
           <h2 id="session-diagnostics-title">Session Diagnostics</h2>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={refresh}>Refresh</button>
-            <button type="button" className="ghost" data-modal-initial-focus onClick={onClose}>Close</button>
+            <button
+              type="button"
+              className="ghost"
+              data-modal-initial-focus={embedded ? undefined : "true"}
+              onClick={onClose}
+            >
+              {embedded ? "Back to Home" : "Close"}
+            </button>
           </div>
         </div>
 
@@ -200,4 +222,8 @@ export default function DiagnosticsModal({ open, onClose, returnFocusRef = null 
       </div>
     </div>
   );
+}
+
+export default function DiagnosticsModal(props) {
+  return <DiagnosticsView {...props} presentation="modal" />;
 }

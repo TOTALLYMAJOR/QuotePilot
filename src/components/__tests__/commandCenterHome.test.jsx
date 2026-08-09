@@ -198,4 +198,35 @@ describe("CommandCenterHome static shell", () => {
     expect(html).not.toContain("Nothing needs you right now");
     expect(html).toContain("New quote");
   });
+
+  test("links an attention-row customer to Customer 360 without changing the Workflow action", () => {
+    const html = renderToStaticMarkup(
+      <CommandCenterHome
+        snapshot={{
+          loading: false,
+          error: "",
+          truncated: false,
+          attentionSummary: {
+            items: [{ id: "attention-1", type: "follow_up", quoteId: "quote-1", daysOverdue: 1 }]
+          },
+          quotes: [{
+            id: "quote-1",
+            customerId: "customer-1",
+            quoteNumber: "Q-1001",
+            customer: { name: "Ada Lovelace" },
+            status: "sent",
+            event: {}
+          }]
+        }}
+        onOpenWorkflow={() => {}}
+        onOpenQuote={() => {}}
+        onOpenCustomer={() => {}}
+        onNewQuote={() => {}}
+      />
+    );
+
+    expect(html).toContain("command-center-customer-link");
+    expect(html).toContain("Ada Lovelace");
+    expect(html).toContain("Open in Workflow");
+  });
 });

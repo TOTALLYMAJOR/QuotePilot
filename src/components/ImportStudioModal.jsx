@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createImportBatchId,
   createImportBatch,
@@ -28,9 +28,10 @@ function primaryValue(record = {}) {
   return record.name || record.email || "Untitled record";
 }
 
-export default function ImportStudioModal({
+export function ImportStudioView({
   open,
   onClose,
+  presentation = "embedded",
   organizationId = "",
   organizationName = "",
   currentUserUid = "",
@@ -40,6 +41,7 @@ export default function ImportStudioModal({
   onImported,
   returnFocusRef = null
 }) {
+  const embedded = presentation === "embedded";
   const fileInputRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
   const [fileName, setFileName] = useState("");
@@ -83,12 +85,20 @@ export default function ImportStudioModal({
     onClose();
   };
   const { dialogRef } = useModalDialog({
-    open,
+    open: open && !embedded,
     onRequestClose: handleClose,
     canClose: !busy,
     onCloseBlocked: () => setError("Wait for the current import operation to finish before closing."),
     returnFocusRef
   });
+
+  useEffect(() => {
+    if (!open || !embedded || typeof window === "undefined") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      dialogRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [embedded, open]);
 
   if (!open) return null;
 
@@ -215,13 +225,13 @@ export default function ImportStudioModal({
   return (
     <div
       ref={dialogRef}
-      className="modal-overlay"
-      role="dialog"
-      aria-modal="true"
+      className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
       aria-labelledby="import-studio-title"
       tabIndex={-1}
     >
-      <div className="modal-card import-studio-card">
+      <div className={`modal-card import-studio-card${embedded ? " workspace-route-card" : ""}`}>
         <header className="modal-head import-studio-head">
           <div>
             <p className="import-studio-kicker">Bring your business with you</p>
@@ -235,7 +245,7 @@ export default function ImportStudioModal({
             onClick={handleClose}
             disabled={busy}
           >
-            Close
+            {embedded ? "Back to Home" : "Close"}
           </button>
         </header>
 
@@ -409,4 +419,8 @@ export default function ImportStudioModal({
       </div>
     </div>
   );
+}
+
+export default function ImportStudioModal(props) {
+  return <ImportStudioView {...props} presentation="modal" />;
 }

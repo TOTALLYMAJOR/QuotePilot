@@ -26,16 +26,16 @@ export function attentionRowCopy(item) {
 
   if (item.type === "change_request") {
     const message = String(item.sourceMessage || "").trim();
-    return { detail: message || "The customer request has no readable message.", meta };
+    return { detail: message || "The customer request has no readable message.", meta, customerName, quoteLabel };
   }
   if (item.type === "follow_up") {
     const overdueLabel = item.daysOverdue > 0
       ? `${item.daysOverdue} day${item.daysOverdue === 1 ? "" : "s"} overdue`
       : "Due today";
-    return { detail: overdueLabel, meta };
+    return { detail: overdueLabel, meta, customerName, quoteLabel };
   }
   const count = Array.isArray(item.pendingRequests) ? item.pendingRequests.length : 0;
-  return { detail: `${count} pending approval${count === 1 ? "" : "s"}`, meta };
+  return { detail: `${count} pending approval${count === 1 ? "" : "s"}`, meta, customerName, quoteLabel };
 }
 
 export function selectUpcomingEvents(quotes = [], { nowDate = new Date(), windowDays = UPCOMING_WINDOW_DAYS } = {}) {
@@ -188,13 +188,17 @@ export default function CommandCenterHome({
             <ul className="command-center-list">
               {visibleAttentionItems.map((item) => {
                 const { family, label } = classifyAttentionItem(item.type, item.state);
-                const { detail, meta } = attentionRowCopy(item);
+                const attentionQuote = state.quotes.find((quote) => quote.id === item.quoteId) || item.quote || {};
+                const { detail, customerName, quoteLabel } = attentionRowCopy({ ...item, quote: attentionQuote });
                 return (
                   <li key={item.id} className="command-center-row">
                     <div className="command-center-row-main">
                       <StatusChip family={family} label={label} />
                       <p className="command-center-row-detail">{detail}</p>
-                      <p className="command-center-row-meta">{meta}</p>
+                      <p className="command-center-row-meta">
+                        {attentionQuote.customerId ? customerLabel(attentionQuote) : customerName}
+                        {quoteLabel ? <> · {quoteLabel}</> : null}
+                      </p>
                     </div>
                     <button type="button" className="ghost" onClick={() => openWorkflowItem(item)}>
                       Open in Workflow

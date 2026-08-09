@@ -273,7 +273,7 @@ function Section({ title, onAdd, children }) {
   );
 }
 
-export default function AdminCatalogModal({
+export function AdminCatalogView({
   open,
   catalog,
   organizationId = "",
@@ -283,12 +283,14 @@ export default function AdminCatalogModal({
   onCatalogMutation,
   onReload,
   saving,
+  presentation = "embedded",
   returnFocusRef = null,
   initialTab = "",
   selectedEventType: selectedEventTypeProp = "",
   onEventTypeChange,
   onToast
 }) {
+  const embedded = presentation === "embedded";
   const [draft, setDraft] = useState(catalog);
   const [activeTab, setActiveTab] = useState(() => resolveCatalogAdminTab(catalog, initialTab));
   const [status, setStatus] = useState("");
@@ -318,6 +320,11 @@ export default function AdminCatalogModal({
   const [menuItemDirty, setMenuItemDirty] = useState({});
   const [menuItemSavingId, setMenuItemSavingId] = useState("");
   const menuItemSaveInFlightRef = useRef(new Set());
+  const resetOnNextOpenRef = useRef(true);
+  const initializedViewScopeRef = useRef("");
+  const eventTypesLoadScopeRef = useRef("");
+  const confirmedInventoryLoadScopeRef = useRef("");
+  const eventMenuLoadScopeRef = useRef("");
   const [packActionId, setPackActionId] = useState("");
   const [catalogRefreshRequired, setCatalogRefreshRequired] = useState(false);
   const [manualSetupEnabled, setManualSetupEnabled] = useState(false);
@@ -330,6 +337,34 @@ export default function AdminCatalogModal({
     0,
     Number(catalog?.settings?.starterCatalogPack?.appliedCatalogRevision || 0)
   );
+  const viewScopeKey = JSON.stringify([
+    scopedOrganizationId,
+    String(initialTab || ""),
+    authoritativeVersion,
+    starterPackRevision
+  ]);
+  const shouldInitializeView = Boolean(
+    open
+    && (resetOnNextOpenRef.current || initializedViewScopeRef.current !== viewScopeKey)
+  );
+  const eventTypesLoadScopeKey = JSON.stringify([
+    scopedOrganizationId,
+    String(selectedEventTypeProp || ""),
+    authoritativeVersion,
+    starterPackRevision
+  ]);
+  const confirmedInventoryLoadScopeKey = JSON.stringify([
+    scopedOrganizationId,
+    authoritativeVersion,
+    starterPackRevision,
+    catalog?.settings?.pricingSetupConfirmed === true
+  ]);
+  const eventMenuLoadScopeKey = JSON.stringify([
+    scopedOrganizationId,
+    String(selectedEventType || ""),
+    authoritativeVersion,
+    starterPackRevision
+  ]);
 
   const pushToast = (message, tone = "info") => {
     if (typeof onToast === "function") {
@@ -372,53 +407,50 @@ export default function AdminCatalogModal({
   };
 
   useEffect(() => {
-    if (open) {
-      const nextDraft = {
-        ...catalog,
-        settings: {
-          ...(catalog?.settings || {}),
-          featureFlags: { ...(catalog?.settings?.featureFlags || {}) }
-        }
-      };
-      const nextJsonDrafts = buildJsonDrafts(catalog);
-      setDraft(nextDraft);
-      setJsonDrafts(nextJsonDrafts);
-      setSavedFingerprint(catalogDraftFingerprint(nextDraft, nextJsonDrafts));
-      setStatus(String(catalog?.error || ""));
-      setUploadingLogo(false);
-      setActiveTab(resolveCatalogAdminTab(catalog, initialTab));
-      setSelectedEventType(String(selectedEventTypeProp || "").trim());
-      setSelectedCategory("");
-      setMenuEventTypes([]);
-      setMenuCategories([]);
-      setMenuItems([]);
-      setMenuItemBaselines({});
-      setMenuItemDirty({});
-      setMenuItemSavingId("");
-      menuItemSaveInFlightRef.current.clear();
-      setPackActionId("");
-      setCatalogRefreshRequired(false);
-      setManualSetupEnabled(false);
-      setConfirmedMenuRecoveryAvailable(false);
-      setConfirmedMenuRecoveryChecked(false);
-      setMenuLoading(false);
-      setMenuActionLoading(false);
-      setNewEventTypeName("");
-      setNewCategoryName("");
-      setEventTypeEditName("");
-      setCategoryEditName("");
-      setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
-    }
-  }, [
-    open,
-    scopedOrganizationId,
-    initialTab,
-    authoritativeVersion,
-    starterPackRevision
-  ]);
+    if (!shouldInitializeView) return;
+    initializedViewScopeRef.current = viewScopeKey;
+    resetOnNextOpenRef.current = false;
+    const nextDraft = {
+      ...catalog,
+      settings: {
+        ...(catalog?.settings || {}),
+        featureFlags: { ...(catalog?.settings?.featureFlags || {}) }
+      }
+    };
+    const nextJsonDrafts = buildJsonDrafts(catalog);
+    setDraft(nextDraft);
+    setJsonDrafts(nextJsonDrafts);
+    setSavedFingerprint(catalogDraftFingerprint(nextDraft, nextJsonDrafts));
+    setStatus(String(catalog?.error || ""));
+    setUploadingLogo(false);
+    setActiveTab(resolveCatalogAdminTab(catalog, initialTab));
+    setSelectedEventType(String(selectedEventTypeProp || "").trim());
+    setSelectedCategory("");
+    setMenuEventTypes([]);
+    setMenuCategories([]);
+    setMenuItems([]);
+    setMenuItemBaselines({});
+    setMenuItemDirty({});
+    setMenuItemSavingId("");
+    menuItemSaveInFlightRef.current.clear();
+    setPackActionId("");
+    setCatalogRefreshRequired(false);
+    setManualSetupEnabled(false);
+    setConfirmedMenuRecoveryAvailable(false);
+    setConfirmedMenuRecoveryChecked(false);
+    setMenuLoading(false);
+    setMenuActionLoading(false);
+    setNewEventTypeName("");
+    setNewCategoryName("");
+    setEventTypeEditName("");
+    setCategoryEditName("");
+    setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
+  }, [open, viewScopeKey]);
 
   useEffect(() => {
     if (!open) return;
+    if (!shouldInitializeView && eventTypesLoadScopeRef.current === eventTypesLoadScopeKey) return;
+    eventTypesLoadScopeRef.current = eventTypesLoadScopeKey;
     let alive = true;
 
     async function loadEventTypeOptions() {
@@ -441,14 +473,18 @@ export default function AdminCatalogModal({
     return () => {
       alive = false;
     };
-  }, [open, scopedOrganizationId, selectedEventTypeProp, authoritativeVersion, starterPackRevision]);
+  }, [open, eventTypesLoadScopeKey]);
 
   useEffect(() => {
+    if (!open) return undefined;
     if (
-      !open
-      || !firebaseReady
-      || catalog?.settings?.pricingSetupConfirmed !== true
+      !shouldInitializeView
+      && confirmedInventoryLoadScopeRef.current === confirmedInventoryLoadScopeKey
     ) {
+      return undefined;
+    }
+    confirmedInventoryLoadScopeRef.current = confirmedInventoryLoadScopeKey;
+    if (!firebaseReady || catalog?.settings?.pricingSetupConfirmed !== true) {
       setConfirmedMenuRecoveryAvailable(false);
       setConfirmedMenuRecoveryChecked(true);
       return undefined;
@@ -484,16 +520,12 @@ export default function AdminCatalogModal({
     return () => {
       alive = false;
     };
-  }, [
-    open,
-    scopedOrganizationId,
-    authoritativeVersion,
-    starterPackRevision,
-    catalog?.settings?.pricingSetupConfirmed
-  ]);
+  }, [open, confirmedInventoryLoadScopeKey]);
 
   useEffect(() => {
     if (!open) return;
+    if (!shouldInitializeView && eventMenuLoadScopeRef.current === eventMenuLoadScopeKey) return;
+    eventMenuLoadScopeRef.current = eventMenuLoadScopeKey;
     const eventTypeId = String(selectedEventType || "").trim();
     if (!eventTypeId) {
       setMenuCategories([]);
@@ -531,25 +563,19 @@ export default function AdminCatalogModal({
     return () => {
       alive = false;
     };
-  }, [
-    open,
-    scopedOrganizationId,
-    selectedEventType,
-    authoritativeVersion,
-    starterPackRevision
-  ]);
+  }, [open, eventMenuLoadScopeKey]);
 
   useEffect(() => {
     if (!open) return;
     const selected = menuEventTypes.find((eventType) => eventType.id === selectedEventType);
     setEventTypeEditName(selected?.name || "");
-  }, [open, selectedEventType, menuEventTypes]);
+  }, [selectedEventType, menuEventTypes]);
 
   useEffect(() => {
     if (!open) return;
     const selected = menuCategories.find((category) => category.id === selectedCategory);
     setCategoryEditName(selected?.name || "");
-  }, [open, selectedCategory, menuCategories]);
+  }, [selectedCategory, menuCategories]);
 
   const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
   const hasPendingMenuEditorDraft = () => {
@@ -598,15 +624,24 @@ export default function AdminCatalogModal({
     if (hasUnsavedChanges && !window.confirm("Discard unsaved catalog and branding changes?")) {
       return;
     }
+    resetOnNextOpenRef.current = true;
     onClose();
   };
   const { dialogRef } = useModalDialog({
-    open,
+    open: open && !embedded,
     onRequestClose: handleClose,
     canClose: !closeBlocked,
     onCloseBlocked: () => setStatus("Wait for the current catalog action to finish before closing."),
     returnFocusRef
   });
+
+  useEffect(() => {
+    if (!open || !embedded || typeof window === "undefined") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      dialogRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [embedded, open]);
 
   if (!open) return null;
 
@@ -1396,13 +1431,13 @@ export default function AdminCatalogModal({
   return (
     <div
       ref={dialogRef}
-      className="modal-overlay"
-      role="dialog"
-      aria-modal="true"
+      className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
       aria-labelledby="catalog-admin-title"
       tabIndex={-1}
     >
-      <div className="modal-card admin-catalog-card">
+      <div className={`modal-card admin-catalog-card${embedded ? " workspace-route-card" : ""}`}>
         <div className="modal-head">
           <h2 id="catalog-admin-title">Catalog Admin</h2>
           <div className="admin-save-actions">
@@ -1421,7 +1456,7 @@ export default function AdminCatalogModal({
               onClick={handleClose}
               disabled={closeBlocked}
             >
-              Close
+              {embedded ? "Back to Home" : "Close"}
             </button>
           </div>
         </div>
@@ -2436,4 +2471,8 @@ export default function AdminCatalogModal({
       </div>
     </div>
   );
+}
+
+export default function AdminCatalogModal(props) {
+  return <AdminCatalogView {...props} presentation="modal" />;
 }

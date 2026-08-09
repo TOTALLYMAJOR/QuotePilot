@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import StatusChip from "./StatusChip";
 import { currency } from "../lib/quoteCalculator";
 import {
   buildKitchenCheckpoints,
@@ -13,6 +14,10 @@ import {
   updateQuoteKitchenCheckpoints,
   updateQuoteProductionChecklist
 } from "../lib/quoteStore";
+import {
+  classifyBookingConfirmation,
+  classifyQuoteStatus
+} from "../lib/statusSemantics";
 import { useModalDialog } from "../hooks/useModalDialog";
 
 const STATUS_SET = new Set(["accepted", "booked"]);
@@ -264,16 +269,35 @@ function confirmationLabel(event) {
   return "Confirmation pending";
 }
 
-export default function EventScheduleModal({
+export function getScheduleStatusPresentation(event = {}) {
+  return {
+    quote: classifyQuoteStatus(event.status),
+    bookingConfirmation: classifyBookingConfirmation(event.confirmationStatus)
+  };
+}
+
+export function getScheduleCalendarCountLabels(counts = {}) {
+  const booked = Math.max(0, Number(counts.booked) || 0);
+  const accepted = Math.max(0, Number(counts.accepted) || 0);
+  return {
+    booked: booked > 0 ? `${booked} booked` : "",
+    accepted: accepted > 0 ? `${accepted} accepted` : ""
+  };
+}
+
+export function EventScheduleView({
   open,
   onClose,
+  presentation = "embedded",
   organizationId = "",
   staffLeads = [],
   capacityLimit = 400,
   currentUserEmail = "",
   returnFocusRef = null
 }) {
+  const embedded = presentation === "embedded";
   const todayIso = toIsoDate(new Date());
+  const routeHeadingRef = useRef(null);
   const [state, setState] = useState({ loading: false, error: "", source: "", quotes: [] });
   const [viewMode, setViewMode] = useState("month");
   const [anchorIso, setAnchorIso] = useState(todayIso);
@@ -718,27 +742,43 @@ export default function EventScheduleModal({
     onClose();
   };
   const { dialogRef } = useModalDialog({
-    open,
+    open: Boolean(open && !embedded),
     onRequestClose: handleClose,
     canClose: !closeBlocked,
     onCloseBlocked: () => setFeedback("Wait for the current schedule update to finish before closing."),
     returnFocusRef
   });
 
+  useEffect(() => {
+    if (!open || !embedded || typeof window === "undefined") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      routeHeadingRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [embedded, open]);
+
   if (!open) return null;
 
   return (
     <div
-      ref={dialogRef}
-      className="modal-overlay"
-      role="dialog"
-      aria-modal="true"
+      className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
       aria-labelledby="event-schedule-title"
-      tabIndex={-1}
     >
-      <div className="modal-card schedule-card">
+      <div
+        ref={dialogRef}
+        className={`modal-card schedule-card${embedded ? " workspace-route-card" : ""}`}
+        tabIndex={-1}
+      >
         <div className="modal-head">
-          <h2 id="event-schedule-title">Event Schedule</h2>
+          <h2
+            id="event-schedule-title"
+            ref={routeHeadingRef}
+            tabIndex={embedded ? -1 : undefined}
+          >
+            Event Schedule
+          </h2>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
@@ -746,11 +786,11 @@ export default function EventScheduleModal({
             <button
               type="button"
               className="ghost"
-              data-modal-initial-focus
+              data-modal-initial-focus={embedded ? undefined : true}
               onClick={handleClose}
               disabled={closeBlocked}
             >
-              Close
+              {embedded ? "Back to Home" : "Close"}
             </button>
           </div>
         </div>
@@ -799,6 +839,7 @@ export default function EventScheduleModal({
                 <div className="schedule-month-grid">
                   {monthCells.map((cell) => {
                     const isSelected = cell.iso === selectedIso;
+                    const countLabels = getScheduleCalendarCountLabels(cell.counts);
                     const className = [
                       "schedule-day-cell",
                       cell.inMonth ? "in-month" : "out-month",
@@ -822,8 +863,8 @@ export default function EventScheduleModal({
                       >
                         <span className="schedule-day-num">{cell.date.getDate()}</span>
                         <div className="schedule-day-badges">
-                          {cell.counts.booked > 0 && <small className="booked">{cell.counts.booked} booked</small>}
-                          {cell.counts.accepted > 0 && <small className="accepted">{cell.counts.accepted} hold</small>}
+                          {countLabels.booked && <small className="booked">{countLabels.booked}</small>}
+                          {countLabels.accepted && <small className="accepted">{countLabels.accepted}</small>}
                           {cell.conflicts.total > 0 && <small className="conflict">{cell.conflicts.total} risk</small>}
                           {cell.conflicts.capacity > 0 && <small className="capacity">{cell.conflicts.capacity} cap</small>}
                         </div>
@@ -898,24 +939,32 @@ export default function EventScheduleModal({
             ) : (
               <>
                 <div className="schedule-event-list">
-                  {selectedEvents.map((item) => (
-                    <article
-                      key={item.id}
-                      id={scheduleEventDetailId(item.id)}
-                      tabIndex={-1}
-                      className={[
-                        "schedule-event-card",
-                        item.status,
-                        item.conflictReasons.length ? "has-conflict" : "",
-                        item.conflictReasons.includes("capacity") ? "has-capacity" : ""
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      <header>
-                        <strong>{item.quoteNumber}</strong>
-                        <span>{item.status}</span>
-                      </header>
+                  {selectedEvents.map((item) => {
+                    const { quote: quoteStatus, bookingConfirmation } = getScheduleStatusPresentation(item);
+                    return (
+                      <article
+                        key={item.id}
+                        id={scheduleEventDetailId(item.id)}
+                        tabIndex={-1}
+                        className={[
+                          "schedule-event-card",
+                          item.status,
+                          item.conflictReasons.length ? "has-conflict" : "",
+                          item.conflictReasons.includes("capacity") ? "has-capacity" : ""
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        <header>
+                          <strong>{item.quoteNumber}</strong>
+                        </header>
+                        <div className="right-actions" aria-label="Quote and booking confirmation status">
+                          <StatusChip family={quoteStatus.family} label={`Quote: ${quoteStatus.label}`} />
+                          <StatusChip
+                            family={bookingConfirmation.family}
+                            label={`Booking confirmation: ${bookingConfirmation.label}`}
+                          />
+                        </div>
                       <p>{item.eventName}</p>
                       <p>{item.time || "Time TBD"} • {item.venue}</p>
                       <p>{item.customer} • {item.guests || 0} guests</p>
@@ -1034,8 +1083,9 @@ export default function EventScheduleModal({
                           Add an event start time to generate kitchen checkpoints.
                         </p>
                       )}
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
 
                 <section className="schedule-staff-board">
@@ -1118,4 +1168,8 @@ export default function EventScheduleModal({
       </div>
     </div>
   );
+}
+
+export default function EventScheduleModal(props) {
+  return <EventScheduleView {...props} presentation="modal" />;
 }

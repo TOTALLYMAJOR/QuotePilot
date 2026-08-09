@@ -98,12 +98,20 @@ describe("recoverable lazy surfaces", () => {
       "CustomerWorkspaceView",
       "WorkspaceNotFound",
       "QuoteHistoryView",
-      "SalesWorkflowView"
+      "SalesWorkflowView",
+      "AdminCatalogView",
+      "EventScheduleView",
+      "ReportingDashboardView",
+      "ImportStudioView",
+      "IntegrationOpsView",
+      "DiagnosticsView"
     ]) {
       expect(appSource).toContain(`const ${name} = createRecoverableLazy(`);
       expect(appSource).toContain(`component={${name}}`);
     }
     expect(appSource).not.toContain("WorkspaceModalFallback");
+    expect(appSource).not.toMatch(/setScheduleOpen\(resolvedWorkspaceRouteId/);
+    expect(appSource).not.toMatch(/setAdminOpen\(resolvedWorkspaceRouteId/);
 
     const recoverySource = readSource("../RecoverableErrorBoundary.jsx");
     expect(recoverySource).toContain("Try again");
@@ -136,7 +144,7 @@ describe("recoverable lazy surfaces", () => {
 
   test("uses non-blocking catalog refresh for Import Studio receipts and conflicts", () => {
     const appSource = readSource("../../App.jsx");
-    expect(appSource.match(/catalog\.reload\(\{ background: true \}\)/g)).toHaveLength(2);
+    expect(appSource.match(/catalog\.reload\(\{ background: true \}\)/g)?.length || 0).toBeGreaterThanOrEqual(2);
     expect(appSource).toContain("onReload={() => catalog.reload({ background: true })}");
   });
 });

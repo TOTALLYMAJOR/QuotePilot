@@ -16,6 +16,12 @@ import { buildQuoteEmailPayload } from "../lib/proposalPayload";
 import { getApprovalRequestExecutionEligibility } from "../lib/quoteWorkflow";
 import { portalConversationAvailable } from "../lib/portalConversationClient";
 import {
+  classifyBookingConfirmation,
+  classifyDepositStatus,
+  classifyFinalBalanceDisplayStatus,
+  classifyQuoteStatus
+} from "../lib/statusSemantics";
+import {
   BOOKING_CONFIRMATION_STATUSES,
   convertQuoteToContract,
   deleteQuote,
@@ -28,6 +34,7 @@ import {
   updateQuoteStatus
 } from "../lib/quoteStore";
 import QuoteConversationPanel from "./QuoteConversationPanel";
+import StatusChip from "./StatusChip";
 
 const RESUMABLE_PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
@@ -78,6 +85,21 @@ export function getFinalBalanceDisplayStatus(finalBalance = {}) {
   return ["unpaid", "sent"].includes(status) ? status : "unpaid";
 }
 
+export function getQuoteHistoryStatusSemantics(quote = {}) {
+  const finalBalanceDisplayStatus = getFinalBalanceDisplayStatus(
+    quote?.payment?.finalBalance
+  );
+  return {
+    lifecycle: classifyQuoteStatus(quote?.status || "draft"),
+    bookingConfirmation: classifyBookingConfirmation(
+      quote?.booking?.confirmationStatus || "pending"
+    ),
+    deposit: classifyDepositStatus(quote?.payment?.depositStatus || "unpaid"),
+    finalBalance: classifyFinalBalanceDisplayStatus(finalBalanceDisplayStatus),
+    finalBalanceDisplayStatus
+  };
+}
+
 export function getExecutableApprovalRequest(quote, action, options = {}) {
   const requests = Array.isArray(quote?.workflow?.approvalRequests)
     ? quote.workflow.approvalRequests
@@ -113,11 +135,6 @@ function statusBucket(status) {
   if (["sent", "viewed", "accepted"].includes(normalized)) return "submitted";
   if (["booked", "declined", "expired"].includes(normalized)) return "archived";
   return normalized;
-}
-
-function statusBucketLabel(status) {
-  const bucket = statusBucket(status);
-  return bucket.charAt(0).toUpperCase() + bucket.slice(1);
 }
 
 export function filterQuoteHistoryQuotes(quotes, {
@@ -654,6 +671,7 @@ export function QuoteHistoryView({
     focusedQuote && filteredQuotes.some((quote) => quote.id === focusedQuote.id)
   );
   const focusedQuoteStatus = String(focusedQuote?.status || "draft").trim().toLowerCase();
+  const focusedQuoteStatusSemantics = getQuoteHistoryStatusSemantics(focusedQuote || {});
   const focusedQuoteIsDraft = focusedQuoteStatus === "draft";
   let focusedQuoteRevisionId = "";
   try {
@@ -1417,6 +1435,10 @@ export function QuoteHistoryView({
               <h3 id="saved-quote-handoff-title">
                 {focusedQuote.quoteNumber || focusedQuote.id}
               </h3>
+              <div className="history-meta-stack" aria-label="Focused quote lifecycle">
+                <small>Quote / proposal lifecycle</small>
+                <StatusChip {...focusedQuoteStatusSemantics.lifecycle} />
+              </div>
               <p id="saved-quote-handoff-description" className="saved-quote-handoff-description">
                 {focusedDelivery.reviewRequired
                   ? "Check the provider outcome, then record whether the email was accepted or was not sent. Quote-changing actions remain locked until review is complete."
@@ -1634,6 +1656,7 @@ export function QuoteHistoryView({
                 const booking = quote.booking || {};
                 const contractNumber = booking.contractNumber || "";
                 const confirmationStatus = booking.confirmationStatus || "pending";
+                const statusSemantics = getQuoteHistoryStatusSemantics(quote);
                 const canConvert = canConvertToContract(quote);
                 const canTrackConfirmation = quote.status === "booked" && Boolean(contractNumber);
                 const canRotatePortalForStatus = canRotateQuotePortal(normalizedQuoteStatus);
@@ -1705,7 +1728,6 @@ export function QuoteHistoryView({
                 const finalBalanceCheckoutState = String(
                   finalBalance.stripeCheckoutState || ""
                 ).trim().toLowerCase();
-                const finalBalanceDisplayStatus = getFinalBalanceDisplayStatus(finalBalance);
                 const finalBalanceAmountCents = Number(finalBalance.amountCents);
                 const showFinalBalance = normalizedQuoteStatus === "booked"
                   && Boolean(contractNumber)
@@ -1739,7 +1761,9 @@ export function QuoteHistoryView({
                     <td>{currency(quote.totals?.deposit || 0)}</td>
                     <td>
                       <div className="history-meta-stack">
-                        {permissions.canManageQuoteStatus ? (
+                        <small>Quote / proposal lifecycle</small>
+                        <StatusChip {...statusSemantics.lifecycle} />
+                        {permissions.canManageQuoteStatus && (
                           <select
                             value={quote.status || "draft"}
                             onChange={(e) => handleStatusUpdate(quote.id, e.target.value)}
@@ -1749,28 +1773,28 @@ export function QuoteHistoryView({
                               <option key={status} value={status}>{status}</option>
                             ))}
                           </select>
-                        ) : (
-                          <strong>{quote.status || "draft"}</strong>
                         )}
-                        <small>{statusBucketLabel(quote.status || "draft")}</small>
                         {deliveryUi.reviewRequired ? (
-                          <small>Delivery review required</small>
+                          <small>Delivery readiness: Review required</small>
                         ) : deliveryUi.activeLease ? (
-                          <small>Delivery in progress</small>
+                          <small>Delivery readiness: Delivery in progress</small>
                         ) : deliveryUi.freshAttemptAvailable ? (
-                          <small>New delivery attempt available</small>
+                          <small>Delivery readiness: New attempt available</small>
                         ) : deliveryUi.retryAvailable ? (
-                          <small>Safe retry available</small>
+                          <small>Delivery readiness: Safe retry available</small>
                         ) : null}
                       </div>
                     </td>
                     <td>
                       <div className="history-meta-stack">
-                        <span>Deposit: {quote.payment?.depositStatus || "unpaid"}</span>
+                        <small>Deposit</small>
+                        <StatusChip {...statusSemantics.deposit} />
                         {showFinalBalance && (
-                          <small>
-                            Balance: {finalBalanceDisplayStatus.replaceAll("_", " ")} · {currency(finalBalanceAmountCents / 100)}
-                          </small>
+                          <>
+                            <small>Final balance</small>
+                            <StatusChip {...statusSemantics.finalBalance} />
+                            <small>{currency(finalBalanceAmountCents / 100)}</small>
+                          </>
                         )}
                       </div>
                     </td>
@@ -1783,7 +1807,9 @@ export function QuoteHistoryView({
                     <td>
                       {canTrackConfirmation ? (
                         <div className="history-meta-stack">
-                          {permissions.canManageConfirmation ? (
+                          <small>Booking confirmation</small>
+                          <StatusChip {...statusSemantics.bookingConfirmation} />
+                          {permissions.canManageConfirmation && (
                             <select
                               value={confirmationStatus}
                               onChange={(e) => handleConfirmationUpdate(quote.id, e.target.value)}
@@ -1793,8 +1819,6 @@ export function QuoteHistoryView({
                                 <option key={bookingStatus} value={bookingStatus}>{bookingStatus}</option>
                               ))}
                             </select>
-                          ) : (
-                            <strong>{confirmationStatus}</strong>
                           )}
                           <small>{fmtDate(booking.confirmedAtISO || booking.confirmationSentAtISO)}</small>
                         </div>
