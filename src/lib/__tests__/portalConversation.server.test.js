@@ -256,6 +256,9 @@ describe("server-owned quote portal conversation", () => {
     expect(sendSource).toContain('operation: "send"');
     expect(sendSource).toContain("randomUUID()");
     expect(sendSource).toContain("Timestamp.fromMillis(nowMs)");
+    expect(sendSource).toContain("conversationSummary");
+    expect(sendSource).toContain("latestActorType: message.actorType");
+    expect(sendSource).toContain("messageCount: nextMessageCount");
     for (const forbidden of ["data?.actorType", "data?.actorName", "data?.messageId", "data?.createdAtISO"]) {
       expect(sendSource).not.toContain(forbidden);
     }

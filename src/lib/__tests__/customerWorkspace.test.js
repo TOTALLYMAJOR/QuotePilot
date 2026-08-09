@@ -80,8 +80,41 @@ describe("buildCustomerWorkspaceDto", () => {
   test("aggregates conversation entry points without merging quote histories", () => {
     const dto = buildCustomerWorkspaceDto({ customer: { id: "customer-1" }, quotes: [quote] });
     expect(dto.conversations).toEqual([
-      expect.objectContaining({ quoteId: "quote-1", quoteNumber: "Q-1001" })
+      expect.objectContaining({
+        quoteId: "quote-1",
+        quoteNumber: "Q-1001",
+        summaryAvailable: false,
+        messageCount: null
+      })
     ]);
+  });
+
+  test("projects server-owned per-quote conversation summaries without merging messages", () => {
+    const dto = buildCustomerWorkspaceDto({
+      customer: { id: "customer-1" },
+      quotes: [{
+        ...quote,
+        conversationSummary: {
+          messageCount: 3,
+          latestMessageAtISO: "2026-08-08T11:30:00.000Z",
+          latestActorType: "customer"
+        }
+      }]
+    });
+
+    expect(dto.conversations).toEqual([{
+      quoteId: "quote-1",
+      quoteNumber: "Q-1001",
+      status: "accepted",
+      summaryAvailable: true,
+      messageCount: 3,
+      latestMessageAtISO: "2026-08-08T11:30:00.000Z",
+      latestActorType: "customer"
+    }]);
+    expect(dto.recentActivity[0]).toMatchObject({
+      quoteId: "quote-1",
+      label: "Customer sent a conversation message"
+    });
   });
 
   test("reports version truncation only from explicit read evidence", () => {

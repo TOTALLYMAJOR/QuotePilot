@@ -16,6 +16,7 @@ const mockState = vi.hoisted(() => ({
   doc: vi.fn(),
   getDoc: vi.fn(),
   getDocs: vi.fn(),
+  limit: vi.fn(),
   orderBy: vi.fn(),
   query: vi.fn(),
   runTransaction: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock("firebase/firestore", () => ({
   doc: mockState.doc,
   getDoc: mockState.getDoc,
   getDocs: mockState.getDocs,
+  limit: mockState.limit,
   orderBy: mockState.orderBy,
   query: mockState.query,
   runTransaction: mockState.runTransaction,
@@ -79,6 +81,7 @@ vi.mock("../organizationService", () => ({
 import {
   buildClientWritablePortalPayment,
   convertQuoteToContract,
+  getCustomerRecordByEmail,
   getQuoteHistory,
   getWorkflowAttentionSnapshot,
   requestQuoteApproval,
@@ -108,6 +111,7 @@ describe("quoteStore Firebase write safety", () => {
     mockState.getOrganizationCollectionRef.mockImplementation((name, orgId) => ({ refType: "org-collection", name, orgId }));
     mockState.getOrganizationSubDocRef.mockImplementation((name, docId, orgId) => ({ refType: "org-doc", name, docId, orgId }));
     mockState.collection.mockImplementation((...args) => ({ refType: "collection", args }));
+    mockState.limit.mockImplementation((value) => ({ refType: "limit", value }));
     mockState.orderBy.mockImplementation((...args) => ({ refType: "orderBy", args }));
     mockState.query.mockImplementation((...args) => ({ refType: "query", args }));
     mockState.getDocs.mockResolvedValue({ docs: [] });
@@ -1057,6 +1061,23 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.runTransaction).not.toHaveBeenCalled();
     expect(mockState.transactionSet).not.toHaveBeenCalled();
     expect(mockState.writeBatch).not.toHaveBeenCalled();
+  });
+
+  test("customer email lookup declares a rules-compatible bounded query", async () => {
+    mockState.getDocs.mockResolvedValue({
+      docs: [{
+        id: "customer-a",
+        data: () => ({
+          organizationId: "org-one",
+          email: "customer@example.com"
+        })
+      }]
+    });
+
+    await expect(getCustomerRecordByEmail(" Customer@Example.com ", "org-one"))
+      .resolves.toMatchObject({ id: "customer-a", email: "customer@example.com" });
+    expect(mockState.where).toHaveBeenCalledWith("email", "==", "customer@example.com");
+    expect(mockState.limit).toHaveBeenCalledWith(1);
   });
 
   test("history derives expiry without attempting a staff write by default", async () => {

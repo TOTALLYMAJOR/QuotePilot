@@ -261,6 +261,16 @@ function lifecycleActivity(quotes = []) {
     if (changeAtISO && quote?.portalDecision?.decision === "changes_requested") {
       activity.push({ quoteId: quote.id, quoteNumber: quote.quoteNumber, label: "Customer requested changes", atISO: changeAtISO });
     }
+    const conversationAtISO = toIso(quote?.conversationSummary?.latestMessageAtISO);
+    if (conversationAtISO) {
+      const actorType = text(quote?.conversationSummary?.latestActorType).toLowerCase();
+      activity.push({
+        quoteId: quote.id,
+        quoteNumber: quote.quoteNumber,
+        label: actorType === "customer" ? "Customer sent a conversation message" : "Staff sent a conversation message",
+        atISO: conversationAtISO
+      });
+    }
   });
   return activity.sort((left, right) => right.atISO.localeCompare(left.atISO)).slice(0, 25);
 }
@@ -375,12 +385,23 @@ export function buildCustomerWorkspaceDto({
     proposalVersions: versions,
     events,
     money: normalizedQuotes.flatMap(paymentRowsForQuote),
-    conversations: normalizedQuotes.map((quote) => ({
-      quoteId: quote.id,
-      quoteNumber: quote.quoteNumber,
-      status: quote.status,
-      updatedAtISO: text(quote.updatedAtISO || quote.createdAtISO)
-    })),
+    conversations: normalizedQuotes.map((quote) => {
+      const summary = quote?.conversationSummary && typeof quote.conversationSummary === "object"
+        ? quote.conversationSummary
+        : null;
+      const messageCount = Number(summary?.messageCount);
+      return {
+        quoteId: quote.id,
+        quoteNumber: quote.quoteNumber,
+        status: quote.status,
+        summaryAvailable: Boolean(summary && Number.isFinite(messageCount) && messageCount >= 0),
+        messageCount: Number.isFinite(messageCount) && messageCount >= 0 ? Math.floor(messageCount) : null,
+        latestMessageAtISO: toIso(summary?.latestMessageAtISO),
+        latestActorType: ["staff", "customer"].includes(text(summary?.latestActorType).toLowerCase())
+          ? text(summary.latestActorType).toLowerCase()
+          : ""
+      };
+    }),
     recentActivity: lifecycleActivity(normalizedQuotes),
     attention,
     nextAction: nextSafeAction(attention, normalizedQuotes),

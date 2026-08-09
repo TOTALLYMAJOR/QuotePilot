@@ -255,7 +255,8 @@ export async function getCustomerRecordByEmail(customerEmail, organizationId = u
   );
   const snapshot = await getDocs(query(
     getOrganizationCollectionRef("customers", resolvedOrganizationId),
-    where("email", "==", normalizedCustomerEmail)
+    where("email", "==", normalizedCustomerEmail),
+    queryLimit(1)
   ));
   const matches = [...snapshot.docs].sort((left, right) => left.id.localeCompare(right.id));
   const selected = matches[0];

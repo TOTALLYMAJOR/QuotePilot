@@ -31,7 +31,13 @@ function safeLogoUrl(value) {
   }
 }
 
+function readableReason(value) {
+  const normalized = String(value || "").trim().replaceAll("_", " ");
+  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : "Saved proposal snapshot";
+}
+
 export function StaffProposalPreview({ quote, onClose }) {
+  const headingRef = useRef(null);
   const preview = buildStaffProposalPreview(quote);
   const branding = preview.branding || {};
   const brandLogoUrl = safeLogoUrl(branding.brandLogoUrl);
@@ -40,15 +46,33 @@ export function StaffProposalPreview({ quote, onClose }) {
   const contact = [branding.businessEmail, branding.businessPhone, branding.businessAddress]
     .filter(Boolean)
     .join(" · ");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const frame = window.requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose?.();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
   return (
     <aside
       className="staff-proposal-preview"
       aria-labelledby="staff-proposal-preview-title"
+      role="region"
     >
       <div className="workspace-route-head staff-proposal-preview-controls">
         <div>
           <p className="eyebrow">Read-only staff preview</p>
-          <h3 id="staff-proposal-preview-title">Proposal presentation</h3>
+          <h3 ref={headingRef} id="staff-proposal-preview-title" tabIndex={-1}>Proposal presentation</h3>
         </div>
         <button type="button" className="ghost compact" onClick={onClose}>Close preview</button>
       </div>
@@ -104,6 +128,7 @@ export default function CustomerWorkspaceView({
   const [state, setState] = useState({ loading: true, error: "", workspace: null });
   const generationRef = useRef(0);
   const tabRefs = useRef({});
+  const previewTriggerRef = useRef(null);
 
   useEffect(() => {
     const generation = generationRef.current + 1;
@@ -127,6 +152,12 @@ export default function CustomerWorkspaceView({
     () => state.workspace?.quotes.find((quote) => quote.id === previewQuoteId) || null,
     [previewQuoteId, state.workspace?.quotes]
   );
+
+  const closePreview = () => {
+    setPreviewQuoteId("");
+    const returnTarget = previewTriggerRef.current;
+    window.requestAnimationFrame(() => returnTarget?.focus());
+  };
 
   const handleTabKeyDown = (event, tabId) => {
     const index = TABS.findIndex(([id]) => id === tabId);
@@ -241,17 +272,45 @@ export default function CustomerWorkspaceView({
             <div className="customer-card-list">
               {workspace.quotes.map((quote) => {
                 const status = classifyQuoteStatus(quote.status);
-                const versionCount = workspace.proposalVersions.filter((version) => version.quoteId === quote.id).length;
+                const versions = workspace.proposalVersions.filter((version) => version.quoteId === quote.id);
+                const versionsTruncated = workspace.versionPageInfo.truncatedQuoteIds.includes(quote.id);
                 return (
                   <article key={quote.id}>
                     <div>
                       <h3>{quote.quoteNumber || quote.id}</h3>
                       <p>{quote.event?.name || "Untitled event"} · {quote.event?.date || "Date TBD"}</p>
                       <StatusChip family={status.family} label={status.label} />
-                      <small>{versionCount} retained version{versionCount === 1 ? "" : "s"}</small>
+                      <small>
+                        {versions.length} most recent retained version{versions.length === 1 ? "" : "s"}
+                        {versionsTruncated ? ` shown; older versions exist beyond the ${workspace.versionPageInfo.perQuoteLimit}-version read limit` : ""}
+                      </small>
+                      {versions.length > 0 && (
+                        <details className="customer-version-history">
+                          <summary>Review proposal versions</summary>
+                          <ol className="customer-version-list">
+                            {versions.map((version, index) => (
+                              <li key={version.id || version.versionId || `${quote.id}-${index}`}>
+                                <strong>Version {Number(version.versionNumber || 0) || versions.length - index}</strong>
+                                <span>{readableReason(version.reason)}</span>
+                                <time dateTime={version.createdAtISO}>{dateTime(version.createdAtISO)}</time>
+                              </li>
+                            ))}
+                          </ol>
+                        </details>
+                      )}
                     </div>
                     <div className="right-actions">
-                      <button type="button" className="ghost compact" onClick={() => setPreviewQuoteId(quote.id)}>Preview</button>
+                      <button
+                        type="button"
+                        className="ghost compact"
+                        aria-expanded={previewQuoteId === quote.id}
+                        onClick={(event) => {
+                          previewTriggerRef.current = event.currentTarget;
+                          setPreviewQuoteId(quote.id);
+                        }}
+                      >
+                        Preview
+                      </button>
                       <button type="button" className="ghost compact" onClick={() => onOpenQuote?.(quote.id)}>Open record</button>
                     </div>
                   </article>
@@ -259,7 +318,7 @@ export default function CustomerWorkspaceView({
               })}
             </div>
           )}
-          {previewQuote && <StaffProposalPreview quote={previewQuote} onClose={() => setPreviewQuoteId("")} />}
+          {previewQuote && <StaffProposalPreview quote={previewQuote} onClose={closePreview} />}
         </section>
 
         <section id="customer-panel-events" role="tabpanel" tabIndex={0} hidden={activeTab !== "events"}>
@@ -298,7 +357,21 @@ export default function CustomerWorkspaceView({
           <div className="customer-card-list">
             {workspace.conversations.map((conversation) => (
               <article key={conversation.quoteId}>
-                <div><h3>{conversation.quoteNumber || conversation.quoteId}</h3><p>Last quote activity {dateTime(conversation.updatedAtISO)}</p></div>
+                <div>
+                  <h3>{conversation.quoteNumber || conversation.quoteId}</h3>
+                  {conversation.summaryAvailable ? (
+                    <p>
+                      {conversation.messageCount} message{conversation.messageCount === 1 ? "" : "s"} recorded
+                      {conversation.latestMessageAtISO
+                        ? conversation.latestActorType
+                          ? ` · latest from ${conversation.latestActorType} ${dateTime(conversation.latestMessageAtISO)}`
+                          : ` · latest message ${dateTime(conversation.latestMessageAtISO)}`
+                        : ""}
+                    </p>
+                  ) : (
+                    <p>Conversation summary is unavailable for this legacy quote; open the record for the authoritative thread.</p>
+                  )}
+                </div>
                 <button type="button" className="ghost compact" onClick={() => onOpenQuote?.(conversation.quoteId)}>Open quote conversation</button>
               </article>
             ))}

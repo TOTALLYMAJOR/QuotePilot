@@ -942,10 +942,19 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/customers/{docId} {
-      allow read: if isOrgStaff(orgId);
+      allow get: if isOrgStaff(orgId);
+      allow list: if isOrgStaff(orgId)
+        && request.query.limit != null
+        && request.query.limit <= 101;
       // Customer identity, normalized directory search fields, import
       // provenance, and rollback decisions are all trusted-server owned.
       allow write: if false;
+    }
+
+    match /organizations/{orgId}/customerEmailClaims/{claimId} {
+      // Normalized email ownership is a trusted transaction serialization
+      // primitive, not customer-directory data.
+      allow read, write: if false;
     }
 
     match /organizations/{orgId}/importBatches/{batchId} {
