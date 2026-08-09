@@ -6,7 +6,7 @@ belongs in `DEV_TASKS.md`. This handoff does not authorize production
 normalization/backfill, deployment, flag promotion, Stripe Connect work,
 structured change requests, or persistent customer accounts.
 
-Last updated: August 8, 2026
+Last updated: August 9, 2026
 
 North star: [Customer-Centered Workspace Plan](CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 
@@ -378,31 +378,36 @@ counts or release status.
 
 ### Commercial Dependency Graph
 
-The Customer 360 read model is a consumer of the planned `CWF-15` Commercial
-Dependency Graph, not its authority or persistence layer. Before CWF-15A source
-work, accept a dedicated ADR covering registry ownership/schema evolution,
-canonical serialization and hashing, browser/server parity, cycle/version
-compatibility, and simulation/invalidation transaction authority. The graph may
-consume server-authoritative pricing outputs but must never recalculate them as
-a second pricing engine.
+The Customer 360 read model is a consumer of `CWF-15`, not its authority or
+persistence layer. The accepted
+`docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md` now governs source-complete CWF-15A:
+the frozen v1 registry, validation and deterministic traversal, browser/Node
+canonical serialization and SHA-256 parity, and Kitchen BEO download-time input
+provenance. The graph may consume server-authoritative pricing outputs but must
+never recalculate them as a second pricing engine.
 
 Before CWF-15C source work, accept a UI specification with a component
 state/display matrix for Change Impact, Current/Stale/Review, authorization,
 invalidation, reconciliation, receipt, error, and recovery states, plus
 acceptance-criteria traceability to each role-safe control and Attention outcome.
 
-CWF-15A may compute and embed a versioned BEO dependency fingerprint, but that
-alone is not retained freshness evidence. CWF-15B must introduce a server-owned
-immutable artifact-generation receipt with artifact type, quote/revision
-identity, fingerprint schema version, dependency fingerprint, generation time,
-and actor only through already governed existing artifact-generation actions,
-plus read-only impact simulation. It introduces no independent authorization,
-invalidation, reconciliation, or publication mutation. CWF-15C may then compare
-the trusted receipt, surface change blast radius and explainable Decision Debt,
-and introduce the UI-bound, role-gated authorized invalidation, reconciliation,
-and publication workflow plus its atomic audit receipts through the CWF-14
-productization contract. No dependency-graph runtime capability is authorized
-or claimed by this handoff.
+CWF-15A computes and displays a versioned BEO dependency fingerprint, exact
+source revision, browser-local generation time, and proof-boundary disclaimer,
+but writes nothing and creates no retained freshness or receipt evidence. There
+is no existing governed server BEO generation action. Before CWF-15B can create
+an immutable artifact-generation receipt, it must separately introduce a
+CWF-14-bound server generation/receipt action or move generation authority
+server-side. That server authority must reload canonical same-tenant data,
+recompute the declared inputs, and bind artifact type, quote/revision identity,
+fingerprint schema, dependency fingerprint, actor, and server time itself;
+browser-supplied digest, source revision, actor, or time can never become
+receipt truth. CWF-15B may also add read-only impact simulation, but it adds no
+independent authorization, invalidation, reconciliation, or publication
+mutation. CWF-15C may then compare a trusted server receipt, surface change
+blast radius and explainable Decision Debt, and introduce the UI-bound,
+role-gated authorized invalidation, reconciliation, and publication workflow
+plus atomic audit receipts through CWF-14. This handoff authorizes neither
+CWF-15B nor CWF-15C source work or runtime authority.
 
 ### Structured change requests
 

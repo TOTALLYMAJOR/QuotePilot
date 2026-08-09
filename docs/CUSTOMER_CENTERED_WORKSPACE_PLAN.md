@@ -336,12 +336,13 @@ without reopening the customer/account or commercial-authority boundary.
 
 ### Platform primitive — highest-priority new program
 
-- Before CWF-15A source work, accept a dedicated ADR/design contract covering
-  registry ownership and schema evolution, deterministic canonical
-  serialization and hashing, browser/server parity boundaries, cycle and
-  version compatibility, and simulation/invalidation transaction authority.
-  The graph may consume server-authoritative pricing outputs but must never
-  become a second pricing engine.
+- The accepted `docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md` governs the
+  source-complete CWF-15A contract: registry ownership and schema evolution,
+  deterministic canonical serialization and hashing, browser/server parity,
+  cycle and version compatibility, and the boundary before future
+  simulation/invalidation authority. The graph may consume
+  server-authoritative pricing outputs but must never become a second pricing
+  engine.
 - Before CWF-15C source work, accept a UI specification with a component
   state/display matrix for Change Impact, Current/Stale/Review, authorization,
   invalidation, reconciliation, receipt, error, and recovery states, plus
@@ -367,15 +368,17 @@ without reopening the customer/account or commercial-authority boundary.
   revision, contract, payment/provider evidence, portal decision, or generated
   artifact, and stale dependents never silently regenerate or republish.
 
-  Every governed artifact receives a schema-versioned dependency fingerprint,
-  source revision, and generation timestamp computed from only its declared
-  authoritative inputs. A mismatch produces a visible `STALE` or `REVIEW`
-  state with the changed inputs and a role-safe regeneration/reconciliation
-  action; matching hashes prove input equivalence only, not provider delivery,
-  customer acceptance, payment, booking, or operational completion. Start with
-  BEO freshness because its payload is already derived from quote data and
-  revision-stamped, then extend to staffing, rental/food quantities, production
-  plans, contracts, and payment scopes without conflating their authorities.
+  CWF-15A starts with a schema-versioned Kitchen BEO dependency fingerprint
+  computed from only its declared normalized rendered inputs. The exact source
+  revision and browser-local generation time are displayed separately and are
+  excluded from that digest. It is not persisted, so matching or mismatching
+  hashes do not yet produce retained `CURRENT`, `STALE`, or `REVIEW` truth.
+  A future freshness comparison first requires a trusted server-owned
+  generation receipt; even then matching hashes prove declared-input
+  equivalence only, not provider delivery, customer acceptance, payment,
+  booking, or operational completion. Extend later to staffing, rental/food
+  quantities, production plans, contracts, and payment scopes without
+  conflating their authorities.
 
   Decision Debt is a deterministic Attention ranking derived from unresolved
   dependency nodes, tenant-local event proximity, bounded commercial exposure,
@@ -383,21 +386,25 @@ without reopening the customer/account or commercial-authority boundary.
   guests, menu, rentals, staffing, and BEO finalization require validated,
   versioned organization settings and explicit defaults. The score explains
   its factors and affected decisions; it is neither predictive AI nor proof
-  that a customer, provider, or staff member took an action. First delivery
-  requires pure graph/evaluator tests, cycle and unknown-node rejection,
-  server/browser parity fixtures, immutable simulation receipts, transaction
-  and authorization coverage, and CWF-14-bound Change Impact, artifact
-  freshness, and Attention surfaces with complete state evidence.
+  that a customer, provider, or staff member took an action. CWF-15A requires
+  pure graph/evaluator tests, cycle and unknown-node rejection, and
+  server/browser parity fixtures. Later freshness, Change Impact, and Attention
+  delivery requires trusted server receipts, transaction and authorization
+  coverage, and CWF-14-bound surfaces with complete state evidence.
 
-  Delivery is intentionally sliced. **CWF-15A** introduces the pure versioned
-  registry/evaluator, browser/server parity fixtures, and computes and embeds a
-  BEO dependency fingerprint without changing quote-write behavior or claiming
-  retained freshness. **CWF-15B** adds a server-owned immutable artifact-
-  generation receipt containing artifact type, quote/revision identity,
-  fingerprint schema version, dependency fingerprint, generation time, and
-  actor only through already governed existing artifact-generation actions,
-  alongside read-only impact simulation. It introduces no independent
-  authorization, invalidation, reconciliation, or publication mutation.
+  Delivery is intentionally sliced. **CWF-15A is source-complete** with the pure
+  versioned registry/evaluator, browser/Node parity fixtures, and a visible BEO
+  dependency fingerprint plus exact source and proof-boundary metadata. It does
+  not change quote-write behavior or claim retained freshness. There is no
+  existing governed server BEO generation action. **CWF-15B** must separately
+  introduce a CWF-14-bound server generation/receipt action or move artifact
+  generation authority server-side before it can persist an immutable receipt.
+  The server must reload canonical same-tenant data and bind artifact type,
+  quote/revision identity, fingerprint schema, dependency fingerprint, actor,
+  and server time itself; browser-supplied digest, source revision, actor, or
+  time can never become receipt truth. CWF-15B also adds read-only impact
+  simulation and introduces no independent authorization, invalidation,
+  reconciliation, or publication mutation.
   **CWF-15C** compares the current authoritative fingerprint with that trusted
   receipt and delivers the staff Change Impact review plus the role-gated
   `authorize -> invalidate -> reconcile -> publish` runtime workflow, its atomic

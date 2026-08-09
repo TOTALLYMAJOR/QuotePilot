@@ -168,12 +168,19 @@ Last updated: August 9, 2026
   exact retry receipt or explicit safe reset, and writes neither value to
   browser storage. Focused unit/rules/emulator evidence is local only; this conversation source is not
   part of live `v0.2.3` and has no hosted staff/customer acceptance.
-- Current source Kitchen BEO: staff can export an internal Kitchen sheet from a
-  saved quote with event timing, staffing, kitchen checkpoints, selections,
-  production-checklist state, revision and generation stamps, day-of contacts,
-  allergen callouts, prepared-by and chef sign-off lines, and day-of notes. The
-  export is locally covered but is not part of the live v0.2.3 frontend and has
-  not received hosted kitchen-operator acceptance.
+- Current source `CWF-15A` Commercial Dependency Graph and Kitchen BEO: a frozen
+  versioned registry validates its topology, rejects cycles and unknown nodes,
+  traverses downstream dependencies deterministically, and shares canonical
+  serialization/SHA-256 behavior across browser and Node. The existing
+  staff-only Kitchen sheet now embeds a schema-bound digest of its normalized
+  declared inputs and displays the exact source revision, graph/fingerprint/
+  canonical schema versions, browser-local generation time, and explicit
+  non-freshness disclaimer. Focused graph, parity, payload, fingerprint, and PDF
+  tests pass locally. The browser writes nothing and retains no generation
+  record; the digest is not `CURRENT`/`STALE`/`REVIEW`, completion, actor,
+  server-time, immutable receipt, reconciliation, or publication evidence.
+  CWF-15A is not part of the live v0.2.3 frontend and has not received hosted
+  kitchen-operator acceptance.
 - Production marketing delivery: a hospitality-first prospect page is live at `/`, the prior dark product overview is live at `/system`, and the authenticated workspace resolves at `/app`; customer portal query routes retain precedence in the client router.
 - Current source tenant onboarding delivery: admin-only Import Studio supports
   tenant-locked CSV preview/import for customers, packages, add-ons, rentals,
