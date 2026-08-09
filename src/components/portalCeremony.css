@@ -1,0 +1,100 @@
+/* Portal ceremony — one-shot celebration effects for the customer portal.
+   Feature A: acceptance ceremony (ink-draw signature, seal-stamp settle).
+   Feature B: payment-confirmed self-drawing checkmark.
+   Ceremony classes are applied only during a live transition and removed
+   after the run, so static renders and already-accepted page loads never
+   carry them. Imported by CustomerPortalView.jsx. */
+
+/* Position anchor for the ShimmerReveal overlay while a ceremony runs. */
+.portal-ceremony-host {
+  position: relative;
+}
+
+/* (A1) The signer's typed legal name "ink-draws" left to right. */
+.portal-ceremony-ink {
+  display: inline-block;
+  animation: portal-ceremony-ink-draw var(--motion-slow) var(--ease-out-soft) both;
+}
+
+@keyframes portal-ceremony-ink-draw {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+/* (A2) Seal-stamp settle: the receipt block drops in from 1.12 scale and
+   lands softly. The element itself animates transform/opacity only; the
+   shadow "thump" lives on a pseudo-element and animates opacity only. */
+.portal-ceremony-stamp {
+  animation: portal-ceremony-stamp-settle var(--motion-slow) var(--ease-spring) both;
+}
+
+@keyframes portal-ceremony-stamp-settle {
+  from { transform: scale(1.12); opacity: 0.4; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.portal-ceremony-stamp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--tone-success) 26%, transparent);
+  opacity: 0;
+  animation: portal-ceremony-shadow-thump var(--motion-slow) var(--ease-out-soft) both;
+}
+
+@keyframes portal-ceremony-shadow-thump {
+  0% { opacity: 0; }
+  40% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* (B) Payment-confirmed checkmark. The base class is the final fully drawn
+   state; the -drawing modifier runs the one-shot stroke draw and is removed
+   after the run, leaving the base (instant) state behind. */
+.portal-ceremony-check {
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: 0.4em;
+  vertical-align: -0.18em;
+}
+
+.portal-ceremony-check path {
+  fill: none;
+  stroke: var(--tone-success);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.portal-ceremony-check-drawing path {
+  stroke-dasharray: 17;
+  stroke-dashoffset: 17;
+  animation: portal-ceremony-check-draw var(--motion-base) var(--ease-out-soft) forwards;
+}
+
+@keyframes portal-ceremony-check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Reduced motion: the JS triggers already skip ceremony classes entirely and
+   the global reduced-motion rule crushes durations; this keeps every final
+   state instant even if a class lands mid-preference-change. */
+@media (prefers-reduced-motion: reduce) {
+  .portal-ceremony-ink,
+  .portal-ceremony-stamp,
+  .portal-ceremony-stamp::after,
+  .portal-ceremony-check-drawing path {
+    animation: none;
+  }
+
+  .portal-ceremony-check-drawing path {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+
+  .portal-ceremony-stamp::after {
+    opacity: 0;
+  }
+}

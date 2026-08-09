@@ -1,19 +1,30 @@
 const functions = require("firebase-functions/v1");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
-const { createHash, randomInt, randomUUID } = require("node:crypto");
-const { FieldValue, Timestamp, getFirestore } = require("firebase-admin/firestore");
+const { createHash, createHmac, randomInt, randomUUID, timingSafeEqual } = require("node:crypto");
+const { FieldPath, FieldValue, Timestamp, getFirestore } = require("firebase-admin/firestore");
 const Stripe = require("stripe");
 const twilio = require("twilio");
+const { Resend } = require("resend");
+const { Webhook } = require("standardwebhooks");
 const {
   PricingEngineError,
   assertPricingCatalogAuthorityCurrent,
+  buildPricingCatalogAuthority,
   calculateQuotePricingAuthoritative
 } = require("./pricingEngine");
 const {
   CommercialChangeImpactPreviewError,
   buildCommercialChangeImpactPreviewSnapshots
 } = require("./commercialChangeImpactPreview");
+const {
+  COMMERCIAL_CHANGE_RECONCILIATION_EVIDENCE_VERSION,
+  CommercialChangeAuthorityError,
+  createCommercialChangeAuthority
+} = require("./commercialChangeAuthority");
+const {
+  createCommercialChangeImpactEvaluator
+} = require("./commercialChangeImpactEvaluator");
 const {
   QuoteCreationError,
   bindCustomerIdentityToQuoteDocuments,
@@ -54,6 +65,53 @@ const {
   planPostEventCloseoutPolicyRefresh,
   resolvePostEventCloseoutSource
 } = require("./postEventCloseout");
+const commercialDependencyGraphCore = require("./commercialDependencyGraphCore.cjs");
+const {
+  KITCHEN_BEO_FRESHNESS_STATES,
+  KITCHEN_BEO_STATUS_SCHEMA_VERSION,
+  KitchenBeoAuthorityError,
+  createKitchenBeoAuthority
+} = require("./kitchenBeoAuthority");
+const { renderKitchenBeoPdf } = require("./kitchenBeoPdf");
+const {
+  DEFAULT_DECISION_DEBT_POLICY,
+  DecisionDebtError,
+  createDecisionDebtAuthority
+} = require("./decisionDebt");
+const {
+  REVENUE_AUTOPILOT_JOB_STATES,
+  RevenueAutopilotError,
+  buildRevenueAutopilotOccurrences,
+  claimRevenueAutopilotJob,
+  evaluateRevenueAutopilotQuoteActivity,
+  planRevenueAutopilotDispatchFailure,
+  planRevenueAutopilotExecution,
+  planRevenueAutopilotMaterialization,
+  planRevenueAutopilotOutcomeResolution,
+  planUnreadCustomerReplyAttention,
+  recordRevenueAutopilotProviderAcceptance,
+  recordRevenueAutopilotProviderEvent,
+  tenantCalendarContext
+} = require("./revenueAutopilot");
+const {
+  RevenueAutopilotTemplateError,
+  renderRevenueAutopilotTemplate
+} = require("./revenueAutopilotTemplates");
+const {
+  RevenueAutopilotAuthorityError,
+  buildRevenueAutopilotConversationEvidence,
+  buildRevenueAutopilotMaterializationInput,
+  dormantRevenueAutopilotTenantPolicy,
+  hashRevenueAutopilotUnsubscribeToken,
+  normalizeRevenueAutopilotEmailControls,
+  normalizeRevenueAutopilotTenantPolicy,
+  planRevenueAutopilotAdminConfiguration,
+  planRevenueAutopilotEmailControlUpdate,
+  planRevenueAutopilotMaterializationFromCanonical,
+  planRevenueAutopilotStaffAcknowledgementReceipt,
+  projectRevenueAutopilotAuthorityForStaff,
+  verifyRevenueAutopilotUnsubscribeToken
+} = require("./revenueAutopilotAuthority");
 const {
   buildExistingOrderMessage,
   buildExistingOrganizationMessage,
@@ -264,6 +322,27 @@ const PORTAL_CONVERSATION_MESSAGES_COLLECTION = "portalConversationMessages";
 const PORTAL_CONVERSATION_REQUESTS_COLLECTION = "portalConversationRequests";
 const PORTAL_CONVERSATION_RATE_LIMITS_COLLECTION = "portalConversationRateLimits";
 const PORTAL_CONVERSATION_STATE_COLLECTION = "portalConversationState";
+const POST_EVENT_CLOSEOUTS_COLLECTION = "postEventCloseouts";
+const KITCHEN_BEO_ARTIFACTS_COLLECTION = "kitchenBeoArtifacts";
+const KITCHEN_BEO_RECEIPTS_COLLECTION = "kitchenBeoGenerationReceipts";
+const COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION = "commercialChangeSimulations";
+const COMMERCIAL_CHANGE_AUTHORIZATIONS_COLLECTION = "commercialChangeAuthorizations";
+const COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION = "commercialChangeApplyReceipts";
+const COMMERCIAL_CHANGE_RECONCILIATION_RECEIPTS_COLLECTION = "commercialChangeReconciliationReceipts";
+const COMMERCIAL_CHANGE_APPROVAL_REQUESTS_COLLECTION = "commercialChangeApprovalRequests";
+const COMMERCIAL_DEPENDENCY_STATE_COLLECTION = "commercialDependencyState";
+const COMMERCIAL_DEPENDENCY_INVALIDATIONS_COLLECTION = "invalidations";
+const DECISION_DEBT_POLICIES_COLLECTION = "decisionDebtPolicies";
+const REVENUE_AUTOPILOT_TENANTS_COLLECTION = "revenueAutopilotTenants";
+const REVENUE_AUTOPILOT_POLICY_COLLECTION = "revenueAutopilotPolicy";
+const REVENUE_AUTOPILOT_TEMPLATES_COLLECTION = "revenueAutopilotTemplates";
+const REVENUE_AUTOPILOT_JOBS_COLLECTION = "revenueAutopilotJobs";
+const REVENUE_AUTOPILOT_ATTENTION_COLLECTION = "revenueAutopilotAttention";
+const REVENUE_AUTOPILOT_RECEIPTS_COLLECTION = "revenueAutopilotReceipts";
+const REVENUE_AUTOPILOT_PROVIDER_EVENTS_COLLECTION = "revenueAutopilotProviderEvents";
+const REVENUE_AUTOPILOT_EMAIL_CONTROLS_COLLECTION = "revenueAutopilotEmailControls";
+const REVENUE_AUTOPILOT_PROVIDER_MESSAGE_INDEX_COLLECTION = "revenueAutopilotProviderMessageIndex";
+const REVENUE_AUTOPILOT_SCHEDULER_STATE_COLLECTION = "revenueAutopilotSchedulerState";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
 const BUYER_ACCESS_ORDERS_COLLECTION = "buyerAccessOrders";
@@ -271,11 +350,27 @@ const BUYER_ACCESS_RATE_LIMITS_COLLECTION = "buyerAccessRateLimits";
 const STRIPE_SECRET_NAME = "STRIPE_SECRET_KEY";
 const STRIPE_WEBHOOK_SECRET_NAME = "STRIPE_WEBHOOK_SECRET";
 const RESEND_API_KEY_SECRET_NAME = "RESEND_API_KEY";
+const RESEND_WEBHOOK_SECRET_NAME = "RESEND_WEBHOOK_SECRET";
+const REVENUE_AUTOPILOT_TOKEN_SECRET_NAME = "REVENUE_AUTOPILOT_TOKEN_SECRET";
 const TWILIO_AUTH_TOKEN_SECRET_NAME = "TWILIO_AUTH_TOKEN";
 const BUYER_ACCESS_STRIPE_SECRET_NAME = "BUYER_ACCESS_STRIPE_SECRET_KEY";
 const BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME = "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET";
 const BUYER_ACCESS_TURNSTILE_SECRET_NAME = "BUYER_ACCESS_TURNSTILE_SECRET";
 const BUYER_ACCESS_RATE_LIMIT_SECRET_NAME = "BUYER_ACCESS_RATE_LIMIT_SECRET";
+const kitchenBeoAuthority = createKitchenBeoAuthority({
+  graphCore: commercialDependencyGraphCore
+});
+const evaluateCommercialChangeImpact = createCommercialChangeImpactEvaluator({
+  graphCore: commercialDependencyGraphCore
+});
+const commercialChangeAuthority = createCommercialChangeAuthority({
+  graphCore: commercialDependencyGraphCore,
+  buildPreviewSnapshots: buildCommercialChangeImpactPreviewSnapshots,
+  simulateImpact: evaluateCommercialChangeImpact
+});
+const decisionDebtAuthority = createDecisionDebtAuthority({
+  graphCore: commercialDependencyGraphCore
+});
 const PAYMENT_REQUEST_FLOWS = Object.freeze({
   deposit: Object.freeze({
     paymentKind: "deposit",
@@ -1043,6 +1138,1258 @@ function getEmailConfig() {
       fromName === APPROVED_EMAIL_FROM_NAME
       && fromEmail === APPROVED_EMAIL_FROM_EMAIL
   };
+}
+
+function configBoolean(path, fallback = false) {
+  const value = normalizeText(readConfig(path, fallback ? "true" : "false")).toLowerCase();
+  return value === "true" || value === "1" || value === "yes";
+}
+
+function getRevenueAutopilotGlobalControl(nowISO = new Date().toISOString()) {
+  const email = getEmailConfig();
+  const providerConfigured = email.provider === "resend"
+    && Boolean(email.resendApiKey)
+    && email.senderApproved;
+  return {
+    enabled: configBoolean("revenue_autopilot.enabled", false),
+    sendsEnabled: configBoolean("revenue_autopilot.sends_enabled", false),
+    provider: {
+      evidenceId: `provider_${createHash("sha256")
+        .update(`${email.provider}|${email.fromName}|${email.fromEmail}|${providerConfigured}`)
+        .digest("hex")
+        .slice(0, 32)}`,
+      providerId: email.provider,
+      configurationId: providerConfigured ? "approved-global-sender-v1" : "",
+      state: providerConfigured ? "configured" : "unconfigured",
+      evaluatedAtISO: nowISO
+    }
+  };
+}
+
+function buildRevenueAutopilotUnsubscribeToken({ organizationId, customerId, secret }) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  const normalizedCustomerId = normalizeText(customerId);
+  const normalizedSecret = normalizeText(secret);
+  if (!normalizedOrganizationId || !normalizedCustomerId || normalizedSecret.length < 32) {
+    throw new RevenueAutopilotError(
+      "failed-precondition",
+      "Revenue Autopilot unsubscribe-token authority is not configured."
+    );
+  }
+  const payload = Buffer.from(JSON.stringify({
+    v: 1,
+    o: normalizedOrganizationId,
+    c: normalizedCustomerId
+  }), "utf8").toString("base64url");
+  const signature = createHmac("sha256", normalizedSecret)
+    .update(`revenue-autopilot-unsubscribe-v1|${payload}`)
+    .digest("base64url");
+  const token = `${payload}_${signature}`;
+  if (!/^[A-Za-z0-9_-]{20,256}$/.test(token)) {
+    throw new RevenueAutopilotError(
+      "failed-precondition",
+      "Revenue Autopilot unsubscribe token exceeds its bounded contract."
+    );
+  }
+  return token;
+}
+
+function parseRevenueAutopilotUnsubscribeToken(token, secret) {
+  const normalizedToken = normalizeText(token);
+  const normalizedSecret = normalizeText(secret);
+  const separator = normalizedToken.lastIndexOf("_");
+  if (
+    !/^[A-Za-z0-9_-]{20,256}$/.test(normalizedToken)
+    || separator < 1
+    || normalizedSecret.length < 32
+  ) {
+    throw new RevenueAutopilotError("not-found", "Email preference link not found.");
+  }
+  const payload = normalizedToken.slice(0, separator);
+  const signature = normalizedToken.slice(separator + 1);
+  const expected = createHmac("sha256", normalizedSecret)
+    .update(`revenue-autopilot-unsubscribe-v1|${payload}`)
+    .digest("base64url");
+  const observedBuffer = Buffer.from(signature, "utf8");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  if (
+    observedBuffer.length !== expectedBuffer.length
+    || !timingSafeEqual(observedBuffer, expectedBuffer)
+  ) {
+    throw new RevenueAutopilotError("not-found", "Email preference link not found.");
+  }
+  let decoded;
+  try {
+    decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    throw new RevenueAutopilotError("not-found", "Email preference link not found.");
+  }
+  const organizationId = normalizeOrganizationId(decoded?.o);
+  const customerId = normalizeText(decoded?.c);
+  if (decoded?.v !== 1 || !organizationId || !customerId) {
+    throw new RevenueAutopilotError("not-found", "Email preference link not found.");
+  }
+  const canonical = buildRevenueAutopilotUnsubscribeToken({
+    organizationId,
+    customerId,
+    secret: normalizedSecret
+  });
+  if (canonical !== normalizedToken) {
+    throw new RevenueAutopilotError("not-found", "Email preference link not found.");
+  }
+  return { organizationId, customerId, token: normalizedToken };
+}
+
+function defaultRevenueAutopilotTemplates() {
+  return {
+    quote_follow_up: {
+      templateId: "quote-follow-up-v1",
+      version: "v1",
+      kind: "quote_follow_up",
+      subject: "{{business_name}} · quote {{quote_number}}",
+      text: [
+        "Hi {{customer_name}},",
+        "",
+        "A quick reminder that quote {{quote_number}} for {{event_date}} is ready to review.",
+        "Open your secure proposal: {{portal_url}}",
+        "",
+        "Manage automated reminder email: {{unsubscribe_url}}",
+        "{{business_name}}"
+      ].join("\n"),
+      html: "<p>Hi {{customer_name}},</p><p>A quick reminder that quote <strong>{{quote_number}}</strong> for {{event_date}} is ready to review.</p><p><a href=\"{{portal_url}}\">Open your secure proposal</a></p><p><a href=\"{{unsubscribe_url}}\">Manage automated reminder email</a></p><p>{{business_name}}</p>"
+    },
+    deposit_reminder: {
+      templateId: "deposit-reminder-v1",
+      version: "v1",
+      kind: "deposit_reminder",
+      subject: "{{business_name}} · deposit reminder for {{quote_number}}",
+      text: [
+        "Hi {{customer_name}},",
+        "",
+        "Your accepted quote {{quote_number}} has a deposit of {{deposit_amount}} awaiting verified payment.",
+        "Review the current payment state: {{portal_url}}",
+        "Event date: {{event_date}}",
+        "",
+        "Manage automated reminder email: {{unsubscribe_url}}",
+        "{{business_name}}"
+      ].join("\n"),
+      html: "<p>Hi {{customer_name}},</p><p>Your accepted quote <strong>{{quote_number}}</strong> has a deposit of <strong>{{deposit_amount}}</strong> awaiting verified payment.</p><p>Event date: {{event_date}}</p><p><a href=\"{{portal_url}}\">Review the current payment state</a></p><p><a href=\"{{unsubscribe_url}}\">Manage automated reminder email</a></p><p>{{business_name}}</p>"
+    },
+    final_balance_reminder: {
+      templateId: "final-balance-reminder-v1",
+      version: "v1",
+      kind: "final_balance_reminder",
+      subject: "{{business_name}} · final balance for {{quote_number}}",
+      text: [
+        "Hi {{customer_name}},",
+        "",
+        "The final balance of {{final_balance_amount}} for quote {{quote_number}} is awaiting verified payment before {{event_date}}.",
+        "Review the current payment state: {{portal_url}}",
+        "",
+        "Manage automated reminder email: {{unsubscribe_url}}",
+        "{{business_name}}"
+      ].join("\n"),
+      html: "<p>Hi {{customer_name}},</p><p>The final balance of <strong>{{final_balance_amount}}</strong> for quote <strong>{{quote_number}}</strong> is awaiting verified payment before {{event_date}}.</p><p><a href=\"{{portal_url}}\">Review the current payment state</a></p><p><a href=\"{{unsubscribe_url}}\">Manage automated reminder email</a></p><p>{{business_name}}</p>"
+    },
+    post_event_review_request: {
+      templateId: "post-event-review-request-v1",
+      version: "v1",
+      kind: "post_event_review_request",
+      subject: "Thank you from {{business_name}}",
+      text: [
+        "Hi {{customer_name}},",
+        "",
+        "Thank you for trusting {{business_name}} with your event on {{event_date}}.",
+        "Share your experience: {{review_url}}",
+        "",
+        "Manage automated reminder email: {{unsubscribe_url}}",
+        "{{business_name}}"
+      ].join("\n"),
+      html: "<p>Hi {{customer_name}},</p><p>Thank you for trusting {{business_name}} with your event on {{event_date}}.</p><p><a href=\"{{review_url}}\">Share your experience</a></p><p><a href=\"{{unsubscribe_url}}\">Manage automated reminder email</a></p><p>{{business_name}}</p>"
+    }
+  };
+}
+
+function revenueAutopilotRefs(organizationId, { quoteId = "", customerId = "" } = {}) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return {
+    organizationRef,
+    policyRef: organizationRef.collection(REVENUE_AUTOPILOT_POLICY_COLLECTION).doc("current"),
+    jobsRef: organizationRef.collection(REVENUE_AUTOPILOT_JOBS_COLLECTION),
+    attentionRef: organizationRef.collection(REVENUE_AUTOPILOT_ATTENTION_COLLECTION),
+    receiptsRef: organizationRef.collection(REVENUE_AUTOPILOT_RECEIPTS_COLLECTION),
+    controlsRef: organizationRef.collection(REVENUE_AUTOPILOT_EMAIL_CONTROLS_COLLECTION),
+    customersRef: organizationRef.collection("customers"),
+    quotesRef: organizationRef.collection(QUOTES_COLLECTION),
+    quoteRef: quoteId ? organizationRef.collection(QUOTES_COLLECTION).doc(quoteId) : null,
+    customerRef: customerId ? organizationRef.collection("customers").doc(customerId) : null,
+    customerControlsRef: customerId
+      ? organizationRef.collection(REVENUE_AUTOPILOT_EMAIL_CONTROLS_COLLECTION).doc(customerId)
+      : null,
+    tenantRegistryRef: db.collection(REVENUE_AUTOPILOT_TENANTS_COLLECTION).doc(organizationId)
+  };
+}
+
+function throwRevenueAutopilotFailure(error, operation) {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (
+    error instanceof RevenueAutopilotError
+    || error instanceof RevenueAutopilotAuthorityError
+    || error instanceof RevenueAutopilotTemplateError
+  ) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(`${operation} failed`, {
+    error: normalizeText(error?.message).slice(0, 240)
+  });
+  throw new functions.https.HttpsError(
+    "internal",
+    "The Revenue Autopilot operation did not complete."
+  );
+}
+
+function clientPolicyToAuthorityRequest({ organizationId, requestId, policy, currentPolicy }) {
+  const source = policy && typeof policy === "object" && !Array.isArray(policy) ? policy : {};
+  const kinds = source.kinds && typeof source.kinds === "object" ? source.kinds : {};
+  return {
+    organizationId,
+    requestId,
+    expectedRevision: Number(currentPolicy?.revision || 0),
+    enabled: source.enabled === true,
+    timeZone: normalizeText(source.timeZone),
+    reviewRequestUrl: normalizeText(source.reviewRequestUrl),
+    quietHours: source.quietHours?.enabled === true
+      ? {
+          enabled: true,
+          start: normalizeText(source.quietHours.start),
+          end: normalizeText(source.quietHours.end)
+        }
+      : { enabled: false, start: "21:00", end: "08:00" },
+    maxAttempts: Number(source.maxAttempts),
+    kinds: {
+      quote_follow_up: {
+        enabled: kinds.quote_follow_up === true,
+        dayOffsets: source.quoteFollowUpDayOffsets
+      },
+      deposit_reminder: {
+        enabled: kinds.deposit_reminder === true,
+        dayOffsets: source.depositReminderDayOffsets
+      },
+      final_balance_reminder: {
+        enabled: kinds.final_balance_reminder === true,
+        dayOffsets: source.finalBalanceReminderDayOffsets
+      },
+      post_event_review_request: {
+        enabled: kinds.post_event_review_request === true
+      },
+      unread_customer_reply: {
+        enabled: kinds.unread_customer_reply === true
+      }
+    },
+    templates: defaultRevenueAutopilotTemplates()
+  };
+}
+
+function revenueAutopilotReceipt({
+  requestId,
+  operation,
+  organizationId = "",
+  customerId = "",
+  quoteId = "",
+  jobId = "",
+  attentionId = "",
+  messageId = "",
+  token = "",
+  policyVersion = "",
+  recordedAtISO
+} = {}) {
+  return {
+    requestId,
+    operation,
+    ...(organizationId ? { organizationId } : {}),
+    ...(customerId ? { customerId } : {}),
+    ...(quoteId ? { quoteId } : {}),
+    ...(jobId ? { jobId } : {}),
+    ...(attentionId ? { attentionId } : {}),
+    ...(messageId ? { messageId } : {}),
+    ...(token ? { token } : {}),
+    ...(policyVersion ? { policyVersion } : {}),
+    recordedAtISO
+  };
+}
+
+function revenueAutopilotTokenSecret() {
+  return normalizeText(process.env[REVENUE_AUTOPILOT_TOKEN_SECRET_NAME]);
+}
+
+function revenueAutopilotRequestId(value) {
+  const requestId = normalizeText(value).toLowerCase();
+  if (!/^ra_request_[a-f0-9]{32}$/u.test(requestId)) {
+    throw new RevenueAutopilotError(
+      "invalid-argument",
+      "A valid Revenue Autopilot request identity is required."
+    );
+  }
+  return requestId;
+}
+
+function revenueAutopilotReceiptRef(refs, operation, requestId) {
+  const id = `rarc_${createHash("sha256")
+    .update(`${operation}|${requestId}`)
+    .digest("hex")}`;
+  return refs.receiptsRef.doc(id);
+}
+
+function revenueAutopilotSuppressionEvidence(rawControls = {}, {
+  organizationId,
+  customerId,
+  recipientKey,
+  nowISO
+} = {}) {
+  const stored = rawControls?.suppression && typeof rawControls.suppression === "object"
+    ? rawControls.suppression
+    : {};
+  const state = new Set(["clear", "suppressed"]).has(normalizeText(stored.state).toLowerCase())
+    ? normalizeText(stored.state).toLowerCase()
+    : "clear";
+  return {
+    organizationId,
+    customerId,
+    recipientKey,
+    evidenceId: normalizeText(stored.evidenceId)
+      || `suppression_${createHash("sha256")
+        .update(`${organizationId}|${customerId}|${recipientKey}|${state}`)
+        .digest("hex")}`,
+    state,
+    evaluatedAtISO: normalizeText(stored.evaluatedAtISO) || nowISO
+  };
+}
+
+function revenueAutopilotPublicPolicy(policy = {}, global = {}, providerProjection = {}) {
+  const kinds = policy?.kinds && typeof policy.kinds === "object" ? policy.kinds : {};
+  return {
+    policyVersion: normalizeText(policy.policyVersion),
+    version: normalizeText(policy.policyVersion),
+    authorityState: normalizeText(policy.authorityState) || "unconfigured",
+    global: {
+      enabled: global.enabled === true,
+      sendsEnabled: global.sendsEnabled === true
+    },
+    globalEnabled: global.enabled === true,
+    tenant: { enabled: policy.enabled === true },
+    tenantEnabled: policy.enabled === true,
+    provider: {
+      configured: providerProjection.configured === true,
+      state: providerProjection.configured === true ? "configured" : "unconfigured",
+      evaluatedAtISO: normalizeText(providerProjection.evaluatedAtISO)
+    },
+    providerConfigured: providerProjection.configured === true,
+    timeZone: normalizeText(policy.timeZone),
+    tenantTimeZone: normalizeText(policy.timeZone),
+    reviewRequestUrl: normalizeText(policy.reviewRequestUrl),
+    quietHours: policy.quietHours || { enabled: false, start: "21:00", end: "08:00" },
+    maxAttempts: Number(policy.maxAttempts) || 3,
+    kinds: Object.fromEntries([
+      "quote_follow_up",
+      "deposit_reminder",
+      "final_balance_reminder",
+      "post_event_review_request",
+      "unread_customer_reply"
+    ].map((kind) => [kind, {
+      enabled: kinds[kind]?.enabled === true,
+      ...(Array.isArray(kinds[kind]?.dayOffsets)
+        ? { dayOffsets: [...kinds[kind].dayOffsets] }
+        : {})
+    }]))
+  };
+}
+
+function projectRevenueAutopilotJobForStaff(job = {}) {
+  return {
+    jobId: normalizeText(job.jobId),
+    quoteId: normalizeText(job.quoteId),
+    customerId: normalizeText(job.customerId),
+    kind: normalizeText(job.kind).toLowerCase(),
+    state: normalizeText(job.state).toLowerCase(),
+    dueTenantDate: normalizeText(job.dueTenantDate),
+    occurrenceKey: normalizeText(job.occurrenceKey),
+    quoteLabel: normalizeText(job.quoteLabel),
+    customerLabel: normalizeText(job.customerLabel),
+    attemptCount: Number(job.attemptCount) || 0,
+    maxAttempts: Number(job.maxAttempts) || 0,
+    nextAttemptAtISO: normalizeText(job.nextAttemptAtISO),
+    providerAcceptedAtISO: normalizeText(job.providerAcceptedAtISO),
+    deliveredAtISO: normalizeText(job.deliveredAtISO),
+    bouncedAtISO: normalizeText(job.bouncedAtISO),
+    complainedAtISO: normalizeText(job.complainedAtISO),
+    outcomeReason: normalizeText(job.outcomeReason),
+    createdAtISO: normalizeText(job.createdAtISO)
+  };
+}
+
+function projectRevenueAutopilotAttentionForStaff(attention = {}) {
+  return {
+    attentionId: normalizeText(attention.attentionId),
+    quoteId: normalizeText(attention.quoteId),
+    customerId: normalizeText(attention.customerId),
+    messageId: normalizeText(attention.messageId),
+    kind: "unread_customer_reply",
+    state: normalizeText(attention.state).toLowerCase() || "open",
+    quoteLabel: normalizeText(attention.quoteLabel),
+    customerLabel: normalizeText(attention.customerLabel),
+    receivedAtISO: normalizeText(attention.receivedAtISO || attention.openedAtISO),
+    openedAtISO: normalizeText(attention.openedAtISO),
+    resolvedAtISO: normalizeText(attention.resolvedAtISO),
+    resolutionReason: normalizeText(attention.resolutionReason)
+  };
+}
+
+function revenueAutopilotPortalEvidence({ quote, portal, organizationId, quoteId } = {}) {
+  const state = normalizeText(quote?.status).toLowerCase();
+  const portalState = normalizeText(portal?.status).toLowerCase();
+  const lifecycleField = `${state}AtISO`;
+  const stateAtISO = normalizeText(
+    quote?.lifecycle?.[lifecycleField]
+      || (state === "booked" ? quote?.booking?.bookedAtISO : "")
+  );
+  const portalStateAtISO = normalizeText(
+    portal?.lifecycle?.[lifecycleField]
+      || (state === "booked" ? portal?.booking?.bookedAtISO : "")
+  );
+  const revisionId = normalizeText(quote?.workflow?.quoteDelivery?.revisionId);
+  const portalIssuedAtISO = normalizeText(quote?.portalIssuedAtISO);
+  if (
+    state !== portalState
+    || !new Set(["sent", "viewed", "accepted", "booked", "declined"]).has(state)
+    || !stateAtISO
+    || stateAtISO !== portalStateAtISO
+    || revisionId !== normalizeText(portal?.deliveryEvidence?.revisionId)
+    || portalIssuedAtISO !== normalizeText(portal?.portalIssuedAtISO)
+  ) {
+    throw new RevenueAutopilotAuthorityError(
+      "aborted",
+      "The canonical quote and customer portal evidence are not an exact current revision."
+    );
+  }
+  return {
+    source: "customer_portal_projection",
+    organizationId,
+    quoteId,
+    revisionId,
+    portalIssuedAtISO,
+    state,
+    stateAtISO,
+    ...(["accepted", "booked"].includes(state)
+      ? { acceptedAtISO: normalizeText(quote?.lifecycle?.acceptedAtISO) }
+      : {})
+  };
+}
+
+function revenueAutopilotAcceptanceEvidence({ receipt, organizationId, quoteId } = {}) {
+  if (!receipt || typeof receipt !== "object") return null;
+  return {
+    source: "proposal_acceptance_receipt",
+    organizationId,
+    quoteId,
+    quoteRevisionId: normalizeText(receipt.quoteRevisionId || receipt.revisionId),
+    receiptId: normalizeText(receipt.receiptId),
+    acceptedAtISO: normalizeText(receipt.acceptedAtISO)
+  };
+}
+
+function revenueAutopilotDepositEvidence({
+  quote,
+  organizationId,
+  quoteId,
+  webhookEvents = [],
+  observedAtISO
+} = {}) {
+  const storedState = normalizeText(quote?.payment?.depositStatus).toLowerCase() || "unpaid";
+  const state = new Set(["paid", "refunded"]).has(storedState) ? storedState : "unpaid";
+  const providerReference = normalizeText(quote?.payment?.stripeSessionId);
+  if (state === "unpaid") {
+    return {
+      source: "verified_provider_webhooks",
+      organizationId,
+      quoteId,
+      bounded: true,
+      observedAtISO,
+      state
+    };
+  }
+  const matchingEvent = webhookEvents.find((event) => (
+    normalizeOrganizationId(event.organizationId) === organizationId
+    && normalizeText(event.quoteId) === quoteId
+    && normalizeText(event.paymentKind).toLowerCase() === "deposit"
+    && normalizeText(event.status).toLowerCase() === "processed"
+    && normalizeText(event.stripeSessionId) === providerReference
+    && normalizeText(event.providerState).toLowerCase() === state
+  ));
+  if (!matchingEvent) {
+    throw new RevenueAutopilotAuthorityError(
+      "failed-precondition",
+      "Settled deposit state lacks an exact processed verified-webhook record."
+    );
+  }
+  return {
+    source: "verified_provider_webhooks",
+    organizationId,
+    quoteId,
+    bounded: true,
+    observedAtISO,
+    state,
+    signatureVerified: true,
+    processingState: "processed",
+    providerReference,
+    processedAtISO: normalizeText(matchingEvent.processedAtISO)
+  };
+}
+
+function revenueAutopilotFinalBalanceEvidence({
+  quote,
+  organizationId,
+  quoteId,
+  observedAtISO
+} = {}) {
+  const ledger = projectQuotePaymentLedger(quote);
+  const projection = ledger.byKind.finalBalance || {};
+  const storedState = normalizeText(projection.state).toLowerCase();
+  const state = new Set(["sent", "processing", "paid", "refunded"]).has(storedState)
+    ? storedState
+    : "unpaid";
+  const operationId = normalizeText(
+    projection.settledOperationId
+      || projection.activeOperationId
+      || projection.latestOperationId
+  ) || `final_balance_${createHash("sha256")
+    .update(`${organizationId}|${quoteId}|${normalizeText(quote?.activeVersionId)}`)
+    .digest("hex")}`;
+  return {
+    source: "canonical_payment_ledger",
+    organizationId,
+    quoteId,
+    operationId,
+    observedAtISO,
+    state,
+    ...(["paid", "refunded"].includes(state)
+      ? {
+          providerReference: normalizeText(projection.providerReference),
+          providerSettledAtISO: normalizeText(projection.providerSettledAtISO)
+        }
+      : {})
+  };
+}
+
+function revenueAutopilotUnsubscribeUrl({ organizationId, customerId, secret } = {}) {
+  const token = buildRevenueAutopilotUnsubscribeToken({ organizationId, customerId, secret });
+  const url = new URL(parseUrlOrThrow(
+    readConfig("app.base_url", "https://quotepilot.mbmapps.com/app"),
+    "app.base_url"
+  ));
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("unsubscribe", token);
+  return url.toString();
+}
+
+function revenueAutopilotTemplateValues({
+  quote,
+  organization,
+  portalUrl,
+  reviewUrl,
+  unsubscribeUrl,
+  kind
+} = {}) {
+  const values = {
+    business_name: normalizeText(
+      quote?.quoteMeta?.brandName
+        || quote?.quoteMeta?.organizationName
+        || organization?.name
+        || "QuotePilot"
+    ),
+    customer_name: normalizeText(quote?.customer?.name) || "there",
+    event_date: normalizeText(quote?.event?.date) || "the event date on your proposal",
+    quote_number: normalizeText(quote?.quoteNumber || quote?.id),
+    unsubscribe_url: unsubscribeUrl,
+    ...(kind === "post_event_review_request"
+      ? { review_url: reviewUrl }
+      : { portal_url: portalUrl })
+  };
+  if (kind === "deposit_reminder") {
+    values.deposit_amount = currencyLabel(quote?.totals?.deposit);
+  }
+  if (kind === "final_balance_reminder") {
+    const amounts = quotePaymentAmounts(quote);
+    values.final_balance_amount = currencyLabel(amounts.finalBalanceCents / 100);
+  }
+  return values;
+}
+
+async function readRevenueAutopilotExecutionAuthority({
+  organizationId,
+  quoteId,
+  kind,
+  existingJobs = [],
+  nowISO
+} = {}) {
+  const refs = revenueAutopilotRefs(organizationId, { quoteId });
+  const quoteSnap = await refs.quoteRef.get();
+  if (!quoteSnap.exists) {
+    throw new RevenueAutopilotAuthorityError("not-found", "Quote not found.");
+  }
+  const quote = { id: quoteId, ...(quoteSnap.data() || {}) };
+  const customerId = normalizeText(quote.customerId);
+  const portalKey = normalizeText(quote.portalKey);
+  if (
+    normalizeOrganizationId(quote.organizationId) !== organizationId
+    || !customerId
+    || !/^[A-Za-z0-9_-]{20,128}$/u.test(portalKey)
+  ) {
+    throw new RevenueAutopilotAuthorityError(
+      "failed-precondition",
+      "Revenue Autopilot execution scope is incomplete."
+    );
+  }
+  const controlsRef = refs.controlsRef.doc(customerId);
+  const acceptanceReceiptId = normalizeText(quote.acceptanceReceipt?.receiptId);
+  const acceptanceRef = acceptanceReceiptId
+    ? refs.organizationRef.collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION).doc(acceptanceReceiptId)
+    : null;
+  const closeoutId = normalizeText(quote.workflow?.postEventCloseout?.closeoutId);
+  const closeoutRef = (
+    kind === "post_event_review_request"
+    && /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,255}$/u.test(closeoutId)
+  )
+    ? refs.organizationRef.collection(POST_EVENT_CLOSEOUTS_COLLECTION).doc(closeoutId)
+    : null;
+  const reads = [
+    db.collection(PORTAL_COLLECTION).doc(portalKey).get(),
+    refs.policyRef.get(),
+    controlsRef.get(),
+    db.collection(WEBHOOK_EVENTS_COLLECTION)
+      .where("organizationId", "==", organizationId)
+      .limit(100)
+      .get(),
+    acceptanceRef ? acceptanceRef.get() : Promise.resolve(null),
+    closeoutRef ? closeoutRef.get() : Promise.resolve(null)
+  ];
+  const [
+    portalSnap,
+    policySnap,
+    controlsSnap,
+    webhookSnap,
+    acceptanceSnap,
+    closeoutSnap
+  ] = await Promise.all(reads);
+  if (!portalSnap.exists) {
+    throw new RevenueAutopilotAuthorityError(
+      "failed-precondition",
+      "The current customer portal projection is unavailable."
+    );
+  }
+  const policy = normalizeRevenueAutopilotTenantPolicy(
+    policySnap.exists ? policySnap.data() || {} : null
+  );
+  const controlsRaw = controlsSnap.exists ? controlsSnap.data() || {} : null;
+  const controls = normalizeRevenueAutopilotEmailControls(controlsRaw, {
+    organizationId,
+    customerId
+  });
+  const global = getRevenueAutopilotGlobalControl(nowISO);
+  const canonical = {
+    quote,
+    portal: revenueAutopilotPortalEvidence({
+      quote,
+      portal: portalSnap.data() || {},
+      organizationId,
+      quoteId
+    })
+  };
+  if (kind !== "quote_follow_up") {
+    if (!acceptanceSnap?.exists) {
+      throw new RevenueAutopilotAuthorityError(
+        "failed-precondition",
+        "This Revenue Autopilot lane requires exact proposal acceptance evidence."
+      );
+    }
+    canonical.acceptance = revenueAutopilotAcceptanceEvidence({
+      receipt: acceptanceSnap.data() || {},
+      organizationId,
+      quoteId
+    });
+  }
+  if (kind === "post_event_review_request") {
+    if (!closeoutSnap?.exists) {
+      throw new RevenueAutopilotAuthorityError(
+        "failed-precondition",
+        "Post-event review execution requires the exact private closeout record."
+      );
+    }
+    canonical.postEventCloseout = {
+      closeoutId: closeoutSnap.id,
+      ...(closeoutSnap.data() || {})
+    };
+  }
+  if (new Set(["deposit_reminder", "final_balance_reminder"]).has(kind)) {
+    canonical.deposit = revenueAutopilotDepositEvidence({
+      quote,
+      organizationId,
+      quoteId,
+      webhookEvents: webhookSnap.docs.map((snapshot) => ({
+        eventId: snapshot.id,
+        ...(snapshot.data() || {})
+      })),
+      observedAtISO: nowISO
+    });
+  }
+  if (kind === "final_balance_reminder") {
+    canonical.finalBalance = revenueAutopilotFinalBalanceEvidence({
+      quote,
+      organizationId,
+      quoteId,
+      observedAtISO: nowISO
+    });
+  }
+  const suppression = revenueAutopilotSuppressionEvidence(controlsRaw, {
+    organizationId,
+    customerId,
+    recipientKey: controls.recipientKey,
+    nowISO
+  });
+  return planRevenueAutopilotMaterializationFromCanonical({
+    request: { organizationId, quoteId, kind },
+    canonical,
+    policy,
+    emailControls: controls,
+    provider: { organizationId, ...global.provider },
+    suppression,
+    global: { enabled: global.enabled, sendsEnabled: global.sendsEnabled },
+    existingJobs
+  }, { nowISO });
+}
+
+async function dispatchRevenueAutopilotJob({ organizationId, jobId } = {}) {
+  const refs = revenueAutopilotRefs(organizationId);
+  const jobRef = refs.jobsRef.doc(jobId);
+  const initialSnap = await jobRef.get();
+  if (!initialSnap.exists) return { action: "missing" };
+  const initialRaw = { jobId, ...(initialSnap.data() || {}) };
+  const quoteId = normalizeText(initialRaw.quoteId);
+  const jobKind = normalizeText(initialRaw.kind).toLowerCase();
+  const nowISO = new Date().toISOString();
+  if (
+    !quoteId
+    || normalizeText(initialRaw.organizationId) !== organizationId
+    || normalizeText(initialRaw.deletedAtISO)
+  ) {
+    return { action: "invalid_scope" };
+  }
+  const canonicalQuoteSnap = await refs.quotesRef.doc(quoteId).get();
+  const canonicalQuote = canonicalQuoteSnap.exists
+    ? canonicalQuoteSnap.data() || {}
+    : null;
+  const quoteActivity = evaluateRevenueAutopilotQuoteActivity({
+    quoteExists: canonicalQuoteSnap.exists,
+    quote: canonicalQuote,
+    organizationId,
+    nowISO,
+    ignorePortalExpiry: jobKind === "post_event_review_request"
+  });
+  if (!quoteActivity.active) {
+    await jobRef.set({
+      state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
+      stoppedAtISO: nowISO,
+      completedAtISO: nowISO,
+      outcomeReason: quoteActivity.reason,
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { action: "stop", reason: quoteActivity.reason };
+  }
+  const authority = await readRevenueAutopilotExecutionAuthority({
+    organizationId,
+    quoteId,
+    kind: jobKind,
+    existingJobs: [initialRaw],
+    nowISO
+  });
+  const planned = planRevenueAutopilotExecution({
+    job: initialRaw,
+    global: authority.input.global,
+    tenantPolicy: authority.input.tenantPolicy,
+    controls: authority.input.controls,
+    stopScope: authority.input.stopScope,
+    evidence: authority.input.evidence,
+    nowISO
+  });
+  if (["none", "wait", "block", "reconcile", "wait_for_provider_event"].includes(planned.action)) {
+    if (planned.job && commercialDependencyGraphCore.canonicalSerialize(planned.job)
+      !== commercialDependencyGraphCore.canonicalSerialize(initialRaw)) {
+      await jobRef.set({
+        ...initialRaw,
+        ...planned.job,
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    return { action: planned.action, reason: planned.reason };
+  }
+  if (planned.action === "stop") {
+    await jobRef.set({
+      ...initialRaw,
+      ...planned.job,
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { action: "stop", reason: planned.reason };
+  }
+  if (planned.action !== "claim") return { action: planned.action || "blocked" };
+
+  const attemptId = `attempt_${randomUUID().replace(/-/g, "")}`;
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(jobRef);
+    if (!snap.exists) return null;
+    const raw = { jobId, ...(snap.data() || {}) };
+    const claim = claimRevenueAutopilotJob({ job: raw, attemptId, nowISO });
+    tx.set(jobRef, {
+      ...raw,
+      ...claim,
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    return { raw, job: claim };
+  });
+  if (!claimed) return { action: "missing" };
+
+  try {
+    const recheckedAtISO = new Date().toISOString();
+    const recheckedAuthority = await readRevenueAutopilotExecutionAuthority({
+      organizationId,
+      quoteId,
+      kind: claimed.job.kind,
+      existingJobs: [claimed.job],
+      nowISO: recheckedAtISO
+    });
+    const rechecked = planRevenueAutopilotExecution({
+      job: claimed.job,
+      global: recheckedAuthority.input.global,
+      tenantPolicy: recheckedAuthority.input.tenantPolicy,
+      controls: recheckedAuthority.input.controls,
+      stopScope: recheckedAuthority.input.stopScope,
+      evidence: recheckedAuthority.input.evidence,
+      nowISO: recheckedAtISO
+    });
+    if (rechecked.action === "stop") {
+      await jobRef.set({
+        ...claimed.raw,
+        ...rechecked.job,
+        updatedAtISO: recheckedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      return { action: "stop", reason: rechecked.reason };
+    }
+    if (rechecked.action !== "wait" || rechecked.reason !== "active_send_lease") {
+      throw Object.assign(
+        new Error("Canonical execution evidence changed before provider dispatch."),
+        { revenueAutopilotOutcome: "definite_failure", code: "aborted" }
+      );
+    }
+    const payload = claimed.raw.frozenPayload || {};
+    if (
+      !isValidEmail(payload.toEmail)
+      || !normalizeText(payload.subject)
+      || !normalizeText(payload.text)
+      || !normalizeText(payload.html)
+    ) {
+      throw Object.assign(
+        new Error("The frozen Revenue Autopilot email payload is incomplete."),
+        { revenueAutopilotOutcome: "definite_failure", code: "failed-precondition" }
+      );
+    }
+    const emailConfig = getEmailConfig();
+    if (
+      emailConfig.provider !== "resend"
+      || !emailConfig.resendApiKey
+      || !emailConfig.senderApproved
+    ) {
+      throw Object.assign(
+        new Error("The approved Revenue Autopilot email provider is unavailable."),
+        { revenueAutopilotOutcome: "definite_failure", code: "failed-precondition" }
+      );
+    }
+    const providerResult = await sendEmailViaResend({
+      apiKey: emailConfig.resendApiKey,
+      from: `${emailConfig.fromName} <${emailConfig.fromEmail}>`,
+      to: payload.toEmail,
+      subject: payload.subject,
+      text: payload.text,
+      html: payload.html,
+      idempotencyKey: claimed.job.idempotencyKey
+    });
+    const acceptedAtISO = new Date().toISOString();
+    const acceptance = recordRevenueAutopilotProviderAcceptance({
+      job: claimed.job,
+      provider: "resend",
+      providerMessageId: providerResult.id,
+      nowISO: acceptedAtISO
+    });
+    const messageIndexRef = db.collection(REVENUE_AUTOPILOT_PROVIDER_MESSAGE_INDEX_COLLECTION)
+      .doc(createHash("sha256").update(`resend|${providerResult.id}`).digest("hex"));
+    await db.runTransaction(async (tx) => {
+      const [jobSnap, messageIndexSnap] = await Promise.all([
+        tx.get(jobRef),
+        tx.get(messageIndexRef)
+      ]);
+      if (!jobSnap.exists) {
+        throw new RevenueAutopilotError("not-found", "Claimed Revenue Autopilot job disappeared.");
+      }
+      const current = { jobId, ...(jobSnap.data() || {}) };
+      if (
+        normalizeText(current.attemptId) !== attemptId
+        || normalizeText(current.state) !== REVENUE_AUTOPILOT_JOB_STATES.SENDING
+      ) {
+        throw new RevenueAutopilotError(
+          "aborted",
+          "Revenue Autopilot dispatch lease changed before provider acceptance was recorded."
+        );
+      }
+      tx.set(jobRef, {
+        ...current,
+        ...acceptance.job,
+        updatedAtISO: acceptedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      if (!messageIndexSnap.exists) {
+        tx.create(messageIndexRef, {
+          provider: "resend",
+          providerMessageId: providerResult.id,
+          organizationId,
+          quoteId,
+          jobId,
+          customerId: normalizeText(current.customerId),
+          recipientKey: normalizeText(current.recipientKey),
+          providerAcceptedAtISO: acceptedAtISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+    });
+    return { action: "provider_accepted", providerMessageId: providerResult.id };
+  } catch (error) {
+    const failedAtISO = new Date().toISOString();
+    const failure = planRevenueAutopilotDispatchFailure({
+      job: claimed.job,
+      error,
+      nowISO: failedAtISO
+    });
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(jobRef);
+      if (!snap.exists) return;
+      const current = { jobId, ...(snap.data() || {}) };
+      if (
+        normalizeText(current.attemptId) !== attemptId
+        || normalizeText(current.state) !== REVENUE_AUTOPILOT_JOB_STATES.SENDING
+      ) return;
+      tx.set(jobRef, {
+        ...current,
+        ...failure.job,
+        updatedAtISO: failedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    });
+    return {
+      action: failure.requiresReconciliation ? "outcome_ambiguous" : failure.outcome,
+      reason: failure.job.outcomeReason
+    };
+  }
+}
+
+async function materializeScheduledRevenueAutopilotQuote({
+  organizationId,
+  quoteId,
+  nowISO
+} = {}) {
+  const refs = revenueAutopilotRefs(organizationId, { quoteId });
+  const [quoteSnap, organizationSnap, existingSnap, policySnap] = await Promise.all([
+    refs.quoteRef.get(),
+    refs.organizationRef.get(),
+    refs.jobsRef.where("quoteId", "==", quoteId).limit(100).get(),
+    refs.policyRef.get()
+  ]);
+  if (!quoteSnap.exists || !organizationSnap.exists || !policySnap.exists) {
+    return { createdCount: 0, updatedCount: 0, state: "source_missing" };
+  }
+  const quote = { id: quoteId, ...(quoteSnap.data() || {}) };
+  if (
+    normalizeOrganizationId(quote.organizationId) !== organizationId
+    || normalizeText(quote.deletedAtISO)
+  ) {
+    return { createdCount: 0, updatedCount: 0, state: "inactive_quote" };
+  }
+  const portalExpiresAtISO = normalizeText(quote.portalExpiresAtISO || quote.expiresAtISO);
+  const portalExpired = Boolean(portalExpiresAtISO && portalExpiresAtISO <= nowISO);
+  let expiryStopsApplied = 0;
+  if (portalExpired) {
+    const activeJobs = existingSnap.docs.filter((snapshot) => (
+      normalizeText(snapshot.data()?.kind).toLowerCase() !== "post_event_review_request"
+      && !new Set([
+      REVENUE_AUTOPILOT_JOB_STATES.DELIVERED,
+      REVENUE_AUTOPILOT_JOB_STATES.BOUNCED,
+      REVENUE_AUTOPILOT_JOB_STATES.COMPLAINED,
+      REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
+      REVENUE_AUTOPILOT_JOB_STATES.DEFINITE_FAILURE
+      ]).has(normalizeText(snapshot.data()?.state))
+    ));
+    const batch = db.batch();
+    activeJobs.forEach((snapshot) => batch.set(snapshot.ref, {
+      state: REVENUE_AUTOPILOT_JOB_STATES.STOPPED,
+      stoppedAtISO: nowISO,
+      completedAtISO: nowISO,
+      outcomeReason: "portal_expired",
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true }));
+    if (activeJobs.length) await batch.commit();
+    expiryStopsApplied = activeJobs.length;
+  }
+  const customerId = normalizeText(quote.customerId);
+  if (!customerId) {
+    return { createdCount: 0, updatedCount: expiryStopsApplied, state: "customer_missing" };
+  }
+  const [customerSnap, controlsSnap] = await Promise.all([
+    refs.customersRef.doc(customerId).get(),
+    refs.controlsRef.doc(customerId).get()
+  ]);
+  if (!customerSnap.exists) {
+    return { createdCount: 0, updatedCount: expiryStopsApplied, state: "customer_missing" };
+  }
+  const customer = customerSnap.data() || {};
+  const controls = normalizeRevenueAutopilotEmailControls(
+    controlsSnap.exists ? controlsSnap.data() || {} : null,
+    { organizationId, customerId }
+  );
+  const policy = normalizeRevenueAutopilotTenantPolicy(policySnap.data() || {});
+  const existingJobs = existingSnap.docs.map((snapshot) => ({
+    jobId: snapshot.id,
+    ...(snapshot.data() || {})
+  }));
+  const portalUrl = resolvePortalLink(quote);
+  let createdCount = 0;
+  let updatedCount = expiryStopsApplied;
+  const secret = revenueAutopilotTokenSecret();
+
+  for (const kind of [
+    "quote_follow_up",
+    "deposit_reminder",
+    "final_balance_reminder",
+    "post_event_review_request"
+  ]) {
+    if (portalExpired && kind !== "post_event_review_request") continue;
+    try {
+      const authority = await readRevenueAutopilotExecutionAuthority({
+        organizationId,
+        quoteId,
+        kind,
+        existingJobs,
+        nowISO
+      });
+      if (authority.plan.conflicts.length) continue;
+      const unsubscribeUrl = revenueAutopilotUnsubscribeUrl({
+        organizationId,
+        customerId,
+        secret
+      });
+      const rendered = authority.plan.create.length
+        ? renderRevenueAutopilotTemplate(
+          policy.templates[kind],
+          revenueAutopilotTemplateValues({
+            quote,
+            organization: organizationSnap.data() || {},
+            portalUrl,
+            reviewUrl: policy.reviewRequestUrl,
+            unsubscribeUrl,
+            kind
+          })
+        )
+        : null;
+      const targetRefs = authority.plan.create.map((job) => refs.jobsRef.doc(job.jobId));
+      const writeResult = await db.runTransaction(async (tx) => {
+        const targetSnaps = await Promise.all(targetRefs.map((ref) => tx.get(ref)));
+        let updatesApplied = 0;
+        let createsApplied = 0;
+        authority.plan.updates.forEach((update) => {
+          tx.set(refs.jobsRef.doc(update.jobId), {
+            ...update,
+            updatedAtISO: nowISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          updatesApplied += 1;
+        });
+        authority.plan.create.forEach((job, index) => {
+          if (targetSnaps[index]?.exists) return;
+          tx.create(targetRefs[index], {
+            ...job,
+            customerId,
+            quoteLabel: normalizeText(quote.quoteNumber) || quoteId,
+            customerLabel: normalizeText(customer.name || quote.customer?.name),
+            recipientKey: controls.recipientKey,
+            frozenPayload: {
+              toEmail: normalizeEmail(customer.emailKey || customer.email || quote.customer?.email),
+              subject: rendered.subject,
+              text: rendered.text,
+              html: rendered.html,
+              templateFingerprint: rendered.templateFingerprint
+            },
+            sourceRevisionId: normalizeText(quote.activeVersionId),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+          });
+          createsApplied += 1;
+        });
+        return { createsApplied, updatesApplied };
+      });
+      createdCount += writeResult.createsApplied;
+      updatedCount += writeResult.updatesApplied;
+    } catch (error) {
+      if (
+        error instanceof RevenueAutopilotError
+        || error instanceof RevenueAutopilotAuthorityError
+        || error instanceof RevenueAutopilotTemplateError
+        || error instanceof PaymentLedgerError
+      ) continue;
+      throw error;
+    }
+  }
+  return { createdCount, updatedCount, state: "materialized" };
+}
+
+function throwDecisionDebtFailure(error, operation) {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (error instanceof DecisionDebtError) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(`${operation} failed`, {
+    error: normalizeText(error?.message).slice(0, 240)
+  });
+  throw new functions.https.HttpsError(
+    "internal",
+    "The Decision Debt operation did not complete."
+  );
+}
+
+function decisionDebtRequestId(value) {
+  const requestId = normalizeText(value).toLowerCase();
+  if (!/^decision_debt_request_[a-f0-9]{32}$/u.test(requestId)) {
+    throw new DecisionDebtError("invalid-argument", "A valid Decision Debt request identity is required.");
+  }
+  return requestId;
+}
+
+function decisionDebtPolicyRecord(raw = null) {
+  if (!raw || typeof raw !== "object" || Number(raw.schemaVersion) !== 1) {
+    return {
+      policy: decisionDebtAuthority.validatePolicy(DEFAULT_DECISION_DEBT_POLICY),
+      revision: 0,
+      policyVersion: "",
+      configuredAtISO: "",
+      configuredBy: "",
+      lastMutation: null
+    };
+  }
+  return {
+    policy: decisionDebtAuthority.validatePolicy({
+      schemaVersion: raw.schemaVersion,
+      maxEventHorizonDays: raw.maxEventHorizonDays,
+      decisionTypes: raw.decisionTypes
+    }),
+    revision: Number.isSafeInteger(Number(raw.revision)) && Number(raw.revision) >= 0
+      ? Number(raw.revision)
+      : 0,
+    policyVersion: normalizeText(raw.policyVersion),
+    configuredAtISO: normalizeText(raw.configuredAtISO),
+    configuredBy: normalizeText(raw.configuredBy),
+    lastMutation: raw.lastMutation && typeof raw.lastMutation === "object"
+      ? {
+          requestId: normalizeText(raw.lastMutation.requestId),
+          requestFingerprint: normalizeText(raw.lastMutation.requestFingerprint)
+        }
+      : null
+  };
+}
+
+function decisionDebtCommercialExposureCents(simulationReceipt = {}) {
+  const values = simulationReceipt?.commercialValues || {};
+  const currency = normalizeText(values.currency).toUpperCase();
+  const before = Number(values.authoritativeTotal?.before);
+  const proposedAfter = Number(values.authoritativeTotal?.proposedAfter);
+  if (currency !== "USD" || !Number.isFinite(before) || !Number.isFinite(proposedAfter)) {
+    return null;
+  }
+  const cents = Math.round(Math.abs(proposedAfter - before) * 100);
+  return Number.isSafeInteger(cents) && cents >= 0 ? cents : null;
+}
+
+function assertDecisionDebtDependencyState({
+  organizationId,
+  quoteId,
+  quote,
+  state,
+  invalidations
+}) {
+  const activeRevisionId = normalizeText(quote?.activeVersionId || quote?.versionMeta?.versionId);
+  const customerId = normalizeText(quote?.customerId);
+  const eventDate = normalizeText(quote?.event?.date);
+  const totalInvalidationCount = Number(state?.totalInvalidationCount);
+  const openInvalidationCount = Number(state?.openInvalidationCount);
+  const resolvedInvalidationCount = Number(state?.resolvedInvalidationCount);
+  const complete = (
+    Number(state?.schemaVersion) === COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION
+    && state?.authority === "server_authoritative"
+    && normalizeOrganizationId(state?.organizationId) === organizationId
+    && normalizeText(state?.quoteId) === quoteId
+    && normalizeText(state?.customerId) === customerId
+    && normalizeText(state?.eventDate) === eventDate
+    && normalizeText(state?.activeRevisionId) === activeRevisionId
+    && /^\d{4}-\d{2}-\d{2}$/u.test(eventDate)
+    && state?.bounds?.invalidationSetComplete === true
+    && Number(state?.bounds?.invalidationLimit) === COMMERCIAL_CHANGE_INVALIDATION_LIMIT
+    && Number.isSafeInteger(totalInvalidationCount)
+    && totalInvalidationCount >= 0
+    && totalInvalidationCount <= COMMERCIAL_CHANGE_INVALIDATION_LIMIT
+    && Number.isSafeInteger(openInvalidationCount)
+    && openInvalidationCount >= 0
+    && Number.isSafeInteger(resolvedInvalidationCount)
+    && resolvedInvalidationCount >= 0
+    && openInvalidationCount + resolvedInvalidationCount === totalInvalidationCount
+    && Array.isArray(invalidations)
+    && invalidations.length === totalInvalidationCount
+  );
+  if (!complete) {
+    throw new DecisionDebtError(
+      "failed-precondition",
+      "Decision Debt dependency evidence is incomplete or stale."
+    );
+  }
+  const openCount = invalidations.filter((item) => (
+    ["open", "reopened"].includes(normalizeText(item?.state).toLowerCase())
+  )).length;
+  if (
+    openCount !== openInvalidationCount
+    || invalidations.some((item) => (
+      normalizeOrganizationId(item?.organizationId) !== organizationId
+      || normalizeText(item?.quoteId) !== quoteId
+      || normalizeText(item?.targetRevisionId) !== activeRevisionId
+      || normalizeText(item?.applyReceiptId) !== normalizeText(state?.latestApplyReceiptId)
+      || !["open", "reopened", "resolved"].includes(
+        normalizeText(item?.state).toLowerCase()
+      )
+    ))
+  ) {
+    throw new DecisionDebtError(
+      "failed-precondition",
+      "Decision Debt invalidation evidence does not match its trusted dependency state."
+    );
+  }
+  return { activeRevisionId, customerId, eventDate, openInvalidationCount };
 }
 
 function listMissingFields(fieldPairs) {
@@ -7444,11 +8791,16 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
       const requestRef = scope.refs.requestsRef.doc(requestKey);
       const rateRef = scope.refs.rateLimitsRef.doc(actorRateKey);
       const generatedMessageRef = scope.refs.messagesRef.doc(generatedMessageId);
-      const [requestSnap, stateSnap, rateSnap, generatedMessageSnap] = await Promise.all([
+      const revenuePolicyRef = db.collection(ORGANIZATIONS_COLLECTION)
+        .doc(binding.organizationId)
+        .collection(REVENUE_AUTOPILOT_POLICY_COLLECTION)
+        .doc("current");
+      const [requestSnap, stateSnap, rateSnap, generatedMessageSnap, revenuePolicySnap] = await Promise.all([
         tx.get(requestRef),
         tx.get(scope.refs.stateRef),
         tx.get(rateRef),
-        tx.get(generatedMessageRef)
+        tx.get(generatedMessageRef),
+        tx.get(revenuePolicyRef)
       ]);
       const portalKeySha256 = portalConversationSha256(scope.activation.portalKey);
       const bodySha256 = portalConversationSha256(input.body);
@@ -7525,6 +8877,62 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
         nowMs
       });
       const message = projectPortalConversationMessage(messageRecord);
+      let attentionPlan = null;
+      let attentionRef = null;
+      if (message.actorType === "customer") {
+        const tenantPolicy = normalizeRevenueAutopilotTenantPolicy(
+          revenuePolicySnap.exists ? revenuePolicySnap.data() || {} : null
+        );
+        const preliminary = planUnreadCustomerReplyAttention({
+          organizationId: binding.organizationId,
+          quoteId: binding.quoteId,
+          messageId: generatedMessageId,
+          evidence: {
+            conversation: {
+              source: "quote_conversation_attention_state",
+              organizationId: binding.organizationId,
+              quoteId: binding.quoteId,
+              latestMessageId: generatedMessageId,
+              latestMessageAtISO: nowISO,
+              latestActorType: "customer",
+              staffAcknowledged: {}
+            }
+          },
+          global: getRevenueAutopilotGlobalControl(nowISO),
+          tenantPolicy,
+          existingAttention: null,
+          nowISO
+        });
+        if (preliminary.create?.attentionId) {
+          attentionRef = db.collection(ORGANIZATIONS_COLLECTION)
+            .doc(binding.organizationId)
+            .collection(REVENUE_AUTOPILOT_ATTENTION_COLLECTION)
+            .doc(preliminary.create.attentionId);
+          const attentionSnap = await tx.get(attentionRef);
+          attentionPlan = planUnreadCustomerReplyAttention({
+            organizationId: binding.organizationId,
+            quoteId: binding.quoteId,
+            messageId: generatedMessageId,
+            evidence: {
+              conversation: {
+                source: "quote_conversation_attention_state",
+                organizationId: binding.organizationId,
+                quoteId: binding.quoteId,
+                latestMessageId: generatedMessageId,
+                latestMessageAtISO: nowISO,
+                latestActorType: "customer",
+                staffAcknowledged: {}
+              }
+            },
+            global: getRevenueAutopilotGlobalControl(nowISO),
+            tenantPolicy,
+            existingAttention: attentionSnap.exists
+              ? { attentionId: attentionSnap.id, ...(attentionSnap.data() || {}) }
+              : null,
+            nowISO
+          });
+        }
+      }
 
       tx.create(generatedMessageRef, {
         ...messageRecord,
@@ -7556,6 +8964,7 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
         messageCount: nextMessageCount,
         latestMessageId: generatedMessageId,
         latestMessageAtISO: nowISO,
+        latestActorType: message.actorType,
         updatedAt: FieldValue.serverTimestamp()
       });
       tx.set(scope.refs.quoteRef, {
@@ -7568,6 +8977,17 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
           updatedAt: FieldValue.serverTimestamp()
         }
       }, { merge: true });
+      if (attentionPlan?.create && attentionRef) {
+        tx.create(attentionRef, {
+          ...attentionPlan.create,
+          customerId: normalizeText(scope.quote.customerId),
+          quoteLabel: normalizeText(scope.quote.quoteNumber) || binding.quoteId,
+          customerLabel: normalizeText(scope.quote.customer?.name),
+          receivedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
       return portalConversationResponse(scope, [message], {
         message,
         idempotent: false
@@ -7576,6 +8996,1352 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
     return result;
   } catch (err) {
     return throwPortalConversationFailure(err, "sendQuotePortalConversationMessage", binding);
+  }
+});
+
+const COMMERCIAL_CHANGE_POLICY_VERSION = "commercial-change-policy-v1";
+const COMMERCIAL_CHANGE_INVALIDATION_LIMIT = 64;
+const COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION = 1;
+const COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED =
+  normalizeText(process.env.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toLowerCase() === "true";
+
+function commercialChangeEnforcementState(settings = {}) {
+  const tenantEnabled = settings?.commercialChangeAuthorityEnabled === true;
+  return {
+    authorityState: COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED && tenantEnabled
+      ? "enforced"
+      : "dormant",
+    globalEnabled: COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED,
+    tenantEnabled
+  };
+}
+
+function commercialChangeActor(staff = {}) {
+  return {
+    uid: normalizeText(staff.uid),
+    email: normalizeEmail(staff.email),
+    role: normalizeText(staff.role).toLowerCase()
+  };
+}
+
+function commercialChangeCatalogAuthorityFromSettings(organizationId, settings = {}) {
+  return buildPricingCatalogAuthority({
+    organizationId,
+    catalogSource: "firebase-org",
+    settings
+  });
+}
+
+function commercialChangeTrustedContext({ staff, nowISO, catalogAuthority }) {
+  return {
+    actor: commercialChangeActor(staff),
+    nowISO,
+    catalogAuthorityDigest: normalizeText(catalogAuthority?.settingsFingerprintSha256).toLowerCase(),
+    policyVersion: COMMERCIAL_CHANGE_POLICY_VERSION
+  };
+}
+
+function exactCommercialChangeReceiptId(value, kind) {
+  const normalized = normalizeText(value).toLowerCase();
+  const prefixes = {
+    simulation: "ccs",
+    authorization: "cca",
+    apply: "ccp"
+  };
+  const prefix = prefixes[kind];
+  if (!prefix || !new RegExp(`^${prefix}_[a-f0-9]{48}$`, "u").test(normalized)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      `A valid commercial change ${kind} receipt id is required.`
+    );
+  }
+  return normalized;
+}
+
+function exactCommercialChangeApprovalRequestId(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (!/^change_auth_request_[a-f0-9]{32}$/u.test(normalized)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "A valid commercial change approval request identity is required."
+    );
+  }
+  return normalized;
+}
+
+function commercialChangeApprovalId(simulationReceiptId) {
+  return `ccar_${createHash("sha256")
+    .update(`commercial-change-approval|${simulationReceiptId}`)
+    .digest("hex")
+    .slice(0, 48)}`;
+}
+
+function commercialChangeRefs(organizationId, quoteId = "") {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return {
+    organizationRef,
+    settingsRef: organizationRef.collection("settings").doc("config"),
+    quoteRef: quoteId
+      ? organizationRef.collection(QUOTES_COLLECTION).doc(quoteId)
+      : null,
+    simulationsRef: organizationRef.collection(COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION),
+    authorizationsRef: organizationRef.collection(COMMERCIAL_CHANGE_AUTHORIZATIONS_COLLECTION),
+    approvalRequestsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPROVAL_REQUESTS_COLLECTION),
+    applyReceiptsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION),
+    reconciliationReceiptsRef: organizationRef
+      .collection(COMMERCIAL_CHANGE_RECONCILIATION_RECEIPTS_COLLECTION),
+    dependencyStateRef: quoteId
+      ? organizationRef.collection(COMMERCIAL_DEPENDENCY_STATE_COLLECTION).doc(quoteId)
+      : null,
+    invalidationsRef: quoteId
+      ? organizationRef
+        .collection(COMMERCIAL_DEPENDENCY_STATE_COLLECTION)
+        .doc(quoteId)
+        .collection(COMMERCIAL_DEPENDENCY_INVALIDATIONS_COLLECTION)
+      : null
+  };
+}
+
+function assertCommercialChangeQuoteScope(quote, organizationId, quoteId) {
+  if (!quote || typeof quote !== "object") {
+    throw new CommercialChangeAuthorityError("not-found", "Quote not found.");
+  }
+  if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+    throw new CommercialChangeAuthorityError(
+      "permission-denied",
+      "Quote is outside your organization."
+    );
+  }
+  if (normalizeText(quote.id) && normalizeText(quote.id) !== quoteId) {
+    throw new CommercialChangeAuthorityError(
+      "failed-precondition",
+      "Canonical quote identity does not match the commercial change scope."
+    );
+  }
+}
+
+function assertCommercialChangeSimulationCurrent({
+  simulationReceipt,
+  organizationId,
+  quoteId,
+  quote,
+  catalogAuthority,
+  nowISO
+}) {
+  const simulation = commercialChangeAuthority.validateSimulationReceipt(simulationReceipt);
+  assertCommercialChangeQuoteScope(quote, organizationId, quoteId);
+  if (
+    simulation.organizationId !== organizationId
+    || simulation.quoteId !== quoteId
+  ) {
+    throw new CommercialChangeAuthorityError(
+      "permission-denied",
+      "Commercial change simulation is outside this organization and quote scope."
+    );
+  }
+  if (normalizeText(quote.activeVersionId || quote.versionMeta?.versionId) !== simulation.baseRevisionId) {
+    throw new CommercialChangeAuthorityError(
+      "aborted",
+      "Commercial change simulation is stale and must be regenerated.",
+      { driftReason: "quote_revision_changed" }
+    );
+  }
+  if (
+    normalizeText(catalogAuthority?.settingsFingerprintSha256).toLowerCase()
+      !== simulation.catalogAuthorityDigest
+  ) {
+    throw new CommercialChangeAuthorityError(
+      "aborted",
+      "Commercial change simulation is stale and must be regenerated.",
+      { driftReason: "catalog_authority_changed" }
+    );
+  }
+  if (simulation.policyVersion !== COMMERCIAL_CHANGE_POLICY_VERSION) {
+    throw new CommercialChangeAuthorityError(
+      "aborted",
+      "Commercial change simulation is stale and must be regenerated.",
+      { driftReason: "policy_changed" }
+    );
+  }
+  if (Date.parse(nowISO) > Date.parse(simulation.expiresAtISO)) {
+    throw new CommercialChangeAuthorityError(
+      "failed-precondition",
+      "Commercial change simulation expired. Re-simulate before continuing.",
+      { driftReason: "authorization_expired" }
+    );
+  }
+  return simulation;
+}
+
+function projectCommercialChangeSimulation(receipt, evaluatedImpact) {
+  const receiptImpact = receipt?.impact || {};
+  return {
+    schemaVersion: normalizeText(evaluatedImpact?.schemaVersion),
+    advisory: evaluatedImpact?.advisory === true,
+    receiptId: normalizeText(receipt?.receiptId),
+    receiptDigest: normalizeText(receipt?.receiptDigest),
+    authorizationRequired: receipt?.authorizationRequired === true,
+    expiresAtISO: normalizeText(receipt?.expiresAtISO),
+    identity: {
+      organizationId: normalizeOrganizationId(receipt?.organizationId),
+      quoteId: normalizeText(receipt?.quoteId),
+      beforeRevisionId: normalizeText(receipt?.baseRevisionId),
+      proposedRevisionId: normalizeText(receipt?.proposedRevisionId)
+    },
+    sources: evaluatedImpact?.sources || {},
+    graph: receipt?.graph || {},
+    factDiffs: Array.isArray(receipt?.factDiffs) ? receipt.factDiffs : [],
+    commercialValues: receipt?.commercialValues || {},
+    impact: {
+      rootNodeIds: Array.isArray(receiptImpact.rootNodeIds)
+        ? receiptImpact.rootNodeIds
+        : [],
+      dependentNodes: Array.isArray(receiptImpact.dependentNodes)
+        ? receiptImpact.dependentNodes.map((node) => ({
+          id: normalizeText(node?.nodeId),
+          kind: normalizeText(node?.nodeKind),
+          distance: Number(node?.distance),
+          triggeredBy: Array.isArray(node?.triggeredBy) ? node.triggeredBy : [],
+          advisoryClass: normalizeText(node?.classification)
+        }))
+        : [],
+      counts: receiptImpact.counts || { total: 0, review: 0, stale: 0 }
+    },
+    bounds: evaluatedImpact?.bounds || {},
+    boundary: normalizeText(evaluatedImpact?.boundary)
+  };
+}
+
+function projectCommercialChangeApproval(raw = null) {
+  if (!raw || typeof raw !== "object") return null;
+  const state = normalizeText(raw.state).toLowerCase();
+  if (!["pending", "authorized", "rejected", "expired"].includes(state)) return null;
+  return {
+    schemaVersion: Number(raw.schemaVersion) || 1,
+    authority: "server_projection",
+    approvalRequestId: normalizeText(raw.approvalRequestId),
+    simulationReceiptId: normalizeText(raw.simulationReceiptId),
+    state,
+    requestedAtISO: normalizeText(raw.requestedAtISO),
+    requestedBy: {
+      email: normalizeEmail(raw.requestedBy?.email),
+      role: normalizeText(raw.requestedBy?.role).toLowerCase()
+    },
+    resolvedAtISO: normalizeText(raw.resolvedAtISO),
+    resolvedBy: {
+      email: normalizeEmail(raw.resolvedBy?.email),
+      role: normalizeText(raw.resolvedBy?.role).toLowerCase()
+    },
+    authorizationReceiptId: normalizeText(raw.authorizationReceiptId),
+    expiresAtISO: normalizeText(raw.expiresAtISO)
+  };
+}
+
+function throwCommercialChangeFailure(error, operation, context = {}) {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (
+    error instanceof CommercialChangeAuthorityError
+    || error instanceof CommercialChangeImpactPreviewError
+    || error instanceof PricingEngineError
+    || error instanceof QuoteCreationError
+  ) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(`${operation} failed`, {
+    organizationId: normalizeOrganizationId(context.organizationId),
+    quoteId: normalizeText(context.quoteId),
+    actorUid: normalizeText(context.actorUid),
+    error: normalizeText(error?.message).slice(0, 240)
+  });
+  throw new functions.https.HttpsError(
+    "internal",
+    "The authoritative commercial change operation did not complete."
+  );
+}
+
+exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const expectedActiveVersionId = normalizeText(data?.expectedActiveVersionId);
+  const requestId = normalizeText(data?.requestId).toLowerCase();
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || !quoteId
+    || !expectedActiveVersionId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Commercial change simulation requires same-organization staff authority and exact quote scope."
+    );
+  }
+  try {
+    const sanitized = sanitizeQuoteCreationRequest({ organizationId, form: data?.form });
+    const nowISO = new Date().toISOString();
+    const pricingResult = await calculateQuotePricingAuthoritative({
+      db,
+      data: {
+        organizationId,
+        pricingInput: {
+          organizationId,
+          form: sanitized.form,
+          metadata: { source: "commercial_change_simulation", generatedAt: nowISO }
+        }
+      },
+      staff,
+      organizationsCollection: ORGANIZATIONS_COLLECTION,
+      nowISO
+    });
+    const refs = commercialChangeRefs(organizationId, quoteId);
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, settingsSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(refs.settingsRef)
+      ]);
+      if (!quoteSnap.exists) {
+        throw new CommercialChangeAuthorityError("not-found", "Quote not found.");
+      }
+      if (!settingsSnap.exists) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "Pricing settings are unavailable for commercial change simulation."
+        );
+      }
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      assertCommercialChangeQuoteScope(quote, organizationId, quoteId);
+      assertPricingCatalogAuthorityCurrent(pricingResult.catalogAuthority, {
+        organizationId,
+        catalogSource: pricingResult.catalogSource,
+        settings: settingsSnap.data() || {}
+      });
+      const preview = buildCommercialChangeImpactPreviewSnapshots({
+        organizationId,
+        quoteId,
+        expectedActiveVersionId,
+        currentQuote: quote,
+        proposedForm: sanitized.form,
+        proposedPricing: pricingResult.pricing
+      });
+      const evaluatedImpact = evaluateCommercialChangeImpact(preview);
+      const proposed = commercialChangeAuthority.simulate({
+        request: { requestId, organizationId, quoteId, expectedActiveVersionId },
+        canonicalQuote: quote,
+        proposedForm: sanitized.form,
+        proposedPricing: pricingResult.pricing,
+        trustedContext: commercialChangeTrustedContext({
+          staff,
+          nowISO,
+          catalogAuthority: pricingResult.catalogAuthority
+        })
+      });
+      const receiptRef = refs.simulationsRef.doc(proposed.receipt.receiptId);
+      const existingSnap = await tx.get(receiptRef);
+      const planned = existingSnap.exists
+        ? commercialChangeAuthority.simulate({
+          request: { requestId, organizationId, quoteId, expectedActiveVersionId },
+          canonicalQuote: quote,
+          proposedForm: sanitized.form,
+          proposedPricing: pricingResult.pricing,
+          trustedContext: commercialChangeTrustedContext({
+            staff,
+            nowISO,
+            catalogAuthority: pricingResult.catalogAuthority
+          }),
+          existingReceipt: existingSnap.data()?.receipt
+        })
+        : proposed;
+      if (!existingSnap.exists) {
+        tx.create(receiptRef, {
+          organizationId,
+          quoteId,
+          requestId,
+          receipt: planned.receipt,
+          createdAtISO: planned.receipt.simulatedAtISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      return {
+        planned,
+        evaluatedImpact,
+        enforcement: commercialChangeEnforcementState(settingsSnap.data() || {})
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      idempotent: result.planned.idempotent,
+      authorityState: result.enforcement.authorityState,
+      simulationReceipt: result.planned.receipt,
+      simulation: projectCommercialChangeSimulation(
+        result.planned.receipt,
+        result.evaluatedImpact
+      )
+    };
+  } catch (error) {
+    return throwCommercialChangeFailure(error, "simulateCommercialQuoteChange", {
+      organizationId,
+      quoteId,
+      actorUid: staff.uid
+    });
+  }
+});
+
+exports.requestCommercialQuoteChangeAuthorization = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const simulationReceiptId = exactCommercialChangeReceiptId(
+    data?.simulationReceiptId,
+    "simulation"
+  );
+  const requestId = exactCommercialChangeApprovalRequestId(data?.requestId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || !quoteId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Commercial change approval requests require same-organization staff authority."
+    );
+  }
+  try {
+    const refs = commercialChangeRefs(organizationId, quoteId);
+    const approvalRequestId = commercialChangeApprovalId(simulationReceiptId);
+    const approvalRef = refs.approvalRequestsRef.doc(approvalRequestId);
+    const simulationRef = refs.simulationsRef.doc(simulationReceiptId);
+    const requestedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [simulationSnap, quoteSnap, settingsSnap, approvalSnap] = await Promise.all([
+        tx.get(simulationRef),
+        tx.get(refs.quoteRef),
+        tx.get(refs.settingsRef),
+        tx.get(approvalRef)
+      ]);
+      if (!simulationSnap.exists || !quoteSnap.exists || !settingsSnap.exists) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "The exact current simulation, quote, and pricing settings are required."
+        );
+      }
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      const catalogAuthority = commercialChangeCatalogAuthorityFromSettings(
+        organizationId,
+        settingsSnap.data() || {}
+      );
+      const simulation = assertCommercialChangeSimulationCurrent({
+        simulationReceipt: simulationSnap.data()?.receipt,
+        organizationId,
+        quoteId,
+        quote,
+        catalogAuthority,
+        nowISO: requestedAtISO
+      });
+      if (!simulation.authorizationRequired) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "This change has no governed dependency impact and does not require approval."
+        );
+      }
+      if (approvalSnap.exists) {
+        const existing = approvalSnap.data() || {};
+        if (
+          normalizeText(existing.simulationReceiptId) !== simulation.receiptId
+          || normalizeText(existing.simulationDigest) !== simulation.receiptDigest
+        ) {
+          throw new CommercialChangeAuthorityError(
+            "already-exists",
+            "The approval identity is bound to different immutable simulation evidence."
+          );
+        }
+        return { record: existing, idempotent: true };
+      }
+      const record = {
+        schemaVersion: 1,
+        authority: "server_authoritative",
+        approvalRequestId,
+        requestId,
+        organizationId,
+        quoteId,
+        simulationReceiptId: simulation.receiptId,
+        simulationDigest: simulation.receiptDigest,
+        proposalDigest: simulation.proposalDigest,
+        baseRevisionId: simulation.baseRevisionId,
+        state: "pending",
+        requestedAtISO,
+        requestedBy: commercialChangeActor(staff),
+        resolvedAtISO: "",
+        resolvedBy: null,
+        authorizationReceiptId: "",
+        expiresAtISO: simulation.expiresAtISO
+      };
+      tx.create(approvalRef, {
+        ...record,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      return { record, idempotent: false };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      idempotent: result.idempotent,
+      approval: projectCommercialChangeApproval(result.record)
+    };
+  } catch (error) {
+    return throwCommercialChangeFailure(error, "requestCommercialQuoteChangeAuthorization", {
+      organizationId,
+      quoteId,
+      actorUid: staff.uid
+    });
+  }
+});
+
+exports.getCommercialQuoteChangeAuthorizationState = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const simulationReceiptId = exactCommercialChangeReceiptId(
+    data?.simulationReceiptId,
+    "simulation"
+  );
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || !quoteId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Commercial change authorization state requires same-organization staff authority."
+    );
+  }
+  try {
+    const refs = commercialChangeRefs(organizationId, quoteId);
+    const approvalRequestId = commercialChangeApprovalId(simulationReceiptId);
+    const [simulationSnap, approvalSnap] = await Promise.all([
+      refs.simulationsRef.doc(simulationReceiptId).get(),
+      refs.approvalRequestsRef.doc(approvalRequestId).get()
+    ]);
+    if (!simulationSnap.exists) {
+      throw new CommercialChangeAuthorityError("not-found", "Commercial change simulation not found.");
+    }
+    const simulation = commercialChangeAuthority.validateSimulationReceipt(
+      simulationSnap.data()?.receipt
+    );
+    if (simulation.organizationId !== organizationId || simulation.quoteId !== quoteId) {
+      throw new CommercialChangeAuthorityError(
+        "permission-denied",
+        "Commercial change simulation is outside this organization and quote scope."
+      );
+    }
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      approval: approvalSnap.exists
+        ? projectCommercialChangeApproval(approvalSnap.data() || {})
+        : null
+    };
+  } catch (error) {
+    return throwCommercialChangeFailure(error, "getCommercialQuoteChangeAuthorizationState", {
+      organizationId,
+      quoteId,
+      actorUid: staff.uid
+    });
+  }
+});
+
+exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const simulationReceiptId = exactCommercialChangeReceiptId(
+    data?.simulationReceiptId,
+    "simulation"
+  );
+  const requestId = normalizeText(data?.requestId).toLowerCase();
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  if (
+    !organizationId
+    || !quoteId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Commercial change authorization requires same-organization administrator authority."
+    );
+  }
+  try {
+    const refs = commercialChangeRefs(organizationId, quoteId);
+    const simulationRef = refs.simulationsRef.doc(simulationReceiptId);
+    const approvalRequestId = commercialChangeApprovalId(simulationReceiptId);
+    const approvalRef = refs.approvalRequestsRef.doc(approvalRequestId);
+    const authorizedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [simulationSnap, quoteSnap, settingsSnap, approvalSnap] = await Promise.all([
+        tx.get(simulationRef),
+        tx.get(refs.quoteRef),
+        tx.get(refs.settingsRef),
+        tx.get(approvalRef)
+      ]);
+      if (!simulationSnap.exists || !quoteSnap.exists || !settingsSnap.exists) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "The exact current simulation, quote, and pricing settings are required."
+        );
+      }
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      const catalogAuthority = commercialChangeCatalogAuthorityFromSettings(
+        organizationId,
+        settingsSnap.data() || {}
+      );
+      const simulation = assertCommercialChangeSimulationCurrent({
+        simulationReceipt: simulationSnap.data()?.receipt,
+        organizationId,
+        quoteId,
+        quote,
+        catalogAuthority,
+        nowISO: authorizedAtISO
+      });
+      const proposed = commercialChangeAuthority.authorize({
+        simulationReceipt: simulation,
+        request: { requestId, organizationId, quoteId },
+        trustedContext: commercialChangeTrustedContext({
+          staff,
+          nowISO: authorizedAtISO,
+          catalogAuthority
+        }),
+        current: {
+          activeRevisionId: normalizeText(quote.activeVersionId || quote.versionMeta?.versionId),
+          catalogAuthorityDigest: normalizeText(catalogAuthority.settingsFingerprintSha256),
+          policyVersion: COMMERCIAL_CHANGE_POLICY_VERSION
+        }
+      });
+      const authorizationRef = refs.authorizationsRef.doc(proposed.receipt.receiptId);
+      const authorizationSnap = await tx.get(authorizationRef);
+      const planned = authorizationSnap.exists
+        ? commercialChangeAuthority.authorize({
+          simulationReceipt: simulation,
+          request: { requestId, organizationId, quoteId },
+          trustedContext: commercialChangeTrustedContext({
+            staff,
+            nowISO: authorizedAtISO,
+            catalogAuthority
+          }),
+          current: {
+            activeRevisionId: normalizeText(quote.activeVersionId || quote.versionMeta?.versionId),
+            catalogAuthorityDigest: normalizeText(catalogAuthority.settingsFingerprintSha256),
+            policyVersion: COMMERCIAL_CHANGE_POLICY_VERSION
+          },
+          existingReceipt: authorizationSnap.data()?.receipt
+        })
+        : proposed;
+      if (!authorizationSnap.exists) {
+        tx.create(authorizationRef, {
+          organizationId,
+          quoteId,
+          simulationReceiptId,
+          receipt: planned.receipt,
+          createdAtISO: planned.receipt.authorizedAtISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      if (approvalSnap.exists) {
+        const approval = approvalSnap.data() || {};
+        if (
+          normalizeText(approval.simulationReceiptId) !== simulation.receiptId
+          || normalizeText(approval.simulationDigest) !== simulation.receiptDigest
+        ) {
+          throw new CommercialChangeAuthorityError(
+            "failed-precondition",
+            "Pending approval does not match the exact simulation."
+          );
+        }
+        tx.update(approvalRef, {
+          state: "authorized",
+          resolvedAtISO: planned.receipt.authorizedAtISO,
+          resolvedBy: commercialChangeActor(staff),
+          authorizationReceiptId: planned.receipt.receiptId,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      return {
+        planned,
+        approval: approvalSnap.exists
+          ? {
+            ...(approvalSnap.data() || {}),
+            state: "authorized",
+            resolvedAtISO: planned.receipt.authorizedAtISO,
+            resolvedBy: commercialChangeActor(staff),
+            authorizationReceiptId: planned.receipt.receiptId
+          }
+          : null
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      idempotent: result.planned.idempotent,
+      authorizationReceipt: result.planned.receipt,
+      approval: projectCommercialChangeApproval(result.approval)
+    };
+  } catch (error) {
+    return throwCommercialChangeFailure(error, "authorizeCommercialQuoteChange", {
+      organizationId,
+      quoteId,
+      actorUid: staff.uid
+    });
+  }
+});
+
+function commercialChangeDecisionMetadata(invalidation = {}, decisionOpening = null) {
+  const directTypes = {
+    "artifact.kitchen_beo": "beo_finalization",
+    "output.plan.food_quantity": "menu",
+    "output.plan.rental_quantity": "rentals",
+    "output.plan.staffing_requirement": "staffing"
+  };
+  const rootTypes = {
+    "fact.event.guest_count": "guest_count",
+    "fact.selection.menu": "menu",
+    "fact.selection.rentals": "rentals",
+    "fact.staffing.counts": "staffing"
+  };
+  const nodeId = normalizeText(invalidation.nodeId);
+  const triggeredBy = Array.isArray(invalidation.triggeredBy)
+    ? invalidation.triggeredBy.map((value) => normalizeText(value)).filter(Boolean)
+    : [];
+  const uniqueRootTypes = [...new Set(
+    triggeredBy.map((rootNodeId) => rootTypes[rootNodeId]).filter(Boolean)
+  )];
+  const decisionType = directTypes[nodeId]
+    || (uniqueRootTypes.length === 1 ? uniqueRootTypes[0] : "");
+  return {
+    decisionId: normalizeText(decisionOpening?.decisionId)
+      || (decisionType
+        ? `dependency-${decisionType}-${normalizeText(invalidation.invalidationId).slice(-24)}`
+        : ""),
+    decisionType
+  };
+}
+
+function projectCommercialDependencyInvalidation(raw = {}) {
+  const state = normalizeText(raw.state).toLowerCase();
+  return {
+    invalidationId: normalizeText(raw.invalidationId || raw.id),
+    operationId: normalizeText(raw.operationId),
+    applyReceiptId: normalizeText(raw.applyReceiptId),
+    sourceRevisionId: normalizeText(raw.sourceRevisionId),
+    targetRevisionId: normalizeText(raw.targetRevisionId),
+    nodeId: normalizeText(raw.nodeId),
+    nodeKind: normalizeText(raw.nodeKind),
+    classification: normalizeText(raw.classification).toUpperCase(),
+    triggeredBy: Array.isArray(raw.triggeredBy)
+      ? raw.triggeredBy.map((value) => normalizeText(value)).filter(Boolean).slice(0, 32)
+      : [],
+    decisionId: normalizeText(raw.decisionId),
+    decisionType: normalizeText(raw.decisionType),
+    state: ["open", "resolved"].includes(state) ? state : "unknown",
+    createdAtISO: normalizeText(raw.createdAtISO),
+    resolvedAtISO: normalizeText(raw.resolvedAtISO),
+    resolution: normalizeText(raw.resolution),
+    resolutionReceiptId: normalizeText(raw.resolutionReceiptId),
+    evidenceId: normalizeText(raw.evidenceId)
+  };
+}
+
+function projectCommercialDependencyState({
+  organizationId,
+  quoteId,
+  quote,
+  stateRecord = null,
+  invalidationRecords = [],
+  observedAtISO,
+  truncated = false
+}) {
+  const base = {
+    schemaVersion: 1,
+    authority: "server_projection",
+    source: "firebase_server_projection",
+    organizationId,
+    quoteId,
+    customerId: normalizeText(quote?.customerId),
+    eventDate: normalizeText(quote?.event?.date),
+    activeRevisionId: normalizeText(quote?.activeVersionId || quote?.versionMeta?.versionId),
+    observedAtISO,
+    bounds: {
+      invalidationLimit: COMMERCIAL_CHANGE_INVALIDATION_LIMIT,
+      invalidationSetComplete: !truncated,
+      returnedCount: truncated ? 0 : invalidationRecords.length,
+      truncated
+    }
+  };
+  if (truncated) {
+    return {
+      ...base,
+      state: "UNKNOWN",
+      safeToPublish: false,
+      latestApplyReceiptId: normalizeText(stateRecord?.latestApplyReceiptId),
+      totalInvalidationCount: Number(stateRecord?.totalInvalidationCount) || 0,
+      openInvalidationCount: Number(stateRecord?.openInvalidationCount) || 0,
+      resolvedInvalidationCount: Number(stateRecord?.resolvedInvalidationCount) || 0,
+      invalidations: [],
+      reasonCodes: ["invalidation_evidence_truncated"]
+    };
+  }
+  if (!stateRecord) {
+    const hasUnexpectedEvidence = invalidationRecords.length > 0;
+    return {
+      ...base,
+      state: hasUnexpectedEvidence ? "UNKNOWN" : "NOT_GENERATED",
+      // Absence of a governed apply receipt is not affirmative publication
+      // authority, even when no orphan invalidations are present.
+      safeToPublish: false,
+      latestApplyReceiptId: "",
+      totalInvalidationCount: invalidationRecords.length,
+      openInvalidationCount: invalidationRecords.filter((item) => item.state === "open").length,
+      resolvedInvalidationCount: invalidationRecords.filter((item) => item.state === "resolved").length,
+      invalidations: hasUnexpectedEvidence ? [] : [],
+      reasonCodes: hasUnexpectedEvidence
+        ? ["dependency_state_missing"]
+        : ["no_governed_change_applied"]
+    };
+  }
+  const projectedInvalidations = invalidationRecords
+    .map((item) => projectCommercialDependencyInvalidation(item))
+    .sort((left, right) => left.invalidationId.localeCompare(right.invalidationId));
+  const openCount = projectedInvalidations.filter((item) => item.state === "open").length;
+  const resolvedCount = projectedInvalidations.filter((item) => item.state === "resolved").length;
+  const expectedTotal = Number(stateRecord.totalInvalidationCount);
+  const complete = Number(stateRecord.schemaVersion) === COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION
+    && stateRecord.authority === "server_authoritative"
+    && normalizeOrganizationId(stateRecord.organizationId) === organizationId
+    && normalizeText(stateRecord.quoteId) === quoteId
+    && normalizeText(stateRecord.activeRevisionId) === base.activeRevisionId
+    && stateRecord.bounds?.invalidationSetComplete === true
+    && Number(stateRecord.bounds?.invalidationLimit) === COMMERCIAL_CHANGE_INVALIDATION_LIMIT
+    && Number.isSafeInteger(expectedTotal)
+    && expectedTotal === projectedInvalidations.length
+    && Number(stateRecord.openInvalidationCount) === openCount
+    && Number(stateRecord.resolvedInvalidationCount) === resolvedCount
+    && projectedInvalidations.every((item) => item.state !== "unknown");
+  if (!complete) {
+    return {
+      ...base,
+      bounds: { ...base.bounds, invalidationSetComplete: false },
+      state: "UNKNOWN",
+      safeToPublish: false,
+      latestApplyReceiptId: normalizeText(stateRecord.latestApplyReceiptId),
+      totalInvalidationCount: projectedInvalidations.length,
+      openInvalidationCount: openCount,
+      resolvedInvalidationCount: resolvedCount,
+      invalidations: [],
+      reasonCodes: ["dependency_state_incomplete"]
+    };
+  }
+  const safeToPublish = openCount === 0 && stateRecord.safeToPublish === true;
+  return {
+    ...base,
+    state: safeToPublish ? "READY" : "BLOCKED",
+    safeToPublish,
+    latestApplyReceiptId: normalizeText(stateRecord.latestApplyReceiptId),
+    totalInvalidationCount: projectedInvalidations.length,
+    openInvalidationCount: openCount,
+    resolvedInvalidationCount: resolvedCount,
+    invalidations: projectedInvalidations,
+    reasonCodes: safeToPublish
+      ? ["all_named_dependencies_reconciled"]
+      : ["governed_dependencies_unresolved"]
+  };
+}
+
+async function readCommercialDependencyState({ organizationId, quoteId, observedAtISO }) {
+  const refs = commercialChangeRefs(organizationId, quoteId);
+  const [quoteSnap, stateSnap, invalidationsSnap] = await Promise.all([
+    refs.quoteRef.get(),
+    refs.dependencyStateRef.get(),
+    refs.invalidationsRef.orderBy(FieldPath.documentId())
+      .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1)
+      .get()
+  ]);
+  if (!quoteSnap.exists) {
+    throw new CommercialChangeAuthorityError("not-found", "Quote not found.");
+  }
+  const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+  assertCommercialChangeQuoteScope(quote, organizationId, quoteId);
+  const truncated = invalidationsSnap.size > COMMERCIAL_CHANGE_INVALIDATION_LIMIT;
+  return projectCommercialDependencyState({
+    organizationId,
+    quoteId,
+    quote,
+    stateRecord: stateSnap.exists ? stateSnap.data() || {} : null,
+    invalidationRecords: truncated
+      ? []
+      : invalidationsSnap.docs.map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) })),
+    observedAtISO,
+    truncated
+  });
+}
+
+exports.getCommercialDependencyState = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || !quoteId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Commercial dependency state requires same-organization staff authority."
+    );
+  }
+  try {
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      dependencyState: await readCommercialDependencyState({
+        organizationId,
+        quoteId,
+        observedAtISO: new Date().toISOString()
+      })
+    };
+  } catch (error) {
+    return throwCommercialChangeFailure(error, "getCommercialDependencyState", {
+      organizationId,
+      quoteId,
+      actorUid: staff.uid
+    });
+  }
+});
+
+function exactCommercialReconciliationRequestId(value) {
+  const requestId = normalizeText(value).toLowerCase();
+  if (!/^change_reconcile_[a-f0-9]{32}$/u.test(requestId)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "A valid commercial dependency reconciliation request identity is required."
+    );
+  }
+  return requestId;
+}
+
+function normalizeCommercialInvalidationIds(values) {
+  if (
+    !Array.isArray(values)
+    || !values.length
+    || values.length > COMMERCIAL_CHANGE_INVALIDATION_LIMIT
+  ) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Reconciliation requires a bounded non-empty invalidation set."
+    );
+  }
+  const normalized = values.map((value) => normalizeText(value).toLowerCase());
+  if (
+    normalized.some((value) => !/^cci_[a-f0-9]{48}$/u.test(value))
+    || new Set(normalized).size !== normalized.length
+  ) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Reconciliation invalidation identities must be unique exact receipts."
+    );
+  }
+  return normalized;
+}
+
+function noArtifactEvidence(invalidation, activeRevisionId) {
+  return {
+    schemaVersion: COMMERCIAL_CHANGE_RECONCILIATION_EVIDENCE_VERSION,
+    authority: "server_authoritative",
+    evidenceId: `not-generated-${normalizeText(invalidation.nodeId).replace(/[^a-z0-9-]/giu, "-")}-${activeRevisionId}`,
+    invalidationId: invalidation.invalidationId,
+    nodeId: invalidation.nodeId,
+    sourceRevisionId: activeRevisionId,
+    resolution: "artifact_not_generated",
+    state: "NOT_GENERATED"
+  };
+}
+
+exports.reconcileCommercialDependencyState = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const applyReceiptId = exactCommercialChangeReceiptId(data?.applyReceiptId, "apply");
+  const requestId = exactCommercialReconciliationRequestId(data?.requestId);
+  const invalidationIds = normalizeCommercialInvalidationIds(data?.invalidationIds);
+  const resolutionNote = normalizeText(data?.resolutionNote);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || !quoteId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Commercial dependency reconciliation requires same-organization staff authority."
+    );
+  }
+  try {
+    const refs = commercialChangeRefs(organizationId, quoteId);
+    const applyRef = refs.applyReceiptsRef.doc(applyReceiptId);
+    const reconciliationRef = refs.reconciliationReceiptsRef.doc(requestId);
+    const observedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [
+        quoteSnap,
+        stateSnap,
+        applySnap,
+        reconciliationSnap,
+        invalidationsSnap,
+        priorReconciliationsSnap
+      ] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(refs.dependencyStateRef),
+        tx.get(applyRef),
+        tx.get(reconciliationRef),
+        tx.get(refs.invalidationsRef.orderBy(FieldPath.documentId())
+          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1)),
+        tx.get(refs.reconciliationReceiptsRef
+          .where("applyReceiptId", "==", applyReceiptId)
+          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1))
+      ]);
+      if (!quoteSnap.exists || !stateSnap.exists || !applySnap.exists) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "The exact quote, dependency state, and apply receipt are required."
+        );
+      }
+      if (
+        invalidationsSnap.size > COMMERCIAL_CHANGE_INVALIDATION_LIMIT
+        || priorReconciliationsSnap.size > COMMERCIAL_CHANGE_INVALIDATION_LIMIT
+      ) {
+        throw new CommercialChangeAuthorityError(
+          "resource-exhausted",
+          "Commercial dependency evidence exceeds the bounded complete set."
+        );
+      }
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      assertCommercialChangeQuoteScope(quote, organizationId, quoteId);
+      const stateRecord = stateSnap.data() || {};
+      const applyReceipt = commercialChangeAuthority.validateApplyReceipt(
+        applySnap.data()?.receipt
+      );
+      const activeRevisionId = normalizeText(quote.activeVersionId || quote.versionMeta?.versionId);
+      if (
+        applyReceipt.organizationId !== organizationId
+        || applyReceipt.quoteId !== quoteId
+        || applyReceipt.newRevisionId !== activeRevisionId
+        || normalizeText(stateRecord.latestApplyReceiptId) !== applyReceipt.receiptId
+        || normalizeText(stateRecord.activeRevisionId) !== activeRevisionId
+        || stateRecord.bounds?.invalidationSetComplete !== true
+      ) {
+        throw new CommercialChangeAuthorityError(
+          "aborted",
+          "Commercial dependency state changed before reconciliation. Reload and retry."
+        );
+      }
+      const allInvalidations = invalidationsSnap.docs.map((snapshot) => ({
+        id: snapshot.id,
+        ...(snapshot.data() || {})
+      }));
+      const invalidationById = new Map(allInvalidations.map((item) => [
+        normalizeText(item.invalidationId || item.id),
+        item
+      ]));
+      if (reconciliationSnap.exists) {
+        const existing = commercialChangeAuthority.validateReconciliationReceipt(
+          reconciliationSnap.data()?.receipt
+        );
+        const existingIds = existing.resolutions
+          .map((item) => normalizeText(item.invalidationId))
+          .sort();
+        if (
+          existing.organizationId !== organizationId
+          || existing.quoteId !== quoteId
+          || existing.applyReceiptId !== applyReceiptId
+          || commercialDependencyGraphCore.canonicalSerialize(existingIds)
+            !== commercialDependencyGraphCore.canonicalSerialize([...invalidationIds].sort())
+        ) {
+          throw new CommercialChangeAuthorityError(
+            "already-exists",
+            "Reconciliation request identity is bound to different immutable evidence."
+          );
+        }
+        return {
+          receipt: existing,
+          idempotent: true,
+          stateRecord,
+          invalidationRecords: allInvalidations
+        };
+      }
+      const requestedInvalidations = invalidationIds.map((invalidationId) => {
+        const invalidation = invalidationById.get(invalidationId);
+        if (
+          !invalidation
+          || normalizeText(invalidation.applyReceiptId) !== applyReceiptId
+          || normalizeText(invalidation.state).toLowerCase() !== "open"
+        ) {
+          throw new CommercialChangeAuthorityError(
+            "failed-precondition",
+            "Each reconciliation target must be an open invalidation from the active apply receipt."
+          );
+        }
+        return invalidation;
+      });
+
+      const needsPortal = requestedInvalidations.some((item) => (
+        normalizeText(item.nodeId) === "projection.customer_decision_center"
+      ));
+      const needsKitchenBeo = requestedInvalidations.some((item) => (
+        normalizeText(item.nodeId) === "artifact.kitchen_beo"
+      ));
+      const portalKey = normalizeText(quote.portalKey);
+      const [portalSnap, kitchenBeoSnap] = await Promise.all([
+        needsPortal && portalKey
+          ? tx.get(db.collection(PORTAL_COLLECTION).doc(portalKey))
+          : Promise.resolve(null),
+        needsKitchenBeo
+          ? tx.get(refs.organizationRef.collection(KITCHEN_BEO_ARTIFACTS_COLLECTION).doc(quoteId))
+          : Promise.resolve(null)
+      ]);
+      const evidenceByInvalidationId = {};
+      for (const invalidation of requestedInvalidations) {
+        const nodeId = normalizeText(invalidation.nodeId);
+        if (normalizeText(invalidation.nodeKind) === "output") {
+          if (!resolutionNote || resolutionNote.length > 800) {
+            throw new CommercialChangeAuthorityError(
+              "invalid-argument",
+              "Resolving a dependent decision requires a staff note up to 800 characters."
+            );
+          }
+          evidenceByInvalidationId[invalidation.invalidationId] = {
+            schemaVersion: COMMERCIAL_CHANGE_RECONCILIATION_EVIDENCE_VERSION,
+            authority: "server_authoritative",
+            evidenceId: `staff-decision-${requestId}-${invalidation.invalidationId.slice(-16)}`,
+            invalidationId: invalidation.invalidationId,
+            nodeId,
+            sourceRevisionId: activeRevisionId,
+            resolution: "decision_resolved",
+            state: "RESOLVED"
+          };
+          continue;
+        }
+        if (nodeId === "projection.customer_decision_center") {
+          const portal = portalSnap?.exists ? portalSnap.data() || {} : null;
+          if (
+            !portal
+            || normalizeOrganizationId(portal.organizationId) !== organizationId
+            || normalizeText(portal.quoteId) !== quoteId
+            || normalizeText(portal.activeVersionId) !== activeRevisionId
+          ) {
+            throw new CommercialChangeAuthorityError(
+              "failed-precondition",
+              "The customer decision-center projection is not current for this quote revision."
+            );
+          }
+          evidenceByInvalidationId[invalidation.invalidationId] = {
+            schemaVersion: COMMERCIAL_CHANGE_RECONCILIATION_EVIDENCE_VERSION,
+            authority: "server_authoritative",
+            evidenceId: `portal-projection-${activeRevisionId}`,
+            invalidationId: invalidation.invalidationId,
+            nodeId,
+            sourceRevisionId: activeRevisionId,
+            resolution: "projection_current",
+            state: "CURRENT"
+          };
+          continue;
+        }
+        if (nodeId === "artifact.kitchen_beo") {
+          if (!kitchenBeoSnap?.exists) {
+            throw new CommercialChangeAuthorityError(
+              "failed-precondition",
+              "Generate a current Kitchen BEO before reconciling its invalidation."
+            );
+          }
+          const remainingInvalidations = allInvalidations
+            .filter((item) => !invalidationIds.includes(normalizeText(item.invalidationId || item.id)))
+            .filter((item) => normalizeText(item.artifactNodeId || item.nodeId) === "artifact.kitchen_beo")
+            .map((item) => ({
+              id: normalizeText(item.invalidationId || item.id),
+              artifactNodeId: normalizeText(item.artifactNodeId || item.nodeId),
+              state: normalizeText(item.state),
+              classification: normalizeText(item.classification)
+            }));
+          const status = kitchenBeoAuthority.deriveArtifactStatus({
+            canonicalQuote: quote,
+            trustedReceipt: kitchenBeoSnap.data()?.latestReceipt || null,
+            invalidations: remainingInvalidations,
+            sourceState: "available",
+            trustedContext: { organizationId, quoteId, nowISO: observedAtISO }
+          });
+          if (status.state !== KITCHEN_BEO_FRESHNESS_STATES.CURRENT) {
+            throw new CommercialChangeAuthorityError(
+              "failed-precondition",
+              "Generate a current Kitchen BEO before reconciling its invalidation."
+            );
+          }
+          evidenceByInvalidationId[invalidation.invalidationId] = {
+            schemaVersion: COMMERCIAL_CHANGE_RECONCILIATION_EVIDENCE_VERSION,
+            authority: "server_authoritative",
+            evidenceId: normalizeText(kitchenBeoSnap.data()?.latestReceiptId),
+            invalidationId: invalidation.invalidationId,
+            nodeId,
+            sourceRevisionId: activeRevisionId,
+            resolution: "artifact_current",
+            state: "CURRENT"
+          };
+          continue;
+        }
+        if (nodeId === "artifact.contract") {
+          if (normalizeText(quote.booking?.contractNumber)) {
+            throw new CommercialChangeAuthorityError(
+              "failed-precondition",
+              "A generated contract needs a revision-bound regeneration receipt before reconciliation."
+            );
+          }
+          evidenceByInvalidationId[invalidation.invalidationId] = noArtifactEvidence(
+            invalidation,
+            activeRevisionId
+          );
+          continue;
+        }
+        if (nodeId === "artifact.production_plan") {
+          const hasProductionPlan = Array.isArray(quote.booking?.productionChecklist)
+            && quote.booking.productionChecklist.length > 0;
+          if (hasProductionPlan) {
+            throw new CommercialChangeAuthorityError(
+              "failed-precondition",
+              "An existing production plan needs a revision-bound regeneration receipt before reconciliation."
+            );
+          }
+          evidenceByInvalidationId[invalidation.invalidationId] = noArtifactEvidence(
+            invalidation,
+            activeRevisionId
+          );
+          continue;
+        }
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          `No trusted reconciliation adapter is registered for ${nodeId}.`
+        );
+      }
+      const planned = commercialChangeAuthority.reconcile({
+        applyReceipt,
+        request: { requestId, organizationId, quoteId, invalidationIds },
+        evidenceByInvalidationId,
+        priorReconciliationReceipts: priorReconciliationsSnap.docs
+          .map((snapshot) => snapshot.data()?.receipt)
+          .filter(Boolean),
+        trustedContext: {
+          actor: commercialChangeActor(staff),
+          nowISO: observedAtISO,
+          catalogAuthorityDigest: normalizeText(stateRecord.catalogAuthorityDigest),
+          policyVersion: COMMERCIAL_CHANGE_POLICY_VERSION
+        },
+        current: { activeRevisionId }
+      });
+      const resolutionById = new Map(planned.receipt.resolutions.map((item) => [
+        item.invalidationId,
+        item
+      ]));
+      const resolvedBy = commercialChangeActor(staff);
+      requestedInvalidations.forEach((invalidation) => {
+        const resolution = resolutionById.get(invalidation.invalidationId);
+        tx.update(refs.invalidationsRef.doc(invalidation.invalidationId), {
+          state: "resolved",
+          resolution: normalizeText(resolution?.resolution),
+          resolutionReceiptId: planned.receipt.receiptId,
+          resolutionReceiptDigest: planned.receipt.receiptDigest,
+          evidenceId: normalizeText(resolution?.evidenceId),
+          evidenceDigest: normalizeText(resolution?.evidenceDigest),
+          resolutionNote,
+          resolvedAtISO: observedAtISO,
+          resolvedBy,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      });
+      tx.create(reconciliationRef, {
+        organizationId,
+        quoteId,
+        applyReceiptId,
+        receipt: planned.receipt,
+        createdAtISO: observedAtISO,
+        createdAt: FieldValue.serverTimestamp()
+      });
+      const nextInvalidations = allInvalidations.map((item) => (
+        invalidationIds.includes(normalizeText(item.invalidationId || item.id))
+          ? {
+            ...item,
+            state: "resolved",
+            resolution: normalizeText(resolutionById.get(item.invalidationId)?.resolution),
+            resolutionReceiptId: planned.receipt.receiptId,
+            evidenceId: normalizeText(resolutionById.get(item.invalidationId)?.evidenceId),
+            resolvedAtISO: observedAtISO
+          }
+          : item
+      ));
+      const openInvalidationCount = nextInvalidations
+        .filter((item) => normalizeText(item.state).toLowerCase() === "open")
+        .length;
+      const nextState = {
+        ...stateRecord,
+        state: openInvalidationCount === 0 ? "READY" : "BLOCKED",
+        safeToPublish: openInvalidationCount === 0,
+        openInvalidationCount,
+        resolvedInvalidationCount: nextInvalidations.length - openInvalidationCount,
+        lastReconciliationReceiptId: planned.receipt.receiptId,
+        updatedAtISO: observedAtISO
+      };
+      tx.update(refs.dependencyStateRef, {
+        ...nextState,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      return {
+        receipt: planned.receipt,
+        idempotent: planned.idempotent,
+        stateRecord: nextState,
+        invalidationRecords: nextInvalidations
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      idempotent: result.idempotent,
+      reconciliationReceipt: result.receipt,
+      dependencyState: projectCommercialDependencyState({
+        organizationId,
+        quoteId,
+        quote: {
+          organizationId,
+          customerId: result.stateRecord.customerId,
+          event: { date: result.stateRecord.eventDate },
+          activeVersionId: result.stateRecord.activeRevisionId
+        },
+        stateRecord: result.stateRecord,
+        invalidationRecords: result.invalidationRecords,
+        observedAtISO
+      })
+    };
+  } catch (error) {
+    return throwCommercialChangeFailure(error, "reconcileCommercialDependencyState", {
+      organizationId,
+      quoteId,
+      actorUid: staff.uid
+    });
   }
 });
 
@@ -7988,11 +10754,189 @@ async function createTrustedQuoteDraftInternal({
   };
 }
 
+function normalizeCommercialChangeApplyEnvelope(raw = null) {
+  if (raw === null || raw === undefined) return null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new CommercialChangeAuthorityError(
+      "invalid-argument",
+      "Commercial change authority must be an exact receipt envelope."
+    );
+  }
+  const applyRequestId = normalizeText(raw.applyRequestId).toLowerCase();
+  if (!/^change_apply_[a-f0-9]{32}$/u.test(applyRequestId)) {
+    throw new CommercialChangeAuthorityError(
+      "invalid-argument",
+      "A valid commercial change apply request identity is required."
+    );
+  }
+  return {
+    simulationReceiptId: exactCommercialChangeReceiptId(
+      raw.simulationReceiptId,
+      "simulation"
+    ),
+    authorizationReceiptId: normalizeText(raw.authorizationReceiptId)
+      ? exactCommercialChangeReceiptId(raw.authorizationReceiptId, "authorization")
+      : "",
+    applyRequestId
+  };
+}
+
+function implicitCommercialChangeRequestIds(preview = {}) {
+  const digest = createHash("sha256")
+    .update(commercialDependencyGraphCore.canonicalSerialize({
+      schemaVersion: "implicit-commercial-change-request-v1",
+      identity: preview.identity
+    }))
+    .digest("hex");
+  return {
+    simulationRequestId: `change_sim_${digest.slice(0, 32)}`,
+    applyRequestId: `change_apply_${digest.slice(32, 64)}`
+  };
+}
+
+function persistCommercialChangeApply({
+  tx,
+  organizationId,
+  quoteId,
+  customerId,
+  eventDate,
+  pricingCatalogAuthority,
+  nowISO,
+  plan
+}) {
+  if (plan.authorityState !== "enforced") {
+    return {
+      authorityState: "dormant",
+      applyReceiptId: "",
+      state: "DORMANT",
+      safeToPublish: false,
+      openInvalidationCount: 0,
+      totalInvalidationCount: 0
+    };
+  }
+  const applyReceipt = plan.apply?.receipt;
+  if (!applyReceipt) {
+    throw new CommercialChangeAuthorityError(
+      "failed-precondition",
+      "The server-authoritative apply receipt is unavailable."
+    );
+  }
+  if (plan.persistSimulation) {
+    tx.create(plan.simulationRef, {
+      organizationId,
+      quoteId,
+      requestId: plan.simulation.receipt.requestId,
+      receipt: plan.simulation.receipt,
+      createdAtISO: plan.simulation.receipt.simulatedAtISO,
+      createdAt: FieldValue.serverTimestamp()
+    });
+  }
+  if (plan.persistApply) {
+    tx.create(plan.applyRef, {
+      organizationId,
+      quoteId,
+      simulationReceiptId: applyReceipt.simulationReceiptId,
+      authorizationReceiptId: applyReceipt.authorizationReceiptId,
+      receipt: applyReceipt,
+      createdAtISO: applyReceipt.appliedAtISO,
+      createdAt: FieldValue.serverTimestamp()
+    });
+  }
+  plan.priorInvalidationDocs.forEach((snapshot) => tx.delete(snapshot.ref));
+  const decisionOpeningByInvalidationId = new Map(
+    (Array.isArray(applyReceipt.decisionOpenings) ? applyReceipt.decisionOpenings : [])
+      .map((item) => [normalizeText(item.invalidationId), item])
+  );
+  const invalidationRecords = applyReceipt.invalidationReceipts.map((invalidation) => {
+    const decision = commercialChangeDecisionMetadata(
+      invalidation,
+      decisionOpeningByInvalidationId.get(invalidation.invalidationId)
+    );
+    return {
+      schemaVersion: 1,
+      authority: "server_authoritative",
+      organizationId,
+      quoteId,
+      invalidationId: invalidation.invalidationId,
+      operationId: invalidation.operationId,
+      applyReceiptId: invalidation.applyReceiptId,
+      sourceRevisionId: invalidation.sourceRevisionId,
+      targetRevisionId: invalidation.targetRevisionId,
+      nodeId: invalidation.nodeId,
+      nodeKind: invalidation.nodeKind,
+      artifactNodeId: invalidation.nodeKind === "artifact" ? invalidation.nodeId : "",
+      classification: invalidation.classification,
+      triggeredBy: invalidation.triggeredBy,
+      decisionId: decision.decisionId,
+      decisionType: decision.decisionType,
+      state: "open",
+      initialState: invalidation.initialState,
+      createdAtISO: invalidation.createdAtISO,
+      createdBy: invalidation.createdBy,
+      resolution: "",
+      resolutionReceiptId: "",
+      resolutionReceiptDigest: "",
+      evidenceId: "",
+      evidenceDigest: "",
+      resolvedAtISO: "",
+      resolvedBy: null,
+      receipt: invalidation
+    };
+  });
+  invalidationRecords.forEach((record) => {
+    tx.create(plan.invalidationsRef.doc(record.invalidationId), {
+      ...record,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+  });
+  const openInvalidationCount = invalidationRecords.length;
+  const dependencyState = {
+    schemaVersion: COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION,
+    authority: "server_authoritative",
+    organizationId,
+    quoteId,
+    customerId,
+    eventDate,
+    activeRevisionId: applyReceipt.newRevisionId,
+    latestApplyReceiptId: applyReceipt.receiptId,
+    latestApplyReceiptDigest: applyReceipt.receiptDigest,
+    catalogAuthorityDigest: normalizeText(
+      pricingCatalogAuthority.settingsFingerprintSha256
+    ),
+    policyVersion: COMMERCIAL_CHANGE_POLICY_VERSION,
+    graph: applyReceipt.graph,
+    state: openInvalidationCount === 0 ? "READY" : "BLOCKED",
+    safeToPublish: openInvalidationCount === 0,
+    totalInvalidationCount: invalidationRecords.length,
+    openInvalidationCount,
+    resolvedInvalidationCount: 0,
+    bounds: {
+      invalidationLimit: COMMERCIAL_CHANGE_INVALIDATION_LIMIT,
+      invalidationSetComplete: true
+    },
+    updatedAtISO: nowISO
+  };
+  tx.set(plan.dependencyStateRef, {
+    ...dependencyState,
+    updatedAt: FieldValue.serverTimestamp()
+  });
+  return {
+    authorityState: "enforced",
+    applyReceiptId: applyReceipt.receiptId,
+    state: dependencyState.state,
+    safeToPublish: dependencyState.safeToPublish,
+    openInvalidationCount,
+    totalInvalidationCount: invalidationRecords.length
+  };
+}
+
 async function updateTrustedQuoteDraftInternal({
   organizationId,
   quoteId,
   staff,
-  form
+  form,
+  commercialChangeAuthorityInput = null
 }) {
   const sanitized = sanitizeQuoteCreationRequest({
     organizationId,
@@ -8084,6 +11028,264 @@ async function updateTrustedQuoteDraftInternal({
       },
       nowISO
     });
+    const enforcement = commercialChangeEnforcementState(
+      transactionPricingSettingsSnapshot.data() || {}
+    );
+    let commercialChangePlan = {
+      authorityState: enforcement.authorityState,
+      apply: null,
+      simulation: null,
+      simulationRef: null,
+      persistSimulation: false,
+      applyRef: null,
+      persistApply: false,
+      dependencyStateRef: null,
+      priorInvalidationDocs: []
+    };
+    if (enforcement.authorityState === "enforced") {
+      const canonicalQuote = { id: quoteId, ...quote };
+      const preview = buildCommercialChangeImpactPreviewSnapshots({
+        organizationId,
+        quoteId,
+        expectedActiveVersionId: normalizeText(
+          quote.activeVersionId || quote.versionMeta?.versionId
+        ),
+        currentQuote: canonicalQuote,
+        proposedForm: sanitized.form,
+        proposedPricing: pricingResult.pricing
+      });
+      const evaluatedImpact = evaluateCommercialChangeImpact(preview);
+      const envelope = normalizeCommercialChangeApplyEnvelope(
+        commercialChangeAuthorityInput
+      );
+      if (evaluatedImpact.impact.counts.total > 0 && !envelope) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "Simulate this commercial change and obtain administrator authorization before saving."
+        );
+      }
+      const implicitIds = implicitCommercialChangeRequestIds(preview);
+      const refs = commercialChangeRefs(organizationId, quoteId);
+      const simulationRef = envelope
+        ? refs.simulationsRef.doc(envelope.simulationReceiptId)
+        : null;
+      const [
+        suppliedSimulationSnap,
+        dependencyStateSnap,
+        priorInvalidationsSnap
+      ] = await Promise.all([
+        simulationRef ? tx.get(simulationRef) : Promise.resolve(null),
+        tx.get(refs.dependencyStateRef),
+        tx.get(refs.invalidationsRef.orderBy(FieldPath.documentId())
+          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1))
+      ]);
+      if (priorInvalidationsSnap.size > COMMERCIAL_CHANGE_INVALIDATION_LIMIT) {
+        throw new CommercialChangeAuthorityError(
+          "resource-exhausted",
+          "Commercial dependency evidence exceeds the bounded complete set."
+        );
+      }
+      const priorInvalidationDocs = priorInvalidationsSnap.docs;
+      const priorInvalidations = priorInvalidationDocs.map((snapshot) => ({
+        id: snapshot.id,
+        ...(snapshot.data() || {})
+      }));
+      const dependencyState = dependencyStateSnap.exists
+        ? dependencyStateSnap.data() || {}
+        : null;
+      if (
+        (!dependencyState && priorInvalidations.length > 0)
+        || (
+          dependencyState
+          && (
+            Number(dependencyState.schemaVersion) !== COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION
+            || dependencyState.authority !== "server_authoritative"
+            || normalizeOrganizationId(dependencyState.organizationId) !== organizationId
+            || normalizeText(dependencyState.quoteId) !== quoteId
+            || normalizeText(dependencyState.activeRevisionId)
+              !== normalizeText(quote.activeVersionId || quote.versionMeta?.versionId)
+            || dependencyState.bounds?.invalidationSetComplete !== true
+            || Number(dependencyState.bounds?.invalidationLimit)
+              !== COMMERCIAL_CHANGE_INVALIDATION_LIMIT
+            || Number(dependencyState.totalInvalidationCount) !== priorInvalidations.length
+            || Number(dependencyState.openInvalidationCount)
+              !== priorInvalidations.filter((item) => (
+                normalizeText(item.state).toLowerCase() === "open"
+              )).length
+          )
+        )
+      ) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "Commercial dependency state is incomplete and requires repair before another edit."
+        );
+      }
+      if (priorInvalidations.some((item) => normalizeText(item.state).toLowerCase() === "open")) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "Reconcile the current quote dependency decisions before applying another edit."
+        );
+      }
+      if (priorInvalidations.some((item) => normalizeText(item.state).toLowerCase() !== "resolved")) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "Commercial dependency evidence contains an unknown state and requires repair."
+        );
+      }
+      const trustedContext = commercialChangeTrustedContext({
+        staff,
+        nowISO,
+        catalogAuthority: pricingResult.catalogAuthority
+      });
+      let simulationPlan;
+      let authoritativeSimulationRef = simulationRef;
+      let persistSimulation = false;
+      if (envelope) {
+        if (!suppliedSimulationSnap?.exists) {
+          throw new CommercialChangeAuthorityError(
+            "failed-precondition",
+            "The exact persisted commercial change simulation is required."
+          );
+        }
+        const existingSimulation = suppliedSimulationSnap.data()?.receipt;
+        const validatedSimulation = commercialChangeAuthority.validateSimulationReceipt(
+          existingSimulation
+        );
+        if (
+          validatedSimulation.simulatedBy?.uid !== staff.uid
+          && staff.role !== "admin"
+        ) {
+          throw new CommercialChangeAuthorityError(
+            "permission-denied",
+            "Only the simulation requester or an administrator may apply this change."
+          );
+        }
+        simulationPlan = commercialChangeAuthority.simulate({
+          request: {
+            requestId: validatedSimulation.requestId,
+            organizationId,
+            quoteId,
+            expectedActiveVersionId: validatedSimulation.baseRevisionId
+          },
+          canonicalQuote,
+          proposedForm: sanitized.form,
+          proposedPricing: pricingResult.pricing,
+          trustedContext,
+          existingReceipt: existingSimulation
+        });
+      } else {
+        simulationPlan = commercialChangeAuthority.simulate({
+          request: {
+            requestId: implicitIds.simulationRequestId,
+            organizationId,
+            quoteId,
+            expectedActiveVersionId: normalizeText(
+              quote.activeVersionId || quote.versionMeta?.versionId
+            )
+          },
+          canonicalQuote,
+          proposedForm: sanitized.form,
+          proposedPricing: pricingResult.pricing,
+          trustedContext
+        });
+        authoritativeSimulationRef = refs.simulationsRef.doc(
+          simulationPlan.receipt.receiptId
+        );
+        const implicitSimulationSnap = await tx.get(authoritativeSimulationRef);
+        if (implicitSimulationSnap.exists) {
+          simulationPlan = commercialChangeAuthority.simulate({
+            request: {
+              requestId: implicitIds.simulationRequestId,
+              organizationId,
+              quoteId,
+              expectedActiveVersionId: normalizeText(
+                quote.activeVersionId || quote.versionMeta?.versionId
+              )
+            },
+            canonicalQuote,
+            proposedForm: sanitized.form,
+            proposedPricing: pricingResult.pricing,
+            trustedContext,
+            existingReceipt: implicitSimulationSnap.data()?.receipt
+          });
+        } else {
+          persistSimulation = true;
+        }
+      }
+      if (
+        simulationPlan.receipt.authorizationRequired
+          !== (evaluatedImpact.impact.counts.total > 0)
+      ) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "Server commercial change impact and authorization state do not match."
+        );
+      }
+      let authorizationReceipt = null;
+      if (simulationPlan.receipt.authorizationRequired) {
+        if (!envelope?.authorizationReceiptId) {
+          throw new CommercialChangeAuthorityError(
+            "failed-precondition",
+            "The exact administrator authorization receipt is required."
+          );
+        }
+        const authorizationSnap = await tx.get(
+          refs.authorizationsRef.doc(envelope.authorizationReceiptId)
+        );
+        if (!authorizationSnap.exists) {
+          throw new CommercialChangeAuthorityError(
+            "failed-precondition",
+            "The exact persisted administrator authorization is required."
+          );
+        }
+        authorizationReceipt = authorizationSnap.data()?.receipt;
+      } else if (envelope?.authorizationReceiptId) {
+        throw new CommercialChangeAuthorityError(
+          "failed-precondition",
+          "A no-impact edit must not consume an unrelated authorization receipt."
+        );
+      }
+      const applyRequestId = envelope?.applyRequestId || implicitIds.applyRequestId;
+      const applyInput = {
+        simulationReceipt: simulationPlan.receipt,
+        authorizationReceipt,
+        request: {
+          requestId: applyRequestId,
+          organizationId,
+          quoteId,
+          newRevisionId: documents.version.versionId
+        },
+        trustedContext,
+        current: {
+          activeRevisionId: normalizeText(quote.activeVersionId || quote.versionMeta?.versionId),
+          catalogAuthorityDigest: normalizeText(
+            pricingResult.catalogAuthority.settingsFingerprintSha256
+          ),
+          policyVersion: COMMERCIAL_CHANGE_POLICY_VERSION
+        }
+      };
+      let applyPlan = commercialChangeAuthority.buildApply(applyInput);
+      const applyRef = refs.applyReceiptsRef.doc(applyPlan.receipt.receiptId);
+      const existingApplySnap = await tx.get(applyRef);
+      if (existingApplySnap.exists) {
+        applyPlan = commercialChangeAuthority.buildApply({
+          ...applyInput,
+          existingReceipt: existingApplySnap.data()?.receipt
+        });
+      }
+      commercialChangePlan = {
+        authorityState: enforcement.authorityState,
+        apply: applyPlan,
+        simulation: simulationPlan,
+        simulationRef: authoritativeSimulationRef,
+        persistSimulation,
+        applyRef,
+        persistApply: !existingApplySnap.exists,
+        dependencyStateRef: refs.dependencyStateRef,
+        invalidationsRef: refs.invalidationsRef,
+        priorInvalidationDocs
+      };
+    }
     const portalRef = db.collection(PORTAL_COLLECTION).doc(documents.result.portalKey);
     const versionRef = quoteRef
       .collection("versions")
@@ -8322,7 +11524,17 @@ async function updateTrustedQuoteDraftInternal({
         ? { createdAt: FieldValue.serverTimestamp() }
         : {})
     }, { merge: true });
-    return boundDocuments.result;
+    const commercialChange = persistCommercialChangeApply({
+      tx,
+      organizationId,
+      quoteId,
+      customerId: customerProjection.customerId,
+      eventDate: normalizeText(boundDocuments.quotePatch.event?.date),
+      pricingCatalogAuthority: pricingResult.catalogAuthority,
+      nowISO,
+      plan: commercialChangePlan
+    });
+    return { ...boundDocuments.result, commercialChange };
   });
 
   return {
@@ -8350,6 +11562,8 @@ function quoteCreationFailure(err, {
     || err instanceof ApprovalWorkflowError
     || err instanceof ContractWorkflowError
     || err instanceof QuoteDeliveryError
+    || err instanceof CommercialChangeAuthorityError
+    || err instanceof CommercialChangeImpactPreviewError
   ) {
     throw new functions.https.HttpsError(err.code, err.message);
   }
@@ -8614,7 +11828,8 @@ exports.updateQuoteDraft = functions.region(REGION).https.onCall(async (data, co
       organizationId,
       quoteId,
       staff,
-      form: data?.form
+      form: data?.form,
+      commercialChangeAuthorityInput: data?.commercialChangeAuthority
     });
   } catch (err) {
     if (err instanceof functions.https.HttpsError) {
@@ -9603,6 +12818,2426 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
     );
   }
 });
+
+function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const artifactRef = organizationRef.collection(KITCHEN_BEO_ARTIFACTS_COLLECTION).doc(quoteId);
+  return {
+    organizationRef,
+    quoteRef: organizationRef.collection(QUOTES_COLLECTION).doc(quoteId),
+    artifactRef,
+    receiptRef: receiptId
+      ? organizationRef.collection(KITCHEN_BEO_RECEIPTS_COLLECTION).doc(receiptId)
+      : null,
+    invalidationsRef: organizationRef
+      .collection(COMMERCIAL_DEPENDENCY_STATE_COLLECTION)
+      .doc(quoteId)
+      .collection(COMMERCIAL_DEPENDENCY_INVALIDATIONS_COLLECTION)
+  };
+}
+
+function throwKitchenBeoFailure(error, operation) {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (error instanceof KitchenBeoAuthorityError) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(`${operation} failed`, {
+    error: normalizeText(error?.message).slice(0, 240)
+  });
+  throw new functions.https.HttpsError(
+    "internal",
+    "The authoritative Kitchen BEO operation did not complete."
+  );
+}
+
+function projectKitchenBeoStatus(status = {}) {
+  const allowedStates = new Set(Object.values(KITCHEN_BEO_FRESHNESS_STATES));
+  const state = allowedStates.has(status.state)
+    ? status.state
+    : KITCHEN_BEO_FRESHNESS_STATES.UNKNOWN;
+  return {
+    schemaVersion: normalizeText(status.schemaVersion),
+    authority: status.authority === "server_derived" ? "server_derived" : "unknown",
+    state,
+    observedAtISO: normalizeText(status.observedAtISO),
+    reasonCodes: Array.isArray(status.reasonCodes)
+      ? status.reasonCodes.map((value) => normalizeText(value)).filter(Boolean).slice(0, 12)
+      : [],
+    currentDependencyFingerprint: normalizeText(status.currentDependencyFingerprint),
+    receiptId: normalizeText(status.receiptId),
+    receiptDependencyFingerprint: normalizeText(status.receiptDependencyFingerprint),
+    commercialSourceRevisionId: normalizeText(status.commercialSourceRevisionId),
+    unresolvedInvalidationIds: Array.isArray(status.unresolvedInvalidationIds)
+      ? status.unresolvedInvalidationIds.map((value) => normalizeText(value)).filter(Boolean).slice(0, 100)
+      : []
+  };
+}
+
+function projectKitchenBeoReceipt(receipt = {}) {
+  return {
+    receiptId: normalizeText(receipt.receiptId),
+    requestId: normalizeText(receipt.requestId),
+    commercialSourceRevisionId: normalizeText(receipt.commercialSourceRevisionId),
+    dependencyFingerprint: normalizeText(receipt.dependencyFingerprint),
+    generatedAtISO: normalizeText(receipt.generatedAtISO),
+    filename: normalizeText(receipt.filename),
+    artifactByteLength: Number(receipt.artifactByteLength) || 0,
+    generatedBy: {
+      email: normalizeEmail(receipt.generatedBy?.email),
+      role: normalizeText(receipt.generatedBy?.role).toLowerCase()
+    }
+  };
+}
+
+function projectStoredKitchenBeoArtifact(record = {}, {
+  organizationId,
+  quoteId,
+  receiptId
+} = {}) {
+  const stored = kitchenBeoAuthority.validateStoredArtifact(record);
+  const receipt = stored.receipt;
+  if (
+    receipt.organizationId !== organizationId
+    || receipt.quoteId !== quoteId
+    || receipt.receiptId !== receiptId
+  ) {
+    throw new KitchenBeoAuthorityError(
+      "permission-denied",
+      "The Kitchen BEO receipt is outside the requested quote scope."
+    );
+  }
+  return {
+    receipt: projectKitchenBeoReceipt(receipt),
+    artifact: stored.artifact
+  };
+}
+
+async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
+  const refs = kitchenBeoRefs(organizationId, quoteId);
+  const [quoteSnap, artifactSnap, invalidationsSnap] = await Promise.all([
+    refs.quoteRef.get(),
+    refs.artifactRef.get(),
+    refs.invalidationsRef.limit(101).get()
+  ]);
+  if (!quoteSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Quote not found.");
+  }
+  const quote = { id: quoteId, ...(quoteSnap.data() || {}) };
+  if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+    throw new functions.https.HttpsError("permission-denied", "Quote is outside your organization.");
+  }
+  if (invalidationsSnap.size > 100) {
+    return {
+      quote,
+      status: projectKitchenBeoStatus({
+        schemaVersion: KITCHEN_BEO_STATUS_SCHEMA_VERSION,
+        authority: "server_derived",
+        state: KITCHEN_BEO_FRESHNESS_STATES.UNKNOWN,
+        observedAtISO: nowISO,
+        reasonCodes: ["invalidation_evidence_truncated"]
+      })
+    };
+  }
+  let trustedReceipt = null;
+  if (artifactSnap.exists) {
+    const artifactPointer = artifactSnap.data() || {};
+    const receiptId = normalizeText(artifactPointer.latestReceiptId).toLowerCase();
+    const pointerReceiptId = normalizeText(
+      artifactPointer.latestReceipt?.receiptId
+    ).toLowerCase();
+    if (/^beo_[a-f0-9]{48}$/u.test(receiptId) && pointerReceiptId === receiptId) {
+      const receiptSnap = await refs.organizationRef
+        .collection(KITCHEN_BEO_RECEIPTS_COLLECTION)
+        .doc(receiptId)
+        .get();
+      if (receiptSnap.exists) {
+        const receiptRecord = receiptSnap.data() || {};
+        try {
+          projectStoredKitchenBeoArtifact(receiptRecord, {
+            organizationId,
+            quoteId,
+            receiptId
+          });
+          trustedReceipt = receiptRecord;
+        } catch {
+          // A pointer without matching immutable bytes cannot establish
+          // freshness. The authority adapter maps this sentinel to UNKNOWN.
+          trustedReceipt = {};
+        }
+      } else {
+        trustedReceipt = {};
+      }
+    } else {
+      trustedReceipt = {};
+    }
+  }
+  const status = kitchenBeoAuthority.deriveArtifactStatus({
+    canonicalQuote: quote,
+    trustedReceipt,
+    invalidations: invalidationsSnap.docs
+      .map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) }))
+      .filter((item) => normalizeText(item.artifactNodeId || item.nodeId) === "artifact.kitchen_beo")
+      .map((item) => ({
+        id: item.id,
+        artifactNodeId: "artifact.kitchen_beo",
+        state: normalizeText(item.state),
+        classification: normalizeText(item.classification)
+      })),
+    sourceState: "available",
+    trustedContext: { organizationId, quoteId, nowISO }
+  });
+  return {
+    quote,
+    status: projectKitchenBeoStatus(status)
+  };
+}
+
+exports.getKitchenBeoArtifactStatus = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (!organizationId || !quoteId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId and quoteId are required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Kitchen BEO status requires same-organization staff authority."
+    );
+  }
+  try {
+    const observedAtISO = new Date().toISOString();
+    const result = await readKitchenBeoStatus({ organizationId, quoteId, nowISO: observedAtISO });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      status: result.status
+    };
+  } catch (error) {
+    return throwKitchenBeoFailure(error, "getKitchenBeoArtifactStatus");
+  }
+});
+
+exports.downloadKitchenBeoReceipt = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const receiptId = normalizeText(data?.receiptId).toLowerCase();
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || !quoteId
+    || !/^beo_[a-f0-9]{48}$/u.test(receiptId)
+  ) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId, quoteId, and an exact Kitchen BEO receiptId are required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Kitchen BEO receipt download requires same-organization staff authority."
+    );
+  }
+  try {
+    const refs = kitchenBeoRefs(organizationId, quoteId, receiptId);
+    const [quoteSnap, receiptSnap] = await Promise.all([
+      refs.quoteRef.get(),
+      refs.receiptRef.get()
+    ]);
+    if (!quoteSnap.exists || !receiptSnap.exists) {
+      throw new KitchenBeoAuthorityError(
+        "not-found",
+        "The exact Kitchen BEO receipt was not found."
+      );
+    }
+    const quote = quoteSnap.data() || {};
+    if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+      throw new KitchenBeoAuthorityError(
+        "permission-denied",
+        "The Kitchen BEO receipt is outside the requested organization."
+      );
+    }
+    const projected = projectStoredKitchenBeoArtifact(receiptSnap.data() || {}, {
+      organizationId,
+      quoteId,
+      receiptId
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      ...projected
+    };
+  } catch (error) {
+    return throwKitchenBeoFailure(error, "downloadKitchenBeoReceipt");
+  }
+});
+
+exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const requestId = normalizeText(data?.requestId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (!organizationId || !quoteId || !requestId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "organizationId, quoteId, and requestId are required."
+    );
+  }
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Kitchen BEO generation requires same-organization staff authority."
+    );
+  }
+
+  try {
+    const claimedAtISO = new Date().toISOString();
+    const initialRefs = kitchenBeoRefs(organizationId, quoteId);
+    const initialQuoteSnap = await initialRefs.quoteRef.get();
+    if (!initialQuoteSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Quote not found.");
+    }
+    const canonicalQuote = { id: quoteId, ...(initialQuoteSnap.data() || {}) };
+    const trustedContext = {
+      organizationId,
+      quoteId,
+      nowISO: claimedAtISO,
+      actor: { uid: staff.uid, email: staff.email, role: staff.role }
+    };
+    const claim = kitchenBeoAuthority.buildGenerationClaim({
+      canonicalQuote,
+      request: { requestId },
+      trustedContext
+    });
+    const refs = kitchenBeoRefs(organizationId, quoteId, claim.receiptId);
+    const existingReceiptSnap = await refs.receiptRef.get();
+    if (existingReceiptSnap.exists) {
+      const existing = existingReceiptSnap.data() || {};
+      if (normalizeText(existing.requestId) !== requestId) {
+        throw new KitchenBeoAuthorityError(
+          "failed-precondition",
+          "The prior Kitchen BEO receipt is bound to another request identity."
+        );
+      }
+      const projected = projectStoredKitchenBeoArtifact(existing, {
+        organizationId,
+        quoteId,
+        receiptId: claim.receiptId
+      });
+      const current = await readKitchenBeoStatus({
+        organizationId,
+        quoteId,
+        nowISO: new Date().toISOString()
+      });
+      return {
+        ok: true,
+        storage: "firebase",
+        organizationId,
+        quoteId,
+        idempotent: true,
+        receipt: projected.receipt,
+        status: current.status,
+        artifact: projected.artifact
+      };
+    }
+
+    const generatedAtISO = new Date().toISOString();
+    const artifact = renderKitchenBeoPdf({
+      payload: claim.payload,
+      provenance: { ...claim, generatedAtISO }
+    });
+    const proposedReceipt = kitchenBeoAuthority.buildGenerationReceipt({
+      claim,
+      artifact,
+      trustedCompletion: { generatedAtISO }
+    });
+    const artifactBase64 = artifact.bytes.toString("base64");
+
+    const persisted = await db.runTransaction(async (tx) => {
+      const [transactionQuoteSnap, transactionReceiptSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(refs.receiptRef)
+      ]);
+      if (!transactionQuoteSnap.exists) {
+        throw new KitchenBeoAuthorityError("not-found", "Quote not found.");
+      }
+      if (transactionReceiptSnap.exists) {
+        const existing = transactionReceiptSnap.data() || {};
+        if (normalizeText(existing.requestId) !== requestId || !normalizeText(existing.artifactBase64)) {
+          throw new KitchenBeoAuthorityError(
+            "already-exists",
+            "Kitchen BEO request identity is already bound to different evidence."
+          );
+        }
+        return { idempotent: true, record: existing };
+      }
+      const transactionQuote = { id: quoteId, ...(transactionQuoteSnap.data() || {}) };
+      const transactionClaim = kitchenBeoAuthority.buildGenerationClaim({
+        canonicalQuote: transactionQuote,
+        request: { requestId },
+        trustedContext
+      });
+      if (
+        commercialDependencyGraphCore.canonicalSerialize(transactionClaim)
+        !== commercialDependencyGraphCore.canonicalSerialize(claim)
+      ) {
+        throw new KitchenBeoAuthorityError(
+          "aborted",
+          "The canonical quote changed while the Kitchen BEO was generated. Retry from the current record."
+        );
+      }
+      const record = {
+        ...proposedReceipt,
+        artifactBase64,
+        createdAt: FieldValue.serverTimestamp()
+      };
+      tx.create(refs.receiptRef, record);
+      tx.set(refs.artifactRef, {
+        organizationId,
+        quoteId,
+        latestReceipt: proposedReceipt,
+        latestReceiptId: proposedReceipt.receiptId,
+        updatedAtISO: generatedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { idempotent: false, record };
+    });
+
+    const current = await readKitchenBeoStatus({
+      organizationId,
+      quoteId,
+      nowISO: new Date().toISOString()
+    });
+    const projected = projectStoredKitchenBeoArtifact(persisted.record, {
+      organizationId,
+      quoteId,
+      receiptId: claim.receiptId
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      idempotent: persisted.idempotent,
+      receipt: projected.receipt,
+      status: current.status,
+      artifact: projected.artifact
+    };
+  } catch (error) {
+    return throwKitchenBeoFailure(error, "generateKitchenBeo");
+  }
+});
+
+exports.getDecisionDebtSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const limit = Number(data?.limit ?? 50);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+    || (quoteId && /[\s/?#\\\u0000]/u.test(quoteId))
+    || !Number.isSafeInteger(limit)
+    || limit < 1
+    || limit > 100
+  ) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Decision Debt requires same-organization staff and a result limit from 1 to 100."
+    );
+  }
+  try {
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+    const policyRef = organizationRef.collection(DECISION_DEBT_POLICIES_COLLECTION).doc("current");
+    const settingsRef = organizationRef.collection("settings").doc("config");
+    const revenuePolicyRef = organizationRef.collection(REVENUE_AUTOPILOT_POLICY_COLLECTION).doc("current");
+    const quotesRef = organizationRef.collection(QUOTES_COLLECTION);
+    const dependencyStatesRef = organizationRef.collection(
+      COMMERCIAL_DEPENDENCY_STATE_COLLECTION
+    );
+    const dependencyStateRead = quoteId
+      ? dependencyStatesRef.doc(quoteId).get()
+      : dependencyStatesRef.where("openInvalidationCount", ">", 0).limit(101).get();
+    const exactQuoteRead = quoteId ? quotesRef.doc(quoteId).get() : Promise.resolve(null);
+    const [
+      policySnap,
+      settingsSnap,
+      revenuePolicySnap,
+      dependencyStateReadSnap,
+      exactQuoteSnap
+    ] = await Promise.all([
+      policyRef.get(),
+      settingsRef.get(),
+      revenuePolicyRef.get(),
+      dependencyStateRead,
+      exactQuoteRead
+    ]);
+    const policyRecord = decisionDebtPolicyRecord(
+      policySnap.exists ? policySnap.data() || {} : null
+    );
+    const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+    const revenuePolicy = revenuePolicySnap.exists
+      ? normalizeRevenueAutopilotTenantPolicy(revenuePolicySnap.data() || {})
+      : dormantRevenueAutopilotTenantPolicy();
+    const tenantTimeZone = normalizeText(
+      settings.businessTimeZone
+        || settings.timeZone
+        || revenuePolicy.timeZone
+    );
+    if (!tenantTimeZone) {
+      throw new DecisionDebtError(
+        "failed-precondition",
+        "Configure an explicit tenant IANA time zone before deriving Decision Debt."
+      );
+    }
+    if (quoteId && !exactQuoteSnap?.exists) {
+      throw new DecisionDebtError("not-found", "Quote not found for Decision Debt.");
+    }
+    if (
+      quoteId
+      && normalizeOrganizationId(exactQuoteSnap.data()?.organizationId) !== organizationId
+    ) {
+      throw new DecisionDebtError(
+        "permission-denied",
+        "Quote is outside the requested Decision Debt organization scope."
+      );
+    }
+    const dependencyStateDocuments = quoteId
+      ? (dependencyStateReadSnap.exists ? [dependencyStateReadSnap] : [])
+      : dependencyStateReadSnap.docs;
+    if (dependencyStateDocuments.length > 100) {
+      throw new DecisionDebtError(
+        "resource-exhausted",
+        "Decision Debt unresolved dependency sources exceed the bounded read."
+      );
+    }
+    const observedAtISO = new Date().toISOString();
+    const candidates = [];
+    for (const dependencyStateDoc of dependencyStateDocuments) {
+      const scopedQuoteId = normalizeText(dependencyStateDoc.id);
+      if (!scopedQuoteId || (quoteId && scopedQuoteId !== quoteId)) {
+        throw new DecisionDebtError(
+          "failed-precondition",
+          "Decision Debt dependency state has invalid quote scope."
+        );
+      }
+      const state = dependencyStateDoc.data() || {};
+      const latestApplyReceiptId = normalizeText(state.latestApplyReceiptId);
+      const invalidationsRef = dependencyStatesRef
+        .doc(scopedQuoteId)
+        .collection(COMMERCIAL_DEPENDENCY_INVALIDATIONS_COLLECTION);
+      const [quoteSnap, invalidationsSnap, applySnap] = await Promise.all([
+        quoteId ? Promise.resolve(exactQuoteSnap) : quotesRef.doc(scopedQuoteId).get(),
+        invalidationsRef.orderBy(FieldPath.documentId())
+          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1)
+          .get(),
+        latestApplyReceiptId
+          ? organizationRef.collection(COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION)
+            .doc(latestApplyReceiptId).get()
+          : Promise.resolve(null)
+      ]);
+      if (!quoteSnap?.exists) {
+        throw new DecisionDebtError(
+          "failed-precondition",
+          "Decision Debt canonical quote source is unavailable."
+        );
+      }
+      if (invalidationsSnap.size > COMMERCIAL_CHANGE_INVALIDATION_LIMIT) {
+        throw new DecisionDebtError(
+          "resource-exhausted",
+          "Decision Debt invalidation evidence exceeds the bounded complete set."
+        );
+      }
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+        throw new DecisionDebtError(
+          "permission-denied",
+          "Decision Debt canonical quote is outside the organization scope."
+        );
+      }
+      const invalidations = invalidationsSnap.docs.map((snapshot) => ({
+        id: snapshot.id,
+        ...(snapshot.data() || {})
+      }));
+      const verifiedState = assertDecisionDebtDependencyState({
+        organizationId,
+        quoteId: scopedQuoteId,
+        quote,
+        state,
+        invalidations
+      });
+      if (verifiedState.openInvalidationCount === 0) continue;
+      if (
+        normalizeText(state.state).toUpperCase() !== "BLOCKED"
+        || state.safeToPublish !== false
+        || !applySnap?.exists
+      ) {
+        throw new DecisionDebtError(
+          "failed-precondition",
+          "Decision Debt requires the exact blocked dependency state and apply receipt."
+        );
+      }
+      const applyReceipt = commercialChangeAuthority.validateApplyReceipt(
+        applySnap.data()?.receipt
+      );
+      if (
+        applyReceipt.organizationId !== organizationId
+        || applyReceipt.quoteId !== scopedQuoteId
+        || applyReceipt.receiptId !== latestApplyReceiptId
+        || applyReceipt.newRevisionId !== verifiedState.activeRevisionId
+        || applyReceipt.receiptDigest !== normalizeText(state.latestApplyReceiptDigest)
+      ) {
+        throw new DecisionDebtError(
+          "failed-precondition",
+          "Decision Debt apply receipt does not match the active dependency state."
+        );
+      }
+      const simulationSnap = await organizationRef
+        .collection(COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION)
+        .doc(applyReceipt.simulationReceiptId)
+        .get();
+      if (!simulationSnap.exists) {
+        throw new DecisionDebtError(
+          "failed-precondition",
+          "Decision Debt simulation evidence is unavailable."
+        );
+      }
+      const simulationReceipt = commercialChangeAuthority.validateSimulationReceipt(
+        simulationSnap.data()?.receipt
+      );
+      if (
+        simulationReceipt.organizationId !== organizationId
+        || simulationReceipt.quoteId !== scopedQuoteId
+        || simulationReceipt.receiptDigest !== applyReceipt.simulationDigest
+      ) {
+        throw new DecisionDebtError(
+          "failed-precondition",
+          "Decision Debt simulation evidence does not match the active apply receipt."
+        );
+      }
+      candidates.push(...decisionDebtAuthority.buildCandidatesFromInvalidations({
+        quoteId: scopedQuoteId,
+        customerId: verifiedState.customerId,
+        eventDate: verifiedState.eventDate,
+        invalidations,
+        policy: policyRecord.policy,
+        commercialExposureCents: decisionDebtCommercialExposureCents(simulationReceipt)
+      }));
+    }
+    const snapshot = decisionDebtAuthority.deriveSnapshot({
+      candidates,
+      policy: policyRecord.policy,
+      nowISO: observedAtISO,
+      tenantTimeZone,
+      limit
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      ...(quoteId ? { quoteId } : {}),
+      ...(policyRecord.policyVersion ? { policyVersion: policyRecord.policyVersion } : {}),
+      snapshot
+    };
+  } catch (error) {
+    return throwDecisionDebtFailure(error, "getDecisionDebtSnapshot");
+  }
+});
+
+exports.configureDecisionDebtPolicy = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const requestId = decisionDebtRequestId(data?.requestId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  if (!organizationId || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Decision Debt policy requires same-organization administrator authority."
+    );
+  }
+  try {
+    const policy = decisionDebtAuthority.validatePolicy(data?.policy);
+    const policyRef = db.collection(ORGANIZATIONS_COLLECTION)
+      .doc(organizationId)
+      .collection(DECISION_DEBT_POLICIES_COLLECTION)
+      .doc("current");
+    const requestFingerprint = createHash("sha256")
+      .update(commercialDependencyGraphCore.canonicalSerialize({ organizationId, policy }))
+      .digest("hex");
+    const nowISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const currentSnap = await tx.get(policyRef);
+      const current = decisionDebtPolicyRecord(
+        currentSnap.exists ? currentSnap.data() || {} : null
+      );
+      if (current.lastMutation?.requestId === requestId) {
+        if (current.lastMutation.requestFingerprint !== requestFingerprint) {
+          throw new DecisionDebtError(
+            "already-exists",
+            "Decision Debt request identity was reused with different policy content."
+          );
+        }
+        return {
+          idempotent: true,
+          policy: current.policy,
+          policyVersion: current.policyVersion,
+          recordedAtISO: current.configuredAtISO
+        };
+      }
+      const expectedPolicyVersion = normalizeText(data?.expectedPolicyVersion);
+      if (expectedPolicyVersion && expectedPolicyVersion !== current.policyVersion) {
+        throw new DecisionDebtError(
+          "aborted",
+          "Decision Debt policy changed after this form was loaded."
+        );
+      }
+      const revision = current.revision + 1;
+      const policyVersion = `decision-debt-policy-r${revision}`;
+      tx.set(policyRef, {
+        ...policy,
+        authorityState: "configured",
+        revision,
+        policyVersion,
+        configuredAtISO: nowISO,
+        configuredBy: staff.uid,
+        lastMutation: { requestId, requestFingerprint },
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      return {
+        idempotent: false,
+        policy,
+        policyVersion,
+        recordedAtISO: nowISO
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      policyVersion: result.policyVersion,
+      policy: result.policy,
+      idempotent: result.idempotent,
+      receipt: {
+        requestId,
+        operation: "configure_policy",
+        organizationId,
+        policyVersion: result.policyVersion,
+        recordedAtISO: result.recordedAtISO
+      }
+    };
+  } catch (error) {
+    return throwDecisionDebtFailure(error, "configureDecisionDebtPolicy");
+  }
+});
+
+exports.getRevenueAutopilotOperations = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const jobLimit = Number(data?.jobLimit ?? 100);
+  const attentionLimit = Number(data?.attentionLimit ?? 50);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (!organizationId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+  if (
+    normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+    || !Number.isSafeInteger(jobLimit)
+    || jobLimit < 1
+    || jobLimit > 100
+    || !Number.isSafeInteger(attentionLimit)
+    || attentionLimit < 1
+    || attentionLimit > 50
+  ) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Revenue Autopilot operations require same-organization staff and bounded read limits."
+    );
+  }
+
+  try {
+    const refs = revenueAutopilotRefs(organizationId, { quoteId });
+    const observedAtISO = new Date().toISOString();
+    let jobsQuery = refs.jobsRef;
+    let attentionQuery = refs.attentionRef;
+    if (quoteId) {
+      jobsQuery = jobsQuery.where("quoteId", "==", quoteId);
+      attentionQuery = attentionQuery.where("quoteId", "==", quoteId);
+    }
+    const [policySnap, jobsSnap, attentionSnap] = await Promise.all([
+      refs.policyRef.get(),
+      jobsQuery.limit(jobLimit + 1).get(),
+      attentionQuery.limit(attentionLimit + 1).get()
+    ]);
+    const policy = normalizeRevenueAutopilotTenantPolicy(
+      policySnap.exists ? policySnap.data() || {} : null
+    );
+    const global = getRevenueAutopilotGlobalControl(observedAtISO);
+    const authority = projectRevenueAutopilotAuthorityForStaff({
+      organizationId,
+      policy,
+      provider: global.provider,
+      observedAtISO
+    });
+    const jobDocs = jobsSnap.docs.slice(0, jobLimit);
+    const attentionDocs = attentionSnap.docs.slice(0, attentionLimit);
+    const jobsTruncated = jobsSnap.docs.length > jobLimit;
+    const attentionTruncated = attentionSnap.docs.length > attentionLimit;
+    const jobs = jobDocs
+      .map((snapshot) => projectRevenueAutopilotJobForStaff({
+        jobId: snapshot.id,
+        ...(snapshot.data() || {})
+      }))
+      .sort((left, right) => (
+        String(right.createdAtISO).localeCompare(String(left.createdAtISO))
+        || String(left.jobId).localeCompare(String(right.jobId))
+      ));
+    const attention = attentionDocs
+      .map((snapshot) => projectRevenueAutopilotAttentionForStaff({
+        attentionId: snapshot.id,
+        ...(snapshot.data() || {})
+      }))
+      .sort((left, right) => (
+        String(right.openedAtISO).localeCompare(String(left.openedAtISO))
+        || String(left.attentionId).localeCompare(String(right.attentionId))
+      ));
+    const truncated = jobsTruncated || attentionTruncated;
+    const providerOutcomes = Object.fromEntries([
+      "provider_accepted",
+      "delivered",
+      "bounced",
+      "complained"
+    ].map((state) => [state, jobs.filter((job) => job.state === state).length]));
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      ...(quoteId ? { quoteId } : {}),
+      policy: revenueAutopilotPublicPolicy(policy, global, authority.provider),
+      jobs,
+      attention,
+      bounds: {
+        totalJobs: jobs.length + (jobsTruncated ? 1 : 0),
+        maximumJobs: jobLimit,
+        totalAttention: attention.length + (attentionTruncated ? 1 : 0),
+        maximumAttention: attentionLimit,
+        complete: !truncated,
+        truncated
+      },
+      providerOutcomes,
+      source: "firebase_server_projection",
+      observedAtISO,
+      readState: jobs.length || attention.length ? "success" : "empty"
+    };
+  } catch (error) {
+    return throwRevenueAutopilotFailure(error, "getRevenueAutopilotOperations");
+  }
+});
+
+function projectRevenueAutopilotCustomerControls({
+  organizationId,
+  customerId,
+  controlsRaw = null,
+  controlsExist = false,
+  observedAtISO
+} = {}) {
+  if (controlsExist && (
+    !controlsRaw
+    || typeof controlsRaw !== "object"
+    || Number(controlsRaw.schemaVersion) !== 1
+    || normalizeText(controlsRaw.authorityState).toLowerCase() !== "configured"
+  )) {
+    throw new RevenueAutopilotAuthorityError(
+      "failed-precondition",
+      "Stored customer email controls do not satisfy the current authority contract."
+    );
+  }
+  const controls = normalizeRevenueAutopilotEmailControls(
+    controlsExist ? controlsRaw : null,
+    { organizationId, customerId }
+  );
+  const configured = controls.authorityState === "configured";
+  return {
+    schemaVersion: 1,
+    authority: "server_projection",
+    source: "firebase_server_projection",
+    organizationId,
+    customerId,
+    observedAtISO,
+    authorityState: configured ? "configured" : "dormant",
+    revision: configured ? controls.revision : 0,
+    consent: configured
+      ? {
+          state: controls.consent.state,
+          recordedAtISO: controls.consent.recordedAtISO
+        }
+      : { state: "unknown", recordedAtISO: "" },
+    subscription: configured
+      ? {
+          state: controls.subscription.state,
+          recordedAtISO: controls.subscription.recordedAtISO
+        }
+      : { state: "unknown", recordedAtISO: "" }
+  };
+}
+
+exports.getRevenueAutopilotCustomerControls = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const customerId = normalizeText(data?.customerId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || !customerId
+    || /[\s/?#\\\u0000]/u.test(customerId)
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Customer reminder controls require an exact same-organization staff scope."
+    );
+  }
+  try {
+    const refs = revenueAutopilotRefs(organizationId, { customerId });
+    const observedAtISO = new Date().toISOString();
+    const [customerSnap, controlsSnap] = await Promise.all([
+      refs.customerRef.get(),
+      refs.customerControlsRef.get()
+    ]);
+    if (!customerSnap.exists) {
+      throw new RevenueAutopilotAuthorityError("not-found", "Customer not found.");
+    }
+    const customer = customerSnap.data() || {};
+    if (
+      normalizeOrganizationId(customer.organizationId || organizationId) !== organizationId
+      || normalizeText(customer.customerId || customerSnap.id) !== customerId
+    ) {
+      throw new RevenueAutopilotAuthorityError(
+        "permission-denied",
+        "Customer is outside this organization."
+      );
+    }
+    const controls = projectRevenueAutopilotCustomerControls({
+      organizationId,
+      customerId,
+      controlsRaw: controlsSnap.exists ? controlsSnap.data() || {} : null,
+      controlsExist: controlsSnap.exists,
+      observedAtISO
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      customerId,
+      controls
+    };
+  } catch (error) {
+    return throwRevenueAutopilotFailure(error, "getRevenueAutopilotCustomerControls");
+  }
+});
+
+exports.configureRevenueAutopilotPolicy = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const requestId = revenueAutopilotRequestId(data?.requestId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  if (!organizationId || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Revenue Autopilot policy requires same-organization administrator authority."
+    );
+  }
+
+  try {
+    const refs = revenueAutopilotRefs(organizationId);
+    const nowISO = new Date().toISOString();
+    const receiptRef = revenueAutopilotReceiptRef(refs, "configure_policy", requestId);
+    const result = await db.runTransaction(async (tx) => {
+      const [policySnap, receiptSnap] = await Promise.all([
+        tx.get(refs.policyRef),
+        tx.get(receiptRef)
+      ]);
+      const currentPolicy = normalizeRevenueAutopilotTenantPolicy(
+        policySnap.exists ? policySnap.data() || {} : null
+      );
+      const expectedPolicyVersion = normalizeText(data?.expectedPolicyVersion);
+      if (expectedPolicyVersion && expectedPolicyVersion !== currentPolicy.policyVersion) {
+        throw new RevenueAutopilotAuthorityError(
+          "aborted",
+          "Revenue Autopilot policy changed after this form was loaded."
+        );
+      }
+      const planned = planRevenueAutopilotAdminConfiguration({
+        request: clientPolicyToAuthorityRequest({
+          organizationId,
+          requestId,
+          policy: data?.policy,
+          currentPolicy
+        }),
+        currentPolicy,
+        actor: { uid: staff.uid, role: staff.role, organizationId },
+        nowISO
+      });
+      const recordedAtISO = normalizeText(planned.receipt.configuredAtISO) || nowISO;
+      const publicReceipt = revenueAutopilotReceipt({
+        requestId,
+        operation: "configure_policy",
+        organizationId,
+        policyVersion: planned.policy.policyVersion,
+        recordedAtISO
+      });
+      if (!receiptSnap.exists) {
+        tx.create(receiptRef, {
+          ...publicReceipt,
+          authorityReceipt: planned.receipt,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      if (!planned.idempotent) {
+        tx.set(refs.policyRef, {
+          ...planned.policy,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        tx.set(refs.tenantRegistryRef, {
+          organizationId,
+          authorityState: planned.policy.authorityState,
+          enabled: planned.policy.enabled === true,
+          policyVersion: planned.policy.policyVersion,
+          timeZone: planned.policy.timeZone,
+          updatedAtISO: recordedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+      return {
+        idempotent: planned.idempotent || receiptSnap.exists,
+        policyVersion: planned.policy.policyVersion,
+        receipt: publicReceipt
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      ...result
+    };
+  } catch (error) {
+    return throwRevenueAutopilotFailure(error, "configureRevenueAutopilotPolicy");
+  }
+});
+
+exports.configureRevenueAutopilotCustomerControls = functions
+  .region(REGION)
+  .runWith({ secrets: [REVENUE_AUTOPILOT_TOKEN_SECRET_NAME] })
+  .https.onCall(async (data, context) => {
+    const organizationId = normalizeOrganizationId(data?.organizationId);
+    const customerId = normalizeText(data?.customerId);
+    const requestId = revenueAutopilotRequestId(data?.requestId);
+    const expectedRevision = Number(data?.expectedRevision);
+    const staff = assertAdminStaff(await assertStaff(context, {
+      expectedOrganizationId: organizationId
+    }));
+    if (!organizationId || !customerId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Customer reminder controls require organizationId and customerId."
+      );
+    }
+    if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Customer reminder controls require same-organization administrator authority."
+      );
+    }
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Customer reminder controls require the observed nonnegative revision."
+      );
+    }
+
+    try {
+      const secret = revenueAutopilotTokenSecret();
+      const refs = revenueAutopilotRefs(organizationId, { customerId });
+      const nowISO = new Date().toISOString();
+      const receiptRef = revenueAutopilotReceiptRef(
+        refs,
+        "configure_customer_controls",
+        requestId
+      );
+      const result = await db.runTransaction(async (tx) => {
+        const [customerSnap, controlsSnap, receiptSnap] = await Promise.all([
+          tx.get(refs.customerRef),
+          tx.get(refs.customerControlsRef),
+          tx.get(receiptRef)
+        ]);
+        if (!customerSnap.exists) {
+          throw new RevenueAutopilotAuthorityError("not-found", "Customer not found.");
+        }
+        const customer = customerSnap.data() || {};
+        if (normalizeOrganizationId(customer.organizationId || organizationId) !== organizationId) {
+          throw new RevenueAutopilotAuthorityError(
+            "permission-denied",
+            "Customer is outside this organization."
+          );
+        }
+        const currentRaw = controlsSnap.exists ? controlsSnap.data() || {} : null;
+        const currentControls = normalizeRevenueAutopilotEmailControls(currentRaw, {
+          organizationId,
+          customerId
+        });
+        const planned = planRevenueAutopilotEmailControlUpdate({
+          request: {
+            organizationId,
+            customerId,
+            requestId,
+            expectedRevision,
+            consentState: normalizeText(data?.consentState).toLowerCase(),
+            subscriptionState: normalizeText(data?.subscriptionState).toLowerCase()
+          },
+          currentControls,
+          customer: {
+            id: customerId,
+            organizationId,
+            normalizedEmail: normalizeEmail(
+              customer.emailKey || customer.email || customer.contact?.email
+            )
+          },
+          actor: { uid: staff.uid, role: staff.role, organizationId },
+          nowISO,
+          secret
+        });
+        const token = buildRevenueAutopilotUnsubscribeToken({
+          organizationId,
+          customerId,
+          secret
+        });
+        const tokenHash = hashRevenueAutopilotUnsubscribeToken({
+          token,
+          organizationId,
+          customerId,
+          secret
+        });
+        const suppression = revenueAutopilotSuppressionEvidence(currentRaw, {
+          organizationId,
+          customerId,
+          recipientKey: planned.controls.recipientKey,
+          nowISO
+        });
+        const publicReceipt = revenueAutopilotReceipt({
+          requestId,
+          operation: "configure_customer_controls",
+          organizationId,
+          customerId,
+          recordedAtISO: normalizeText(planned.receipt.recordedAtISO) || nowISO
+        });
+        if (!receiptSnap.exists) {
+          tx.create(receiptRef, {
+            ...publicReceipt,
+            authorityReceipt: planned.receipt,
+            createdAt: FieldValue.serverTimestamp()
+          });
+        }
+        if (!planned.idempotent) {
+          tx.set(refs.customerControlsRef, {
+            ...planned.controls,
+            unsubscribeTokenHash: tokenHash,
+            suppression,
+            updatedAt: FieldValue.serverTimestamp()
+          });
+        }
+        return {
+          idempotent: planned.idempotent || receiptSnap.exists,
+          receipt: publicReceipt
+        };
+      });
+      return {
+        ok: true,
+        storage: "firebase",
+        organizationId,
+        customerId,
+        ...result
+      };
+    } catch (error) {
+      return throwRevenueAutopilotFailure(error, "configureRevenueAutopilotCustomerControls");
+    }
+  });
+
+exports.materializeRevenueAutopilotJobs = functions
+  .region(REGION)
+  .runWith({ secrets: [REVENUE_AUTOPILOT_TOKEN_SECRET_NAME] })
+  .https.onCall(async (data, context) => {
+    const organizationId = normalizeOrganizationId(data?.organizationId);
+    const quoteId = normalizeText(data?.quoteId);
+    const requestId = revenueAutopilotRequestId(data?.requestId);
+    const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+    if (
+      !organizationId
+      || !quoteId
+      || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+    ) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Revenue Autopilot materialization requires same-organization staff authority."
+      );
+    }
+
+    try {
+      const secret = revenueAutopilotTokenSecret();
+      const refs = revenueAutopilotRefs(organizationId, { quoteId });
+      const receiptRef = revenueAutopilotReceiptRef(refs, "materialize_jobs", requestId);
+      const nowISO = new Date().toISOString();
+      const result = await db.runTransaction(async (tx) => {
+        const [receiptSnap, quoteSnap, policySnap, organizationSnap] = await Promise.all([
+          tx.get(receiptRef),
+          tx.get(refs.quoteRef),
+          tx.get(refs.policyRef),
+          tx.get(refs.organizationRef)
+        ]);
+        if (receiptSnap.exists) {
+          const prior = receiptSnap.data() || {};
+          if (
+            normalizeText(prior.organizationId) !== organizationId
+            || normalizeText(prior.quoteId) !== quoteId
+            || normalizeText(prior.requestId) !== requestId
+          ) {
+            throw new RevenueAutopilotAuthorityError(
+              "already-exists",
+              "Revenue Autopilot request identity is bound to different materialization evidence."
+            );
+          }
+          return {
+            idempotent: true,
+            receipt: revenueAutopilotReceipt({
+              requestId,
+              operation: "materialize_jobs",
+              organizationId,
+              quoteId,
+              recordedAtISO: normalizeText(prior.recordedAtISO)
+            })
+          };
+        }
+        if (!quoteSnap.exists || !organizationSnap.exists) {
+          throw new RevenueAutopilotAuthorityError("not-found", "Quote not found.");
+        }
+        const quote = { id: quoteId, ...(quoteSnap.data() || {}) };
+        if (
+          normalizeOrganizationId(quote.organizationId) !== organizationId
+          || !normalizeText(quote.customerId)
+        ) {
+          throw new RevenueAutopilotAuthorityError(
+            "failed-precondition",
+            "Revenue Autopilot requires one stable same-organization customer identity."
+          );
+        }
+        const customerId = normalizeText(quote.customerId);
+        const portalKey = normalizeText(quote.portalKey);
+        if (!/^[A-Za-z0-9_-]{20,128}$/u.test(portalKey)) {
+          throw new RevenueAutopilotAuthorityError(
+            "failed-precondition",
+            "Deliver the current secure proposal before preparing reminder records."
+          );
+        }
+        const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
+        const customerRef = refs.customersRef.doc(customerId);
+        const controlsRef = refs.controlsRef.doc(customerId);
+        const acceptanceReceiptId = normalizeText(quote.acceptanceReceipt?.receiptId);
+        const acceptanceRef = acceptanceReceiptId
+          ? refs.organizationRef
+            .collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION)
+            .doc(acceptanceReceiptId)
+          : null;
+        const closeoutId = normalizeText(quote.workflow?.postEventCloseout?.closeoutId);
+        const closeoutRef = /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,255}$/u.test(closeoutId)
+          ? refs.organizationRef.collection(POST_EVENT_CLOSEOUTS_COLLECTION).doc(closeoutId)
+          : null;
+        const jobsQuery = refs.jobsRef.where("quoteId", "==", quoteId).limit(100);
+        const webhookQuery = db.collection(WEBHOOK_EVENTS_COLLECTION)
+          .where("organizationId", "==", organizationId)
+          .limit(100);
+        const reads = [
+          tx.get(portalRef),
+          tx.get(customerRef),
+          tx.get(controlsRef),
+          tx.get(jobsQuery),
+          tx.get(webhookQuery),
+          acceptanceRef ? tx.get(acceptanceRef) : Promise.resolve(null),
+          closeoutRef ? tx.get(closeoutRef) : Promise.resolve(null)
+        ];
+        const [
+          portalSnap,
+          customerSnap,
+          controlsSnap,
+          jobsSnap,
+          webhookSnap,
+          acceptanceSnap,
+          closeoutSnap
+        ] = await Promise.all(reads);
+        if (!portalSnap.exists || !customerSnap.exists) {
+          throw new RevenueAutopilotAuthorityError(
+            "failed-precondition",
+            "The current proposal or customer projection is unavailable."
+          );
+        }
+        const portal = portalSnap.data() || {};
+        const customer = customerSnap.data() || {};
+        if (
+          normalizeOrganizationId(portal.organizationId) !== organizationId
+          || normalizeText(portal.quoteId) !== quoteId
+          || normalizeOrganizationId(customer.organizationId || organizationId) !== organizationId
+        ) {
+          throw new RevenueAutopilotAuthorityError(
+            "permission-denied",
+            "Revenue Autopilot source evidence is outside this quote scope."
+          );
+        }
+        const policy = normalizeRevenueAutopilotTenantPolicy(
+          policySnap.exists ? policySnap.data() || {} : null
+        );
+        const controlsRaw = controlsSnap.exists ? controlsSnap.data() || {} : null;
+        const controls = normalizeRevenueAutopilotEmailControls(controlsRaw, {
+          organizationId,
+          customerId
+        });
+        const global = getRevenueAutopilotGlobalControl(nowISO);
+        const provider = { organizationId, ...global.provider };
+        const suppression = revenueAutopilotSuppressionEvidence(controlsRaw, {
+          organizationId,
+          customerId,
+          recipientKey: controls.recipientKey,
+          nowISO
+        });
+        const existingJobs = jobsSnap.docs.map((snapshot) => ({
+          jobId: snapshot.id,
+          ...(snapshot.data() || {})
+        }));
+        const webhookEvents = webhookSnap.docs.map((snapshot) => ({
+          eventId: snapshot.id,
+          ...(snapshot.data() || {})
+        }));
+        const canonicalBase = {
+          quote,
+          portal: revenueAutopilotPortalEvidence({
+            quote,
+            portal,
+            organizationId,
+            quoteId
+          })
+        };
+        if (acceptanceSnap?.exists) {
+          canonicalBase.acceptance = revenueAutopilotAcceptanceEvidence({
+            receipt: acceptanceSnap.data() || {},
+            organizationId,
+            quoteId
+          });
+        }
+        if (closeoutSnap?.exists) {
+          canonicalBase.postEventCloseout = {
+            closeoutId: closeoutSnap.id,
+            ...(closeoutSnap.data() || {})
+          };
+        }
+        const portalUrl = resolvePortalLink(quote);
+        const unsubscribeUrl = revenueAutopilotUnsubscribeUrl({
+          organizationId,
+          customerId,
+          secret
+        });
+        const customerEmail = normalizeEmail(
+          customer.emailKey || customer.email || quote.customer?.email
+        );
+        if (!isValidEmail(customerEmail)) {
+          throw new RevenueAutopilotAuthorityError(
+            "failed-precondition",
+            "Customer reminder email is unavailable."
+          );
+        }
+        const laneResults = {};
+        let createdCount = 0;
+        let updatedCount = 0;
+        const portalExpiresAtISO = normalizeText(quote.portalExpiresAtISO || quote.expiresAtISO);
+        const portalExpired = Boolean(portalExpiresAtISO && portalExpiresAtISO <= nowISO);
+
+        for (const kind of [
+          "quote_follow_up",
+          "deposit_reminder",
+          "final_balance_reminder",
+          "post_event_review_request"
+        ]) {
+          try {
+            if (portalExpired && kind !== "post_event_review_request") {
+              laneResults[kind] = {
+                state: "stopped",
+                createCount: 0,
+                updateCount: 0,
+                conflictCount: 0,
+                reasonCodes: ["portal_expired"]
+              };
+              continue;
+            }
+            const canonical = { ...canonicalBase };
+            if (new Set(["deposit_reminder", "final_balance_reminder"]).has(kind)) {
+              canonical.deposit = revenueAutopilotDepositEvidence({
+                quote,
+                organizationId,
+                quoteId,
+                webhookEvents,
+                observedAtISO: nowISO
+              });
+            }
+            if (kind !== "quote_follow_up" && !canonical.acceptance) {
+              throw new RevenueAutopilotAuthorityError(
+                "failed-precondition",
+                "This Revenue Autopilot lane requires exact proposal acceptance evidence."
+              );
+            }
+            if (kind === "final_balance_reminder") {
+              canonical.finalBalance = revenueAutopilotFinalBalanceEvidence({
+                quote,
+                organizationId,
+                quoteId,
+                observedAtISO: nowISO
+              });
+            }
+            const planned = planRevenueAutopilotMaterializationFromCanonical({
+              request: { organizationId, quoteId, kind },
+              canonical,
+              policy,
+              emailControls: controls,
+              provider,
+              suppression,
+              global: { enabled: global.enabled, sendsEnabled: global.sendsEnabled },
+              existingJobs
+            }, { nowISO });
+            laneResults[kind] = {
+              state: normalizeText(planned.plan.state),
+              createCount: planned.plan.create.length,
+              updateCount: planned.plan.updates.length,
+              conflictCount: planned.plan.conflicts.length,
+              reasonCodes: [
+                ...(planned.plan.stop?.reasons || []),
+                ...(planned.plan.gate?.reasons || [])
+              ].map((reason) => normalizeText(reason?.code)).filter(Boolean).slice(0, 10)
+            };
+            if (planned.plan.conflicts.length) {
+              throw new RevenueAutopilotAuthorityError(
+                "aborted",
+                `Frozen ${kind} job content conflicts with the current policy version.`
+              );
+            }
+            for (const update of planned.plan.updates) {
+              tx.set(refs.jobsRef.doc(update.jobId), {
+                ...update,
+                updatedAtISO: nowISO,
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+              updatedCount += 1;
+            }
+            for (const job of planned.plan.create) {
+              const rendered = renderRevenueAutopilotTemplate(
+                policy.templates[kind],
+                revenueAutopilotTemplateValues({
+                  quote,
+                  organization: organizationSnap.data() || {},
+                  portalUrl,
+                  reviewUrl: policy.reviewRequestUrl,
+                  unsubscribeUrl,
+                  kind
+                })
+              );
+              tx.create(refs.jobsRef.doc(job.jobId), {
+                ...job,
+                customerId,
+                quoteLabel: normalizeText(quote.quoteNumber) || quoteId,
+                customerLabel: normalizeText(customer.name || quote.customer?.name),
+                recipientKey: controls.recipientKey,
+                frozenPayload: {
+                  toEmail: customerEmail,
+                  subject: rendered.subject,
+                  text: rendered.text,
+                  html: rendered.html,
+                  templateFingerprint: rendered.templateFingerprint
+                },
+                sourceRevisionId: normalizeText(quote.activeVersionId),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+              });
+              createdCount += 1;
+            }
+          } catch (laneError) {
+            if (
+              laneError instanceof RevenueAutopilotError
+              || laneError instanceof RevenueAutopilotAuthorityError
+              || laneError instanceof RevenueAutopilotTemplateError
+              || laneError instanceof PaymentLedgerError
+            ) {
+              laneResults[kind] = {
+                state: "blocked",
+                createCount: 0,
+                updateCount: 0,
+                conflictCount: 0,
+                reasonCodes: [normalizeText(laneError.code) || "failed_precondition"],
+                detail: normalizeText(laneError.message).slice(0, 240)
+              };
+              continue;
+            }
+            throw laneError;
+          }
+        }
+        const publicReceipt = revenueAutopilotReceipt({
+          requestId,
+          operation: "materialize_jobs",
+          organizationId,
+          quoteId,
+          recordedAtISO: nowISO
+        });
+        tx.create(receiptRef, {
+          ...publicReceipt,
+          customerId,
+          policyVersion: policy.policyVersion,
+          laneResults,
+          createdCount,
+          updatedCount,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        return {
+          idempotent: false,
+          receipt: publicReceipt,
+          createdCount,
+          updatedCount,
+          laneResults
+        };
+      });
+      return {
+        ok: true,
+        storage: "firebase",
+        organizationId,
+        quoteId,
+        ...result
+      };
+    } catch (error) {
+      return throwRevenueAutopilotFailure(error, "materializeRevenueAutopilotJobs");
+    }
+  });
+
+exports.acknowledgeRevenueAutopilotReply = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const attentionId = normalizeText(data?.attentionId);
+  const requestedMessageId = normalizeText(data?.messageId);
+  const requestId = revenueAutopilotRequestId(data?.requestId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (
+    !organizationId
+    || !quoteId
+    || !attentionId
+    || !requestedMessageId
+    || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Manual reply acknowledgement requires same-organization staff authority and an exact message identity."
+    );
+  }
+  try {
+    const refs = revenueAutopilotRefs(organizationId, { quoteId });
+    const attentionRef = refs.attentionRef.doc(attentionId);
+    const conversationRefs = portalConversationRefs(organizationId, quoteId);
+    const receiptRef = revenueAutopilotReceiptRef(refs, "acknowledge_reply", requestId);
+    const nowISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, attentionSnap, stateSnap, publicReceiptSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(attentionRef),
+        tx.get(conversationRefs.stateRef),
+        tx.get(receiptRef)
+      ]);
+      if (!quoteSnap.exists || !attentionSnap.exists || !stateSnap.exists) {
+        throw new RevenueAutopilotAuthorityError(
+          "not-found",
+          "Unread customer-reply attention was not found."
+        );
+      }
+      const quote = { id: quoteId, ...(quoteSnap.data() || {}) };
+      const attention = { attentionId, ...(attentionSnap.data() || {}) };
+      const state = stateSnap.data() || {};
+      if (
+        normalizeOrganizationId(quote.organizationId) !== organizationId
+        || normalizeText(attention.organizationId) !== organizationId
+        || normalizeText(attention.quoteId) !== quoteId
+      ) {
+        throw new RevenueAutopilotAuthorityError(
+          "permission-denied",
+          "Unread-reply attention is outside this quote scope."
+        );
+      }
+      const messageId = normalizeText(attention.messageId);
+      if (messageId !== requestedMessageId) {
+        throw new RevenueAutopilotAuthorityError(
+          "aborted",
+          "Unread-reply attention changed after the conversation action was selected."
+        );
+      }
+      const latestMessageRef = conversationRefs.messagesRef.doc(messageId);
+      const latestMessageSnap = await tx.get(latestMessageRef);
+      if (!latestMessageSnap.exists) {
+        throw new RevenueAutopilotAuthorityError(
+          "failed-precondition",
+          "The exact latest customer message is unavailable."
+        );
+      }
+      const latestMessage = { id: latestMessageSnap.id, ...(latestMessageSnap.data() || {}) };
+      const exactState = {
+        ...state,
+        latestActorType: normalizeText(state.latestActorType)
+          || normalizeText(latestMessage.actorType)
+      };
+      const existingAuthorityReceipt = publicReceiptSnap.exists
+        ? publicReceiptSnap.data()?.authorityReceipt || null
+        : null;
+      const planned = planRevenueAutopilotStaffAcknowledgementReceipt({
+        request: { organizationId, quoteId, messageId, requestId },
+        quote,
+        conversationState: exactState,
+        latestMessage,
+        existingReceipt: existingAuthorityReceipt,
+        actor: { uid: staff.uid, role: staff.role, organizationId },
+        nowISO
+      });
+      const recordedAtISO = normalizeText(planned.receipt.acknowledgedAtISO) || nowISO;
+      const publicReceipt = revenueAutopilotReceipt({
+        requestId,
+        operation: "acknowledge_reply",
+        organizationId,
+        quoteId,
+        attentionId,
+        messageId,
+        recordedAtISO
+      });
+      if (!publicReceiptSnap.exists) {
+        tx.create(receiptRef, {
+          ...publicReceipt,
+          authorityReceipt: planned.receipt,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      if (!planned.idempotent) {
+        tx.set(conversationRefs.stateRef, {
+          staffAcknowledged: {
+            latestMessageId: messageId,
+            latestMessageAtISO: normalizeText(latestMessage.createdAtISO),
+            acknowledgedAtISO: recordedAtISO,
+            acknowledgedBy: staff.uid,
+            acknowledgedByRole: staff.role,
+            receiptId: requestId
+          },
+          latestActorType: "customer",
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        tx.set(attentionRef, {
+          state: "resolved",
+          resolvedAtISO: recordedAtISO,
+          resolutionReason: "customer_reply_acknowledged",
+          resolvedBy: staff.uid,
+          updatedAtISO: recordedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+      return { idempotent: planned.idempotent, receipt: publicReceipt };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId,
+      quoteId,
+      attentionId,
+      messageId: requestedMessageId,
+      ...result
+    };
+  } catch (error) {
+    return throwRevenueAutopilotFailure(error, "acknowledgeRevenueAutopilotReply");
+  }
+});
+
+exports.reconcileRevenueAutopilotJob = functions
+  .region(REGION)
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME] })
+  .https.onCall(async (data, context) => {
+    const organizationId = normalizeOrganizationId(data?.organizationId);
+    const quoteId = normalizeText(data?.quoteId);
+    const jobId = normalizeText(data?.jobId);
+    const requestId = revenueAutopilotRequestId(data?.requestId);
+    const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+    if (
+      !organizationId
+      || !quoteId
+      || !jobId
+      || normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+    ) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Revenue Autopilot reconciliation requires same-organization staff authority."
+      );
+    }
+    try {
+      const refs = revenueAutopilotRefs(organizationId, { quoteId });
+      const jobRef = refs.jobsRef.doc(jobId);
+      const receiptRef = revenueAutopilotReceiptRef(refs, "reconcile_job", requestId);
+      const claimedAtISO = new Date().toISOString();
+      const claimed = await db.runTransaction(async (tx) => {
+        const [jobSnap, receiptSnap] = await Promise.all([
+          tx.get(jobRef),
+          tx.get(receiptRef)
+        ]);
+        if (receiptSnap.exists) {
+          const prior = receiptSnap.data() || {};
+          if (
+            normalizeText(prior.organizationId) !== organizationId
+            || normalizeText(prior.quoteId) !== quoteId
+            || normalizeText(prior.jobId) !== jobId
+          ) {
+            throw new RevenueAutopilotAuthorityError(
+              "already-exists",
+              "Reconciliation request identity is bound to another job."
+            );
+          }
+          return { idempotent: true, receipt: prior, raw: null };
+        }
+        if (!jobSnap.exists) {
+          throw new RevenueAutopilotAuthorityError("not-found", "Revenue Autopilot job not found.");
+        }
+        const raw = { jobId, ...(jobSnap.data() || {}) };
+        if (
+          normalizeText(raw.organizationId) !== organizationId
+          || normalizeText(raw.quoteId) !== quoteId
+          || normalizeText(raw.state) !== REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS
+        ) {
+          throw new RevenueAutopilotAuthorityError(
+            "failed-precondition",
+            "Only this quote's ambiguous Revenue Autopilot outcome can be reconciled."
+          );
+        }
+        const currentRequestId = normalizeText(raw.reconciliation?.requestId);
+        const leaseExpiresAtISO = normalizeText(raw.reconciliation?.leaseExpiresAtISO);
+        if (
+          currentRequestId
+          && currentRequestId !== requestId
+          && leaseExpiresAtISO > claimedAtISO
+        ) {
+          throw new RevenueAutopilotAuthorityError(
+            "aborted",
+            "Another exact Revenue Autopilot reconciliation is in progress."
+          );
+        }
+        tx.set(jobRef, {
+          reconciliation: {
+            requestId,
+            claimedAtISO,
+            leaseExpiresAtISO: new Date(Date.parse(claimedAtISO) + 2 * 60 * 1000).toISOString(),
+            claimedBy: staff.uid
+          },
+          updatedAtISO: claimedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return { idempotent: false, receipt: null, raw };
+      });
+      if (claimed.idempotent) {
+        const recordedAtISO = normalizeText(claimed.receipt.recordedAtISO);
+        return {
+          ok: true,
+          storage: "firebase",
+          organizationId,
+          quoteId,
+          jobId,
+          idempotent: true,
+          receipt: revenueAutopilotReceipt({
+            requestId,
+            operation: "reconcile_job",
+            organizationId,
+            quoteId,
+            jobId,
+            recordedAtISO
+          })
+        };
+      }
+      const payload = claimed.raw?.frozenPayload || {};
+      if (
+        !isValidEmail(payload.toEmail)
+        || !normalizeText(payload.subject)
+        || !normalizeText(payload.text)
+        || !normalizeText(payload.html)
+      ) {
+        throw new RevenueAutopilotAuthorityError(
+          "failed-precondition",
+          "The frozen Revenue Autopilot provider request is unavailable."
+        );
+      }
+      const emailConfig = getEmailConfig();
+      if (
+        emailConfig.provider !== "resend"
+        || !emailConfig.resendApiKey
+        || !emailConfig.senderApproved
+      ) {
+        throw new RevenueAutopilotAuthorityError(
+          "failed-precondition",
+          "The approved Revenue Autopilot provider is not configured."
+        );
+      }
+      const providerResult = await sendEmailViaResend({
+        apiKey: emailConfig.resendApiKey,
+        from: `${emailConfig.fromName} <${emailConfig.fromEmail}>`,
+        to: payload.toEmail,
+        subject: payload.subject,
+        text: payload.text,
+        html: payload.html,
+        idempotencyKey: normalizeText(claimed.raw.idempotencyKey)
+      });
+      const recordedAtISO = new Date().toISOString();
+      const resolution = planRevenueAutopilotOutcomeResolution({
+        job: claimed.raw,
+        resolution: "provider_accepted",
+        provider: "resend",
+        providerMessageId: providerResult.id,
+        providerAcceptedAtISO: recordedAtISO,
+        nowISO: recordedAtISO
+      });
+      const publicReceipt = revenueAutopilotReceipt({
+        requestId,
+        operation: "reconcile_job",
+        organizationId,
+        quoteId,
+        jobId,
+        recordedAtISO
+      });
+      const messageIndexRef = db.collection(REVENUE_AUTOPILOT_PROVIDER_MESSAGE_INDEX_COLLECTION)
+        .doc(createHash("sha256").update(`resend|${providerResult.id}`).digest("hex"));
+      await db.runTransaction(async (tx) => {
+        const [jobSnap, receiptSnap, indexSnap] = await Promise.all([
+          tx.get(jobRef),
+          tx.get(receiptRef),
+          tx.get(messageIndexRef)
+        ]);
+        if (receiptSnap.exists) return;
+        if (!jobSnap.exists) {
+          throw new RevenueAutopilotAuthorityError("not-found", "Revenue Autopilot job not found.");
+        }
+        const current = { jobId, ...(jobSnap.data() || {}) };
+        if (
+          normalizeText(current.state) !== REVENUE_AUTOPILOT_JOB_STATES.OUTCOME_AMBIGUOUS
+          || normalizeText(current.reconciliation?.requestId) !== requestId
+        ) {
+          throw new RevenueAutopilotAuthorityError(
+            "aborted",
+            "Revenue Autopilot reconciliation authority changed before completion."
+          );
+        }
+        tx.set(jobRef, {
+          ...current,
+          ...resolution.job,
+          reconciliation: FieldValue.delete(),
+          updatedAtISO: recordedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        tx.create(receiptRef, {
+          ...publicReceipt,
+          provider: "resend",
+          providerMessageId: providerResult.id,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        if (!indexSnap.exists) {
+          tx.create(messageIndexRef, {
+            provider: "resend",
+            providerMessageId: providerResult.id,
+            organizationId,
+            quoteId,
+            jobId,
+            customerId: normalizeText(current.customerId),
+            recipientKey: normalizeText(current.recipientKey),
+            providerAcceptedAtISO: recordedAtISO,
+            createdAt: FieldValue.serverTimestamp()
+          });
+        }
+      });
+      return {
+        ok: true,
+        storage: "firebase",
+        organizationId,
+        quoteId,
+        jobId,
+        idempotent: false,
+        receipt: publicReceipt
+      };
+    } catch (error) {
+      return throwRevenueAutopilotFailure(error, "reconcileRevenueAutopilotJob");
+    }
+  });
+
+async function readRevenueAutopilotUnsubscribeContext(token) {
+  const secret = revenueAutopilotTokenSecret();
+  const scope = parseRevenueAutopilotUnsubscribeToken(token, secret);
+  const refs = revenueAutopilotRefs(scope.organizationId, { customerId: scope.customerId });
+  const [organizationSnap, customerSnap, controlsSnap] = await Promise.all([
+    refs.organizationRef.get(),
+    refs.customerRef.get(),
+    refs.customerControlsRef.get()
+  ]);
+  if (
+    !organizationSnap.exists
+    || !customerSnap.exists
+    || !controlsSnap.exists
+    || !isOrganizationRecordActive(organizationSnap.data() || {})
+  ) {
+    throw new RevenueAutopilotAuthorityError("not-found", "Email preference link not found.");
+  }
+  const customer = customerSnap.data() || {};
+  const controlsRaw = controlsSnap.data() || {};
+  if (
+    normalizeOrganizationId(customer.organizationId || scope.organizationId) !== scope.organizationId
+    || !verifyRevenueAutopilotUnsubscribeToken({
+      token: scope.token,
+      organizationId: scope.organizationId,
+      customerId: scope.customerId,
+      secret,
+      storedHash: controlsRaw.unsubscribeTokenHash
+    })
+  ) {
+    throw new RevenueAutopilotAuthorityError("not-found", "Email preference link not found.");
+  }
+  const controls = normalizeRevenueAutopilotEmailControls(controlsRaw, {
+    organizationId: scope.organizationId,
+    customerId: scope.customerId
+  });
+  if (controls.authorityState !== "configured") {
+    throw new RevenueAutopilotAuthorityError("not-found", "Email preference link not found.");
+  }
+  const email = normalizeEmail(customer.emailKey || customer.email || customer.contact?.email);
+  const [local = "", domain = ""] = email.split("@");
+  const recipientLabel = domain
+    ? `${local.slice(0, 1) || "•"}${"•".repeat(Math.min(6, Math.max(3, local.length - 1)))}@${domain}`
+    : "Customer email on the current relationship";
+  return {
+    scope,
+    refs,
+    controls,
+    controlsRaw,
+    context: {
+      organizationName: normalizeText(organizationSnap.data()?.name) || "QuotePilot reminders",
+      recipientLabel,
+      subscriptionState: controls.subscription.state,
+      consentState: controls.consent.state
+    }
+  };
+}
+
+exports.getRevenueAutopilotUnsubscribeContext = functions
+  .region(REGION)
+  .runWith({ secrets: [REVENUE_AUTOPILOT_TOKEN_SECRET_NAME] })
+  .https.onCall(async (data) => {
+    const token = normalizeText(data?.token);
+    try {
+      const result = await readRevenueAutopilotUnsubscribeContext(token);
+      return {
+        ok: true,
+        storage: "firebase",
+        token,
+        context: result.context
+      };
+    } catch (error) {
+      return throwRevenueAutopilotFailure(error, "getRevenueAutopilotUnsubscribeContext");
+    }
+  });
+
+exports.unsubscribeRevenueAutopilotEmail = functions
+  .region(REGION)
+  .runWith({ secrets: [REVENUE_AUTOPILOT_TOKEN_SECRET_NAME] })
+  .https.onCall(async (data) => {
+    const token = normalizeText(data?.token);
+    const requestId = revenueAutopilotRequestId(data?.requestId);
+    try {
+      const initial = await readRevenueAutopilotUnsubscribeContext(token);
+      const { scope, refs } = initial;
+      const nowISO = new Date().toISOString();
+      const receiptRef = revenueAutopilotReceiptRef(refs, "unsubscribe_email", requestId);
+      const result = await db.runTransaction(async (tx) => {
+        const [controlsSnap, receiptSnap] = await Promise.all([
+          tx.get(refs.customerControlsRef),
+          tx.get(receiptRef)
+        ]);
+        if (!controlsSnap.exists) {
+          throw new RevenueAutopilotAuthorityError("not-found", "Email preference link not found.");
+        }
+        const raw = controlsSnap.data() || {};
+        const secret = revenueAutopilotTokenSecret();
+        if (!verifyRevenueAutopilotUnsubscribeToken({
+          token,
+          organizationId: scope.organizationId,
+          customerId: scope.customerId,
+          secret,
+          storedHash: raw.unsubscribeTokenHash
+        })) {
+          throw new RevenueAutopilotAuthorityError("not-found", "Email preference link not found.");
+        }
+        if (receiptSnap.exists) {
+          const prior = receiptSnap.data() || {};
+          if (
+            normalizeText(prior.requestId) !== requestId
+            || normalizeText(prior.tokenHash) !== normalizeText(raw.unsubscribeTokenHash)
+          ) {
+            throw new RevenueAutopilotAuthorityError(
+              "already-exists",
+              "This unsubscribe request identity is already bound to different evidence."
+            );
+          }
+          return { idempotent: true, recordedAtISO: normalizeText(prior.recordedAtISO) };
+        }
+        const controls = normalizeRevenueAutopilotEmailControls(raw, {
+          organizationId: scope.organizationId,
+          customerId: scope.customerId
+        });
+        const alreadyUnsubscribed = controls.subscription.state === "unsubscribed";
+        tx.set(refs.customerControlsRef, {
+          ...controls,
+          revision: controls.revision + (alreadyUnsubscribed ? 0 : 1),
+          subscription: {
+            evidenceId: alreadyUnsubscribed
+              ? controls.subscription.evidenceId
+              : `unsubscribe_${createHash("sha256")
+                .update(`${scope.organizationId}|${scope.customerId}|${requestId}`)
+                .digest("hex")}`,
+            state: "unsubscribed",
+            recordedAtISO: alreadyUnsubscribed ? controls.subscription.recordedAtISO : nowISO,
+            source: alreadyUnsubscribed ? controls.subscription.source : "customer_unsubscribe_link"
+          },
+          unsubscribeTokenHash: normalizeText(raw.unsubscribeTokenHash),
+          suppression: raw.suppression || null,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        tx.create(receiptRef, {
+          requestId,
+          operation: "unsubscribe_email",
+          organizationId: scope.organizationId,
+          customerId: scope.customerId,
+          tokenHash: normalizeText(raw.unsubscribeTokenHash),
+          recordedAtISO: nowISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        return { idempotent: alreadyUnsubscribed, recordedAtISO: nowISO };
+      });
+      const receipt = revenueAutopilotReceipt({
+        requestId,
+        operation: "unsubscribe_email",
+        token,
+        recordedAtISO: result.recordedAtISO || nowISO
+      });
+      return {
+        ok: true,
+        storage: "firebase",
+        token,
+        idempotent: result.idempotent,
+        receipt
+      };
+    } catch (error) {
+      return throwRevenueAutopilotFailure(error, "unsubscribeRevenueAutopilotEmail");
+    }
+  });
+
+async function readRevenueAutopilotSchedulerTenantPage({ limit: pageLimit = 25 } = {}) {
+  const stateRef = db.collection(REVENUE_AUTOPILOT_SCHEDULER_STATE_COLLECTION).doc("current");
+  const registryRef = db.collection(REVENUE_AUTOPILOT_TENANTS_COLLECTION);
+  const stateSnap = await stateRef.get();
+  const priorCursor = normalizeText(stateSnap.data()?.tenantCursor);
+  const buildQuery = (cursor = "") => {
+    let tenantQuery = registryRef
+      .where("enabled", "==", true)
+      .orderBy(FieldPath.documentId())
+      .limit(pageLimit);
+    if (cursor) tenantQuery = tenantQuery.startAfter(cursor);
+    return tenantQuery;
+  };
+  let tenantSnap = await buildQuery(priorCursor).get();
+  let wrapped = false;
+  if (!tenantSnap.docs.length && priorCursor) {
+    tenantSnap = await buildQuery().get();
+    wrapped = true;
+  }
+  const nextCursor = tenantSnap.docs.length === pageLimit
+    ? tenantSnap.docs.at(-1).id
+    : "";
+  return { stateRef, tenantSnap, priorCursor, nextCursor, wrapped };
+}
+
+async function readRevenueAutopilotTenantWorkPage({
+  collectionRef,
+  cursor = "",
+  limit: pageLimit
+} = {}) {
+  const buildQuery = (startCursor = "") => {
+    let workQuery = collectionRef
+      .orderBy(FieldPath.documentId())
+      .limit(pageLimit);
+    if (startCursor) workQuery = workQuery.startAfter(startCursor);
+    return workQuery;
+  };
+  let snapshot = await buildQuery(cursor).get();
+  let wrapped = false;
+  if (!snapshot.docs.length && cursor) {
+    snapshot = await buildQuery().get();
+    wrapped = true;
+  }
+  return {
+    snapshot,
+    wrapped,
+    nextCursor: snapshot.docs.length === pageLimit
+      ? snapshot.docs.at(-1).id
+      : ""
+  };
+}
+
+exports.runRevenueAutopilotSchedule = functions
+  .region(REGION)
+  .runWith({
+    secrets: [RESEND_API_KEY_SECRET_NAME, REVENUE_AUTOPILOT_TOKEN_SECRET_NAME],
+    timeoutSeconds: 540,
+    memory: "512MB"
+  })
+  .pubsub.schedule("every 15 minutes")
+  .timeZone("UTC")
+  .onRun(async () => {
+    const startedAtISO = new Date().toISOString();
+    const global = getRevenueAutopilotGlobalControl(startedAtISO);
+    if (!global.enabled || !global.sendsEnabled || global.provider.state !== "configured") {
+      functions.logger.info("Revenue Autopilot schedule remained dormant", {
+        enabled: global.enabled,
+        sendsEnabled: global.sendsEnabled,
+        providerState: global.provider.state
+      });
+      return { ok: true, state: "dormant", startedAtISO };
+    }
+    const tenantPage = await readRevenueAutopilotSchedulerTenantPage({ limit: 25 });
+    const tenantSnap = tenantPage.tenantSnap;
+    let quotesObserved = 0;
+    let jobsCreated = 0;
+    let jobsUpdated = 0;
+    let dispatchesObserved = 0;
+    let failures = 0;
+    const perTenantQuoteLimit = 10;
+    const perTenantDispatchLimit = 4;
+
+    for (const tenantDoc of tenantSnap.docs) {
+      const organizationId = normalizeOrganizationId(
+        tenantDoc.data()?.organizationId || tenantDoc.id
+      );
+      if (!organizationId) continue;
+      const policyRef = db.collection(ORGANIZATIONS_COLLECTION)
+        .doc(organizationId)
+        .collection(REVENUE_AUTOPILOT_POLICY_COLLECTION)
+        .doc("current");
+      const policySnap = await policyRef.get();
+      let policy;
+      try {
+        policy = normalizeRevenueAutopilotTenantPolicy(
+          policySnap.exists ? policySnap.data() || {} : null
+        );
+      } catch (error) {
+        failures += 1;
+        functions.logger.warn("Revenue Autopilot skipped invalid tenant policy", {
+          organizationId,
+          error: normalizeText(error?.message).slice(0, 200)
+        });
+        continue;
+      }
+      if (policy.authorityState !== "configured" || policy.enabled !== true) continue;
+      const tenantRegistry = tenantDoc.data() || {};
+      const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+      const quotePage = await readRevenueAutopilotTenantWorkPage({
+        collectionRef: organizationRef.collection(QUOTES_COLLECTION),
+        cursor: normalizeText(tenantRegistry.schedulerQuoteCursor),
+        limit: perTenantQuoteLimit
+      });
+      const quotesSnap = quotePage.snapshot;
+      quotesObserved += quotesSnap.docs.length;
+      for (const quoteDoc of quotesSnap.docs) {
+        try {
+          const materialized = await materializeScheduledRevenueAutopilotQuote({
+            organizationId,
+            quoteId: quoteDoc.id,
+            nowISO: new Date().toISOString()
+          });
+          jobsCreated += materialized.createdCount;
+          jobsUpdated += materialized.updatedCount;
+        } catch (error) {
+          failures += 1;
+          functions.logger.warn("Revenue Autopilot quote materialization skipped", {
+            organizationId,
+            quoteId: quoteDoc.id,
+            error: normalizeText(error?.message).slice(0, 200)
+          });
+        }
+      }
+      const jobPage = await readRevenueAutopilotTenantWorkPage({
+        collectionRef: organizationRef.collection(REVENUE_AUTOPILOT_JOBS_COLLECTION),
+        cursor: normalizeText(tenantRegistry.schedulerJobCursor),
+        limit: perTenantDispatchLimit
+      });
+      const jobsSnap = jobPage.snapshot;
+      for (const jobDoc of jobsSnap.docs) {
+        try {
+          const outcome = await dispatchRevenueAutopilotJob({
+            organizationId,
+            jobId: jobDoc.id
+          });
+          if (!new Set(["none", "wait", "block", "missing"]).has(outcome.action)) {
+            dispatchesObserved += 1;
+          }
+        } catch (error) {
+          failures += 1;
+          functions.logger.warn("Revenue Autopilot job dispatch skipped", {
+            organizationId,
+            jobId: jobDoc.id,
+            error: normalizeText(error?.message).slice(0, 200)
+          });
+        }
+      }
+      await tenantDoc.ref.set({
+        schedulerQuoteCursor: quotePage.nextCursor,
+        schedulerJobCursor: jobPage.nextCursor,
+        schedulerCursorUpdatedAtISO: new Date().toISOString(),
+        schedulerCursorUpdatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    await tenantPage.stateRef.set({
+      tenantCursor: tenantPage.nextCursor,
+      priorTenantCursor: tenantPage.priorCursor,
+      wrapped: tenantPage.wrapped,
+      updatedAtISO: new Date().toISOString(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    const completedAtISO = new Date().toISOString();
+    functions.logger.info("Revenue Autopilot bounded schedule completed", {
+      tenantCount: tenantSnap.docs.length,
+      quotesObserved,
+      jobsCreated,
+      jobsUpdated,
+      dispatchesObserved,
+      failures,
+      startedAtISO,
+      completedAtISO
+    });
+    return {
+      ok: true,
+      state: "completed",
+      tenantCount: tenantSnap.docs.length,
+      quotesObserved,
+      jobsCreated,
+      jobsUpdated,
+      dispatchesObserved,
+      failures,
+      startedAtISO,
+      completedAtISO
+    };
+  });
+
+exports.revenueAutopilotResendWebhook = functions
+  .region(REGION)
+  .runWith({ secrets: [RESEND_WEBHOOK_SECRET_NAME] })
+  .https.onRequest(async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method not allowed.");
+      return;
+    }
+    const webhookSecret = normalizeText(process.env[RESEND_WEBHOOK_SECRET_NAME]);
+    const eventId = normalizeText(req.headers["svix-id"]);
+    const timestamp = normalizeText(req.headers["svix-timestamp"]);
+    const signature = normalizeText(req.headers["svix-signature"]);
+    const rawPayload = Buffer.isBuffer(req.rawBody)
+      ? req.rawBody.toString("utf8")
+      : "";
+    if (!webhookSecret || !eventId || !timestamp || !signature || !rawPayload) {
+      res.status(400).send("Webhook verification evidence is incomplete.");
+      return;
+    }
+    let event;
+    try {
+      event = new Webhook(webhookSecret).verify(rawPayload, {
+        "webhook-id": eventId,
+        "webhook-timestamp": timestamp,
+        "webhook-signature": signature
+      });
+    } catch (error) {
+      functions.logger.warn("Revenue Autopilot Resend webhook signature rejected", {
+        eventId,
+        error: normalizeText(error?.message).slice(0, 160)
+      });
+      res.status(400).send("Invalid webhook signature.");
+      return;
+    }
+    const providerMessageId = normalizeText(event?.data?.email_id);
+    if (!providerMessageId) {
+      res.json({ received: true, ignored: "missing_provider_message_id" });
+      return;
+    }
+    const messageIndexRef = db.collection(REVENUE_AUTOPILOT_PROVIDER_MESSAGE_INDEX_COLLECTION)
+      .doc(createHash("sha256").update(`resend|${providerMessageId}`).digest("hex"));
+    const messageIndexSnap = await messageIndexRef.get();
+    if (!messageIndexSnap.exists) {
+      res.json({ received: true, ignored: "unknown_provider_message" });
+      return;
+    }
+    const index = messageIndexSnap.data() || {};
+    const organizationId = normalizeOrganizationId(index.organizationId);
+    const quoteId = normalizeText(index.quoteId);
+    const jobId = normalizeText(index.jobId);
+    const customerId = normalizeText(index.customerId);
+    if (!organizationId || !quoteId || !jobId) {
+      res.status(500).send("Provider-message authority index is invalid.");
+      return;
+    }
+    const refs = revenueAutopilotRefs(organizationId, { quoteId, customerId });
+    const providerEventRef = refs.organizationRef
+      .collection(REVENUE_AUTOPILOT_PROVIDER_EVENTS_COLLECTION)
+      .doc(createHash("sha256").update(`resend|${eventId}`).digest("hex"));
+    const jobRef = refs.jobsRef.doc(jobId);
+    const eventTypeMap = {
+      "email.delivered": "delivered",
+      "email.bounced": "bounced",
+      "email.complained": "complained"
+    };
+    const providerEventType = normalizeText(event?.type).toLowerCase();
+    const mappedType = eventTypeMap[providerEventType] || "";
+    const observedAtISO = new Date().toISOString();
+    try {
+      const result = await db.runTransaction(async (tx) => {
+        const readRefs = [tx.get(providerEventRef), tx.get(jobRef)];
+        if (refs.customerControlsRef) readRefs.push(tx.get(refs.customerControlsRef));
+        const [eventSnap, jobSnap, controlsSnap] = await Promise.all(readRefs);
+        if (eventSnap.exists) return { duplicate: true, ignored: false };
+        if (!jobSnap.exists) {
+          tx.create(providerEventRef, {
+            provider: "resend",
+            eventId,
+            providerMessageId,
+            eventType: normalizeText(event?.type),
+            organizationId,
+            quoteId,
+            jobId,
+            signatureVerified: true,
+            status: "ignored",
+            result: "job_not_found",
+            observedAtISO,
+            createdAt: FieldValue.serverTimestamp()
+          });
+          return { duplicate: false, ignored: true };
+        }
+        const current = { jobId, ...(jobSnap.data() || {}) };
+        if (
+          normalizeText(current.organizationId) !== organizationId
+          || normalizeText(current.quoteId) !== quoteId
+          || normalizeText(current.provider) !== "resend"
+          || normalizeText(current.providerMessageId) !== providerMessageId
+        ) {
+          throw new RevenueAutopilotAuthorityError(
+            "permission-denied",
+            "Provider event is outside the accepted Revenue Autopilot job scope."
+          );
+        }
+        if (!mappedType) {
+          tx.create(providerEventRef, {
+            provider: "resend",
+            eventId,
+            providerMessageId,
+            eventType: normalizeText(event?.type),
+            organizationId,
+            quoteId,
+            jobId,
+            signatureVerified: true,
+            status: "ignored",
+            result: new Set(["email.opened", "email.clicked"]).has(providerEventType)
+              ? "engagement_event_never_establishes_portal_view"
+              : "unsupported_event_type",
+            observedAtISO,
+            createdAt: FieldValue.serverTimestamp()
+          });
+          return { duplicate: false, ignored: true };
+        }
+        const recorded = recordRevenueAutopilotProviderEvent({
+          job: current,
+          event: {
+            source: "verified_provider_webhook",
+            signatureVerified: true,
+            eventId,
+            provider: "resend",
+            providerMessageId,
+            type: mappedType,
+            occurredAtISO: normalizeText(event?.data?.created_at || event?.created_at)
+          },
+          nowISO: observedAtISO
+        });
+        tx.set(jobRef, {
+          ...current,
+          ...recorded.job,
+          updatedAtISO: observedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        if (recorded.suppressionRecommended && refs.customerControlsRef && controlsSnap?.exists) {
+          const controlsRaw = controlsSnap.data() || {};
+          tx.set(refs.customerControlsRef, {
+            suppression: {
+              organizationId,
+              customerId,
+              recipientKey: normalizeText(current.recipientKey),
+              evidenceId: `suppression_${createHash("sha256")
+                .update(`${eventId}|${recorded.suppressionReason}`)
+                .digest("hex")}`,
+              state: "suppressed",
+              reason: recorded.suppressionReason,
+              evaluatedAtISO: observedAtISO
+            },
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+        tx.create(providerEventRef, {
+          provider: "resend",
+          eventId,
+          providerMessageId,
+          eventType: normalizeText(event?.type),
+          mappedType,
+          organizationId,
+          quoteId,
+          jobId,
+          customerId,
+          signatureVerified: true,
+          status: "processed",
+          suppressionRecommended: recorded.suppressionRecommended === true,
+          observedAtISO,
+          providerOccurredAtISO: normalizeText(event?.data?.created_at || event?.created_at),
+          createdAt: FieldValue.serverTimestamp()
+        });
+        return { duplicate: false, ignored: false };
+      });
+      res.json({
+        received: true,
+        ...(result.duplicate ? { duplicate: true } : {}),
+        ...(result.ignored ? { ignored: "unsupported_or_unbound_event" } : {})
+      });
+    } catch (error) {
+      functions.logger.error("Revenue Autopilot Resend webhook processing failed", {
+        eventId,
+        providerMessageId,
+        organizationId,
+        quoteId,
+        jobId,
+        error: normalizeText(error?.message).slice(0, 240)
+      });
+      res.status(500).send("Failed to process provider event.");
+    }
+  });
 
 exports.reopenQuote = functions.region(REGION).https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);

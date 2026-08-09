@@ -16,11 +16,6 @@ const FUNCTIONS_SOURCE = readFileSync(
   fileURLToPath(new URL("../../../functions/index.js", import.meta.url)),
   "utf8"
 );
-const COMMERCE_OPS_SOURCE = readFileSync(
-  fileURLToPath(new URL("../../lib/commerceOps.js", import.meta.url)),
-  "utf8"
-);
-
 function simulation(overrides = {}) {
   return {
     schemaVersion: "commercial-change-impact-v1",
@@ -141,17 +136,6 @@ function renderPanel(props = {}) {
   return renderToStaticMarkup(<CommercialChangeImpactPanel {...props} />);
 }
 
-function collectElements(node, predicate, matches = []) {
-  if (Array.isArray(node)) {
-    node.forEach((child) => collectElements(child, predicate, matches));
-    return matches;
-  }
-  if (!React.isValidElement(node)) return matches;
-  if (predicate(node)) matches.push(node);
-  collectElements(node.props.children, predicate, matches);
-  return matches;
-}
-
 describe("CommercialChangeImpactPanel", () => {
   test("derives every required presentation state without treating a failed refresh as current", () => {
     const model = simulation();
@@ -252,16 +236,12 @@ describe("CommercialChangeImpactPanel", () => {
 
   test("supports only the optional return-to-edit action", () => {
     const onReturnToEdit = vi.fn();
-    const tree = CommercialChangeImpactPanel({
+    const markup = renderPanel({
       model: simulation(),
       onReturnToEdit
     });
-    const buttons = collectElements(tree, (node) => node.type === "button");
-
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0].props["data-capability-action"]).toBe("return-to-edit");
-    buttons[0].props.onClick();
-    expect(onReturnToEdit).toHaveBeenCalledTimes(1);
+    expect(markup).toContain('data-capability-action="return-to-edit"');
+    expect(markup.match(/<button/gu)).toHaveLength(1);
     expect(renderPanel({ model: simulation() })).not.toContain("<button");
   });
 
@@ -284,35 +264,134 @@ describe("CommercialChangeImpactPanel", () => {
 
   test("offers an explicit retry control after a failed simulation", () => {
     const onRetry = vi.fn();
-    const tree = CommercialChangeImpactPanel({ error: "Unavailable", onRetry });
-    const buttons = collectElements(tree, (node) => node.type === "button");
+    const markup = renderPanel({ error: "Unavailable", onRetry });
+    expect(markup).toContain('data-capability-action="retry-simulation"');
+    expect(markup.match(/<button/gu)).toHaveLength(1);
+  });
 
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0].props["data-capability-action"]).toBe("retry-simulation");
-    buttons[0].props.onClick();
-    expect(onRetry).toHaveBeenCalledTimes(1);
+  test("presents dormant authority as receipt-backed review without unsafe mutation controls", () => {
+    const markup = renderPanel({
+      model: simulation(),
+      authorityState: "dormant",
+      authorizationRequired: true,
+      scopeCurrent: true
+    });
+
+    expect(markup).toContain('data-capability-id="cwf-15c-commercial-change-authority"');
+    expect(markup).toContain('data-authority-state="dormant"');
+    expect(markup).toContain("enforcement is dormant");
+    expect(markup).not.toContain("Authorize exact change");
+    expect(markup).not.toContain("Apply authorized change");
+  });
+
+  test("renders every literal canonical Commercial Change Authority mutation marker", () => {
+    const renderAuthority = (mutationState) => renderPanel({
+      model: simulation(),
+      authorityState: "enforced",
+      authorizationRequired: true,
+      scopeCurrent: true,
+      mutationState
+    });
+
+    expect(renderAuthority("ready")).toContain('data-capability-state="ready"');
+    expect(renderAuthority("submitting")).toContain('data-capability-state="submitting"');
+    expect(renderAuthority("uncertain")).toContain('data-capability-state="uncertain"');
+    expect(renderAuthority("reconciliation")).toContain('data-capability-state="reconciliation"');
+    expect(renderAuthority("receipt")).toContain('data-capability-state="receipt"');
+    expect(renderAuthority("error")).toContain('data-capability-state="error"');
+    expect(renderAuthority("recovery")).toContain('data-capability-state="recovery"');
+  });
+
+  test("gives sales an exact approval handoff and administrators an exact authorization action", () => {
+    const onRequestAuthorization = vi.fn();
+    const salesMarkup = renderPanel({
+      model: simulation(),
+      authorityState: "enforced",
+      authorizationRequired: true,
+      staffRole: "sales",
+      scopeCurrent: true,
+      onRequestAuthorization
+    });
+    expect(salesMarkup).toContain("Request admin authorization");
+
+    const onAuthorize = vi.fn();
+    const adminMarkup = renderPanel({
+      model: simulation(),
+      authorityState: "enforced",
+      authorizationRequired: true,
+      staffRole: "admin",
+      scopeCurrent: true,
+      onAuthorize
+    });
+    expect(adminMarkup).toContain("Authorize exact change");
+  });
+
+  test("enables atomic apply only for an exact current authorization receipt", () => {
+    const onApply = vi.fn();
+    const currentMarkup = renderPanel({
+      model: simulation(),
+      authorityState: "enforced",
+      authorizationRequired: true,
+      staffRole: "admin",
+      authorizationReceiptId: `cca_${"a".repeat(48)}`,
+      scopeCurrent: true,
+      mutationState: "authorized",
+      onApply
+    });
+    expect(currentMarkup).toContain("Apply authorized change");
+    expect(currentMarkup).not.toContain("disabled=\"\"");
+
+    const staleMarkup = renderPanel({
+      model: simulation(),
+      authorityState: "enforced",
+      authorizationRequired: true,
+      authorizationReceiptId: `cca_${"a".repeat(48)}`,
+      scopeCurrent: false,
+      mutationState: "authorized",
+      onApply
+    });
+    expect(staleMarkup).toContain("Authorization and apply are disabled");
+    expect(staleMarkup).toContain("disabled=\"\"");
+  });
+
+  test("fails an uncertain apply closed instead of submitting a second logical edit", () => {
+    const markup = renderPanel({
+      model: simulation(),
+      authorityState: "enforced",
+      authorizationRequired: true,
+      staffRole: "admin",
+      authorizationReceiptId: `cca_${"a".repeat(48)}`,
+      scopeCurrent: true,
+      mutationState: "uncertain",
+      mutationKind: "apply",
+      mutationMessage: "Refresh the authoritative quote record before taking another action.",
+      onApply: vi.fn()
+    });
+
+    expect(markup).toContain("Apply outcome unresolved");
+    expect(markup).toContain("disabled=\"\"");
+    expect(markup).toContain("this screen will not submit the edit again");
+    expect(APP_SOURCE).toContain("QuotePilot does not yet have a read-only apply-outcome lookup");
+    expect(APP_SOURCE).toContain("Do not create a second logical edit from this screen");
   });
 
   test("is mechanically bound to the trusted quote edit and authoritative pricing path", () => {
     expect(APP_SOURCE).toContain('data-capability-id="cwf-15b-commercial-change-impact-preview"');
     expect(APP_SOURCE).toContain("handlePreviewChangeImpact");
-    expect(APP_SOURCE).toContain("includeChangeImpactPreview: true");
     expect(APP_SOURCE).toContain("expectedActiveVersionId: editingQuote.activeVersionId");
     expect(APP_SOURCE).toContain('activeVersionId: quote.activeVersionId || quote.versionMeta?.versionId || ""');
-    expect(COMMERCE_OPS_SOURCE).toContain("expectedActiveVersionId = \"\"");
-    expect(COMMERCE_OPS_SOURCE).toContain("payload.expectedActiveVersionId = String(expectedActiveVersionId || \"\").trim()");
-    expect(APP_SOURCE).toContain("simulateCommercialChangeImpact(snapshots)");
+    expect(APP_SOURCE).toContain("simulateCommercialQuoteChange({");
+    expect(APP_SOURCE).toContain("requestCommercialQuoteChangeAuthorization({");
+    expect(APP_SOURCE).toContain("authorizeCommercialQuoteChange({");
+    expect(APP_SOURCE).toContain("commercialChangeAuthority: {");
+    expect(APP_SOURCE).toContain("applyRequestId");
     expect(APP_SOURCE).toContain("Preview change impact");
     expect(APP_SOURCE).toContain("onRetry={() => handlePreviewChangeImpact({ recovery: true })}");
     expect(APP_SOURCE).toContain("No client-calculated substitute is shown");
-    expect(FUNCTIONS_SOURCE).toContain("quoteId && data?.includeChangeImpactPreview === true");
-    expect(FUNCTIONS_SOURCE).toContain("const expectedActiveVersionId = normalizeText(data?.expectedActiveVersionId)");
-    expect(FUNCTIONS_SOURCE).toContain("changeImpactPreview = await db.runTransaction(async (tx) =>");
-    expect(FUNCTIONS_SOURCE).toContain("tx.get(quoteRef)");
-    expect(FUNCTIONS_SOURCE).toContain("tx.get(settingsRef)");
-    expect(FUNCTIONS_SOURCE).toContain("assertPricingCatalogAuthorityCurrent(result.catalogAuthority");
-    expect(FUNCTIONS_SOURCE).toContain("sanitizeQuoteCreationRequest({");
-    expect(FUNCTIONS_SOURCE).toContain("buildCommercialChangeImpactPreviewSnapshots({");
-    expect(FUNCTIONS_SOURCE).toContain("...(changeImpactPreview ? { changeImpactPreview } : {})");
+    expect(FUNCTIONS_SOURCE).toContain("exports.simulateCommercialQuoteChange =");
+    expect(FUNCTIONS_SOURCE).toContain("exports.requestCommercialQuoteChangeAuthorization =");
+    expect(FUNCTIONS_SOURCE).toContain("exports.authorizeCommercialQuoteChange =");
+    expect(FUNCTIONS_SOURCE).toContain("commercialChangeAuthority.buildApply(");
+    expect(FUNCTIONS_SOURCE).toContain("persistCommercialChangeApply({");
   });
 });

@@ -22,7 +22,28 @@ import {
   buildWorkflowTimingCues
 } from "../lib/workflowTimingCues";
 import { buildRevenueAutopilotPreview } from "../lib/revenueAutopilotPreview";
+import {
+  acknowledgeRevenueAutopilotReply,
+  configureRevenueAutopilotPolicy,
+  getRevenueAutopilotOperations,
+  isDefinitiveRevenueAutopilotError,
+  materializeRevenueAutopilotJobs,
+  normalizeRevenueAutopilotReviewRequestUrl,
+  readPendingRevenueAutopilotMaterializationAttempt,
+  readPendingRevenueAutopilotPolicyAttempt,
+  resetDefinitiveRevenueAutopilotPolicyAttempt,
+  reconcileRevenueAutopilotJob
+} from "../lib/revenueAutopilotClient";
+import {
+  configureDecisionDebtPolicy,
+  getDecisionDebtSnapshot,
+  readPendingDecisionDebtPolicyAttempt,
+  reconcileDecisionDebtPolicy,
+  resetDefinitiveDecisionDebtPolicyAttempt
+} from "../lib/decisionDebtClient";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import DecisionDebtPanel from "./DecisionDebtPanel";
+import RevenueAutopilotOperations from "./RevenueAutopilotOperations";
 import RevenueAutopilotPreviewPanel from "./RevenueAutopilotPreviewPanel";
 import WorkflowTimingPanel from "./WorkflowTimingPanel";
 import {
@@ -33,7 +54,7 @@ import {
   humanizeWorkspaceValue
 } from "../lib/workspacePresentation";
 
-const WORKFLOW_TABS = ["attention", "followups", "autopilot", "approvals"];
+const WORKFLOW_TABS = ["attention", "followups", "autopilot", "debt", "approvals"];
 const PROVIDER_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
   "send_final_balance_request"
@@ -104,6 +125,119 @@ function revenueAutopilotReadFailure(code, detail) {
     error: code,
     detail
   };
+}
+
+export function buildRevenueAutopilotReviewRequestConfiguration({
+  enabled = false,
+  reviewRequestUrl = ""
+} = {}) {
+  if (!enabled) {
+    return {
+      state: "dormant",
+      valid: true,
+      normalizedUrl: "",
+      host: "",
+      detail: "The post-event review lane is dormant. A review destination is not required."
+    };
+  }
+  try {
+    const normalizedUrl = normalizeRevenueAutopilotReviewRequestUrl(reviewRequestUrl, {
+      required: true
+    });
+    return {
+      state: "configured",
+      valid: true,
+      normalizedUrl,
+      host: new URL(normalizedUrl).hostname,
+      detail: "The destination is a valid public HTTPS URL. Runtime, provider, closeout, consent, and suppression gates remain separate."
+    };
+  } catch {
+    const missing = !String(reviewRequestUrl || "").trim();
+    return {
+      state: missing ? "missing" : "invalid",
+      valid: false,
+      normalizedUrl: "",
+      host: "",
+      detail: missing
+        ? "Enter the tenant-approved public HTTPS review destination before enabling this lane."
+        : "Use a public HTTPS URL without credentials, fragments, a nonstandard port, or a private/local host."
+    };
+  }
+}
+
+export function RevenueAutopilotReviewRequestPolicyFields({
+  draft,
+  onDraftChange = () => {}
+}) {
+  const enabled = draft?.kinds?.post_event_review_request === true;
+  const reviewRequestUrl = String(draft?.reviewRequestUrl || "");
+  const configuration = buildRevenueAutopilotReviewRequestConfiguration({
+    enabled,
+    reviewRequestUrl
+  });
+  return (
+    <div
+      className="workflow-form-section"
+      data-capability-id="cwf-12-post-event-review-policy"
+      data-capability-state={configuration.state}
+      data-autopilot-review-url-state={configuration.state}
+    >
+      <label className="checkrow">
+        <input
+          type="checkbox"
+          checked={enabled}
+          data-capability-action="toggle-post-event-review-request"
+          onChange={(event) => onDraftChange((current) => ({
+            ...current,
+            kinds: {
+              ...current.kinds,
+              post_event_review_request: event.target.checked
+            }
+          }))}
+        />
+        <span>Post-event review requests</span>
+      </label>
+      {enabled && (
+        <label className="field">
+          <span>Tenant review destination</span>
+          <input
+            type="url"
+            inputMode="url"
+            required
+            value={reviewRequestUrl}
+            placeholder="https://reviews.example.com/your-business"
+            aria-invalid={!configuration.valid}
+            aria-describedby="revenue-autopilot-review-url-guidance"
+            data-capability-action="set-post-event-review-url"
+            onChange={(event) => onDraftChange((current) => ({
+              ...current,
+              reviewRequestUrl: event.target.value
+            }))}
+          />
+        </label>
+      )}
+      <p
+        id="revenue-autopilot-review-url-guidance"
+        className={configuration.valid ? "source-note" : "warning-note"}
+        role={configuration.valid ? "status" : "alert"}
+      >
+        {configuration.detail}
+        {configuration.host ? ` Configured host: ${configuration.host}.` : ""}
+        {enabled && " A review ask is not evidence of an external review or recovered revenue."}
+      </p>
+    </div>
+  );
+}
+
+export function isRevenueAutopilotPolicySaveBlocked({
+  mutationState = "ready",
+  pendingAttempt = null,
+  reviewConfiguration = { valid: true }
+} = {}) {
+  if (new Set(["submitting", "reconciliation"]).has(String(mutationState || "").trim())) {
+    return true;
+  }
+  return !pendingAttempt && reviewConfiguration?.valid !== true;
 }
 
 export function buildWorkflowRevenueAutopilotInput({
@@ -251,6 +385,39 @@ export function SalesWorkflowView({
   const [handlingNotes, setHandlingNotes] = useState({});
   const [busyKey, setBusyKey] = useState("");
   const [workflowReadError, setWorkflowReadError] = useState("");
+  const [autopilotOperations, setAutopilotOperations] = useState({
+    loading: false,
+    error: "",
+    stale: false,
+    snapshot: null,
+    mutation: { state: "ready", error: "", receipt: null }
+  });
+  const [decisionDebt, setDecisionDebt] = useState({
+    loading: false,
+    error: "",
+    stale: false,
+    snapshot: null,
+    policyVersion: "",
+    mutation: { state: "ready", error: "", receipt: null }
+  });
+  const [autopilotConfigurationOpen, setAutopilotConfigurationOpen] = useState(false);
+  const [autopilotPolicyDraft, setAutopilotPolicyDraft] = useState({
+    enabled: false,
+    timeZone: "UTC",
+    quietHours: { enabled: true, start: "21:00", end: "08:00" },
+    kinds: {
+      quote_follow_up: true,
+      deposit_reminder: true,
+      final_balance_reminder: true,
+      post_event_review_request: false,
+      unread_customer_reply: true
+    },
+    reviewRequestUrl: "",
+    maxAttempts: 3,
+    quoteFollowUpDayOffsets: [2, 5],
+    depositReminderDayOffsets: [1, 3],
+    finalBalanceReminderDayOffsets: [14, 7, 3]
+  });
   const dialogRef = useRef(null);
   const routeHeadingRef = useWorkspaceRouteHeadingFocus(Boolean(open && embedded));
   const detailHeadingRef = useRef(null);
@@ -260,6 +427,8 @@ export function SalesWorkflowView({
   const skipReturnFocusRef = useRef(false);
   const tabInteractedRef = useRef(false);
   const loadGenerationRef = useRef(0);
+  const autopilotGenerationRef = useRef(0);
+  const decisionDebtGenerationRef = useRef(0);
   const workflowScopeRef = useRef("");
   const onCloseRef = useRef(onClose);
   workflowScopeRef.current = [organizationId, currentUserRole, currentUserEmail]
@@ -278,6 +447,78 @@ export function SalesWorkflowView({
     pushToast(message, "success");
   };
 
+  const loadRevenueAutopilotOperations = async () => {
+    const scopedOrganizationId = String(organizationId || "").trim();
+    if (!scopedOrganizationId) return;
+    const generation = autopilotGenerationRef.current + 1;
+    autopilotGenerationRef.current = generation;
+    setAutopilotOperations((current) => ({
+      ...current,
+      loading: true,
+      error: "",
+      stale: Boolean(current.snapshot)
+    }));
+    try {
+      const result = await getRevenueAutopilotOperations({
+        organizationId: scopedOrganizationId,
+        jobLimit: 100,
+        attentionLimit: 50
+      });
+      if (generation !== autopilotGenerationRef.current) return;
+      setAutopilotOperations((current) => ({
+        ...current,
+        loading: false,
+        error: "",
+        stale: false,
+        snapshot: result
+      }));
+    } catch (error) {
+      if (generation !== autopilotGenerationRef.current) return;
+      setAutopilotOperations((current) => ({
+        ...current,
+        loading: false,
+        error: error?.message || "Revenue Autopilot operations could not be read.",
+        stale: Boolean(current.snapshot)
+      }));
+    }
+  };
+
+  const loadDecisionDebt = async () => {
+    const scopedOrganizationId = String(organizationId || "").trim();
+    if (!scopedOrganizationId) return;
+    const generation = decisionDebtGenerationRef.current + 1;
+    decisionDebtGenerationRef.current = generation;
+    setDecisionDebt((current) => ({
+      ...current,
+      loading: true,
+      error: "",
+      stale: Boolean(current.snapshot)
+    }));
+    try {
+      const result = await getDecisionDebtSnapshot({
+        organizationId: scopedOrganizationId,
+        limit: 50
+      });
+      if (generation !== decisionDebtGenerationRef.current) return;
+      setDecisionDebt((current) => ({
+        ...current,
+        loading: false,
+        error: "",
+        stale: false,
+        snapshot: result.snapshot,
+        policyVersion: result.policyVersion || ""
+      }));
+    } catch (error) {
+      if (generation !== decisionDebtGenerationRef.current) return;
+      setDecisionDebt((current) => ({
+        ...current,
+        loading: false,
+        error: error?.message || "Decision Debt could not be derived.",
+        stale: Boolean(current.snapshot)
+      }));
+    }
+  };
+
   const load = async ({ selectDefaultTab = false } = {}) => {
     const loadOrganizationId = String(organizationId || "").trim();
     const loadScope = [organizationId, currentUserRole, currentUserEmail]
@@ -288,6 +529,8 @@ export function SalesWorkflowView({
     loadGenerationRef.current = generation;
     setWorkflowReadError("");
     setState((prev) => ({ ...prev, loading: true, error: "", feedback: "" }));
+    void loadRevenueAutopilotOperations();
+    void loadDecisionDebt();
     try {
       const result = await getQuoteHistory({
         organizationId,
@@ -327,7 +570,12 @@ export function SalesWorkflowView({
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      loadGenerationRef.current += 1;
+      autopilotGenerationRef.current += 1;
+      decisionDebtGenerationRef.current += 1;
+      return;
+    }
     tabInteractedRef.current = false;
     skipReturnFocusRef.current = false;
     setState((prev) => ({
@@ -349,6 +597,22 @@ export function SalesWorkflowView({
     setHandlingNotes({});
     setBusyKey("");
     setWorkflowReadError("");
+    setAutopilotConfigurationOpen(false);
+    setAutopilotOperations({
+      loading: true,
+      error: "",
+      stale: false,
+      snapshot: null,
+      mutation: { state: "ready", error: "", receipt: null }
+    });
+    setDecisionDebt({
+      loading: true,
+      error: "",
+      stale: false,
+      snapshot: null,
+      policyVersion: "",
+      mutation: { state: "ready", error: "", receipt: null }
+    });
     load({ selectDefaultTab: true });
   }, [focusQuoteId, open, organizationId]);
 
@@ -793,6 +1057,289 @@ export function SalesWorkflowView({
     handleOpenQuoteHistory(quote, null);
   };
 
+  const openAutopilotConfiguration = () => {
+    const policy = autopilotOperations.snapshot?.policy || {};
+    const kinds = policy.kinds || {};
+    const quietHoursEnabled = policy.quietHours?.enabled === true;
+    setAutopilotPolicyDraft({
+      enabled: policy.tenantEnabled === true || policy.tenant?.enabled === true,
+      timeZone: normalizeTimeZone(policy.timeZone || tenantTimeZone)
+        || state.snapshotTimeZone
+        || "UTC",
+      quietHours: quietHoursEnabled
+        ? {
+            enabled: true,
+            start: policy.quietHours?.start || "21:00",
+            end: policy.quietHours?.end || "08:00"
+          }
+        : { enabled: false, start: "", end: "" },
+      kinds: {
+        quote_follow_up: kinds.quote_follow_up?.enabled !== false,
+        deposit_reminder: kinds.deposit_reminder?.enabled !== false,
+        final_balance_reminder: kinds.final_balance_reminder?.enabled !== false,
+        post_event_review_request: kinds.post_event_review_request?.enabled === true,
+        unread_customer_reply: kinds.unread_customer_reply?.enabled !== false
+      },
+      reviewRequestUrl: String(policy.reviewRequestUrl || "").trim(),
+      maxAttempts: Number(policy.maxAttempts) || 3,
+      quoteFollowUpDayOffsets: kinds.quote_follow_up?.dayOffsets || [2, 5],
+      depositReminderDayOffsets: kinds.deposit_reminder?.dayOffsets || [1, 3],
+      finalBalanceReminderDayOffsets: [14, 7, 3]
+    });
+    setAutopilotConfigurationOpen(true);
+  };
+
+  const updateAutopilotMutation = (mutation) => {
+    setAutopilotOperations((current) => ({ ...current, mutation }));
+  };
+
+  const handleSaveAutopilotPolicy = async () => {
+    if (!isAdmin) return;
+    const scopedOrganizationId = String(organizationId || "").trim();
+    const pending = readPendingRevenueAutopilotPolicyAttempt({
+      organizationId: scopedOrganizationId
+    });
+    updateAutopilotMutation({
+      state: pending ? "reconciliation" : "submitting",
+      operation: "configure_policy",
+      error: "",
+      receipt: null
+    });
+    try {
+      const result = await configureRevenueAutopilotPolicy(pending
+        ? {
+            organizationId: pending.organizationId,
+            ...(pending.expectedPolicyVersion
+              ? { expectedPolicyVersion: pending.expectedPolicyVersion }
+              : {}),
+            policy: pending.policy,
+            requestId: pending.requestId
+          }
+        : {
+            organizationId: scopedOrganizationId,
+            expectedPolicyVersion: autopilotOperations.snapshot?.policy?.policyVersion || undefined,
+            policy: autopilotPolicyDraft
+          });
+      updateAutopilotMutation({
+        state: "receipt",
+        operation: "configure_policy",
+        error: "",
+        receipt: result.receipt
+      });
+      setAutopilotConfigurationOpen(false);
+      await loadRevenueAutopilotOperations();
+      pushToast("Revenue Autopilot tenant policy recorded. Runtime and provider gates remain separate.", "success");
+    } catch (error) {
+      updateAutopilotMutation({
+        state: isDefinitiveRevenueAutopilotError(error) ? "error" : "uncertain",
+        operation: "configure_policy",
+        error: error?.message || "The policy action did not return a definitive receipt.",
+        receipt: null
+      });
+    }
+  };
+
+  const handleMaterializeAutopilot = async () => {
+    const scopedOrganizationId = String(organizationId || "").trim();
+    if (!selectedQuoteId) {
+      updateAutopilotMutation({
+        state: "error",
+        operation: "materialize_jobs",
+        error: "Select an authoritative quote before preparing its governed records.",
+        receipt: null
+      });
+      return;
+    }
+    const pending = readPendingRevenueAutopilotMaterializationAttempt({
+      organizationId: scopedOrganizationId,
+      quoteId: selectedQuoteId
+    });
+    updateAutopilotMutation({
+      state: pending ? "reconciliation" : "submitting",
+      operation: "materialize_jobs",
+      error: "",
+      receipt: null,
+      quoteId: selectedQuoteId
+    });
+    try {
+      const result = await materializeRevenueAutopilotJobs({
+        organizationId: scopedOrganizationId,
+        quoteId: selectedQuoteId,
+        ...(pending?.requestId ? { requestId: pending.requestId } : {})
+      });
+      updateAutopilotMutation({
+        state: "receipt",
+        operation: "materialize_jobs",
+        error: "",
+        receipt: result.receipt,
+        quoteId: selectedQuoteId
+      });
+      await loadRevenueAutopilotOperations();
+    } catch (error) {
+      updateAutopilotMutation({
+        state: isDefinitiveRevenueAutopilotError(error) ? "error" : "uncertain",
+        operation: "materialize_jobs",
+        error: error?.message || "Job preparation did not return a definitive receipt.",
+        receipt: null,
+        quoteId: selectedQuoteId
+      });
+    }
+  };
+
+  const handleReconcileAutopilotJob = async (job) => {
+    const targetJobId = String(job?.jobId || "").trim();
+    const targetQuoteId = String(job?.quoteId || selectedQuoteId || "").trim();
+    if (!targetJobId || !targetQuoteId) {
+      if (autopilotOperations.mutation?.operation === "materialize_jobs") {
+        await handleMaterializeAutopilot();
+      }
+      return;
+    }
+    updateAutopilotMutation({
+      state: "reconciliation",
+      operation: "reconcile_job",
+      error: "",
+      receipt: null,
+      jobId: targetJobId
+    });
+    try {
+      const result = await reconcileRevenueAutopilotJob({
+        organizationId,
+        quoteId: targetQuoteId,
+        jobId: targetJobId
+      });
+      updateAutopilotMutation({
+        state: "receipt",
+        operation: "reconcile_job",
+        error: "",
+        receipt: result.receipt,
+        jobId: targetJobId
+      });
+      await loadRevenueAutopilotOperations();
+    } catch (error) {
+      updateAutopilotMutation({
+        state: isDefinitiveRevenueAutopilotError(error) ? "error" : "uncertain",
+        operation: "reconcile_job",
+        error: error?.message || "Provider outcome reconciliation remains uncertain.",
+        receipt: null,
+        jobId: targetJobId
+      });
+    }
+  };
+
+  const handleAcknowledgeAutopilotReply = async (attention) => {
+    updateAutopilotMutation({
+      state: "submitting",
+      operation: "acknowledge_reply",
+      error: "",
+      receipt: null,
+      attentionId: attention?.attentionId
+    });
+    try {
+      const result = await acknowledgeRevenueAutopilotReply({
+        organizationId,
+        quoteId: attention?.quoteId,
+        attentionId: attention?.attentionId,
+        messageId: attention?.messageId
+      });
+      updateAutopilotMutation({
+        state: "receipt",
+        operation: "acknowledge_reply",
+        error: "",
+        receipt: result.receipt,
+        attentionId: attention?.attentionId
+      });
+      await loadRevenueAutopilotOperations();
+    } catch (error) {
+      updateAutopilotMutation({
+        state: isDefinitiveRevenueAutopilotError(error) ? "error" : "uncertain",
+        operation: "acknowledge_reply",
+        error: error?.message || "Manual reply acknowledgement remains uncertain.",
+        receipt: null,
+        attentionId: attention?.attentionId
+      });
+    }
+  };
+
+  const handleOpenAutopilotConversation = (attention) => {
+    const quoteId = String(attention?.quoteId || "").trim();
+    if (!quoteId) return;
+    skipReturnFocusRef.current = true;
+    onOpenQuoteHistory?.({
+      quoteId,
+      action: "conversation"
+    });
+  };
+
+  const handleConfigureDecisionDebt = async ({ policy, expectedPolicyVersion }) => {
+    setDecisionDebt((current) => ({
+      ...current,
+      mutation: { state: "submitting", error: "", receipt: null }
+    }));
+    try {
+      const result = await configureDecisionDebtPolicy({
+        organizationId,
+        policy,
+        ...(expectedPolicyVersion ? { expectedPolicyVersion } : {})
+      });
+      setDecisionDebt((current) => ({
+        ...current,
+        mutation: { state: "receipt", error: "", receipt: result.receipt }
+      }));
+      await loadDecisionDebt();
+    } catch (error) {
+      const pending = readPendingDecisionDebtPolicyAttempt({ organizationId });
+      setDecisionDebt((current) => ({
+        ...current,
+        mutation: {
+          state: pending?.definitive ? "error" : "uncertain",
+          error: error?.message || "Decision Debt policy outcome is uncertain.",
+          receipt: null,
+          requestId: pending?.requestId
+        }
+      }));
+    }
+  };
+
+  const handleReconcileDecisionDebt = async () => {
+    setDecisionDebt((current) => ({
+      ...current,
+      mutation: { ...current.mutation, state: "reconciliation", error: "" }
+    }));
+    try {
+      const result = await reconcileDecisionDebtPolicy({ organizationId });
+      setDecisionDebt((current) => ({
+        ...current,
+        mutation: { state: "receipt", error: "", receipt: result.receipt }
+      }));
+      await loadDecisionDebt();
+    } catch (error) {
+      const pending = readPendingDecisionDebtPolicyAttempt({ organizationId });
+      setDecisionDebt((current) => ({
+        ...current,
+        mutation: {
+          state: pending?.definitive ? "error" : "uncertain",
+          error: error?.message || "Decision Debt policy reconciliation remains uncertain.",
+          receipt: null,
+          requestId: pending?.requestId
+        }
+      }));
+    }
+  };
+
+  const handleResetDecisionDebt = () => {
+    const pending = readPendingDecisionDebtPolicyAttempt({ organizationId });
+    if (resetDefinitiveDecisionDebtPolicyAttempt({
+      organizationId,
+      ...(pending?.requestId ? { requestId: pending.requestId } : {})
+    })) {
+      setDecisionDebt((current) => ({
+        ...current,
+        mutation: { state: "recovery", error: "", receipt: null }
+      }));
+    }
+  };
+
   const focusAttentionItem = (candidateIds = []) => {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
@@ -889,6 +1436,33 @@ export function SalesWorkflowView({
     }
   };
 
+  const revenueOperationsSnapshot = autopilotOperations.snapshot
+    ? {
+        ...autopilotOperations.snapshot,
+        readState: autopilotOperations.loading
+          ? "recovery"
+          : autopilotOperations.error
+            ? "stale"
+            : autopilotOperations.snapshot.readState,
+        mutation: autopilotOperations.mutation
+      }
+    : null;
+  const decisionDebtPartial = Boolean(
+    decisionDebt.snapshot?.bounds?.truncated
+  );
+  const autopilotReviewRequestConfiguration = buildRevenueAutopilotReviewRequestConfiguration({
+    enabled: autopilotPolicyDraft.kinds.post_event_review_request,
+    reviewRequestUrl: autopilotPolicyDraft.reviewRequestUrl
+  });
+  const pendingAutopilotPolicyAttempt = String(organizationId || "").trim()
+    ? readPendingRevenueAutopilotPolicyAttempt({ organizationId })
+    : null;
+  const autopilotPolicySaveBlocked = isRevenueAutopilotPolicySaveBlocked({
+    mutationState: autopilotOperations.mutation?.state,
+    pendingAttempt: pendingAutopilotPolicyAttempt,
+    reviewConfiguration: autopilotReviewRequestConfiguration
+  });
+
   if (!open) return null;
 
   return (
@@ -981,6 +1555,20 @@ export function SalesWorkflowView({
             onClick={() => selectTab("autopilot")}
           >
             Revenue autopilot
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="workflow-tab-debt"
+            aria-controls="workflow-panel-debt"
+            tabIndex={activeTab === "debt" ? 0 : -1}
+            ref={(node) => { tabRefs.current.debt = node; }}
+            onKeyDown={(event) => handleTabKeyDown(event, "debt")}
+            aria-selected={activeTab === "debt"}
+            className={activeTab === "debt" ? "active" : ""}
+            onClick={() => selectTab("debt")}
+          >
+            Decision Debt
           </button>
           <button
             type="button"
@@ -1392,7 +1980,7 @@ export function SalesWorkflowView({
           data-automation-surface="read-only-preview"
         >
           <p className="workflow-attention-boundary">
-            This tab evaluates one quote from the bounded Workflow read. It performs no provider, portal, payment-webhook, conversation, consent, suppression, template, or scheduling read of its own; missing evidence remains blocked.
+            The preview below remains a bounded quote-only simulation. The operations surface separately reads server-owned policy, consent, suppression, job, conversation-attention, and provider evidence; neither surface implies a send or recovered revenue.
           </p>
           <section className="workflow-form-section" aria-labelledby="workflow-autopilot-quote-title">
             <h4 id="workflow-autopilot-quote-title">Quote snapshot</h4>
@@ -1430,6 +2018,232 @@ export function SalesWorkflowView({
             loading={state.loading}
             error={workflowReadError || revenueAutopilotRead.error}
             stale={Boolean(workflowReadError && revenueAutopilotRead.preview)}
+          />
+          <RevenueAutopilotOperations
+            snapshot={revenueOperationsSnapshot}
+            available={!autopilotOperations.error || Boolean(autopilotOperations.snapshot)}
+            onConfigure={isAdmin ? openAutopilotConfiguration : undefined}
+            onMaterialize={handleMaterializeAutopilot}
+            onReconcile={handleReconcileAutopilotJob}
+            onOpenConversation={handleOpenAutopilotConversation}
+            onAcknowledgeReply={handleAcknowledgeAutopilotReply}
+          />
+          {autopilotOperations.error && (
+            <p className="warning-note" role="alert">
+              {autopilotOperations.error}
+              <button type="button" className="ghost compact" onClick={loadRevenueAutopilotOperations}>
+                Retry operations read
+              </button>
+            </p>
+          )}
+          {isAdmin && autopilotConfigurationOpen && (
+            <section
+              className="workflow-form-section"
+              aria-labelledby="revenue-autopilot-policy-form-title"
+              data-capability-id="cwf-12-revenue-autopilot-policy-form"
+            >
+              <div className="workspace-route-head">
+                <div>
+                  <p className="eyebrow">Tenant administrator</p>
+                  <h3 id="revenue-autopilot-policy-form-title">Automation policy</h3>
+                  <p className="muted">This records tenant intent only. Runtime and approved-provider gates remain independently dormant until configured outside this form.</p>
+                </div>
+              </div>
+              <div className="workflow-form-grid">
+                <label className="workflow-complete-toggle">
+                  <input
+                    type="checkbox"
+                    checked={autopilotPolicyDraft.enabled}
+                    onChange={(event) => setAutopilotPolicyDraft((current) => ({
+                      ...current,
+                      enabled: event.target.checked
+                    }))}
+                  />
+                  <span>Enable tenant automation policy</span>
+                </label>
+                <label className="field">
+                  <span>Tenant IANA time zone</span>
+                  <input
+                    value={autopilotPolicyDraft.timeZone}
+                    onChange={(event) => setAutopilotPolicyDraft((current) => ({
+                      ...current,
+                      timeZone: event.target.value
+                    }))}
+                    placeholder="America/Chicago"
+                  />
+                </label>
+                <label className="field">
+                  <span>Maximum bounded attempts</span>
+                  <select
+                    value={autopilotPolicyDraft.maxAttempts}
+                    onChange={(event) => setAutopilotPolicyDraft((current) => ({
+                      ...current,
+                      maxAttempts: Number(event.target.value)
+                    }))}
+                  >
+                    {[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </label>
+                <label className="workflow-complete-toggle">
+                  <input
+                    type="checkbox"
+                    checked={autopilotPolicyDraft.quietHours.enabled}
+                    onChange={(event) => setAutopilotPolicyDraft((current) => ({
+                      ...current,
+                      quietHours: event.target.checked
+                        ? { enabled: true, start: "21:00", end: "08:00" }
+                        : { enabled: false, start: "", end: "" }
+                    }))}
+                  />
+                  <span>Enforce tenant-local quiet hours</span>
+                </label>
+                {autopilotPolicyDraft.quietHours.enabled && (
+                  <>
+                    <label className="field">
+                      <span>Quiet hours start</span>
+                      <input
+                        type="time"
+                        value={autopilotPolicyDraft.quietHours.start}
+                        onChange={(event) => setAutopilotPolicyDraft((current) => ({
+                          ...current,
+                          quietHours: { ...current.quietHours, start: event.target.value }
+                        }))}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Quiet hours end</span>
+                      <input
+                        type="time"
+                        value={autopilotPolicyDraft.quietHours.end}
+                        onChange={(event) => setAutopilotPolicyDraft((current) => ({
+                          ...current,
+                          quietHours: { ...current.quietHours, end: event.target.value }
+                        }))}
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+              <fieldset className="workflow-form-section">
+                <legend>Governed lanes</legend>
+                <div className="checklist">
+                  {[
+                    ["quote_follow_up", "Quote follow-ups"],
+                    ["deposit_reminder", "Deposit reminders"],
+                    ["final_balance_reminder", "Final-balance reminders"],
+                    ["unread_customer_reply", "Unread customer-reply attention"]
+                  ].map(([kind, label]) => (
+                    <label className="checkrow" key={kind}>
+                      <input
+                        type="checkbox"
+                        checked={autopilotPolicyDraft.kinds[kind]}
+                        onChange={(event) => setAutopilotPolicyDraft((current) => ({
+                          ...current,
+                          kinds: { ...current.kinds, [kind]: event.target.checked }
+                        }))}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+                <RevenueAutopilotReviewRequestPolicyFields
+                  draft={autopilotPolicyDraft}
+                  onDraftChange={setAutopilotPolicyDraft}
+                />
+              </fieldset>
+              <div className="workflow-form-grid">
+                <label className="field">
+                  <span>Quote follow-up days after send</span>
+                  <input
+                    value={autopilotPolicyDraft.quoteFollowUpDayOffsets.join(", ")}
+                    onChange={(event) => setAutopilotPolicyDraft((current) => ({
+                      ...current,
+                      quoteFollowUpDayOffsets: event.target.value.split(",")
+                        .map((value) => Number(value.trim()))
+                        .filter(Number.isSafeInteger)
+                    }))}
+                  />
+                </label>
+                <label className="field">
+                  <span>Deposit reminder days after acceptance</span>
+                  <input
+                    value={autopilotPolicyDraft.depositReminderDayOffsets.join(", ")}
+                    onChange={(event) => setAutopilotPolicyDraft((current) => ({
+                      ...current,
+                      depositReminderDayOffsets: event.target.value.split(",")
+                        .map((value) => Number(value.trim()))
+                        .filter(Number.isSafeInteger)
+                    }))}
+                  />
+                </label>
+                <label className="field">
+                  <span>Final-balance event-minus windows</span>
+                  <input value="14, 7, 3" readOnly />
+                </label>
+              </div>
+              <div className="right-actions">
+                <button
+                  type="button"
+                  className="cta compact"
+                  onClick={handleSaveAutopilotPolicy}
+                  disabled={autopilotPolicySaveBlocked}
+                  title={!pendingAutopilotPolicyAttempt && !autopilotReviewRequestConfiguration.valid
+                    ? "Configure a valid public HTTPS review destination before saving this enabled lane."
+                    : undefined}
+                >
+                  {pendingAutopilotPolicyAttempt ? "Reconcile exact policy attempt" : "Save tenant policy"}
+                </button>
+                <button type="button" className="ghost compact" onClick={() => setAutopilotConfigurationOpen(false)}>
+                  Cancel
+                </button>
+                {autopilotOperations.mutation?.state === "error" && (
+                  <button
+                    type="button"
+                    className="ghost compact"
+                    onClick={() => {
+                      const pending = readPendingRevenueAutopilotPolicyAttempt({ organizationId });
+                      if (resetDefinitiveRevenueAutopilotPolicyAttempt({
+                        organizationId,
+                        ...(pending?.requestId ? { requestId: pending.requestId } : {})
+                      })) {
+                        updateAutopilotMutation({ state: "recovery", error: "", receipt: null });
+                      }
+                    }}
+                  >
+                    Reset rejected policy attempt
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
+        </section>
+
+        <section
+          className="workflow-attention-panel"
+          role="tabpanel"
+          id="workflow-panel-debt"
+          aria-labelledby="workflow-tab-debt"
+          tabIndex={0}
+          hidden={activeTab !== "debt"}
+        >
+          <DecisionDebtPanel
+            snapshot={decisionDebt.snapshot
+              ? { ...decisionDebt.snapshot, policyVersion: decisionDebt.policyVersion }
+              : null}
+            loading={decisionDebt.loading}
+            error={decisionDebt.error}
+            stale={decisionDebt.stale}
+            partial={decisionDebtPartial}
+            mutation={decisionDebt.mutation}
+            isAdmin={isAdmin}
+            onRetry={loadDecisionDebt}
+            onConfigurePolicy={handleConfigureDecisionDebt}
+            onReconcilePolicy={handleReconcileDecisionDebt}
+            onResetMutation={handleResetDecisionDebt}
+            onOpenQuote={(quoteId) => {
+              const quote = state.quotes.find((item) => item.id === quoteId);
+              if (quote) handleOpenQuoteHistory(quote, null);
+            }}
           />
         </section>
 

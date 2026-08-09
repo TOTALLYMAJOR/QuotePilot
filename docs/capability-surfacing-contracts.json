@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 4,
+  "catalogVersion": 5,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -1066,7 +1066,7 @@
     },
     {
       "id": "workflow-timing-and-revenue-autopilot-preview",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -1158,7 +1158,7 @@
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "`Revenue autopilot` is currently a non-sending eligibility preview"
+          "locator": "`Revenue autopilot` keeps the original bounded, non-sending quote eligibility"
         }
       ],
       "surfaceReview": "changed",
@@ -1643,7 +1643,7 @@
     },
     {
       "id": "commercial-dependency-graph-beo-provenance",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -1665,7 +1665,7 @@
       "entryPointLocators": [
         {
           "path": "src/components/QuoteHistoryModal.jsx",
-          "locator": "Kitchen sheet"
+          "locator": "Local BEO — no receipt"
         }
       ],
       "testPaths": [
@@ -1713,15 +1713,1017 @@
         },
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Commercial Dependency Graph v1 and Kitchen BEO download-time provenance"
+          "locator": "Commercial Dependency Graph v1 pure foundation"
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "### Kitchen Sheet Input Provenance (CWF-15A)"
+          "locator": "## Trusted Kitchen BEO generation and artifact freshness"
         }
       ],
       "headlessReason": "The registry, traversal, canonical bytes, and browser-generated digest are deterministic internal mechanics behind the existing staff-only Kitchen sheet download. Presenting them as a mutable dashboard or freshness status in CWF-15A would imply retained server authority the browser does not possess.",
-      "safeOutcome": "Authorized staff keep using Kitchen sheet and receive visible source, digest, schema, graph, and proof-boundary provenance inside the PDF; no quote is written and no freshness, completion, actor, server-time, or receipt evidence is created."
+      "safeOutcome": "Authorized staff keep using the local BEO download and receive visible source, digest, schema, graph, and proof-boundary provenance inside the PDF; no quote is written and no freshness, completion, actor, server-time, or receipt evidence is created."
+    },
+    {
+      "id": "commercial-change-authority",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Receipt-bound commercial change simulation, approval handoff, authorization, and atomic application are exposed inside the trusted quote-edit path; uncertain apply outcomes remain explicitly blocked pending a dedicated read-only reconciliation contract.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/commercialChangeAuthority.js",
+        "functions/commercialChangeImpactEvaluator.js",
+        "src/lib/commercialChangeAuthorityClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#simulateCommercialQuoteChange",
+        "functions/index.js#requestCommercialQuoteChangeAuthorization",
+        "functions/index.js#getCommercialQuoteChangeAuthorizationState",
+        "functions/index.js#authorizeCommercialQuoteChange"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#simulateCommercialQuoteChange",
+        "functions/index.js#requestCommercialQuoteChangeAuthorization",
+        "functions/index.js#getCommercialQuoteChangeAuthorizationState",
+        "functions/index.js#authorizeCommercialQuoteChange",
+        "functions/index.js#getCommercialDependencyState",
+        "functions/index.js#reconcileCommercialDependencyState",
+        "functions/index.js#updateQuoteDraft"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/CommercialChangeImpactPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CommercialChangeImpactPanel.jsx",
+          "locator": "data-capability-id=\"cwf-15c-commercial-change-authority\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+        "src/lib/__tests__/commercialChangeAuthority.server.test.js",
+        "src/lib/__tests__/commercialChangeAuthorityClient.test.js",
+        "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders every literal canonical Commercial Change Authority mutation marker"
+        },
+        {
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "is mechanically bound to the trusted quote edit and authoritative pricing path"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Commercial Change Authority"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Commercial Change Authority"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The quote-edit simulation, staff approval handoff, administrator authorization, exact receipt application, request-identity lock, pre-apply uncertainty controls, definitive rejection, and recovery controls were reviewed together; post-commit apply uncertainty is retained and blocked because no read-only outcome lookup exists yet.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders every literal canonical Commercial Change Authority mutation marker",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders every literal canonical Commercial Change Authority mutation marker",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders every literal canonical Commercial Change Authority mutation marker",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders every literal canonical Commercial Change Authority mutation marker",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders every literal canonical Commercial Change Authority mutation marker",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders every literal canonical Commercial Change Authority mutation marker",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "renders every literal canonical Commercial Change Authority mutation marker",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can simulate and route an exact commercial change, while only an authorized administrator can issue the bound authorization receipt required for atomic application. An uncertain apply disables repeat application and remains blocked; this source does not claim read-only apply-outcome reconciliation."
+    },
+    {
+      "id": "commercial-dependency-state-and-reconciliation",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "The quote record exposes authoritative dependency invalidations, publication eligibility, and note-bound reconciliation receipts without treating a stale artifact or unresolved decision as current.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/commercialDependencyGraphCore.cjs",
+        "src/lib/commercialChangeAuthorityClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getCommercialDependencyState",
+        "functions/index.js#reconcileCommercialDependencyState"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#simulateCommercialQuoteChange",
+        "functions/index.js#authorizeCommercialQuoteChange",
+        "functions/index.js#getCommercialDependencyState",
+        "functions/index.js#reconcileCommercialDependencyState",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#getKitchenBeoArtifactStatus",
+        "functions/index.js#downloadKitchenBeoReceipt",
+        "functions/index.js#generateKitchenBeo",
+        "functions/index.js#getDecisionDebtSnapshot",
+        "functions/index.js#configureDecisionDebtPolicy",
+        "functions/index.js#getRevenueAutopilotOperations",
+        "functions/index.js#materializeRevenueAutopilotJobs",
+        "functions/index.js#reconcileRevenueAutopilotJob"
+      ],
+      "frontendPaths": [
+        "src/components/QuoteHistoryModal.jsx",
+        "src/components/CommercialDependencyStatePanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CommercialDependencyStatePanel.jsx",
+          "locator": "data-capability-id=\"cwf-15-commercial-dependency-state\""
+        },
+        {
+          "path": "src/components/CommercialDependencyStatePanel.jsx",
+          "locator": "className=\"commercial-dependency-reconcile\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+        "src/components/__tests__/quoteHistoryCommercialDependencyIntegration.test.jsx",
+        "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "renders every literal canonical dependency read marker through exact reads"
+        },
+        {
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "requires a staff note for output nodes and renders the immutable reconciliation receipt"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Commercial Dependency State and reconciliation"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Commercial Dependency State and reconciliation"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The staff quote record now distinguishes bounded loading, empty, ready, blocked, partial, stale, and failed reads from receipt-bound reconciliation, including exact request locking and safe recovery.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "renders every literal canonical dependency read marker through exact reads",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "renders every literal canonical dependency read marker through exact reads",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "renders every literal canonical dependency read marker through exact reads",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "renders every literal canonical dependency read marker through exact reads",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "renders every literal canonical dependency read marker through exact reads",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "renders definitive reconciliation error and real reload recovery markers",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "renders definitive reconciliation error and real reload recovery markers",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "requires a staff note for output nodes and renders the immutable reconciliation receipt",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "requires a staff note for output nodes and renders the immutable reconciliation receipt",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "locks and retries the exact reconciliation identity after an uncertain outcome",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "locks and retries the exact reconciliation identity after an uncertain outcome",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/commercialDependencyStatePanel.test.jsx",
+          "locator": "requires a staff note for output nodes and renders the immutable reconciliation receipt",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can see which exact dependent decisions and artifacts remain invalid, why publication is blocked, and which note-backed reconciliation receipt resolved each selected invalidation; no visual family alone claims artifact freshness or authorization."
+    },
+    {
+      "id": "trusted-kitchen-beo-authority",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Staff can inspect server-authoritative Kitchen BEO freshness, download exact prior receipt bytes, and generate a new PDF with a durable source fingerprint and immutable receipt.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/kitchenBeoAuthority.js",
+        "functions/kitchenBeoPdf.js",
+        "src/lib/kitchenBeoClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getKitchenBeoArtifactStatus",
+        "functions/index.js#downloadKitchenBeoReceipt",
+        "functions/index.js#generateKitchenBeo"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getKitchenBeoArtifactStatus",
+        "functions/index.js#downloadKitchenBeoReceipt",
+        "functions/index.js#generateKitchenBeo"
+      ],
+      "frontendPaths": [
+        "src/components/QuoteHistoryModal.jsx",
+        "src/components/KitchenBeoArtifactPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/KitchenBeoArtifactPanel.jsx",
+          "locator": "data-capability-id=\"cwf-15-kitchen-beo-artifact-status\""
+        },
+        {
+          "path": "src/components/KitchenBeoArtifactPanel.jsx",
+          "locator": "data-capability-id=\"cwf-15-kitchen-beo-generation\""
+        },
+        {
+          "path": "src/components/KitchenBeoArtifactPanel.jsx",
+          "locator": "data-capability-action=\"download-receipt\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+        "src/components/__tests__/quoteHistoryKitchenBeoIntegration.test.jsx",
+        "src/lib/__tests__/kitchenBeoAuthority.server.test.js",
+        "src/lib/__tests__/kitchenBeoClient.test.js",
+        "src/lib/__tests__/kitchenBeoIntegration.server.test.js",
+        "src/lib/__tests__/kitchenBeoPdf.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO status-read marker through real reads"
+        },
+        {
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "downloads exact prior receipt bytes without creating a new generation receipt"
+        },
+        {
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO generation marker"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Trusted Kitchen BEO generation and artifact freshness"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Trusted Kitchen BEO generation and artifact freshness"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The quote-record status read, current/stale/unknown boundary, prior receipt download, generation request lock, immutable receipt, uncertain reconciliation, browser-download failure, and recovery controls were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO status-read marker through real reads",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO status-read marker through real reads",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO status-read marker through real reads",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO status-read marker through real reads",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO status-read marker through real reads",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO generation marker",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO generation marker",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO generation marker",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO generation marker",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO generation marker",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO generation marker",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/kitchenBeoArtifactPanel.test.jsx",
+          "locator": "renders every literal canonical Kitchen BEO generation marker",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can distinguish not generated, current, stale, incomplete, and failed BEO evidence, download only exact trusted receipt bytes, and generate or reconcile one request identity without treating a browser download as artifact-generation proof."
+    },
+    {
+      "id": "decision-debt-and-policy-controls",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Decision Debt exposes deterministic time-sensitive unresolved-decision priority and its bounded factors to staff, with version-bound policy mutation reserved for administrators.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/decisionDebt.js",
+        "src/lib/decisionDebtClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getDecisionDebtSnapshot",
+        "functions/index.js#configureDecisionDebtPolicy"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getDecisionDebtSnapshot",
+        "functions/index.js#configureDecisionDebtPolicy"
+      ],
+      "frontendPaths": [
+        "src/components/SalesWorkflowModal.jsx",
+        "src/components/DecisionDebtPanel.jsx",
+        "src/components/QuoteDecisionDebtPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/DecisionDebtPanel.jsx",
+          "locator": "data-capability-id=\"cwf-15-decision-debt\""
+        },
+        {
+          "path": "src/components/DecisionDebtPanel.jsx",
+          "locator": "data-capability-id=\"cwf-15-decision-debt-policy\""
+        },
+        {
+          "path": "src/components/QuoteDecisionDebtPanel.jsx",
+          "locator": "data-capability-id=\"cwf-15-decision-debt-quote-record\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/decisionDebtPanel.test.jsx",
+        "src/components/__tests__/quoteDecisionDebtPanel.test.jsx",
+        "src/lib/__tests__/decisionDebt.server.test.js",
+        "src/lib/__tests__/decisionDebtClient.test.js",
+        "src/lib/__tests__/decisionDebtIntegration.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt read marker from real presentations"
+        },
+        {
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt policy mutation marker"
+        },
+        {
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "keeps configuration admin-only and saves an edited policy against the displayed server version"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Decision Debt and policy controls"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Decision Debt and policy controls"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The deterministic debt list, source and bounds evidence, quote handoff, incomplete exposure boundary, stale retry, administrator-only policy editor, exact policy version, request locking, reconciliation, receipt, and recovery states were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt read marker from real presentations",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt read marker from real presentations",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt read marker from real presentations",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt read marker from real presentations",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt read marker from real presentations",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt policy mutation marker",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt policy mutation marker",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt policy mutation marker",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt policy mutation marker",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt policy mutation marker",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt policy mutation marker",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/decisionDebtPanel.test.jsx",
+          "locator": "renders every literal canonical Decision Debt policy mutation marker",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff see a deterministic urgency signal that discloses its formula, dependency count, timing source, bounds, and non-accounting exposure; administrators can change only a version-bound policy and no policy receipt resolves the underlying decisions."
+    },
+    {
+      "id": "revenue-autopilot-operations",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Revenue Autopilot exposes bounded policy, job, provider-outcome, attention, and post-event review operations with tenant gates, exact receipts, and truthful dormant or incomplete states.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/revenueAutopilot.js",
+        "functions/revenueAutopilotAuthority.js",
+        "functions/revenueAutopilotTemplates.js",
+        "scripts/customer-centered-authority-emulator-acceptance.mjs",
+        "src/lib/revenueAutopilotClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getRevenueAutopilotOperations",
+        "functions/index.js#configureRevenueAutopilotPolicy",
+        "functions/index.js#materializeRevenueAutopilotJobs",
+        "functions/index.js#acknowledgeRevenueAutopilotReply",
+        "functions/index.js#reconcileRevenueAutopilotJob",
+        "functions/index.js#runRevenueAutopilotSchedule",
+        "functions/index.js#revenueAutopilotResendWebhook"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getRevenueAutopilotOperations",
+        "functions/index.js#getRevenueAutopilotCustomerControls",
+        "functions/index.js#configureRevenueAutopilotPolicy",
+        "functions/index.js#configureRevenueAutopilotCustomerControls",
+        "functions/index.js#materializeRevenueAutopilotJobs",
+        "functions/index.js#acknowledgeRevenueAutopilotReply",
+        "functions/index.js#reconcileRevenueAutopilotJob",
+        "functions/index.js#getRevenueAutopilotUnsubscribeContext",
+        "functions/index.js#unsubscribeRevenueAutopilotEmail",
+        "functions/index.js#runRevenueAutopilotSchedule",
+        "functions/index.js#revenueAutopilotResendWebhook"
+      ],
+      "frontendPaths": [
+        "src/components/SalesWorkflowModal.jsx",
+        "src/components/RevenueAutopilotOperations.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/RevenueAutopilotOperations.jsx",
+          "locator": "data-capability-id=\"cwf-12-revenue-autopilot-operations\""
+        },
+        {
+          "path": "src/components/RevenueAutopilotOperations.jsx",
+          "locator": "data-capability-id=\"cwf-12-revenue-autopilot-mutation\""
+        },
+        {
+          "path": "src/components/SalesWorkflowModal.jsx",
+          "locator": "data-capability-id=\"cwf-12-post-event-review-policy\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+        "src/components/__tests__/salesWorkflowRevenueAutopilot.test.jsx",
+        "src/lib/__tests__/revenueAutopilot.server.test.js",
+        "src/lib/__tests__/revenueAutopilotAuthority.server.test.js",
+        "src/lib/__tests__/revenueAutopilotClient.test.js",
+        "src/lib/__tests__/revenueAutopilotSchedule.server.test.js",
+        "src/lib/__tests__/revenueAutopilotTemplates.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operations read marker"
+        },
+        {
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operation mutation marker"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowRevenueAutopilot.test.jsx",
+          "locator": "renders the admin post-event toggle, required URL field, and proof-safe configuration copy"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Revenue Autopilot operations, post-event review requests, and customer unsubscribe"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Revenue Autopilot operations"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Post-event review requests"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The workflow operations read, tenant/provider activation gates, bounded queue evidence, policy and record mutations, post-event review lane, provider outcomes, reply attention, exact receipts, uncertain reconciliation, and safe recovery states were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operations read marker",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operations read marker",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operations read marker",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operations read marker",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operations read marker",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operations read marker",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operations read marker",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operation mutation marker",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operation mutation marker",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operation mutation marker",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operation mutation marker",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/revenueAutopilotOperations.test.jsx",
+          "locator": "renders every literal canonical Revenue Autopilot operation mutation marker",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can see which automated lane is eligible, dormant, suppressed, queued, sent, delivered, bounced, complained, replied to, or reconciled, while incomplete provider evidence and failed reads never become delivery, payment, acceptance, or recovered-revenue claims."
+    },
+    {
+      "id": "revenue-autopilot-customer-controls",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Customer 360 exposes a safe consent and email-subscription projection to staff and reserves exact customer-control evidence mutation for tenant administrators.",
+      "backendPaths": [
+        "functions/index.js",
+        "src/lib/revenueAutopilotClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getRevenueAutopilotCustomerControls",
+        "functions/index.js#configureRevenueAutopilotCustomerControls"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getRevenueAutopilotCustomerControls",
+        "functions/index.js#configureRevenueAutopilotCustomerControls"
+      ],
+      "frontendPaths": [
+        "src/components/CustomerWorkspaceView.jsx",
+        "src/components/RevenueAutopilotCustomerControls.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/RevenueAutopilotCustomerControls.jsx",
+          "locator": "data-capability-id=\"cwf-12-customer-email-controls-mutation\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+        "src/components/__tests__/customerWorkspaceRevenueAutopilotControlsIntegration.test.jsx",
+        "src/lib/__tests__/revenueAutopilotClient.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "keeps consent/subscription separate from provider delivery, customer viewing, and payment"
+        },
+        {
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "requires deliberate compatible evidence and sends only the exact customer-control fields"
+        },
+        {
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "retains an uncertain failed outcome and exposes only exact reconciliation"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Revenue Autopilot operations, post-event review requests, and customer unsubscribe"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "Customer 360 shows `Customer email controls`"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The Customer 360 role gate, safe projection, distinct consent and subscription controls, compatibility rules, exact revision and request identity, idempotent receipt, uncertain reconciliation, definitive rejection, reset, and customer-scope cleanup were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "keeps consent/subscription separate from provider delivery, customer viewing, and payment",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "shows submitting while the exact request is in flight",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "retains an uncertain failed outcome and exposes only exact reconciliation",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "restores unresolved process-memory input and reconciles the unchanged request identity",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "requires deliberate compatible evidence and sends only the exact customer-control fields",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "requires an exact safe reset after definitive rejection before corrected input",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/revenueAutopilotCustomerControls.test.jsx",
+          "locator": "requires an exact safe reset after definitive rejection before corrected input",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can review whether governed email is allowed for the customer, while only administrators can record exact consent or subscription evidence; the control receipt schedules nothing and proves no provider delivery, customer view, payment, or revenue."
+    },
+    {
+      "id": "revenue-autopilot-customer-unsubscribe",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "customers"
+      ],
+      "summary": "An opaque exact-token public email-preferences surface lets a customer stop automated reminders with an idempotent receipt and exact uncertain-outcome reconciliation.",
+      "backendPaths": [
+        "functions/index.js",
+        "src/lib/revenueAutopilotClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getRevenueAutopilotUnsubscribeContext",
+        "functions/index.js#unsubscribeRevenueAutopilotEmail"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getRevenueAutopilotUnsubscribeContext",
+        "functions/index.js#unsubscribeRevenueAutopilotEmail"
+      ],
+      "frontendPaths": [
+        "src/main.jsx",
+        "src/components/RevenueAutopilotUnsubscribePage.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/RevenueAutopilotUnsubscribePage.jsx",
+          "locator": "data-capability-id=\"cwf-12-revenue-autopilot-unsubscribe\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+        "src/lib/__tests__/revenueAutopilotClient.test.js",
+        "src/lib/__tests__/revenueAutopilotSchedule.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "renders the governed ready state from an exact-token context"
+        },
+        {
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "moves a real request through submitting to an exact receipt"
+        },
+        {
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "retains an uncertain request and reconciles the same identity"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Revenue Autopilot operations, post-event review requests, and customer unsubscribe"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Customer unsubscribe"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The portal-precedence route boundary, exact-token context, public-safe organization label, idempotent unsubscribe receipt, request lock, ambiguous reconciliation, definitive rejection, safe reset, and context-read retry were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "renders the governed ready state from an exact-token context",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "moves a real request through submitting to an exact receipt",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "retains an uncertain request and reconciles the same identity",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "retains an uncertain request and reconciles the same identity",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "moves a real request through submitting to an exact receipt",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "resets a definitive rejection into explicit recovery",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/revenueAutopilotUnsubscribePage.test.jsx",
+          "locator": "resets a definitive rejection into explicit recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "A customer can stop future governed reminder eligibility without authenticating or exposing private quote data; the exact-token receipt changes only email subscription state and does not cancel an event, change acceptance, alter payment, delete conversations, or prove provider delivery."
     }
   ]
 }

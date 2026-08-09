@@ -42,6 +42,9 @@ import {
   formatWorkspaceText,
   humanizeWorkspaceValue
 } from "../lib/workspacePresentation";
+import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";
+import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
+import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
 import QuoteConversationPanel from "./QuoteConversationPanel";
 import StatusChip from "./StatusChip";
 
@@ -185,6 +188,23 @@ export function shouldRenderQuoteHistory({ open = true, closeGuard = {} } = {}) 
 
 export function canOpenQuoteConversation(conversationQuote) {
   return !quoteHistoryCloseBlockedByConversation(conversationQuote);
+}
+
+export function resolveFocusedConversationQuote({
+  focusAction = "",
+  focusQuoteId = "",
+  quotes = [],
+  conversationQuote = null
+} = {}) {
+  if (
+    String(focusAction || "").trim() !== "conversation"
+    || quoteHistoryCloseBlockedByConversation(conversationQuote)
+  ) {
+    return null;
+  }
+  const targetId = String(focusQuoteId || "").trim();
+  if (!targetId || !Array.isArray(quotes)) return null;
+  return quotes.find((quote) => String(quote?.id || "").trim() === targetId) || null;
 }
 
 export function beginContractConversionAttempt({
@@ -615,6 +635,68 @@ export function getQuoteHistoryActionPermissions(role) {
   };
 }
 
+export function getQuoteHistoryKitchenBeoMode(source = "") {
+  const normalizedSource = String(source || "").trim().toLowerCase();
+  if (normalizedSource === "firebase") {
+    return {
+      authority: "server_authoritative",
+      action: "open-authoritative",
+      label: "Kitchen BEO status",
+      title: "Review server-derived freshness and generate a Kitchen BEO with an immutable receipt."
+    };
+  }
+  if (normalizedSource === "local") {
+    return {
+      authority: "local_non_authoritative",
+      action: "export-local",
+      label: "Local BEO — no receipt",
+      title: "Non-authoritative local fallback: creates a browser PDF without a server generation receipt or freshness status."
+    };
+  }
+  return {
+    authority: "unavailable",
+    action: "none",
+    label: "Kitchen BEO unavailable",
+    title: "Quote storage authority is not available. Refresh Quotes before generating an artifact."
+  };
+}
+
+export function QuoteHistoryKitchenBeoAction({
+  source = "",
+  quote = null,
+  disabled = false,
+  disabledReason = "",
+  exportingLocal = false,
+  onOpenAuthoritative,
+  onExportLocal
+}) {
+  const mode = getQuoteHistoryKitchenBeoMode(source);
+  const handler = mode.action === "open-authoritative"
+    ? onOpenAuthoritative
+    : mode.action === "export-local"
+      ? onExportLocal
+      : null;
+  const unavailable = typeof handler !== "function" || mode.action === "none";
+  return (
+    <button
+      type="button"
+      className="ghost compact"
+      data-beo-authority={mode.authority}
+      data-capability-action={mode.action === "open-authoritative"
+        ? "open-kitchen-beo"
+        : mode.action === "export-local"
+          ? "export-local-kitchen-beo"
+          : undefined}
+      aria-haspopup={mode.action === "open-authoritative" ? "dialog" : undefined}
+      onClick={() => handler?.(quote)}
+      disabled={disabled || exportingLocal || unavailable}
+      title={disabledReason || mode.title}
+    >
+      {exportingLocal ? "Generating local BEO…" : mode.label}
+    </button>
+  );
+}
+
 export function canRotateQuotePortal(status) {
   return ["draft", "sent", "viewed", "accepted", "booked"].includes(
     String(status || "draft").trim().toLowerCase()
@@ -658,6 +740,7 @@ export function QuoteHistoryView({
   focusAction = "",
   focusReason = "",
   onEditQuote,
+  onOpenWorkflow,
   onOpenIntegrations,
   integrationsAvailable = true,
   canDeleteQuotes = false,
@@ -688,7 +771,7 @@ export function QuoteHistoryView({
   const [updatingConfirmationId, setUpdatingConfirmationId] = useState("");
   const [duplicatingId, setDuplicatingId] = useState("");
   const [exportingPdfId, setExportingPdfId] = useState("");
-  const [exportingBeoId, setExportingBeoId] = useState("");
+  const [exportingLocalBeoId, setExportingLocalBeoId] = useState("");
   const [sendingQuoteEmailId, setSendingQuoteEmailId] = useState("");
   const [sendingPaymentEmailId, setSendingPaymentEmailId] = useState("");
   const [sendingFinalBalanceEmailId, setSendingFinalBalanceEmailId] = useState("");
@@ -700,12 +783,15 @@ export function QuoteHistoryView({
   const [deliveryReview, setDeliveryReview] = useState(null);
   const [resolvingDeliveryId, setResolvingDeliveryId] = useState("");
   const [conversationQuote, setConversationQuote] = useState(null);
+  const [kitchenBeoQuote, setKitchenBeoQuote] = useState(null);
+  const kitchenBeoQuoteRef = useRef(null);
   const [deliveryClockMs, setDeliveryClockMs] = useState(() => Date.now());
   const dialogRef = useRef(null);
   const routeHeadingRef = useWorkspaceRouteHeadingFocus(Boolean(open && embedded));
   const savedQuoteHandoffRef = useRef(null);
   const deliveryReviewRef = useRef(null);
   const deliveryReviewReturnFocusRef = useRef(null);
+  const kitchenBeoReturnFocusRef = useRef(null);
   const deliveryReviewStateRef = useRef(null);
   const focusedHandoffIdRef = useRef("");
   const loadedFocusQuoteIdRef = useRef("");
@@ -726,6 +812,7 @@ export function QuoteHistoryView({
     onCloseBlockedRef.current = onCloseBlocked;
   }, [onClose, onCloseBlocked]);
   deliveryReviewStateRef.current = deliveryReview;
+  kitchenBeoQuoteRef.current = kitchenBeoQuote;
 
   useEffect(() => {
     if (open) return;
@@ -737,8 +824,10 @@ export function QuoteHistoryView({
     }
     setDeliveryReview(null);
     setConversationQuote(null);
+    setKitchenBeoQuote(null);
     setContractConversions({});
     deliveryReviewReturnFocusRef.current = null;
+    kitchenBeoReturnFocusRef.current = null;
   }, [open]);
 
   useEffect(() => {
@@ -768,25 +857,29 @@ export function QuoteHistoryView({
     const handleDialogKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        const closeGuard = quoteHistoryCloseGuardRef.current;
-        if (closeGuard.blocked) {
-          setState((current) => ({
-            ...current,
-            error: closeGuard.message
-          }));
-        } else if (deliveryReviewStateRef.current) {
-          setDeliveryReview(null);
-          const returnTarget = deliveryReviewReturnFocusRef.current;
-          window.requestAnimationFrame(() => {
-            if (returnTarget?.isConnected) {
-              returnTarget.focus();
-            } else {
-              savedQuoteHandoffRef.current?.focus();
-            }
-          });
+        if (kitchenBeoQuoteRef.current) {
+          setKitchenBeoQuote(null);
         } else {
-          setDeliveryReview(null);
-          onCloseRef.current?.();
+          const closeGuard = quoteHistoryCloseGuardRef.current;
+          if (closeGuard.blocked) {
+            setState((current) => ({
+              ...current,
+              error: closeGuard.message
+            }));
+          } else if (deliveryReviewStateRef.current) {
+            setDeliveryReview(null);
+            const returnTarget = deliveryReviewReturnFocusRef.current;
+            window.requestAnimationFrame(() => {
+              if (returnTarget?.isConnected) {
+                returnTarget.focus();
+              } else {
+                savedQuoteHandoffRef.current?.focus();
+              }
+            });
+          } else {
+            setDeliveryReview(null);
+            onCloseRef.current?.();
+          }
         }
         return;
       }
@@ -853,6 +946,10 @@ export function QuoteHistoryView({
   };
 
   const requestQuoteHistoryClose = () => {
+    if (kitchenBeoQuote) {
+      setKitchenBeoQuote(null);
+      return;
+    }
     const closeGuard = quoteHistoryCloseGuardRef.current;
     if (closeGuard.blocked) {
       setState((current) => ({ ...current, error: closeGuard.message }));
@@ -983,13 +1080,29 @@ export function QuoteHistoryView({
     const focusKey = `${focusQuoteId}:${String(focusAction || "").trim()}`;
     if (focusedHandoffIdRef.current === focusKey) return;
     if (loadedFocusQuoteIdRef.current !== focusQuoteId) return;
-    if (!state.quotes.some((quote) => quote.id === focusQuoteId)) return;
+    const targetQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
+    if (!targetQuote) return;
+    const normalizedAction = String(focusAction || "").trim();
+    if (normalizedAction === "conversation") {
+      const focusedConversation = resolveFocusedConversationQuote({
+        focusAction: normalizedAction,
+        focusQuoteId,
+        quotes: state.quotes,
+        conversationQuote
+      });
+      if (focusedConversation) {
+        setConversationQuote(focusedConversation);
+        focusedHandoffIdRef.current = focusKey;
+      } else if (conversationQuote?.id === targetQuote.id) {
+        focusedHandoffIdRef.current = focusKey;
+      }
+      return;
+    }
     const frame = window.requestAnimationFrame(() => {
       const handoff = savedQuoteHandoffRef.current;
       if (!handoff || handoff.dataset.quoteId !== focusQuoteId) return;
       const targetRow = Array.from(dialogRef.current?.querySelectorAll("tr[data-quote-id]") || [])
         .find((row) => row.dataset.quoteId === focusQuoteId);
-      const normalizedAction = String(focusAction || "").trim();
       const actionTarget = normalizedAction
         ? Array.from(targetRow?.querySelectorAll("button[data-approval-action]") || [])
           .find((button) => button.dataset.approvalAction === normalizedAction && !button.disabled)
@@ -1000,7 +1113,7 @@ export function QuoteHistoryView({
       focusedHandoffIdRef.current = focusKey;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [open, focusQuoteId, focusAction, state.loading, state.quotes]);
+  }, [open, focusQuoteId, focusAction, state.loading, state.quotes, conversationQuote]);
 
   useEffect(() => {
     if (!deliveryReview) return undefined;
@@ -1457,18 +1570,36 @@ export function QuoteHistoryView({
     }
   };
 
-  const handleExportBeo = async (quote) => {
-    setExportingBeoId(quote.id);
+  const handleOpenKitchenBeo = (quote) => {
     try {
       assertRebookArtifactReady(quote, { tenantTimeZone });
+      if (state.source !== "firebase") {
+        throw new Error("Authoritative Kitchen BEO generation requires Firebase-backed quote storage.");
+      }
+      kitchenBeoReturnFocusRef.current = document.activeElement;
+      setState((prev) => ({ ...prev, error: "", feedback: "" }));
+      setKitchenBeoQuote(quote);
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: err?.message || "Failed to open Kitchen BEO status." }));
+    }
+  };
+
+  const handleExportLocalBeo = async (quote) => {
+    setExportingLocalBeoId(quote.id);
+    try {
+      assertRebookArtifactReady(quote, { tenantTimeZone });
+      if (state.source !== "local") {
+        throw new Error("The browser-only Kitchen BEO fallback is available only for local quote storage.");
+      }
       const { exportKitchenBeo } = await import("../lib/beoExport");
       await exportKitchenBeo(quote, { output: "save" });
-      setState((prev) => ({ ...prev, feedback: `Downloaded kitchen sheet for ${quote.quoteNumber}.` }));
-      pushToast(`Downloaded kitchen sheet for ${quote.quoteNumber}.`, "success");
+      const feedback = `Browser-local Kitchen BEO download started for ${quote.quoteNumber}. It has no server generation receipt or freshness status.`;
+      setState((prev) => ({ ...prev, feedback }));
+      pushToast(feedback, "success");
     } catch (err) {
-      setState((prev) => ({ ...prev, error: err?.message || "Failed to export kitchen sheet." }));
+      setState((prev) => ({ ...prev, error: err?.message || "Failed to export the local Kitchen BEO fallback." }));
     } finally {
-      setExportingBeoId("");
+      setExportingLocalBeoId("");
     }
   };
 
@@ -1863,6 +1994,11 @@ export function QuoteHistoryView({
         <p className="source-note">
           Authority: {authorityCopy}
         </p>
+        {state.source === "local" && permissions.canExportBeo && (
+          <p className="warning-note" role="status" data-beo-local-boundary="no-server-receipt">
+            Kitchen BEO fallback is browser-local in this workspace. It has no server generation receipt, retained artifact history, or authoritative freshness status.
+          </p>
+        )}
         {quoteHistoryCloseGuard.blocked && (
           <p className="warning-note" role="status">{quoteHistoryCloseGuard.message}</p>
         )}
@@ -2062,6 +2198,25 @@ export function QuoteHistoryView({
               )}
             </div>
           </section>
+        )}
+        {focusedQuoteIsVisible
+          && state.source === "firebase"
+          && ["admin", "sales"].includes(permissions.role) && (
+          <CommercialDependencyStatePanel
+            organizationId={organizationId}
+            quoteId={focusedQuote.id}
+            quoteNumber={focusedQuote.quoteNumber}
+            available={Boolean(organizationId)}
+            canReconcile
+          />
+        )}
+        {focusedQuoteIsVisible && state.source === "firebase" && (
+          <QuoteDecisionDebtPanel
+            organizationId={organizationId}
+            quoteId={focusedQuote.id}
+            available={Boolean(organizationId)}
+            onOpenWorkflow={onOpenWorkflow}
+          />
         )}
         <div className="history-controls">
           <input
@@ -2464,15 +2619,15 @@ export function QuoteHistoryView({
                           </button>
                         )}
                         {permissions.canExportBeo && (
-                          <button
-                            type="button"
-                            className="ghost compact"
-                            onClick={() => handleExportBeo(quote)}
-                            disabled={exportingBeoId === quote.id || !rebookDeliveryGate.ready}
-                            title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
-                          >
-                            {exportingBeoId === quote.id ? "Generating kitchen sheet..." : "Kitchen sheet"}
-                          </button>
+                          <QuoteHistoryKitchenBeoAction
+                            source={state.source}
+                            quote={quote}
+                            disabled={!rebookDeliveryGate.ready}
+                            disabledReason={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
+                            exportingLocal={exportingLocalBeoId === quote.id}
+                            onOpenAuthoritative={handleOpenKitchenBeo}
+                            onExportLocal={handleExportLocalBeo}
+                          />
                         )}
                         {permissions.canSendQuoteEmail
                           && state.source === "firebase"
@@ -2597,6 +2752,7 @@ export function QuoteHistoryView({
                               <button
                                 type="button"
                                 className="ghost compact"
+                                data-capability-action="open-quote-conversation"
                                 onClick={() => setConversationQuote(quote)}
                                 disabled={!canOpenQuoteConversation(conversationQuote)}
                                 title={conversationQuote
@@ -2720,6 +2876,24 @@ export function QuoteHistoryView({
               onClose={() => setConversationQuote(null)}
             />
           </aside>
+        )}
+        {kitchenBeoQuote && state.source === "firebase" && (
+          <KitchenBeoArtifactPanel
+            open
+            presentation="modal"
+            organizationId={organizationId}
+            quoteId={kitchenBeoQuote.id}
+            quoteNumber={kitchenBeoQuote.quoteNumber}
+            returnFocusRef={kitchenBeoReturnFocusRef}
+            onClose={() => setKitchenBeoQuote(null)}
+            onGenerated={(result) => {
+              const feedback = result?.idempotent
+                ? `Matching server Kitchen BEO receipt confirmed for ${kitchenBeoQuote.quoteNumber}.`
+                : `Server Kitchen BEO receipt recorded for ${kitchenBeoQuote.quoteNumber}.`;
+              setState((current) => ({ ...current, feedback, error: "" }));
+              pushToast(feedback, "success");
+            }}
+          />
         )}
         {deliveryReview && (
           <section

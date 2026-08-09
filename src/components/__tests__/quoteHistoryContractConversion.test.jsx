@@ -12,6 +12,7 @@ import {
   isDefinitiveContractConversionError,
   quoteHistoryCloseBlockedByConversation,
   reduceContractConversionMutationState,
+  resolveFocusedConversationQuote,
   recoverContractConversionFromCanonicalHistory,
   shouldRenderQuoteHistory,
   shouldRestoreBlockedQuoteHistoryRoute
@@ -143,6 +144,26 @@ describe("Quote History contract conversion presentation", () => {
     expect(shouldRestoreBlockedQuoteHistoryRoute({ open: false, closeGuard })).toBe(true);
     expect(shouldRenderQuoteHistory({ open: false, closeGuard })).toBe(true);
     expect(shouldRenderQuoteHistory({ open: false, closeGuard: { blocked: false } })).toBe(false);
+  });
+
+  test("opens only the exact focused quote conversation and never replaces an active thread", () => {
+    const quotes = [{ id: "quote-41" }, { id: "quote-42" }];
+    expect(resolveFocusedConversationQuote({
+      focusAction: "conversation",
+      focusQuoteId: "quote-42",
+      quotes
+    })).toBe(quotes[1]);
+    expect(resolveFocusedConversationQuote({
+      focusAction: "send_payment_request",
+      focusQuoteId: "quote-42",
+      quotes
+    })).toBeNull();
+    expect(resolveFocusedConversationQuote({
+      focusAction: "conversation",
+      focusQuoteId: "quote-42",
+      quotes,
+      conversationQuote: quotes[0]
+    })).toBeNull();
   });
 
   test("preserves every unresolved contract-conversion identity across route-close attempts", () => {

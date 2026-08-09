@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import { detectBreakdownValueChanges } from "../lib/wizardUi";
+import DigitRoll from "./DigitRoll";
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(() => {
@@ -34,7 +35,11 @@ function BreakdownMoneyRow({ rowKey, label, value, delta = 0, changed = false, s
     >
       <dt>{label}</dt>
       <dd>
-        <strong>{money(value)}</strong>
+        {/* Odometer digits roll on reprice; the row-flash (.changed) and
+            delta chip below layer on top of it unchanged. */}
+        <strong>
+          <DigitRoll value={money(value)} />
+        </strong>
         {changed && (
           <small className={`row-delta ${directionClass}`.trim()}>
             {deltaPrefix} {money(Math.abs(delta))}
@@ -370,31 +375,35 @@ export default function LiveBreakdown({
           <span>{money(displayValues.package + displayValues.menu + displayValues.addons + displayValues.rentals)}</span>
         </header>
         <dl className="breakdown-money-list">
+          {/* Money rows feed the DigitRoll odometer the FINAL repriced value
+              (valueTargets), not the frame-by-frame tweened displayValues —
+              the odometer is the row animation and must roll exactly once
+              per reprice. Section headers keep the counting tween. */}
           <BreakdownMoneyRow
             rowKey="package"
             label="Package"
-            value={displayValues.package}
+            value={valueTargets.package}
             changed={Boolean(rowEffects.package)}
             delta={rowEffects.package?.delta || 0}
           />
           <BreakdownMoneyRow
             rowKey="menu"
             label="Menu Items"
-            value={displayValues.menu}
+            value={valueTargets.menu}
             changed={Boolean(rowEffects.menu)}
             delta={rowEffects.menu?.delta || 0}
           />
           <BreakdownMoneyRow
             rowKey="addons"
             label="Add-ons"
-            value={displayValues.addons}
+            value={valueTargets.addons}
             changed={Boolean(rowEffects.addons)}
             delta={rowEffects.addons?.delta || 0}
           />
           <BreakdownMoneyRow
             rowKey="rentals"
             label="Rentals"
-            value={displayValues.rentals}
+            value={valueTargets.rentals}
             changed={Boolean(rowEffects.rentals)}
             delta={rowEffects.rentals?.delta || 0}
           />
@@ -410,14 +419,14 @@ export default function LiveBreakdown({
           <BreakdownMoneyRow
             rowKey="labor"
             label="Labor"
-            value={displayValues.labor}
+            value={valueTargets.labor}
             changed={Boolean(rowEffects.labor)}
             delta={rowEffects.labor?.delta || 0}
           />
           <BreakdownMoneyRow
             rowKey="bartenderLabor"
             label="Bartender Portion"
-            value={displayValues.bartenderLabor}
+            value={valueTargets.bartenderLabor}
             changed={Boolean(rowEffects.bartenderLabor)}
             delta={rowEffects.bartenderLabor?.delta || 0}
           />
@@ -445,7 +454,7 @@ export default function LiveBreakdown({
           <BreakdownMoneyRow
             rowKey="travel"
             label={`Travel (${form.milesRT} mi)`}
-            value={displayValues.travel}
+            value={valueTargets.travel}
             changed={Boolean(rowEffects.travel)}
             delta={rowEffects.travel?.delta || 0}
           />
@@ -461,28 +470,28 @@ export default function LiveBreakdown({
           <BreakdownMoneyRow
             rowKey="subtotal"
             label="Subtotal"
-            value={displayValues.subtotal}
+            value={valueTargets.subtotal}
             changed={Boolean(rowEffects.subtotal)}
             delta={rowEffects.subtotal?.delta || 0}
           />
           <BreakdownMoneyRow
             rowKey="serviceFee"
             label={serviceChargeLabel(totals.serviceFeePctApplied)}
-            value={displayValues.serviceFee}
+            value={valueTargets.serviceFee}
             changed={Boolean(rowEffects.serviceFee)}
             delta={rowEffects.serviceFee?.delta || 0}
           />
           <BreakdownMoneyRow
             rowKey="tax"
             label={`Tax (${Math.round(totals.taxRateApplied * 1000) / 10}%)`}
-            value={displayValues.tax}
+            value={valueTargets.tax}
             changed={Boolean(rowEffects.tax)}
             delta={rowEffects.tax?.delta || 0}
           />
           <BreakdownMoneyRow
             rowKey="total"
             label="Total"
-            value={displayValues.total}
+            value={valueTargets.total}
             changed={Boolean(rowEffects.total)}
             delta={rowEffects.total?.delta || 0}
             strong
@@ -490,7 +499,7 @@ export default function LiveBreakdown({
           <BreakdownMoneyRow
             rowKey="deposit"
             label={`Deposit (${Math.round(settings.depositPct * 100)}%)`}
-            value={displayValues.deposit}
+            value={valueTargets.deposit}
             changed={Boolean(rowEffects.deposit)}
             delta={rowEffects.deposit?.delta || 0}
             strong

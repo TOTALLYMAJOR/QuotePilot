@@ -7,6 +7,11 @@ const {
   CommercialChangeImpactPreviewError,
   buildCommercialChangeImpactPreviewSnapshots
 } = require("../../../functions/commercialChangeImpactPreview.js");
+const graphCore = require("../../../functions/commercialDependencyGraphCore.cjs");
+const { createCommercialChangeImpactEvaluator } = require(
+  "../../../functions/commercialChangeImpactEvaluator.js"
+);
+const evaluateServerImpact = createCommercialChangeImpactEvaluator({ graphCore });
 
 function pricing({ guests = 125, total = 12480, deposit = 3120 } = {}) {
   return {
@@ -126,6 +131,19 @@ describe("server-owned commercial change-impact snapshots", () => {
     });
     expect(result.impact.dependentNodes.some((node) => node.id === "artifact.kitchen_beo"))
       .toBe(true);
+  });
+
+  test("keeps the deployable server evaluator in exact parity with the browser presentation model", () => {
+    const preview = buildCommercialChangeImpactPreviewSnapshots({
+      organizationId: "org-1",
+      quoteId: "quote-1",
+      expectedActiveVersionId: "v0014",
+      currentQuote: quote(),
+      proposedForm: form(),
+      proposedPricing: pricing({ guests: 175, total: 16920, deposit: 4230 })
+    });
+
+    expect(evaluateServerImpact(preview)).toEqual(simulateCommercialChangeImpact(preview));
   });
 
   test("is deterministic for the same canonical source and proposed input", () => {

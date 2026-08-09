@@ -150,7 +150,7 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   const rows = page.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })
   });
-  const refreshButton = page.getByRole("button", { name: "Refresh" });
+  const refreshButton = page.getByRole("button", { name: "Refresh", exact: true });
   await expect.poll(async () => {
     if (await refreshButton.isVisible() && await refreshButton.isEnabled()) {
       await refreshButton.click();
@@ -207,9 +207,23 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   const changeImpact = page.locator(
     '[data-capability-id="cwf-15b-commercial-change-impact-presentation"]'
   );
-  await expect(changeImpact).toHaveAttribute("data-capability-state", "success", {
-    timeout: 45_000
-  });
+  await expect.poll(
+    () => changeImpact.getAttribute("data-capability-state"),
+    { timeout: 45_000 }
+  ).toMatch(/^(success|error)$/);
+  const changeImpactState = await changeImpact.getAttribute("data-capability-state");
+  if (changeImpactState !== "success") {
+    const diagnostic = await page.evaluate(() => {
+      const raw = window.localStorage.getItem("quoteWizard.sessionDiagnostics");
+      const parsed = raw ? JSON.parse(raw) : {};
+      return (parsed.events || []).find(
+        (event) => event?.context?.action === "preview-commercial-change-impact"
+      ) || null;
+    });
+    throw new Error(
+      `Commercial change impact did not succeed: ${JSON.stringify(diagnostic)}`
+    );
+  }
   await expect(changeImpact).toContainText("fact.event.guest_count");
   await expect(changeImpact).toContainText("Commercial delta");
   await expect(changeImpact).toContainText(

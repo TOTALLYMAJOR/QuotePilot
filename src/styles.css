@@ -5906,6 +5906,7 @@ hr {
 }
 
 .staff-evidence-rail {
+  position: relative; /* anchors one-shot overlay layers (shimmer reveal) */
   display: grid;
   gap: 0.75rem;
   margin: 0 0 var(--space-4);
@@ -7290,4 +7291,608 @@ hr {
   .commercial-search-result-action {
     display: none;
   }
+}
+
+/* ---------- Shimmer reveal (one-shot money-moment overlay) ---------- */
+/* Accent follows net-cash direction; brightened via color-mix so the glow
+   reads on cream surfaces without abandoning the staff palette tokens. */
+
+.shimmer-reveal {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 3;
+  --sr-accent: color-mix(in srgb, var(--tone-gold-2) 78%, #ffe9bd);
+}
+
+.shimmer-reveal[data-tone="positive"] {
+  --sr-accent: color-mix(in srgb, var(--tone-success) 58%, #7fe0ab);
+}
+
+.shimmer-reveal[data-tone="negative"] {
+  --sr-accent: color-mix(in srgb, var(--tone-danger) 62%, #ffb39e);
+}
+
+.shimmer-reveal-wash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    100deg,
+    transparent 18%,
+    color-mix(in srgb, var(--sr-accent) 13%, transparent) 50%,
+    transparent 82%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sr-accent) 42%, transparent);
+  opacity: 0;
+  animation: sr-wash 880ms ease-out forwards;
+}
+
+.shimmer-reveal-band {
+  position: absolute;
+  top: -18%;
+  bottom: -18%;
+  left: 0;
+  width: 26%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--sr-accent) 22%, #ffffff 12%),
+    transparent
+  );
+  filter: blur(6px);
+  transform: translateX(-140%) skewX(-14deg);
+  animation: sr-band 640ms cubic-bezier(0.22, 0.61, 0.36, 1) 40ms forwards;
+}
+
+.shimmer-reveal-particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--sr-accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--sr-accent) 62%, transparent);
+  opacity: 0;
+  transform: translate(0, 0) scale(0.3);
+  animation: sr-particle var(--sr-duration, 420ms) cubic-bezier(0.2, 0.6, 0.2, 1)
+    var(--sr-delay, 0ms) forwards;
+}
+
+.shimmer-reveal-particle[data-kind="streak"] {
+  width: 1px;
+  height: 7px;
+  border-radius: 1px;
+  transform: translate(0, 0) rotate(var(--sr-tilt, 0deg)) scale(0.3);
+}
+
+@keyframes sr-wash {
+  0% { opacity: 0; }
+  22% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes sr-band {
+  to { transform: translateX(560%) skewX(-14deg); }
+}
+
+@keyframes sr-particle {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(var(--sr-tilt, 0deg)) scale(0.3);
+  }
+  30% {
+    opacity: var(--sr-peak, 0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--sr-drift-x, 0px), var(--sr-drift-y, -10px))
+      rotate(var(--sr-tilt, 0deg)) scale(var(--sr-scale, 1));
+  }
+}
+
+/* ---------- Commercial dependency reconciliation ---------- */
+.commercial-dependency-panel {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid #d6cebd;
+  border-left: 4px solid #70796d;
+  border-radius: var(--radius-sm);
+  background: #fbfaf6;
+  color: #312d26;
+}
+
+.commercial-dependency-panel.commercial-dependency-blocked,
+.commercial-dependency-panel.commercial-dependency-stale {
+  border-left-color: #a56e1c;
+}
+
+.commercial-dependency-panel.commercial-dependency-unknown {
+  border-left-color: #a13e35;
+}
+
+.commercial-dependency-panel.commercial-dependency-ready {
+  border-left-color: #4d765e;
+}
+
+.commercial-dependency-header,
+.commercial-dependency-selection-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.commercial-dependency-header > div,
+.commercial-dependency-select > span {
+  min-width: 0;
+}
+
+.commercial-dependency-header .eyebrow,
+.commercial-dependency-header h3,
+.commercial-dependency-header p,
+.commercial-dependency-selection-head p,
+.commercial-dependency-reconcile h4,
+.commercial-dependency-reconcile p,
+.commercial-dependency-receipt h4,
+.commercial-dependency-receipt p {
+  margin: 0;
+}
+
+.commercial-dependency-header h3 {
+  margin: 0.12rem 0 0.2rem;
+  color: #29251f;
+  font-size: 1.05rem;
+}
+
+.commercial-dependency-header p:not(.eyebrow) {
+  color: #686053;
+  font-size: 0.8rem;
+}
+
+.commercial-dependency-gate {
+  display: grid;
+  grid-template-columns: minmax(8.5rem, 0.55fr) minmax(13rem, 1fr);
+  gap: 0.15rem var(--space-3);
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #d8cfbd;
+  border-radius: 9px;
+  background: #f5f2eb;
+}
+
+.commercial-dependency-gate > span {
+  color: #6e6454;
+  font-size: 0.69rem;
+  font-weight: 850;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.commercial-dependency-gate > strong {
+  color: #342f27;
+  font-size: 0.85rem;
+}
+
+.commercial-dependency-gate > small {
+  grid-column: 2;
+  color: #756b5b;
+  font-size: 0.71rem;
+  line-height: 1.4;
+}
+
+.commercial-dependency-gate-eligible {
+  border-color: #aac4b3;
+  background: #f1f7f3;
+}
+
+.commercial-dependency-gate-blocked {
+  border-color: #dab975;
+  background: #fff8e9;
+}
+
+.commercial-dependency-evidence,
+.commercial-dependency-receipt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.commercial-dependency-evidence > div,
+.commercial-dependency-receipt-grid > div {
+  min-width: 0;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid #e0d9cb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.commercial-dependency-evidence dt,
+.commercial-dependency-receipt-grid dt,
+.commercial-dependency-provenance dt {
+  color: #756b5b;
+  font-size: 0.65rem;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.commercial-dependency-evidence dd,
+.commercial-dependency-receipt-grid dd,
+.commercial-dependency-provenance dd {
+  margin: 0.2rem 0 0;
+  color: #373129;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.commercial-dependency-panel code {
+  color: #4e4436;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.commercial-dependency-reasons {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #655d50;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.commercial-dependency-selection {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.commercial-dependency-selection legend {
+  margin-bottom: 0.45rem;
+  color: #302b24;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.commercial-dependency-selection-head {
+  margin-bottom: 0.65rem;
+}
+
+.commercial-dependency-selection-head p {
+  max-width: 46rem;
+  color: #6d6456;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.commercial-dependency-invalidation-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.commercial-dependency-invalidation {
+  padding: 0.75rem;
+  border: 1px solid #ddd5c6;
+  border-left: 3px solid #a56e1c;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.commercial-dependency-invalidation[data-commercial-node-kind="artifact"] {
+  border-left-color: #9b4f45;
+}
+
+.commercial-dependency-invalidation[data-commercial-node-kind="projection"] {
+  border-left-color: #56748c;
+}
+
+.commercial-dependency-select {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 0.7rem;
+  cursor: pointer;
+}
+
+.commercial-dependency-select input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0.16rem 0 0;
+  accent-color: #5d563d;
+}
+
+.commercial-dependency-node-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.commercial-dependency-node-heading strong {
+  color: #302b24;
+  font-size: 0.87rem;
+}
+
+.commercial-dependency-select small {
+  display: block;
+  margin-top: 0.2rem;
+  color: #6c6458;
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.commercial-dependency-provenance {
+  margin: 0.65rem 0 0 1.75rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid #e8e2d8;
+}
+
+.commercial-dependency-provenance summary {
+  color: #625845;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.commercial-dependency-provenance dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem var(--space-3);
+  margin: 0.65rem 0 0;
+}
+
+.commercial-dependency-reconcile,
+.commercial-dependency-receipt {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem;
+  border: 1px solid #d5c292;
+  border-radius: 9px;
+  background: #fffaf0;
+}
+
+.commercial-dependency-receipt {
+  border-color: #a7c3b0;
+  background: #f3f8f5;
+}
+
+.commercial-dependency-reconcile .field {
+  margin: 0;
+}
+
+.commercial-dependency-reconcile textarea {
+  min-height: 5.75rem;
+  resize: vertical;
+}
+
+.commercial-dependency-reconcile-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  color: #6d624f;
+  font-size: 0.71rem;
+  font-weight: 700;
+}
+
+.commercial-dependency-receipt-resolutions {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.commercial-dependency-receipt-resolutions li {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.7fr) minmax(8rem, 0.6fr) minmax(10rem, 1fr);
+  gap: 0.65rem;
+  align-items: baseline;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #d7e3db;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.84);
+  font-size: 0.74rem;
+}
+
+@media (max-width: 760px) {
+  .commercial-dependency-header,
+  .commercial-dependency-selection-head,
+  .commercial-dependency-node-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .commercial-dependency-gate,
+  .commercial-dependency-evidence,
+  .commercial-dependency-receipt-grid,
+  .commercial-dependency-provenance dl,
+  .commercial-dependency-receipt-resolutions li {
+    grid-template-columns: 1fr;
+  }
+
+  .commercial-dependency-gate > small {
+    grid-column: 1;
+  }
+
+  .commercial-dependency-selection-head .workspace-inline-actions button {
+    flex: 1 1 10rem;
+  }
+}
+
+/* ---------- Motion system foundation ---------- */
+/* Shared timing/easing tokens: micro (hover, ticks), base (transitions),
+   reveal (one-shot money moments). All FX animate transform/opacity only. */
+
+:root {
+  --motion-fast: 140ms;
+  --motion-base: 240ms;
+  --motion-slow: 480ms;
+  --motion-reveal: 900ms;
+  --ease-out-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ---------- Button depth (micro) ---------- */
+
+.cta,
+.ghost {
+  transition:
+    transform var(--motion-fast) var(--ease-out-soft),
+    box-shadow var(--motion-fast) var(--ease-out-soft),
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.cta:active:not(:disabled) {
+  transform: translateY(1px) scale(0.995);
+  box-shadow: 0 3px 8px rgba(14, 10, 6, 0.22);
+}
+
+.ghost:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ghost:hover:not(:disabled) {
+  box-shadow: inset 0 -2px 0 rgba(201, 147, 52, 0.55);
+}
+
+/* ---------- Modal choreography (macro) ---------- */
+
+.modal-overlay {
+  animation: modal-overlay-in var(--motion-base) ease-out;
+  backdrop-filter: blur(2.5px);
+}
+
+.modal-overlay > .modal-card,
+.modal-overlay > [class*="-card"] {
+  animation: modal-card-in var(--motion-base) var(--ease-out-soft);
+}
+
+.stagger-children > * {
+  animation: stage-in var(--motion-base) var(--ease-out-soft) backwards;
+}
+
+.stagger-children > *:nth-child(2) { animation-delay: 30ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 60ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 90ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 180ms; }
+.stagger-children > *:nth-child(n + 8) { animation-delay: 210ms; }
+
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ---------- Attention badge heartbeat (micro) ---------- */
+/* One-shot on count increase only (class re-applied via key remount). */
+
+.workflow-attention-badge {
+  position: relative;
+}
+
+.badge-heartbeat {
+  animation: badge-heartbeat 620ms var(--ease-spring);
+}
+
+.badge-heartbeat::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 999px;
+  border: 2px solid rgba(159, 61, 50, 0.75);
+  animation: badge-ring 620ms ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes badge-heartbeat {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+@keyframes badge-ring {
+  0% { opacity: 0.9; transform: scale(0.8); }
+  100% { opacity: 0; transform: scale(2.1); }
+}
+
+/* ---------- Stepper ink (micro) ---------- */
+/* Connector line fills toward the next step as prior steps complete, and the
+   existing ✓ badge pops once when a step flips to completed. */
+
+.stepper-item {
+  position: relative;
+}
+
+.stepper-item:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  left: -0.7rem;
+  top: 50%;
+  width: 0.7rem;
+  height: 2px;
+  background: rgba(201, 153, 74, 0.28);
+  transform: translateY(-50%);
+}
+
+.stepper-item.status-completed:not(:first-child)::before,
+.stepper-item.status-current:not(:first-child)::before {
+  background: var(--tone-gold-2);
+  transform-origin: left center;
+  animation: stepper-ink 320ms var(--ease-out-soft);
+}
+
+.stepper-item.status-completed .step-badge {
+  animation: step-check-pop 420ms var(--ease-spring);
+}
+
+@keyframes stepper-ink {
+  from { transform: translateY(-50%) scaleX(0); }
+  to { transform: translateY(-50%) scaleX(1); }
+}
+
+@keyframes step-check-pop {
+  0% { transform: scale(0.5) rotate(-12deg); }
+  60% { transform: scale(1.15) rotate(2deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+/* ---------- Directional wizard transitions (macro) ---------- */
+
+.step-stage[data-nav-dir="fwd"] {
+  animation: stage-in-fwd var(--motion-base) var(--ease-out-soft);
+}
+
+.step-stage[data-nav-dir="back"] {
+  animation: stage-in-back var(--motion-base) var(--ease-out-soft);
+}
+
+@keyframes stage-in-fwd {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes stage-in-back {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
 }

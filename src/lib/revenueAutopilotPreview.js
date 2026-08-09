@@ -861,8 +861,8 @@ function unreadCustomerReplyCore({ quote, identity, calendar, evidence }) {
       reasons: [reason(
         records?.length ? "conversation_evidence_ambiguous" : "conversation_evidence_missing",
         records?.length
-          ? "More than one conversation-read snapshot was supplied."
-          : "A current quote conversation-read snapshot is required."
+          ? "More than one conversation-attention snapshot was supplied."
+          : "A current quote conversation-attention snapshot is required."
       )],
       scopeKey: "conversation-unresolved"
     };
@@ -870,20 +870,20 @@ function unreadCustomerReplyCore({ quote, identity, calendar, evidence }) {
   const record = records[0];
   if (
     !isRecord(record)
-    || text(record.source).toLowerCase() !== "quote_conversation_read_state"
+    || text(record.source).toLowerCase() !== "quote_conversation_attention_state"
     || safeIdentifier(record.organizationId) !== identity.organizationId
     || safeIdentifier(record.quoteId) !== identity.quoteId
   ) {
     return {
       state: "blocked",
-      reasons: [reason("conversation_evidence_scope_mismatch", "The conversation-read snapshot does not match this quote and organization.")],
+      reasons: [reason("conversation_evidence_scope_mismatch", "The conversation-attention snapshot does not match this quote and organization.")],
       scopeKey: "conversation-scope-mismatch"
     };
   }
   if (validDateOnly(record.observedForDate) !== calendar.date) {
     return {
       state: "blocked",
-      reasons: [reason("conversation_evidence_stale", "The conversation-read snapshot is not current for the tenant calendar date.")],
+      reasons: [reason("conversation_evidence_stale", "The conversation-attention snapshot is not current for the tenant calendar date.")],
       scopeKey: "conversation-stale"
     };
   }
@@ -916,7 +916,7 @@ function unreadCustomerReplyCore({ quote, identity, calendar, evidence }) {
   ) {
     return {
       state: "blocked",
-      reasons: [reason("conversation_evidence_stale", "The conversation-read snapshot does not match the latest canonical conversation summary.")],
+      reasons: [reason("conversation_evidence_stale", "The conversation-attention snapshot does not match the latest canonical conversation summary.")],
       scopeKey: latestMessageId
     };
   }
@@ -928,19 +928,22 @@ function unreadCustomerReplyCore({ quote, identity, calendar, evidence }) {
     };
   }
   const evaluatedMessageId = safeIdentifier(record.evaluatedMessageId);
-  const readState = text(record.staffReadState).toLowerCase();
-  if (evaluatedMessageId !== latestMessageId || !new Set(["read", "unread"]).has(readState)) {
+  const acknowledgementState = text(record.staffAcknowledgementState).toLowerCase();
+  if (
+    evaluatedMessageId !== latestMessageId
+    || !new Set(["acknowledged", "unacknowledged"]).has(acknowledgementState)
+  ) {
     return {
       state: "blocked",
-      reasons: [reason("conversation_read_state_incomplete", "Staff read state is not bound to the latest conversation message.")],
+      reasons: [reason("conversation_acknowledgement_state_incomplete", "Staff acknowledgement state is not bound to the latest conversation message.")],
       scopeKey: latestMessageId
     };
   }
   if (latestActorType !== "customer") {
-    if (readState === "unread") {
+    if (acknowledgementState === "unacknowledged") {
       return {
         state: "blocked",
-        reasons: [reason("conversation_read_state_conflict", "Unread-customer state conflicts with a latest message not authored by the customer.")],
+        reasons: [reason("conversation_acknowledgement_state_conflict", "Unacknowledged-customer state conflicts with a latest message not authored by the customer.")],
         scopeKey: latestMessageId
       };
     }
@@ -950,25 +953,25 @@ function unreadCustomerReplyCore({ quote, identity, calendar, evidence }) {
       scopeKey: latestMessageId
     };
   }
-  if (readState === "read") {
-    const staffReadAtISO = normalizedISO(record.staffReadAtISO);
-    if (!staffReadAtISO || staffReadAtISO < latestMessageAtISO) {
+  if (acknowledgementState === "acknowledged") {
+    const staffAcknowledgedAtISO = normalizedISO(record.staffAcknowledgedAtISO);
+    if (!staffAcknowledgedAtISO || staffAcknowledgedAtISO < latestMessageAtISO) {
       return {
         state: "blocked",
-        reasons: [reason("conversation_read_receipt_stale", "The staff read receipt does not follow the latest customer message.")],
+        reasons: [reason("conversation_acknowledgement_stale", "The staff acknowledgement does not follow the latest customer message.")],
         scopeKey: latestMessageId
       };
     }
     return {
       state: "stopped",
-      reasons: [reason("customer_reply_read", "Unread-reply escalation stops because staff read evidence covers the latest customer message.", "stop")],
+      reasons: [reason("customer_reply_acknowledged", "Unread-reply escalation stops because staff manually acknowledged the latest customer message. This is not read evidence.", "stop")],
       scopeKey: latestMessageId
     };
   }
-  if (text(record.staffReadAtISO)) {
+  if (text(record.staffAcknowledgedAtISO)) {
     return {
       state: "blocked",
-      reasons: [reason("conversation_unread_evidence_conflict", "Unread state conflicts with a recorded staff read timestamp.")],
+      reasons: [reason("conversation_unacknowledged_evidence_conflict", "Unacknowledged state conflicts with a recorded staff acknowledgement timestamp.")],
       scopeKey: latestMessageId
     };
   }

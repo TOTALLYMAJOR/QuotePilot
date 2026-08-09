@@ -81,6 +81,9 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain("NOTIFICATIONS_EMAIL_PROVIDER=none");
     expect(output).toContain("NOTIFICATIONS_SMS_PROVIDER=none");
     expect(output).toContain("STRIPE_MODE=live");
+    expect(output).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false");
+    expect(output).toContain("REVENUE_AUTOPILOT_ENABLED=false");
+    expect(output).toContain("REVENUE_AUTOPILOT_SENDS_ENABLED=false");
     expect(output).toContain("BUYER_ACCESS_ENABLED=false");
     expect(output).toContain("BUYER_ACCESS_STRIPE_MODE=test");
     expect(output).toContain(
@@ -93,10 +96,12 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET");
     expect(output).not.toContain("BUYER_ACCESS_RATE_LIMIT_SECRET");
     expect(output).not.toContain("RESEND_API_KEY");
+    expect(output).not.toContain("RESEND_WEBHOOK_SECRET");
     expect(output).not.toContain("STRIPE_SECRET_KEY");
     expect(output).not.toContain("STRIPE_WEBHOOK_SECRET");
     expect(output).not.toContain("TWILIO_ACCOUNT_SID");
     expect(output).not.toContain("TWILIO_AUTH_TOKEN");
+    expect(output).not.toContain("REVENUE_AUTOPILOT_TOKEN_SECRET");
     expect(output).not.toContain("TWILIO_MESSAGING_SERVICE_SID");
     expect(output).not.toContain("NOTIFICATIONS_OWNER_PHONE");
     expect(result.stdout).not.toContain("test_only_secret");
@@ -108,6 +113,72 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     }).result;
     expect(testMode.status).not.toBe(0);
     expect(testMode.stderr).toMatch(/requires STRIPE_MODE=live/i);
+  });
+
+  test("keeps Commercial Change Authority enforcement explicit and fail closed", () => {
+    const enabled = runMaterializer({
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true"
+    });
+    expect(enabled.result.status).toBe(0);
+    expect(fs.readFileSync(
+      path.join(enabled.cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    )).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true");
+
+    const invalid = runMaterializer({
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "enabled"
+    }).result;
+    expect(invalid.status).not.toBe(0);
+    expect(invalid.stderr).toMatch(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED must be true or false/i);
+  });
+
+  test("keeps Revenue Autopilot activation and outbound sends independently fail closed", () => {
+    const enabledOnly = runMaterializer({
+      REVENUE_AUTOPILOT_ENABLED: "true"
+    });
+    expect(enabledOnly.result.status).toBe(0);
+    const enabledOnlyOutput = fs.readFileSync(
+      path.join(enabledOnly.cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    );
+    expect(enabledOnlyOutput).toContain("REVENUE_AUTOPILOT_ENABLED=true");
+    expect(enabledOnlyOutput).toContain("REVENUE_AUTOPILOT_SENDS_ENABLED=false");
+
+    const sendsWithoutRuntime = runMaterializer({
+      REVENUE_AUTOPILOT_SENDS_ENABLED: "true",
+      NOTIFICATIONS_EMAIL_PROVIDER: "resend"
+    }).result;
+    expect(sendsWithoutRuntime.status).not.toBe(0);
+    expect(sendsWithoutRuntime.stderr).toMatch(/cannot be true while REVENUE_AUTOPILOT_ENABLED is false/i);
+
+    const sendsWithoutProvider = runMaterializer({
+      REVENUE_AUTOPILOT_ENABLED: "true",
+      REVENUE_AUTOPILOT_SENDS_ENABLED: "true"
+    }).result;
+    expect(sendsWithoutProvider.status).not.toBe(0);
+    expect(sendsWithoutProvider.stderr).toMatch(/require NOTIFICATIONS_EMAIL_PROVIDER=resend/i);
+
+    const outboundReady = runMaterializer({
+      REVENUE_AUTOPILOT_ENABLED: "true",
+      REVENUE_AUTOPILOT_SENDS_ENABLED: "true",
+      NOTIFICATIONS_EMAIL_PROVIDER: "resend"
+    });
+    expect(outboundReady.result.status).toBe(0);
+    const outboundOutput = fs.readFileSync(
+      path.join(outboundReady.cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    );
+    expect(outboundOutput).toContain("REVENUE_AUTOPILOT_SENDS_ENABLED=true");
+    expect(outboundOutput).not.toContain("REVENUE_AUTOPILOT_TOKEN_SECRET");
+
+    for (const [name, value] of [
+      ["REVENUE_AUTOPILOT_ENABLED", "enabled"],
+      ["REVENUE_AUTOPILOT_SENDS_ENABLED", "enabled"]
+    ]) {
+      const invalid = runMaterializer({ [name]: value }).result;
+      expect(invalid.status).not.toBe(0);
+      expect(invalid.stderr).toContain(`${name} must be true or false`);
+    }
   });
 
   test("rejects placeholder platform authority", () => {
@@ -180,9 +251,11 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
   test("rejects generic provider secrets in dotenv because Secret Manager owns them", () => {
     for (const [name, value] of [
       ["RESEND_API_KEY", "re_secret_fixture"],
+      ["RESEND_WEBHOOK_SECRET", "resend-webhook-secret-fixture"],
       ["TWILIO_AUTH_TOKEN", "twilio-secret-fixture"],
       ["STRIPE_SECRET_KEY", "rk_live_secret_fixture"],
-      ["STRIPE_WEBHOOK_SECRET", "whsec_secret_fixture"]
+      ["STRIPE_WEBHOOK_SECRET", "whsec_secret_fixture"],
+      ["REVENUE_AUTOPILOT_TOKEN_SECRET", "autopilot-token-secret-fixture"]
     ]) {
       const { result } = runMaterializer({ [name]: value });
       expect(result.status).not.toBe(0);

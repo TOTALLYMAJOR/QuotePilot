@@ -730,6 +730,7 @@ service cloud.firestore {
         "featureFlagsPaid",
         "featureFlagsLockReason",
         "featureFlagsLockUpdatedAtISO",
+        "commercialChangeAuthorityEnabled",
         "orderId",
         "onboarding"
       ])
@@ -749,6 +750,7 @@ service cloud.firestore {
         "featureFlagsPaid",
         "featureFlagsLockReason",
         "featureFlagsLockUpdatedAtISO",
+        "commercialChangeAuthorityEnabled",
         "orderId",
         "onboarding"
       ])
@@ -995,6 +997,96 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/postEventCloseouts/{closeoutId}/actionReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Kitchen BEO artifacts, immutable generation receipts, dependency
+    // invalidations, and Decision Debt policy/snapshots are trusted-server
+    // evidence. Staff consume bounded callable projections; artifact bytes and
+    // internal reconciliation records are never browser-readable.
+    match /organizations/{orgId}/kitchenBeoArtifacts/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/kitchenBeoGenerationReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/commercialChangeSimulations/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/commercialChangeApprovalRequests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/commercialChangeAuthorizations/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/commercialChangeApplyReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/commercialChangeReconciliationReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/commercialDependencyState/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/commercialDependencyState/{quoteId}/invalidations/{invalidationId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/decisionDebtPolicies/{policyId} {
+      allow read, write: if false;
+    }
+
+    // Revenue Autopilot policy, templates, recipient controls, jobs, Attention
+    // records, dispatch receipts, and provider evidence are trusted-server
+    // authority. Staff use callable-owned, redacted projections; no browser
+    // principal may read recipient/provider evidence or mutate automation state.
+    match /organizations/{orgId}/revenueAutopilotPolicy/{policyId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/revenueAutopilotTemplates/{templateId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/revenueAutopilotJobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/revenueAutopilotAttention/{attentionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/revenueAutopilotReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/revenueAutopilotProviderEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/revenueAutopilotEmailControls/{customerId} {
+      allow read, write: if false;
+    }
+
+    // Global registry/index documents contain tenant and provider routing
+    // evidence and are also Admin SDK only.
+    match /revenueAutopilotTenants/{orgId} {
+      allow read, write: if false;
+    }
+
+    match /revenueAutopilotProviderMessageIndex/{messageId} {
+      allow read, write: if false;
+    }
+
+    match /revenueAutopilotSchedulerState/{stateId} {
       allow read, write: if false;
     }
 

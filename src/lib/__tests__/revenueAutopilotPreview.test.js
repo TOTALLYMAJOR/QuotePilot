@@ -179,7 +179,7 @@ function paymentLedger(entries = [], overrides = {}) {
 
 function conversationSnapshot(overrides = {}) {
   return {
-    source: "quote_conversation_read_state",
+    source: "quote_conversation_attention_state",
     organizationId: ORGANIZATION_ID,
     quoteId: QUOTE_ID,
     observedForDate: CALENDAR_DATE,
@@ -188,8 +188,8 @@ function conversationSnapshot(overrides = {}) {
     latestMessageAtISO: "",
     latestActorType: "",
     evaluatedMessageId: "",
-    staffReadState: "read",
-    staffReadAtISO: "",
+    staffAcknowledgementState: "acknowledged",
+    staffAcknowledgedAtISO: "",
     body: "PRIVATE CUSTOMER MESSAGE MUST NOT LEAK",
     ...overrides
   };
@@ -494,15 +494,15 @@ describe("revenue autopilot read-only preview", () => {
       conversationSnapshots: [conversationSnapshot({
         ...summary,
         evaluatedMessageId: "message-3",
-        staffReadState: "unread"
+        staffAcknowledgementState: "unacknowledged"
       })]
     });
     const readEvidence = evidenceFor("sent", {
       conversationSnapshots: [conversationSnapshot({
         ...summary,
         evaluatedMessageId: "message-3",
-        staffReadState: "read",
-        staffReadAtISO: "2026-08-10T14:05:00.000Z"
+        staffAcknowledgementState: "acknowledged",
+        staffAcknowledgedAtISO: "2026-08-10T14:05:00.000Z"
       })]
     });
 
@@ -511,7 +511,7 @@ describe("revenue autopilot read-only preview", () => {
     expect(evaluation(build({ quote, evidence: readEvidence }), "unread_customer_reply"))
       .toMatchObject({
         state: "stopped",
-        reasons: [{ code: "customer_reply_read" }]
+        reasons: [{ code: "customer_reply_acknowledged" }]
       });
   });
 
@@ -614,14 +614,14 @@ describe("revenue autopilot read-only preview", () => {
           ...summary,
           latestMessageId: "message-1",
           evaluatedMessageId: "message-1",
-          staffReadState: "unread"
+          staffAcknowledgementState: "unacknowledged"
         })]
       })
     });
     const current = conversationSnapshot({
       ...summary,
       evaluatedMessageId: "message-2",
-      staffReadState: "unread"
+      staffAcknowledgementState: "unacknowledged"
     });
     const ambiguous = build({
       quote,

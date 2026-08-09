@@ -93,6 +93,36 @@ const ORG_SCOPED_ADMIN_WRITE_CASES = [
   }
 ];
 
+const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
+  ["organizations", "org-a", "kitchenBeoArtifacts", "q1"],
+  ["organizations", "org-a", "kitchenBeoGenerationReceipts", "beo-receipt-1"],
+  ["organizations", "org-a", "commercialChangeSimulations", "ccs-receipt-1"],
+  ["organizations", "org-a", "commercialChangeApprovalRequests", "ccar-request-1"],
+  ["organizations", "org-a", "commercialChangeAuthorizations", "cca-receipt-1"],
+  ["organizations", "org-a", "commercialChangeApplyReceipts", "ccp-receipt-1"],
+  ["organizations", "org-a", "commercialChangeReconciliationReceipts", "ccr-receipt-1"],
+  ["organizations", "org-a", "commercialDependencyState", "q1"],
+  [
+    "organizations",
+    "org-a",
+    "commercialDependencyState",
+    "q1",
+    "invalidations",
+    "invalidation-1"
+  ],
+  ["organizations", "org-a", "decisionDebtPolicies", "current"],
+  ["organizations", "org-a", "revenueAutopilotPolicy", "current"],
+  ["organizations", "org-a", "revenueAutopilotTemplates", "quote-follow-up-v1"],
+  ["organizations", "org-a", "revenueAutopilotJobs", "job-1"],
+  ["organizations", "org-a", "revenueAutopilotAttention", "attention-1"],
+  ["organizations", "org-a", "revenueAutopilotReceipts", "receipt-1"],
+  ["organizations", "org-a", "revenueAutopilotProviderEvents", "provider-event-1"],
+  ["organizations", "org-a", "revenueAutopilotEmailControls", "customer-1"],
+  ["revenueAutopilotTenants", "org-a"],
+  ["revenueAutopilotProviderMessageIndex", "provider-message-1"],
+  ["revenueAutopilotSchedulerState", "global"]
+]);
+
 const CATALOG_COLLECTIONS = new Set([
   "catalogPackages",
   "catalogAddons",
@@ -1945,6 +1975,78 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       await assertFails(deleteDoc(closeoutRef));
       await assertFails(setDoc(receiptRef, { forged: true }));
     }
+  });
+
+  test.each([
+    ["unauthenticated", () => testEnv.unauthenticatedContext()],
+    ["unassigned", () => testEnv.authenticatedContext("unassigned-commercial-user", {
+      email: "unassigned-commercial@example.com",
+      email_verified: true
+    })],
+    ["same-org customer", () => testEnv.authenticatedContext("customer-org-a", {
+      email: "customer-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    })],
+    ["same-org sales", () => testEnv.authenticatedContext("sales-org-a", {
+      email: "sales-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    })],
+    ["same-org admin", () => testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    })],
+    ["cross-tenant staff", () => testEnv.authenticatedContext("sales-org-b", {
+      email: "sales-b@example.com",
+      email_verified: true,
+      organizationId: "org-b"
+    })]
+  ])("server-owned commercial authority denies every %s browser operation", async (_label, contextFactory) => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      for (const authorityPath of SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS) {
+        await setDoc(doc(db, ...authorityPath), {
+          schemaVersion: 1,
+          organizationId: "org-a",
+          serverOwned: true,
+          providerReference: "private-provider-reference",
+          recipientKey: "private-recipient-key"
+        });
+      }
+    });
+
+    const browserDb = contextFactory().firestore();
+    for (const authorityPath of SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS) {
+      const existingRef = doc(browserDb, ...authorityPath);
+      const collectionPath = authorityPath.slice(0, -1);
+      const browserDocumentPath = [
+        ...collectionPath,
+        `${authorityPath.at(-1)}-browser-created`
+      ];
+
+      await assertFails(getDoc(existingRef));
+      await assertFails(getDocs(query(collection(browserDb, ...collectionPath), limit(5))));
+      await assertFails(setDoc(doc(browserDb, ...browserDocumentPath), {
+        organizationId: "org-a",
+        serverOwned: false
+      }));
+      await assertFails(updateDoc(existingRef, { serverOwned: false }));
+      await assertFails(deleteDoc(existingRef));
+    }
+  }, 30_000);
+
+  test("commercial change enforcement cannot be promoted by a browser administrator", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    }).firestore();
+    await assertFails(updateDoc(
+      doc(adminDb, "organizations", "org-a", "settings", "config"),
+      { commercialChangeAuthorityEnabled: true }
+    ));
   });
 
   test("product analytics events are callable-owned and cannot expose raw staff activity", async () => {

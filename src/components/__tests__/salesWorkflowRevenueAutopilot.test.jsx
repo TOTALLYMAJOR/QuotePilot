@@ -2,9 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import { WORKFLOW_TIMING_INPUT_SCAN_LIMIT } from "../../lib/workflowTimingCues";
 import {
+  RevenueAutopilotReviewRequestPolicyFields,
   SalesWorkflowView,
+  buildRevenueAutopilotReviewRequestConfiguration,
   buildWorkflowRevenueAutopilotInput,
-  buildWorkflowRevenueAutopilotRead
+  buildWorkflowRevenueAutopilotRead,
+  isRevenueAutopilotPolicySaveBlocked
 } from "../SalesWorkflowModal";
 
 function quote(overrides = {}) {
@@ -32,6 +35,67 @@ function quote(overrides = {}) {
 }
 
 describe("Sales Workflow revenue autopilot integration", () => {
+  test("binds the post-event lane toggle to a strict tenant review-destination state", () => {
+    expect(buildRevenueAutopilotReviewRequestConfiguration({
+      enabled: false,
+      reviewRequestUrl: ""
+    })).toMatchObject({ state: "dormant", valid: true });
+    expect(buildRevenueAutopilotReviewRequestConfiguration({
+      enabled: true,
+      reviewRequestUrl: ""
+    })).toMatchObject({ state: "missing", valid: false });
+    expect(buildRevenueAutopilotReviewRequestConfiguration({
+      enabled: true,
+      reviewRequestUrl: "http://localhost/reviews"
+    })).toMatchObject({ state: "invalid", valid: false });
+    expect(buildRevenueAutopilotReviewRequestConfiguration({
+      enabled: true,
+      reviewRequestUrl: "https://reviews.example.test/collect"
+    })).toMatchObject({
+      state: "configured",
+      valid: true,
+      host: "reviews.example.test"
+    });
+  });
+
+  test("renders the admin post-event toggle, required URL field, and proof-safe configuration copy", () => {
+    const markup = renderToStaticMarkup(
+      <RevenueAutopilotReviewRequestPolicyFields
+        draft={{
+          kinds: { post_event_review_request: true },
+          reviewRequestUrl: "https://reviews.example.test/collect"
+        }}
+        onDraftChange={() => {}}
+      />
+    );
+
+    expect(markup).toContain('data-capability-id="cwf-12-post-event-review-policy"');
+    expect(markup).toContain('data-capability-state="configured"');
+    expect(markup).toContain('data-capability-action="toggle-post-event-review-request"');
+    expect(markup).toContain('data-capability-action="set-post-event-review-url"');
+    expect(markup).toContain('type="url"');
+    expect(markup).toContain("Runtime, provider, closeout, consent, and suppression gates remain separate");
+    expect(markup).toContain("not evidence of an external review or recovered revenue");
+  });
+
+  test("blocks a new invalid policy while preserving exact pending-attempt reconciliation", () => {
+    const invalidReviewConfiguration = { valid: false };
+    expect(isRevenueAutopilotPolicySaveBlocked({
+      mutationState: "ready",
+      reviewConfiguration: invalidReviewConfiguration
+    })).toBe(true);
+    expect(isRevenueAutopilotPolicySaveBlocked({
+      mutationState: "uncertain",
+      pendingAttempt: { requestId: "ra_request_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+      reviewConfiguration: invalidReviewConfiguration
+    })).toBe(false);
+    expect(isRevenueAutopilotPolicySaveBlocked({
+      mutationState: "reconciliation",
+      pendingAttempt: { requestId: "ra_request_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+      reviewConfiguration: { valid: true }
+    })).toBe(true);
+  });
+
   test("derives the date from an explicit tenant time zone instead of device calendar state", () => {
     const input = buildWorkflowRevenueAutopilotInput({
       organizationId: "org-1",

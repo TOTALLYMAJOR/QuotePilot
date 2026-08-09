@@ -24,13 +24,16 @@ Threshold policy:
   for aggregate JavaScript and the largest chunk. The guard accepts it only
   when its ID is active and its pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The customer-centered workspace exception is currently capped at 2,331,934
-  aggregate JavaScript bytes and a 413,275-byte largest chunk. These are the
-  larger exact measurements from the August 9 disabled- and enabled-flag source
-  builds, so the exception provides no
-  additional growth headroom. Against the unchanged clean-main baseline, they
-  represent 334,569 bytes (16.75%) aggregate growth and 25,346 bytes (6.53%)
-  largest-chunk growth.
+- The customer-centered workspace exception is currently capped at 2,552,693
+  aggregate JavaScript bytes and a 426,521-byte largest chunk. These are the
+  exact measurements from the August 9 commercial-authority and Revenue
+  Autopilot checkpoint build, so the exception provides no additional growth
+  headroom. Against the unchanged clean-main baseline, they represent 555,328
+  bytes (27.80%) aggregate growth and 38,592 bytes (9.95%) largest-chunk
+  growth. Route-level splitting keeps the new Customer 360, Workflow,
+  commercial-authority, Decision Debt, Revenue Autopilot, and BEO surfaces out
+  of the public entry chunk, but aggregate download, parse, and execution cost
+  still requires explicit remediation or reviewed post-merge recalibration.
 - An active exception prevents `--update-baseline`; remove it before producing
   a new clean-main baseline. Passing under an exception is branch budget
   compliance, not Core Web Vitals, hosted, production, or human-acceptance

@@ -1,0 +1,78 @@
+/* Wizard selection micro-motion (owned by WizardSteps.jsx).
+   One-shot classes are added/removed imperatively by runOneShotMotionClass()
+   in WizardSteps.jsx, so nothing here appears in static markup or on initial
+   render. House rules: keyframes animate transform/opacity only; durations,
+   easings, and colors come from the shared tokens in src/styles.css :root. */
+
+@keyframes wizard-selection-settle {
+  0% { transform: scale(0.98); }
+  60% { transform: scale(1.005); }
+  100% { transform: scale(1); }
+}
+
+@keyframes wizard-selection-wink {
+  0% { opacity: 0; transform: translate3d(0, 2px, 0) scale(0.4); }
+  30% { opacity: 0.95; }
+  100% { opacity: 0; transform: translate3d(5px, -14px, 0) scale(1.05); }
+}
+
+@keyframes wizard-qty-pulse {
+  0% { opacity: 0; }
+  35% { opacity: 0.2; }
+  100% { opacity: 0; }
+}
+
+/* Subtle 98% -> 100% scale-settle when a selection card is picked. */
+.selection-settle {
+  position: relative;
+  transform-origin: 50% 50%;
+  animation: wizard-selection-settle var(--motion-base) var(--ease-spring) both;
+}
+
+/* Single tiny particle "wink": one gold dot that fades up and out. */
+.selection-settle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0.9rem;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tone-gold-2);
+  pointer-events: none;
+  opacity: 0;
+  animation: wizard-selection-wink calc(var(--motion-base) * 2) var(--ease-out-soft) both;
+}
+
+/* Brief background pulse behind quantity steppers / qty inputs on value
+   change — a gold wash whose opacity (only) animates. */
+.qty-pulse {
+  position: relative;
+}
+
+.qty-pulse::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--tone-gold-2);
+  pointer-events: none;
+  opacity: 0;
+  animation: wizard-qty-pulse var(--motion-base) var(--ease-out-soft) both;
+}
+
+/* Belt and braces: the JS guard already skips adding these classes under
+   reduced motion, and the global reduced-motion rule crushes durations —
+   but if a class ever lands anyway, render nothing extra. */
+@media (prefers-reduced-motion: reduce) {
+  .selection-settle,
+  .selection-settle::after,
+  .qty-pulse::before {
+    animation: none;
+  }
+
+  .selection-settle::after,
+  .qty-pulse::before {
+    content: none;
+  }
+}

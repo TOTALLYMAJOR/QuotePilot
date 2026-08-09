@@ -79,7 +79,9 @@ describe("recoverable lazy surfaces", () => {
     const mainSource = readSource("../../main.jsx");
     const appSource = readSource("../../App.jsx");
 
-    expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(3);
+    expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(4);
+    expect(mainSource).toContain("const RevenueAutopilotUnsubscribePage = createRecoverableLazy(");
+    expect(mainSource).toContain('surfaceName="Email preferences"');
     for (const name of [
       "AdminCatalogModal",
       "EventScheduleModal",

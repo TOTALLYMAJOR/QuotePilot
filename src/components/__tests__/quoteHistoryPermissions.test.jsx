@@ -1,5 +1,8 @@
-import { describe, expect, test } from "vitest";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, test, vi } from "vitest";
 import {
+  QuoteHistoryKitchenBeoAction,
   assertRebookArtifactReady,
   canDeliverQuoteEmailStatus,
   canEditQuoteStatus,
@@ -7,12 +10,13 @@ import {
   getFinalBalanceDisplayStatus,
   filterQuoteHistoryQuotes,
   formatQuoteHistoryDate,
-  getQuoteHistoryFinancialCells,
   getExecutableApprovalRequest,
+  getQuoteDeliveryUiState,
   isCustomerPortalShareable,
   isFinalBalanceRequestEligible,
-  getQuoteDeliveryUiState,
-  getQuoteHistoryActionPermissions
+  getQuoteHistoryActionPermissions,
+  getQuoteHistoryFinancialCells,
+  getQuoteHistoryKitchenBeoMode
 } from "../QuoteHistoryModal";
 
 describe("quote history presentation helpers", () => {
@@ -361,6 +365,81 @@ describe("quote history action permissions", () => {
     };
 
     expect(getExecutableApprovalRequest(quote, "convert_to_contract")).toBeNull();
+  });
+});
+
+describe("quote history Kitchen BEO authority routing", () => {
+  const quote = Object.freeze({ id: "quote-42", quoteNumber: "Q-0042" });
+
+  test("routes Firebase quotes to server freshness and generation instead of browser export", () => {
+    expect(getQuoteHistoryKitchenBeoMode("firebase")).toMatchObject({
+      authority: "server_authoritative",
+      action: "open-authoritative",
+      label: "Kitchen BEO status"
+    });
+    const onOpenAuthoritative = vi.fn();
+    const onExportLocal = vi.fn();
+    const element = QuoteHistoryKitchenBeoAction({
+      source: "firebase",
+      quote,
+      onOpenAuthoritative,
+      onExportLocal
+    });
+    element.props.onClick();
+
+    expect(onOpenAuthoritative).toHaveBeenCalledWith(quote);
+    expect(onExportLocal).not.toHaveBeenCalled();
+    const markup = renderToStaticMarkup(element);
+    expect(markup).toContain('data-beo-authority="server_authoritative"');
+    expect(markup).toContain('data-capability-action="open-kitchen-beo"');
+    expect(markup).toContain('aria-haspopup="dialog"');
+    expect(markup).toContain("immutable receipt");
+    expect(markup).not.toContain("Local BEO");
+  });
+
+  test("routes only exact local storage to a visibly non-authoritative browser fallback", () => {
+    expect(getQuoteHistoryKitchenBeoMode("local")).toMatchObject({
+      authority: "local_non_authoritative",
+      action: "export-local",
+      label: "Local BEO — no receipt"
+    });
+    const onOpenAuthoritative = vi.fn();
+    const onExportLocal = vi.fn();
+    const element = QuoteHistoryKitchenBeoAction({
+      source: "local",
+      quote,
+      onOpenAuthoritative,
+      onExportLocal
+    });
+    element.props.onClick();
+
+    expect(onExportLocal).toHaveBeenCalledWith(quote);
+    expect(onOpenAuthoritative).not.toHaveBeenCalled();
+    const markup = renderToStaticMarkup(element);
+    expect(markup).toContain('data-beo-authority="local_non_authoritative"');
+    expect(markup).toContain('data-capability-action="export-local-kitchen-beo"');
+    expect(markup).toContain("Non-authoritative local fallback");
+    expect(markup).toContain("without a server generation receipt or freshness status");
+    expect(markup).not.toContain('aria-haspopup="dialog"');
+  });
+
+  test("fails closed while quote storage authority is unknown", () => {
+    const onOpenAuthoritative = vi.fn();
+    const onExportLocal = vi.fn();
+    const element = QuoteHistoryKitchenBeoAction({
+      source: "retained-maybe",
+      quote,
+      onOpenAuthoritative,
+      onExportLocal
+    });
+    element.props.onClick();
+
+    expect(onOpenAuthoritative).not.toHaveBeenCalled();
+    expect(onExportLocal).not.toHaveBeenCalled();
+    const markup = renderToStaticMarkup(element);
+    expect(markup).toContain('data-beo-authority="unavailable"');
+    expect(markup).toContain("disabled");
+    expect(markup).toContain("Refresh Quotes before generating an artifact");
   });
 });
 
