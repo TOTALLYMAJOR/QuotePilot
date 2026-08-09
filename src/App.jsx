@@ -3182,6 +3182,10 @@ export default function App({ tenantContext, authSession }) {
             open={historyOpen}
             presentation={CUSTOMER_CENTERED_WORKSPACE_ENABLED ? "embedded" : "modal"}
             onClose={closeHistoryWorkspace}
+            onCloseBlocked={(message) => {
+              pushToast(message || "Finish the pending Quotes action before leaving.", "warning");
+              navigateWorkspace(WORKSPACE_PATHS.quotes, { replace: true });
+            }}
             basePortalUrl={`${window.location.origin}${WORKSPACE_PATHS.home}`}
             organizationId={authSession.organizationId}
             currentUserUid={authSession.user?.uid || ""}

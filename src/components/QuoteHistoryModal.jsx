@@ -41,6 +41,311 @@ const RESUMABLE_PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_final_balance_request"
 ]);
 
+const DEFINITIVE_CONTRACT_CONVERSION_ERROR_CODES = new Set([
+  "already-exists",
+  "failed-precondition",
+  "invalid-argument",
+  "not-found",
+  "out-of-range",
+  "permission-denied",
+  "unauthenticated"
+]);
+
+function contractConversionErrorMessage(error, fallback = "Contract conversion could not be completed.") {
+  const message = String(error?.message || fallback)
+    .replace(/^FirebaseError:\s*/i, "")
+    .trim();
+  return message || fallback;
+}
+
+export function isDefinitiveContractConversionError(error) {
+  const code = String(error?.code || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^functions\//, "");
+  if (DEFINITIVE_CONTRACT_CONVERSION_ERROR_CODES.has(code)) return true;
+
+  const message = contractConversionErrorMessage(error, "");
+  return [
+    /admin role required to convert quotes to contracts/i,
+    /approve a contract-conversion request in workflow first/i,
+    /approved contract-conversion request is required/i,
+    /quote id is required/i,
+    /organizationId is required for convertQuoteToContract/i,
+    /quote not found/i,
+    /already converted to a contract/i,
+    /only accepted quotes can be converted to a contract/i,
+    /accepted quote has no menu selection/i,
+    /booking blocked: another contract is already booked/i
+  ].some((pattern) => pattern.test(message));
+}
+
+export function createContractConversionMutationState(quoteId = "") {
+  return {
+    phase: "ready",
+    quoteId: String(quoteId || "").trim(),
+    approvalRequestId: "",
+    requiresApproval: false,
+    error: "",
+    receipt: null
+  };
+}
+
+export function getContractConversionMutationState(statesByQuote = {}, quoteId = "") {
+  const normalizedQuoteId = String(quoteId || "").trim();
+  const existing = normalizedQuoteId && statesByQuote && typeof statesByQuote === "object"
+    ? statesByQuote[normalizedQuoteId]
+    : null;
+  return existing && typeof existing === "object"
+    ? existing
+    : createContractConversionMutationState(normalizedQuoteId);
+}
+
+export function reduceContractConversionMutationState(statesByQuote = {}, nextState = {}) {
+  const quoteId = String(nextState?.quoteId || "").trim();
+  if (!quoteId) return { ...(statesByQuote || {}) };
+  return {
+    ...(statesByQuote || {}),
+    [quoteId]: {
+      ...createContractConversionMutationState(quoteId),
+      ...nextState,
+      quoteId
+    }
+  };
+}
+
+export function quoteHistoryCloseBlockedByConversation(conversationQuote) {
+  return Boolean(String(conversationQuote?.id || "").trim());
+}
+
+const CONTRACT_CONVERSION_CLOSE_BLOCKING_PHASES = new Set([
+  "submitting",
+  "uncertain",
+  "reconciliation",
+  "recovery"
+]);
+
+export function buildQuoteHistoryCloseGuard({
+  conversationQuote = null,
+  contractConversions = {}
+} = {}) {
+  const conversationQuoteId = String(conversationQuote?.id || "").trim();
+  if (conversationQuoteId) {
+    return {
+      blocked: true,
+      reason: "conversation",
+      quoteId: conversationQuoteId,
+      message: "Close the current quote conversation before leaving Quotes or opening another conversation."
+    };
+  }
+
+  const blockedConversion = Object.values(
+    contractConversions && typeof contractConversions === "object" ? contractConversions : {}
+  ).find((conversion) => CONTRACT_CONVERSION_CLOSE_BLOCKING_PHASES.has(
+    String(conversion?.phase || "").trim().toLowerCase()
+  ));
+  if (blockedConversion) {
+    const quoteId = String(blockedConversion.quoteId || "").trim();
+    const phase = String(blockedConversion.phase || "").trim().toLowerCase();
+    const quoteLabel = quoteId ? ` for quote ${quoteId}` : "";
+    return {
+      blocked: true,
+      reason: "contract_conversion",
+      quoteId,
+      message: phase === "uncertain"
+        ? `Reconcile the uncertain contract conversion${quoteLabel} before leaving Quotes.`
+        : `Keep Quotes open while the contract conversion${quoteLabel} is ${phase}.`
+    };
+  }
+
+  return {
+    blocked: false,
+    reason: "",
+    quoteId: "",
+    message: ""
+  };
+}
+
+export function shouldRestoreBlockedQuoteHistoryRoute({ open = true, closeGuard = {} } = {}) {
+  return open === false && closeGuard?.blocked === true;
+}
+
+export function shouldRenderQuoteHistory({ open = true, closeGuard = {} } = {}) {
+  return open === true || closeGuard?.blocked === true;
+}
+
+export function canOpenQuoteConversation(conversationQuote) {
+  return !quoteHistoryCloseBlockedByConversation(conversationQuote);
+}
+
+export function beginContractConversionAttempt({
+  currentState = createContractConversionMutationState(),
+  quoteId = "",
+  approvalRequestId = "",
+  requiresApproval = false,
+  reconcile = false
+} = {}) {
+  const normalizedQuoteId = String(quoteId || "").trim();
+  if (!normalizedQuoteId) {
+    throw new Error("Quote id is required.");
+  }
+  if (reconcile) {
+    const preservedQuoteId = String(currentState?.quoteId || "").trim();
+    const preservedApprovalRequestId = String(currentState?.approvalRequestId || "").trim();
+    const approvalRequired = currentState?.requiresApproval === true;
+    if (preservedQuoteId !== normalizedQuoteId || (approvalRequired && !preservedApprovalRequestId)) {
+      throw new Error("The original approved contract-conversion request is required for reconciliation.");
+    }
+    return {
+      phase: "reconciliation",
+      quoteId: normalizedQuoteId,
+      approvalRequestId: preservedApprovalRequestId,
+      requiresApproval: approvalRequired,
+      error: "",
+      receipt: null
+    };
+  }
+
+  return {
+    phase: "submitting",
+    quoteId: normalizedQuoteId,
+    approvalRequestId: String(approvalRequestId || "").trim(),
+    requiresApproval: requiresApproval === true,
+    error: "",
+    receipt: null
+  };
+}
+
+export function buildContractConversionMutationPresentation({
+  phase = "ready",
+  approvalReady = true,
+  error = "",
+  receipt = null
+} = {}) {
+  const normalizedError = String(error || "").trim();
+  const contractNumber = String(receipt?.contractNumber || "").trim();
+  const status = String(receipt?.status || "booked").trim().toLowerCase() || "booked";
+  const versionNumber = Number(receipt?.versionNumber);
+  const versionNote = Number.isSafeInteger(versionNumber) && versionNumber > 0
+    ? ` Immutable version ${versionNumber} is linked to the result.`
+    : "";
+
+  if (phase === "submitting") {
+    return {
+      state: "submitting",
+      title: "Submitting contract conversion",
+      detail: "Waiting for the trusted conversion receipt before reporting a contract or status change.",
+      error: ""
+    };
+  }
+  if (phase === "uncertain") {
+    return {
+      state: "uncertain",
+      title: "Conversion outcome is uncertain.",
+      detail: "No trusted receipt returned. Reconcile the same approved request before assuming whether a contract was recorded.",
+      error: normalizedError
+    };
+  }
+  if (phase === "reconciliation") {
+    return {
+      state: "reconciliation",
+      title: "Reconciling contract conversion",
+      detail: "The same approval request identity is being retried while QuotePilot waits for the canonical result.",
+      error: ""
+    };
+  }
+  if (phase === "receipt") {
+    return {
+      state: "receipt",
+      title: "Contract conversion receipt confirmed.",
+      detail: `The trusted result records contract ${contractNumber || "number unavailable"} and quote status ${status}.${versionNote} Deposit and final-balance settlement, customer confirmation, and operational readiness remain separate canonical facts.`,
+      error: ""
+    };
+  }
+  if (phase === "error") {
+    return {
+      state: "error",
+      title: "Contract conversion needs attention.",
+      detail: "The request was definitively rejected before a successful conversion receipt. No contract or status change is assumed.",
+      error: normalizedError
+    };
+  }
+  if (phase === "recovery") {
+    return {
+      state: "recovery",
+      title: "Refreshing canonical quote history",
+      detail: "QuotePilot is reloading the authoritative quote before returning this row to a safe ready or receipt state.",
+      error: ""
+    };
+  }
+  return {
+    state: "ready",
+    title: approvalReady ? "Ready for approved conversion" : "Approval required before conversion",
+    detail: approvalReady
+      ? "No conversion request has been submitted from this row."
+      : "Approve the exact contract-conversion request in Workflow before submitting this action.",
+    error: ""
+  };
+}
+
+export function ContractConversionMutationStatus({ presentation, showReady = false }) {
+  if (!presentation) return null;
+  if (!showReady && presentation.state === "ready") return null;
+  const alertState = ["uncertain", "error"].includes(presentation.state)
+    || Boolean(presentation.error);
+  return (
+    <div
+      className="history-meta-stack"
+      data-capability-state={presentation.state}
+      data-mutation-state={presentation.state}
+      role={alertState ? "alert" : "status"}
+    >
+      <small className={alertState ? "warning-note" : "source-note"}>
+        <strong>{presentation.title}</strong> {presentation.detail}
+      </small>
+      {presentation.error && <small className="error-note">{presentation.error}</small>}
+    </div>
+  );
+}
+
+export async function recoverContractConversionFromCanonicalHistory({
+  quoteId = "",
+  refreshHistory
+} = {}) {
+  const normalizedQuoteId = String(quoteId || "").trim();
+  if (!normalizedQuoteId || typeof refreshHistory !== "function") {
+    throw new Error("Quote id and canonical history refresh are required for recovery.");
+  }
+  const history = await refreshHistory();
+  if (!history || !Array.isArray(history.quotes)) {
+    throw new Error("Canonical quote history could not be refreshed.");
+  }
+  const quote = history.quotes.find((item) => String(item?.id || "").trim() === normalizedQuoteId);
+  if (!quote) {
+    throw new Error("The quote is no longer available in canonical quote history.");
+  }
+  const contractNumber = String(quote?.booking?.contractNumber || "").trim();
+  if (quote && String(quote.status || "").trim().toLowerCase() === "booked" && contractNumber) {
+    const versionNumber = Number(quote.latestVersionNumber);
+    return {
+      phase: "receipt",
+      quoteId: normalizedQuoteId,
+      approvalRequestId: "",
+      requiresApproval: false,
+      error: "",
+      receipt: {
+        contractNumber,
+        status: "booked",
+        versionNumber: Number.isSafeInteger(versionNumber) && versionNumber > 0
+          ? versionNumber
+          : 0,
+        source: "canonical_history"
+      }
+    };
+  }
+  return createContractConversionMutationState(normalizedQuoteId);
+}
+
 export function formatQuoteHistoryDate(iso) {
   if (!iso) return "-";
   const raw = String(iso).trim();
@@ -321,6 +626,7 @@ export function canEditQuoteStatus(status) {
 export function QuoteHistoryView({
   open,
   onClose,
+  onCloseBlocked = null,
   presentation = "embedded",
   basePortalUrl = "",
   organizationId = "",
@@ -357,6 +663,7 @@ export function QuoteHistoryView({
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingId, setUpdatingId] = useState("");
   const [convertingId, setConvertingId] = useState("");
+  const [contractConversions, setContractConversions] = useState({});
   const [updatingConfirmationId, setUpdatingConfirmationId] = useState("");
   const [duplicatingId, setDuplicatingId] = useState("");
   const [exportingPdfId, setExportingPdfId] = useState("");
@@ -383,18 +690,46 @@ export function QuoteHistoryView({
   const loadGenerationRef = useRef(0);
   const targetLoadPendingRef = useRef(false);
   const onCloseRef = useRef(onClose);
+  const onCloseBlockedRef = useRef(onCloseBlocked);
+  const quoteHistoryCloseGuardRef = useRef(buildQuoteHistoryCloseGuard());
+
+  const quoteHistoryCloseGuard = buildQuoteHistoryCloseGuard({
+    conversationQuote,
+    contractConversions
+  });
+  quoteHistoryCloseGuardRef.current = quoteHistoryCloseGuard;
 
   useEffect(() => {
     onCloseRef.current = onClose;
-  }, [onClose]);
+    onCloseBlockedRef.current = onCloseBlocked;
+  }, [onClose, onCloseBlocked]);
   deliveryReviewStateRef.current = deliveryReview;
 
   useEffect(() => {
     if (open) return;
+    const closeGuard = quoteHistoryCloseGuardRef.current;
+    if (shouldRestoreBlockedQuoteHistoryRoute({ open, closeGuard })) {
+      setState((current) => ({ ...current, error: closeGuard.message }));
+      onCloseBlockedRef.current?.(closeGuard.message);
+      return;
+    }
     setDeliveryReview(null);
     setConversationQuote(null);
+    setContractConversions({});
     deliveryReviewReturnFocusRef.current = null;
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !quoteHistoryCloseGuard.blocked || typeof window === "undefined") {
+      return undefined;
+    }
+    const protectPendingQuoteWork = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectPendingQuoteWork);
+    return () => window.removeEventListener("beforeunload", protectPendingQuoteWork);
+  }, [open, quoteHistoryCloseGuard.blocked]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -411,7 +746,13 @@ export function QuoteHistoryView({
     const handleDialogKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (deliveryReviewStateRef.current) {
+        const closeGuard = quoteHistoryCloseGuardRef.current;
+        if (closeGuard.blocked) {
+          setState((current) => ({
+            ...current,
+            error: closeGuard.message
+          }));
+        } else if (deliveryReviewStateRef.current) {
           setDeliveryReview(null);
           const returnTarget = deliveryReviewReturnFocusRef.current;
           window.requestAnimationFrame(() => {
@@ -488,6 +829,16 @@ export function QuoteHistoryView({
       onToast(message, tone);
     }
   };
+
+  const requestQuoteHistoryClose = () => {
+    const closeGuard = quoteHistoryCloseGuardRef.current;
+    if (closeGuard.blocked) {
+      setState((current) => ({ ...current, error: closeGuard.message }));
+      return;
+    }
+    setDeliveryReview(null);
+    onClose?.();
+  };
   const approvalExecutionOptions = ({ allowInProgressRecovery = false } = {}) => ({
     validateCurrentEligibility: true,
     requireActivePortal: state.source === "firebase",
@@ -508,7 +859,7 @@ export function QuoteHistoryView({
         organizationId: requestedOrganizationId,
         persistExpiredStatuses: normalizeHistoryRole(currentUserRole) === "admin"
       });
-      if (generation !== loadGenerationRef.current) return;
+      if (generation !== loadGenerationRef.current) return null;
       const targetFound = targetingSavedQuote
         && result.quotes.some((quote) => quote.id === requestedFocusQuoteId);
       if (targetingSavedQuote) {
@@ -526,8 +877,9 @@ export function QuoteHistoryView({
         source: result.source,
         quotes: result.quotes
       });
+      return result;
     } catch (err) {
-      if (generation !== loadGenerationRef.current) return;
+      if (generation !== loadGenerationRef.current) return null;
       if (targetingSavedQuote) targetLoadPendingRef.current = false;
       loadedFocusQuoteIdRef.current = "";
       setState((prev) => ({
@@ -536,6 +888,7 @@ export function QuoteHistoryView({
         error: err?.message || "Failed to load quote history.",
         feedback: ""
       }));
+      return null;
     }
   };
 
@@ -636,7 +989,10 @@ export function QuoteHistoryView({
     return () => window.cancelAnimationFrame(frame);
   }, [deliveryReview?.quoteId]);
 
-  if (!open) return null;
+  // Keep the child conversation mounted across a blocked route transition so
+  // its in-memory request identity cannot be destroyed before /app/quotes is
+  // restored. Contract-conversion identities already live in this parent.
+  if (!shouldRenderQuoteHistory({ open, closeGuard: quoteHistoryCloseGuard })) return null;
 
   const permissions = getQuoteHistoryActionPermissions(currentUserRole);
   const authorityCopy = permissions.role === "admin"
@@ -870,26 +1226,49 @@ export function QuoteHistoryView({
     setPendingDeleteQuote(null);
   };
 
-  const handleConvertToContract = async (quote) => {
+  const handleConvertToContract = async (quote, { reconcile = false } = {}) => {
     if (!permissions.canConvertToContract) {
-      setState((prev) => ({ ...prev, error: "Admin role required to convert quotes to contracts." }));
+      const error = "Admin role required to convert quotes to contracts.";
+      setContractConversions((current) => reduceContractConversionMutationState(current, {
+        ...createContractConversionMutationState(quote?.id),
+        phase: "error",
+        error
+      }));
+      setState((prev) => ({ ...prev, error }));
       return;
     }
-    setConvertingId(quote.id);
-    setState((prev) => ({ ...prev, error: "", feedback: "" }));
+    let attempt = null;
+    let dispatched = false;
     try {
-      const approvalRequest = getExecutableApprovalRequest(
-        quote,
-        "convert_to_contract",
-        approvalExecutionOptions()
-      );
-      if (state.source === "firebase" && !approvalRequest) {
-        throw new Error("Approve a contract-conversion request in Workflow first.");
+      const requiresApproval = state.source === "firebase";
+      let approvalRequestId = "";
+      if (!reconcile) {
+        const approvalRequest = getExecutableApprovalRequest(
+          quote,
+          "convert_to_contract",
+          approvalExecutionOptions()
+        );
+        if (requiresApproval && !approvalRequest) {
+          throw new Error("Approve a contract-conversion request in Workflow first.");
+        }
+        approvalRequestId = approvalRequest?.id || "";
       }
+
+      attempt = beginContractConversionAttempt({
+        currentState: getContractConversionMutationState(contractConversions, quote.id),
+        quoteId: quote.id,
+        approvalRequestId,
+        requiresApproval,
+        reconcile
+      });
+      setContractConversions((current) => reduceContractConversionMutationState(current, attempt));
+      setConvertingId(quote.id);
+      setState((prev) => ({ ...prev, error: "", feedback: "" }));
+      dispatched = true;
       const result = await convertQuoteToContract({
         quoteId: quote.id,
         actorEmail: currentUserEmail,
-        approvalRequestId: approvalRequest?.id || ""
+        approvalRequestId: attempt.approvalRequestId
       });
       applyQuoteLocally(quote.id, (existing) => ({
         ...existing,
@@ -909,14 +1288,72 @@ export function QuoteHistoryView({
         ...prev,
         feedback: `Converted ${quote.quoteNumber} to contract ${result.contractNumber}.${acceptedNote}${capacityNote}`
       }));
+      setContractConversions((current) => reduceContractConversionMutationState(current, {
+        phase: "receipt",
+        quoteId: quote.id,
+        approvalRequestId: attempt.approvalRequestId,
+        requiresApproval: attempt.requiresApproval,
+        error: "",
+        receipt: {
+          contractNumber: result.contractNumber,
+          status: result.status,
+          versionNumber: result.versionNumber,
+          source: result.storage
+        }
+      }));
       pushToast(`Converted ${quote.quoteNumber} to contract ${result.contractNumber}.`, "success");
     } catch (err) {
+      const error = contractConversionErrorMessage(
+        err,
+        "Failed to convert quote to contract."
+      );
+      const uncertain = dispatched && !isDefinitiveContractConversionError(err);
+      setContractConversions((current) => reduceContractConversionMutationState(current, {
+        phase: uncertain ? "uncertain" : "error",
+        quoteId: String(quote?.id || "").trim(),
+        approvalRequestId: attempt?.approvalRequestId || "",
+        requiresApproval: attempt?.requiresApproval === true,
+        error,
+        receipt: null
+      }));
       setState((prev) => ({
         ...prev,
-        error: err?.message || "Failed to convert quote to contract."
+        error
       }));
     } finally {
       setConvertingId("");
+    }
+  };
+
+  const handleRecoverContractConversion = async (quote) => {
+    const quoteId = String(quote?.id || "").trim();
+    if (!quoteId) return;
+    setContractConversions((current) => reduceContractConversionMutationState(current, {
+      phase: "recovery",
+      quoteId,
+      approvalRequestId: "",
+      requiresApproval: false,
+      error: "",
+      receipt: null
+    }));
+    setState((prev) => ({ ...prev, error: "", feedback: "" }));
+    try {
+      const safeState = await recoverContractConversionFromCanonicalHistory({
+        quoteId,
+        refreshHistory: load
+      });
+      setContractConversions((current) => reduceContractConversionMutationState(current, safeState));
+    } catch (err) {
+      const error = contractConversionErrorMessage(
+        err,
+        "Canonical quote history could not be refreshed."
+      );
+      setContractConversions((current) => reduceContractConversionMutationState(current, {
+        ...createContractConversionMutationState(quoteId),
+        phase: "error",
+        error
+      }));
+      setState((prev) => ({ ...prev, error }));
     }
   };
 
@@ -1271,7 +1708,7 @@ export function QuoteHistoryView({
         approvalExecutionOptions({ allowInProgressRecovery: true })
       );
       if (!approvalRequest) {
-        throw new Error("Approve a final-balance request in Sales Workflow first.");
+        throw new Error("Approve a final-balance request in Workflow first.");
       }
       const finalBalanceRequestInProgress = String(approvalRequest.executionState || "")
         .trim()
@@ -1379,10 +1816,9 @@ export function QuoteHistoryView({
             <button
               type="button"
               className="ghost"
-              onClick={() => {
-                setDeliveryReview(null);
-                onClose?.();
-              }}
+              onClick={requestQuoteHistoryClose}
+              disabled={quoteHistoryCloseGuard.blocked}
+              title={quoteHistoryCloseGuard.message}
             >
               Close
             </button>
@@ -1393,6 +1829,9 @@ export function QuoteHistoryView({
         <p className="source-note">
           Authority: {authorityCopy}
         </p>
+        {quoteHistoryCloseGuard.blocked && (
+          <p className="warning-note" role="status">{quoteHistoryCloseGuard.message}</p>
+        )}
         {permissions.canSendQuoteEmail && state.source === "firebase" && (
           <p
             id="quote-email-provider-readiness"
@@ -1666,6 +2105,17 @@ export function QuoteHistoryView({
                   "convert_to_contract",
                   approvalExecutionOptions()
                 );
+                const contractConversionState = getContractConversionMutationState(
+                  contractConversions,
+                  quote.id
+                );
+                const contractConversionActive = Boolean(contractConversions[quote.id]);
+                const contractConversionPresentation = buildContractConversionMutationPresentation({
+                  ...contractConversionState,
+                  approvalReady: !approvalRequired || Boolean(contractApproval)
+                });
+                const contractConversionBusy = ["submitting", "reconciliation", "recovery"]
+                  .includes(contractConversionState.phase);
                 const paymentRequestApproval = getExecutableApprovalRequest(
                   quote,
                   "send_payment_request",
@@ -1830,18 +2280,63 @@ export function QuoteHistoryView({
                     <td>{fmtDate(quote.updatedAtISO || quote.createdAtISO)}</td>
                     <td>
                       <div className="row-actions">
-                        {permissions.canConvertToContract && canConvert && (
-                          <button
-                            type="button"
-                            data-approval-action="convert_to_contract"
-                            className="cta compact"
-                            onClick={() => handleConvertToContract(quote)}
-                            disabled={deliveryUnresolved || convertingId === quote.id || (approvalRequired && !contractApproval)}
-                            title={approvalRequired && !contractApproval ? "Approve contract conversion in Workflow first." : ""}
-                          >
-                            {convertingId === quote.id ? "Converting..." : "Convert"}
-                          </button>
+                        {permissions.canConvertToContract && (canConvert || contractConversionActive) && (
+                          <ContractConversionMutationStatus
+                            presentation={contractConversionPresentation}
+                            showReady
+                          />
                         )}
+                        {permissions.canConvertToContract
+                          && canConvert
+                          && !["error", "recovery", "receipt"].includes(contractConversionState.phase)
+                          && (
+                            <button
+                              type="button"
+                              data-approval-action="convert_to_contract"
+                              className="cta compact"
+                              onClick={() => handleConvertToContract(quote, {
+                                reconcile: contractConversionState.phase === "uncertain"
+                              })}
+                              disabled={
+                                deliveryUnresolved
+                                || contractConversionBusy
+                                || convertingId === quote.id
+                                || (
+                                  contractConversionState.phase !== "uncertain"
+                                  && approvalRequired
+                                  && !contractApproval
+                                )
+                              }
+                              title={
+                                contractConversionState.phase === "uncertain"
+                                  ? "Reconcile the original approved conversion request."
+                                  : approvalRequired && !contractApproval
+                                    ? "Approve contract conversion in Workflow first."
+                                    : ""
+                              }
+                            >
+                              {contractConversionState.phase === "reconciliation"
+                                ? "Reconciling..."
+                                : contractConversionState.phase === "submitting" || convertingId === quote.id
+                                  ? "Converting..."
+                                  : contractConversionState.phase === "uncertain"
+                                    ? "Reconcile conversion"
+                                    : "Convert"}
+                            </button>
+                          )}
+                        {permissions.canConvertToContract
+                          && canConvert
+                          && contractConversionActive
+                          && contractConversionState.phase === "error"
+                          && (
+                            <button
+                              type="button"
+                              className="ghost compact"
+                              onClick={() => handleRecoverContractConversion(quote)}
+                            >
+                              Refresh history
+                            </button>
+                          )}
                         {permissions.canManageConfirmation && canTrackConfirmation && confirmationStatus !== "confirmed" && (
                           <button
                             type="button"
@@ -2025,6 +2520,10 @@ export function QuoteHistoryView({
                                 type="button"
                                 className="ghost compact"
                                 onClick={() => setConversationQuote(quote)}
+                                disabled={!canOpenQuoteConversation(conversationQuote)}
+                                title={conversationQuote
+                                  ? "Close the current quote conversation before opening another."
+                                  : ""}
                               >
                                 Conversation
                               </button>
