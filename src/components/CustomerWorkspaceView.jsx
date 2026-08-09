@@ -5,6 +5,7 @@ import { classifyDepositStatus, classifyFinalBalanceDisplayStatus, classifyQuote
 import { buildPortalThemeStyle } from "../data/portalThemePresets";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { StaffReadContextRail } from "./StaffEvidenceRail";
+import CustomerCommercialTimeline from "./CustomerCommercialTimeline";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
@@ -514,19 +515,7 @@ export default function CustomerWorkspaceView({
         />
 
         <section id="customer-panel-overview" role="tabpanel" aria-labelledby="customer-tab-overview" tabIndex={0} hidden={activeTab !== "overview"}>
-          <h2>Recent activity</h2>
-          {workspace.recentActivity.length === 0 ? <p className="source-note">No lifecycle activity is recorded yet.</p> : (
-            <ol className="customer-activity-list">
-              {workspace.recentActivity.map((item, index) => (
-                <li key={`${item.quoteId}-${item.label}-${index}`}>
-                  <button type="button" className="workspace-text-link" onClick={() => onOpenQuote?.(item.quoteId)}>
-                    {formatWorkspaceText(item.quoteNumber, { emptyLabel: "Quote number pending" })}
-                  </button>
-                  <span>{item.label}</span><time dateTime={item.atISO}>{formatWorkspaceDateTime(item.atISO)}</time>
-                </li>
-              ))}
-            </ol>
-          )}
+          <CustomerCommercialTimeline workspace={workspace} onOpenQuote={onOpenQuote} />
         </section>
 
         <section id="customer-panel-quotes" role="tabpanel" aria-labelledby="customer-tab-quotes" tabIndex={0} hidden={activeTab !== "quotes"}>
