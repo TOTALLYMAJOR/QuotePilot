@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 8, 2026
+Last updated: August 9, 2026
 
 ## P0 - Production Acceptance and Tenant Provisioning
 - Prepare and promote the next tagged exact-`main` revision containing this
@@ -101,17 +101,20 @@ Detailed contracts and invariants:
 
 ### Pre-Host Release Candidate
 
-- **CWF-01:** Finish human-readable status/date/money/empty formatting and
-  hosted keyboard, overflow, contrast, focus, and branding-isolation acceptance.
-  Preserve the contained desktop action row, mobile More hierarchy,
-  route-appropriate return language, and distinct canonical state.
-- **CWF-03:** Add the staff trust/freshness/evidence rail with tenant scope,
-  source contract, last successful refresh, stale/error/truncation state, and
-  canonical-versus-derived labeling. Keep the first slice surface-scoped and
-  read-only over canonical staff data/server receipts and constrained by the
-  signed-in role's existing read contracts; never invoke the portal loader,
-  create `viewed` evidence, or infer provider/commercial truth. Treat a global
-  evidence ledger as separate work.
+- **CWF-01:** Qualify the source-complete human-readable status/date/money/empty
+  formatting, Quotes/Workflow route-return language, and primary-route heading
+  focus on an exact hosted candidate. Verify signed-in keyboard order, long-data
+  overflow, real-rendered contrast, focus, and staff/proposal branding isolation
+  while preserving the contained desktop action row, mobile More hierarchy,
+  modal **Close** wording, and distinct canonical state.
+- **CWF-03:** Qualify the Home-first staff trust/freshness/evidence rail on an
+  exact hosted candidate. It now names tenant scope, the two existing read
+  contracts and their outcomes, source, last complete client read,
+  loading/refresh/incomplete/retained-stale/error/truncation state, and
+  canonical-versus-derived authority without adding I/O. Keep expansion to
+  Directory/Customer 360 surface-scoped and read-only; treat a global evidence
+  ledger as separate work. Never invoke the portal loader, create `viewed`
+  evidence, or infer provider/commercial truth.
 
 ### Platform Primitive - First New Program
 

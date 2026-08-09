@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 8, 2026
+Last updated: August 9, 2026
 
 ## Operational Health
 - Runtime: release `v0.2.3` is live from merged `main` commit
@@ -17,15 +17,15 @@ Last updated: August 8, 2026
   portal branding. The legacy `tonicatering` Firebase project, hosting site,
   environment filename, deployment confirmations, and service URLs remain
   unchanged infrastructure identifiers.
-- Exact-source workspace qualification is complete locally: 103 unit files
-  passed with 1,320 tests (4 files / 57 tests skipped); default Playwright passed
+- Exact-source workspace qualification is complete locally: 106 unit files
+  passed with 1,344 tests (4 files / 57 tests skipped); default Playwright passed
   58 tests with 17 intentionally skipped and the flag-on workspace suite passed
-  15/15. Firestore rules passed 53/53, the Firebase staff/portal browser lane
+  16/16. Firestore rules passed 53/53, the Firebase staff/portal browser lane
   passed 4/4, authoritative quote-write coverage passed 3/3, customer-import
   emulator coverage passed 2/2, and customer-ID backfill emulator coverage
   passed 1/1. The full provisioning, booking-conversion, payment, buyer-access,
   and cleanup emulator matrix also passed. Default and flag-on production builds
-  each transformed 381 modules, both bundle checks passed, and environment,
+  each transformed 384 modules, both bundle checks passed, and environment,
   documentation governance, secret, and diff checks passed. These are
   source/local/emulator results, not
   hosted tenant, provider, deployment, production-data, flag-promotion, or
@@ -35,6 +35,11 @@ Last updated: August 8, 2026
   cloud install and each function update completed successfully from `v0.2.3`;
   the local authoritative and provisioning matrices also pass.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
+- Current source uses a documented temporary 5.5% aggregate-JavaScript branch
+  allowance while the customer-centered workspace convergence remains
+  unmerged. The clean-main baseline and largest-chunk limit are unchanged; the
+  allowance must return to 5% after a clean updated-main baseline and browser/
+  CWV qualification.
 - Current source delivery governance includes a required no-orphan-capability
   check in `lane:core`. It reviews the whole branch/PR backend diff, requires a
   versioned capability-surfacing contract manifest plus real frontend/Feature
@@ -81,9 +86,17 @@ Last updated: August 8, 2026
   and quote/payment actions retain exact quote focus. The neutral staff shell
   remains distinct from tenant-branded customer portal, proposal, and marketing
   surfaces. Covered desktop widths keep the action row contained; embedded
-  operational routes use route-appropriate return wording while true modals
-  retain Close; accepted calendar facts stay distinct from booking holds; and
-  routed headings have scoped visible focus. This is current branch source with the local/emulator qualification
+  operational routes plus Quotes and Workflow use route-appropriate return
+  wording while true modals retain Close; accepted calendar facts stay distinct
+  from booking holds; and Home, Customers, Quotes, Workflow, and operational
+  routed headings have scoped visible focus. First-release staff surfaces use
+  human-readable date, money, enum, source, identifier-fallback, and empty-state
+  copy without changing canonical values. Home also exposes a read-only
+  tenant/source/evidence rail over the same two existing reads, recording the
+  last complete client read and distinguishing loading, refresh, incomplete,
+  retained-stale, unavailable, and latest-200 truncation states. The rail calls
+  Home derived presentation and explicitly does not treat freshness as provider,
+  customer, booking, payment, or completion evidence. This is current branch source with the local/emulator qualification
   recorded above; hosted, deployment, production-data, and human-acceptance
   evidence remain separate and must not be inferred from the source claim.
 - Current source quote-entry simplification: Step 1 keeps attendance and role
@@ -129,7 +142,8 @@ Last updated: August 8, 2026
   actions; every lazy route and workspace tool has its own safe retry, reload,
   and close/back boundary; recovery reload protects unsaved quote work with a
   discard confirmation while Close tool preserves it; Import Studio catalog
-  refreshes keep receipts, Undo, and errors mounted; revisioned menu removal
+  refreshes keep batch identity, receipts, Undo, and errors mounted while
+  unresolved import controls stay locked; revisioned menu removal
   waits until unrelated Catalog Admin drafts are saved or discarded; and the
   contextual and legacy workspace dialogs share contained focus, safe Escape,
   body-scroll lock, close guards, and trigger restoration. In the flagged
@@ -148,8 +162,11 @@ Last updated: August 8, 2026
   every operation. Sent, viewed, accepted, and booked conversations remain
   writable, declined conversations are visibly read-only, and rotation makes
   the old token unusable while retaining history for a newly delivered current
-  issuance. Direct browser access to conversation records is denied. Focused
-  unit/rules/emulator evidence is local only; this conversation source is not
+  issuance. Direct browser access to conversation records is denied. Current
+  source keeps unresolved send identity and unchanged body in bounded app
+  memory across panel close/unmount, retains a global unload warning until an
+  exact retry receipt or explicit safe reset, and writes neither value to
+  browser storage. Focused unit/rules/emulator evidence is local only; this conversation source is not
   part of live `v0.2.3` and has no hosted staff/customer acceptance.
 - Current source Kitchen BEO: staff can export an internal Kitchen sheet from a
   saved quote with event timing, staffing, kitchen checkpoints, selections,
@@ -164,7 +181,10 @@ Last updated: August 8, 2026
   trusted callables; new customer records receive opaque stable IDs and
   server-owned normalized directory keys. Duplicate/collision decisions,
   actor receipts, exact-input replay, and modified-record rollback protection
-  are emulator-covered. This callable change is source/local evidence and is
+  are emulator-covered. While submission or reconciliation is unresolved, the
+  UI keeps the batch identity and locks Close/reset/source/file replacement;
+  catalog-source recovery retries in place without clearing that identity.
+  This callable change is source/local evidence and is
   not yet deployed or hosted-smoke-accepted.
 - Current source starter-pack package scope: version 2 manifests add typed menu,
   add-on, and rental inclusion references without changing the addressable
@@ -351,6 +371,11 @@ Last updated: August 8, 2026
   mobile, portal-precedence, branding-isolation, and human acceptance before the
   flag can be removed or enabled for production. Local/high-risk qualification
   is complete and does not satisfy those hosted gates.
+- The Home trust/freshness rail is a first surface-scoped CWF-03 slice, not a
+  global evidence ledger. Directory and Customer 360 still expose their own
+  bounded/source states rather than sharing a cross-surface freshness contract.
+  The rail's last-complete-read timestamp is client read evidence only and must
+  not be described as an underlying-record update or commercial/provider event.
 - The customer-ID backfill has no authorized production apply path in this
   release. A production mutation requires a separately approved, tenant-scoped
   dry-run artifact, exact confirmation contract, release record, and rollback

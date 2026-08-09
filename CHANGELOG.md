@@ -8,6 +8,24 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- A documented temporary 5.5% aggregate-JavaScript branch allowance for the
+  unmerged customer-centered workspace convergence. It does not reset the
+  clean-main baseline or relax the largest-chunk gate and must return to the
+  normal 5% allowance after clean-main recalibration and browser/CWV checks.
+
+- A source-side `CWF-01`/`CWF-03` release-candidate slice for the flagged staff
+  workspace. Home now exposes a compact read-context rail bound to the current
+  tenant, the existing Workflow Attention and latest-200 quote-history
+  contracts, each read outcome, the last complete client read, retained-stale
+  or incomplete state, source, and truncation. It explicitly labels Home as a
+  derived presentation and says that freshness is not delivery, acceptance,
+  booking, payment, or completion proof. The slice adds no read or write
+  authority and never invokes the customer portal loader. First-release staff
+  surfaces now use human-readable dates, money, enums, identifiers, sources,
+  and semantic empty copy; routed Quotes and Workflow say **Back to Home** and
+  receive visible heading focus, while their true modal wrappers retain
+  **Close**. Hosted signed-in, contrast, long-data, branding-isolation, and
+  human acceptance remain separate gates.
 - The governed customer-workspace enhancement track now spans `CWF-01`
   through `CWF-15`,
   covering visual credibility, evidence/freshness, bounded search and timelines,
@@ -30,6 +48,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   assertion-bearing tests plus canonical per-state component markers for read
   and mutation profiles. Only the explicitly deferred stale-read state may use
   a narrow exception; callable exports cannot use any headless classification.
+  The scanner now reviews runtime client paths fail-closed, promotes otherwise
+  presentational files when direct authority signals appear, detects chained
+  and modular Firestore writes, and requires affected callable exports for
+  every active shared Functions helper contract.
   Reviewed entry, Feature Matrix, and User Manual locators remain
   mandatory while structural evidence stays distinct from semantic, visual,
   hosted, provider, production, and human acceptance.
@@ -42,6 +64,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   both the immutable version and its snapshot, with passing local emulator
   assertion coverage; coordinated deployment and hosted acceptance remain
   pending.
+- Unresolved conversation sends now retain their exact request identity and
+  unchanged body in bounded app memory across panel close/unmount, keep one
+  unload warning active, and reconcile with that identity after reopen; no
+  quote content is written to browser storage. Definitive rejection requires an
+  explicit safe reset. Import Studio likewise locks Close/reset/source/file
+  replacement while a batch is submitting or unresolved and keeps the same
+  batch identity through catalog-source refresh recovery.
 - A temporary-flagged, dependency-free staff route foundation for `/app`,
   Customers, Quotes, the five-step builder, focused quote/edit records,
   Workflow, Schedule, Reporting, Catalog, Imports, Integrations, and

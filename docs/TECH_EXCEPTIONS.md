@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 6, 2026
+Last updated: August 9, 2026
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -18,7 +18,29 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 ## Active Exceptions
 
-None.
+- Date: August 9, 2026
+- Owner: QuotePilot maintainers
+- Change: Temporarily raise the aggregate JavaScript allowance from 5% to 5.5%
+  for the customer-centered workspace convergence branch without changing the
+  clean-main baseline.
+- Exception type: `perf-threshold-temp`
+- Rationale: The complete routed staff workspace, Customer 360, mutation-state
+  recovery, and staff evidence presentation are being qualified together on an
+  unmerged branch. The clean-main baseline cannot be truthfully regenerated
+  until that source lands.
+- Risk impact: Aggregate lazy-loaded JavaScript may grow by up to an additional
+  0.5 percentage point during this branch. The largest-chunk gate remains
+  unchanged and all new work remains subject to build and browser checks.
+- Performance impact: The August 9 build contains 2,100,135 JavaScript bytes
+  versus the 1,997,365-byte clean-main baseline (5.15% growth); the largest
+  chunk is 390,494 bytes, within the existing largest-chunk allowance.
+- Rollback plan: Revert the allowance to 5% and remove or defer enough branch
+  source to pass the prior threshold.
+- Exit criteria: After the workspace source lands, build from a clean updated
+  `main`, reset the exact baseline per policy, restore the normal 5% allowance,
+  and pass bundle, CWV, default-route, and flagged-workspace browser checks.
+- Verification evidence: `npm run build`, `npm run check:perf:bundle`, the full
+  unit suite, and default plus flagged Playwright lanes.
 
 ## Resolved Exceptions
 
