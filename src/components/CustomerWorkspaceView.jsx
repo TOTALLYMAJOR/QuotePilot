@@ -6,6 +6,7 @@ import { buildPortalThemeStyle } from "../data/portalThemePresets";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { StaffReadContextRail } from "./StaffEvidenceRail";
 import CustomerCommercialTimeline from "./CustomerCommercialTimeline";
+import QuoteVersionComparison from "./QuoteVersionComparison";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
@@ -554,6 +555,7 @@ export default function CustomerWorkspaceView({
                           </ol>
                         </details>
                       )}
+                      <QuoteVersionComparison versions={versions} />
                     </div>
                     <div className="right-actions">
                       <button
