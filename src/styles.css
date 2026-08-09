@@ -6067,6 +6067,74 @@ hr {
   font-size: 0.76rem;
 }
 
+.quote-version-comparison-disclosure {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.quote-version-comparison {
+  width: min(100%, 58rem);
+  min-width: 0;
+  border: 1px solid #d8cfbb;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: #fffdf8;
+}
+
+.quote-version-comparison .workspace-route-head {
+  margin-bottom: var(--space-2);
+}
+
+.quote-version-comparison h4,
+.quote-version-comparison p {
+  margin-top: 0;
+}
+
+.quote-version-comparison-sections {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.quote-version-comparison-sections details {
+  border-top: 1px solid #e4dccb;
+  padding-top: var(--space-2);
+}
+
+.quote-version-comparison-sections summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.quote-version-comparison-sections dl {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+}
+
+.quote-version-comparison-sections dl > div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.7fr) minmax(0, 1.3fr);
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: 8px;
+  background: #f7f3e9;
+}
+
+.quote-version-comparison-sections dt {
+  font-weight: 800;
+}
+
+.quote-version-comparison-sections dd {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .workspace-text-link,
 .command-center-customer-link {
   appearance: none;
@@ -6161,6 +6229,11 @@ hr {
   display: grid;
   gap: 0.25rem;
   padding: var(--space-3);
+}
+
+.customer-card-list > article > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .customer-overview-grid span {
@@ -6469,6 +6542,11 @@ hr {
     align-items: flex-start;
     flex-direction: column;
     gap: 0.15rem;
+  }
+
+  .quote-version-comparison-sections dl > div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
   }
 }
 
