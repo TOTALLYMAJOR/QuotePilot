@@ -1,0 +1,307 @@
+import { buildCustomerRebookingRadar } from "../lib/customerRebookingRadar";
+import {
+  formatWorkspaceDate,
+  formatWorkspaceInteger,
+  formatWorkspaceText
+} from "../lib/workspacePresentation";
+
+const SOURCE_LABELS = Object.freeze({
+  firebase: "Firestore customer workspace",
+  local: "Browser-local customer workspace",
+  mixed: "Mixed customer workspace sources"
+});
+
+const REBOOK_UNAVAILABLE_REASONS = Object.freeze({
+  acceptance_receipt_missing: "No acceptance receipt is available for this booked quote.",
+  acceptance_receipt_incomplete: "The recorded acceptance receipt is incomplete.",
+  accepted_version_identity_missing: "The accepted proposal version is not identified.",
+  accepted_revision_mismatch: "The acceptance receipt does not match the active accepted version.",
+  accepted_source_version_not_loaded: "The accepted proposal version is not available in this customer read.",
+  accepted_source_version_not_loaded_history_truncated:
+    "The accepted proposal version is older than the retained history loaded into this bounded view.",
+  accepted_source_version_ambiguous: "More than one retained version matches the accepted version identity.",
+  accepted_source_version_invalid: "The retained accepted version does not pass quote and organization scope checks."
+});
+
+function text(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeTimeZone(value) {
+  const requested = text(value);
+  if (!requested) return "";
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: requested })
+      .resolvedOptions()
+      .timeZone;
+  } catch {
+    return "";
+  }
+}
+
+function calendarDateAt(instant, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    calendar: "gregory",
+    numberingSystem: "latn",
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(instant);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function resolvedDeviceTimeZone(explicitDeviceTimeZone = "") {
+  const supplied = normalizeTimeZone(explicitDeviceTimeZone);
+  if (supplied) return supplied;
+  try {
+    return normalizeTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  } catch {
+    return "";
+  }
+}
+
+export function resolveCustomerRevenueCalendarContext({
+  loadedAt,
+  tenantTimeZone = "",
+  deviceTimeZone = ""
+} = {}) {
+  const instant = loadedAt instanceof Date ? new Date(loadedAt.getTime()) : new Date(loadedAt);
+  if (Number.isNaN(instant.getTime())) {
+    throw new TypeError("A completed Customer 360 read time is required for revenue opportunities.");
+  }
+
+  const requestedTenantTimeZone = text(tenantTimeZone);
+  if (requestedTenantTimeZone) {
+    const timeZone = normalizeTimeZone(requestedTenantTimeZone);
+    if (!timeZone) {
+      throw new TypeError("The explicitly supplied tenant time zone is not a valid IANA time zone.");
+    }
+    return {
+      date: calendarDateAt(instant, timeZone),
+      source: "tenant",
+      timeZone
+    };
+  }
+
+  const timeZone = resolvedDeviceTimeZone(deviceTimeZone);
+  if (!timeZone) {
+    throw new TypeError("The device-local IANA time zone could not be resolved.");
+  }
+  return {
+    date: calendarDateAt(instant, timeZone),
+    source: "device",
+    timeZone
+  };
+}
+
+export function buildCustomerRevenueOpportunityRead({
+  workspace,
+  organizationId,
+  loadedAt,
+  tenantTimeZone = "",
+  deviceTimeZone = ""
+} = {}) {
+  const calendarContext = resolveCustomerRevenueCalendarContext({
+    loadedAt,
+    tenantTimeZone,
+    deviceTimeZone
+  });
+  return buildCustomerRebookingRadar(workspace, {
+    organizationId,
+    calendarContext
+  });
+}
+
+export function describeUnavailableRebookReason(reason) {
+  return REBOOK_UNAVAILABLE_REASONS[text(reason)]
+    || "The exact accepted immutable proposal source could not be verified from this bounded read.";
+}
+
+function sourceLabel(source) {
+  return SOURCE_LABELS[text(source).toLowerCase()] || "Customer workspace source not confirmed";
+}
+
+function partialBoundsSummary(pageInfo = {}) {
+  const notes = [];
+  if (pageInfo.radarTruncated) {
+    notes.push(
+      `Showing the first ${formatWorkspaceInteger(pageInfo.returned)} of ${formatWorkspaceInteger(pageInfo.candidateCount)} eligible opportunities.`
+    );
+  }
+  if (pageInfo.quoteReadTruncated) {
+    notes.push("Older linked quotes may contain additional opportunities.");
+  }
+  if (pageInfo.versionReadTruncated) {
+    notes.push("Some accepted-source checks are limited by the retained proposal history loaded here.");
+  }
+  return notes.join(" ") || "This opportunity view is partial because an upstream Customer 360 read reached its bound.";
+}
+
+function OpportunityEvidence({ opportunity }) {
+  if (opportunity.type !== "anniversary_rebooking") {
+    return <p className="source-note">{opportunity.evidenceCopy}</p>;
+  }
+  const action = opportunity.reviewedAction || {};
+  if (action.state === "ready_for_staff_review") {
+    return (
+      <>
+        <p className="source-note" data-rebook-source-state="verified">
+          Accepted source identified: version {formatWorkspaceText(action.sourceVersionId)}. No rebook draft has been created.
+        </p>
+        <p className="source-note">{opportunity.evidenceCopy}</p>
+      </>
+    );
+  }
+  return (
+    <>
+      <p className="warning-note" data-rebook-source-state="unavailable">
+        Rebook source unavailable: {describeUnavailableRebookReason(action.reason)}
+      </p>
+      <p className="source-note">{opportunity.evidenceCopy}</p>
+    </>
+  );
+}
+
+function OpportunityCard({ opportunity, onOpenQuote }) {
+  const actionQuoteId = opportunity.reviewedAction?.sourceQuoteId || opportunity.quoteId;
+  const venue = text(opportunity.event?.venue);
+  return (
+    <article className="customer-revenue-opportunity" data-opportunity-type={opportunity.type}>
+      <div>
+        <span className="customer-revenue-opportunity-type">
+          {opportunity.type === "anniversary_rebooking" ? "Repeat-event radar" : "Post-event closeout"}
+        </span>
+        <h3>{opportunity.title}</h3>
+        <p>
+          {formatWorkspaceDate(opportunity.event?.date)}
+          {venue ? ` at ${formatWorkspaceText(venue)}` : ""}
+        </p>
+        {opportunity.type === "post_event_closeout" && (
+          <>
+            <p className="source-note">
+              Review window: {formatWorkspaceDate(opportunity.timing?.eligibleFromDate)} to {formatWorkspaceDate(opportunity.timing?.eligibleThroughDate)}.
+            </p>
+            <ul>
+              {(opportunity.reviewItems || []).map((item) => (
+                <li key={item.code}>{item.label}</li>
+              ))}
+            </ul>
+          </>
+        )}
+        {opportunity.type === "anniversary_rebooking" && (
+          <p className="source-note">
+            Anniversary date: {formatWorkspaceDate(opportunity.timing?.anniversaryDate)}.
+          </p>
+        )}
+        <OpportunityEvidence opportunity={opportunity} />
+      </div>
+      {typeof onOpenQuote === "function" && actionQuoteId && (
+        <div className="right-actions">
+          <button
+            type="button"
+            className="ghost compact"
+            data-capability-action="open-authoritative-source-quote"
+            onClick={() => onOpenQuote(actionQuoteId)}
+          >
+            Open source quote
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+export function CustomerRevenueOpportunitiesPresentation({
+  radar = null,
+  error = "",
+  loading = false,
+  stale = false,
+  onOpenQuote
+}) {
+  const state = error && !radar
+    ? "error"
+    : stale && radar
+      ? "stale"
+      : loading
+        ? "loading"
+        : radar?.status || "empty";
+  const opportunities = Array.isArray(radar?.opportunities) ? radar.opportunities : [];
+  const pageInfo = radar?.pageInfo || {};
+
+  return (
+    <section
+      className="customer-relationship-briefing customer-revenue-opportunities"
+      aria-labelledby="customer-revenue-opportunities-title"
+      data-capability-id="cwf-11-rebooking-radar"
+      data-capability-state={state}
+      data-read-state={loading && radar ? "refreshing" : state}
+    >
+      <div className="workspace-route-head">
+        <div>
+          <h2 id="customer-revenue-opportunities-title">Revenue opportunities</h2>
+          <p className="muted">Post-event closeout and repeat-event cues from recorded booked events.</p>
+        </div>
+        <span className="source-note">Source: {sourceLabel(radar?.source)}</span>
+      </div>
+
+      {error && !radar ? (
+        <p className="warning-note" role="alert">
+          Revenue opportunities could not be evaluated for this completed customer read. No actions were created.
+        </p>
+      ) : loading && !radar ? (
+        <p className="source-note" role="status">Evaluating bounded closeout and anniversary windows.</p>
+      ) : (
+        <>
+          {loading && radar && (
+            <p className="source-note" role="status">
+              Refreshing Customer 360; the prior opportunity evaluation remains visible.
+            </p>
+          )}
+          {stale && radar && (
+            <p className="warning-note" role="alert">
+              The Customer 360 refresh failed. These opportunity cues come from the retained snapshot and may be stale.
+            </p>
+          )}
+          {error && radar && (
+            <p className="warning-note" role="alert">
+              The current opportunity evaluation failed. The prior bounded evaluation remains visible.
+            </p>
+          )}
+          <p className="source-note">
+            {radar?.calendarContext?.label || "Calendar source not confirmed"}: {formatWorkspaceDate(radar?.calendarContext?.date)} ({formatWorkspaceText(radar?.calendarContext?.timeZone, { emptyLabel: "time zone unavailable" })}).
+          </p>
+          <p className="source-note">
+            Evaluation bound: first {formatWorkspaceInteger(pageInfo.limit)} eligible opportunities from this bounded Customer 360 read.
+          </p>
+          <p className="source-note">
+            {radar?.evidenceCopy?.opportunity || "These are read-only opportunity cues, not completed commercial outcomes."}
+          </p>
+          {state === "partial" && (
+            <p className="warning-note" role="status" data-capability-state="partial">
+              {partialBoundsSummary(pageInfo)}
+            </p>
+          )}
+          {opportunities.length === 0 ? (
+            <p className="source-note" role="status">
+              No closeout or anniversary cues fall within this calendar window in the bounded customer read.
+            </p>
+          ) : (
+            <div className="customer-card-list">
+              {opportunities.map((opportunity) => (
+                <OpportunityCard
+                  key={opportunity.id}
+                  opportunity={opportunity}
+                  onOpenQuote={onOpenQuote}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+export default CustomerRevenueOpportunitiesPresentation;
