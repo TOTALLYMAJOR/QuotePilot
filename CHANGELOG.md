@@ -328,10 +328,8 @@ This changelog is backfilled from git history and will be maintained going forwa
 - The full provisioning emulator acceptance runner now fails immediately unless
   both quote-payment and buyer-access Stripe rails are explicitly configured for
   test mode, both synthetic webhook secrets are present, the buyer-access server
-  gate is enabled, and its application URL is supplied. Quote-payment webhook
-  diagnostics now retain the safe error code and bounded error message instead
-  of allowing the structured message field to be overwritten by logger stack
-  formatting. No provider request or production secret is used by this lane.
+  gate is enabled, and its application URL is supplied. No provider request or
+  production secret is used by this lane.
 - Browser navigation smoke coverage now recognizes the Workflow button's live
   accessible-status suffix, preventing a release check race after attention
   data loads.
