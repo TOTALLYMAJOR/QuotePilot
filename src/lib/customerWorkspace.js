@@ -1,0 +1,492 @@
+import {
+  collection,
+  doc,
+  documentId,
+  getDoc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  startAfter,
+  where
+} from "firebase/firestore";
+import { db, firebaseReady } from "./firebase";
+import { getQuoteHistory, getQuoteVersionHistory, QUOTE_STATUSES } from "./quoteStore";
+import { buildWorkflowAttentionSummary } from "./quoteWorkflow";
+import { getFinalBalanceDisplayStatus } from "./statusSemantics";
+
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+const CUSTOMER_WORKSPACE_QUOTE_LIMIT = 25;
+const VERSION_LIMIT_PER_QUOTE = 10;
+const DEFAULT_QUOTE_VALIDITY_DAYS = 30;
+const EXPIRABLE_QUOTE_STATUSES = new Set(["draft", "sent", "viewed"]);
+
+function text(value) {
+  return String(value || "").trim();
+}
+
+function toIso(value) {
+  if (!value) return "";
+  if (typeof value?.toDate === "function") return value.toDate().toISOString();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
+function addDaysIso(baseISO, days = DEFAULT_QUOTE_VALIDITY_DAYS) {
+  const base = new Date(baseISO);
+  base.setDate(base.getDate() + Math.max(1, Number(days || DEFAULT_QUOTE_VALIDITY_DAYS)));
+  return base.toISOString();
+}
+
+function applyQuoteExpirySemantics(quote = {}, nowISO = new Date().toISOString()) {
+  const parsedNow = new Date(nowISO);
+  const effectiveNow = Number.isNaN(parsedNow.getTime()) ? new Date() : parsedNow;
+  const effectiveNowISO = effectiveNow.toISOString();
+  const rawStatus = text(quote.status).toLowerCase();
+  const status = QUOTE_STATUSES.includes(rawStatus) ? rawStatus : "draft";
+  const createdAtISO = toIso(quote.createdAtISO || quote.createdAt) || effectiveNowISO;
+  const expiresAtISO = text(quote.expiresAtISO) || addDaysIso(createdAtISO);
+
+  if (!EXPIRABLE_QUOTE_STATUSES.has(status)) {
+    return { ...quote, status, createdAtISO, expiresAtISO };
+  }
+
+  const parsedExpiry = new Date(expiresAtISO);
+  const effectiveExpiry = Number.isNaN(parsedExpiry.getTime()) ? effectiveNow : parsedExpiry;
+  if (effectiveExpiry.getTime() >= effectiveNow.getTime()) {
+    return { ...quote, status, createdAtISO, expiresAtISO };
+  }
+
+  return {
+    ...quote,
+    status: "expired",
+    createdAtISO,
+    expiresAtISO,
+    lifecycle: {
+      ...(quote.lifecycle || {}),
+      expiredAtISO: quote.lifecycle?.expiredAtISO || effectiveNowISO
+    }
+  };
+}
+
+function normalizeQuoteRecord(id, data = {}) {
+  return {
+    id,
+    ...data,
+    createdAtISO: toIso(data.createdAtISO || data.createdAt),
+    updatedAtISO: toIso(data.updatedAtISO || data.updatedAt)
+  };
+}
+
+export function normalizeCustomerSearchKey(value) {
+  return text(value).toLowerCase().replace(/\s+/g, " ");
+}
+
+export function encodeCustomerPathId(customerId) {
+  const id = text(customerId);
+  if (!id || id.includes("/")) throw new Error("A valid customerId is required.");
+  return encodeURIComponent(id);
+}
+
+export function decodeCustomerPathId(encodedCustomerId) {
+  try {
+    const id = text(decodeURIComponent(String(encodedCustomerId || "")));
+    if (!id || id.includes("/")) return "";
+    return id;
+  } catch {
+    return "";
+  }
+}
+
+function normalizePageSize(value) {
+  const parsed = Number(value || DEFAULT_PAGE_SIZE);
+  if (!Number.isFinite(parsed)) return DEFAULT_PAGE_SIZE;
+  return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(parsed)));
+}
+
+function normalizeCustomerRecord(id, data = {}) {
+  return {
+    id,
+    customerId: text(data.customerId || id),
+    name: text(data.name),
+    email: text(data.email).toLowerCase(),
+    phone: text(data.phone),
+    company: text(data.company || data.organization),
+    nameKey: normalizeCustomerSearchKey(data.nameKey || data.name),
+    emailKey: normalizeCustomerSearchKey(data.emailKey || data.email),
+    lastQuoteId: text(data.lastQuoteId),
+    lastQuoteNumber: text(data.lastQuoteNumber),
+    lastEventName: text(data.lastEventName),
+    lastEventDate: text(data.lastEventDate),
+    createdAtISO: toIso(data.createdAtISO || data.createdAt),
+    updatedAtISO: toIso(data.updatedAtISO || data.updatedAt)
+  };
+}
+
+function compareCustomers(left, right) {
+  return left.nameKey.localeCompare(right.nameKey)
+    || left.emailKey.localeCompare(right.emailKey)
+    || left.id.localeCompare(right.id);
+}
+
+function customerMatchesSearch(customer, searchKey) {
+  if (!searchKey) return true;
+  return customer.nameKey.startsWith(searchKey) || customer.emailKey.startsWith(searchKey);
+}
+
+function localCustomersFromQuotes(quotes = []) {
+  const records = new Map();
+  quotes.forEach((quote) => {
+    const customerId = text(quote?.customerId);
+    if (!customerId) return;
+    const customer = quote.customer || {};
+    const current = records.get(customerId);
+    const next = normalizeCustomerRecord(customerId, {
+      customerId,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      company: customer.organization,
+      lastQuoteId: quote.id,
+      lastQuoteNumber: quote.quoteNumber,
+      lastEventName: quote.event?.name,
+      lastEventDate: quote.event?.date,
+      updatedAtISO: quote.updatedAtISO || quote.createdAtISO
+    });
+    if (!current || next.updatedAtISO > current.updatedAtISO) records.set(customerId, next);
+  });
+  return [...records.values()].sort(compareCustomers);
+}
+
+export async function getCustomerDirectoryPage({
+  organizationId = "",
+  search = "",
+  cursor = "",
+  pageSize = DEFAULT_PAGE_SIZE
+} = {}) {
+  const orgId = text(organizationId);
+  if (!orgId) throw new Error("organizationId is required for customer directory reads.");
+  const normalizedSearch = normalizeCustomerSearchKey(search);
+  const normalizedCursor = decodeCustomerPathId(cursor);
+  const normalizedPageSize = normalizePageSize(pageSize);
+
+  if (!firebaseReady || !db) {
+    const history = await getQuoteHistory({ organizationId: orgId });
+    const customers = localCustomersFromQuotes(history.quotes)
+      .filter((customer) => customerMatchesSearch(customer, normalizedSearch));
+    const cursorIndex = normalizedCursor
+      ? customers.findIndex((customer) => customer.id === normalizedCursor)
+      : -1;
+    const startIndex = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+    const page = customers.slice(startIndex, startIndex + normalizedPageSize + 1);
+    const hasMore = page.length > normalizedPageSize;
+    const items = page.slice(0, normalizedPageSize);
+    return {
+      source: "local",
+      items,
+      nextCursor: hasMore ? encodeCustomerPathId(items.at(-1)?.id) : ""
+    };
+  }
+
+  const customersRef = collection(db, "organizations", orgId, "customers");
+  const searchField = normalizedSearch.includes("@") ? "emailKey" : "nameKey";
+  const constraints = [];
+  if (normalizedSearch) {
+    constraints.push(
+      where(searchField, ">=", normalizedSearch),
+      where(searchField, "<=", `${normalizedSearch}\uf8ff`)
+    );
+  }
+  constraints.push(orderBy(searchField), orderBy(documentId()));
+  if (normalizedCursor) {
+    const cursorSnapshot = await getDoc(doc(customersRef, normalizedCursor));
+    if (cursorSnapshot.exists()) constraints.push(startAfter(cursorSnapshot));
+  }
+  constraints.push(limit(normalizedPageSize + 1));
+  const snapshot = await getDocs(query(customersRef, ...constraints));
+  const page = snapshot.docs.map((entry) => normalizeCustomerRecord(entry.id, entry.data()));
+  const hasMore = page.length > normalizedPageSize;
+  const items = page.slice(0, normalizedPageSize);
+  return {
+    source: "firebase",
+    items,
+    nextCursor: hasMore ? encodeCustomerPathId(items.at(-1)?.id) : ""
+  };
+}
+
+function paymentRowsForQuote(quote) {
+  const rows = [];
+  const depositStatus = text(quote?.payment?.depositStatus || "unpaid").toLowerCase();
+  rows.push({
+    quoteId: quote.id,
+    quoteNumber: quote.quoteNumber,
+    kind: "deposit",
+    status: depositStatus,
+    amount: Number(quote?.totals?.deposit || 0),
+    evidenceAtISO: toIso(quote?.payment?.depositConfirmedAtISO)
+  });
+  const finalBalance = quote?.payment?.finalBalance || {};
+  const finalStatus = getFinalBalanceDisplayStatus(finalBalance);
+  if (Number(finalBalance.amountCents || 0) > 0 || finalStatus !== "unpaid") {
+    rows.push({
+      quoteId: quote.id,
+      quoteNumber: quote.quoteNumber,
+      kind: "final_balance",
+      status: finalStatus,
+      amount: Number(finalBalance.amountCents || 0) / 100,
+      evidenceAtISO: toIso(finalBalance.paidAtISO)
+    });
+  }
+  return rows;
+}
+
+function lifecycleActivity(quotes = []) {
+  const activity = [];
+  const fields = [
+    ["draftAtISO", "Quote drafted"],
+    ["sentAtISO", "Proposal sent"],
+    ["viewedAtISO", "Proposal viewed"],
+    ["acceptedAtISO", "Proposal accepted"],
+    ["bookedAtISO", "Event booked"],
+    ["declinedAtISO", "Proposal declined"],
+    ["expiredAtISO", "Quote expired"]
+  ];
+  quotes.forEach((quote) => {
+    fields.forEach(([field, label]) => {
+      const atISO = toIso(quote?.lifecycle?.[field] || quote?.[field]);
+      if (atISO) activity.push({ quoteId: quote.id, quoteNumber: quote.quoteNumber, label, atISO });
+    });
+    const changeAtISO = toIso(quote?.portalDecision?.submittedAtISO);
+    if (changeAtISO && quote?.portalDecision?.decision === "changes_requested") {
+      activity.push({ quoteId: quote.id, quoteNumber: quote.quoteNumber, label: "Customer requested changes", atISO: changeAtISO });
+    }
+  });
+  return activity.sort((left, right) => right.atISO.localeCompare(left.atISO)).slice(0, 25);
+}
+
+function nextSafeAction(attentionSummary, quotes) {
+  const item = attentionSummary.items[0];
+  if (item) {
+    const label = item.type === "change_request"
+      ? "Review the customer change request"
+      : item.type === "follow_up"
+        ? "Complete the due follow-up"
+        : "Review the pending approval";
+    return {
+      kind: "workflow",
+      label,
+      quoteId: item.quoteId,
+      attentionType: item.type,
+      requestId: item.sourceRequestId || item.pendingRequests?.[0]?.id || ""
+    };
+  }
+  const acceptedWithoutDeposit = quotes.find((quote) => (
+    quote.status === "accepted"
+    && ["", "unpaid"].includes(text(quote?.payment?.depositStatus).toLowerCase())
+  ));
+  if (acceptedWithoutDeposit) {
+    return { kind: "quote", label: "Review deposit request eligibility", quoteId: acceptedWithoutDeposit.id };
+  }
+  return { kind: "none", label: "No immediate staff action" };
+}
+
+export function buildStaffProposalPreview(quote = {}) {
+  const quoteMeta = quote?.quoteMeta || {};
+  const organizationName = text(quoteMeta.organizationName);
+  return {
+    quoteId: text(quote.id),
+    quoteNumber: text(quote.quoteNumber),
+    status: text(quote.status || "draft").toLowerCase(),
+    customerName: text(quote?.customer?.name),
+    eventName: text(quote?.event?.name),
+    eventDate: text(quote?.event?.date),
+    venue: text(quote?.event?.venue),
+    guests: Number(quote?.event?.guests || 0),
+    subtotal: Number(quote?.totals?.subtotal || 0),
+    tax: Number(quote?.totals?.tax || 0),
+    total: Number(quote?.totals?.total || 0),
+    deposit: Number(quote?.totals?.deposit || 0),
+    branding: {
+      organizationName,
+      brandName: text(quoteMeta.brandName || organizationName),
+      brandTagline: text(quoteMeta.brandTagline),
+      brandLogoUrl: text(quoteMeta.brandLogoUrl),
+      brandPrimaryColor: text(quoteMeta.brandPrimaryColor),
+      brandAccentColor: text(quoteMeta.brandAccentColor),
+      brandDarkAccentColor: text(quoteMeta.brandDarkAccentColor),
+      brandBackgroundStart: text(quoteMeta.brandBackgroundStart),
+      brandBackgroundMid: text(quoteMeta.brandBackgroundMid),
+      brandBackgroundEnd: text(quoteMeta.brandBackgroundEnd),
+      businessEmail: text(quoteMeta.businessEmail),
+      businessPhone: text(quoteMeta.businessPhone),
+      businessAddress: text(quoteMeta.businessAddress),
+      brandCrew: Array.isArray(quoteMeta.brandCrew)
+        ? quoteMeta.brandCrew.map((member) => ({ ...member }))
+        : []
+    },
+    portalEvidenceChanged: false
+  };
+}
+
+export function buildCustomerWorkspaceDto({
+  customer,
+  quotes = [],
+  versionsByQuote = {},
+  versionTruncatedQuoteIds = [],
+  quotePageInfo = { limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT, truncated: false },
+  nowISO = new Date().toISOString()
+} = {}) {
+  const effectiveNowISO = toIso(nowISO) || new Date().toISOString();
+  const normalizedQuotes = quotes.map((quote) => (
+    applyQuoteExpirySemantics(quote, effectiveNowISO)
+  )).sort((left, right) => (
+    text(right.updatedAtISO || right.createdAtISO).localeCompare(text(left.updatedAtISO || left.createdAtISO))
+  ));
+  const activeQuotes = normalizedQuotes.filter((quote) => !["deleted", "declined", "expired"].includes(text(quote.status).toLowerCase()));
+  const attention = buildWorkflowAttentionSummary(normalizedQuotes, { now: effectiveNowISO });
+  const events = normalizedQuotes
+    .filter((quote) => ["accepted", "booked"].includes(text(quote.status).toLowerCase()))
+    .map((quote) => ({
+      quoteId: quote.id,
+      quoteNumber: quote.quoteNumber,
+      status: quote.status,
+      eventName: quote?.event?.name || quote.quoteNumber,
+      date: quote?.event?.date || "",
+      time: quote?.event?.time || "",
+      venue: quote?.event?.venue || "",
+      guests: Number(quote?.event?.guests || 0),
+      contractNumber: text(quote?.booking?.contractNumber),
+      beoAvailable: text(quote.status).toLowerCase() === "booked"
+    }))
+    .sort((left, right) => text(left.date).localeCompare(text(right.date)));
+  const versions = normalizedQuotes.flatMap((quote) => (
+    (versionsByQuote[quote.id] || []).map((version) => ({
+      ...version,
+      quoteId: quote.id,
+      quoteNumber: quote.quoteNumber
+    }))
+  ));
+
+  return {
+    customer: normalizeCustomerRecord(customer?.id || customer?.customerId, customer),
+    quotes: normalizedQuotes,
+    activeQuotes,
+    proposalVersions: versions,
+    events,
+    money: normalizedQuotes.flatMap(paymentRowsForQuote),
+    conversations: normalizedQuotes.map((quote) => ({
+      quoteId: quote.id,
+      quoteNumber: quote.quoteNumber,
+      status: quote.status,
+      updatedAtISO: text(quote.updatedAtISO || quote.createdAtISO)
+    })),
+    recentActivity: lifecycleActivity(normalizedQuotes),
+    attention,
+    nextAction: nextSafeAction(attention, normalizedQuotes),
+    quotePageInfo: {
+      limit: Number(quotePageInfo.limit || CUSTOMER_WORKSPACE_QUOTE_LIMIT),
+      truncated: quotePageInfo.truncated === true
+    },
+    versionPageInfo: {
+      perQuoteLimit: VERSION_LIMIT_PER_QUOTE,
+      truncatedQuoteIds: [...new Set(versionTruncatedQuoteIds.map(text).filter(Boolean))]
+    }
+  };
+}
+
+async function loadQuoteVersions(orgId, quoteId) {
+  const versionsRef = collection(db, "organizations", orgId, "quotes", quoteId, "versions");
+  const snapshot = await getDocs(query(
+    versionsRef,
+    orderBy("createdAtISO", "desc"),
+    limit(VERSION_LIMIT_PER_QUOTE + 1)
+  ));
+  return {
+    items: snapshot.docs.slice(0, VERSION_LIMIT_PER_QUOTE).map((entry) => ({
+      id: entry.id,
+      ...entry.data(),
+      createdAtISO: toIso(entry.data().createdAtISO || entry.data().createdAt)
+    })),
+    truncated: snapshot.size > VERSION_LIMIT_PER_QUOTE
+  };
+}
+
+export async function getCustomerWorkspace({ organizationId = "", customerId = "" } = {}) {
+  const orgId = text(organizationId);
+  const id = text(customerId);
+  if (!orgId || !id) throw new Error("organizationId and customerId are required for Customer 360.");
+
+  if (!firebaseReady || !db) {
+    const history = await getQuoteHistory({ organizationId: orgId });
+    const matchingQuotes = history.quotes.filter((quote) => text(quote.customerId) === id);
+    const quotes = matchingQuotes.slice(0, CUSTOMER_WORKSPACE_QUOTE_LIMIT);
+    const customer = localCustomersFromQuotes(quotes).find((entry) => entry.id === id);
+    if (!customer) return null;
+    const versionResults = await Promise.all(quotes.map(async (quote) => {
+      const result = await getQuoteVersionHistory(quote.id, { organizationId: orgId });
+      const scopedVersions = result.versions.filter((version) => (
+        !text(version.organizationId) || text(version.organizationId) === orgId
+      ));
+      return [quote.id, {
+        items: scopedVersions.slice(0, VERSION_LIMIT_PER_QUOTE).map((version) => ({
+          ...version,
+          createdAtISO: toIso(version.createdAtISO || version.createdAt || version.timestamp)
+        })),
+        truncated: scopedVersions.length > VERSION_LIMIT_PER_QUOTE
+      }];
+    }));
+    const versionsByQuote = Object.fromEntries(versionResults.map(([quoteId, result]) => (
+      [quoteId, result.items]
+    )));
+    const versionTruncatedQuoteIds = versionResults
+      .filter(([, result]) => result.truncated)
+      .map(([quoteId]) => quoteId);
+    return {
+      source: "local",
+      ...buildCustomerWorkspaceDto({
+        customer,
+        quotes,
+        versionsByQuote,
+        versionTruncatedQuoteIds,
+        quotePageInfo: {
+          limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT,
+          truncated: matchingQuotes.length > CUSTOMER_WORKSPACE_QUOTE_LIMIT
+        }
+      })
+    };
+  }
+
+  const customerSnapshot = await getDoc(doc(db, "organizations", orgId, "customers", id));
+  if (!customerSnapshot.exists()) return null;
+  const quoteSnapshot = await getDocs(query(
+    collection(db, "organizations", orgId, "quotes"),
+    where("customerId", "==", id),
+    orderBy("createdAt", "desc"),
+    limit(CUSTOMER_WORKSPACE_QUOTE_LIMIT + 1)
+  ));
+  const quoteDocuments = quoteSnapshot.docs.slice(0, CUSTOMER_WORKSPACE_QUOTE_LIMIT);
+  const quotes = quoteDocuments.map((entry) => normalizeQuoteRecord(entry.id, entry.data()));
+  const versionResults = await Promise.all(quotes.map(async (quote) => (
+    [quote.id, await loadQuoteVersions(orgId, quote.id)]
+  )));
+  const versionsByQuote = Object.fromEntries(versionResults.map(([quoteId, result]) => (
+    [quoteId, result.items]
+  )));
+  const versionTruncatedQuoteIds = versionResults
+    .filter(([, result]) => result.truncated)
+    .map(([quoteId]) => quoteId);
+  return {
+    source: "firebase",
+    ...buildCustomerWorkspaceDto({
+      customer: { id: customerSnapshot.id, ...customerSnapshot.data() },
+      quotes,
+      versionsByQuote,
+      versionTruncatedQuoteIds,
+      quotePageInfo: {
+        limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT,
+        truncated: quoteSnapshot.size > CUSTOMER_WORKSPACE_QUOTE_LIMIT
+      }
+    })
+  };
+}

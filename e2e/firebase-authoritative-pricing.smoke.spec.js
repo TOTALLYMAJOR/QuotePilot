@@ -184,6 +184,7 @@ test("concurrent quote transactions reuse and preserve one imported customer pro
     phone: "205-555-0142",
     company: "Imported Customer Company",
     notes: "Preserve this imported customer note.",
+    recordSource: "import_studio",
     importSource: "import_studio",
     importBatchId: proof.importedBatchId,
     createdAtISO: proof.importedCreatedAtISO,
@@ -193,7 +194,6 @@ test("concurrent quote transactions reuse and preserve one imported customer pro
     lastEventDate: proof.finalQuote.event.date,
     name: proof.finalQuote.customer.name
   });
-  expect(customer).not.toHaveProperty("recordSource");
   expect(proof.finalQuote).toMatchObject({
     id: proof.createdQuoteIds[0],
     organizationId: "e2e-org",

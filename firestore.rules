@@ -88,20 +88,6 @@ service cloud.firestore {
         && request.resource.data.get("starterPackCatalogRevision", 0) == resource.data.get("starterPackCatalogRevision", 0);
     }
 
-    function quoteBelongsToUser(data, orgId) {
-      return hasVerifiedEmail()
-        && organizationActive(orgId)
-        && data.organizationId == orgId
-        && (
-          (sameOrg(orgId) && data.ownerUid == request.auth.uid)
-          || (
-            data.customerEmailKey != null
-            && request.auth.token.email != null
-            && data.customerEmailKey == request.auth.token.email
-          )
-        );
-    }
-
     function statusPatchOnly() {
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
       return affectedKeys.hasOnly([
@@ -718,6 +704,8 @@ service cloud.firestore {
         && request.resource.data.createdBy.email == request.auth.token.email
         && request.resource.data.pricing is map
         && request.resource.data.snapshot is map
+        && request.resource.data.get("customerId", "") == quoteDataAfter.get("customerId", "")
+        && snapshot.get("customerId", "") == quoteDataAfter.get("customerId", "")
         && request.resource.data.pricing == quoteData.pricing
         && snapshot.organizationId == orgId
         && snapshot.id == quoteId
@@ -836,20 +824,14 @@ service cloud.firestore {
           && isOrgAdmin(resource.data.organizationId)
         )
       );
-      allow create: if (
-          isSignedIn()
-          && request.auth.uid == uid
-          && request.resource.data.role == "customer"
-          && request.resource.data.email == request.auth.token.email
-        )
-        || (
-          request.resource.data.organizationId is string
-          && isOrgAdmin(request.resource.data.organizationId)
-        );
+      allow create: if request.resource.data.organizationId is string
+        && request.resource.data.role in ["admin", "sales"]
+        && isOrgAdmin(request.resource.data.organizationId);
       allow update: if (
           resource.data.organizationId is string
           && request.resource.data.organizationId is string
           && request.resource.data.organizationId == resource.data.organizationId
+          && request.resource.data.role in ["admin", "sales"]
           && isOrgAdmin(resource.data.organizationId)
         );
       allow delete: if (
@@ -961,46 +943,14 @@ service cloud.firestore {
 
     match /organizations/{orgId}/customers/{docId} {
       allow read: if isOrgStaff(orgId);
-      allow create: if isOrgAdmin(orgId)
-        && request.resource.data.organizationId == orgId
-        && request.resource.data.importSource == "import_studio"
-        && request.resource.data.importBatchId is string
-        && request.resource.data.importBatchId.size() > 0
-        && !request.resource.data.keys().hasAny([
-          "customerId",
-          "recordSource",
-          "createdFromQuoteId",
-          "lastQuoteId",
-          "lastQuoteNumber",
-          "lastEventName",
-          "lastEventDate",
-          "lastProjectedAtISO"
-        ]);
-      allow update: if false;
-      allow delete: if isOrgAdmin(orgId)
-        && resource.data.organizationId == orgId
-        && resource.data.importSource == "import_studio"
-        && !resource.data.keys().hasAny([
-          "recordSource",
-          "lastQuoteId",
-          "lastProjectedAtISO"
-        ]);
+      // Customer identity, normalized directory search fields, import
+      // provenance, and rollback decisions are all trusted-server owned.
+      allow write: if false;
     }
 
     match /organizations/{orgId}/importBatches/{batchId} {
       allow read: if isOrgAdmin(orgId);
-      allow create: if isOrgAdmin(orgId)
-        && request.resource.data.organizationId == orgId
-        && request.resource.data.importBatchId == batchId
-        && request.resource.data.importType == "customers";
-      allow update: if isOrgAdmin(orgId)
-        && resource.data.organizationId == orgId
-        && request.resource.data.organizationId == orgId
-        && resource.data.importBatchId == batchId
-        && request.resource.data.importBatchId == batchId
-        && resource.data.importType == "customers"
-        && request.resource.data.importType == "customers";
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /organizations/{orgId}/quoteApprovalExecutions/{executionId} {
@@ -1030,7 +980,7 @@ service cloud.firestore {
 
     match /organizations/{orgId}/quotes/{quoteId} {
       allow create: if false;
-      allow read: if isOrgStaff(orgId) || quoteBelongsToUser(resource.data, orgId);
+      allow read: if isOrgStaff(orgId);
       allow update: if orgQuoteStaffUpdateAllowed(orgId, quoteId);
       allow update: if orgQuotePortalUpdateAllowed(orgId, quoteId);
       allow delete: if false;

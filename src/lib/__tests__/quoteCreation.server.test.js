@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 const require = createRequire(import.meta.url);
 const {
   QuoteCreationError,
+  bindCustomerIdentityToQuoteDocuments,
   buildCanonicalPortalSnapshot,
   buildCustomerProjection,
   buildDuplicateQuoteForm,
@@ -238,6 +239,8 @@ describe("trusted server quote creation documents", () => {
         organizationId: "org-a",
         name: "Ada Lovelace",
         email: "ada@example.com",
+        nameKey: "ada lovelace",
+        emailKey: "ada@example.com",
         phone: "205-555-0100",
         company: "Analytical Events",
         lastQuoteId: "quote-a",
@@ -311,6 +314,45 @@ describe("trusted server quote creation documents", () => {
       ...base,
       existingCustomer: { organizationId: "org-a", email: "grace@example.com" }
     })).toThrow(/does not match/i);
+    expect(() => buildCustomerProjection({
+      ...base,
+      existingCustomer: {
+        organizationId: "org-a",
+        email: "ada@example.com",
+        emailKey: "grace@example.com"
+      }
+    })).toThrow(/does not match/i);
+  });
+
+  test("retains an explicitly bound customer during a contact edit", () => {
+    const projection = buildCustomerProjection({
+      organizationId: "org-a",
+      quoteId: "quote-a",
+      quoteNumber: "Q-260727-1200-ABCDEF12",
+      customer: { name: "Ada Byron", email: "ada.byron@example.com" },
+      event: {},
+      nowISO: "2026-07-29T12:00:00.000Z",
+      existingCustomerId: "customer-a",
+      existingCustomer: {
+        customerId: "customer-a",
+        organizationId: "org-a",
+        name: "Ada Lovelace",
+        email: "ada@example.com"
+      },
+      allowEmailChange: true
+    });
+
+    expect(projection).toMatchObject({
+      customerId: "customer-a",
+      isNew: false,
+      patch: {
+        customerId: "customer-a",
+        name: "Ada Byron",
+        nameKey: "ada byron",
+        email: "ada.byron@example.com",
+        emailKey: "ada.byron@example.com"
+      }
+    });
   });
 
   test("keeps only approved Stripe-host payment links in public portal snapshots", () => {
@@ -605,6 +647,17 @@ describe("trusted server quote creation documents", () => {
         status: "draft"
       }
     });
+
+    const bound = bindCustomerIdentityToQuoteDocuments(documents, "customer-a");
+    expect(bound.quote.customerId).toBe("customer-a");
+    expect(bound.version).toMatchObject({
+      customerId: "customer-a",
+      snapshot: { customerId: "customer-a" }
+    });
+    expect(bound.result.customerId).toBe("customer-a");
+    expect(bound.portal).not.toHaveProperty("customerId");
+    expect(buildCanonicalPortalSnapshot("quote-a", bound.quote))
+      .not.toHaveProperty("customerId");
   });
 
   test("duplicates only source presentation while leaving identity and proof server-owned", () => {
@@ -681,6 +734,7 @@ describe("trusted server quote creation documents", () => {
     });
     const sourceQuote = {
       ...created.quote,
+      customerId: "customer-a",
       status: "sent",
       lifecycle: {
         draftAtISO: "2026-07-27T12:00:00.000Z",
@@ -730,6 +784,7 @@ describe("trusted server quote creation documents", () => {
     expect(rotation.portal.deliveryEvidence.state).toBe("");
     expect(rotation.version).toMatchObject({
       versionId: "v0002",
+      customerId: "customer-a",
       versionNumber: 2,
       reason: "portal_key_rotate",
       createdBy: {
@@ -739,6 +794,7 @@ describe("trusted server quote creation documents", () => {
       },
       snapshot: {
         id: "quote-a",
+        customerId: "customer-a",
         portalKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     });
@@ -1253,6 +1309,13 @@ describe("trusted server quote creation documents", () => {
       activeVersionId: "v0002",
       latestVersionNumber: 2
     });
+    const boundEdit = bindCustomerIdentityToQuoteDocuments(edited, "customer-a");
+    expect(boundEdit.quotePatch.customerId).toBe("customer-a");
+    expect(boundEdit.version).toMatchObject({
+      customerId: "customer-a",
+      snapshot: { customerId: "customer-a" }
+    });
+    expect(boundEdit.portal).not.toHaveProperty("customerId");
   });
 
   test("rejects trusted edits that could overwrite terminal evidence or lack staff authority", () => {

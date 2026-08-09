@@ -56,6 +56,10 @@ function email(value) {
   return text(value, 254).toLowerCase();
 }
 
+function customerNameSearchKey(value) {
+  return text(value, 160).toLowerCase().replace(/\s+/g, " ");
+}
+
 function customerProjectionDocumentId(value) {
   const normalizedEmail = email(value);
   if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
@@ -75,7 +79,8 @@ function buildCustomerProjection({
   event = {},
   nowISO,
   existingCustomer = null,
-  existingCustomerId = ""
+  existingCustomerId = "",
+  allowEmailChange = false
 } = {}) {
   const orgId = sanitizeIdentifier(organizationId);
   const id = sanitizeIdentifier(quoteId);
@@ -96,7 +101,15 @@ function buildCustomerProjection({
   if (existing) {
     const existingOrgId = sanitizeIdentifier(existing.organizationId);
     const existingEmail = email(existing.email);
-    if ((existingOrgId && existingOrgId !== orgId) || (existingEmail && existingEmail !== customerEmail)) {
+    const existingEmailKey = email(existing.emailKey);
+    const existingEmailIdentity = existingEmailKey || existingEmail;
+    const recordedCustomerId = sanitizeIdentifier(existing.customerId, 500);
+    if (
+      (existingOrgId && existingOrgId !== orgId)
+      || (existingEmail && existingEmailKey && existingEmail !== existingEmailKey)
+      || (recordedCustomerId && recordedCustomerId !== customerId)
+      || (!allowEmailChange && existingEmailIdentity && existingEmailIdentity !== customerEmail)
+    ) {
       throw new QuoteCreationError(
         "failed-precondition",
         "Existing customer projection does not match this quote."
@@ -113,6 +126,8 @@ function buildCustomerProjection({
     organizationId: orgId,
     name: customerName,
     email: customerEmail,
+    nameKey: customerNameSearchKey(customerName),
+    emailKey: customerEmail,
     lastQuoteId: id,
     lastQuoteNumber: number,
     lastEventName: text(event?.name, 160),
@@ -133,6 +148,44 @@ function buildCustomerProjection({
     customerId,
     isNew: !existing,
     patch
+  };
+}
+
+function bindCustomerIdentityToQuoteDocuments(documents, customerId) {
+  const quoteDocumentKey = isRecord(documents?.quote)
+    ? "quote"
+    : (isRecord(documents?.quotePatch) ? "quotePatch" : "");
+  if (!isRecord(documents) || !quoteDocumentKey || !isRecord(documents.version)) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Trusted quote documents are required before customer identity can be bound."
+    );
+  }
+  const id = sanitizeIdentifier(customerId, 500);
+  if (!id) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Trusted customer identity is required before the quote can be stored."
+    );
+  }
+  return {
+    ...documents,
+    [quoteDocumentKey]: {
+      ...documents[quoteDocumentKey],
+      customerId: id
+    },
+    version: {
+      ...documents.version,
+      customerId: id,
+      snapshot: {
+        ...(isRecord(documents.version.snapshot) ? documents.version.snapshot : {}),
+        customerId: id
+      }
+    },
+    result: {
+      ...(isRecord(documents.result) ? documents.result : {}),
+      customerId: id
+    }
   };
 }
 
@@ -733,6 +786,7 @@ function buildQuoteReopenDocuments({
   const source = isRecord(quote) ? quote : {};
   const baseline = isRecord(activeSnapshot) ? activeSnapshot : {};
   const organizationId = sanitizeIdentifier(source.organizationId);
+  const customerId = sanitizeIdentifier(source.customerId, 500);
   const portalKey = sanitizeIdentifier(newPortalKey, 128);
   const previousPortalKey = sanitizeIdentifier(source.portalKey, 128);
   const actorUid = sanitizeIdentifier(staff?.uid);
@@ -952,6 +1006,7 @@ function buildQuoteReopenDocuments({
       versionId,
       quoteId: id,
       organizationId,
+      ...(customerId ? { customerId } : {}),
       versionNumber: nextVersionNumber,
       createdAtISO: reopenedAtISO,
       reason: versionMeta.reason,
@@ -985,6 +1040,7 @@ function buildPortalRotationDocuments({
   const id = sanitizeIdentifier(quoteId);
   const source = isRecord(quote) ? quote : {};
   const organizationId = sanitizeIdentifier(source.organizationId);
+  const customerId = sanitizeIdentifier(source.customerId, 500);
   const portalKey = sanitizeIdentifier(newPortalKey, 128);
   const previousPortalKey = sanitizeIdentifier(source.portalKey, 128);
   const actorUid = sanitizeIdentifier(staff?.uid);
@@ -1099,6 +1155,7 @@ function buildPortalRotationDocuments({
       versionId,
       quoteId: id,
       organizationId,
+      ...(customerId ? { customerId } : {}),
       versionNumber: nextVersionNumber,
       createdAtISO: rotatedAtISO,
       reason: versionMeta.reason,
@@ -1607,6 +1664,7 @@ module.exports = {
   QUOTE_VERSION_ID,
   QuoteCreationError,
   buildCanonicalPortalSnapshot,
+  bindCustomerIdentityToQuoteDocuments,
   buildCustomerProjection,
   buildDuplicateQuoteForm,
   buildPortalRotationDocuments,
@@ -1615,6 +1673,7 @@ module.exports = {
   buildTrustedQuoteCreationDocuments,
   buildTrustedQuoteEditDocuments,
   customerProjectionDocumentId,
+  customerNameSearchKey,
   sanitizeQuoteCreationRequest,
   sanitizeStoredStripePaymentLink
 };

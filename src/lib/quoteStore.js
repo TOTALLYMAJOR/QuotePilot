@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit as queryLimit,
   orderBy,
   query,
   runTransaction,
@@ -1511,6 +1512,9 @@ function buildLegacyReadFallbackVersion(quote, { reason = "legacy_read_fallback"
     versionId,
     quoteId: String(quote?.id || "").trim(),
     organizationId: String(quote?.organizationId || "").trim(),
+    ...(String(quote?.customerId || "").trim()
+      ? { customerId: String(quote.customerId).trim() }
+      : {}),
     versionNumber: versionMeta.versionNumber,
     createdAtISO: versionMeta.createdAt || quote?.updatedAtISO || quote?.createdAtISO || isoNow(),
     reason: versionMeta.reason || reason,
@@ -1659,6 +1663,9 @@ export async function saveQuoteVersion(
         versionId,
         quoteId: quote.id,
         organizationId: writeOrganizationId,
+        ...(String(quote.customerId || "").trim()
+          ? { customerId: String(quote.customerId).trim() }
+          : {}),
         versionNumber: versionMeta.versionNumber,
         createdAtISO: timestamp,
         reason: versionMeta.reason,
@@ -1726,6 +1733,9 @@ export async function saveQuoteVersion(
     reason: versionMeta.reason,
     quoteId: quote.id,
     organizationId: resolvedOrganizationId,
+    ...(String(quote.customerId || "").trim()
+      ? { customerId: String(quote.customerId).trim() }
+      : {}),
     snapshot,
     pricing: resolveQuotePricingSnapshot(snapshot),
     timestamp
@@ -3827,6 +3837,10 @@ export async function getQuoteHistory(filters = {}) {
   const normalizedCustomerName = normalizeCustomerNameKey(filters?.customerName || "");
   const includeDeleted = filters?.includeDeleted === true;
   const persistExpiredStatuses = filters?.persistExpiredStatuses === true;
+  const requestedLimit = Number(filters?.limitCount || 0);
+  const limitCount = Number.isFinite(requestedLimit) && requestedLimit > 0
+    ? Math.min(500, Math.max(1, Math.floor(requestedLimit)))
+    : 0;
   const nowISO = isoNow();
 
   if (firebaseReady) {
@@ -3843,6 +3857,7 @@ export async function getQuoteHistory(filters = {}) {
           prefixConstraints.unshift(where("eventTypeId", "==", normalizedEventTypeId));
         }
         try {
+          if (limitCount) prefixConstraints.push(queryLimit(limitCount + 1));
           const snap = await getDocs(query(targetCollection, ...prefixConstraints));
           return { snap, usedServerCustomerPrefix: true };
         } catch {
@@ -3850,6 +3865,7 @@ export async function getQuoteHistory(filters = {}) {
           if (normalizedEventTypeId) {
             fallbackConstraints.unshift(where("eventTypeId", "==", normalizedEventTypeId));
           }
+          if (limitCount) fallbackConstraints.push(queryLimit(limitCount + 1));
           const snap = await getDocs(query(targetCollection, ...fallbackConstraints));
           return { snap, usedServerCustomerPrefix: false };
         }
@@ -3859,6 +3875,7 @@ export async function getQuoteHistory(filters = {}) {
       if (normalizedEventTypeId) {
         constraints.unshift(where("eventTypeId", "==", normalizedEventTypeId));
       }
+      if (limitCount) constraints.push(queryLimit(limitCount + 1));
       const snap = await getDocs(query(targetCollection, ...constraints));
       return { snap, usedServerCustomerPrefix: false };
     };
@@ -3905,10 +3922,12 @@ export async function getQuoteHistory(filters = {}) {
       customerName: usedServerCustomerPrefix ? "" : normalizedCustomerName,
       includeDeleted
     });
+    const limitedQuotes = limitCount ? filteredQuotes.slice(0, limitCount) : filteredQuotes;
 
     return {
       source: "firebase",
-      quotes: filteredQuotes,
+      quotes: limitedQuotes,
+      truncated: Boolean(limitCount && snap.size > limitCount),
       expiryPersistenceFailures
     };
   }
@@ -3928,13 +3947,16 @@ export async function getQuoteHistory(filters = {}) {
     localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(nextQuotes));
   }
 
+  const filteredQuotes = applyQuoteHistoryFilters(nextQuotes, {
+    eventTypeId: normalizedEventTypeId,
+    customerName: normalizedCustomerName,
+    includeDeleted
+  });
+
   return {
     source: "local",
-    quotes: applyQuoteHistoryFilters(nextQuotes, {
-      eventTypeId: normalizedEventTypeId,
-      customerName: normalizedCustomerName,
-      includeDeleted
-    })
+    quotes: limitCount ? filteredQuotes.slice(0, limitCount) : filteredQuotes,
+    truncated: Boolean(limitCount && filteredQuotes.length > limitCount)
   };
 }
 
