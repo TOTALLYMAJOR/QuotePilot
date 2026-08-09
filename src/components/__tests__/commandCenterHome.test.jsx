@@ -184,12 +184,18 @@ describe("summarizeMoneyRows", () => {
 });
 
 describe("CommandCenterHome static shell", () => {
-  test("renders the attention heading and empty-state copy before data loads", () => {
+  test("renders a true loading state before the shared snapshot resolves", () => {
     const html = renderToStaticMarkup(
-      <CommandCenterHome organizationId="" onOpenWorkflow={() => {}} onOpenQuote={() => {}} onNewQuote={() => {}} />
+      <CommandCenterHome
+        snapshot={{ loading: true, error: "", attentionSummary: null, quotes: [], truncated: false }}
+        onOpenWorkflow={() => {}}
+        onOpenQuote={() => {}}
+        onNewQuote={() => {}}
+      />
     );
     expect(html).toContain("What needs your attention");
-    expect(html).toContain("Nothing needs you right now");
+    expect(html).toContain("Loading attention items");
+    expect(html).not.toContain("Nothing needs you right now");
     expect(html).toContain("New quote");
   });
 });

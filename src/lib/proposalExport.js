@@ -213,7 +213,7 @@ function resolvePortalLink(quote, basePortalUrl = "") {
     }
   }
   const base = String(basePortalUrl || "").trim() || (
-    typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : ""
+    typeof window !== "undefined" ? `${window.location.origin}/app` : ""
   );
   if (!base) return "";
   return `${base}?portal=${encodeURIComponent(portalKey)}`;

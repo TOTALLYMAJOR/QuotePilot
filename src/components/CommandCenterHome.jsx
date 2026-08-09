@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import StatusChip from "./StatusChip";
 import { currency } from "../lib/quoteCalculator";
-import { getQuoteHistory, getWorkflowAttentionSnapshot } from "../lib/quoteStore";
-import { buildWorkflowAttentionSummary } from "../lib/quoteWorkflow";
 import {
   classifyAttentionItem,
   classifyDepositStatus,
@@ -98,64 +96,57 @@ export function summarizeMoneyRows(rows = []) {
 }
 
 export default function CommandCenterHome({
-  organizationId = "",
+  snapshot,
+  onRefresh,
   onOpenWorkflow,
   onOpenQuote,
+  onOpenCustomer,
   onNewQuote
 }) {
-  const [attentionState, setAttentionState] = useState({ loading: false, error: "", summary: null });
-  const [historyState, setHistoryState] = useState({ loading: false, error: "", quotes: [] });
-
-  const loadAttention = async () => {
-    if (!organizationId) return;
-    setAttentionState((prev) => ({ ...prev, loading: true, error: "" }));
-    try {
-      const result = await getWorkflowAttentionSnapshot({ organizationId });
-      setAttentionState({ loading: false, error: "", summary: buildWorkflowAttentionSummary(result.quotes) });
-    } catch (err) {
-      setAttentionState((prev) => ({
-        ...prev,
-        loading: false,
-        error: err?.message || "Failed to load workflow attention."
-      }));
-    }
+  const state = snapshot || {
+    loading: true,
+    error: "",
+    attentionSummary: null,
+    quotes: [],
+    truncated: false
   };
-
-  const loadHistory = async () => {
-    if (!organizationId) return;
-    setHistoryState((prev) => ({ ...prev, loading: true, error: "" }));
-    try {
-      const result = await getQuoteHistory({ organizationId });
-      setHistoryState({ loading: false, error: "", quotes: result.quotes });
-    } catch (err) {
-      setHistoryState((prev) => ({
-        ...prev,
-        loading: false,
-        error: err?.message || "Failed to load quote records."
-      }));
-    }
-  };
-
-  useEffect(() => {
-    loadAttention();
-    loadHistory();
-  }, [organizationId]);
-
-  const attentionItems = attentionState.summary?.items || [];
+  const attentionItems = state.attentionSummary?.items || [];
   const visibleAttentionItems = attentionItems.slice(0, ATTENTION_ROW_LIMIT);
   const attentionOverflow = attentionItems.length - visibleAttentionItems.length;
   const hasAnyAttention = attentionItems.length > 0;
 
   const upcomingEvents = useMemo(
-    () => selectUpcomingEvents(historyState.quotes),
-    [historyState.quotes]
+    () => selectUpcomingEvents(state.quotes),
+    [state.quotes]
   );
   const hasAnyEvents = upcomingEvents.length > 0;
 
-  const moneyRows = useMemo(() => buildMoneyRows(historyState.quotes), [historyState.quotes]);
+  const moneyRows = useMemo(() => buildMoneyRows(state.quotes), [state.quotes]);
   const moneyTotals = useMemo(() => summarizeMoneyRows(moneyRows), [moneyRows]);
 
-  const isRefreshing = attentionState.loading || historyState.loading;
+  const isRefreshing = state.loading;
+
+  const openWorkflowItem = (item) => {
+    onOpenWorkflow?.({
+      quoteId: item.quoteId,
+      attentionType: item.type,
+      requestId: item.sourceRequestId || item.pendingRequests?.[0]?.id || ""
+    });
+  };
+
+  const customerLabel = (quote) => {
+    const label = quote?.customer?.name || quote?.customer?.email || "Customer";
+    if (!quote?.customerId || typeof onOpenCustomer !== "function") return label;
+    return (
+      <button
+        type="button"
+        className="command-center-customer-link"
+        onClick={() => onOpenCustomer(quote.customerId)}
+      >
+        {label}
+      </button>
+    );
+  };
 
   return (
     <section className="panel command-center" aria-labelledby="command-center-heading">
@@ -168,7 +159,7 @@ export default function CommandCenterHome({
           <button
             type="button"
             className="ghost"
-            onClick={() => { loadAttention(); loadHistory(); }}
+            onClick={() => onRefresh?.({ force: true })}
             disabled={isRefreshing}
           >
             {isRefreshing ? "Refreshing..." : "Refresh"}
@@ -177,16 +168,18 @@ export default function CommandCenterHome({
         </div>
       </div>
 
-      {attentionState.error && <p className="error-note" role="alert">{attentionState.error}</p>}
-      {historyState.error && <p className="error-note" role="alert">{historyState.error}</p>}
+      {state.error && <p className="error-note" role="alert">{state.error}</p>}
+      {state.truncated && (
+        <p className="source-note">Home uses the 200 most recent quote records. Open Quotes for the complete history.</p>
+      )}
 
       <div className="command-center-grid">
         <div className="command-center-inbox">
           <h3>Needs your attention</h3>
-          {attentionState.loading && !attentionState.summary && (
+          {state.loading && !state.attentionSummary && (
             <p className="source-note">Loading attention items...</p>
           )}
-          {!attentionState.loading && !hasAnyAttention && !attentionState.error && (
+          {!state.loading && !hasAnyAttention && !state.error && (
             <p className="source-note">
               Nothing needs you right now. New change requests, overdue follow-ups, and pending approvals will appear here.
             </p>
@@ -203,7 +196,7 @@ export default function CommandCenterHome({
                       <p className="command-center-row-detail">{detail}</p>
                       <p className="command-center-row-meta">{meta}</p>
                     </div>
-                    <button type="button" className="ghost" onClick={onOpenWorkflow}>
+                    <button type="button" className="ghost" onClick={() => openWorkflowItem(item)}>
                       Open in Workflow
                     </button>
                   </li>
@@ -212,7 +205,7 @@ export default function CommandCenterHome({
             </ul>
           )}
           {attentionOverflow > 0 && (
-            <button type="button" className="ghost command-center-more" onClick={onOpenWorkflow}>
+            <button type="button" className="ghost command-center-more" onClick={() => onOpenWorkflow?.({})}>
               View {attentionOverflow} more in Workflow
             </button>
           )}
@@ -221,8 +214,8 @@ export default function CommandCenterHome({
         <div className="command-center-rail">
           <div className="command-center-rail-section">
             <h3>Next {UPCOMING_WINDOW_DAYS} days</h3>
-            {historyState.loading && !hasAnyEvents && <p className="source-note">Loading events...</p>}
-            {!historyState.loading && !hasAnyEvents && !historyState.error && (
+            {state.loading && !hasAnyEvents && <p className="source-note">Loading events...</p>}
+            {!state.loading && !hasAnyEvents && !state.error && (
               <p className="source-note">No accepted or booked events in the next {UPCOMING_WINDOW_DAYS} days.</p>
             )}
             {hasAnyEvents && (
@@ -236,7 +229,7 @@ export default function CommandCenterHome({
                           <strong>{quote.event?.name || quote.quoteNumber}</strong> · {quote.event?.date}
                         </p>
                         <p className="command-center-row-meta">
-                          {quote.event?.venue || "Venue TBD"} · {Number(quote.event?.guests || 0)} guests
+                          {customerLabel(quote)} · {quote.event?.venue || "Venue TBD"} · {Number(quote.event?.guests || 0)} guests
                         </p>
                         <StatusChip family={family} label={label} />
                       </div>
@@ -252,7 +245,7 @@ export default function CommandCenterHome({
 
           <div className="command-center-rail-section">
             <h3>Money at a glance</h3>
-            {!historyState.loading && !moneyRows.length && !historyState.error && (
+            {!state.loading && !moneyRows.length && !state.error && (
               <p className="source-note">No payments awaiting action. Requests become available after a proposal is accepted.</p>
             )}
             {moneyRows.length > 0 && (
@@ -272,7 +265,7 @@ export default function CommandCenterHome({
                     <li key={`${row.quoteId}-${row.kind}-${index}`} className="command-center-row">
                       <div className="command-center-row-main">
                         <p className="command-center-row-detail">{row.kind} · {currency(row.amount)}</p>
-                        <p className="command-center-row-meta">{row.customerName} · {row.quoteNumber}</p>
+                        <p className="command-center-row-meta">{customerLabel(state.quotes.find((quote) => quote.id === row.quoteId))} · {row.quoteNumber}</p>
                         <StatusChip family={row.family} label={row.label} />
                       </div>
                       <button type="button" className="ghost" onClick={() => onOpenQuote(row.quoteId)}>

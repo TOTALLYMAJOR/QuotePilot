@@ -17,7 +17,7 @@ describe("workspace interaction recovery wiring", () => {
   test("availability blocks expose schedule context and a correction path", () => {
     expect(appSource).toContain('className="warning-note availability-recovery"');
     expect(appSource).toContain('onClick={handleCorrectAvailability}');
-    expect(appSource).toContain('onClick={() => openWorkspaceTool(setScheduleOpen)}');
+    expect(appSource).toContain('onClick={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}');
     expect(appSource).toContain("Edit Date, Time, or Venue");
   });
 

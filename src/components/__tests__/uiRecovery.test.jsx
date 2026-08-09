@@ -87,9 +87,18 @@ describe("recoverable lazy surfaces", () => {
       "ImportStudioModal",
       "DiagnosticsModal",
       "QuoteCompareModal",
-      "QuoteHistoryModal",
-      "ReportingDashboardModal",
-      "SalesWorkflowModal"
+      "ReportingDashboardModal"
+    ]) {
+      expect(appSource).toContain(`const ${name} = createRecoverableLazy(`);
+      expect(appSource).toContain(`component={${name}}`);
+    }
+    for (const name of [
+      "CommandCenterHome",
+      "CustomerDirectoryView",
+      "CustomerWorkspaceView",
+      "WorkspaceNotFound",
+      "QuoteHistoryView",
+      "SalesWorkflowView"
     ]) {
       expect(appSource).toContain(`const ${name} = createRecoverableLazy(`);
       expect(appSource).toContain(`component={${name}}`);

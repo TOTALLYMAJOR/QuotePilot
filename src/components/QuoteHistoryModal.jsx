@@ -301,9 +301,10 @@ export function canEditQuoteStatus(status) {
   );
 }
 
-export default function QuoteHistoryModal({
+export function QuoteHistoryView({
   open,
   onClose,
+  presentation = "embedded",
   basePortalUrl = "",
   organizationId = "",
   currentUserUid = "",
@@ -318,6 +319,7 @@ export default function QuoteHistoryModal({
   canDeleteQuotes = false,
   onToast
 }) {
+  const embedded = presentation === "embedded";
   const [state, setState] = useState({
     loading: false,
     source: "",
@@ -385,7 +387,7 @@ export default function QuoteHistoryModal({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || embedded) return undefined;
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const focusFrame = window.requestAnimationFrame(() => dialogRef.current?.focus());
@@ -439,7 +441,7 @@ export default function QuoteHistoryModal({
       document.removeEventListener("keydown", handleDialogKeyDown);
       document.body.style.overflow = previousBodyOverflow;
     };
-  }, [open]);
+  }, [embedded, open]);
 
   useEffect(() => {
     loadGenerationRef.current += 1;
@@ -714,8 +716,8 @@ export default function QuoteHistoryModal({
 
   const resolveQuotePortalLink = (quote) => {
     if (!quote?.portalKey) return "";
-    const base = basePortalUrl || `${window.location.origin}${window.location.pathname}`;
-    return `${base}?portal=${quote.portalKey}`;
+    const base = basePortalUrl || `${window.location.origin}/app`;
+    return `${base}?portal=${encodeURIComponent(quote.portalKey)}`;
   };
 
   const handleStatusUpdate = async (quoteId, nextStatus, silent = false) => {
@@ -1343,8 +1345,13 @@ export default function QuoteHistoryModal({
   };
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="quote-history-title">
-      <div className="modal-card history-card" ref={dialogRef} tabIndex={-1}>
+    <div
+      className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
+      aria-labelledby="quote-history-title"
+    >
+      <div className={`modal-card history-card${embedded ? " workspace-route-card" : ""}`} ref={dialogRef} tabIndex={-1}>
         <div className="modal-head">
           <h2 id="quote-history-title">Quotes</h2>
           <div className="right-actions">
@@ -2203,4 +2210,8 @@ export default function QuoteHistoryModal({
       </div>
     </div>
   );
+}
+
+export default function QuoteHistoryModal(props) {
+  return <QuoteHistoryView {...props} presentation="modal" />;
 }
