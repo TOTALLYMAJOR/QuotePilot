@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
-import { currency } from "../lib/quoteCalculator";
 import {
   buildKitchenCheckpoints,
   buildProductionChecklist,
@@ -19,6 +18,13 @@ import {
   classifyQuoteStatus
 } from "../lib/statusSemantics";
 import { useModalDialog } from "../hooks/useModalDialog";
+import {
+  formatWorkspaceInteger,
+  formatWorkspaceMoney,
+  formatWorkspaceSource,
+  formatWorkspaceText,
+  hasWorkspaceNumber
+} from "../lib/workspacePresentation";
 
 const STATUS_SET = new Set(["accepted", "booked"]);
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -72,10 +78,14 @@ function sameMonth(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 }
 
-function dayLabel(isoDate) {
+export function formatScheduleDayLabel(isoDate) {
   const dt = parseIsoDate(isoDate);
   if (!dt) return "-";
   return dt.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+}
+
+export function getScheduleSourceLabel({ loading = false, source = "" } = {}) {
+  return loading && !source ? "Loading tenant records" : formatWorkspaceSource(source);
 }
 
 function scheduleEventDetailId(value) {
@@ -285,6 +295,63 @@ export function getScheduleCalendarCountLabels(counts = {}) {
   };
 }
 
+export function buildScheduledEvents(quotes = []) {
+  return (Array.isArray(quotes) ? quotes : [])
+    .filter((quote) => STATUS_SET.has(String(quote?.status || "")))
+    .map((quote) => ({
+      id: quote.id,
+      quoteNumber: String(quote.quoteNumber || "").trim(),
+      status: String(quote.status || ""),
+      date: String(quote.event?.date || ""),
+      time: String(quote.event?.time || ""),
+      hours: Number(quote.event?.hours || 0),
+      eventName: String(quote.event?.name || "").trim(),
+      venue: String(quote.event?.venue || "").trim(),
+      dietaryRestrictions: String(quote.event?.dietaryRestrictions || "").trim(),
+      customer: String(quote.customer?.name || quote.customer?.email || "").trim(),
+      guests: quote.event?.guests ?? null,
+      total: quote.totals?.total ?? null,
+      staffLead: String(quote.booking?.staffLead || "").trim(),
+      kitchenCheckpointOverrides: Array.isArray(quote.booking?.kitchenCheckpoints)
+        ? quote.booking.kitchenCheckpoints
+        : [],
+      productionChecklist: buildProductionChecklist(quote),
+      contractNumber: String(quote.booking?.contractNumber || "").trim(),
+      confirmationStatus: String(quote.booking?.confirmationStatus || "pending").trim(),
+      confirmationSentAtISO: String(quote.booking?.confirmationSentAtISO || ""),
+      confirmedAtISO: String(quote.booking?.confirmedAtISO || "")
+    }))
+    .filter((item) => parseIsoDate(item.date))
+    .sort((a, b) => {
+      const dateCmp = a.date.localeCompare(b.date);
+      if (dateCmp !== 0) return dateCmp;
+      const timeCmp = String(a.time || "").localeCompare(String(b.time || ""));
+      if (timeCmp !== 0) return timeCmp;
+      return String(a.quoteNumber || "").localeCompare(String(b.quoteNumber || ""));
+    });
+}
+
+export function ScheduleEventFacts({ item = {} }) {
+  const guestsRecorded = hasWorkspaceNumber(item.guests);
+  return (
+    <>
+      <p>{formatWorkspaceText(item.eventName, { emptyLabel: "Untitled event" })}</p>
+      <p>
+        {formatWorkspaceText(item.time, { emptyLabel: "Time not set" })}
+        {" • "}{formatWorkspaceText(item.venue, { emptyLabel: "Venue not set" })}
+      </p>
+      <p>
+        {formatWorkspaceText(item.customer, { emptyLabel: "Customer not recorded" })}
+        {" • "}{formatWorkspaceInteger(item.guests, { emptyLabel: "Guest count not set" })}
+        {guestsRecorded ? " guests" : ""}
+      </p>
+      <p>Dietary restrictions: {formatWorkspaceText(item.dietaryRestrictions, { emptyLabel: "None recorded" })}</p>
+      <p>Total: {formatWorkspaceMoney(item.total)}</p>
+      <p>Contract: {formatWorkspaceText(item.contractNumber, { emptyLabel: "Pending conversion" })}</p>
+    </>
+  );
+}
+
 export function EventScheduleView({
   open,
   onClose,
@@ -337,40 +404,7 @@ export function EventScheduleView({
   const anchorDate = parseIsoDate(anchorIso) || parseIsoDate(todayIso) || new Date();
 
   const scheduledEvents = useMemo(
-    () =>
-      state.quotes
-        .filter((quote) => STATUS_SET.has(String(quote.status || "")))
-        .map((quote) => ({
-          id: quote.id,
-          quoteNumber: quote.quoteNumber || "-",
-          status: String(quote.status || ""),
-          date: String(quote.event?.date || ""),
-          time: String(quote.event?.time || ""),
-          hours: Number(quote.event?.hours || 0),
-          eventName: quote.event?.name || "-",
-          venue: quote.event?.venue || "-",
-          dietaryRestrictions: String(quote.event?.dietaryRestrictions || "").trim(),
-          customer: quote.customer?.name || quote.customer?.email || "-",
-          guests: Number(quote.event?.guests || 0),
-          total: Number(quote.totals?.total || 0),
-          staffLead: String(quote.booking?.staffLead || "").trim(),
-          kitchenCheckpointOverrides: Array.isArray(quote.booking?.kitchenCheckpoints)
-            ? quote.booking.kitchenCheckpoints
-            : [],
-          productionChecklist: buildProductionChecklist(quote),
-          contractNumber: String(quote.booking?.contractNumber || "").trim(),
-          confirmationStatus: String(quote.booking?.confirmationStatus || "pending").trim(),
-          confirmationSentAtISO: String(quote.booking?.confirmationSentAtISO || ""),
-          confirmedAtISO: String(quote.booking?.confirmedAtISO || "")
-        }))
-        .filter((item) => parseIsoDate(item.date))
-        .sort((a, b) => {
-          const dateCmp = a.date.localeCompare(b.date);
-          if (dateCmp !== 0) return dateCmp;
-          const timeCmp = String(a.time || "").localeCompare(String(b.time || ""));
-          if (timeCmp !== 0) return timeCmp;
-          return String(a.quoteNumber || "").localeCompare(String(b.quoteNumber || ""));
-        }),
+    () => buildScheduledEvents(state.quotes),
     [state.quotes]
   );
 
@@ -795,7 +829,9 @@ export function EventScheduleView({
           </div>
         </div>
 
-        <p className="source-note">Source: {state.source || "-"}</p>
+        <p className="source-note">
+          Source: {getScheduleSourceLabel(state)}
+        </p>
         <p className="source-note">Capacity threshold: {maxCapacity} guests per venue/time window.</p>
         {state.error && <p className="error-note">{state.error}</p>}
         {feedback && <p className="source-note">{feedback}</p>}
@@ -902,7 +938,7 @@ export function EventScheduleView({
                               .join(" ")}
                           >
                             <strong>{item.time || "TBD"}</strong>
-                            <span>{item.quoteNumber}</span>
+                            <span>{formatWorkspaceText(item.quoteNumber, { emptyLabel: "Quote number pending" })}</span>
                             {item.conflictReasons.length > 0 && (
                               <small>{item.conflictReasons.includes("capacity") ? "capacity risk" : "time conflict"}</small>
                             )}
@@ -922,7 +958,7 @@ export function EventScheduleView({
           </section>
 
           <aside className="schedule-day-panel">
-            <h3>{dayLabel(selectedIso)}</h3>
+            <h3>{formatScheduleDayLabel(selectedIso)}</h3>
             <p className="source-note">
               Booked: {selectedCounts.booked} • Accepted: {selectedCounts.accepted}
             </p>
@@ -956,7 +992,7 @@ export function EventScheduleView({
                           .join(" ")}
                       >
                         <header>
-                          <strong>{item.quoteNumber}</strong>
+                          <strong>{formatWorkspaceText(item.quoteNumber, { emptyLabel: "Quote number pending" })}</strong>
                         </header>
                         <div className="right-actions" aria-label="Quote and booking confirmation status">
                           <StatusChip family={quoteStatus.family} label={`Quote: ${quoteStatus.label}`} />
@@ -965,12 +1001,7 @@ export function EventScheduleView({
                             label={`Booking confirmation: ${bookingConfirmation.label}`}
                           />
                         </div>
-                      <p>{item.eventName}</p>
-                      <p>{item.time || "Time TBD"} • {item.venue}</p>
-                      <p>{item.customer} • {item.guests || 0} guests</p>
-                      <p>Dietary restrictions: {item.dietaryRestrictions || "None provided"}</p>
-                      <p>Total: {currency(item.total)}</p>
-                      <p>Contract: {item.contractNumber || "Pending conversion"}</p>
+                      <ScheduleEventFacts item={item} />
                       <p
                         className={[
                           "schedule-confirmation-note",
@@ -1144,10 +1175,14 @@ export function EventScheduleView({
                                   detail?.scrollIntoView({ behavior: "smooth", block: "nearest" });
                                   detail?.focus({ preventScroll: true });
                                 }}
-                                aria-label={`Focus event details for ${item.quoteNumber}`}
+                                aria-label={`Focus event details for ${formatWorkspaceText(item.quoteNumber, { emptyLabel: "quote number pending" })}`}
                               >
-                                <strong>{item.quoteNumber}</strong>
-                                <span>{item.time || "TBD"} • {item.guests || 0} guests</span>
+                                <strong>{formatWorkspaceText(item.quoteNumber, { emptyLabel: "Quote number pending" })}</strong>
+                                <span>
+                                  {formatWorkspaceText(item.time, { emptyLabel: "Time not set" })}
+                                  {" • "}{formatWorkspaceInteger(item.guests, { emptyLabel: "Guest count not set" })}
+                                  {hasWorkspaceNumber(item.guests) ? " guests" : ""}
+                                </span>
                                 {item.conflictReasons.length > 0 && (
                                   <small>
                                     {item.conflictReasons.includes("capacity") ? "capacity risk" : "time conflict"}

@@ -107,6 +107,24 @@ describe("buildMoneyRows", () => {
     expect(rows).toHaveLength(0);
   });
 
+  test("keeps a missing deposit amount distinct from a legitimate zero", () => {
+    const [missing] = buildMoneyRows([{
+      id: "q-missing-deposit",
+      status: "accepted",
+      totals: {},
+      payment: { depositStatus: "unpaid" }
+    }]);
+    const [zero] = buildMoneyRows([{
+      id: "q-zero-deposit",
+      status: "accepted",
+      totals: { deposit: 0 },
+      payment: { depositStatus: "unpaid" }
+    }]);
+
+    expect(missing.amount).toBeNull();
+    expect(zero.amount).toBe(0);
+  });
+
   test("converts the final-balance amountCents to a dollar amount, unlike the deposit's dollar-float total", () => {
     const rows = buildMoneyRows([
       {
@@ -179,7 +197,25 @@ describe("summarizeMoneyRows", () => {
       { family: "action", amount: 25 },
       { family: "provider", amount: 999 }
     ]);
-    expect(totals).toEqual({ requested: 150, outstanding: 25 });
+    expect(totals).toEqual({
+      requested: 150,
+      requestedUnknown: 0,
+      outstanding: 25,
+      outstandingUnknown: 0
+    });
+  });
+
+  test("reports missing payment amounts without corrupting known totals", () => {
+    expect(summarizeMoneyRows([
+      { family: "pending", amount: 100 },
+      { family: "pending", amount: null },
+      { family: "action", amount: "unknown" }
+    ])).toEqual({
+      requested: 100,
+      requestedUnknown: 1,
+      outstanding: 0,
+      outstandingUnknown: 1
+    });
   });
 });
 

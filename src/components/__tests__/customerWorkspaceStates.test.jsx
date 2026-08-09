@@ -66,7 +66,7 @@ describe("customer workspace executable presentation states", () => {
   test("renders the customer directory empty state after a completed read", () => {
     const markup = directoryMarkup(READY_DIRECTORY);
 
-    expect(markup).toContain("Source: firebase");
+    expect(markup).toContain("Source: Firestore staff records");
     expect(markup).toContain('data-capability-state="empty"');
     expect(markup).toContain("No customers match this directory view.");
     expect(markup).not.toContain('role="alert"');

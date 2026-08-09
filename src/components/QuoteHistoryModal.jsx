@@ -9,7 +9,6 @@ import {
   sendPaymentRequestToCustomerEmail,
   sendQuoteToCustomerEmail
 } from "../lib/commerceOps";
-import { currency } from "../lib/quoteCalculator";
 import { getEventTypes } from "../lib/menuService";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import { buildQuoteEmailPayload } from "../lib/proposalPayload";
@@ -33,6 +32,15 @@ import {
   updateQuoteBookingConfirmation,
   updateQuoteStatus
 } from "../lib/quoteStore";
+import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import {
+  formatWorkspaceDate,
+  formatWorkspaceInteger,
+  formatWorkspaceMoney as currency,
+  formatWorkspaceSource,
+  formatWorkspaceText,
+  humanizeWorkspaceValue
+} from "../lib/workspacePresentation";
 import QuoteConversationPanel from "./QuoteConversationPanel";
 import StatusChip from "./StatusChip";
 
@@ -347,13 +355,14 @@ export async function recoverContractConversionFromCanonicalHistory({
 }
 
 export function formatQuoteHistoryDate(iso) {
-  if (!iso) return "-";
-  const raw = String(iso).trim();
-  const dt = /^\d{4}-\d{2}-\d{2}$/.test(raw)
-    ? new Date(`${raw}T12:00:00`)
-    : new Date(raw);
-  if (Number.isNaN(dt.getTime())) return "-";
-  return dt.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  return formatWorkspaceDate(iso, { emptyLabel: "Date not recorded" });
+}
+
+export function getQuoteHistoryFinancialCells(quote = {}) {
+  return {
+    total: currency(quote.totals?.total),
+    deposit: currency(quote.totals?.deposit)
+  };
 }
 
 const fmtDate = formatQuoteHistoryDate;
@@ -681,6 +690,7 @@ export function QuoteHistoryView({
   const [conversationQuote, setConversationQuote] = useState(null);
   const [deliveryClockMs, setDeliveryClockMs] = useState(() => Date.now());
   const dialogRef = useRef(null);
+  const routeHeadingRef = useWorkspaceRouteHeadingFocus(Boolean(open && embedded));
   const savedQuoteHandoffRef = useRef(null);
   const deliveryReviewRef = useRef(null);
   const deliveryReviewReturnFocusRef = useRef(null);
@@ -1202,9 +1212,9 @@ export function QuoteHistoryView({
       await load();
       setState((prev) => ({
         ...prev,
-        feedback: `Quote ${quote.quoteNumber || quote.id} reopened as a draft with a new portal issuance.`
+        feedback: `${formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote record" })} reopened as a draft with a new portal issuance.`
       }));
-      pushToast(`Quote ${quote.quoteNumber || quote.id} reopened as a draft.`, "success");
+      pushToast(`${formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote record" })} reopened as a draft.`, "success");
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -1602,7 +1612,7 @@ export function QuoteHistoryView({
     deliveryReviewReturnFocusRef.current = document.activeElement;
     setDeliveryReview({
       quoteId: quote.id,
-      quoteNumber: quote.quoteNumber || quote.id,
+      quoteNumber: formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" }),
       quoteRevisionId,
       resolution: observedProviderMessageId ? "provider_accepted" : "confirmed_not_sent",
       providerMessageId: observedProviderMessageId,
@@ -1808,7 +1818,14 @@ export function QuoteHistoryView({
     >
       <div className={`modal-card history-card${embedded ? " workspace-route-card" : ""}`} ref={dialogRef} tabIndex={-1}>
         <div className="modal-head">
-          <h2 id="quote-history-title">Quotes</h2>
+          <h2
+            ref={routeHeadingRef}
+            id="quote-history-title"
+            className={embedded ? "workspace-route-heading" : undefined}
+            tabIndex={embedded ? -1 : undefined}
+          >
+            Quotes
+          </h2>
           <div className="right-actions">
             <button type="button" className="ghost" onClick={load} disabled={state.loading}>
               {state.loading ? "Refreshing..." : "Refresh"}
@@ -1820,12 +1837,12 @@ export function QuoteHistoryView({
               disabled={quoteHistoryCloseGuard.blocked}
               title={quoteHistoryCloseGuard.message}
             >
-              Close
+              {embedded ? "Back to Home" : "Close"}
             </button>
           </div>
         </div>
 
-        <p className="source-note">Source: {state.source || "-"}</p>
+        <p className="source-note">Source: {formatWorkspaceSource(state.source)}</p>
         <p className="source-note">
           Authority: {authorityCopy}
         </p>
@@ -1872,7 +1889,7 @@ export function QuoteHistoryView({
                   : `Quote ${focusedQuoteStatus}`}
               </p>
               <h3 id="saved-quote-handoff-title">
-                {focusedQuote.quoteNumber || focusedQuote.id}
+                {formatWorkspaceText(focusedQuote.quoteNumber, { emptyLabel: "Quote number pending" })}
               </h3>
               <div className="history-meta-stack" aria-label="Focused quote lifecycle">
                 <small>Quote / proposal lifecycle</small>
@@ -2143,7 +2160,9 @@ export function QuoteHistoryView({
                   approvalExecutionOptions()
                 );
                 const quoteEventTypeId = String(quote.eventTypeId || quote.selection?.eventTypeId || "");
-                const quoteEventTypeLabel = eventTypeNameById.get(quoteEventTypeId) || quoteEventTypeId || "-";
+                const quoteEventTypeLabel = eventTypeNameById.get(quoteEventTypeId)
+                  || humanizeWorkspaceValue(quoteEventTypeId, { emptyLabel: "Event type not set" });
+                const financialCells = getQuoteHistoryFinancialCells(quote);
                 const quoteIsDraft = normalizedQuoteStatus === "draft";
                 let quoteRevisionId = "";
                 try {
@@ -2202,13 +2221,13 @@ export function QuoteHistoryView({
                     data-quote-id={quote.id}
                     className={quote.id === focusQuoteId ? "history-row-target" : ""}
                   >
-                    <td>{quote.quoteNumber || "-"}</td>
-                    <td>{quote.customer?.name || quote.customer?.email || "-"}</td>
+                    <td>{formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })}</td>
+                    <td>{formatWorkspaceText(quote.customer?.name || quote.customer?.email, { emptyLabel: "Customer not recorded" })}</td>
                     <td>{quoteEventTypeLabel}</td>
                     <td>{fmtDate(quote.event?.date)}</td>
-                    <td>{quote.event?.guests ?? "-"}</td>
-                    <td>{currency(quote.totals?.total || 0)}</td>
-                    <td>{currency(quote.totals?.deposit || 0)}</td>
+                    <td>{formatWorkspaceInteger(quote.event?.guests, { emptyLabel: "Guest count not set" })}</td>
+                    <td>{financialCells.total}</td>
+                    <td>{financialCells.deposit}</td>
                     <td>
                       <div className="history-meta-stack">
                         <small>Quote / proposal lifecycle</small>
@@ -2220,7 +2239,7 @@ export function QuoteHistoryView({
                             disabled={updatingId === quote.id || statusOptions.length <= 1 || deliveryUnresolved}
                           >
                             {statusOptions.map((status) => (
-                              <option key={status} value={status}>{status}</option>
+                              <option key={status} value={status}>{classifyQuoteStatus(status).label}</option>
                             ))}
                           </select>
                         )}
@@ -2250,7 +2269,7 @@ export function QuoteHistoryView({
                     </td>
                     <td>
                       <div className="history-meta-stack">
-                        <strong>{contractNumber || "-"}</strong>
+                        <strong>{formatWorkspaceText(contractNumber, { emptyLabel: "Not booked" })}</strong>
                         <small>{fmtDate(booking.contractConvertedAtISO)}</small>
                       </div>
                     </td>
@@ -2266,14 +2285,16 @@ export function QuoteHistoryView({
                               disabled={updatingConfirmationId === quote.id || deliveryUnresolved}
                             >
                               {BOOKING_CONFIRMATION_STATUSES.map((bookingStatus) => (
-                                <option key={bookingStatus} value={bookingStatus}>{bookingStatus}</option>
+                                <option key={bookingStatus} value={bookingStatus}>
+                                  {classifyBookingConfirmation(bookingStatus).label}
+                                </option>
                               ))}
                             </select>
                           )}
                           <small>{fmtDate(booking.confirmedAtISO || booking.confirmationSentAtISO)}</small>
                         </div>
                       ) : (
-                        <span className="muted">-</span>
+                        <span className="muted">Not applicable</span>
                       )}
                     </td>
                     <td>{fmtDate(quote.expiresAtISO)}</td>
@@ -2602,7 +2623,7 @@ export function QuoteHistoryView({
         {pendingDeleteQuote && (
           <div className="confirm-modal">
             <p>
-              Permanently delete quote <strong>{pendingDeleteQuote.quoteNumber || pendingDeleteQuote.id}</strong>?
+              Permanently delete quote <strong>{formatWorkspaceText(pendingDeleteQuote.quoteNumber, { emptyLabel: "Quote number pending" })}</strong>?
               This cannot be undone.
             </p>
             <div className="right-actions">
@@ -2625,7 +2646,7 @@ export function QuoteHistoryView({
           <aside className="quote-conversation-modal">
             <QuoteConversationPanel
               defaultOpen
-              title={`Conversation for ${conversationQuote.quoteNumber || conversationQuote.id}`}
+              title={`Conversation for ${formatWorkspaceText(conversationQuote.quoteNumber, { emptyLabel: "quote number pending" })}`}
               access={{
                 accessMode: "staff",
                 organizationId,

@@ -5,6 +5,14 @@ import { buildWorkflowAttentionSummary } from "../lib/quoteWorkflow";
 const REFRESH_TTL_MS = 60_000;
 const COMMAND_CENTER_HISTORY_LIMIT = 200;
 
+function emptyReadState() {
+  return { status: "idle", source: "", error: "" };
+}
+
+function loadingReadState() {
+  return { status: "loading", source: "", error: "" };
+}
+
 export function createSnapshotRequestGeneration() {
   let current = 0;
   return {
@@ -23,10 +31,85 @@ function emptySnapshot({ loading = false } = {}) {
     loading,
     error: "",
     source: "",
+    reads: {
+      attention: emptyReadState(),
+      history: emptyReadState()
+    },
+    partial: false,
+    stale: false,
     attentionSummary: null,
     quotes: [],
     truncated: false,
+    truncationKnown: false,
     loadedAt: 0
+  };
+}
+
+function settledReadState(result) {
+  if (result.status === "fulfilled") {
+    return {
+      status: "success",
+      source: String(result.value?.source || "").trim(),
+      error: ""
+    };
+  }
+  return {
+    status: "error",
+    source: "",
+    error: result.reason?.message || "Read failed."
+  };
+}
+
+export function buildCommercialSnapshotResult({
+  current = emptySnapshot(),
+  attentionResult,
+  historyResult,
+  nowMs = Date.now()
+} = {}) {
+  const attentionRead = settledReadState(attentionResult);
+  const historyRead = settledReadState(historyResult);
+  const errors = [attentionRead.error, historyRead.error].filter(Boolean);
+  const requestSucceeded = attentionResult.status === "fulfilled"
+    && historyResult.status === "fulfilled";
+  const partial = attentionResult.status !== historyResult.status;
+  const successfulSources = [attentionRead.source, historyRead.source].filter(Boolean);
+  const sourceSet = new Set(successfulSources);
+  const source = sourceSet.size > 1
+    ? "mixed"
+    : successfulSources[0] || current.source;
+  const loadedAt = requestSucceeded ? nowMs : current.loadedAt;
+  const hasPriorCompleteRead = Number(current.loadedAt) > 0;
+  const retainCompleteSnapshot = !requestSucceeded && hasPriorCompleteRead;
+
+  return {
+    loading: false,
+    error: errors.join(" "),
+    source: retainCompleteSnapshot ? current.source : source,
+    reads: {
+      attention: attentionRead,
+      history: historyRead
+    },
+    partial,
+    stale: !requestSucceeded && Number(current.loadedAt) > 0,
+    attentionSummary: retainCompleteSnapshot
+      ? current.attentionSummary
+      : attentionResult.status === "fulfilled"
+      ? buildWorkflowAttentionSummary(attentionResult.value.quotes)
+      : current.attentionSummary,
+    quotes: retainCompleteSnapshot
+      ? current.quotes
+      : historyResult.status === "fulfilled"
+      ? historyResult.value.quotes
+      : current.quotes,
+    truncated: retainCompleteSnapshot
+      ? current.truncated
+      : historyResult.status === "fulfilled"
+      ? historyResult.value.truncated === true
+      : current.truncated,
+    truncationKnown: retainCompleteSnapshot
+      ? current.truncationKnown === true
+      : historyResult.status === "fulfilled" || current.truncationKnown === true,
+    loadedAt
   };
 }
 
@@ -65,7 +148,17 @@ export function useCommercialWorkspaceSnapshot({
     if (scopeChanged) loadedAtRef.current = 0;
     setState((current) => scopeChanged
       ? emptySnapshot({ loading: true })
-      : { ...current, loading: true, error: "" });
+      : {
+          ...current,
+          loading: true,
+          error: "",
+          reads: {
+            attention: loadingReadState(),
+            history: loadingReadState()
+          },
+          partial: false,
+          stale: false
+        });
     Promise.allSettled([
       getWorkflowAttentionSnapshot({ organizationId: normalizedOrganizationId }),
       includeHistory
@@ -76,41 +169,17 @@ export function useCommercialWorkspaceSnapshot({
         : Promise.resolve({ source: "", quotes: [], truncated: false })
     ]).then(([attentionResult, historyResult]) => {
       if (!generationRef.current.isCurrent(generation)) return;
-
-      const errors = [];
-      const loadedAttentionSummary = attentionResult.status === "fulfilled"
-        ? buildWorkflowAttentionSummary(attentionResult.value.quotes)
-        : null;
-      if (attentionResult.status === "rejected") {
-        errors.push(attentionResult.reason?.message || "Failed to load workflow attention.");
-      }
-      if (historyResult.status === "rejected") {
-        errors.push(historyResult.reason?.message || "Failed to load quote records.");
-      }
-
-      const requestSucceeded = attentionResult.status === "fulfilled"
-        && historyResult.status === "fulfilled";
-      const loadedAt = requestSucceeded ? Date.now() : loadedAtRef.current;
-      if (requestSucceeded) loadedAtRef.current = loadedAt;
-      setState((current) => ({
-        loading: false,
-        error: errors.join(" "),
-        source: attentionResult.status === "fulfilled"
-          ? attentionResult.value.source
-          : historyResult.status === "fulfilled"
-            ? historyResult.value.source
-            : current.source,
-        attentionSummary: attentionResult.status === "fulfilled"
-          ? loadedAttentionSummary
-          : current.attentionSummary,
-        quotes: historyResult.status === "fulfilled"
-          ? historyResult.value.quotes
-          : current.quotes,
-        truncated: historyResult.status === "fulfilled"
-          ? historyResult.value.truncated === true
-          : current.truncated,
-        loadedAt: requestSucceeded ? loadedAt : current.loadedAt
-      }));
+      const nowMs = Date.now();
+      setState((current) => {
+        const next = buildCommercialSnapshotResult({
+          current,
+          attentionResult,
+          historyResult,
+          nowMs
+        });
+        if (next.loadedAt > 0) loadedAtRef.current = next.loadedAt;
+        return next;
+      });
     });
 
     return () => {
