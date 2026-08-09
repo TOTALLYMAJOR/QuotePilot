@@ -1,7 +1,7 @@
 # Commercial Dependency Graph Architecture Decision
 
-Status: Accepted for CWF-15A source implementation  
-Date: August 9, 2026  
+Status: Accepted for CWF-15A source implementation
+Date: August 9, 2026
 Decision owners: QuotePilot maintainers
 
 ## Context
