@@ -523,6 +523,74 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertSucceeds(getDoc(versionRef));
   });
 
+  test("version identity must match the canonical quote customer", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(
+        doc(context.firestore(), "organizations", "org-a", "quotes", "q1"),
+        { customerId: "customer-a" }
+      );
+    });
+
+    const db = testEnv.authenticatedContext("sales-org-a", {
+      email: "sales-a@example.com",
+      email_verified: true
+    }).firestore();
+    const versionRef = doc(
+      db,
+      "organizations",
+      "org-a",
+      "quotes",
+      "q1",
+      "versions",
+      "v0001"
+    );
+    const quoteRef = doc(db, "organizations", "org-a", "quotes", "q1");
+    const quotePointer = {
+      latestVersionNumber: 1,
+      versionMeta: {
+        versionId: "v0001",
+        versionNumber: 1,
+        createdAt: "2026-03-20T00:00:00.000Z",
+        createdBy: {
+          uid: "sales-org-a",
+          email: "sales-a@example.com",
+          role: "sales"
+        },
+        reason: "test"
+      }
+    };
+
+    const missingIdentityBatch = writeBatch(db);
+    missingIdentityBatch.set(versionRef, buildVersionPayload());
+    missingIdentityBatch.update(quoteRef, quotePointer);
+    await assertFails(missingIdentityBatch.commit());
+
+    const baseVersion = buildVersionPayload();
+    const mismatchedIdentityBatch = writeBatch(db);
+    mismatchedIdentityBatch.set(versionRef, {
+      ...baseVersion,
+      customerId: "customer-b",
+      snapshot: {
+        ...baseVersion.snapshot,
+        customerId: "customer-b"
+      }
+    });
+    mismatchedIdentityBatch.update(quoteRef, quotePointer);
+    await assertFails(mismatchedIdentityBatch.commit());
+
+    const matchingIdentityBatch = writeBatch(db);
+    matchingIdentityBatch.set(versionRef, {
+      ...baseVersion,
+      customerId: "customer-a",
+      snapshot: {
+        ...baseVersion.snapshot,
+        customerId: "customer-a"
+      }
+    });
+    matchingIdentityBatch.update(quoteRef, quotePointer);
+    await assertSucceeds(matchingIdentityBatch.commit());
+  });
+
   test("version docs are immutable after create", async () => {
     const ref = await assertSucceeds(createOwnVersion());
 
@@ -630,7 +698,62 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(getDoc(customerRef));
   });
 
-  test("customer projections are server-owned while admin import records remain reversible", async () => {
+  test("canonical quotes are staff-readable only while exact-token portal reads continue", async () => {
+    const quotePath = ["organizations", "org-a", "quotes", "q1"];
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    const salesDb = testEnv.authenticatedContext("sales-org-a", {
+      email: "sales-a@example.com",
+      email_verified: true
+    }).firestore();
+    const customerDb = testEnv.authenticatedContext("customer-org-a", {
+      email: "customer-a@example.com",
+      email_verified: true
+    }).firestore();
+    const unassignedDb = testEnv.authenticatedContext("unassigned-customer", {
+      email: "customer-a@example.com",
+      email_verified: true
+    }).firestore();
+    const foreignDb = testEnv.authenticatedContext("sales-org-b", {
+      email: "sales-b@example.com",
+      email_verified: true
+    }).firestore();
+    const publicDb = testEnv.unauthenticatedContext().firestore();
+
+    await assertSucceeds(getDoc(doc(adminDb, ...quotePath)));
+    await assertSucceeds(getDoc(doc(salesDb, ...quotePath)));
+    await assertFails(getDoc(doc(customerDb, ...quotePath)));
+    await assertFails(getDoc(doc(unassignedDb, ...quotePath)));
+    await assertFails(getDoc(doc(foreignDb, ...quotePath)));
+    await assertFails(getDoc(doc(publicDb, ...quotePath)));
+    await assertSucceeds(getDoc(doc(publicDb, "customerPortalQuotes", VALID_PORTAL_KEY)));
+  });
+
+  test("browser principals cannot create customer role documents", async () => {
+    const customerDb = testEnv.authenticatedContext("new-customer", {
+      email: "new-customer@example.com",
+      email_verified: true
+    }).firestore();
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+
+    await assertFails(setDoc(doc(customerDb, "userRoles", "new-customer"), {
+      role: "customer",
+      email: "new-customer@example.com",
+      organizationId: "org-a"
+    }));
+    await assertFails(setDoc(doc(adminDb, "userRoles", "admin-created-customer"), {
+      role: "customer",
+      email: "customer@example.com",
+      organizationId: "org-a"
+    }));
+  });
+
+  test("customer projections and imported customer identity are server-owned", async () => {
     const adminProjectedRef = orgScopedRefFor(
       "admin-org-a",
       "admin-a@example.com",
@@ -687,25 +810,28 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       ...importRecord,
       lastQuoteId: "forged"
     }));
-    await assertSucceeds(setDoc(adminImportRef, importRecord));
+    await assertFails(setDoc(adminImportRef, {
+      ...importRecord,
+      nameKey: "browser-forged-search-key",
+      emailKey: "imported@example.com"
+    }));
+    await assertFails(setDoc(adminImportRef, importRecord));
     await assertFails(updateDoc(adminImportRef, { name: "Browser edit" }));
-    await assertSucceeds(deleteDoc(adminImportRef));
+    await assertFails(deleteDoc(adminImportRef));
 
     await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), "organizations", "org-a", "customers", "projected-import"), {
+      await setDoc(doc(context.firestore(), "organizations", "org-a", "customers", "imported-customer"), {
         ...importRecord,
-        lastQuoteId: "q1",
-        lastProjectedAtISO: "2026-03-20T00:00:00.000Z"
+        customerId: "imported-customer",
+        nameKey: "imported customer",
+        emailKey: "imported@example.com",
+        recordSource: "import_studio",
+        importBaselineHash: "server-owned-baseline"
       });
     });
-    const projectedImportRef = orgScopedRefFor(
-      "admin-org-a",
-      "admin-a@example.com",
-      "org-a",
-      "customers",
-      "projected-import"
-    );
-    await assertFails(deleteDoc(projectedImportRef));
+    await assertSucceeds(getDoc(adminImportRef));
+    await assertFails(updateDoc(adminImportRef, { nameKey: "forged" }));
+    await assertFails(deleteDoc(adminImportRef));
   });
 
   test("org-a admin can write own org paths but cannot write org-b quotes/catalog/menu/settings", async () => {
@@ -2285,14 +2411,14 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       "importBatches",
       "batch-a"
     );
-    await assertSucceeds(setDoc(ownReceipt, {
+    await assertFails(setDoc(ownReceipt, {
       organizationId: "org-a",
       importBatchId: "batch-a",
       importType: "customers",
       status: "completed"
     }));
     await assertSucceeds(getDoc(ownReceipt));
-    await assertSucceeds(updateDoc(ownReceipt, { status: "rolled_back" }));
+    await assertFails(updateDoc(ownReceipt, { status: "rolled_back" }));
 
     const crossOrgReceipt = orgScopedRefFor(
       "admin-org-a",
@@ -2337,6 +2463,14 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }));
 
     await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "organizations", "org-a", "importBatches", "batch-server-customer"), {
+        organizationId: "org-a",
+        importBatchId: "batch-server-customer",
+        importType: "customers",
+        batchKind: "customer",
+        operation: "customer_import",
+        status: "completed"
+      });
       await setDoc(doc(context.firestore(), "organizations", "org-a", "importBatches", "batch-server-catalog"), {
         organizationId: "org-a",
         importBatchId: "batch-server-catalog",
@@ -2345,6 +2479,15 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
         status: "completed"
       });
     });
+    const serverCustomerReceipt = orgScopedRefFor(
+      "admin-org-a",
+      "admin-a@example.com",
+      "org-a",
+      "importBatches",
+      "batch-server-customer"
+    );
+    await assertSucceeds(getDoc(serverCustomerReceipt));
+    await assertFails(updateDoc(serverCustomerReceipt, { status: "rolled_back" }));
     const serverCatalogReceipt = orgScopedRefFor(
       "admin-org-a",
       "admin-a@example.com",
@@ -2678,9 +2821,9 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
 
   test("tombstoning an organization revokes its public portal token immediately", async () => {
     const activeRef = portalSnapshotRefFor(VALID_PORTAL_KEY);
-    const customerQuote = quoteRefFor("customer-org-a", "customer-a@example.com", "org-a", "q1");
+    const staffQuote = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q1");
     await assertSucceeds(getDoc(activeRef));
-    await assertSucceeds(getDoc(customerQuote));
+    await assertSucceeds(getDoc(staffQuote));
 
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "organizationTombstones", "org-a"), {
@@ -2690,7 +2833,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     });
 
     await assertFails(getDoc(activeRef));
-    await assertFails(getDoc(customerQuote));
+    await assertFails(getDoc(staffQuote));
     await assertFails(updatePortalPair(VALID_PORTAL_KEY, "org-a", "q1", {
       status: "accepted",
       updatedAtISO: "2026-03-21T03:00:00.000Z",

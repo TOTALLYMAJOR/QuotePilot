@@ -11,6 +11,7 @@ const {
 } = require("./pricingEngine");
 const {
   QuoteCreationError,
+  bindCustomerIdentityToQuoteDocuments,
   buildCanonicalPortalSnapshot,
   buildCustomerProjection,
   buildDuplicateQuoteForm,
@@ -19,6 +20,7 @@ const {
   buildServerQuoteNumber,
   buildTrustedQuoteCreationDocuments,
   buildTrustedQuoteEditDocuments,
+  customerProjectionDocumentId,
   sanitizeQuoteCreationRequest
 } = require("./quoteCreation");
 const {
@@ -220,6 +222,11 @@ const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
 const PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION = "proposalAcceptanceReceipts";
 const PRODUCT_ANALYTICS_COLLECTION = "productAnalyticsEvents";
 const PORTAL_COLLECTION = "customerPortalQuotes";
+const CUSTOMER_IMPORT_BATCH_KIND = "customer";
+const CUSTOMER_IMPORT_SOURCE = "import_studio";
+const CUSTOMER_IMPORT_TYPE = "customers";
+const CUSTOMER_IMPORT_MAX_RECORDS = 350;
+const CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS = 2000;
 const PORTAL_CONVERSATION_MESSAGES_COLLECTION = "portalConversationMessages";
 const PORTAL_CONVERSATION_REQUESTS_COLLECTION = "portalConversationRequests";
 const PORTAL_CONVERSATION_RATE_LIMITS_COLLECTION = "portalConversationRateLimits";
@@ -5888,6 +5895,580 @@ function toCatalogImportHttpsError(error, fallbackMessage) {
   return new functions.https.HttpsError("internal", fallbackMessage);
 }
 
+class CustomerImportError extends Error {
+  constructor(code, message, details = undefined) {
+    super(message);
+    this.name = "CustomerImportError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
+const CUSTOMER_IMPORT_METADATA_KEYS = new Set([
+  "importBatchId",
+  "importBaselineHash",
+  "createdAt",
+  "updatedAt",
+  "createdAtISO",
+  "updatedAtISO"
+]);
+
+function customerImportText(value, maxLength = 500) {
+  return String(value ?? "").trim().slice(0, maxLength);
+}
+
+function customerImportNameKey(value) {
+  return customerImportText(value, 160).toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeCustomerImportBatchId(value) {
+  const batchId = customerImportText(value, 128);
+  return /^[A-Za-z0-9_-]{20,128}$/.test(batchId) ? batchId : "";
+}
+
+function stableCustomerImportValue(value) {
+  if (Array.isArray(value)) return value.map(stableCustomerImportValue);
+  if (value && typeof value === "object") {
+    return Object.keys(value)
+      .sort()
+      .reduce((result, key) => {
+        if (value[key] !== undefined && typeof value[key] !== "function") {
+          result[key] = stableCustomerImportValue(value[key]);
+        }
+        return result;
+      }, {});
+  }
+  return value;
+}
+
+function customerImportHash(value) {
+  return createHash("sha256")
+    .update(JSON.stringify(stableCustomerImportValue(value)))
+    .digest("hex");
+}
+
+function customerImportBusinessData(data = {}) {
+  return Object.keys(data || {})
+    .sort()
+    .reduce((result, key) => {
+      if (
+        !CUSTOMER_IMPORT_METADATA_KEYS.has(key)
+        && data[key] !== undefined
+        && typeof data[key] !== "function"
+      ) {
+        result[key] = stableCustomerImportValue(data[key]);
+      }
+      return result;
+    }, {});
+}
+
+function customerImportBaselineHash(data = {}) {
+  return customerImportHash(customerImportBusinessData(data));
+}
+
+function customerImportDuplicateKey(data = {}) {
+  const emailKey = normalizeEmail(data.emailKey || data.email);
+  if (emailKey) return `email:${emailKey}`;
+  const nameKey = customerImportNameKey(data.nameKey || data.name);
+  return nameKey ? `name:${nameKey}` : "";
+}
+
+function customerImportDocumentId(data = {}) {
+  const emailKey = normalizeEmail(data.emailKey || data.email);
+  if (emailKey) return customerProjectionDocumentId(emailKey);
+  const nameKey = customerImportNameKey(data.nameKey || data.name);
+  return nameKey ? `name_${customerImportHash(nameKey)}` : "";
+}
+
+function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
+  const source = input && typeof input === "object" ? input : {};
+  const name = customerImportText(source.name, 160);
+  const email = normalizeEmail(customerImportText(source.email, 254));
+  if (!name && !email) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      `Customer import row ${rowNumber || "unknown"} needs a name or email.`
+    );
+  }
+  if (email && !isValidEmail(email)) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      `Customer import row ${rowNumber || "unknown"} has an invalid email.`
+    );
+  }
+  const data = {
+    name,
+    email,
+    phone: customerImportText(source.phone, 80),
+    company: customerImportText(source.company || source.organization, 160),
+    notes: customerImportText(source.notes, 2_000),
+    nameKey: customerImportNameKey(name),
+    emailKey: email
+  };
+  return {
+    data,
+    duplicateKey: customerImportDuplicateKey(data),
+    customerId: customerImportDocumentId(data)
+  };
+}
+
+function normalizeCustomerImportRows(records = []) {
+  if (!Array.isArray(records) || records.length === 0) {
+    throw new CustomerImportError("invalid-argument", "No valid customer records are ready to import.");
+  }
+  if (records.length > CUSTOMER_IMPORT_MAX_RECORDS) {
+    throw new CustomerImportError(
+      "resource-exhausted",
+      `Customer import batches are limited to ${CUSTOMER_IMPORT_MAX_RECORDS} records.`
+    );
+  }
+  return records.map((entry, index) => {
+    const rowNumber = Number.isSafeInteger(Number(entry?.rowNumber))
+      ? Number(entry.rowNumber)
+      : index + 2;
+    const source = entry?.record && typeof entry.record === "object"
+      ? entry.record
+      : entry;
+    return {
+      rowNumber,
+      ...sanitizeCustomerImportRecord(source, rowNumber)
+    };
+  });
+}
+
+function customerImportRequestHash({ fileName = "", rows = [] } = {}) {
+  return customerImportHash({
+    importType: CUSTOMER_IMPORT_TYPE,
+    fileName: customerImportText(fileName, 240),
+    rows: rows.map((row) => ({ rowNumber: row.rowNumber, data: row.data }))
+  });
+}
+
+function customerImportResultFromReceipt(receipt = {}, { idempotentReplay = true } = {}) {
+  return {
+    ok: true,
+    importBatchId: normalizeCustomerImportBatchId(receipt.importBatchId),
+    organizationId: normalizeOrganizationId(receipt.organizationId),
+    importType: CUSTOMER_IMPORT_TYPE,
+    createdCount: Math.max(0, Number(receipt.createdCount || 0)),
+    skippedCount: Math.max(0, Number(receipt.skippedCount || 0)),
+    createdRecords: Array.isArray(receipt.createdRecords) ? receipt.createdRecords : [],
+    skippedRows: Array.isArray(receipt.skippedRows) ? receipt.skippedRows : [],
+    status: customerImportText(receipt.status, 40) || "completed",
+    idempotentReplay
+  };
+}
+
+function customerImportRollbackResultFromReceipt(receipt = {}, { idempotentReplay = true } = {}) {
+  return {
+    ok: true,
+    importBatchId: normalizeCustomerImportBatchId(receipt.importBatchId),
+    organizationId: normalizeOrganizationId(receipt.organizationId),
+    importType: CUSTOMER_IMPORT_TYPE,
+    status: "rolled_back",
+    deletedCount: Math.max(0, Number(receipt.rolledBackCount || 0)),
+    protectedCount: Math.max(0, Number(receipt.rollbackProtectedCount || 0)),
+    missingCount: Math.max(0, Number(receipt.rollbackMissingCount || 0)),
+    protectedRecords: Array.isArray(receipt.rollbackProtectedRecords)
+      ? receipt.rollbackProtectedRecords
+      : [],
+    idempotentReplay
+  };
+}
+
+function assertCustomerImportReceiptIdentity(receipt = {}, {
+  organizationId,
+  importBatchId,
+  requestHash
+} = {}) {
+  if (
+    receipt.batchKind !== CUSTOMER_IMPORT_BATCH_KIND
+    || receipt.operation !== "customer_import"
+    || receipt.organizationId !== organizationId
+    || receipt.importBatchId !== importBatchId
+    || receipt.importType !== CUSTOMER_IMPORT_TYPE
+    || receipt.targetCollection !== "customers"
+    || receipt.requestHash !== requestHash
+  ) {
+    throw new CustomerImportError(
+      "already-exists",
+      "This import batch identity is already bound to different customer input. Start a new import."
+    );
+  }
+}
+
+function assertExistingCustomerImportIdentity(snapshot, organizationId) {
+  const data = snapshot.data() || {};
+  const storedOrganizationId = normalizeOrganizationId(data.organizationId);
+  const storedCustomerId = customerImportText(data.customerId, 500);
+  const storedEmail = normalizeEmail(data.email);
+  const storedEmailKey = normalizeEmail(data.emailKey);
+  const storedName = customerImportNameKey(data.name);
+  const storedNameKey = customerImportNameKey(data.nameKey);
+  if (
+    (storedOrganizationId && storedOrganizationId !== organizationId)
+    || (storedCustomerId && storedCustomerId !== snapshot.id)
+    || (storedEmail && storedEmailKey && storedEmail !== storedEmailKey)
+    || (storedName && storedNameKey && storedName !== storedNameKey)
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "A customer record has conflicting identity or normalized search fields. Repair it before importing."
+    );
+  }
+  return customerImportDuplicateKey(data);
+}
+
+async function createCustomerImportBatchInternal({
+  organizationId = "",
+  organizationName = "",
+  fileName = "",
+  records = [],
+  importBatchId = "",
+  actorUid = "",
+  actorEmail = "",
+  nowISO = new Date().toISOString()
+} = {}) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  const normalizedBatchId = normalizeCustomerImportBatchId(importBatchId);
+  if (!normalizedOrganizationId) {
+    throw new CustomerImportError("invalid-argument", "organizationId is required.");
+  }
+  if (!normalizedBatchId) {
+    throw new CustomerImportError("invalid-argument", "A stable importBatchId is required.");
+  }
+  const rows = normalizeCustomerImportRows(records);
+  const operationHash = customerImportRequestHash({ fileName, rows });
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
+  const customerCollectionRef = organizationRef.collection("customers");
+  const receiptRef = organizationRef.collection("importBatches").doc(normalizedBatchId);
+
+  return db.runTransaction(async (transaction) => {
+    const receiptSnapshot = await transaction.get(receiptRef);
+    if (receiptSnapshot.exists) {
+      const receipt = receiptSnapshot.data() || {};
+      assertCustomerImportReceiptIdentity(receipt, {
+        organizationId: normalizedOrganizationId,
+        importBatchId: normalizedBatchId,
+        requestHash: operationHash
+      });
+      if (receipt.status === "completed") return customerImportResultFromReceipt(receipt);
+      throw new CustomerImportError(
+        "failed-precondition",
+        "This customer import was already rolled back. Start a new import batch."
+      );
+    }
+
+    const existingSnapshot = await transaction.get(
+      customerCollectionRef.limit(CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS + 1)
+    );
+    if (existingSnapshot.docs.length > CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS) {
+      throw new CustomerImportError(
+        "resource-exhausted",
+        `This destination has more than ${CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS} customer records. Use a managed migration so duplicate checks remain complete.`
+      );
+    }
+
+    const existingKeys = new Map();
+    const existingIds = new Map();
+    existingSnapshot.docs.forEach((snapshot) => {
+      const duplicateKey = assertExistingCustomerImportIdentity(
+        snapshot,
+        normalizedOrganizationId
+      );
+      existingIds.set(snapshot.id, duplicateKey);
+      if (!duplicateKey) return;
+      const priorId = existingKeys.get(duplicateKey);
+      if (priorId && priorId !== snapshot.id) {
+        throw new CustomerImportError(
+          "failed-precondition",
+          "Multiple customer records already share the same normalized identity. Repair the collision before importing."
+        );
+      }
+      existingKeys.set(duplicateKey, snapshot.id);
+    });
+
+    const seenKeys = new Set(existingKeys.keys());
+    const createdRecords = [];
+    const skippedRows = [];
+    rows.forEach((row) => {
+      if (seenKeys.has(row.duplicateKey)) {
+        skippedRows.push({ rowNumber: row.rowNumber, reason: "duplicate" });
+        return;
+      }
+      const collidingKey = existingIds.get(row.customerId);
+      if (collidingKey && collidingKey !== row.duplicateKey) {
+        throw new CustomerImportError(
+          "failed-precondition",
+          "A stable customer identity is already occupied by a different normalized customer."
+        );
+      }
+      seenKeys.add(row.duplicateKey);
+      const customerData = {
+        customerId: row.customerId,
+        organizationId: normalizedOrganizationId,
+        ...row.data,
+        recordSource: CUSTOMER_IMPORT_SOURCE,
+        importSource: CUSTOMER_IMPORT_SOURCE
+      };
+      const baselineHash = customerImportBaselineHash(customerData);
+      transaction.set(customerCollectionRef.doc(row.customerId), {
+        ...customerData,
+        importBatchId: normalizedBatchId,
+        importBaselineHash: baselineHash,
+        createdAtISO: nowISO,
+        updatedAtISO: nowISO,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      createdRecords.push({
+        collection: "customers",
+        id: row.customerId,
+        rowNumber: row.rowNumber,
+        baselineHash
+      });
+    });
+
+    transaction.set(receiptRef, {
+      schemaVersion: 2,
+      batchKind: CUSTOMER_IMPORT_BATCH_KIND,
+      operation: "customer_import",
+      importBatchId: normalizedBatchId,
+      organizationId: normalizedOrganizationId,
+      organizationName: customerImportText(organizationName, 300),
+      importType: CUSTOMER_IMPORT_TYPE,
+      targetCollection: "customers",
+      fileName: customerImportText(fileName, 240),
+      requestHash: operationHash,
+      status: "completed",
+      sourceRows: rows.length,
+      createdCount: createdRecords.length,
+      skippedCount: skippedRows.length,
+      createdRecords,
+      skippedRows,
+      actor: {
+        uid: customerImportText(actorUid, 160),
+        email: normalizeEmail(actorEmail)
+      },
+      createdAtISO: nowISO,
+      updatedAtISO: nowISO,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    return {
+      ...customerImportResultFromReceipt({
+        importBatchId: normalizedBatchId,
+        organizationId: normalizedOrganizationId,
+        createdCount: createdRecords.length,
+        skippedCount: skippedRows.length,
+        createdRecords,
+        skippedRows,
+        status: "completed"
+      }, { idempotentReplay: false })
+    };
+  });
+}
+
+function isLegacyCustomerImportReceipt(receipt = {}, organizationId, importBatchId) {
+  return !receipt.batchKind
+    && !receipt.operation
+    && receipt.organizationId === organizationId
+    && receipt.importBatchId === importBatchId
+    && receipt.importType === CUSTOMER_IMPORT_TYPE;
+}
+
+function legacyCustomerImportRecordUnchanged(data = {}, importBatchId) {
+  return data.importSource === CUSTOMER_IMPORT_SOURCE
+    && data.importBatchId === importBatchId
+    && customerImportText(data.createdAtISO) !== ""
+    && data.updatedAtISO === data.createdAtISO
+    && !data.customerId
+    && !data.nameKey
+    && !data.emailKey
+    && !data.recordSource
+    && !data.lastQuoteId
+    && !data.lastProjectedAtISO;
+}
+
+async function rollbackCustomerImportBatchInternal({
+  organizationId = "",
+  importBatchId = "",
+  actorUid = "",
+  actorEmail = "",
+  nowISO = new Date().toISOString()
+} = {}) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  const normalizedBatchId = normalizeCustomerImportBatchId(importBatchId);
+  if (!normalizedOrganizationId) {
+    throw new CustomerImportError("invalid-argument", "organizationId is required.");
+  }
+  if (!normalizedBatchId) {
+    throw new CustomerImportError("invalid-argument", "A valid importBatchId is required.");
+  }
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
+  const customerCollectionRef = organizationRef.collection("customers");
+  const receiptRef = organizationRef.collection("importBatches").doc(normalizedBatchId);
+
+  return db.runTransaction(async (transaction) => {
+    const receiptSnapshot = await transaction.get(receiptRef);
+    if (!receiptSnapshot.exists) {
+      throw new CustomerImportError("not-found", "Customer import receipt was not found.");
+    }
+    const receipt = receiptSnapshot.data() || {};
+    const currentReceipt = receipt.batchKind === CUSTOMER_IMPORT_BATCH_KIND
+      && receipt.operation === "customer_import"
+      && receipt.organizationId === normalizedOrganizationId
+      && receipt.importBatchId === normalizedBatchId
+      && receipt.importType === CUSTOMER_IMPORT_TYPE
+      && receipt.targetCollection === "customers";
+    const legacyReceipt = isLegacyCustomerImportReceipt(
+      receipt,
+      normalizedOrganizationId,
+      normalizedBatchId
+    );
+    if (!currentReceipt && !legacyReceipt) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "Import receipt does not describe this customer batch."
+      );
+    }
+    if (receipt.status === "rolled_back") {
+      return customerImportRollbackResultFromReceipt(receipt);
+    }
+    if (receipt.status !== "completed") {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "Customer import is not eligible for rollback."
+      );
+    }
+    const createdRecords = Array.isArray(receipt.createdRecords) ? receipt.createdRecords : [];
+    if (createdRecords.length > CUSTOMER_IMPORT_MAX_RECORDS) {
+      throw new CustomerImportError(
+        "resource-exhausted",
+        "Customer import receipt exceeds the safe rollback limit."
+      );
+    }
+    if (createdRecords.some((entry) => (
+      customerImportText(entry?.collection, 80) !== "customers"
+      || !/^[^/]{1,500}$/.test(customerImportText(entry?.id, 500))
+    ))) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "Customer import receipt contains an invalid record target."
+      );
+    }
+
+    const recordSnapshots = await Promise.all(createdRecords.map((entry) => (
+      transaction.get(customerCollectionRef.doc(customerImportText(entry.id, 500)))
+    )));
+    const protectedRecords = [];
+    let deletedCount = 0;
+    let missingCount = 0;
+    createdRecords.forEach((entry, index) => {
+      const snapshot = recordSnapshots[index];
+      const id = customerImportText(entry.id, 500);
+      if (!snapshot.exists) {
+        missingCount += 1;
+        return;
+      }
+      const data = snapshot.data() || {};
+      const baselineHash = customerImportText(entry.baselineHash, 128);
+      const currentRecordUnchanged = currentReceipt
+        && data.organizationId === normalizedOrganizationId
+        && data.customerId === id
+        && data.importSource === CUSTOMER_IMPORT_SOURCE
+        && data.importBatchId === normalizedBatchId
+        && baselineHash.length === 64
+        && data.importBaselineHash === baselineHash
+        && customerImportBaselineHash(data) === baselineHash;
+      const legacyRecordUnchanged = legacyReceipt
+        && data.organizationId === normalizedOrganizationId
+        && legacyCustomerImportRecordUnchanged(data, normalizedBatchId);
+      if (!currentRecordUnchanged && !legacyRecordUnchanged) {
+        protectedRecords.push({ collection: "customers", id, reason: "record_modified" });
+        return;
+      }
+      transaction.delete(snapshot.ref);
+      deletedCount += 1;
+    });
+
+    transaction.set(receiptRef, {
+      status: "rolled_back",
+      rolledBackCount: deletedCount,
+      rollbackProtectedCount: protectedRecords.length,
+      rollbackMissingCount: missingCount,
+      rollbackProtectedRecords: protectedRecords,
+      rolledBackAtISO: nowISO,
+      rolledBackAt: FieldValue.serverTimestamp(),
+      rollbackActor: {
+        uid: customerImportText(actorUid, 160),
+        email: normalizeEmail(actorEmail)
+      },
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp(),
+      rollbackError: FieldValue.delete()
+    }, { merge: true });
+    return customerImportRollbackResultFromReceipt({
+      ...receipt,
+      status: "rolled_back",
+      rolledBackCount: deletedCount,
+      rollbackProtectedCount: protectedRecords.length,
+      rollbackMissingCount: missingCount,
+      rollbackProtectedRecords: protectedRecords
+    }, { idempotentReplay: false });
+  });
+}
+
+function toCustomerImportHttpsError(error, fallbackMessage) {
+  if (error instanceof CustomerImportError) {
+    return new functions.https.HttpsError(error.code, error.message, error.details);
+  }
+  if (error instanceof QuoteCreationError) {
+    return new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(fallbackMessage, {
+    error: normalizeText(error?.message)
+  });
+  return new functions.https.HttpsError("internal", fallbackMessage);
+}
+
+exports.createCustomerImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await createCustomerImportBatchInternal({
+      organizationId: staff.organizationId,
+      organizationName: data?.organizationName,
+      fileName: data?.fileName,
+      records: data?.records,
+      importBatchId: data?.importBatchId,
+      actorUid: staff.uid,
+      actorEmail: staff.email
+    });
+  } catch (error) {
+    throw toCustomerImportHttpsError(error, "Failed to import customer records.");
+  }
+});
+
+exports.rollbackCustomerImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await rollbackCustomerImportBatchInternal({
+      organizationId: staff.organizationId,
+      importBatchId: data?.importBatchId,
+      actorUid: staff.uid,
+      actorEmail: staff.email
+    });
+  } catch (error) {
+    throw toCustomerImportHttpsError(error, "Failed to roll back customer import.");
+  }
+});
+
 exports.createCatalogImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const staff = assertAdminStaff(await assertStaff(context, {
@@ -6309,10 +6890,66 @@ exports.getPortalRecoveryContact = functions.region(REGION).https.onCall(async (
   };
 });
 
-function selectCustomerProjectionDocument(snapshot) {
-  const docs = Array.isArray(snapshot?.docs) ? [...snapshot.docs] : [];
-  docs.sort((left, right) => String(left?.id || "").localeCompare(String(right?.id || "")));
-  return docs[0] || null;
+function customerProjectionDocuments(...snapshots) {
+  const byId = new Map();
+  for (const snapshot of snapshots) {
+    const docs = Array.isArray(snapshot?.docs)
+      ? snapshot.docs
+      : (snapshot && typeof snapshot.exists === "boolean" ? [snapshot] : []);
+    for (const docSnapshot of docs) {
+      const id = normalizeText(docSnapshot?.id);
+      if (id && !byId.has(id)) byId.set(id, docSnapshot);
+    }
+  }
+  return [...byId.values()].sort((left, right) => (
+    String(left?.id || "").localeCompare(String(right?.id || ""))
+  ));
+}
+
+function customerProjectionEmail(docSnapshot) {
+  const data = docSnapshot?.data?.() || {};
+  return normalizeEmail(data.emailKey || data.email);
+}
+
+function assertCustomerProjectionEmailConsistency(snapshots) {
+  for (const docSnapshot of customerProjectionDocuments(...snapshots)) {
+    const data = docSnapshot?.data?.() || {};
+    const storedEmail = normalizeEmail(data.email);
+    const storedEmailKey = normalizeEmail(data.emailKey);
+    if (storedEmail && storedEmailKey && storedEmail !== storedEmailKey) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "A customer record has conflicting normalized email identity. Repair it before saving the quote."
+      );
+    }
+  }
+}
+
+function selectCustomerProjectionDocument(snapshots, customerEmail) {
+  const normalizedEmail = normalizeEmail(customerEmail);
+  const matches = customerProjectionDocuments(...snapshots)
+    .filter((docSnapshot) => customerProjectionEmail(docSnapshot) === normalizedEmail);
+  if (matches.length > 1) {
+    throw new QuoteCreationError(
+      "already-exists",
+      "Multiple customer records use this email. Resolve the customer collision before saving the quote."
+    );
+  }
+  return matches[0] || null;
+}
+
+function assertNoCustomerProjectionCollision(snapshots, customerEmail, retainedCustomerId) {
+  const retainedId = normalizeText(retainedCustomerId);
+  const collision = customerProjectionDocuments(...snapshots).find((docSnapshot) => (
+    customerProjectionEmail(docSnapshot) === normalizeEmail(customerEmail)
+    && normalizeText(docSnapshot.id) !== retainedId
+  ));
+  if (collision) {
+    throw new QuoteCreationError(
+      "already-exists",
+      "Another customer record already uses this email. Keep the current customer identity or resolve the collision first."
+    );
+  }
 }
 
 function normalizePortalConversationQuoteId(value) {
@@ -6737,16 +7374,32 @@ async function createTrustedQuoteDraftInternal({
     .collection(ORGANIZATIONS_COLLECTION)
     .doc(organizationId)
     .collection("customers");
-  const customerQuery = customerCollectionRef
+  const normalizedCustomerEmail = documents.quote.customerEmailKey;
+  const customerEmailQuery = customerCollectionRef
     .where("email", "==", documents.quote.customer.email)
     .limit(25);
+  const customerEmailKeyQuery = customerCollectionRef
+    .where("emailKey", "==", normalizedCustomerEmail)
+    .limit(25);
+  const deterministicCustomerRef = customerCollectionRef.doc(
+    customerProjectionDocumentId(normalizedCustomerEmail)
+  );
 
-  await db.runTransaction(async (tx) => {
-    const [quoteSnap, portalSnap, versionSnap, customerSnapshot] = await Promise.all([
+  const result = await db.runTransaction(async (tx) => {
+    const [
+      quoteSnap,
+      portalSnap,
+      versionSnap,
+      customerEmailSnapshot,
+      customerEmailKeySnapshot,
+      deterministicCustomerSnapshot
+    ] = await Promise.all([
       tx.get(quoteRef),
       tx.get(portalRef),
       tx.get(versionRef),
-      tx.get(customerQuery)
+      tx.get(customerEmailQuery),
+      tx.get(customerEmailKeyQuery),
+      tx.get(deterministicCustomerRef)
     ]);
     if (quoteSnap.exists || portalSnap.exists || versionSnap.exists) {
       throw new QuoteCreationError(
@@ -6754,7 +7407,25 @@ async function createTrustedQuoteDraftInternal({
         "A generated quote identity collided. Retry quote creation."
       );
     }
-    const existingCustomerDoc = selectCustomerProjectionDocument(customerSnapshot);
+    const customerSnapshots = [
+      customerEmailSnapshot,
+      customerEmailKeySnapshot,
+      deterministicCustomerSnapshot
+    ];
+    assertCustomerProjectionEmailConsistency(customerSnapshots);
+    const existingCustomerDoc = selectCustomerProjectionDocument(
+      customerSnapshots,
+      normalizedCustomerEmail
+    );
+    if (
+      deterministicCustomerSnapshot.exists
+      && customerProjectionEmail(deterministicCustomerSnapshot) !== normalizedCustomerEmail
+    ) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "The deterministic customer identity is occupied by a different customer."
+      );
+    }
     const customerProjection = buildCustomerProjection({
       organizationId,
       quoteId: quoteRef.id,
@@ -6766,19 +7437,23 @@ async function createTrustedQuoteDraftInternal({
       existingCustomerId: existingCustomerDoc?.id || ""
     });
     const customerRef = customerCollectionRef.doc(customerProjection.customerId);
+    const boundDocuments = bindCustomerIdentityToQuoteDocuments(
+      documents,
+      customerProjection.customerId
+    );
 
     tx.create(quoteRef, {
-      ...documents.quote,
+      ...boundDocuments.quote,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     });
     tx.create(portalRef, {
-      ...documents.portal,
+      ...boundDocuments.portal,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     });
     tx.create(versionRef, {
-      ...documents.version,
+      ...boundDocuments.version,
       createdAt: FieldValue.serverTimestamp()
     });
     tx.set(customerRef, {
@@ -6788,13 +7463,14 @@ async function createTrustedQuoteDraftInternal({
         ? { createdAt: FieldValue.serverTimestamp() }
         : {})
     }, { merge: true });
+    return boundDocuments.result;
   });
 
   return {
     ok: true,
     organizationId,
     storage: "firebase",
-    ...documents.result
+    ...result
   };
 }
 
@@ -6882,13 +7558,48 @@ async function updateTrustedQuoteDraftInternal({
       .collection(ORGANIZATIONS_COLLECTION)
       .doc(organizationId)
       .collection("customers");
-    const customerQuery = customerCollectionRef
-      .where("email", "==", documents.quotePatch.customer.email)
+    const desiredCustomerEmail = normalizeEmail(documents.quotePatch.customer.email);
+    const sourceCustomerEmail = normalizeEmail(
+      quote.customerEmailKey || quote.customer?.email
+    );
+    if (!sourceCustomerEmail) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "The quote needs a valid existing customer email before it can be edited."
+      );
+    }
+    const storedCustomerId = normalizeText(quote.customerId);
+    const fallbackCustomerId = customerProjectionDocumentId(sourceCustomerEmail);
+    const retainedCustomerId = storedCustomerId || fallbackCustomerId;
+    const retainedCustomerRef = customerCollectionRef.doc(retainedCustomerId);
+    const desiredCustomerEmailQuery = customerCollectionRef
+      .where("email", "==", desiredCustomerEmail)
       .limit(25);
-    const [portalSnap, versionSnap, customerSnapshot] = await Promise.all([
+    const desiredCustomerEmailKeyQuery = customerCollectionRef
+      .where("emailKey", "==", desiredCustomerEmail)
+      .limit(25);
+    const sourceCustomerEmailQuery = customerCollectionRef
+      .where("email", "==", sourceCustomerEmail)
+      .limit(25);
+    const sourceCustomerEmailKeyQuery = customerCollectionRef
+      .where("emailKey", "==", sourceCustomerEmail)
+      .limit(25);
+    const [
+      portalSnap,
+      versionSnap,
+      retainedCustomerSnapshot,
+      desiredCustomerEmailSnapshot,
+      desiredCustomerEmailKeySnapshot,
+      sourceCustomerEmailSnapshot,
+      sourceCustomerEmailKeySnapshot
+    ] = await Promise.all([
       tx.get(portalRef),
       tx.get(versionRef),
-      tx.get(customerQuery)
+      tx.get(retainedCustomerRef),
+      tx.get(desiredCustomerEmailQuery),
+      tx.get(desiredCustomerEmailKeyQuery),
+      tx.get(sourceCustomerEmailQuery),
+      tx.get(sourceCustomerEmailKeyQuery)
     ]);
     if (versionSnap.exists) {
       throw new QuoteCreationError(
@@ -6909,7 +7620,44 @@ async function updateTrustedQuoteDraftInternal({
         );
       }
     }
-    const existingCustomerDoc = selectCustomerProjectionDocument(customerSnapshot);
+    const customerSnapshots = [
+      retainedCustomerSnapshot,
+      desiredCustomerEmailSnapshot,
+      desiredCustomerEmailKeySnapshot,
+      sourceCustomerEmailSnapshot,
+      sourceCustomerEmailKeySnapshot
+    ];
+    assertCustomerProjectionEmailConsistency(customerSnapshots);
+    let existingCustomerDoc = retainedCustomerSnapshot.exists
+      ? retainedCustomerSnapshot
+      : null;
+    if (storedCustomerId && !existingCustomerDoc) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "The quote customer identity no longer resolves to a customer record."
+      );
+    }
+    if (!storedCustomerId) {
+      existingCustomerDoc = selectCustomerProjectionDocument(
+        customerSnapshots,
+        sourceCustomerEmail
+      );
+      if (
+        retainedCustomerSnapshot.exists
+        && customerProjectionEmail(retainedCustomerSnapshot) !== sourceCustomerEmail
+      ) {
+        throw new QuoteCreationError(
+          "failed-precondition",
+          "The deterministic customer identity is occupied by a different customer."
+        );
+      }
+    }
+    const resolvedCustomerId = existingCustomerDoc?.id || retainedCustomerId;
+    assertNoCustomerProjectionCollision(
+      customerSnapshots,
+      desiredCustomerEmail,
+      resolvedCustomerId
+    );
     const customerProjection = buildCustomerProjection({
       organizationId,
       quoteId,
@@ -6918,23 +7666,28 @@ async function updateTrustedQuoteDraftInternal({
       event: documents.quotePatch.event,
       nowISO,
       existingCustomer: existingCustomerDoc?.data() || null,
-      existingCustomerId: existingCustomerDoc?.id || ""
+      existingCustomerId: resolvedCustomerId,
+      allowEmailChange: true
     });
     const customerRef = customerCollectionRef.doc(customerProjection.customerId);
+    const boundDocuments = bindCustomerIdentityToQuoteDocuments(
+      documents,
+      customerProjection.customerId
+    );
 
     tx.update(quoteRef, {
-      ...documents.quotePatch,
+      ...boundDocuments.quotePatch,
       updatedAt: FieldValue.serverTimestamp()
     });
     tx.set(portalRef, {
-      ...documents.portal,
+      ...boundDocuments.portal,
       updatedAt: FieldValue.serverTimestamp(),
       ...(portalSnap.exists
         ? {}
         : { createdAt: FieldValue.serverTimestamp() })
     });
     tx.create(versionRef, {
-      ...documents.version,
+      ...boundDocuments.version,
       createdAt: FieldValue.serverTimestamp()
     });
     tx.set(customerRef, {
@@ -6944,7 +7697,7 @@ async function updateTrustedQuoteDraftInternal({
         ? { createdAt: FieldValue.serverTimestamp() }
         : {})
     }, { merge: true });
-    return documents.result;
+    return boundDocuments.result;
   });
 
   return {
@@ -7494,6 +8247,9 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         versionId,
         quoteId,
         organizationId,
+        ...(normalizeText(quote.customerId)
+          ? { customerId: normalizeText(quote.customerId) }
+          : {}),
         versionNumber: nextVersionNumber,
         createdAtISO: convertedAtISO,
         reason: versionMeta.reason,

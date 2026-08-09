@@ -2,14 +2,6 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const mockState = vi.hoisted(() => ({
   cloudFunctions: { id: "mock-functions" },
-  db: { id: "mock-db" },
-  collection: vi.fn(),
-  doc: vi.fn(),
-  getDoc: vi.fn(),
-  getDocs: vi.fn(),
-  limit: vi.fn(),
-  query: vi.fn(),
-  writeBatch: vi.fn(),
   httpsCallable: vi.fn(),
   callable: vi.fn(),
   normalizeOrganizationId: vi.fn()
@@ -17,57 +9,27 @@ const mockState = vi.hoisted(() => ({
 
 vi.mock("../firebase", () => ({
   cloudFunctions: mockState.cloudFunctions,
-  db: mockState.db,
   firebaseReady: true
 }));
 vi.mock("../organizationService", () => ({
   normalizeOrganizationId: mockState.normalizeOrganizationId
 }));
-vi.mock("firebase/firestore", () => ({
-  collection: mockState.collection,
-  deleteField: vi.fn(() => "delete-field"),
-  doc: mockState.doc,
-  getDoc: mockState.getDoc,
-  getDocs: mockState.getDocs,
-  limit: mockState.limit,
-  query: mockState.query,
-  serverTimestamp: vi.fn(() => "server-time"),
-  writeBatch: mockState.writeBatch
-}));
 vi.mock("firebase/functions", () => ({
   httpsCallable: mockState.httpsCallable
 }));
 
-import { createImportBatch, rollbackImportBatch } from "../importBatchService";
+import {
+  createCustomerImportBatchId,
+  createImportBatch,
+  rollbackImportBatch
+} from "../importBatchService";
 
 describe("tenant-locked import persistence", () => {
-  let batch;
-  let generatedId;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    generatedId = 0;
     mockState.normalizeOrganizationId.mockImplementation((value) => String(value || "").trim().toLowerCase());
-    mockState.collection.mockImplementation((...segments) => ({ kind: "collection", segments }));
-    mockState.doc.mockImplementation((...segments) => {
-      if (segments.length === 1) {
-        generatedId += 1;
-        return { kind: "doc", id: `generated-${generatedId}`, parent: segments[0] };
-      }
-      return { kind: "doc", id: String(segments.at(-1)), segments };
-    });
-    mockState.limit.mockImplementation((value) => ({ limit: value }));
-    mockState.query.mockImplementation((...parts) => ({ parts }));
-    mockState.getDocs.mockResolvedValue({ docs: [] });
     mockState.callable.mockResolvedValue({ data: { ok: true } });
     mockState.httpsCallable.mockReturnValue(mockState.callable);
-    batch = {
-      set: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-      commit: vi.fn().mockResolvedValue(undefined)
-    };
-    mockState.writeBatch.mockReturnValue(batch);
   });
 
   test("fails closed when the authenticated organization is missing", async () => {
@@ -75,10 +37,21 @@ describe("tenant-locked import persistence", () => {
       importType: "customers",
       records: [{ record: { name: "Michael Major", email: "flightcontrol@quietpilot.us" } }]
     })).rejects.toThrow(/destination organization is required/i);
-    expect(mockState.writeBatch).not.toHaveBeenCalled();
+    expect(mockState.httpsCallable).not.toHaveBeenCalled();
   });
 
-  test("writes records and receipt only under the supplied organization path", async () => {
+  test("customer import uses the authoritative callable with stable batch identity", async () => {
+    mockState.callable.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        importBatchId: "customer_import_batch_0001",
+        organizationId: "mbmapps-001",
+        importType: "customers",
+        createdCount: 1,
+        skippedCount: 0,
+        status: "completed"
+      }
+    });
     const result = await createImportBatch({
       organizationId: "MBMapps-001",
       organizationName: "MBMapps",
@@ -92,61 +65,87 @@ describe("tenant-locked import persistence", () => {
           organizationId: "attacker-org"
         }
       }],
-      actor: { uid: "admin-1", email: "admin@example.com" }
+      actor: { uid: "browser-spoof", email: "spoof@example.com" },
+      importBatchId: "customer_import_batch_0001"
     });
 
-    expect(mockState.collection).toHaveBeenCalledWith(
-      mockState.db,
-      "organizations",
-      "mbmapps-001",
-      "customers"
+    expect(mockState.httpsCallable).toHaveBeenCalledWith(
+      mockState.cloudFunctions,
+      "createCustomerImportBatch"
     );
-    expect(mockState.collection).toHaveBeenCalledWith(
-      mockState.db,
-      "organizations",
-      "mbmapps-001",
-      "importBatches"
-    );
-    expect(batch.set).toHaveBeenCalledTimes(2);
-    const recordPayload = batch.set.mock.calls[0][1];
-    expect(recordPayload.organizationId).toBe("mbmapps-001");
-    expect(recordPayload.organizationId).not.toBe("attacker-org");
+    expect(mockState.callable).toHaveBeenCalledWith({
+      organizationId: "mbmapps-001",
+      organizationName: "MBMapps",
+      fileName: "customers.csv",
+      records: [{
+        rowNumber: 2,
+        record: {
+          name: "Michael Major",
+          email: "flightcontrol@quietpilot.us",
+          organizationId: "attacker-org"
+        }
+      }],
+      importBatchId: "customer_import_batch_0001"
+    });
+    expect(mockState.callable.mock.calls[0][0]).not.toHaveProperty("actor");
     expect(result).toMatchObject({ ok: true, organizationId: "mbmapps-001", createdCount: 1 });
-    expect(batch.commit).toHaveBeenCalledTimes(1);
   });
 
-  test("skips existing duplicate customer email without overwriting it", async () => {
-    mockState.getDocs.mockResolvedValue({
-      docs: [{ data: () => ({ email: "flightcontrol@quietpilot.us" }) }]
+  test("generates an opaque stable-format batch id when the caller does not supply one", async () => {
+    mockState.callable.mockResolvedValueOnce({
+      data: { ok: true, importBatchId: "customer_server_receipt", status: "completed" }
     });
-
-    const result = await createImportBatch({
+    await createImportBatch({
       organizationId: "mbmapps-001",
       importType: "customers",
       records: [{ rowNumber: 2, record: { name: "Michael Major", email: "flightcontrol@quietpilot.us" } }]
     });
-
-    expect(result).toMatchObject({ createdCount: 0, skippedCount: 1 });
-    expect(batch.set).toHaveBeenCalledTimes(1);
-    expect(batch.commit).toHaveBeenCalledTimes(1);
+    expect(mockState.callable.mock.calls[0][0].importBatchId).toMatch(/^customer_[a-f0-9]{32}$/);
+    expect(createCustomerImportBatchId({ randomUUID: () => "12345678-1234-1234-1234-123456789abc" }))
+      .toBe("customer_12345678123412341234123456789abc");
   });
 
-  test("fails closed when a complete duplicate scan would exceed the supported collection size", async () => {
-    mockState.getDocs.mockResolvedValue({
-      docs: Array.from({ length: 2001 }, (_, index) => ({
-        data: () => ({ email: `customer-${index}@example.com` })
-      }))
-    });
+  test("reuses an auto-generated customer batch id after an ambiguous client failure", async () => {
+    const records = [{ rowNumber: 2, record: { name: "Retry Customer", email: "retry@example.com" } }];
+    mockState.callable
+      .mockRejectedValueOnce(new Error("connection reset"))
+      .mockResolvedValueOnce({ data: { ok: true, status: "completed" } });
 
     await expect(createImportBatch({
       organizationId: "mbmapps-001",
       importType: "customers",
-      records: [{ rowNumber: 2, record: { email: "new@example.com" } }]
-    })).rejects.toThrow(/managed migration/i);
-    expect(mockState.writeBatch).not.toHaveBeenCalled();
+      records
+    })).rejects.toThrow(/connection reset/i);
+    const firstBatchId = mockState.callable.mock.calls[0][0].importBatchId;
+    await createImportBatch({
+      organizationId: "mbmapps-001",
+      importType: "customers",
+      records
+    });
+    expect(mockState.callable.mock.calls[1][0].importBatchId).toBe(firstBatchId);
   });
 
-  test("rejects unsupported record types and records without an identity field", async () => {
+  test("returns server-owned duplicate decisions without browser collection scans", async () => {
+    mockState.callable.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        importBatchId: "customer_import_batch_0002",
+        createdCount: 0,
+        skippedCount: 1,
+        skippedRows: [{ rowNumber: 2, reason: "duplicate" }]
+      }
+    });
+    const result = await createImportBatch({
+      organizationId: "mbmapps-001",
+      importType: "customers",
+      records: [{ rowNumber: 2, record: { email: "existing@example.com" } }],
+      importBatchId: "customer_import_batch_0002"
+    });
+    expect(result).toMatchObject({ createdCount: 0, skippedCount: 1 });
+    expect(mockState.httpsCallable).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects unsupported record types and invalid batch sizes before calling the server", async () => {
     await expect(createImportBatch({
       organizationId: "mbmapps-001",
       importType: "quotes",
@@ -156,72 +155,36 @@ describe("tenant-locked import persistence", () => {
     await expect(createImportBatch({
       organizationId: "mbmapps-001",
       importType: "customers",
-      records: [{ rowNumber: 2, record: {} }]
-    })).rejects.toThrow(/required identity field/i);
+      records: []
+    })).rejects.toThrow(/no valid records/i);
+    expect(mockState.httpsCallable).not.toHaveBeenCalled();
   });
 
-  test("rollback removes unchanged batch records and protects records edited later", async () => {
-    mockState.getDoc
-      .mockResolvedValueOnce({
-        exists: () => true,
-        data: () => ({
-          organizationId: "mbmapps-001",
-          importBatchId: "batch-1",
-          importType: "customers",
-          status: "completed",
-          createdRecords: [
-            { collection: "customers", id: "customer-1" },
-            { collection: "customers", id: "customer-2" }
-          ]
-        })
-      })
-      .mockResolvedValueOnce({
-        exists: () => true,
-        data: () => ({
-          importBatchId: "batch-1",
-          createdAtISO: "2026-07-21T00:00:00.000Z",
-          updatedAtISO: "2026-07-21T00:00:00.000Z"
-        })
-      })
-      .mockResolvedValueOnce({
-        exists: () => true,
-        data: () => ({
-          importBatchId: "batch-1",
-          createdAtISO: "2026-07-21T00:00:00.000Z",
-          updatedAtISO: "2026-07-21T01:00:00.000Z"
-        })
-      });
-
+  test("customer rollback uses the authoritative callable", async () => {
+    mockState.callable.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        importBatchId: "customer_import_batch_0001",
+        importType: "customers",
+        deletedCount: 1,
+        protectedCount: 1,
+        status: "rolled_back"
+      }
+    });
     const result = await rollbackImportBatch({
       organizationId: "mbmapps-001",
-      importBatchId: "batch-1"
+      importBatchId: "customer_import_batch_0001"
     });
 
-    expect(batch.delete).toHaveBeenCalledTimes(1);
-    expect(batch.update).toHaveBeenCalledTimes(1);
-    expect(result).toMatchObject({ deletedCount: 1, protectedCount: 1, status: "rolled_back" });
-  });
-
-  test("customer rollback rejects a receipt that crosses into a catalog collection", async () => {
-    mockState.getDoc
-      .mockResolvedValueOnce({
-        exists: () => true,
-        data: () => ({
-          organizationId: "mbmapps-001",
-          importBatchId: "batch-1",
-          importType: "customers",
-          status: "completed",
-          createdRecords: [{ collection: "catalogPackages", id: "package-1" }]
-        })
-      });
-
-    await expect(rollbackImportBatch({
+    expect(mockState.httpsCallable).toHaveBeenCalledWith(
+      mockState.cloudFunctions,
+      "rollbackCustomerImportBatch"
+    );
+    expect(mockState.callable).toHaveBeenCalledWith({
       organizationId: "mbmapps-001",
-      importBatchId: "batch-1"
-    })).rejects.toThrow(/invalid record target/i);
-
-    expect(batch.delete).not.toHaveBeenCalled();
-    expect(batch.update).not.toHaveBeenCalled();
+      importBatchId: "customer_import_batch_0001"
+    });
+    expect(result).toMatchObject({ deletedCount: 1, protectedCount: 1, status: "rolled_back" });
   });
 
   test("catalog import uses the authoritative callable with stable identity and revision", async () => {
@@ -260,8 +223,6 @@ describe("tenant-locked import persistence", () => {
       expectedCatalogRevision: 7
     });
     expect(result).toMatchObject({ ok: true, catalogRevision: 8 });
-    expect(mockState.getDocs).not.toHaveBeenCalled();
-    expect(mockState.writeBatch).not.toHaveBeenCalled();
   });
 
   test("catalog rollback uses the authoritative callable and revision precondition", async () => {
@@ -286,7 +247,5 @@ describe("tenant-locked import persistence", () => {
       expectedCatalogRevision: 11
     });
     expect(result).toMatchObject({ ok: true, status: "rolled_back" });
-    expect(mockState.getDoc).not.toHaveBeenCalled();
-    expect(mockState.writeBatch).not.toHaveBeenCalled();
   });
 });

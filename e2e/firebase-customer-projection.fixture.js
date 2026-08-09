@@ -4,7 +4,6 @@ import {
   getDoc,
   getDocs,
   query,
-  setDoc,
   where
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -14,29 +13,39 @@ export async function exerciseCustomerProjectionTransactions() {
   const organizationId = "e2e-org";
   const unique = globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 16);
   const normalizedEmail = `projection-${unique}@example.com`;
-  const importedCustomerId = `imported-${unique}`;
   const importedBatchId = `batch-${unique}`;
-  const importedCustomerRef = doc(
+  const createCustomerImport = httpsCallable(cloudFunctions, "createCustomerImportBatch");
+  const imported = (await createCustomerImport({
+    organizationId,
+    organizationName: "Authoritative Pricing E2E",
+    fileName: "customer-projection.csv",
+    importBatchId: importedBatchId,
+    records: [{
+      rowNumber: 2,
+      record: {
+        name: "Imported Projection Customer",
+        email: normalizedEmail,
+        phone: "205-555-0142",
+        company: "Imported Customer Company",
+        notes: "Preserve this imported customer note."
+      }
+    }]
+  })).data;
+  const importedCustomerId = String(imported?.createdRecords?.[0]?.id || "");
+  if (imported?.ok !== true || imported?.createdCount !== 1 || !importedCustomerId) {
+    throw new Error("The authoritative customer import did not create one customer fixture.");
+  }
+  const importedCustomerSnapshot = await getDoc(doc(
     db,
     "organizations",
     organizationId,
     "customers",
     importedCustomerId
-  );
-  const importedCreatedAtISO = "2026-07-01T12:00:00.000Z";
-
-  await setDoc(importedCustomerRef, {
-    organizationId,
-    name: "Imported Projection Customer",
-    email: normalizedEmail,
-    phone: "205-555-0142",
-    company: "Imported Customer Company",
-    notes: "Preserve this imported customer note.",
-    importSource: "import_studio",
-    importBatchId: importedBatchId,
-    createdAtISO: importedCreatedAtISO,
-    updatedAtISO: importedCreatedAtISO
-  });
+  ));
+  const importedCreatedAtISO = String(importedCustomerSnapshot.data()?.createdAtISO || "");
+  if (!importedCustomerSnapshot.exists() || !importedCreatedAtISO) {
+    throw new Error("The authoritative customer import fixture is unavailable.");
+  }
 
   const [packageSnapshot, menuSnapshot] = await Promise.all([
     getDocs(collection(db, "organizations", organizationId, "catalogPackages")),
