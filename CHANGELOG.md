@@ -8,6 +8,100 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Source/local/emulator-qualified `CWF-11` exact-version rebooking in Customer
+  360. A bounded
+  anniversary cue can now invoke a same-tenant callable that revalidates the
+  booked quote, matching acceptance receipt, stable customer, and exact retained
+  immutable version before creating one deterministic draft. The draft overlays
+  current customer contact and is repriced from the current trusted catalog;
+  delivery remains blocked until staff saves a new current-or-future event date
+  later than the source event. Creation, uncertainty, same-identity
+  reconciliation, definitive failure, recovery, and required-review states are
+  visible. This action sends no message and establishes no acceptance, booking,
+  payment, or revenue fact. A disposable Auth/Firestore/Functions emulator lane
+  covers same-tenant denial, source-version drift, deterministic-identity
+  collision refusal, concurrent retry convergence, atomic initial writes,
+  current-catalog repricing, and the trusted staff-review transition. Functions
+  deployment and hosted staff acceptance are pending.
+- Source-only `CWF-13` bounded Customer 360 commercial measures. The Overview
+  now derives quoted, exact-state accepted/booked, payment, and repeat-event
+  measures from the customer-scoped DTO with visible denominators,
+  missing-evidence counts, bounds, and loading/empty/partial/stale/error/retry
+  states. Deposit and final-balance values are promoted as provider-confirmed
+  only for an exclusively Firebase-backed read with the matching paid state and
+  a valid provider confirmation timestamp; browser-local, mixed, and
+  unknown-source fields fail closed as unavailable. It says `Lifetime` only
+  after the bounded quote read reports complete and otherwise says
+  `Displayed-record`; it is not an accounting ledger, cash reconciliation,
+  forecast, recognized revenue, or persisted `commercialSummary`. Deployment
+  and hosted staff acceptance are pending.
+- Source-only `CWF-12` Revenue Autopilot eligibility preview in Workflow. Staff
+  can select one quote from the bounded canonical Workflow read and inspect
+  deterministic quote-follow-up, deposit-reminder, tenant-local final-balance,
+  and unread-reply evaluations. Catalog Admin now supplies an explicit tenant
+  IANA business time zone; missing portal, acceptance, webhook, conversation,
+  consent, suppression, quiet-hour, template, or provider evidence fails
+  closed. The surface explicitly reports zero messages scheduled and zero sent:
+  it creates no records, jobs, idempotency claims, Attention items, or provider
+  actions. Scheduler/email implementation, deployment, provider evidence, and
+  hosted acceptance remain pending.
+- Source-only read-only `CWF-15B-b` Commercial Change Impact preview in the trusted
+  quote edit flow. The existing pricing callable can now return bounded
+  server-owned snapshots of the saved canonical revision and the
+  server-authoritatively repriced proposed form; the client deterministically
+  presents exact fact changes, total/deposit deltas, and affected dependency
+  nodes as `REVIEW` or `STALE`, with loading/empty/partial/stale/error/recovery
+  presentation. Previewing does not save or authorize the edit and cannot
+  invalidate checks, regenerate artifacts, reconcile dependencies, or publish.
+  No generation receipt, retained artifact-freshness truth, deployment, or
+  hosted acceptance is claimed.
+- Source/local `CWF-02`, `CWF-04`, `CWF-05`, and `CWF-06` workspace slices.
+  The flagged neutral staff shell now has a recoverably lazy `Ctrl`/`Command`+K
+  palette over six same-tenant customer-prefix results and six matches from the
+  latest 50 quotes, with transient queries, opaque navigation, source/bounds,
+  stale-generation rejection, focus restoration, and explicit partial/error/
+  retry states. Customer Directory and Customer 360 now expose surface-scoped
+  read-context rails; Customer 360 adds a bounded relationship briefing, a
+  source-labeled recorded commercial timeline, and an on-demand advisory
+  comparison of the two latest retained immutable versions. The timeline and
+  comparison omit rather than infer missing provider-delivery/bounce, lifecycle,
+  payment, booking, or other authority. Hosted keyboard/mobile/long-data and
+  human acceptance remain separate gates.
+- Source/local `CWF-07` Workflow timing cues and `CWF-08` Schedule run of show.
+  Workflow now separates timestamp-derived due-today, overdue, upcoming, and
+  aging guidance from exact stored internal completion receipts, with bounded
+  source, stale, partial, error, and retry presentation. Schedule now derives a
+  bounded, expandable event-day sequence from recorded event, booking, staffing,
+  checklist, and BEO inputs while labeling timing sources and unknowns. Neither
+  surface invents provider delivery, customer contact, payment, booking,
+  attendance, inventory, or operational-readiness evidence; persisted ownership,
+  SLA/escalation, collaborative event operations, and hosted acceptance remain
+  separate work.
+- Source/local `CWF-09` bounded commercial intelligence in Reporting. The
+  same-tenant quote read is capped at 500 displayed records and exposes source,
+  last complete client read, truncation, explicit denominators, missing-money
+  evidence, retained-stale/error/retry states, and UTC six-month trend context.
+  Accepted/booked quote value remains separate from the paid-deposit total. A
+  deposit amount qualifies for that verified total only from a Firebase-backed
+  read with a paid state, valid provider-confirmation timestamp, and recorded
+  amount; local, missing, or ambiguous evidence is excluded rather than treated
+  as zero. These are operational measures, not tenant-wide totals when
+  truncated and never accounting revenue.
+- Source/local `CWF-10` decision-reconciliation and interaction polish in the
+  existing exact-token customer decision center. Acceptance and requested-change
+  attempts now distinguish submitting, uncertain, same-attempt reconciliation,
+  exact receipt, changed-source review, definitive failure, and explicit
+  recovery; typed-signature validation returns focus to the missing signer or
+  consent control, and motion honors the customer's reduced-motion preference.
+  The flow never auto-retries a decision or promotes acceptance into payment or
+  booking evidence. Hosted customer acceptance remains pending.
+- Authoritative pricing now owns actor identity and calculation time on the
+  server and fingerprints the confirmed tenant pricing settings around catalog
+  reads. Quote create, duplicate, edit, rebook, and Change Impact paths recheck
+  that catalog authority at their trusted commit/read boundary and abort with a
+  safe recalculate-and-retry outcome if the catalog revision, confirmation, or
+  settings fingerprint changes. Browser-supplied actor/time remains
+  non-authoritative, and no stale pricing result is silently committed.
 - Source-complete `CWF-15A` Commercial Dependency Graph and Kitchen BEO
   download-time provenance. The frozen v1 registry validates node and edge
   contracts, rejects cycles and unknown dependencies, traverses downstream
@@ -19,10 +113,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   persists no generation record, and creates no `CURRENT`/`STALE`/`REVIEW`,
   actor, server-time, receipt, reconciliation, or publication evidence. It is
   source/local evidence only and is not deployed or hosted-operator accepted.
-- A documented temporary 5.5% aggregate-JavaScript branch allowance for the
-  unmerged customer-centered workspace convergence. It does not reset the
-  clean-main baseline or relax the largest-chunk gate and must return to the
-  normal 5% allowance after clean-main recalibration and browser/CWV checks.
+- A named temporary bundle exception for the unmerged customer-centered
+  workspace convergence, with exact no-headroom ceilings of 2,331,934 aggregate
+  JavaScript bytes and a 413,275-byte largest chunk. The machine-readable
+  exception is pinned to the unchanged clean-main metrics and blocks baseline
+  updates while active; normal 5% limits resume when the exception is removed.
+  Passing this branch gate is not CWV, hosted, production, or human-acceptance
+  evidence.
 
 - A source-side `CWF-01`/`CWF-03` release-candidate slice for the flagged staff
   workspace. Home now exposes a compact read-context rail bound to the current
@@ -47,9 +144,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   user-relevant backend contracts with polished, discoverable, role-safe
   frontend states and keeps provider, payment, booking, pricing, customer-view,
   and accounting authority distinct. CWF-15 is sequenced as the now
-  source-complete 15A registry/fingerprint, a separately governed server
-  generation/receipt action plus read-only simulation, then UI-bound authorized
-  invalidation/reconciliation. There is no existing governed server BEO action,
+  source-complete 15A registry/fingerprint, a separately governed 15B-a server
+  generation/receipt action, the source-complete 15B-b advisory simulation, then
+  15C UI-bound authorized invalidation/reconciliation. There is no existing
+  governed server BEO action,
   and browser-supplied digest, source revision, actor, or time can never become
   receipt truth.
 - A required diff-aware capability-surfacing check in `lane:core`, backed by a
@@ -227,6 +325,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- The full provisioning emulator acceptance runner now fails immediately unless
+  both quote-payment and buyer-access Stripe rails are explicitly configured for
+  test mode, both synthetic webhook secrets are present, the buyer-access server
+  gate is enabled, and its application URL is supplied. Quote-payment webhook
+  diagnostics now retain the safe error code and bounded error message instead
+  of allowing the structured message field to be overwritten by logger stack
+  formatting. No provider request or production secret is used by this lane.
 - Browser navigation smoke coverage now recognizes the Workflow button's live
   accessible-status suffix, preventing a release check race after attention
   data loads.
@@ -903,6 +1008,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Restored Kitchen sheet downloads in the Vite development and Playwright
+  runtime by explicitly pre-bundling the reviewed CommonJS dependency-graph
+  core for browser ESM interop. The Node `require()` parity entry and production
+  bundle path remain unchanged.
 - Customer provisioning no longer silently substitutes the signed-in administrator's UID when the Owner UID field is blank; assigning the operator's own account now requires the explicit `Use My Account` action.
 - Customer portal date-only event values now render in local time without shifting to the previous calendar day.
 - Quote store unit fixtures now pin their intended validation date so portal-expiry and quote-expiry assertions remain deterministic over time.

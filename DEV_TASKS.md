@@ -127,7 +127,7 @@ Detailed contracts and invariants:
   reconciliation, or publication evidence. The graph may consume
   server-authoritative pricing outputs but must never become a second pricing
   engine. Hosted kitchen-operator acceptance remains a separate release gate.
-- **CWF-15B — establish generation authority before freshness.** There is no
+- **CWF-15B-a — establish generation authority before freshness.** There is no
   existing governed server BEO generation action to extend. Approve and
   productize either a new CWF-14-bound server generation/receipt action or move
   artifact generation authority server-side. The server must reload canonical
@@ -137,11 +137,16 @@ Detailed contracts and invariants:
   uncertain, reconciliation, success, definitive-error, and recovery states.
   Browser-supplied digest, source revision, actor, or time can never become
   receipt truth.
-- Add a read-only CWF-15B impact simulation that reports exact before/after
-  facts and deterministic dependent nodes without mutating an accepted version,
-  contract, payment/provider evidence, portal decision, generated artifact, or
-  checklist. It introduces no independent
-  `authorize -> invalidate -> reconcile -> publish` authority.
+- **CWF-15B-b:** Qualify and promote the source-complete read-only Change Impact
+  preview on an exact hosted candidate. The current edit surface asks the
+  trusted pricing callable for the saved canonical revision plus a
+  server-authoritatively repriced proposed form, then reports exact fact and
+  commercial deltas with deterministic `REVIEW`/`STALE` dependents. Verify
+  same-tenant role gates, stale-generation recovery, long-data containment,
+  keyboard behavior, and authoritative-pricing parity. This preview performs
+  no save, authorization, invalidation, regeneration, checklist mutation, or
+  publication and does not satisfy the separate generation-receipt prerequisite
+  above.
 - Before **CWF-15C** source work, accept a UI specification with a state/display
   matrix for Change Impact, `CURRENT`/`STALE`/`REVIEW`, authorization,
   invalidation, reconciliation, receipt, error, and recovery, plus
@@ -164,80 +169,101 @@ Detailed contracts and invariants:
 
 ### First Follow-On
 
-- **CWF-02:** Add bounded same-tenant universal commercial search and a
-  keyboard command palette. First federate bounded Customer and Quote reads;
+- **CWF-02:** Qualify and extend the source-complete first tranche of bounded
+  same-tenant Customer/Quote search and its keyboard command palette. Verify the
+  exact hosted flag-on keyboard/mobile experience and truncation/retry language;
   put broader proposal/event discovery behind a bounded backend read model with
-  tenant cursors, caps, opaque IDs, and visible truncation. Keep queries/customer
-  content out of URLs and browser storage; never expose portal tokens, private
-  claims, message bodies, private payment records, raw analytics, or admin-only
-  data; preserve every role/approval/confirmation gate.
-- **CWF-04:** Add a Customer 360 relationship briefing header derived from the
-  bounded customer DTO, including current attention, next event, latest
-  activity, freshness, and next safe staff action without a persisted rollup or
-  generic customer account. Treat mutable notes, tags, ownership, health scores,
-  and cached summaries as a separate CRM/customer-record authority program.
-- **CWF-05:** Add an evidence-safe, source-labeled customer timeline for quote
-  versions, provider acceptance, provider-reported delivery/bounce, recipient
-  view, decisions, booking, payment, and quote-scoped conversation milestones.
-  Keep delivery milestones distinct; do not merge messages or invent evidence.
-- **CWF-06:** Add advisory proposal-readiness and immutable-version change
-  intelligence deterministically without recalculating or mutating history;
-  keep save/send intentional, server pricing authoritative, and customer input
-  non-authoritative for scope, prices, or totals. Route AI scoring or persisted
-  recommendations through separate privacy/model governance.
-- **CWF-07:** Add timestamp-derived due/overdue/aging cues and trusted internal
-  completion receipts first. Persisted owner, SLA, escalation, and handoff state
-  require server validation and a safe staff directory, must not let sales
-  enumerate `userRoles`, and keep provider notifications in a separate program.
-  Never present receipts as customer contact, provider delivery, proposal
+  tenant cursors, caps, opaque IDs, and visible truncation. Keep queries and
+  customer content out of URLs, History state, and persisted search state; never
+  expose portal tokens, private claims, message bodies, private payment records,
+  raw analytics, or admin-only data, and preserve every authority gate.
+- **CWF-04:** Qualify and extend the source-complete Customer 360 relationship
+  briefing derived from the bounded customer DTO. Preserve its current
+  attention, next-event, latest-activity, freshness, and next-safe-action
+  boundaries through hosted acceptance. Treat mutable notes, tags, ownership,
+  health scores, and cached summaries as a separate CRM/customer-record
+  authority program rather than extending the read-only briefing implicitly.
+- **CWF-05:** Qualify and extend the source-complete evidence-safe customer
+  timeline. Its current source-labeled version, acceptance, view, decision,
+  booking, payment, and quote-conversation milestones must receive hosted
+  acceptance; provider delivery/bounce stays omitted until the bounded DTO has
+  authoritative receipt fields. Keep delivery milestones distinct, do not merge
+  quote conversations, and never invent missing evidence.
+- **CWF-06:** Qualify and extend the source-complete advisory proposal-readiness
+  and immutable-version comparison surfaces without recalculating or mutating
+  history. Preserve intentional save/send, server pricing authority, and
+  non-authoritative customer input. AI scoring or persisted recommendations
+  remain a separate privacy/model-governance program.
+- **CWF-07:** Qualify and extend the source-complete timestamp-derived
+  due/overdue/aging cues and trusted internal completion receipts in Workflow.
+  Persisted owner, SLA, escalation, and handoff state still require server
+  validation and a safe staff directory, must not let sales enumerate
+  `userRoles`, and keep provider notifications in a separate program. Never
+  present internal receipts as customer contact, provider delivery, proposal
   resolution, payment, or booking proof.
 
 ### Later Follow-On
 
-- **CWF-08:** Add an event run-of-show schedule derived from existing event,
-  booking, staffing, checklist, and BEO references as a generated read-only view
-  first. Collaborative tasks, dependencies, rosters, resources, vendors, and
-  portal-visible timing require a separate versioned event-operations model;
-  keep it separate from inventory, attendance, acceptance, payment, and booking
+- **CWF-08:** Qualify and extend the source-complete bounded event run of show
+  derived from existing event, booking, staffing, checklist, and BEO references.
+  Verify the generated read-only sequence on an exact hosted candidate.
+  Collaborative tasks, dependencies, rosters, resources, vendors, and portal-
+  visible timing still require a separate versioned event-operations model; keep
+  it separate from inventory, attendance, acceptance, payment, and booking
   evidence.
-- **CWF-09:** Add a proof-safe commercial intelligence studio with visible
-  scope, freshness, denominators, and truncation; keep accepted/booked quote
-  value separate from verified money received and label neither accounting
-  revenue. Bound the existing Reporting read before reuse; require tenant-bounded
-  server aggregates for substantive expansion, with accounting, reconciliation,
-  tax, refunds, and disputes outside this program.
-- **CWF-10:** Polish typed-signature interaction and stale/retry/success/focus
-  recovery in the existing exact-token decision center with reduced-motion
-  behavior; do not create a generic portal/account or weaken callable-owned
-  acceptance and pricing authority. Reuse existing idempotency/reconciliation
-  behavior and never auto-retry a non-idempotent provider operation.
+- **CWF-09:** Qualify and extend the existing bounded Reporting tranche into a
+  proof-safe commercial intelligence studio with visible scope, freshness,
+  denominators, and truncation. Preserve separation among accepted/booked quote
+  value and verified money received, and label neither accounting revenue.
+  Require tenant-bounded server aggregates before substantive drill-down or
+  scale expansion; accounting, reconciliation, tax, refunds, and disputes stay
+  outside this program.
+- **CWF-10:** Qualify and promote the source-complete typed-signature recovery
+  and reduced-motion polish in the existing exact-token decision center. Verify
+  stale/retry/success/focus behavior on the exact hosted candidate; do not create
+  a generic portal/account or weaken callable-owned acceptance and pricing
+  authority. Reuse existing idempotency/reconciliation behavior and never auto-
+  retry a non-idempotent provider operation.
 
 ### Revenue, Retention, and Productization Extensions
 
-- **CWF-11:** Add a one-week post-event closeout sequence plus anniversary
-  repeat-event alerts. Let staff create a reviewed rebook draft from the last
-  accepted immutable version through trusted duplication and current
-  server-authoritative repricing; never present a reminder as a lead, booking,
-  delivery, or revenue fact. Gate outbound thank-you/review requests with
-  consent, suppression, idempotency, tenant timezone, and provider evidence.
-- **CWF-12:** Add an SMS-free revenue-autopilot slice using scheduled,
-  tenant-branded email and Attention escalation: quote follow-ups that stop on
-  exact portal view/accept/decline; accepted-quote deposit reminders that stop
-  on webhook payment; final-balance reminders at tenant-local event-minus-14/7/3
-  days that stop on the matching settled rail; and explicit staff-read markers
-  for unacknowledged customer replies. Include quiet hours,
-  consent/unsubscribe/suppression, templates, idempotent jobs, bounded retry,
-  role gates, and separate accepted/delivered/bounced/viewed evidence. Define
-  attribution before claiming recovered value and keep booked value, verified
-  money received, and accounting revenue separate.
-- **CWF-13:** Activate Customer 360 as the CRM-grade staff relationship view
-  with bounded quote/proposal, event, verified-payment, quote-conversation,
-  repeat-pattern, and next-action context. Add lifetime commercial measures
-  only with visible denominators and separate quoted, accepted, booked, and
-  webhook-verified money. Do not introduce a persisted `commercialSummary`, a
-  second identity, generic external account, or customer-wide mutable thread;
-  complete hosted activation and legacy normalization through their existing
-  rollout gates.
+- **CWF-11:** Qualify and promote the source-complete bounded post-event and
+  anniversary radar plus exact-version rebook-draft path. The current trusted
+  callable accepts only a booked quote with matching acceptance receipt and
+  retained immutable version, creates one deterministic current-catalog-priced
+  draft for the same stable customer, and requires staff to save a new
+  current-or-future event date before delivery. Disposable local emulator
+  acceptance for idempotency, collision, reconciliation, catalog repricing, and
+  recovery is complete; it is not hosted evidence. The remaining release task is
+  to promote the callable with its frontend on an exact candidate and verify
+  hosted staff review. Then add the
+  still-missing scheduled closeout records and outbound thank-you/review asks
+  behind consent, suppression, idempotency, tenant timezone, and provider
+  evidence. Never present a cue or draft as a lead, booking, delivery, or
+  revenue fact.
+- **CWF-12:** Treat the source-complete, read-only Revenue Autopilot eligibility
+  preview as the safety specification for the later scheduler. It evaluates one
+  quote from the bounded Workflow read against exact portal decisions,
+  acceptance, webhook payment, tenant-local final-balance windows, conversation
+  read evidence, and outbound controls; Catalog Admin supplies the authoritative
+  tenant IANA time zone, and absent evidence fails closed. Qualify that preview
+  on a hosted candidate, then separately build trusted staff-read receipts,
+  scheduled tenant-branded email, Attention escalation, templates, consent/
+  unsubscribe/suppression, quiet hours, idempotent jobs, bounded retry, and
+  distinct accepted/delivered/bounced/viewed evidence. The current preview
+  schedules and sends nothing. Define attribution before claiming recovered
+  value and keep booked value, verified money received, and accounting revenue
+  separate.
+- **CWF-13:** Qualify and promote Customer 360 and its source-complete bounded
+  commercial-measures panel on an exact hosted candidate. The current read-only
+  derivation shows quoted, exact-state accepted/booked, provider-confirmed
+  deposit/final-balance amounts, and repeat-event evidence with visible record
+  coverage; it uses `Lifetime` only when the bounded quote read reports complete
+  and otherwise says `Displayed-record`. Preserve explicit partial/stale/error
+  states and the non-accounting boundary. Complete legacy identity/claim
+  normalization and flag activation through their existing rollout gates; do
+  not introduce a persisted `commercialSummary`, second identity, generic
+  external account, or customer-wide mutable thread.
 - **CWF-14:** Maintain and extend the no-orphan-capability productization gate.
   For every new user-relevant backend contract, identify the audience and ship
   a discoverable, role/feature-safe frontend entry with loading, empty, success, stale,

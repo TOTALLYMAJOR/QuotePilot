@@ -1,6 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: July 27, 2026
+Last updated: August 9, 2026
 
 ## Goal
 Accelerate delivery while preserving production safety by using:
@@ -38,7 +38,9 @@ Each PR declares:
 - `lane:quick`
   - `npm run check:env`
   - `npm run check:secrets`
+  - `npm run check:workflows`
 - `lane:core`
+  - `npm run check:capability-surfaces`
   - `npm run test:unit`
   - `npm run build`
   - `npm run check:docs:governance`
