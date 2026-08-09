@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 7, 2026
+Last updated: August 9, 2026
 
 ## P0 - Production Acceptance and Tenant Provisioning
 - Prepare and promote the next tagged exact-`main` revision containing this
@@ -65,6 +65,28 @@ Last updated: August 7, 2026
   summary, active-step rail, compact operator action rail, and simplified
   Step 1 staffing-pricing boundary.
 - Add intentional transition/motion polish for step changes and live breakdown updates.
+
+## P1 - Quoting Competitiveness
+Design rationale and constraints for every item in this group live in
+`.codex/skills/quote-wizard-maintainer/references/quoting-enhancement-design-notes.md`;
+load that reference before implementation.
+- Activate the dormant event-template system ("template flywheel"):
+  save-a-quote-as-template, a form-based template editor replacing the
+  Event Templates JSON textarea, an explicit template-to-event-type binding,
+  starter-pack template seeds, and step-1 "Start from" template cards, all
+  preserving the never-overwrite-user-selections defaults contract.
+- Add price-from-wins prefill and similar-won-quote context in the wizard,
+  derived read-only from tenant quote history with explicit, dismissible
+  apply actions.
+- Extend Good/Better/Best scenarios into customer-choice tiered portal
+  proposals with server re-priced tier snapshots and tier-bound acceptance
+  evidence (coordinated frontend/Functions/rules release with hosted UAT).
+- Add optional catalog cost basis and staff-only margin guardrails mirrored
+  in authoritative pricing, never exposed on customer-facing surfaces.
+- Add a public self-serve estimate intake modeled on the `/start` gating
+  pattern with its own abuse controls and fail-closed server gate.
+- Use the explicit quote valid-through date for a portal pricing-hold
+  countdown and expiry-driven follow-up suggestions in Workflow Attention.
 
 ## P1 - Product Capability
 - Add opt-in, provider-backed notifications and configurable escalation rules

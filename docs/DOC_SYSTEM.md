@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: August 6, 2026
+Last updated: August 9, 2026
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -74,6 +74,7 @@ as separate claims.
 | Cloud/local orchestration policy and lane contracts | `docs/ORCHESTRATION_BLUEPRINT.md` | Operational commands and scenarios live in `docs/ORCHESTRATION_RUNBOOK.md`. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
+| Quoting roadmap design rationale | `.codex/skills/quote-wizard-maintainer/references/quoting-enhancement-design-notes.md` | Design constraints for quoting/template roadmap items; backlog priority stays in `DEV_TASKS.md`. |
 | Performance budgets and CWV policy | `docs/PERFORMANCE_GUARDRAILS.md` | Baselines live under `docs/performance/`. |
 
 ## Redundancy Rules

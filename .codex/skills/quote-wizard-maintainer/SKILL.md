@@ -10,6 +10,8 @@ description: Maintain and evolve the React + Firebase catering quote wizard. Use
 2. Load references before edits:
    - `references/code-map.md`
    - `references/safe-change-checklist.md`
+   - `references/quoting-enhancement-design-notes.md` (required before any
+     quoting-roadmap or template-system work)
 3. Implement the smallest safe change set.
 4. Validate with `scripts/run-maintainer-checks.sh`.
 5. Update canonical docs using `docs/DOC_SYSTEM.md` triggers.
@@ -32,4 +34,6 @@ description: Maintain and evolve the React + Firebase catering quote wizard. Use
 ## Resources
 - `references/code-map.md`: fast map of high-impact files.
 - `references/safe-change-checklist.md`: pre-change and post-change checklist.
+- `references/quoting-enhancement-design-notes.md`: quoting roadmap design
+  rationale, template-system findings, and per-proposal constraints.
 - `scripts/run-maintainer-checks.sh`: repeatable quality gate runner.
