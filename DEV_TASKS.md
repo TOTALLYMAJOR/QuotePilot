@@ -75,52 +75,54 @@ Last updated: August 8, 2026
   receive the new decision-center event, selection, and pricing fields. The
   tool and emulator acceptance are complete; production execution is not.
 
-## P1 - Commercial Command Center Follow-on
-The Home workspace view and shared status-chip system shipped in source
-(`docs/FEATURE_MATRIX.md` row 29); these are the pieces of the originating
-UX audit intentionally left out of that first pass to keep it reviewable,
-frontend-only, and free of any change to a high-risk file.
-- Add a route/shell so Home, Quotes, and the wizard are real navigable
-  destinations instead of a header button that swaps the main content
-  region; keep `?portal=` precedence and the existing lazy-tool recovery
-  boundaries intact through the migration.
-- Retrofit the `StatusChip`/`src/lib/statusSemantics.js` system onto Quote
-  History's status column, Event Schedule's confirmation/conflict labels,
-  and the customer portal's payment status, replacing today's plain text
-  and raw `<select>` with the same never-color-only chip grammar Home now
-  uses. Do this as its own reviewable pass per surface, not all at once.
-- Add delivery/provider blockers (mutation-locked delivery, disabled email
-  provider) to Home's attention inbox once a lightweight, Home-safe read of
-  `getQuoteDeliveryUiState`-equivalent state exists; the first Home pass
-  intentionally left this out rather than duplicating that logic.
-- Consider making Home the default landing view instead of the wizard; this
-  needs `e2e/quote-wizard.smoke.spec.js` and related specs updated for the
-  new landing assertion, not just the App.jsx change.
-- Extend the shipped staff-scoped `app-shell-neutral` chrome to the interior
-  of the large workspace dialogs (Quote History, Catalog Admin, Integrations
-  Ops tables and section styling), which still carry cream/gold treatments
-  inside the now-white modal cards.
+## P1 - Customer-Centered Workspace Rollout
+North star:
+[docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md).
+Backend contract:
+[docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md).
+- Qualify the first-release source with the high-risk maintainer lane: native
+  `/app` routes, Command Center snapshot/focus behavior, sticky quote-draft
+  continuity, stable `customerId`, paginated customer reads, Customer 360,
+  authority hardening, and dry-run/emulator backfill behavior. Keep source,
+  local, emulator, hosted, production, and human evidence separate.
+- Put the new shell/default landing behind its temporary build flag for an
+  exact hosted candidate. Verify direct deep links, Back/Forward, signed-in
+  staff roles, mobile navigation, authenticated 404, proposal-preview branding,
+  and `/app?portal=...` precedence before considering flag removal.
+- Do not run the legacy customer-ID backfill in production from this work.
+  Review a tenant-scoped dry-run artifact first; production apply requires a
+  separate authorization, exact confirmation contract, and release record.
+- Before a tenant receives the new directory flag, inventory imported-only
+  customer records created by the prior browser path and review a dry-run
+  normalization artifact. Deploying the new customer-import callables does not
+  retroactively add directory keys to those records.
+- Extend semantic status chips to Quote History and Schedule in separate
+  reviewable UI slices while keeping proposal acceptance, booking, deposit,
+  final balance, and operational readiness distinct.
+- Add delivery/provider blockers to Home only after a bounded Home-safe
+  presentation contract exists; do not duplicate delivery authority logic.
 
-## P1 - Customer Workspace Backend (Codex Handoff)
-Full slice plan: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md).
-Each slice below is independently scoped with its own Change Intent
-Contract, files, data shape, and acceptance criteria; none is started.
-- Slice 1: a server-maintained commercial rollup on each `customers` record
-  (open quotes, active events, deposit/balance due, last activity) so an
-  Internal Customer 360 view can answer "what's open here" in one read.
-- Slice 2: a first-class `changeRequests` record (structured asks, status,
-  owner, linked resulting revision) replacing today's freeform-message-only
-  `portalDecision.changes_requested` path — without removing that existing
-  path. This is the largest and highest-value slice; expect it to be split
-  further by whoever implements it.
-- Slice 3: a tenant Stripe Connect merchant-account foundation (account
-  status, requirements, payouts) isolated from both existing Stripe rails,
-  populated only from Stripe API responses and signed webhooks. Requires an
-  explicit Connect account-type decision (Standard/Express/Custom) before
-  implementation starts.
-- Slice 4: external customer account (persistent, multi-event) — explicitly
-  not yet spec-ready; needs an identity/migration decision documented in
-  the handoff doc before it can be scoped as an implementable slice.
+## P1 - Remaining Routed Workspaces
+- Extract Schedule and Reporting to `/app/schedule` and `/app/reporting` while
+  preserving existing lazy recovery, filters, focus, and draft continuity.
+- Extract Catalog, Imports, Integrations, and Diagnostics to their planned
+  `/app/*` routes with the current role/feature gates unchanged.
+- Finish neutral staff styling inside routed operational surfaces with explicit
+  staff-shell selectors; do not leak the neutral skin into staff proposal
+  previews, customer portals, proposal exports, or marketing.
+
+## P1 - Customer and Payments Decision Tracks
+- Specify first-class structured change requests as a callable-only program
+  that links customer intent to an authoritative resulting quote version. Keep
+  the existing freeform request-changes decision path until that program is
+  separately implemented and accepted.
+- Keep persistent external customer accounts in discovery until membership,
+  recovery, revocation, multi-organization access, migration, and coexistence
+  with the exact-token decision center are specified.
+- Treat Stripe Connect as a separate payments architecture decision. Resolve
+  account type, merchant-of-record responsibility, webhook and credential
+  isolation, payouts, refunds, disputes, tax/accounting obligations, and
+  coexistence with both existing Stripe rails before implementation.
 
 ## P2 - Integrations
 - Complete Twilio Messaging Service A2P registration and approval, promote the
