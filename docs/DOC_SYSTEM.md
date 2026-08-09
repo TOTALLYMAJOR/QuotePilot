@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: August 8, 2026
+Last updated: August 9, 2026
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -101,9 +101,14 @@ whole branch/PR or push diff from a validated fail-closed baseline, includes
 deleted authority paths, requires manifest and review-revision increments, and
 owns changed, new, or removed Firebase Function exports by exact
 `path#exportName` rather than file alone. Shared-helper changes must also list
-the current callable exports they are declared to affect; this is an explicit
-review contract, not a claim that the checker can infer a complete semantic call
-graph.
+the current callable exports they are declared to affect for every active
+classification. Client authority review is fail-closed across runtime
+`src/**` paths rather than limited to named hook/context/service folders;
+reviewed presentation-only files remain excluded unless their source introduces
+direct provider, Firebase, or network authority signals. Mutation inspection
+includes chained Admin/Firestore writes and modular client writes. These are
+explicit review contracts, not claims that the checker can infer a complete
+semantic call graph.
 
 Headless work may use only the narrow `headless_operational`,
 `security_private`, or `developer_infrastructure` classifications. Operational

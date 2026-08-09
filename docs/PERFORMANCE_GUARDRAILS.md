@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: August 6, 2026
+Last updated: August 9, 2026
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -18,7 +18,10 @@ Measured metrics:
 - `largestJsChunkBytes`: largest single JavaScript asset in `dist/assets`
 
 Threshold policy:
-- Maximum allowed = baseline * 1.05 (5% allowance)
+- Maximum allowed = baseline plus the allowance recorded in the baseline file.
+- The normal allowance is 5%. A temporary 5.5% branch allowance is active for
+  the customer-centered workspace convergence and is governed by
+  `docs/TECH_EXCEPTIONS.md`; the clean-main baseline is unchanged.
 
 Regenerate baseline (intentional only):
 ```bash

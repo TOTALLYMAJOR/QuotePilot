@@ -5,7 +5,7 @@ lives in `PROJECT_STATUS.md`; remaining rollout work lives in `DEV_TASKS.md`.
 This document defines contracts and sequence, not implementation, deployment,
 provider, production-data, flag-promotion, or human-acceptance evidence.
 
-Last updated: August 8, 2026
+Last updated: August 9, 2026
 
 ## Product direction
 
@@ -305,9 +305,10 @@ should not be mistaken for hosted or human acceptance: the desktop header could
 wrap under real command density, embedded routes inherited modal-derived
 **Close** language, several operational values retained raw enum/date formatting,
 and data freshness and evidence provenance were too quiet. Current source has
-locally addressed the header containment and embedded return-language portions;
-human formatting and hosted keyboard, overflow, contrast, focus, and branding
-acceptance remain open. The original ten-item design track addresses those
+locally addressed header containment, route-appropriate return language,
+primary-route heading focus, first-release staff formatting, and a Home-scoped
+read-context rail; hosted keyboard, long-data overflow, contrast, branding, and
+human acceptance remain open. The original ten-item design track addresses those
 findings; three
 revenue-and-retention extensions, one ongoing productization gate, and one
 high-priority platform primitive deepen the same customer-centered model

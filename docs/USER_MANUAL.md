@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: August 8, 2026
+Last updated: August 9, 2026
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -100,6 +100,15 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   introduces no new read contracts or data sources, creates no records, and
   cannot request payment, approve a request, or change a quote's status by
   itself.
+- `Staff read context` identifies the organization profile name and exact tenant key, the Workflow
+  Attention plus latest-200 quote-history contract, the read source, and the
+  time when both reads last completed together. `Incomplete read` means only
+  one contract completed; `Last complete read retained` means a later refresh
+  failed while older complete data remains visible; `Bounded snapshot` means
+  Home reached its 200-record quote-history cap. The timestamp describes the
+  browser's read, not when every record changed. Home cards and totals are a
+  derived staff presentation, and a fresh read never proves provider delivery,
+  customer acceptance, booking, payment, or operational completion.
 
 ## Customer Directory and Customer 360
 
@@ -139,6 +148,13 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 The exact-token customer decision center remains the only customer-facing
 experience. A `?portal=<token>` query takes precedence on any pathname, and
 newly generated links use `/app?portal=...`.
+
+On routed `Quotes` and `Workflow`, use `Back to Home`; true contextual or
+legacy dialogs continue to use `Close`. Staff route headings receive keyboard
+focus after navigation so screen-reader and keyboard users have a visible
+orientation point. Dates, money, statuses, source names, and missing values are
+displayed as human-readable copy while their canonical stored values remain
+unchanged.
 
 ## Quote Builder Details
 - Event Type drives dynamic menu categories and items.
@@ -203,11 +219,14 @@ newly generated links use `/app?portal=...`.
     `Send message`, and same-request reconciliation when a send returns no
     server receipt. `Message recorded` proves only the canonical QuotePilot
     conversation receipt, not external delivery. While a message outcome is
-    uncertain, the composer and close controls remain locked so the request
-    identity cannot be lost. Use `Reconcile message` to retry the unchanged
-    message with that same identity; Quotes also blocks route closure while the
-    conversation remains open, and refreshing the history does not by itself
-    resolve the pending receipt. Messages are limited to 1,200 characters. A
+    uncertain, the composer remains locked. You may close the panel: QuotePilot
+    keeps the exact request identity and unchanged body in bounded app memory,
+    warns before full-page unload, and restores them when the same conversation
+    is reopened. It does not place message content in browser storage. Use
+    `Reconcile message` to retry the unchanged message with that same identity;
+    refreshing history alone does not resolve the pending receipt. After a
+    definitive rejection, `Reset rejected attempt` explicitly clears the old
+    identity before editing. Messages are limited to 1,200 characters. A
     declined quote keeps its history visible but removes the composer; an
     expired, deleted, rotated, or otherwise inactive portal cannot be used. When
     a portal is safely rotated and delivered again, its new link sees the
@@ -528,12 +547,15 @@ newly generated links use `/app?portal=...`.
   only for the exact same normalized input; a mismatched retry fails closed.
   If a request returns without a server receipt, Import Studio labels the
   outcome uncertain and offers reconciliation of that same batch instead of
-  assuming success or failure. A confirmed receipt is the only completed-state
+  assuming success or failure. While submission or reconciliation is active,
+  Close, reset, source-type changes, and file replacement stay locked so the
+  batch identity cannot be discarded. A confirmed receipt is the only completed-state
   evidence and never implies outbound messages. If another catalog save,
   import, pack action, rollback, or confirmation advanced the revision first,
   the server returns a definitive conflict and makes no writes; Import Studio
-  refreshes the catalog in the background and labels the action as recovery
-  while keeping the file, visible error, or receipt available. Review the
+  refreshes the catalog in place and labels the action as recovery while
+  keeping the batch identity, file, visible error, or receipt available. If the
+  refresh itself fails, use `Retry source refresh`. Review the
   refreshed source before retrying the same batch identity; no completed write
   is assumed.
 - `Undo this import` removes only unchanged documents whose `importBatchId` and
