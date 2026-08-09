@@ -28,8 +28,12 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - `/app/customers` and `/app/customers/:customerId`: temporary-flagged,
   paginated staff customer directory and opaque-ID Internal Customer 360.
 - `/app/quotes`, `/app/quotes/new`, `/app/quotes/:quoteId`, and
-  `/app/quotes/:quoteId/edit`: routed quote list, sticky-mounted builder,
-  focused record, and trusted edit entry points.
+  `/app/quotes/:quoteId/edit`: routed quote administration, sticky-mounted
+  builder, event-first quote record, and trusted edit entry points. The event
+  record composes existing quote/Workflow evidence plus the existing
+  proposal-readiness selector through one deterministic presentation contract;
+  it labels that result as proposal completeness and does not create an
+  event-wide readiness or data-authority contract.
 - `/app/workflow`: routed attention, follow-up, and approval surface; optional
   query parameters focus an exact quote, attention type, and request.
 - `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational

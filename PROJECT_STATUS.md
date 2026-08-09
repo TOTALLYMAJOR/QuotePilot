@@ -17,15 +17,15 @@ Last updated: August 9, 2026
   portal branding. The legacy `tonicatering` Firebase project, hosting site,
   environment filename, deployment confirmations, and service URLs remain
   unchanged infrastructure identifiers.
-- The August 9 customer-centered convergence checkpoint passed 174 unit files
-  with 2,219 tests (4 files / 65 tests skipped). Default Playwright passed 58
+- The August 9 CWF-16 candidate checkpoint passed 177 unit files with 2,234
+  tests (4 files / 65 tests skipped). Default Playwright passed 58
   tests with 20 intentionally flag-gated skips; the complete flag-on workspace
   and accessibility run passed 21/21. Firestore rules passed 61/61 on isolated
   ports, the Firebase staff/portal browser lane passed 4/4, and authoritative
   quote-write coverage passed 3/3. The Firebase lane exposed and then verified
   the fix for an invalid absent Attention-pointer delete sentinel during staff
-  conversation send. The production build transformed 433 modules and emitted
-  2,597,989 aggregate JavaScript bytes with a 390,494-byte largest chunk, within
+  conversation send. The production build transformed 4,976 modules and emitted
+  2,650,137 aggregate JavaScript bytes with a 390,494-byte largest chunk, within
   the exact named temporary exception. Environment, workflow, capability-
   surfacing, documentation-governance, secret, bundle, and diff checks passed.
   All of these are source/local/emulator results, not hosted tenant, provider,
@@ -37,8 +37,8 @@ Last updated: August 9, 2026
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current source uses a named temporary bundle exception while the
   customer-centered workspace convergence remains unmerged. Its no-headroom
-  ceilings match the August 9 completed source/local convergence build at
-  2,597,989 aggregate JavaScript bytes and a 390,494-byte largest chunk, versus
+  ceilings match the August 9 CWF-16 source/local candidate build at 2,650,137
+  aggregate JavaScript bytes and a 390,494-byte largest chunk, versus
   unchanged clean-main metrics of
   1,997,365 and 387,929 bytes. The normal allowance remains 5%, baseline updates
   are blocked while the exception is active, and closure requires the explicit
@@ -59,17 +59,24 @@ Last updated: August 9, 2026
   authority tests, and no callable ownership. This is structural traceability
   evidence, not semantic completeness or proof of visual polish, hosted
   availability, provider behavior, production promotion, or human acceptance.
-- The newly accepted Event Workspace + Intelligence synthesis is roadmap input,
-  not implemented product state. A provisional source scan identifies the
-  focused quote route as only a partial transaction workspace and finds no
-  central Event Intelligence selector, formal Flexibility/change-window
-  contract, or authoritative Operational Slack/Execution Fragility model. It is
-  now sequenced as the earliest post-stabilization source program in
-  `DEV_TASKS.md` and `docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md`, where its
-  required pre-edit repository audit and specification gate remain explicit.
-  Existing proposal readiness, Decision Debt, BEO freshness, dependency
-  reconciliation, and Revenue Autopilot materialization must not be overstated
-  as satisfying that future synthesis.
+- CWF-16 is source/local complete behind the existing customer-centered
+  workspace flag. `/app/quotes/:quoteId` is an event-first record over the
+  existing bounded quote and Workflow contracts; `/app/quotes` remains quote
+  administration and `/app/quotes/:quoteId/edit` remains the trusted editor.
+  Exact identity, sold scope, lifecycle, attention, existing context routes,
+  governed edit state, local/Firebase BEO boundaries, desktop/mobile layout,
+  focus, and console-clean interaction have focused automated and same-state
+  visual evidence. A central presentation-only deterministic selector now
+  synthesizes exact Workflow Attention and proposal-readiness facts into
+  Condition, proposal-scoped Readiness, and Needs You, with stable reason codes
+  behind `Why?`; Flexibility and Alignment fail closed as `Unavailable`. It adds
+  no backend/data authority and does not establish event-wide readiness,
+  inventory, capacity, payment, booking, completion, deployment, hosted
+  availability, flag promotion, or human acceptance. CWF-17 remains the next
+  open source program for broader intelligence synthesis. No formal
+  Flexibility/change-window contract, authoritative Operational Slack or
+  Execution Fragility model, combined Alignment projection, or complete Change
+  Impact synthesis exists yet.
 - Main release governance supports the repository's actual solo-owner
   operating model without inventing an independent reviewer. The explicit
   `solo-operator` policy retains exact-SHA CI/UAT, one allowlisted human,
@@ -102,8 +109,11 @@ Last updated: August 9, 2026
   third existing read adds unread customer-reply Attention without introducing
   a new read contract, data source, or commercial write authority. Stable customer names in Home
   link to Customer 360, exact attention actions retain quote/type/request focus,
-  and quote/payment actions retain exact quote focus. The neutral staff shell
-  remains distinct from tenant-branded customer portal, proposal, and marketing
+  and quote/payment actions retain exact quote focus. That focus now renders the
+  CWF-16 Event Workspace instead of repeating the administration table while
+  preserving existing Schedule, Customer, Workflow, BEO, PDF, conversation,
+  role, lifecycle, and delivery boundaries. The neutral staff shell remains
+  distinct from tenant-branded customer portal, proposal, and marketing
   surfaces. Covered desktop widths keep the action row contained; embedded
   operational routes plus Quotes and Workflow use route-appropriate return
   wording while true modals retain Close; accepted calendar facts stay distinct

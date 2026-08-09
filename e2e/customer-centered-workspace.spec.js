@@ -298,6 +298,11 @@ test.describe("customer-centered workspace", () => {
   });
 
   test("Home targets the exact customer, Workflow attention item, and quote record", async ({ page }) => {
+    const browserErrors = [];
+    page.on("pageerror", (error) => browserErrors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") browserErrors.push(message.text());
+    });
     await page.addInitScript(() => {
       const createdAtISO = "2026-08-08T10:00:00.000Z";
       localStorage.setItem("quoteWizard.quotes", JSON.stringify([
@@ -330,8 +335,28 @@ test.describe("customer-centered workspace", () => {
           createdAtISO,
           updatedAtISO: "2026-08-08T12:00:00.000Z",
           expiresAtISO: "2099-12-31T23:59:59.000Z",
-          customer: { name: "Home Money Customer", email: "money@example.test" },
-          event: { name: "Money Dinner", date: "2027-03-13", guests: 55 },
+          customer: {
+            name: "Home Money Customer",
+            email: "money@example.test",
+            organization: "Bennett Foundation"
+          },
+          event: {
+            name: "Money Dinner",
+            date: "2027-03-13",
+            time: "18:30",
+            guests: 55,
+            venue: "The Foundry Hall",
+            style: "Plated",
+            servers: 4,
+            chefs: 2
+          },
+          selection: {
+            eventTypeId: "benefit-dinner",
+            packageName: "Classic Dinner",
+            menuItemNames: ["Herb Chicken", "Seasonal Vegetables"],
+            rentals: ["linen", "chairs"],
+            rentalQuantities: { linen: 8, chairs: 55 }
+          },
           totals: { total: 5000, deposit: 1500 },
           payment: { depositStatus: "unpaid" },
           lifecycle: { acceptedAtISO: "2026-08-08T12:00:00.000Z" }
@@ -364,6 +389,51 @@ test.describe("customer-centered workspace", () => {
     const focusedQuote = page.locator('.saved-quote-handoff[data-quote-id="home-money-quote"]');
     await expect(focusedQuote).toBeVisible();
     await expect(focusedQuote).toBeFocused();
+    await expect(page.getByRole("heading", { name: "Money Dinner", level: 1 })).toBeVisible();
+    await expect(focusedQuote).toContainText("No tracked quote attention");
+    await expect(focusedQuote).toContainText("not an event-readiness or completion claim");
+    await expect(focusedQuote).toContainText("What this quote records");
+    await expect(focusedQuote.locator('[data-intelligence-dimension="readiness"]'))
+      .toContainText("Proposal completeness only");
+    await expect(focusedQuote.locator('[data-intelligence-dimension="flexibility"]'))
+      .toHaveAttribute("data-intelligence-state", "unavailable");
+    await expect(focusedQuote.locator('[data-intelligence-dimension="alignment"]'))
+      .toHaveAttribute("data-intelligence-state", "unavailable");
+    await focusedQuote.getByText("Why?", { exact: true }).click();
+    await expect(focusedQuote).toContainText("event_change_window_contract_absent");
+    await expect(focusedQuote).toContainText("combined_transaction_integrity_projection_absent");
+    await focusedQuote.getByText("Why?", { exact: true }).click();
+    await expect(focusedQuote.getByRole("button", { name: "Edit quote" })).toHaveCount(0);
+    await expect(focusedQuote.getByRole("button", { name: "Quote administration", exact: true })).toBeVisible();
+
+    if (process.env.CWF16_SCREENSHOT_DESKTOP) {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.evaluate(() => {
+        document.activeElement?.blur();
+        window.scrollTo(0, 0);
+      });
+      await page.waitForTimeout(100);
+      await page.screenshot({ path: process.env.CWF16_SCREENSHOT_DESKTOP, fullPage: false });
+      if (process.env.CWF16_SCREENSHOT_FULL) {
+        await page.screenshot({ path: process.env.CWF16_SCREENSHOT_FULL, fullPage: true });
+      }
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole("heading", { name: "Money Dinner", level: 1 })).toBeVisible();
+    expect(await page.evaluate(() => (
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    ))).toBe(true);
+
+    if (process.env.CWF16_SCREENSHOT_MOBILE) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: process.env.CWF16_SCREENSHOT_MOBILE, fullPage: false });
+    }
+
+    await focusedQuote.getByRole("button", { name: "Back to Quotes" }).click();
+    await expect(page).toHaveURL(/\/app\/quotes$/);
+    await expect(page.getByRole("heading", { name: "Quotes", level: 2 })).toBeVisible();
+    expect(browserErrors).toEqual([]);
   });
 
   test("Workflow exposes Revenue Autopilot as an explicit non-sending, fail-closed preview", async ({ page }) => {

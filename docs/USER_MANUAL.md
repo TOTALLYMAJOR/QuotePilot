@@ -44,7 +44,9 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
    Escape to return focus to the workflow.
 4. Select `Save draft` from the final step. Saving creates or updates the quote
    but does not send it to the customer or mark it sent.
-5. Quote History opens on the exact saved quote. A Firebase-backed admin can
+5. In a customer-centered workspace build, the Event Workspace opens on the
+   exact saved quote; other builds retain the focused Quote History handoff. A
+   Firebase-backed admin can
    submit that saved revision only after QuotePilot confirms that a supported
    email-provider configuration is present. Provider email contains the
    server-built customer portal link; browser-generated PDF attachments are not
@@ -98,6 +100,31 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   requested, split into "Requested, awaiting customer" and "Not yet
   requested" totals. A final balance never appears as actionable until its
   deposit is Stripe-paid, matching the existing final-balance request gate.
+
+## Event Workspace (Quote Detail)
+
+- Open a quote from Home, Customer 360, or Quotes to use
+  `/app/quotes/:quoteId` as the event record. Use `Back to Quotes` or `Quote
+  administration` to return to the full role-gated quote table.
+- Review the exact customer/event identity, quoted scope, lifecycle, and bounded
+  current condition. `No tracked quote attention` means only that the bounded
+  quote/Workflow read has no due item; it does not mean the event is ready or
+  complete.
+- The intelligence strip reuses the existing proposal-readiness calculation and
+  labels it `Proposal readiness`; it measures required proposal fields, not
+  operational event readiness. `Flexibility` and `Alignment` show `Unavailable`
+  until QuotePilot has the required change-window and combined-integrity facts.
+  Open `Why?` to review the exact missing proposal fields, evidence bounds, and
+  stable reason codes. Do not interpret an unavailable dimension as zero or as
+  a negative score.
+- Draft, sent, or viewed quotes show `Edit quote` only when the signed-in role
+  and current delivery state already permit ordinary editing. Accepted/booked
+  records explain the governed-change boundary and do not present ordinary
+  Edit.
+- Schedule and Customer cards open their existing routes. Rentals focuses the
+  selected sold scope. Production/BEO, PDF, and conversation actions retain
+  their existing source, freshness, portal, role, and artifact gates. A local
+  BEO is explicitly a browser download with no server receipt.
   Selecting a quote or payment row opens the authoritative quote record. When
   a row has a stable `customerId`, selecting the customer name opens Customer
   360 instead.

@@ -1,0 +1,341 @@
+import { forwardRef, useRef } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarBlank,
+  ChatCircle,
+  ClipboardText,
+  FilePdf,
+  ListChecks,
+  PencilSimple,
+  UserCircle,
+  UsersThree,
+  Armchair
+} from "@phosphor-icons/react";
+import { buildEventWorkspacePresentation } from "./eventWorkspacePresentation";
+import StatusChip from "./StatusChip";
+
+const CONTEXT_ICONS = {
+  schedule: CalendarBlank,
+  staffing: UsersThree,
+  rentals: Armchair,
+  production: ClipboardText,
+  customer: UserCircle
+};
+
+function ContextCard({ id, title, detail, actionLabel, disabled = false, onClick }) {
+  const Icon = CONTEXT_ICONS[id] || ListChecks;
+  const interactive = typeof onClick === "function";
+  const content = (
+    <>
+      <span className="event-context-icon" aria-hidden="true"><Icon size={22} weight="duotone" /></span>
+      <span className="event-context-copy">
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </span>
+      {interactive && !disabled && <ArrowRight size={18} aria-hidden="true" />}
+      {disabled && <span className="event-context-unavailable">Unavailable</span>}
+    </>
+  );
+
+  if (!interactive) {
+    return <div className="event-context-card" data-context={id}>{content}</div>;
+  }
+  return (
+    <button
+      type="button"
+      className="event-context-card event-context-button"
+      data-context={id}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={`${actionLabel || title}: ${detail}`}
+    >
+      {content}
+    </button>
+  );
+}
+
+const EventWorkspaceView = forwardRef(function EventWorkspaceView({
+  quote,
+  source,
+  ordinaryEditAllowed = false,
+  scheduleAvailable = false,
+  beoAvailable = false,
+  conversationAvailable = false,
+  exportingPdf = false,
+  onBackToQuotes,
+  onEditQuote,
+  onMoreQuoteActions,
+  onOpenWorkflow,
+  onOpenSchedule,
+  onOpenCustomer,
+  onOpenBeo,
+  onExportPdf,
+  onOpenConversation
+}, forwardedRef) {
+  const soldScopeRef = useRef(null);
+  const model = buildEventWorkspacePresentation(quote, {
+    source,
+    ordinaryEditAllowed
+  });
+
+  const runNextAction = () => {
+    if (model.nextAction.kind === "workflow") {
+      onOpenWorkflow?.(model.nextAction.target);
+      return;
+    }
+    if (model.nextAction.kind === "edit") {
+      onEditQuote?.(quote);
+      return;
+    }
+    onMoreQuoteActions?.();
+  };
+
+  const focusSoldScope = () => {
+    soldScopeRef.current?.focus({ preventScroll: false });
+    soldScopeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  return (
+    <article
+      className="event-workspace saved-quote-handoff"
+      data-quote-id={model.quoteId}
+      ref={forwardedRef}
+      tabIndex={-1}
+      aria-labelledby="event-workspace-title"
+      aria-describedby="event-workspace-evidence"
+    >
+      <button type="button" className="event-back-link" onClick={onBackToQuotes}>
+        <ArrowLeft size={18} aria-hidden="true" />
+        Back to Quotes
+      </button>
+
+      <header className="event-identity">
+        <div className="event-identity-copy">
+          <p className="eyebrow">{model.quoteNumber} · {model.sourceLabel}</p>
+          <div className="event-title-row">
+            <h1 id="event-workspace-title">{model.eventName}</h1>
+            <StatusChip {...model.status} />
+          </div>
+          <p className="event-venue">{model.venue}</p>
+          <dl className="event-key-facts" aria-label="Event facts">
+            <div><dt>Customer</dt><dd>{model.customerName}</dd></div>
+            <div><dt>Date</dt><dd>{model.eventDate}</dd></div>
+            <div><dt>Time</dt><dd>{model.eventTime}</dd></div>
+            <div><dt>Guests</dt><dd>{model.guests}</dd></div>
+            <div><dt>Quoted total</dt><dd>{model.total}</dd></div>
+          </dl>
+        </div>
+        <div className="event-primary-actions" aria-label="Event actions">
+          {model.ordinaryEditAllowed && (
+            <button type="button" className="cta" onClick={() => onEditQuote?.(quote)}>
+              <PencilSimple size={18} aria-hidden="true" />
+              Edit quote
+            </button>
+          )}
+          <button type="button" className="ghost" onClick={onMoreQuoteActions}>
+            Quote administration
+          </button>
+        </div>
+      </header>
+
+      <section className="event-triage-grid" aria-label="Current event condition and next action">
+        <div className={`event-condition-card is-${model.attention.state}`}>
+          <p className="eyebrow">Current condition</p>
+          <strong>{model.attention.title}</strong>
+          <p>{model.attention.detail}</p>
+        </div>
+        <div className="event-next-action-card">
+          <p className="eyebrow">{model.intelligence.needsYou.state === "attention" ? "Needs you" : "Next action"}</p>
+          <strong>{model.nextAction.title}</strong>
+          <p>{model.nextAction.detail}</p>
+          <button type="button" className="event-inline-action" onClick={runNextAction}>
+            {model.nextAction.label}
+            <ArrowRight size={17} aria-hidden="true" />
+          </button>
+        </div>
+      </section>
+
+      <section
+        className="event-intelligence"
+        aria-labelledby="event-intelligence-title"
+        data-event-intelligence="deterministic-presentation-v1"
+      >
+        <div className="event-section-heading">
+          <div>
+            <p className="eyebrow">Deterministic intelligence</p>
+            <h2 id="event-intelligence-title">Decision support</h2>
+          </div>
+          <p>Existing evidence only. Unsupported conclusions stay unavailable.</p>
+        </div>
+        <div className="event-intelligence-strip">
+          <div
+            className="event-intelligence-dimension"
+            data-intelligence-dimension="readiness"
+            data-intelligence-state={model.intelligence.readiness.state}
+          >
+            <span>{model.intelligence.readiness.label}</span>
+            <strong>{model.intelligence.readiness.score}%</strong>
+            <small>{model.intelligence.readiness.statusLabel}</small>
+            <progress max="100" value={model.intelligence.readiness.score}>
+              {model.intelligence.readiness.score}%
+            </progress>
+            <em>{model.intelligence.readiness.scopeLabel}</em>
+          </div>
+          <div
+            className="event-intelligence-dimension is-unavailable"
+            data-intelligence-dimension="flexibility"
+            data-intelligence-state={model.intelligence.flexibility.state}
+          >
+            <span>{model.intelligence.flexibility.label}</span>
+            <strong>{model.intelligence.flexibility.statusLabel}</strong>
+            <small>Change-window evidence is not available.</small>
+          </div>
+          <div
+            className="event-intelligence-dimension is-unavailable"
+            data-intelligence-dimension="alignment"
+            data-intelligence-state={model.intelligence.alignment.state}
+          >
+            <span>{model.intelligence.alignment.label}</span>
+            <strong>{model.intelligence.alignment.statusLabel}</strong>
+            <small>Combined integrity evidence is not available.</small>
+          </div>
+        </div>
+        <details className="event-intelligence-why">
+          <summary>Why?</summary>
+          <div className="event-intelligence-evidence">
+            <section>
+              <h3>Proposal readiness</h3>
+              <p>{model.intelligence.readiness.detail}</p>
+              {model.intelligence.readiness.gaps.length > 0 && (
+                <p><strong>Gaps:</strong> {model.intelligence.readiness.gaps.map((gap) => gap.label).join(", ")}</p>
+              )}
+            </section>
+            <section>
+              <h3>Flexibility</h3>
+              <p>{model.intelligence.flexibility.detail}</p>
+            </section>
+            <section>
+              <h3>Alignment</h3>
+              <p>{model.intelligence.alignment.detail}</p>
+            </section>
+            <section>
+              <h3>Evidence boundary</h3>
+              <p>{model.intelligence.evidence.bounds}. Source: {model.intelligence.evidence.source}.</p>
+              <p className="event-reason-codes">
+                <strong>Reason codes:</strong>{" "}
+                {model.intelligence.evidence.reasonCodes.map((code) => <code key={code}>{code}</code>)}
+              </p>
+            </section>
+          </div>
+        </details>
+      </section>
+
+      <section className="event-section" aria-labelledby="event-context-title">
+        <div className="event-section-heading">
+          <div>
+            <p className="eyebrow">Event context</p>
+            <h2 id="event-context-title">Open the record you need</h2>
+          </div>
+          <p>Shortcuts preserve each surface's existing authority.</p>
+        </div>
+        <div className="event-context-grid">
+          <ContextCard
+            id="schedule"
+            {...model.context.schedule}
+            actionLabel="Open Schedule"
+            onClick={onOpenSchedule}
+            disabled={!scheduleAvailable}
+          />
+          <ContextCard id="staffing" {...model.context.staffing} />
+          <ContextCard
+            id="rentals"
+            {...model.context.rentals}
+            actionLabel="Review sold rentals"
+            onClick={focusSoldScope}
+          />
+          <ContextCard
+            id="production"
+            {...model.context.production}
+            actionLabel="Open Production BEO"
+            onClick={onOpenBeo}
+            disabled={!beoAvailable}
+          />
+          <ContextCard
+            id="customer"
+            {...model.context.customer}
+            actionLabel="Open Customer"
+            onClick={onOpenCustomer}
+            disabled={!model.customerId || typeof onOpenCustomer !== "function"}
+          />
+        </div>
+      </section>
+
+      <div className="event-detail-grid">
+        <section
+          className="event-section event-sold-scope"
+          aria-labelledby="event-scope-title"
+          ref={soldScopeRef}
+          tabIndex={-1}
+        >
+          <div className="event-section-heading">
+            <div>
+              <p className="eyebrow">Sold scope</p>
+              <h2 id="event-scope-title">What this quote records</h2>
+            </div>
+            <span className="event-type-chip">{model.eventTypeLabel}</span>
+          </div>
+          <dl className="event-scope-list">
+            {model.soldScope.map((item) => (
+              <div key={item.id} data-scope={item.id}>
+                <dt>{item.label}</dt>
+                <dd>{item.value}</dd>
+                {item.detail && <small>{item.detail}</small>}
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="event-section event-lifecycle" aria-labelledby="event-lifecycle-title">
+          <div className="event-section-heading">
+            <div>
+              <p className="eyebrow">Lifecycle</p>
+              <h2 id="event-lifecycle-title">Quote progress</h2>
+            </div>
+          </div>
+          <ol>
+            {model.lifecycle.map((milestone) => (
+              <li key={milestone.id} className={`is-${milestone.state}`}>
+                <span className="event-lifecycle-marker" aria-hidden="true" />
+                <span><strong>{milestone.label}</strong><small>{milestone.dateLabel}</small></span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
+
+      <footer className="event-workspace-footer">
+        <div>
+          <p id="event-workspace-evidence" className="source-note">{model.evidenceNote}</p>
+          <p className="source-note">{model.editBoundary}</p>
+        </div>
+        <div className="event-secondary-actions">
+          {typeof onExportPdf === "function" && (
+            <button type="button" className="ghost compact" onClick={onExportPdf} disabled={exportingPdf}>
+              <FilePdf size={18} aria-hidden="true" />
+              {exportingPdf ? "Generating PDF..." : "Download PDF"}
+            </button>
+          )}
+          {conversationAvailable && (
+            <button type="button" className="ghost compact" onClick={onOpenConversation}>
+              <ChatCircle size={18} aria-hidden="true" />
+              Conversation
+            </button>
+          )}
+        </div>
+      </footer>
+    </article>
+  );
+});
+
+export default EventWorkspaceView;
