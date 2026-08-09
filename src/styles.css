@@ -4698,12 +4698,105 @@ hr {
   margin: 0.55rem 0 0;
 }
 
+.portal-signature-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.08rem 0.55rem;
+  margin-top: 0.7rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--portal-brand) 30%, #cfd7d2);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.portal-signature-summary span {
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--portal-brand-dark);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.portal-signature-summary strong,
+.portal-signature-summary small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.portal-signature-summary small {
+  color: #66716b;
+}
+
 .portal-accept-confirmation input {
   width: auto;
 }
 
 .portal-decision-submit {
   margin-top: 0.65rem;
+}
+
+.portal-decision-state {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin: 0.15rem 0 0.9rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #cfd7d2;
+  border-left: 4px solid #657a70;
+  border-radius: 8px;
+  background: #f8faf8;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.portal-decision-state-submitting,
+.portal-decision-state-reconciliation {
+  border-left-color: var(--portal-brand);
+  background: color-mix(in srgb, var(--portal-accent) 18%, #fff);
+}
+
+.portal-decision-state-receipt {
+  border-left-color: #347159;
+  background: #f1faf6;
+}
+
+.portal-decision-state-uncertain,
+.portal-decision-state-stale {
+  border-left-color: #a66f19;
+  background: #fff9eb;
+}
+
+.portal-decision-state-error {
+  border-left-color: #a23f35;
+  background: #fff5f3;
+}
+
+.portal-decision-state:focus-visible {
+  outline: 3px solid var(--portal-focus);
+  outline-offset: 2px;
+}
+
+.portal-decision-state strong,
+.portal-decision-state p {
+  margin: 0;
+}
+
+.portal-decision-state p {
+  margin-top: 0.18rem;
+  color: #4f5d56;
+}
+
+.portal-decision-state small {
+  display: block;
+  margin-top: 0.3rem;
+  color: #66716b;
+  overflow-wrap: anywhere;
+}
+
+.portal-decision-state > button {
+  flex: 0 0 auto;
 }
 
 .portal-decision-note-receipt {
@@ -5536,6 +5629,14 @@ hr {
   }
 
   .portal-decision-options {
+    width: 100%;
+  }
+
+  .portal-decision-state {
+    display: grid;
+  }
+
+  .portal-decision-state > button {
     width: 100%;
   }
 
