@@ -11,6 +11,10 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Feature matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Customer workspace backend handoff: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
+- Commercial Change Authority ADR: [docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md](docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md)
+- Commercial Change Authority design/UI/work plan: [design](docs/COMMERCIAL_CHANGE_AUTHORITY_DESIGN.md), [UI specification](docs/COMMERCIAL_CHANGE_AUTHORITY_UI_SPEC.md), [work plan](docs/COMMERCIAL_CHANGE_AUTHORITY_WORK_PLAN.md)
+- Revenue Autopilot ADR: [docs/REVENUE_AUTOPILOT_ADR.md](docs/REVENUE_AUTOPILOT_ADR.md)
+- Revenue Autopilot design/UI/work plan: [design](docs/REVENUE_AUTOPILOT_DESIGN.md), [UI specification](docs/REVENUE_AUTOPILOT_UI_SPEC.md), [work plan](docs/REVENUE_AUTOPILOT_WORK_PLAN.md)
 - Orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
 - Orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
@@ -41,6 +45,10 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - `/?portal=<token>` or `/app?portal=<token>`: customer proposal portal. The
   token takes precedence on every pathname, existing links remain compatible,
   and newly generated canonical links use `/app?portal=...`.
+- `/?unsubscribe=<opaque-token>` on any non-portal pathname: public Revenue
+  Autopilot email-preference surface. Portal precedence is unchanged; the
+  stable signed v1 organization/customer token is hash-bound to server controls
+  and intentionally has no timestamp or expiry.
 
 When `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`, the six operational paths
 above render as recoverably lazy embedded workspace regions and preserve their
@@ -67,6 +75,19 @@ rails in current source, public invoice-first buyer onboarding on the existing
 history, scheduling, reporting, and diagnostics. Source availability does not
 establish production deployment or provider acceptance; see `PROJECT_STATUS.md`
 for current operational truth.
+
+The working-tree candidate also includes dormant Commercial Change Authority
+and Revenue Autopilot programs. Commercial changes can be simulated against
+authoritative pricing, authorized, atomically applied with dependency
+invalidations, reconciled by named dependency evidence, and surfaced through
+trusted Kitchen BEO freshness and deterministic Decision Debt. Revenue
+Autopilot includes tenant controls, scheduled email lanes, unread-reply
+Attention escalation, post-event review requests, customer unsubscribe, and
+provider-webhook reconciliation. These are source/local capabilities behind
+default-off runtime gates; they are not deployed, enabled, provider-accepted,
+production-data, or human-acceptance evidence. A dedicated exact read/reconcile
+contract for a transport-ambiguous commercial apply remains required before
+Commercial Change enforcement may be enabled.
 
 Tenant safety mode:
 - Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
@@ -195,13 +216,36 @@ Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
 webhook secret. Event and Checkout Session `livemode` must also match. The
 tracked Functions template and materializer contain only `STRIPE_MODE`;
 `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, and
+`RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`, and
 `TWILIO_AUTH_TOKEN` are Firebase Secret Manager values bound only to Functions
-that consume them. The materializer rejects all four. Twilio's account SID,
+that consume them. The materializer rejects all six. The Revenue Autopilot
+Resend webhook binds only `RESEND_WEBHOOK_SECRET` and verifies raw requests with
+the repository-pinned `standardwebhooks@1.0.0`; it does not receive the Resend
+API key. `REVENUE_AUTOPILOT_TOKEN_SECRET` only signs/verifies opaque unsubscribe
+scope. Twilio's account SID,
 Messaging Service SID, and owner destination are non-secret runtime values;
 owner alerts route through the Messaging Service rather than a raw sender
 number. Use the credential-isolated runtime channel
 described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and never place real
 provider values in a browser environment, Functions dotenv, or committed file.
+
+Commercial Change and Revenue Autopilot use independent server-owned gates:
+
+```dotenv
+COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false
+REVENUE_AUTOPILOT_ENABLED=false
+REVENUE_AUTOPILOT_SENDS_ENABLED=false
+NOTIFICATIONS_EMAIL_PROVIDER=none
+```
+
+Commercial Change additionally requires the trusted tenant setting
+`commercialChangeAuthorityEnabled=true`; browser principals cannot enable it.
+Revenue Autopilot evaluation/job authority and outbound sends are separate, so
+keep both flags false and the provider `none` until an exact coordinated release
+and provider acceptance. The scheduler runs every 15 minutes in UTC but derives
+eligibility on the tenant's validated IANA calendar. No command here deploys,
+configures production, promotes a gate, creates production data, or proves email
+acceptance/delivery.
 
 Buyer onboarding uses a separate server-only Stripe test rail. Its non-secret
 runtime inventory is `BUYER_ACCESS_ENABLED`, `BUYER_ACCESS_STRIPE_MODE=test`,

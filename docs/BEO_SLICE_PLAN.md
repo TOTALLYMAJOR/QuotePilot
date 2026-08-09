@@ -1,22 +1,28 @@
 # BEO Slice Plan
 
-Status: completed in source by commits `3632021` (slice E) and `eb5791c`
-(slice F). This file is a historical implementation record, not an active work
-order. Current operating guidance lives in `docs/USER_MANUAL.md`, feature state
-in `docs/FEATURE_MATRIX.md`, and release state in `PROJECT_STATUS.md`.
+Status: slices E/F are completed historical work from commits `3632021` and
+`eb5791c`. Slice G is implemented in the current source/local candidate and is
+not deployed, hosted-accepted, or production-promoted. This file is an
+architecture/implementation record, not release authorization. Current
+operating guidance lives in `docs/USER_MANUAL.md`, feature state in
+`docs/FEATURE_MATRIX.md`, and release state in `PROJECT_STATUS.md`.
 
 Source: not from the 2026-08-05 UX audit. This is a new differentiation feature
 (kitchen-facing Banquet Event Order export) proposed and designed in a
 2026-08-06 planning conversation, kept in its own doc so it isn't misread as
 audit-sourced work.
 
-## Historical ground rules
+## Historical E/F ground rules
 
 - These constraints governed the completed implementation; do not rerun the
   slices from this document.
 - Never touch: `firestore.rules`, tenant-scoping logic, `quoteStore.js` status flow, anything under `scripts/`.
 - Baseline tests had to remain green.
 - E2E: not required for this slice (no user-facing wizard/portal strings change).
+
+Those constraints do not describe Slice G, which intentionally adds trusted
+Functions, private rules, client, and UI authority under the accepted
+Commercial Change design documents.
 
 ---
 
@@ -283,11 +289,98 @@ green (364+ at time of writing).
 
 ---
 
-## Deferred (tier 2) — needs new data capture, NOT in slice F
+## Slice G — trusted generation, immutable receipts, freshness, and exact download (source candidate)
 
-Recorded so the next planning pass starts here. Each of these requires
-touching write paths (`quoteStore.js`, `functions/`, rules) or catalog
-schema, i.e. a human decision first:
+Goal: turn the staff Kitchen BEO from a browser-only download with provenance
+into a server-generated artifact whose exact bytes and generation evidence can
+be retained, compared to current canonical source, downloaded later, and used
+to reconcile only qualifying Kitchen BEO invalidations.
+
+Architecture authority:
+
+- `docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md` keeps graph topology and canonical
+  hashing pure and non-authoritative for pricing or mutation.
+- `docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md` owns receipt, role, transaction,
+  invalidation, reconciliation, and publication-eligibility boundaries.
+- `docs/COMMERCIAL_CHANGE_AUTHORITY_UI_SPEC.md` owns visible states and
+  recovery.
+
+### Trusted generation contract
+
+`generateKitchenBeo` accepts only opaque organization, quote, and exact request
+identity from authenticated same-tenant staff. The server:
+
+1. reads the canonical quote and validates the active immutable source revision;
+2. builds the same declared BEO input model used by the reviewed payload adapter;
+3. computes the versioned graph/input/canonical fingerprint;
+4. generates bounded PDF bytes on the server;
+5. transactionally rereads the canonical source before persistence;
+6. writes one immutable receipt plus retained artifact bytes bound to tenant,
+   quote, revision, schemas, actor, server time, fingerprint, byte hash/size,
+   request, and receipt identity; and
+7. resolves only named open Kitchen BEO invalidations whose trusted evidence is
+   satisfied by that exact fresh generation.
+
+Browser-supplied revision, digest, actor, time, payload, bytes, invalidation, or
+completion evidence is never accepted. Idempotent replay returns the existing
+exact receipt only after strict base64 decoding and exact stored byte-length and
+SHA-256 validation. The final generation response performs the same validation;
+a reused identity with changed intent/bytes or corrupt retained bytes fails
+closed.
+
+### Freshness contract
+
+`getKitchenBeoArtifactStatus` returns one bounded staff projection:
+
+| State | Meaning |
+|---|---|
+| `CURRENT` | The current-artifact pointer resolves to the exact immutable successful receipt, its retained bytes pass strict base64 plus exact byte-length/SHA-256 validation, the canonical revision/fingerprint matches, and no qualifying Kitchen BEO invalidation remains open. |
+| `STALE` | A valid prior receipt exists but its revision/fingerprint or named invalidation evidence no longer matches. |
+| `REVIEW` | Trusted source/receipt exists but a governed decision must be reconciled before currentness. |
+| `NOT_GENERATED` | No successful trusted receipt exists. |
+| `UNKNOWN` | Required evidence is missing, corrupt, unsupported, cross-scope, or unavailable. |
+
+This classification proves only declared-input freshness. It does not prove
+inventory, kitchen review, publication, handwritten sign-off, operational
+completion, proposal acceptance, booking, payment, provider delivery, or
+customer view.
+
+### Exact current and prior receipt download
+
+`downloadKitchenBeoReceipt` accepts the exact same-tenant quote and receipt ID,
+validates the immutable private receipt/artifact binding and byte hash/size, and
+returns those retained PDF bytes. It never regenerates an old document from the
+current quote. The staff UI exposes the current receipt and bounded prior
+receipts with separate download actions. A browser download failure does not
+invalidate the server receipt.
+
+### Staff surface and recovery
+
+`KitchenBeoArtifactPanel` lives on the authoritative Quote record and exposes
+all five read states plus ready, submitting, uncertain, reconciliation,
+receipt, error, and recovery mutation states. An uncertain generation retains
+the exact request identity; a definitive rejection must be reset before a
+corrected new request. The public token portal receives no BEO receipt,
+fingerprint, bytes, invalidation, actor, or Decision Debt evidence.
+
+### Source qualification boundary
+
+Focused server authority/PDF/client/component/integration tests cover canonical
+derivation, double-read drift, idempotency/collision, five-state freshness,
+strict base64 and retained-byte length/SHA validation on replay, response,
+status, and download, bounded bytes, exact receipt download, invalidation
+handling, browser download failure, role/scope, and private rules. Final
+full-repository qualification is
+recorded in `PROJECT_STATUS.md` only after it completes. None of this is
+deployment, hosted operator acceptance, production receipt/data, feature-gate
+promotion, or human acceptance.
+
+---
+
+## Deferred (tier 2) — additional data capture outside slices E-G
+
+Recorded so the next planning pass starts here. Each requires new editable
+operational/catalog authority beyond the current trusted artifact inputs:
 
 - Persisted kitchen/special-instructions notes field on the quote (wizard +
   BEO + portal-invisible).

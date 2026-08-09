@@ -341,18 +341,17 @@ without reopening the customer/account or commercial-authority boundary.
 
 ### Platform primitive — highest-priority new program
 
-- The accepted `docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md` governs the
-  source-complete CWF-15A contract: registry ownership and schema evolution,
-  deterministic canonical serialization and hashing, browser/server parity,
-  cycle and version compatibility, and the boundary before future
-  simulation/invalidation authority. The graph may consume
-  server-authoritative pricing outputs but must never become a second pricing
-  engine.
-- Before CWF-15C source work, accept a UI specification with a component
-  state/display matrix for Change Impact, Current/Stale/Review, authorization,
-  invalidation, reconciliation, receipt, error, and recovery states, plus
-  acceptance-criteria traceability from the dependency contract to every
-  discoverable role-safe control and Attention outcome.
+- The accepted `docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md` governs the pure CWF-15A
+  foundation: registry ownership/evolution, canonical serialization/hashing,
+  browser/server parity, traversal, cycle rejection, and proof boundaries. The
+  graph may consume server-authoritative pricing outputs but never calculates
+  prices, persists evidence, or mutates a record.
+- `docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md`, its UI specification, design, and
+  work plan now govern the separately implemented source/local authority:
+  exact-revision simulation, authorization, atomic apply/invalidation, trusted
+  Kitchen BEO receipts/freshness/download, dependency reconciliation, and
+  Decision Debt. Source presence does not promote its default-off enforcement
+  gates or prove deployment/hosted acceptance.
 - **CWF-15 — Commercial Dependency Graph, change blast radius, artifact
   freshness, and decision debt (high).** Introduce a versioned, deterministic
   dependency registry for authoritative commercial facts and the outputs they
@@ -373,17 +372,17 @@ without reopening the customer/account or commercial-authority boundary.
   revision, contract, payment/provider evidence, portal decision, or generated
   artifact, and stale dependents never silently regenerate or republish.
 
-  CWF-15A starts with a schema-versioned Kitchen BEO dependency fingerprint
-  computed from only its declared normalized rendered inputs. The exact source
-  revision and browser-local generation time are displayed separately and are
-  excluded from that digest. It is not persisted, so matching or mismatching
-  hashes do not yet produce retained `CURRENT`, `STALE`, or `REVIEW` truth.
-  A future freshness comparison first requires a trusted server-owned
-  generation receipt; even then matching hashes prove declared-input
-  equivalence only, not provider delivery, customer acceptance, payment,
-  booking, or operational completion. Extend later to staffing, rental/food
-  quantities, production plans, contracts, and payment scopes without
-  conflating their authorities.
+  CWF-15A retains a schema-versioned Kitchen BEO dependency fingerprint over
+  only declared normalized inputs. The original browser download remains
+  provenance only. The current source separately adds trusted server BEO
+  generation: canonical reread/recheck, bounded PDF bytes, immutable receipt,
+  actor/server time, exact current and prior-receipt download, and
+  `CURRENT`/`STALE`/`REVIEW`/`NOT_GENERATED`/`UNKNOWN` classification. Currentness
+  follows the current-artifact pointer to the exact immutable receipt, validates
+  its retained bytes with strict base64 plus exact stored length/SHA-256, and
+  requires no qualifying open invalidation; a
+  hash alone still proves only declared-input equivalence, not publication,
+  delivery, customer acceptance, booking, payment, or completion.
 
   Decision Debt is a deterministic Attention ranking derived from unresolved
   dependency nodes, tenant-local event proximity, bounded commercial exposure,
@@ -391,45 +390,39 @@ without reopening the customer/account or commercial-authority boundary.
   guests, menu, rentals, staffing, and BEO finalization require validated,
   versioned organization settings and explicit defaults. The score explains
   its factors and affected decisions; it is neither predictive AI nor proof
-  that a customer, provider, or staff member took an action. CWF-15A requires
-  pure graph/evaluator tests, cycle and unknown-node rejection, and
-  server/browser parity fixtures. Later freshness, Change Impact, and Attention
-  delivery requires trusted server receipts, transaction and authorization
-  coverage, and CWF-14-bound surfaces with complete state evidence.
+  that a customer, provider, or staff member took an action. Current source
+  derives it only from persisted unresolved dependency state and exposes the
+  deterministic factors/bounds in Workflow. Tenant admins edit the versioned
+  lock policy beside that snapshot; non-admin staff remain read-only.
 
-  Delivery is intentionally sliced. **CWF-15A is source-complete** with the pure
+  Delivery remains intentionally sliced. **CWF-15A is source-complete** with the pure
   versioned registry/evaluator, browser/Node parity fixtures, and a visible BEO
   dependency fingerprint plus exact source and proof-boundary metadata. It does
-  not change quote-write behavior or claim retained freshness. There is no
-  existing governed server BEO generation action.
+  not itself change quote-write behavior or claim retained freshness.
 
-  **CWF-15B-a — generation authority** must introduce a CWF-14-bound server
-  generation/receipt action or move artifact generation authority server-side
-  before QuotePilot can persist an immutable artifact receipt. The server must
-  reload canonical same-tenant data and bind artifact type, quote/revision
-  identity, fingerprint schema, dependency fingerprint, actor, and server time
-  itself; browser-supplied digest, source revision, actor, or time can never
-  become receipt truth. This authority slice remains separate from the existing
-  browser download.
+  **CWF-15B-a — generation authority is present in source.** The server reloads
+  canonical same-tenant data, binds artifact/quote/revision/schema/fingerprint/
+  actor/time/byte evidence, stores immutable receipt/PDF bytes, and supports
+  exact current or prior receipt download. Replays and final responses validate
+  strict base64 and exact stored byte length/SHA-256 before returning retained
+  evidence. Browser-supplied digest, source
+  revision, actor, time, payload, or bytes never become receipt truth.
 
-  **CWF-15B-b — advisory Change Impact** is source-complete: the quote edit
-  surface uses the existing trusted pricing callable to return bounded snapshots
-  of the saved
-  canonical revision and server-authoritatively repriced proposed form, then
-  deterministically presents exact changes, commercial deltas, and affected
-  `REVIEW`/`STALE` nodes. It does not save, authorize, invalidate, regenerate,
-  reconcile, or publish. The delivered preview is only simulation evidence and
-  introduces no independent authorization, invalidation, reconciliation, or
-  publication mutation.
+  **CWF-15B-b — Change Impact simulation is present in source.** It uses the
+  existing trusted pricing boundary, exact saved/proposed snapshots, catalog
+  fencing, deterministic graph effects, and immutable simulation evidence. A
+  simulation remains read-only and cannot itself save or invalidate anything.
 
-  **CWF-15C** compares the current authoritative fingerprint with the trusted
-  CWF-15B-a receipt and promotes the existing CWF-15B-b advisory preview into the
-  role-gated `authorize -> invalidate -> reconcile -> publish` runtime workflow,
-  its atomic
-  invalidation/audit receipts, Current/Stale/Review reconciliation controls, and
-  explainable Decision Debt in Attention. Each slice must independently satisfy
-  CWF-14; later slices cannot manufacture evidence missing from an earlier
-  authority boundary.
+  **CWF-15C source authority is present but dormant by default.** Sales may
+  request and tenant admins may grant exact authorization; the trusted edit
+  transaction atomically writes quote/version/apply/invalidation evidence;
+  staff may reconcile only named open dependencies; BEO generation may resolve
+  only qualifying BEO invalidations; and Workflow exposes Decision Debt. The
+  derived `safeToPublish` result remains eligibility only—no automatic publish
+  action exists. A dedicated exact read/reconcile contract for a transport-
+  ambiguous governed apply outcome remains open and is required before either
+  gate may be enabled. `COMMERCIAL_CHANGE_AUTHORITY_ENABLED` and the trusted tenant
+  gate must both remain off until separately authorized hosted acceptance.
 
 ### First follow-on
 
@@ -527,29 +520,34 @@ without reopening the customer/account or commercial-authority boundary.
   and Workflow, uses a separate exact configuration-refresh receipt, and uses
   idempotent callable-owned receipts for four explicit
   internal review/reopen actions. Those receipts prove internal review only.
-  Outbound review asks remain later work and require consent, unsubscribe,
-  suppression, idempotency, quiet hours, provider evidence, and tenant-time-zone
-  controls. A reminder is an opportunity—not customer contact, a lead, accepted
-  quote, booking, delivery, payment, or revenue fact.
+  The source/local Revenue Autopilot tranche now provides one separately gated
+  post-event review-request occurrence from an exact completed closeout,
+  accepted revision, stable customer, strict template, public HTTPS review URL,
+  consent/subscription, quiet hours, provider readiness, idempotency, bounded
+  retry, unsubscribe, and suppression controls. Reopening or invalidating the
+  closeout self-stops the occurrence; portal expiry alone does not erase valid
+  completed-closeout authority. Runtime and outbound sends still default off,
+  so this is not provider, delivery, review-posted, lead, booking, payment,
+  recovered-revenue, or production evidence.
 - **CWF-12 — Revenue autopilot, email follow-ups, and payment dunning (medium).**
   Add scheduled tenant-branded email policies and Attention escalation on proven
   server/provider boundaries: quote reminders stop on exact portal view,
   acceptance, or decline; deposit reminders require acceptance and stop only on
   webhook-authoritative payment; final-balance reminders use tenant-local
   event-minus-14/7/3-day rules and stop on the matching settled rail; and a
-  customer reply becomes "unacknowledged" only through an explicit trusted
-  staff-read marker, never by inference from message order. The first source
-  tranche is a discoverable, deterministic, read-only Workflow preview. It
-  evaluates one quote from the bounded staff read in the authoritative tenant
-  IANA time zone, explains every eligible/stopped/blocked/not-due result, and
-  fails closed when portal, acceptance, payment, conversation, consent,
-  suppression, quiet-hour, template, or provider evidence is absent. It creates
-  no record, idempotency claim, schedule, Attention item, or send. The later
-  SMS-free execution tranche must add trusted staff-read receipts, quiet hours,
-  consent/suppression/unsubscribe, idempotent scheduler jobs, bounded retry,
-  templates, role gates, and distinct provider-accepted/delivered/bounced/
-  customer-viewed evidence. Any "recovered" value requires an explicit
-  attribution method and must keep booked value, verified money received, and
+  customer reply becomes unacknowledged only through the exact latest message
+  and is resolved by an explicit trusted acknowledgement, never by inference
+  from message order. The read-only Workflow preview remains as advisory
+  explanation. A separate source/local operations tranche now adds versioned
+  tenant policy/templates, customer consent/subscription, public unsubscribe,
+  stable idempotent jobs, bounded quiet-hour retry/dispatch leases, exact
+  provider-outcome reconciliation, unread-reply Attention, a 15-minute bounded
+  scheduler, and signed Resend delivered/bounced/complained handling. Staff see
+  bounded operations in Workflow and controls in Customer 360. Runtime and sends
+  are independently default-off, the webhook uses `standardwebhooks@1.0.0` with
+  only its Secret Manager webhook secret, and no provider/deployment/production/
+  human evidence is inferred. Any recovered-value claim remains deferred and
+  must keep booked value, verified money received, temporal association, and
   accounting revenue separate.
 - **CWF-13 — Customer 360 activation and CRM-grade relationship intelligence
   (medium).** Make the internal customer workspace the default answer to "show
