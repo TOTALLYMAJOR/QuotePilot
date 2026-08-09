@@ -14177,8 +14177,7 @@ exports.stripeWebhook = functions
       eventType: normalizeText(event.type),
       requestHost,
       requestIp,
-      errorCode: normalizeText(err?.code || err?.name || "processing_failed").slice(0, 80),
-      errorMessage: normalizeText(err?.message).slice(0, 240)
+      message: normalizeText(err?.message).slice(0, 240)
     });
     res.status(500).send("Failed to process checkout session.");
     return;
