@@ -1,5 +1,17 @@
+const CURRENCY_FORMATTER = typeof Intl !== "undefined" && typeof Intl.NumberFormat === "function"
+  ? new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+  : null;
+
 export function currency(n) {
-  return `$${(Math.round(Number(n || 0) * 100) / 100).toFixed(2)}`;
+  const amount = Math.round(Number(n || 0) * 100) / 100;
+  const safeAmount = Object.is(amount, -0) ? 0 : amount;
+  if (!CURRENCY_FORMATTER) return `$${safeAmount.toFixed(2)}`;
+  return CURRENCY_FORMATTER.format(safeAmount);
 }
 
 export function serviceChargeLabel(rate) {

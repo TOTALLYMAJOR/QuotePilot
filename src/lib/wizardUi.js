@@ -95,6 +95,44 @@ export function normalizeEventHours(value) {
   return Math.min(MAX_EVENT_HOURS, Math.max(MIN_EVENT_HOURS, parsed));
 }
 
+// Typed counts must land inside the same bounds the +/- controls enforce so a
+// keyed-in value can never drift from the range the pricing engine supports.
+export function clampCount(value, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  const safeMin = Number.isFinite(Number(min)) ? Number(min) : 0;
+  const safeMax = Number.isFinite(Number(max)) ? Number(max) : Number.MAX_SAFE_INTEGER;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return safeMin;
+  return Math.min(safeMax, Math.max(safeMin, Math.round(parsed)));
+}
+
+function toLocalDateISO(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function isPastEventDateISO(dateISO, todayISO = "") {
+  const normalized = normalizeText(dateISO);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return false;
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(normalizeText(todayISO))
+    ? normalizeText(todayISO)
+    : toLocalDateISO(new Date());
+  return normalized < today;
+}
+
+// Preview of the expiry the saved quote will carry (quoteStore stamps
+// expiresAtISO from save time + validity days); date-only local math keeps the
+// label stable across the day the quote is prepared.
+export function resolveQuoteValidThroughISO(validityDays, fromDate = new Date()) {
+  const parsedDays = Number(validityDays);
+  const days = Number.isFinite(parsedDays) && parsedDays > 0
+    ? Math.max(1, Math.round(parsedDays))
+    : 30;
+  const base = fromDate instanceof Date && !Number.isNaN(fromDate.getTime()) ? fromDate : new Date();
+  return toLocalDateISO(new Date(base.getFullYear(), base.getMonth(), base.getDate() + days));
+}
+
 export function createTemplateDefaultsOwnership({
   beforeForm = {},
   afterForm = {},

@@ -516,9 +516,6 @@ h6 {
   flex: 1;
   min-width: 0;
   display: flex;
-  gap: 0.52rem;
-  align-items: flex-start;
-  padding: 0.55rem 0.6rem;
   border-radius: 14px;
   border: 1px solid rgba(201, 153, 74, 0.42);
   background: rgba(255, 250, 238, 0.82);
@@ -527,6 +524,38 @@ h6 {
 
 .stepper-item.status-locked {
   opacity: 0.58;
+}
+
+.stepper-trigger {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 0.52rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.6rem;
+  margin: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 180ms ease;
+}
+
+.stepper-trigger:disabled {
+  cursor: default;
+}
+
+.stepper-item:not(.status-current) .stepper-trigger:not(:disabled):hover {
+  background: rgba(201, 153, 74, 0.16);
+}
+
+.stepper-trigger:focus-visible {
+  outline: none;
+  border-radius: 14px;
+  box-shadow: 0 0 0 3px rgba(201, 147, 52, 0.28);
 }
 
 .step-badge {
@@ -656,6 +685,13 @@ textarea:focus {
 
 .field-hint {
   color: #7d6947;
+}
+
+.field-warning-note {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #8a5308;
 }
 
 .field-error-note {
@@ -1148,6 +1184,13 @@ thead th {
 
 .quote-total-line strong {
   text-decoration: underline;
+}
+
+.quote-per-guest-note {
+  margin-top: 0.28rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: #685539;
 }
 
 .quote-sheet-bottom {

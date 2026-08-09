@@ -1,10 +1,30 @@
 import { describe, expect, test } from "vitest";
-import { calculateQuote } from "../quoteCalculator";
+import { calculateQuote, currency } from "../quoteCalculator";
 import {
   quoteCalculationCatalog,
   quoteCalculationFixtures,
   quoteCalculationSettings
 } from "./fixtures/quoteCalculationFixtures";
+
+describe("currency", () => {
+  test("formats customer-facing amounts with thousands separators", () => {
+    expect(currency(0)).toBe("$0.00");
+    expect(currency(8.5)).toBe("$8.50");
+    expect(currency(999.99)).toBe("$999.99");
+    expect(currency(1000)).toBe("$1,000.00");
+    expect(currency(8379.21)).toBe("$8,379.21");
+    expect(currency(1234567.891)).toBe("$1,234,567.89");
+  });
+
+  test("stays safe on empty, invalid, and negative input", () => {
+    expect(currency()).toBe("$0.00");
+    expect(currency(null)).toBe("$0.00");
+    expect(currency("")).toBe("$0.00");
+    expect(currency(Number.NaN)).toBe("$0.00");
+    expect(currency(-0)).toBe("$0.00");
+    expect(currency(-1250.5)).toBe("-$1,250.50");
+  });
+});
 
 describe("calculateQuote fixtures", () => {
   test("returns deterministic totals for identical inputs", () => {

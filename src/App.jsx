@@ -40,6 +40,7 @@ import {
   normalizeEventHours,
   releaseTemplateDefaultsOwnership,
   resolveFirstValidPackageId,
+  resolveQuoteValidThroughISO,
   restoreTemplateOwnedDefaults,
   STEP1_REQUIRED_FIELDS
 } from "./lib/wizardUi";
@@ -843,6 +844,10 @@ export default function App({ tenantContext, authSession }) {
   );
   const step1Validation = stepValidation.step1 || { valid: false, missingFields: [], fieldErrors: {} };
   const step1CanAdvance = step1Validation.valid;
+  const quoteValidityDays = Math.max(1, Number(catalog.settings?.quoteValidityDays || 30));
+  const quoteValidThroughLabel = new Date(
+    `${resolveQuoteValidThroughISO(quoteValidityDays)}T12:00:00`
+  ).toLocaleDateString();
 
   const effectiveMenuSections = useMemo(
     () => (Array.isArray(dynamicMenuSections) ? dynamicMenuSections : []),
@@ -1534,16 +1539,20 @@ export default function App({ tenantContext, authSession }) {
     applyRecommendation(nextRecommendation, { userOriginated: false });
   }, [aiAutopilotEnabled, recommendations, step]);
 
+  const revealStep1Validation = () => {
+    markFieldsTouched(STEP1_REQUIRED_FIELDS.map((field) => field.key));
+    setShowStepValidation(true);
+    window.requestAnimationFrame(() => {
+      const firstInvalid = document.querySelector(".wizard-panel [aria-invalid='true']");
+      firstInvalid?.scrollIntoView({ behavior: "smooth", block: "center" });
+      firstInvalid?.focus({ preventScroll: true });
+    });
+  };
+
   const handleNextStep = () => {
     if (catalog.loading) return;
     if (step === 1 && !step1CanAdvance) {
-      markFieldsTouched(STEP1_REQUIRED_FIELDS.map((field) => field.key));
-      setShowStepValidation(true);
-      window.requestAnimationFrame(() => {
-        const firstInvalid = document.querySelector(".wizard-panel [aria-invalid='true']");
-        firstInvalid?.scrollIntoView({ behavior: "smooth", block: "center" });
-        firstInvalid?.focus({ preventScroll: true });
-      });
+      revealStep1Validation();
       return;
     }
     if (step === 2 && selectedMenuItemCount < 1) {
@@ -1553,6 +1562,27 @@ export default function App({ tenantContext, authSession }) {
     setShowStepValidation(false);
     recordProductAnalyticsEvent("wizard_step_completed", { step });
     setStep((current) => Math.min(5, current + 1));
+  };
+
+  // Stepper chips double as direct navigation: backward jumps are always
+  // allowed, forward jumps pass the same gates as walking Next step-by-step.
+  const handleStepSelect = (targetStep) => {
+    if (catalog.loading) return;
+    const target = Math.min(5, Math.max(1, Math.round(Number(targetStep) || 1)));
+    if (target === step) return;
+    if (target > step) {
+      if (!step1CanAdvance) {
+        if (step !== 1) setStep(1);
+        revealStep1Validation();
+        return;
+      }
+      if (target > 2 && selectedMenuItemCount < 1) {
+        showMissingMenuSelection({ moveToMenuStep: true });
+        return;
+      }
+    }
+    setShowStepValidation(false);
+    setStep(target);
   };
 
   const handleSubmitQuote = async () => {
@@ -2482,22 +2512,33 @@ export default function App({ tenantContext, authSession }) {
           <ol className="stepper" ref={stepperRef}>
             {stepperModel.map((stepMeta) => {
               const stepOneMissing = stepMeta.stepNumber === 1 && !step1Validation.valid;
+              const isCurrentStep = stepMeta.stepNumber === step;
               return (
                 <li
                   key={stepMeta.label}
                   className={`stepper-item status-${stepMeta.status} ${stepMeta.isLocked ? "is-locked" : ""}`.trim()}
-                  aria-current={stepMeta.stepNumber === step ? "step" : undefined}
+                  aria-current={isCurrentStep ? "step" : undefined}
                 >
-                  <span className="step-badge">
-                    {stepMeta.status === "completed" ? "✓" : stepOneMissing ? "!" : stepMeta.stepNumber}
-                  </span>
-                  <div className="step-copy">
-                    <em>{stepMeta.label}</em>
-                    <small>{stepMeta.microcopy}</small>
-                    {stepOneMissing && (
-                      <small className="step-warning">Missing required fields</small>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    className="stepper-trigger"
+                    onClick={() => handleStepSelect(stepMeta.stepNumber)}
+                    disabled={stepMeta.isLocked || catalog.loading}
+                    aria-label={isCurrentStep
+                      ? `Step ${stepMeta.stepNumber}: ${stepMeta.label} (current step)`
+                      : `Go to step ${stepMeta.stepNumber}: ${stepMeta.label}`}
+                  >
+                    <span className="step-badge" aria-hidden="true">
+                      {stepMeta.status === "completed" ? "✓" : stepOneMissing ? "!" : stepMeta.stepNumber}
+                    </span>
+                    <span className="step-copy">
+                      <em>{stepMeta.label}</em>
+                      <small>{stepMeta.microcopy}</small>
+                      {stepOneMissing && (
+                        <small className="step-warning">Missing required fields</small>
+                      )}
+                    </span>
+                  </button>
                 </li>
               );
             })}
@@ -2606,8 +2647,11 @@ export default function App({ tenantContext, authSession }) {
                   <p><strong>Event:</strong> {form.eventName || "-"}{form.date ? ` · ${form.date}` : ""}</p>
                   <p><strong>Guests:</strong> {totals.guests}</p>
                   <p><strong>Total:</strong> {currency(totals.total)}</p>
+                  {totals.guests > 0 && (
+                    <p><strong>Per guest (all-in):</strong> {currency(totals.total / totals.guests)}</p>
+                  )}
                   <p><strong>Deposit:</strong> {currency(totals.deposit)}</p>
-                  <p><strong>Quote validity:</strong> {Math.max(1, Number(catalog.settings?.quoteValidityDays || 30))} days</p>
+                  <p><strong>Quote validity:</strong> {quoteValidityDays} days (through {quoteValidThroughLabel})</p>
                   <p className="muted">Saving creates a draft. You'll send it to the customer from the next screen.</p>
                 </article>
                 <div className="grid two-col">
@@ -2667,7 +2711,7 @@ export default function App({ tenantContext, authSession }) {
             </div>
           </div>
 
-          <p className="source-note">Quote validity: {Math.max(1, Number(catalog.settings?.quoteValidityDays || 30))} days</p>
+          <p className="source-note">Quote validity: {quoteValidityDays} days · through {quoteValidThroughLabel}</p>
           {isEditingQuote && (
             <p className="warning-note">
               Editing quote {editingQuote.quoteNumber}. Saving updates this quote (with version history) and keeps labor rates locked by snapshot.

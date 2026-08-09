@@ -37,10 +37,17 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
    - `Add-ons / Rentals`
    - `Pricing Summary`
    - `Save Quote`
+   Step chips in the progress rail are buttons: click any earlier step to
+   return to it directly, or jump ahead once Event Basics required fields (and
+   a Step 2 menu selection) are complete. Blocked forward jumps show the same
+   validation guidance as `Next`.
 3. Review the sticky Live Breakdown panel while editing. After entering the
    wizard on a phone or tablet, all five steps keep Total and Deposit in view.
    Use `View breakdown` for the focus-contained itemized sheet and `Close` or
-   Escape to return focus to the workflow.
+   Escape to return focus to the workflow. Totals include an `All-in per
+   guest` figure (total divided by priced guests), and the Pricing Summary
+   sheet and save step state the exact `valid through` date for the configured
+   validity window.
 4. Select `Save draft` from the final step. Saving creates or updates the quote
    but does not send it to the customer or mark it sent.
 5. Quote History opens on the exact saved quote. A Firebase-backed admin can

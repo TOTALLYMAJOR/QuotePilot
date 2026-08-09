@@ -2,13 +2,16 @@ import { describe, expect, test } from "vitest";
 import {
   applyEventTypeTemplateDefaults,
   buildStepStatus,
+  clampCount,
   createTemplateDefaultsOwnership,
   detectBreakdownValueChanges,
   findTemplateForEventType,
+  isPastEventDateISO,
   MIN_EVENT_HOURS,
   normalizeEventHours,
   releaseTemplateDefaultsOwnership,
   resolveFirstValidPackageId,
+  resolveQuoteValidThroughISO,
   restoreTemplateOwnedDefaults,
   validateStep1
 } from "../wizardUi";
@@ -99,6 +102,36 @@ describe("wizardUi", () => {
     });
 
     expect(statuses).toEqual(["completed", "completed", "current", "incomplete", "incomplete"]);
+  });
+
+  test("clampCount keeps typed counts inside the supported pricing range", () => {
+    expect(clampCount(1000, 0, 400)).toBe(400);
+    expect(clampCount(-5, 0, 400)).toBe(0);
+    expect(clampCount("120", 0, 400)).toBe(120);
+    expect(clampCount("7.6", 0, 400)).toBe(8);
+    expect(clampCount("", 0, 400)).toBe(0);
+    expect(clampCount("abc", 0, 400)).toBe(0);
+    expect(clampCount(35, 0, 30)).toBe(30);
+    expect(clampCount(2, 5, 30)).toBe(5);
+  });
+
+  test("isPastEventDateISO flags only dates before the reference day", () => {
+    expect(isPastEventDateISO("2026-03-10", "2026-03-11")).toBe(true);
+    expect(isPastEventDateISO("2026-03-11", "2026-03-11")).toBe(false);
+    expect(isPastEventDateISO("2026-03-12", "2026-03-11")).toBe(false);
+    expect(isPastEventDateISO("", "2026-03-11")).toBe(false);
+    expect(isPastEventDateISO("not-a-date", "2026-03-11")).toBe(false);
+    expect(typeof isPastEventDateISO("2001-01-01")).toBe("boolean");
+    expect(isPastEventDateISO("2001-01-01")).toBe(true);
+  });
+
+  test("resolveQuoteValidThroughISO adds validity days with month rollover", () => {
+    const from = new Date(2026, 2, 11); // March 11, 2026 local time
+    expect(resolveQuoteValidThroughISO(30, from)).toBe("2026-04-10");
+    expect(resolveQuoteValidThroughISO(1, from)).toBe("2026-03-12");
+    expect(resolveQuoteValidThroughISO(0, from)).toBe("2026-04-10");
+    expect(resolveQuoteValidThroughISO("garbage", from)).toBe("2026-04-10");
+    expect(resolveQuoteValidThroughISO(45, new Date(2026, 11, 20))).toBe("2027-02-03");
   });
 
   test("findTemplateForEventType matches by template id then by name", () => {

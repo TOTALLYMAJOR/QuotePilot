@@ -121,8 +121,8 @@ describe("proposal payload snapshots", () => {
       {
         "body": "Hi Jordan Lee,
       Thank you for considering Acme Events Catering for Spring Gala on 2026-04-20 at Pine Hall.
-      Your quote (Q-2026-0042) total is $8379.21.
-      To reserve your date, the deposit due is $2513.76.
+      Your quote (Q-2026-0042) total is $8,379.21.
+      To reserve your date, the deposit due is $2,513.76.
       Deposit payment link: https://checkout.stripe.com/c/pay/cs_test_q_2026_0042
       This quote is valid through 2026-04-09.
       Please reply with any questions or requested adjustments.

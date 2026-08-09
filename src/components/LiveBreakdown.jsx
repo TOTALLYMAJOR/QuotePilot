@@ -487,6 +487,13 @@ export default function LiveBreakdown({
             delta={rowEffects.total?.delta || 0}
             strong
           />
+          {totals.guests > 0 && (
+            <BreakdownTextRow
+              rowKey="perGuestAllIn"
+              label="All-in per guest"
+              value={money(displayValues.total / totals.guests)}
+            />
+          )}
           <BreakdownMoneyRow
             rowKey="deposit"
             label={`Deposit (${Math.round(settings.depositPct * 100)}%)`}

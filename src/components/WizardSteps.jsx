@@ -1,21 +1,29 @@
 import { useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
-import { MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
+import {
+  clampCount,
+  isPastEventDateISO,
+  MAX_EVENT_HOURS,
+  MIN_EVENT_HOURS,
+  normalizeEventHours,
+  resolveQuoteValidThroughISO
+} from "../lib/wizardUi";
 
 function joinClassNames(...parts) {
   return parts.filter(Boolean).join(" ");
 }
 
-function Field({ label, children, error = "", hint = "", required = false, className = "" }) {
+function Field({ label, children, error = "", warning = "", hint = "", required = false, className = "" }) {
   return (
-    <label className={joinClassNames("field", className, error && "field-error")}> 
+    <label className={joinClassNames("field", className, error && "field-error")}>
       <span>
         {label}
         {required && <em className="field-required" aria-hidden="true">*</em>}
       </span>
       {children}
       {error && <small className="field-error-note">{error}</small>}
-      {!error && hint && <small className="field-hint">{hint}</small>}
+      {!error && warning && <small className="field-warning-note" role="status">{warning}</small>}
+      {!error && !warning && hint && <small className="field-hint">{hint}</small>}
     </label>
   );
 }
@@ -91,7 +99,7 @@ function StepperNumberInput({
           max={max}
           value={safeValue}
           aria-label={label}
-          onChange={(e) => onChange(Number(e.target.value || 0))}
+          onChange={(e) => onChange(clampCount(e.target.value, min, max))}
           onBlur={onBlur}
           aria-invalid={Boolean(error)}
         />
@@ -226,7 +234,14 @@ export function StepEvent({
             onClearDefaults={onClearTemplateDefaults}
             onDismiss={onDismissTemplateNotice}
           />
-          <Field label="Event date" error={getError("date")} required>
+          <Field
+            label="Event date"
+            error={getError("date")}
+            warning={isPastEventDateISO(form.date)
+              ? "This date is in the past — double-check it before sending the quote."
+              : ""}
+            required
+          >
             <input
               type="date"
               value={form.date}
@@ -973,6 +988,7 @@ export function StepReview({ form, totals, settings, readiness = null }) {
   );
   const menuNames = (form.menuItems || []).map((id) => menuLookup.get(id)).filter(Boolean);
   const effectivePerPerson = totals.guests > 0 ? totals.base / totals.guests : 0;
+  const allInPerGuest = totals.guests > 0 ? totals.total / totals.guests : 0;
   const staffingOnly = Math.max(0, totals.labor - totals.bartenderLabor);
   const staffingLaborEnabled = totals.staffingLaborEnabled !== false;
   const staffTeamLabel = [
@@ -985,6 +1001,9 @@ export function StepReview({ form, totals, settings, readiness = null }) {
     .map(([role, count]) => `${count} ${role}${count === 1 ? "" : "s"}`)
     .join(" · ");
   const validityDays = Math.max(1, Number(settings.quoteValidityDays || 30));
+  const validThroughLabel = new Date(
+    `${resolveQuoteValidThroughISO(validityDays)}T12:00:00`
+  ).toLocaleDateString();
   const businessContact = [
     settings.businessAddress,
     settings.businessPhone,
@@ -1021,7 +1040,7 @@ export function StepReview({ form, totals, settings, readiness = null }) {
           </p>
           <p><strong>Phone #:</strong> {form.phone || "-"}</p>
           <p><strong>Email Address:</strong> {form.email || "-"}</p>
-          <p><strong># of Guests:</strong> {form.guests || 0}</p>
+          <p><strong># of Guests:</strong> {totals.guests || 0}</p>
           <p><strong>Time of Event:</strong> {eventTimeLabel}</p>
           <p><strong>Name of Event:</strong> {form.eventName || "-"}</p>
           <p><strong>Date of Event:</strong> {eventDateLabel}</p>
@@ -1060,10 +1079,15 @@ export function StepReview({ form, totals, settings, readiness = null }) {
           <p className="quote-center-note"><strong>{settings.disposablesNote || "All disposables are included in this quote."}</strong></p>
         )}
         <p className="quote-total-line">TOTAL: <strong>{currency(totals.total)}</strong></p>
+        {totals.guests > 0 && (
+          <p className="quote-per-guest-note">
+            {currency(allInPerGuest)} per guest all-in — includes staffing, travel, service charge, and tax.
+          </p>
+        )}
 
         <div className="quote-sheet-bottom">
           <p><strong>Quote prepared by:</strong> {settings.quotePreparedBy || "-"}</p>
-          <p><strong>Quote is valid for {validityDays} days.</strong></p>
+          <p><strong>Quote is valid for {validityDays} days — through {validThroughLabel}.</strong></p>
         </div>
         <p className="quote-acceptance">To accept quote, please sign and return to {settings.acceptanceEmail || settings.businessEmail || "-"}</p>
         <p className="quote-deposit-tag"><strong>{settings.depositNotice || "30% deposit is required to lock in your date."}</strong></p>
@@ -1072,6 +1096,9 @@ export function StepReview({ form, totals, settings, readiness = null }) {
 
       <div className="summary-total">
         <p>Deposit ({Math.round(settings.depositPct * 100)}%): <strong>{currency(totals.deposit)}</strong></p>
+        {totals.guests > 0 && (
+          <p>All-in per guest: <strong>{currency(allInPerGuest)}</strong></p>
+        )}
       </div>
     </div>
   );

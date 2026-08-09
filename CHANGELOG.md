@@ -8,6 +8,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Direct wizard-step navigation from the quote stepper. Each step chip is now
+  a button: earlier steps open immediately, while forward jumps pass the same
+  step-1 required-field and step-2 menu-selection gates as walking Next
+  step-by-step, including the existing focus-and-explain validation guidance.
+- An all-in per-guest figure across the quoting surfaces: the Live Breakdown
+  totals, the customer-facing proposal sheet under TOTAL, the staff summary,
+  and the save-step recap now show total cost divided by priced guests so
+  competitive per-head comparisons need no manual math.
+- An explicit quote expiration date. The proposal sheet, save-step recap, and
+  wizard footer now pair the configured validity window with the concrete
+  "valid through" calendar date, matching the expiry the saved quote records.
+- A non-blocking past-date warning on the wizard's event date field so stale
+  dates are caught before a proposal is prepared, without blocking edits to
+  historical quotes.
+
 - Independent recovery boundaries for every lazy public route and workspace
   tool. A failed chunk now preserves the surrounding app and exposes executing
   retry, reload, and close/back actions with sanitized diagnostics. The seven
@@ -89,6 +104,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Customer-facing money formatting now uses en-US thousands separators
+  (for example `$8,379.21`) across the wizard, live breakdown, proposal sheet,
+  quote emails, exports, and portal surfaces via the shared currency helper.
+- Typed counts in the wizard's stepper number inputs (guests and staffing)
+  are clamped to the same supported range as the +/- controls, and the
+  proposal sheet's guest count now always displays the priced guest count, so
+  a keyed-in value can no longer drift from what the pricing engine charges.
 - Browser navigation smoke coverage now recognizes the Workflow button's live
   accessible-status suffix, preventing a release check race after attention
   data loads.
