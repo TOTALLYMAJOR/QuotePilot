@@ -389,6 +389,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Workspace selection cues now use a short two-grain click-chirp while
+  remaining behind the central sound preference and fail-silent Web Audio
+  boundary.
 - The full provisioning emulator acceptance runner now fails immediately unless
   both quote-payment and buyer-access Stripe rails are explicitly configured for
   test mode, both synthetic webhook secrets are present, the buyer-access server

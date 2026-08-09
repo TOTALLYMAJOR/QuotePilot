@@ -31,7 +31,7 @@ const TONE_PROFILES = Object.freeze({
   neutral: { notes: [880], tilt: 0, brightness: 2200 }
 });
 
-function scheduleGrain(context, destination, { frequency, at, peak, duration, detune = 0 }) {
+function scheduleGrain(context, destination, frequency, at, peak, duration, detune = 0) {
   const oscillator = context.createOscillator();
   const gain = context.createGain();
   oscillator.type = "sine";
@@ -71,25 +71,22 @@ export function playShimmerChime(tone = "neutral", { random = Math.random } = {}
 
     const start = context.currentTime + 0.02;
     profile.notes.forEach((frequency, index) => {
-      scheduleGrain(context, master, {
-        frequency,
-        at: start + index * 0.09,
-        peak: 0.042,
-        duration: 0.34
-      });
+      scheduleGrain(context, master, frequency, start + index * 0.09, 0.042, 0.34);
     });
 
     // Particle shimmer: eight whisper-level grains scattered across ~0.28s,
     // drifting up or down with the tone's tilt.
     const base = profile.notes[profile.notes.length - 1];
     for (let i = 0; i < 8; i += 1) {
-      scheduleGrain(context, master, {
-        frequency: base * (1.5 + random() * 0.75) * (profile.tilt < 0 ? 0.5 : 1),
-        at: start + 0.05 + random() * 0.23,
-        peak: 0.008 + random() * 0.007,
-        duration: 0.12 + random() * 0.1,
-        detune: (random() - 0.5) * 40 * (profile.tilt || 1)
-      });
+      scheduleGrain(
+        context,
+        master,
+        base * (1.5 + random() * 0.75) * (profile.tilt < 0 ? 0.5 : 1),
+        start + 0.05 + random() * 0.23,
+        0.008 + random() * 0.007,
+        0.12 + random() * 0.1,
+        (random() - 0.5) * 40 * (profile.tilt || 1)
+      );
     }
     return true;
   } catch {
@@ -112,15 +109,14 @@ function withContext(run) {
   }
 }
 
-// Whisper-level UI tick for micro-interactions (selections, count changes).
+// Soft UI tick for micro-interactions (selections, count changes). Two quick
+// grains a fifth apart read as a "click-chirp" that survives normal room
+// noise while staying well under notification-sound loudness.
 export function playTick() {
   return withContext((context) => {
-    scheduleGrain(context, context.destination, {
-      frequency: 1318.5,
-      at: context.currentTime + 0.01,
-      peak: 0.016,
-      duration: 0.07
-    });
+    const at = context.currentTime + 0.01;
+    scheduleGrain(context, context.destination, 1318.5, at, 0.034, 0.1);
+    scheduleGrain(context, context.destination, 1975.5, at + 0.035, 0.02, 0.08);
   });
 }
 
@@ -129,8 +125,8 @@ export function playTick() {
 export function playSeal() {
   return withContext((context) => {
     const at = context.currentTime + 0.02;
-    scheduleGrain(context, context.destination, { frequency: 98, at, peak: 0.05, duration: 0.28 });
-    scheduleGrain(context, context.destination, { frequency: 196, at: at + 0.03, peak: 0.028, duration: 0.18 });
-    scheduleGrain(context, context.destination, { frequency: 587.33, at: at + 0.06, peak: 0.012, duration: 0.12 });
+    scheduleGrain(context, context.destination, 98, at, 0.05, 0.28);
+    scheduleGrain(context, context.destination, 196, at + 0.03, 0.028, 0.18);
+    scheduleGrain(context, context.destination, 587.33, at + 0.06, 0.012, 0.12);
   });
 }
