@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import EventRunOfShowPanel from "./EventRunOfShowPanel";
 import StatusChip from "./StatusChip";
 import {
   buildKitchenCheckpoints,
@@ -25,6 +26,9 @@ import {
   formatWorkspaceText,
   hasWorkspaceNumber
 } from "../lib/workspacePresentation";
+import { buildEventRunOfShowReadModel } from "../lib/eventRunOfShow";
+
+export const EVENT_SCHEDULE_QUOTE_LIMIT = 500;
 
 const STATUS_SET = new Set(["accepted", "booked"]);
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -365,7 +369,15 @@ export function EventScheduleView({
   const embedded = presentation === "embedded";
   const todayIso = toIsoDate(new Date());
   const routeHeadingRef = useRef(null);
-  const [state, setState] = useState({ loading: false, error: "", source: "", quotes: [] });
+  const loadGenerationRef = useRef(0);
+  const [state, setState] = useState({
+    loading: true,
+    error: "",
+    source: "",
+    quotes: [],
+    truncated: false,
+    organizationId: ""
+  });
   const [viewMode, setViewMode] = useState("month");
   const [anchorIso, setAnchorIso] = useState(todayIso);
   const [selectedIso, setSelectedIso] = useState(todayIso);
@@ -376,16 +388,37 @@ export function EventScheduleView({
   const [dropLaneKey, setDropLaneKey] = useState("");
 
   const load = async () => {
-    setState((prev) => ({ ...prev, loading: true, error: "" }));
+    const readOrganizationId = String(organizationId || "").trim();
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    setState((prev) => (
+      prev.organizationId === readOrganizationId
+        ? { ...prev, loading: true, error: "" }
+        : {
+          loading: true,
+          error: "",
+          source: "",
+          quotes: [],
+          truncated: false,
+          organizationId: readOrganizationId
+        }
+    ));
     try {
-      const result = await getQuoteHistory({ organizationId });
+      const result = await getQuoteHistory({
+        organizationId: readOrganizationId,
+        limitCount: EVENT_SCHEDULE_QUOTE_LIMIT
+      });
+      if (loadGenerationRef.current !== generation) return;
       setState({
         loading: false,
         error: "",
         source: result.source,
-        quotes: result.quotes
+        quotes: result.quotes,
+        truncated: result.truncated === true,
+        organizationId: readOrganizationId
       });
     } catch (err) {
+      if (loadGenerationRef.current !== generation) return;
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -399,6 +432,9 @@ export function EventScheduleView({
     setFeedback("");
     setDropLaneKey("");
     load();
+    return () => {
+      loadGenerationRef.current += 1;
+    };
   }, [open, organizationId]);
 
   const anchorDate = parseIsoDate(anchorIso) || parseIsoDate(todayIso) || new Date();
@@ -434,6 +470,15 @@ export function EventScheduleView({
   );
   const selectedCounts = countByStatus(selectedEvents);
   const selectedDayConflicts = dayConflicts.get(selectedIso) || EMPTY_DAY_CONFLICT;
+  const selectedDayRunOfShow = useMemo(
+    () => buildEventRunOfShowReadModel({
+      quotes: state.quotes.filter((quote) => String(quote?.event?.date || "").trim() === selectedIso),
+      source: state.source,
+      upstreamTruncated: state.truncated,
+      upstreamLimit: EVENT_SCHEDULE_QUOTE_LIMIT
+    }),
+    [selectedIso, state.quotes, state.source, state.truncated]
+  );
 
   const resolvedStaffLeads = useMemo(() => {
     const base = normalizeStaffLeads(staffLeads);
@@ -970,9 +1015,14 @@ export function EventScheduleView({
                 {selectedDayConflicts.capacity > 0 ? ` • capacity ${selectedDayConflicts.capacity}` : ""}
               </p>
             )}
-            {selectedEvents.length === 0 ? (
-              <p className="muted">No accepted/booked events for this day.</p>
-            ) : (
+            <EventRunOfShowPanel
+              model={selectedDayRunOfShow}
+              selectedDateLabel={formatScheduleDayLabel(selectedIso)}
+              loading={state.loading}
+              error={state.error}
+              onRetry={load}
+            />
+            {selectedEvents.length > 0 && (
               <>
                 <div className="schedule-event-list">
                   {selectedEvents.map((item) => {
@@ -1033,7 +1083,7 @@ export function EventScheduleView({
                       )}
                       <div className="schedule-production-checklist">
                         <div className="schedule-production-head">
-                          <strong>Production checklist</strong>
+                          <strong>Production checklist controls</strong>
                           <span>
                             {item.productionChecklist.completed}/{item.productionChecklist.total}
                           </span>
@@ -1065,7 +1115,7 @@ export function EventScheduleView({
                       </div>
                       {item.kitchenCheckpoints.length > 0 ? (
                         <div className="schedule-checkpoints">
-                          <strong>Kitchen checkpoints</strong>
+                          <strong>Kitchen checkpoint controls</strong>
                           <div className="schedule-checkpoint-list">
                             {item.kitchenCheckpoints.map((checkpoint) => (
                               <div key={`${item.id}-${checkpoint.id}`} className="schedule-checkpoint-item">
