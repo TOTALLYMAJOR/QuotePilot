@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: August 7, 2026
+Last updated: August 9, 2026
 
 ## Goal
 Prepare, promote, and verify QuotePilot safely with isolated credentials,
@@ -167,6 +167,11 @@ channels, not in the prepare job:
   - `RESEND_API_KEY` in Firebase Secret Manager before any Resend-bound
     Function is deployed; provider enablement remains controlled separately by
     `NOTIFICATIONS_EMAIL_PROVIDER`
+  - `RESEND_WEBHOOK_SECRET` in Firebase Secret Manager for the Revenue
+    Autopilot webhook only; do not bind `RESEND_API_KEY` to that webhook
+  - `REVENUE_AUTOPILOT_TOKEN_SECRET` in Firebase Secret Manager only for signed
+    unsubscribe-token issue/verification; never reuse a provider, Stripe,
+    Turnstile, or rate-limit secret
   - `TWILIO_AUTH_TOKEN` in Firebase Secret Manager before any SMS-capable
     Function is deployed; keep the account SID, Messaging Service SID, and
     owner destination in trusted non-secret runtime configuration
@@ -205,6 +210,9 @@ custom-domain setup (the same values may be used locally for validation):
 ```dotenv
 NOTIFICATIONS_SMS_PROVIDER=none
 NOTIFICATIONS_EMAIL_PROVIDER=none
+COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false
+REVENUE_AUTOPILOT_ENABLED=false
+REVENUE_AUTOPILOT_SENDS_ENABLED=false
 STRIPE_MODE=live
 BUYER_ACCESS_ENABLED=false
 BUYER_ACCESS_STRIPE_MODE=test
@@ -272,6 +280,106 @@ controlled recipient and capture all three proof layers:
 
 Configuration presence or an accepted API response alone is not delivery
 proof. Keep production customer email disabled if any layer fails.
+
+### Commercial Change Authority and trusted Kitchen BEO activation gate
+
+Keep `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false` and the server-owned tenant
+setting `commercialChangeAuthorityEnabled=false` through source qualification,
+coordinated frontend/Functions/rules preparation, hosted role acceptance, and
+operator review. Browser principals cannot promote either gate. Before any
+activation:
+
+1. Close the unresolved exact apply-outcome gap. A transport-ambiguous governed
+   `updateQuoteDraft` requires a dedicated same-tenant read/reconcile contract
+   bound to the original request, simulation, authorization, quote, revision,
+   and apply receipt. Atomic intent and idempotency do not justify a browser
+   success claim without that evidence.
+2. Verify sales can simulate/request but only tenant admins can authorize and
+   edit policy. Cross-tenant, stale revision/catalog, expired authorization,
+   over-bound, and browser-direct authority access must fail closed.
+3. Verify apply either atomically records quote/version/apply/dependency
+   invalidations or records nothing. Simulation must never edit accepted
+   history, contracts, provider/payment evidence, portal decisions, or prior
+   artifacts.
+4. Verify `safeToPublish` remains a read-only eligibility result and invokes no
+   publication, delivery, acceptance, booking, payment, or completion action.
+5. Exercise trusted Kitchen BEO generation, status, and
+   `downloadKitchenBeoReceipt` for both the exact current receipt and a prior
+   immutable receipt. Generation replay, final response, status, and download
+   must reject malformed base64 or any retained byte-length/SHA-256 mismatch.
+   `CURRENT` must follow the current-artifact pointer to the exact receipt and
+   revalidate its bytes before deriving freshness.
+6. Capture exact hosted staff/admin/kitchen behavior, including all five
+   freshness states, uncertainty/recovery, responsive/keyboard use, and branded
+   proposal isolation. This still does not prove kitchen sign-off or artifact
+   publication.
+
+Rollback is to return both global and tenant gates to false. Preserve immutable
+receipts and artifacts for audit; do not delete or rewrite history to simulate a
+rollback. No step in this runbook authorizes production gate promotion.
+
+### Revenue Autopilot activation gate
+
+Revenue Autopilot evaluation and outbound sends are independent. Keep this
+fail-safe state until exact source, hosted, provider, and human acceptance is
+recorded:
+
+```dotenv
+REVENUE_AUTOPILOT_ENABLED=false
+REVENUE_AUTOPILOT_SENDS_ENABLED=false
+NOTIFICATIONS_EMAIL_PROVIDER=none
+```
+
+Secret Manager ownership is intentionally split:
+
+- `RESEND_API_KEY`: send and provider reconciliation functions only.
+- `RESEND_WEBHOOK_SECRET`: `revenueAutopilotResendWebhook` only. The webhook
+  receives raw request bytes and verifies them directly with repository-pinned
+  `standardwebhooks@1.0.0` before trusting JSON; it must not receive the Resend
+  API key.
+- `REVENUE_AUTOPILOT_TOKEN_SECRET`: signed v1 organization/customer unsubscribe
+  token issue/verification only. The public token is opaque and the stored hash
+  is server-owned. V1 intentionally has no timestamp or expiry; signature,
+  organization/customer scope, and stored-hash mismatch fail closed.
+
+Before activation:
+
+1. Confirm the interim sender/DNS identity and restricted-key scope, deploy the
+   exact coordinated Functions/rules/frontend artifact, and subscribe the exact
+   `revenueAutopilotResendWebhook` endpoint. Prove bad signature, wrong scope,
+   replay, malformed raw body, and cross-tenant denial before trusting provider
+   events.
+2. Confirm `runRevenueAutopilotSchedule` is configured every 15 minutes in UTC.
+   Verify that evaluation still uses each tenant's validated IANA calendar,
+   quiet hours, bounded leases/retries, idempotent job identity, and self-stop
+   rules. Scheduler existence or invocation is not send/delivery evidence.
+3. Exercise quote follow-up stop on view/accept/decline, post-acceptance deposit
+   reminders, fixed event-minus-14/7/3 final-balance windows, and unread customer
+   replies becoming Attention items. Validate suppression and customer controls
+   before allowing sends.
+4. For post-event review requests, require the exact accepted immutable revision
+   plus a private closeout that remains `completed`. Reopening, invalid,
+   configuration-blocked, or pending closeout state must stop the lane even when
+   the portal has expired. Verify the tenant-branded URL without treating a
+   job, acceptance, delivery, or click as a posted review or rebooking.
+5. Verify every governed email contains the durable public unsubscribe URL.
+   Portal query precedence must remain intact. One exact unsubscribe action
+   records an idempotent receipt and changes email eligibility only; it must not
+   cancel a quote/event or edit acceptance, payment, or conversations.
+6. Capture provider states separately: request accepted, delivered, bounced,
+   complained, and suppressed/unsubscribed. Also capture controlled-recipient
+   inbox evidence. Never infer delivered from accepted, customer view from
+   delivered, or recovered revenue from a reminder.
+7. Review Workflow operations and Customer 360 controls for loading, empty,
+   partial/stale, error, retry, uncertainty/reconciliation, receipt, role,
+   responsive, keyboard, and accessibility behavior.
+
+Only after those records may an authorized release turn on evaluation, observe
+it without sends, then separately enable provider sends. Rollback disables sends
+first, then evaluation, while preserving jobs/receipts/provider evidence. Source
+presence, local tests, Secret Manager entries, scheduler configuration, or a
+webhook 2xx alone is not deployment, provider, production-data, or human
+acceptance evidence.
 
 Buyer setup assistance is also available in-app:
 - `Integrations Ops` -> `Buyer Setup Assistant (Optional Twilio)` to check status and send SMS test.

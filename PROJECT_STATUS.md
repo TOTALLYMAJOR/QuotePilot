@@ -43,9 +43,9 @@ Last updated: August 9, 2026
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current source uses a named temporary bundle exception while the
   customer-centered workspace convergence remains unmerged. Its no-headroom
-  ceilings match the larger of the August 9 disabled- and enabled-flag source
-  builds at 2,331,934 aggregate JavaScript bytes and a 413,275-byte largest
-  chunk, versus unchanged clean-main metrics of
+  ceilings match the August 9 commercial-authority and Revenue Autopilot
+  checkpoint build at 2,552,693 aggregate JavaScript bytes and a 426,521-byte
+  largest chunk, versus unchanged clean-main metrics of
   1,997,365 and 387,929 bytes. The normal allowance remains 5%, baseline updates
   are blocked while the exception is active, and closure requires the explicit
   optimization or reviewed clean-main recalibration path plus local bundle,
@@ -191,31 +191,30 @@ Last updated: August 9, 2026
   exact retry receipt or explicit safe reset, and writes neither value to
   browser storage. Focused unit/rules/emulator evidence is local only; this conversation source is not
   part of live `v0.2.3` and has no hosted staff/customer acceptance.
-- Current source `CWF-15A` Commercial Dependency Graph and Kitchen BEO: a frozen
-  versioned registry validates its topology, rejects cycles and unknown nodes,
-  traverses downstream dependencies deterministically, and shares canonical
-  serialization/SHA-256 behavior across browser and Node. The existing
-  staff-only Kitchen sheet now embeds a schema-bound digest of its normalized
-  declared inputs and displays the exact source revision, graph/fingerprint/
-  canonical schema versions, browser-local generation time, and explicit
-  non-freshness disclaimer. Focused graph, parity, payload, fingerprint, and PDF
-  tests pass locally. The browser writes nothing and retains no generation
-  record; the digest is not `CURRENT`/`STALE`/`REVIEW`, completion, actor,
-  server-time, immutable receipt, reconciliation, or publication evidence.
-  CWF-15A is not part of the live v0.2.3 frontend and has not received hosted
-  kitchen-operator acceptance.
-- Working-tree candidate `CWF-15B-b` Commercial Change Impact preview: while
-  editing a Firebase-backed saved quote, staff can ask the existing trusted
-  pricing callable for a bounded saved-revision snapshot and a
-  server-authoritatively repriced proposed-form snapshot. The browser then uses
-  the versioned dependency graph to show exact fact changes, authoritative total
-  and deposit deltas, and affected nodes classified `REVIEW` or `STALE`.
-  Request-generation guards reject superseded results, and the visible surface
-  covers loading, empty, partial, stale, error, retry, and return-to-edit
-  presentation. The preview performs no save, authorization, invalidation,
-  artifact regeneration, reconciliation, checklist mutation, or publication;
-  it is not a server generation receipt or retained freshness record. This
-  source is not deployed and has no hosted staff acceptance.
+- Current working-tree `CWF-15` authority candidate preserves the pure frozen
+  Commercial Dependency Graph while adding separate server-owned simulation,
+  sales request/admin authorization, gated atomic quote/version apply plus
+  immutable invalidations, bounded dependency-state reconciliation, and
+  deterministic Decision Debt. Workflow exposes the Debt factors/bounds and an
+  admin-only versioned lock-policy editor; non-admin staff are read-only.
+  Simulation presentation is reconstructed from the normalized immutable
+  receipt and rejected client-side if scope or evidence diverges.
+  `safeToPublish` is derived eligibility only and performs no publication.
+  Both global and tenant enforcement gates default off. A dedicated exact read/
+  reconcile contract for a transport-ambiguous governed apply is still missing;
+  the UI must not infer a save, and neither gate may be enabled until that gap is
+  closed and qualified.
+- Current working-tree trusted Kitchen BEO authority reloads canonical data,
+  generates server PDF bytes, records immutable actor/time/revision/schema/
+  fingerprint/byte evidence, reports `CURRENT`, `STALE`, `REVIEW`,
+  `NOT_GENERATED`, or `UNKNOWN`, and supports exact current and prior receipt
+  download through `downloadKitchenBeoReceipt`. Generation replay, final
+  response, status, and download validate strict base64 plus exact retained byte
+  length/SHA-256. `CURRENT` follows the exact current-receipt pointer and
+  revalidates its stored bytes. This proves declared-input freshness only—not
+  kitchen review, publication, customer acceptance, booking, payment, delivery,
+  or completion. The source/local invariant is not deployed or hosted-operator
+  accepted.
 - Current source authoritative-pricing consistency: the server now owns pricing
   actor identity and calculation time, fingerprints the confirmed tenant
   settings around the catalog read, and rechecks that authority at the trusted
@@ -308,17 +307,19 @@ Last updated: August 9, 2026
   source-covered. These values are read-only operational measures, not
   accounting revenue, cash reconciliation, forecasts, or a persisted rollup.
   Deployment and hosted staff acceptance are pending.
-- Working-tree candidate `CWF-12` Revenue Autopilot preview: Workflow now
-  includes a discoverable read-only tab for one quote from its bounded current Firestore
-  snapshot. It deterministically evaluates quote follow-up stops, deposit
-  reminder eligibility, event-minus-14/7/3 final-balance windows, and unread
-  customer-reply escalation against exact evidence and an organization-configured
-  IANA business time zone. The current Workflow adapter supplies no independent
-  portal, webhook, conversation, consent, suppression, quiet-hour, template, or
-  provider reads, so unavailable evidence remains visibly blocked. The panel
-  schedules zero messages, sends zero messages, writes nothing, and creates no
-  idempotency or recovered-revenue claim. Scheduler/email/Attention execution,
-  deployment, provider proof, and hosted staff acceptance remain pending.
+- Working-tree `CWF-12` Revenue Autopilot authority candidate now includes
+  tenant policy and Customer 360 controls, deterministic idempotent jobs, four
+  reminder lanes plus completed-closeout post-event review requests, unread-
+  reply Attention escalation, a 15-minute UTC scheduler evaluated on tenant-
+  local calendar rules, bounded Workflow operations, durable signed/hash-bound
+  no-expiry customer unsubscribe, and raw Resend webhook verification through
+  `standardwebhooks@1.0.0`. The API key, webhook secret, and unsubscribe-token
+  secret have isolated Secret Manager ownership; the webhook binds only its
+  webhook secret. `REVENUE_AUTOPILOT_ENABLED`,
+  `REVENUE_AUTOPILOT_SENDS_ENABLED`, and email provider activation remain off.
+  No deployment, scheduler execution, secret provisioning, provider acceptance/
+  delivery/bounce/complaint, hosted behavior, recovered value, or human
+  acceptance is established by this source/local candidate.
 - Working-tree candidates `CWF-07` and `CWF-08`: Workflow exposes bounded
   timestamp-derived due-today, overdue, upcoming, and aging cues alongside exact
   stored internal completion receipts, while Schedule exposes a bounded,
@@ -497,6 +498,18 @@ Last updated: August 9, 2026
   `NOTIFICATIONS_SMS_PROVIDER=none` in the ignored project-scoped Functions
   environment.
 ## Active Risks
+- Commercial Change enforcement is default-off and must remain so. The current
+  source has no dedicated exact read/reconcile contract for a transport-
+  ambiguous governed apply outcome; atomic server intent and request identity do
+  not let the UI claim a save after an unknown transport result. Close that gap,
+  rerun the full authority qualification, and capture hosted role acceptance
+  before considering either the global or tenant gate.
+- Revenue Autopilot evaluation and sends are independently default-off. The
+  15-minute scheduler, Resend webhook, customer unsubscribe, post-event URL, and
+  operations UI have source/local evidence only. `RESEND_API_KEY`,
+  `RESEND_WEBHOOK_SECRET`, and `REVENUE_AUTOPILOT_TOKEN_SECRET` require isolated
+  Secret Manager provisioning and exact bindings; provider/DNS/webhook,
+  scheduler, hosted, production-data, and human acceptance remain unproven.
 - The customer-centered staff shell is behind
   `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED`, which defaults off. It still
   requires an exact hosted candidate plus signed-in deep-link, Back/Forward,
@@ -557,8 +570,9 @@ Last updated: August 9, 2026
   remains pending.
 - Workflow Attention and its change-request handling rules are deployed and
   locally covered, but authenticated hosted acceptance has not been captured.
-  Automated customer/staff notifications and
-  escalation delivery remain unimplemented.
+  Automated email and escalation authority now exists only in the current
+  default-off source candidate; it is not deployed, provider-accepted, or
+  enabled.
 - Existing portal snapshots still need a reviewed production dry run and apply
   before their customer-safe event, selection, and pricing projection is
   complete. Projection backfill is not delivery authority: legacy links without

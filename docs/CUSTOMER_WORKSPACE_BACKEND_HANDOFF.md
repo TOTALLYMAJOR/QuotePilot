@@ -4,7 +4,8 @@ Status: approved backend contract for stable customer identity and Customer 360.
 Current qualification belongs in `PROJECT_STATUS.md`; remaining rollout work
 belongs in `DEV_TASKS.md`. This handoff does not authorize production
 normalization/backfill, deployment, flag promotion, Stripe Connect work,
-structured change requests, or persistent customer accounts.
+structured change requests, persistent customer accounts, Revenue Autopilot
+provider activation, or Commercial Change enforcement-gate promotion.
 
 Last updated: August 9, 2026
 
@@ -364,6 +365,11 @@ Run the repository's high-risk maintainer lane plus focused coverage for:
 - dry-run classification and emulator apply rollback;
 - authoritative pricing because trusted quote writes change;
 - staff preview not creating `viewed` evidence;
+- Commercial Change exact customer/quote/version continuity, private receipt/
+  invalidation rules, trusted BEO generation/download, and Decision Debt bounds;
+- Revenue Autopilot customer-control projection, stable signed unsubscribe,
+  exact closeout-bound post-event materialization, private job/provider records,
+  scheduler/webhook safety, and portal-route precedence;
 - environment, full unit, build, bundle, Playwright, docs governance, secrets,
   and diff checks required by the north-star plan.
 
@@ -374,40 +380,75 @@ Current qualification evidence and its proof boundary are recorded only in
 `PROJECT_STATUS.md`; this handoff intentionally does not duplicate mutable test
 counts or release status.
 
-## Deferred programs
+## Adjacent implemented source programs
 
-### Commercial Dependency Graph
+### Commercial Dependency Graph and Change Authority
 
 The Customer 360 read model is a consumer of `CWF-15`, not its authority or
 persistence layer. The accepted
-`docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md` now governs source-complete CWF-15A:
+`docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md` governs the source-complete pure
+CWF-15A foundation:
 the frozen v1 registry, validation and deterministic traversal, browser/Node
 canonical serialization and SHA-256 parity, and Kitchen BEO download-time input
 provenance. The graph may consume server-authoritative pricing outputs but must
 never recalculate them as a second pricing engine.
 
-Before CWF-15C source work, accept a UI specification with a component
-state/display matrix for Change Impact, Current/Stale/Review, authorization,
-invalidation, reconciliation, receipt, error, and recovery states, plus
-acceptance-criteria traceability to each role-safe control and Attention outcome.
+The current source implements the separate authority specified by
+`docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md` and its UI/design/work-plan documents:
 
-CWF-15A computes and displays a versioned BEO dependency fingerprint, exact
-source revision, browser-local generation time, and proof-boundary disclaimer,
-but writes nothing and creates no retained freshness or receipt evidence. There
-is no existing governed server BEO generation action. Before CWF-15B can create
-an immutable artifact-generation receipt, it must separately introduce a
-CWF-14-bound server generation/receipt action or move generation authority
-server-side. That server authority must reload canonical same-tenant data,
-recompute the declared inputs, and bind artifact type, quote/revision identity,
-fingerprint schema, dependency fingerprint, actor, and server time itself;
-browser-supplied digest, source revision, actor, or time can never become
-receipt truth. CWF-15B may also add read-only impact simulation, but it adds no
-independent authorization, invalidation, reconciliation, or publication
-mutation. CWF-15C may then compare a trusted server receipt, surface change
-blast radius and explainable Decision Debt, and introduce the UI-bound,
-role-gated authorized invalidation, reconciliation, and publication workflow
-plus atomic audit receipts through CWF-14. This handoff authorizes neither
-CWF-15B nor CWF-15C source work or runtime authority.
+- exact-revision, authoritative-pricing simulation;
+- sales authorization request and tenant-admin authorization;
+- gated atomic quote/version apply plus immutable dependency invalidations;
+- bounded dependency-state read and exact named reconciliation;
+- canonical server Kitchen BEO generation, immutable receipt/PDF bytes,
+  strict base64 plus stored byte length/SHA-256 validation on replay and final
+  response, five-state freshness that follows the exact current-receipt pointer
+  and revalidates retained bytes, and exact current/prior receipt download; and
+- bounded non-predictive Decision Debt with admin policy beside Workflow.
+
+These capabilities reuse stable `customerId`/quote/version continuity but do not
+move customer authority into Customer 360. Private receipts, artifacts,
+invalidations, policies, and bytes remain browser-denied; customer portal
+projections receive none of them. `safeToPublish` is derived eligibility only.
+Both Commercial Change enforcement gates remain default-off, and this handoff
+authorizes no deployment, production receipt/data, gate promotion, or hosted
+acceptance. The source still needs a dedicated exact apply-outcome read/
+reconcile contract before a transport-ambiguous governed edit can be proven
+committed or rejected; do not enable either gate before that gap closes.
+
+### Revenue Autopilot and post-event review
+
+The source/local CWF-11/CWF-12 tranche uses the customer read model without
+turning Customer 360 into message/provider authority:
+
+- eligible governed bookings create one private exact-version post-event
+  closeout; internal review receipts remain distinct from outbound email;
+- Customer 360 projects safe consent/subscription state and gives tenant admins
+  an exact callable mutation, while non-admin staff are read-only;
+- a stable signed v1 organization/customer unsubscribe token is verified
+  against the stored hash. It intentionally has no timestamp/expiry so opt-out
+  remains durable;
+- the post-event review-request lane additionally requires the exact completed
+  private closeout, accepted revision, strict template, and safe public HTTPS
+  review URL. Reopening the closeout self-stops it; portal expiry alone does not
+  erase completed-closeout authority;
+- the other email lanes bind quote view/decision, acceptance, and exact payment
+  evidence; unread latest customer-message evidence creates internal Attention;
+  and
+- policy, controls, jobs, Attention, receipts, provider events/indexes, tenant
+  registry, scheduler cursor, frozen content, email addresses, tokens/hashes,
+  and provider identifiers remain private. Staff receive bounded projections.
+
+The scheduler source runs every 15 minutes UTC while calculating due/quiet-hour
+windows in the tenant IANA time zone. Runtime and outbound sends are separate
+default-off environment gates. Resend dispatch uses its API secret; the webhook
+uses pinned `standardwebhooks@1.0.0` with only `RESEND_WEBHOOK_SECRET`, and
+unsubscribe signing uses `REVENUE_AUTOPILOT_TOKEN_SECRET`. All three belong in
+Firebase Secret Manager. Source/local/emulator evidence is not sender/DNS,
+scheduler, webhook, provider, deployment, production, recovered-revenue, or
+human-acceptance evidence.
+
+## Deferred programs
 
 ### Structured change requests
 

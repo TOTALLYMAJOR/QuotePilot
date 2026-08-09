@@ -504,17 +504,11 @@ unchanged.
   provider delivery, proposal resolution, payment, or booking. If refresh fails,
   the last successful snapshot is labeled stale and `Retry read` requests a new
   tenant-scoped snapshot.
-- `Revenue autopilot` is currently a non-sending eligibility preview. Select
-  one authoritative quote from the bounded Workflow snapshot, then review the
-  four deterministic evaluations: quote follow-up, deposit reminder,
-  event-minus-14/7/3 final-balance reminder, and unread customer reply. Every
-  result explains why it is `Review eligible`, `Stopped`, `Blocked`, or `Not
-  due` and lists the required evidence gates. The panel always reports `0
-  messages scheduled · 0 messages sent`; it creates no job, Attention item,
-  staff-read receipt, provider action, or recovered-revenue evidence. A missing
-  or invalid tenant business time zone, portal/acceptance/webhook/conversation
-  evidence, consent, unsubscribe/suppression check, quiet-hours policy,
-  template, or provider configuration keeps the applicable evaluation blocked.
+- `Revenue autopilot` keeps the original bounded, non-sending quote eligibility
+  preview and now places a separate server-owned operations surface beneath it.
+  The preview still creates no job, Attention item, receipt, or provider action;
+  use the operations surface and its exact receipts for current materialized
+  state. See **Revenue Autopilot operations** below.
 - Sales staff can request approval for sensitive actions such as payment requests, contract conversion, portal-link rotation, or quote deletion.
 - Admins can approve or reject those requests with a resolution note. Approval
   records authority but does not execute the action; select `Execute in Quotes`
@@ -530,6 +524,147 @@ unchanged.
   The deployed matching Functions and Firestore rules deny direct
   approval-array, contract-evidence, and execution-audit writes; source changes
   still require a coordinated release before they alter production behavior.
+
+## Commercial Change Authority
+
+- In a trusted quote edit, select `Review Change Impact` after changing event,
+  customer, selection, pricing-input, or other governed fields. QuotePilot
+  reloads the exact active revision, reprices the proposed form on the server,
+  and shows before/proposed facts, total/deposit deltas, and affected graph
+  nodes. Simulation does not save the quote.
+- `Authority dormant` means source is present but ordinary trusted save remains
+  authoritative because both the release-controlled server gate and trusted
+  tenant gate have not been promoted. A no-impact result also stays on the
+  normal trusted save path. Neither state is authorization to promote a gate.
+- When enforcement is active and governed impact exists, sales staff select
+  `Request authorization`; tenant administrators may select `Authorize exact
+  change`. Authorization binds the exact simulation, active revision, proposed
+  digest, catalog authority, policy, expiry, tenant, quote, and actor. Any drift
+  requires a new simulation.
+- Select `Apply authorized change` only for the exact current authorization.
+  One trusted transaction writes the canonical quote, immutable version, apply
+  receipt, dependency state, and named invalidations. It does not regenerate,
+  reconcile, publish, deliver, accept, book, charge, pay, or complete anything.
+- `Submitting` means do not repeat the action. `Outcome uncertain` is not a
+  saved quote and must remain unresolved. The current source does not yet offer
+  a dedicated exact apply-outcome read/reconcile control, so do not repeat,
+  reset, or describe the change as committed after transport ambiguity. That
+  reliability contract must ship before either enforcement gate is enabled. A
+  definitive server rejection may be reset only before preparing a corrected
+  new request.
+
+## Commercial Dependency State and reconciliation
+
+- Open the authoritative quote record and review `Commercial Dependency
+  State`. The bounded staff projection names the apply receipt/source revision,
+  unresolved and resolved nodes, source/time, and derived publication
+  eligibility. A missing receipt is `NOT_GENERATED`; incomplete or unsupported
+  authority is `UNKNOWN`, never current.
+- Select only the exact open invalidations you intend to reconcile. Choose the
+  allowed resolution for that node kind and provide the required staff note for
+  decision/output evidence. QuotePilot rejects stale, cross-quote, already-
+  resolved, unsupported, or over-broad requests.
+- An uncertain reconciliation keeps the same request identity; use `Reconcile
+  exact request` instead of submitting another. A receipt confirms only the
+  named dependency resolutions. Prior apply, invalidation, artifact, and
+  reconciliation receipts remain immutable.
+- `Safe to publish` is deterministic eligibility when no governed dependency
+  remains unresolved. It does not publish a proposal, Kitchen BEO, portal
+  revision, payment request, provider message, or any other artifact.
+
+## Decision Debt and policy controls
+
+- Open `Workflow` and select the Decision Debt view. It appears only from
+  server-owned unresolved dependency state; an empty result does not infer that
+  every operational task or customer decision is complete.
+- Each item shows the exact quote/source revision, event and lock dates,
+  affected dependencies, a bounded 0–100 score, and the deterministic factors:
+  dependency weight × event proximity × commercial-exposure factor ×
+  reversibility. Missing authority stays unavailable instead of becoming zero.
+  Decision Debt is priority, not predictive AI, likelihood, a receivable,
+  recovered revenue, or accounting revenue.
+- Any same-tenant staff member may review priority and open the exact quote.
+  Tenant administrators alone may edit the versioned lock-window policy beside
+  the snapshot. Keeping the policy at the point of use makes the current bounds
+  and effect discoverable; changing it does not resolve a dependency or change
+  a quote.
+- Admin policy changes use an exact expected version and receipt. Reconcile an
+  uncertain request unchanged; reset a definitive rejection before preparing a
+  corrected policy.
+
+## Revenue Autopilot operations
+
+- Open `Workflow` and select Revenue Autopilot. The read-only quote preview and
+  the persisted operations surface are deliberately separate. Operations reads
+  at most 100 private job projections and 50 unread-reply Attention projections
+  and shows source, capture time, bounds/truncation, policy, and provider
+  outcomes. A failed refresh retains prior evidence only as stale.
+- Review the three visible activation families—release/runtime, tenant policy,
+  and email provider—plus each lane. The server also keeps runtime enablement
+  and outbound-send enablement as independent default-off release gates. A
+  configured policy, prepared job, or locally passing test does not imply that
+  either gate, provider, scheduler, or production delivery is active.
+- The five lanes are Quote follow-up, Deposit reminder, Final-balance reminder,
+  Post-event review request, and Unread customer reply. The first four are
+  email; unread reply creates internal Attention only. Quote reminders stop on
+  exact current view/accept/decline or terminal quote evidence. Deposit and
+  final-balance stops require their exact authoritative acceptance/payment
+  rail; browser returns or local payment labels are insufficient.
+- Tenant administrators may select `Configure policy` to record tenant intent,
+  IANA time zone, quiet hours, one-to-five bounded attempts, lane switches,
+  quote/deposit offsets, the fixed event-minus-14/7/3 final-balance cadence,
+  and post-event review destination. This form cannot enable the external
+  runtime/send gates or provider.
+- Staff may select one authoritative quote and `Prepare governed records` only
+  when the current bounded operations read permits it. The server reloads
+  canonical evidence and creates, updates, blocks, or stops stable occurrences.
+  A materialization receipt does not prove scheduling execution or a send.
+- Job states remain distinct: scheduled, dispatch lease, bounded retry,
+  ambiguous outcome, provider accepted, delivered, bounced, complained,
+  stopped, and definite failure. `Provider accepted` is not delivery; delivery
+  is not portal view. Reconcile an ambiguous job with its exact frozen provider
+  identity rather than creating a replacement.
+- An unread customer reply becomes Attention only for the exact latest
+  quote-scoped customer message. `Open conversation` and `Acknowledge exact
+  reply` are separate actions. Acknowledgement records an internal receipt; it
+  does not prove that staff read or answered the message content.
+- Customer 360 shows `Customer email controls`. Any staff member may review the
+  safe consent/subscription projection; only tenant administrators may record
+  exact customer-specific evidence. Consent and subscription are separate.
+  Revoked consent cannot remain subscribed. Recording controls schedules or
+  sends nothing and proves no delivery, view, payment, or revenue.
+
+### Post-event review requests
+
+- This lane is independently dormant until an admin enables it, its strict
+  tenant template exists, and a valid public HTTPS review destination is saved.
+  Local/private/internal URLs, credentials, fragments, and nonstandard ports
+  are rejected. The destination is a link target, not review evidence.
+- One occurrence may be materialized only from the exact accepted proposal
+  revision, stable customer, private acceptance evidence, and private post-event
+  closeout that remains `completed`. Portal expiry alone does not invalidate
+  this post-event message, but a pending, configuration-blocked, invalid, or
+  reopened closeout blocks or stops it and prevents stale rematerialization.
+- The email may include a tenant-branded thank-you/review request and the
+  configured review link. A job, provider acceptance, delivery, or link click
+  does not prove that a public review was posted, a lead was created, an event
+  was rebooked, payment was received, or revenue was recovered.
+
+### Customer unsubscribe
+
+- Governed emails include an opaque unsubscribe link. On any non-portal path,
+  `?unsubscribe=<token>` opens Email preferences; `?portal=<token>` always has
+  precedence so this route cannot replace the customer decision center.
+- Review the organization label and current reminder state, then select `Stop
+  automated reminders`. A valid current token records one idempotent server
+  receipt and changes only email subscription eligibility. It does not cancel
+  a quote/event, change proposal acceptance, alter payment, or delete messages.
+- If the result is uncertain, reconcile the exact request; do not start a
+  second unsubscribe attempt. V1 opt-out links intentionally do not expire; an
+  invalid signature/scope or token that does not match the stored customer
+  controls fails
+  without revealing the customer email, quote, message, provider identity,
+  token hash, or other private data.
 
 ## Reporting Dashboard
 - Open `Reporting` or `/app/reporting` to review quote pipeline, conversion,
@@ -594,34 +729,45 @@ unchanged.
   failed refresh leaves the prior projection visibly stale; use `Retry run of
   show` to request a new tenant-scoped Schedule read.
 
-### Kitchen Sheet Input Provenance (CWF-15A)
+## Trusted Kitchen BEO generation and artifact freshness
 
-- From `Quotes`, staff can select `Kitchen sheet` on a saved quote to download
-  the internal Banquet Event Order. Before service, verify the quote revision
-  and generated timestamp, event and day-of contacts, staffing, checkpoint
-  times, menu selections, dietary/allergen callouts, and checklist state.
-- The PDF includes the exact source-revision identity, the Commercial
-  Dependency Graph and fingerprint schema versions, the canonical-serialization
-  schema, and the complete `sha256:` dependency digest. That digest covers the
-  normalized rendered organization, contact, event, staffing, selection,
-  checkpoint, and checklist inputs declared for the Kitchen BEO.
-- Source-revision identity and the browser-local generation time are displayed
-  separately and are excluded from the digest. A source timestamp is displayed
-  only when version metadata matches the active source-version pointer; mutable
-  quote timestamps are not substituted for missing revision evidence. Portal,
-  Workflow, conversation, and payment state do not change this BEO input
-  digest.
-- The PDF states that this digest identifies only the declared inputs used for
-  that download. It is not retained freshness or completion evidence. CWF-15A
-  does not persist a generation record, compare `CURRENT`/`STALE`/`REVIEW`, or
-  establish a server actor, server time, immutable receipt, reconciliation, or
-  publication decision.
-- The Kitchen sheet includes blank prepared-by and chef sign-off lines plus
-  ruled day-of notes for event-day use. Downloading or signing the PDF does not
-  change the quote, record a digital acceptance, prove payment, confirm
-  inventory, or persist the handwritten sign-off back to QuotePilot. Use the
-  customer proposal and portal—not the Kitchen sheet—for customer commercial
-  review.
+- From the authoritative quote record, open `Kitchen BEO authority`. The status
+  read reloads canonical same-tenant quote data and private generation/
+  invalidation evidence. It reports exactly one of `CURRENT`, `STALE`, `REVIEW`,
+  `NOT_GENERATED`, or `UNKNOWN`; color never carries the state alone.
+- `CURRENT` requires the current-artifact pointer to resolve to the exact
+  immutable successful server receipt, strict base64 and exact stored byte
+  length/SHA-256 validation of its retained PDF, the current canonical revision
+  and declared-input fingerprint to match, and no qualifying open Kitchen BEO
+  invalidation. `STALE` means a prior valid receipt
+  exists but revision/fingerprint or named invalidation evidence no longer
+  matches. `REVIEW` means a governed decision still needs reconciliation.
+  `NOT_GENERATED` means no receipt exists; `UNKNOWN` means authority is missing,
+  unsupported, corrupt, cross-scope, or unreadable.
+- Select `Generate Kitchen BEO` only after reviewing the source. The server
+  rereads and rechecks the canonical quote, builds the declared payload and
+  fingerprint, generates exact PDF bytes, and binds tenant, quote, revision,
+  graph/input/canonical schemas, actor, server time, digest, byte hash/size, and
+  receipt identity. Browser-supplied digest, payload, actor, time, and bytes are
+  never receipt truth. Idempotent replay and the final response revalidate the
+  retained bytes before returning the immutable receipt.
+- A successful fresh generation may resolve only the qualifying named Kitchen
+  BEO invalidations in that trusted flow. It does not resolve staffing, rental,
+  food, production, contract, payment, portal, or other decision evidence.
+- Downloading uses retained server bytes. `Download current receipt` gets the
+  active receipt; a listed prior receipt can be downloaded by its exact
+  immutable receipt ID without regenerating from today's quote. A browser
+  download failure does not erase or invalidate the trusted server receipt.
+- `Submitting` means do not start a duplicate. An uncertain outcome retains the
+  exact request for reconciliation; a definitive rejection can be reset before
+  a corrected attempt. Refresh status after any generation or dependency
+  reconciliation.
+- The PDF still includes event/day-of contacts, staffing, checkpoints, menu,
+  dietary/allergen callouts, checklist, prepared-by and chef sign-off lines,
+  and ruled notes. A current receipt proves declared-input equivalence only—it
+  does not prove kitchen review, inventory, handwritten sign-off, publication,
+  customer acceptance, booking, payment, provider delivery, or operational
+  completion. Use the proposal/token portal for customer commercial review.
 
 ## Admin Catalog Operations
 - Open `Catalog` or `/app/catalog` (admin users only). Contextual catalog setup

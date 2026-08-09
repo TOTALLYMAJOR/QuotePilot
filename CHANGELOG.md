@@ -24,9 +24,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   staff-only review items can be reviewed or reopened through one idempotent
   callable; the private record and action receipts remain browser-inaccessible
   and absent from the token portal. These receipts prove internal review only:
-  no thank-you, review request, follow-up email, delivery, open, reply, lead,
-  booking, payment, or revenue outcome is inferred. Functions/rules deployment,
-  hosted staff acceptance, and outbound consent/provider-gated messages remain
+  the closeout itself proves no thank-you, review request, follow-up email,
+  delivery, open, reply, lead, booking, payment, or revenue outcome. The newer
+  default-off Revenue Autopilot source may materialize an exact completed-
+  closeout review-request job under separate consent/provider authority;
+  deployment, hosted staff acceptance, and outbound provider proof remain
   separate release work.
 - Source/local/emulator-qualified `CWF-11` exact-version rebooking in Customer
   360. A bounded
@@ -55,26 +57,39 @@ This changelog is backfilled from git history and will be maintained going forwa
   `Displayed-record`; it is not an accounting ledger, cash reconciliation,
   forecast, recognized revenue, or persisted `commercialSummary`. Deployment
   and hosted staff acceptance are pending.
-- Source-only `CWF-12` Revenue Autopilot eligibility preview in Workflow. Staff
-  can select one quote from the bounded canonical Workflow read and inspect
-  deterministic quote-follow-up, deposit-reminder, tenant-local final-balance,
-  and unread-reply evaluations. Catalog Admin now supplies an explicit tenant
-  IANA business time zone; missing portal, acceptance, webhook, conversation,
-  consent, suppression, quiet-hour, template, or provider evidence fails
-  closed. The surface explicitly reports zero messages scheduled and zero sent:
-  it creates no records, jobs, idempotency claims, Attention items, or provider
-  actions. Scheduler/email implementation, deployment, provider evidence, and
-  hosted acceptance remain pending.
-- Source-only read-only `CWF-15B-b` Commercial Change Impact preview in the trusted
-  quote edit flow. The existing pricing callable can now return bounded
-  server-owned snapshots of the saved canonical revision and the
-  server-authoritatively repriced proposed form; the client deterministically
-  presents exact fact changes, total/deposit deltas, and affected dependency
-  nodes as `REVIEW` or `STALE`, with loading/empty/partial/stale/error/recovery
-  presentation. Previewing does not save or authorize the edit and cannot
-  invalidate checks, regenerate artifacts, reconcile dependencies, or publish.
-  No generation receipt, retained artifact-freshness truth, deployment, or
-  hosted acceptance is claimed.
+- Source/local `CWF-12` Revenue Autopilot authority and operations. Tenant policy
+  plus Customer 360 controls drive deterministic idempotent quote, deposit,
+  event-minus-14/7/3 final-balance, completed-closeout review-request, and unread-
+  reply Attention lanes. A 15-minute UTC scheduler evaluates tenant-local
+  calendar/quiet-hour rules; Workflow exposes bounded job/provider states and
+  the public route supports a durable signed-and-hash-bound no-expiry
+  unsubscribe receipt. Resend raw webhook verification uses
+  `standardwebhooks@1.0.0`; `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, and
+  `REVENUE_AUTOPILOT_TOKEN_SECRET` have separate Secret Manager ownership, and
+  the webhook binds only its webhook secret. Runtime/send/provider gates remain
+  off. No deployment, scheduled execution, provider acceptance/delivery/
+  bounce/complaint, production data, recovered revenue, or hosted/human
+  acceptance is claimed.
+- Source/local Commercial Change Authority over the pure `CWF-15A` graph.
+  Exact-revision authoritative-pricing simulations now support sales request,
+  tenant-admin authorization, gated atomic quote/version apply with immutable
+  apply/invalidation receipts, bounded named dependency reconciliation, and
+  deterministic Decision Debt with an admin-only policy editor. The staff
+  simulation projection is reconstructed from the normalized immutable receipt,
+  so reordered pre-normalization impact data cannot diverge from the evidence
+  the browser validates. Both global and tenant enforcement gates default off,
+  and `safeToPublish` remains eligibility only. A dedicated exact apply-outcome
+  read/reconcile contract is still missing for transport-ambiguous governed
+  edits and is required before gate activation.
+- Source/local trusted Kitchen BEO generation and freshness. The server reloads
+  canonical source, generates retained PDF bytes plus immutable actor/time/
+  revision/schema/fingerprint evidence, reports five distinct freshness states,
+  and supports exact current and prior receipt downloads through
+  `downloadKitchenBeoReceipt`. Replay, final response, status, and download use
+  strict base64 plus exact retained length/SHA-256 validation; `CURRENT` follows
+  the current-artifact pointer to the exact receipt and revalidates bytes. This
+  is declared-input freshness, not publication, kitchen review, commercial,
+  provider, or completion evidence.
 - Source/local `CWF-02`, `CWF-04`, `CWF-05`, and `CWF-06` workspace slices.
   The flagged neutral staff shell now has a recoverably lazy `Ctrl`/`Command`+K
   palette over six same-tenant customer-prefix results and six matches from the
@@ -134,8 +149,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   actor, server-time, receipt, reconciliation, or publication evidence. It is
   source/local evidence only and is not deployed or hosted-operator accepted.
 - A named temporary bundle exception for the unmerged customer-centered
-  workspace convergence, with exact no-headroom ceilings of 2,331,934 aggregate
-  JavaScript bytes and a 413,275-byte largest chunk. The machine-readable
+  workspace convergence, with exact no-headroom ceilings of 2,552,693 aggregate
+  JavaScript bytes and a 426,521-byte largest chunk. The updated checkpoint
+  includes the governed commercial-change, artifact-freshness, Decision Debt,
+  and Revenue Autopilot surface slices. The machine-readable
   exception is pinned to the unchanged clean-main metrics and blocks baseline
   updates while active; normal 5% limits resume when the exception is removed.
   Passing this branch gate is not CWV, hosted, production, or human-acceptance

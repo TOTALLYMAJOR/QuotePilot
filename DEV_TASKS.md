@@ -118,54 +118,34 @@ Detailed contracts and invariants:
 
 ### Platform Primitive - Next Governed Slices
 
-- Treat **CWF-15A** as the source-complete baseline defined by
-  `docs/COMMERCIAL_DEPENDENCY_GRAPH_ADR.md`: a frozen versioned registry,
-  validation and deterministic downstream traversal, browser/Node canonical
-  serialization and SHA-256 parity, and a schema-bound Kitchen BEO input digest
-  visible in the existing staff download. It performs no write and establishes
-  no retained generation, freshness, actor, server-time, receipt,
-  reconciliation, or publication evidence. The graph may consume
-  server-authoritative pricing outputs but must never become a second pricing
-  engine. Hosted kitchen-operator acceptance remains a separate release gate.
-- **CWF-15B-a — establish generation authority before freshness.** There is no
-  existing governed server BEO generation action to extend. Approve and
-  productize either a new CWF-14-bound server generation/receipt action or move
-  artifact generation authority server-side. The server must reload canonical
-  same-tenant data, recompute the declared-input fingerprint, bind the exact
-  artifact/quote/revision identity plus actor and server time, and persist an
-  immutable idempotent receipt through a role-safe UI with ready, submitting,
-  uncertain, reconciliation, success, definitive-error, and recovery states.
-  Browser-supplied digest, source revision, actor, or time can never become
-  receipt truth.
-- **CWF-15B-b:** Qualify and promote the source-complete read-only Change Impact
-  preview on an exact hosted candidate. The current edit surface asks the
-  trusted pricing callable for the saved canonical revision plus a
-  server-authoritatively repriced proposed form, then reports exact fact and
-  commercial deltas with deterministic `REVIEW`/`STALE` dependents. Verify
-  same-tenant role gates, stale-generation recovery, long-data containment,
-  keyboard behavior, and authoritative-pricing parity. This preview performs
-  no save, authorization, invalidation, regeneration, checklist mutation, or
-  publication and does not satisfy the separate generation-receipt prerequisite
-  above.
-- Before **CWF-15C** source work, accept a UI specification with a state/display
-  matrix for Change Impact, `CURRENT`/`STALE`/`REVIEW`, authorization,
-  invalidation, reconciliation, receipt, error, and recovery, plus
-  acceptance-criteria traceability to every discoverable role-safe control and
-  Attention outcome. Only a trusted server receipt may be compared with a
-  freshly server-derived authoritative fingerprint.
-- CWF-15C may then deliver the UI-bound, role-gated
-  `simulate -> authorize -> invalidate -> reconcile -> publish` workflow and
-  atomic audit receipts. Keep immutable accepted versions, contracts,
-  provider/payment evidence, portal decisions, and generated artifacts
-  unchanged during simulation; stale dependents never silently regenerate or
-  republish.
-- Derive Decision Debt only after those authority boundaries exist, using
-  unresolved dependencies, tenant-local event proximity, bounded commercial
-  exposure, dependency weight, reversibility, and validated tenant lock
-  windows. Explain every factor and affected decision; do not market it as
-  predictive AI. Each remaining slice requires graph/parity, transaction,
-  authorization, reconciliation, and CWF-14 UI-state coverage appropriate to
-  its authority. Exact hosted staff acceptance remains separately recorded.
+- **CWF-15 source/local candidate is implemented behind dormant authority.**
+  Preserve the pure CWF-15A graph; the newer server authority separately adds
+  exact-revision simulation, sales request/admin authorization, atomic governed
+  apply/invalidation receipts, bounded dependency-state reconciliation,
+  trusted Kitchen BEO generation/freshness/current-and-prior receipt download,
+  and deterministic Decision Debt with admin-only lock-policy controls.
+  `COMMERCIAL_CHANGE_AUTHORITY_ENABLED` and the trusted tenant gate both remain
+  off until a separately authorized release. `safeToPublish` is eligibility,
+  never publication.
+- **Next source correction — exact apply-outcome reconciliation.** An uncertain
+  commercial apply does not yet have a dedicated read/reconcile contract that
+  can prove whether that exact apply request committed. Keep the edit surface
+  from claiming resolved success on transport ambiguity. Add a same-tenant,
+  exact-request outcome read bound to the simulation, authorization, quote,
+  active revision, and apply receipt; then wire submitting, uncertain,
+  reconciliation, receipt, definitive-error, and recovery UI-state tests before
+  enabling either enforcement gate.
+- Qualify strict Kitchen BEO receipt integrity across generation replay, final
+  response, status, and download. Retained bytes must pass strict base64 plus
+  exact stored length/SHA-256 checks; `CURRENT` must follow the current-artifact
+  pointer to that exact immutable receipt and revalidate bytes. Verify current
+  and prior `downloadKitchenBeoReceipt` behavior, corruption denial, role/scope,
+  long-data, keyboard, and kitchen-operator presentation.
+- Run the full source/local/emulator and documentation qualification for these
+  authority paths, then promote frontend, Functions, and Firestore rules only
+  through the governed exact-SHA release. Deployment, hosted role acceptance,
+  production gate configuration/data, and human acceptance remain separate
+  unchecked work.
 
 ### First Follow-On
 
@@ -240,25 +220,27 @@ Detailed contracts and invariants:
   time-zone block plus explicit configuration recovery, private receipts, and
   Customer 360 plus Workflow review/reopen states. The remaining release task is
   to promote both callables with their frontend and rules on an exact candidate
-  and verify hosted staff review. Outbound thank-you/review asks remain a
-  separate Revenue Autopilot delivery step behind consent, unsubscribe,
-  suppression, idempotency, quiet hours, tenant time zone, and distinct provider
-  evidence. Legacy bookings remain bookable with a visible source-review block
+  and verify hosted staff review. The source candidate now also creates the
+  exact closeout-bound review-request job and customer URL under Revenue
+  Autopilot controls; that does not establish provider acceptance, delivery,
+  customer review, or hosted behavior. Legacy bookings remain bookable with a visible source-review block
   instead of invented authority. Never present a cue, internal review, or draft as customer contact,
   a lead, booking, delivery, or revenue fact.
-- **CWF-12:** Treat the source-complete, read-only Revenue Autopilot eligibility
-  preview as the safety specification for the later scheduler. It evaluates one
-  quote from the bounded Workflow read against exact portal decisions,
-  acceptance, webhook payment, tenant-local final-balance windows, conversation
-  read evidence, and outbound controls; Catalog Admin supplies the authoritative
-  tenant IANA time zone, and absent evidence fails closed. Qualify that preview
-  on a hosted candidate, then separately build trusted staff-read receipts,
-  scheduled tenant-branded email, Attention escalation, templates, consent/
-  unsubscribe/suppression, quiet hours, idempotent jobs, bounded retry, and
-  distinct accepted/delivered/bounced/viewed evidence. The current preview
-  schedules and sends nothing. Define attribution before claiming recovered
-  value and keep booked value, verified money received, and accounting revenue
-  separate.
+- **CWF-12:** Qualify and promote the source/local Revenue Autopilot authority:
+  tenant policy and Customer 360 controls, deterministic idempotent jobs,
+  15-minute UTC scheduler with tenant-local eligibility, quote/deposit/final-
+  balance/post-event email lanes, unread-reply Attention escalation, durable
+  signed-and-hash-bound customer unsubscribe, bounded operations UI, and raw
+  Resend webhook verification through `standardwebhooks@1.0.0`. Keep
+  `REVENUE_AUTOPILOT_ENABLED=false`, `REVENUE_AUTOPILOT_SENDS_ENABLED=false`,
+  and email provider disabled until exact deployment and provider acceptance.
+  Provision `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, and
+  `REVENUE_AUTOPILOT_TOKEN_SECRET` only through Secret Manager; the webhook must
+  bind only its webhook secret. Prove accepted, delivered, bounced, complained,
+  suppressed/unsubscribed, self-stop, retry, quiet-hour, and exact Attention
+  behavior separately before activation. Define attribution before claiming
+  recovered value; booked value, verified money received, and accounting revenue
+  remain distinct.
 - **CWF-13:** Qualify and promote Customer 360 and its source-complete bounded
   commercial-measures panel on an exact hosted candidate. The current read-only
   derivation shows quoted, exact-state accepted/booked, provider-confirmed
