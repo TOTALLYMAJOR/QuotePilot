@@ -48,6 +48,32 @@ export function isDefinitiveImportMutationError(error) {
   return DEFINITIVE_IMPORT_ERROR_CODES.has(code);
 }
 
+export function classifyImportMutationFailure({ error, catalogImport = false } = {}) {
+  const code = String(error?.code || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^functions\//, "");
+  if (catalogImport && code === "aborted") {
+    return {
+      phase: "recovery",
+      preserveBatchIdentity: true,
+      requiresCatalogRefresh: true
+    };
+  }
+  if (isDefinitiveImportMutationError(error)) {
+    return {
+      phase: "error",
+      preserveBatchIdentity: false,
+      requiresCatalogRefresh: false
+    };
+  }
+  return {
+    phase: "uncertain",
+    preserveBatchIdentity: true,
+    requiresCatalogRefresh: false
+  };
+}
+
 export function buildImportMutationResetGuard({
   phase = "idle",
   pendingImportBatchId = "",
@@ -95,7 +121,8 @@ export function buildImportMutationPresentation({
   readyCount = 0,
   error = "",
   receiptStatus = "",
-  recoveryReady = false
+  recoveryReady = false,
+  recoveryRefreshBusy = false
 } = {}) {
   const normalizedOperation = operation === "rollback" ? "rollback" : "import";
   const operationLabel = normalizedOperation === "rollback" ? "Undo" : "Import";
@@ -118,7 +145,7 @@ export function buildImportMutationPresentation({
       state: "submitting",
       actionLabel: normalizedOperation === "rollback" ? "Undoing..." : "Importing...",
       title: normalizedOperation === "rollback" ? "Submitting undo request" : "Submitting import",
-      detail: "Waiting for a server receipt before reporting a completed change.",
+      detail: "Waiting for a server receipt before reporting a completed change. Close, source-change, and new-file actions stay locked to this batch identity.",
       error: normalizedError
     };
   }
@@ -127,7 +154,7 @@ export function buildImportMutationPresentation({
       state: "uncertain",
       actionLabel: normalizedOperation === "rollback" ? "Reconcile undo" : "Reconcile import",
       title: `${operationLabel} outcome is uncertain.`,
-      detail: "No server receipt returned. Retry to reconcile the same batch identity before assuming which records changed.",
+      detail: "No server receipt returned. Retry to reconcile the same batch identity before assuming which records changed. Close, source-change, and new-file actions remain locked.",
       error: normalizedError
     };
   }
@@ -136,7 +163,7 @@ export function buildImportMutationPresentation({
       state: "reconciliation",
       actionLabel: normalizedOperation === "rollback" ? "Reconciling undo..." : "Reconciling import...",
       title: normalizedOperation === "rollback" ? "Reconciling undo" : "Reconciling import",
-      detail: "The same batch identity is being retried. Waiting for the server receipt that establishes the result.",
+      detail: "The same batch identity is being retried. Waiting for the server receipt that establishes the result; close and source replacement remain locked.",
       error: normalizedError
     };
   }
@@ -164,11 +191,11 @@ export function buildImportMutationPresentation({
       state: "recovery",
       actionLabel: recoveryReady
         ? (normalizedOperation === "rollback" ? "Retry undo" : "Retry import")
-        : "Refreshing source...",
+        : (recoveryRefreshBusy ? "Refreshing source..." : "Retry source refresh"),
       title: recoveryReady ? `${operationLabel} source refreshed.` : `${operationLabel} source changed.`,
       detail: recoveryReady
         ? "The latest catalog revision is loaded. Retry the same batch identity to obtain a definitive receipt; no completed change is assumed."
-        : "QuotePilot is refreshing the latest catalog revision before the same batch identity can be retried; no completed change is assumed.",
+        : "The same batch identity remains locked. Refresh the latest catalog source here before retrying; no completed change is assumed.",
       error: normalizedError
     };
   }
@@ -229,6 +256,7 @@ export function ImportStudioView({
   const [mutationPhase, setMutationPhase] = useState("idle");
   const [mutationOperation, setMutationOperation] = useState("import");
   const [recoveryCatalogRevision, setRecoveryCatalogRevision] = useState(null);
+  const [recoveryMutationError, setRecoveryMutationError] = useState("");
 
   const definition = getImportTypeDefinition(importType);
   const previewRows = useMemo(
@@ -246,7 +274,8 @@ export function ImportStudioView({
     readyCount: readyRows.length,
     error,
     receiptStatus: receipt?.status,
-    recoveryReady
+    recoveryReady,
+    recoveryRefreshBusy: busy && mutationPhase === "recovery"
   });
   const resetGuard = buildImportMutationResetGuard({
     phase: mutationPhase,
@@ -269,6 +298,7 @@ export function ImportStudioView({
     setMutationPhase("idle");
     setMutationOperation("import");
     setRecoveryCatalogRevision(null);
+    setRecoveryMutationError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -323,6 +353,7 @@ export function ImportStudioView({
     setMutationPhase("idle");
     setMutationOperation("import");
     setRecoveryCatalogRevision(null);
+    setRecoveryMutationError("");
     if (!file) return;
     if (!String(file.name || "").toLowerCase().endsWith(".csv")) {
       setError("Choose a CSV file. Excel support will follow in a later release.");
@@ -367,6 +398,29 @@ export function ImportStudioView({
     setMutationPhase("ready");
     setMutationOperation("import");
     setRecoveryCatalogRevision(null);
+    setRecoveryMutationError("");
+  };
+
+  const refreshCatalogForRecovery = async (mutationError = recoveryMutationError || error) => {
+    const baseError = String(mutationError || "The catalog source changed before the operation completed.").trim();
+    setMutationPhase("recovery");
+    setRecoveryCatalogRevision((current) => (
+      current === null ? Number(catalogRevision || 0) : current
+    ));
+    setRecoveryMutationError(baseError);
+    if (typeof onReload !== "function") {
+      setError(`${baseError} The current batch identity remains locked; refresh the catalog source before retrying.`);
+      return;
+    }
+    setBusy(true);
+    try {
+      await onReload();
+      setError(baseError);
+    } catch (reloadError) {
+      setError(`${baseError} Catalog refresh failed: ${reloadError?.message || "try the source refresh again."} The same batch identity remains locked.`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleImport = async () => {
@@ -396,6 +450,7 @@ export function ImportStudioView({
     setMutationOperation("import");
     setMutationPhase(reconciliation ? "reconciling" : "submitting");
     setRecoveryCatalogRevision(null);
+    setRecoveryMutationError("");
     try {
       const importBatchId = resolveImportBatchIdentity({
         pendingImportBatchId,
@@ -415,35 +470,19 @@ export function ImportStudioView({
       setReceipt(result);
       setPendingImportBatchId("");
       setMutationPhase("success");
+      setRecoveryMutationError("");
       if (typeof onImported === "function") onImported(result);
     } catch (err) {
       const mutationError = err?.message || "Import failed.";
       setError(mutationError);
-      const revisionConflict = catalogImport
-        && String(err?.code || "").includes("aborted");
-      const definitive = isDefinitiveImportMutationError(err);
-      if (revisionConflict) {
-        if (typeof onReload === "function") {
-          setRecoveryCatalogRevision(Number(catalogRevision || 0));
-          setMutationPhase("recovery");
-          try {
-            await onReload();
-          } catch (reloadError) {
-            setPendingImportBatchId("");
-            setRecoveryCatalogRevision(null);
-            setMutationPhase("error");
-            setError(`${mutationError} Catalog refresh also failed: ${reloadError?.message || "retry the refresh."}`);
-          }
-        } else {
-          setPendingImportBatchId("");
-          setMutationPhase("error");
-          setError(`${mutationError} Reload the catalog before retrying.`);
-        }
-      } else if (definitive) {
+      const failure = classifyImportMutationFailure({ error: err, catalogImport });
+      if (failure.requiresCatalogRefresh) {
+        await refreshCatalogForRecovery(mutationError);
+      } else if (!failure.preserveBatchIdentity) {
         setPendingImportBatchId("");
-        setMutationPhase("error");
+        setMutationPhase(failure.phase);
       } else {
-        setMutationPhase("uncertain");
+        setMutationPhase(failure.phase);
       }
     } finally {
       setBusy(false);
@@ -466,6 +505,7 @@ export function ImportStudioView({
     setMutationOperation("rollback");
     setMutationPhase(reconciliation ? "reconciling" : "submitting");
     setRecoveryCatalogRevision(null);
+    setRecoveryMutationError("");
     setPendingImportBatchId(receipt.importBatchId);
     try {
       const receiptRevision = Number(receipt.catalogRevisionAfter ?? receipt.catalogRevision ?? 0);
@@ -480,35 +520,19 @@ export function ImportStudioView({
       setReceipt((current) => ({ ...current, ...result }));
       setPendingImportBatchId("");
       setMutationPhase("success");
+      setRecoveryMutationError("");
       if (typeof onImported === "function") onImported(result);
     } catch (err) {
       const mutationError = err?.message || "Rollback failed.";
       setError(mutationError);
-      const revisionConflict = catalogImport
-        && String(err?.code || "").includes("aborted");
-      const definitive = isDefinitiveImportMutationError(err);
-      if (revisionConflict) {
-        if (typeof onReload === "function") {
-          setRecoveryCatalogRevision(Number(catalogRevision || 0));
-          setMutationPhase("recovery");
-          try {
-            await onReload();
-          } catch (reloadError) {
-            setPendingImportBatchId("");
-            setRecoveryCatalogRevision(null);
-            setMutationPhase("error");
-            setError(`${mutationError} Catalog refresh also failed: ${reloadError?.message || "retry the refresh."}`);
-          }
-        } else {
-          setPendingImportBatchId("");
-          setMutationPhase("error");
-          setError(`${mutationError} Reload the catalog before retrying.`);
-        }
-      } else if (definitive) {
+      const failure = classifyImportMutationFailure({ error: err, catalogImport });
+      if (failure.requiresCatalogRefresh) {
+        await refreshCatalogForRecovery(mutationError);
+      } else if (!failure.preserveBatchIdentity) {
         setPendingImportBatchId("");
-        setMutationPhase("error");
+        setMutationPhase(failure.phase);
       } else {
-        setMutationPhase("uncertain");
+        setMutationPhase(failure.phase);
       }
     } finally {
       setBusy(false);
@@ -682,9 +706,11 @@ export function ImportStudioView({
                   busy
                   || !readyRows.length
                   || readyRows.length > MAX_IMPORT_RECORDS
-                  || (mutationPhase === "recovery" && !recoveryReady)
+                  || (mutationPhase === "recovery" && !recoveryReady && typeof onReload !== "function")
                 }
-                onClick={handleImport}
+                onClick={mutationPhase === "recovery" && !recoveryReady
+                  ? () => refreshCatalogForRecovery()
+                  : handleImport}
               >
                 {mutationPresentation.actionLabel}
               </button>
@@ -727,8 +753,10 @@ export function ImportStudioView({
                 <button
                   type="button"
                   className="ghost danger"
-                  disabled={busy || (mutationPhase === "recovery" && !recoveryReady)}
-                  onClick={handleRollback}
+                  disabled={busy || (mutationPhase === "recovery" && !recoveryReady && typeof onReload !== "function")}
+                  onClick={mutationPhase === "recovery" && !recoveryReady
+                    ? () => refreshCatalogForRecovery()
+                    : handleRollback}
                 >
                   {mutationOperation === "rollback" && ["uncertain", "reconciling", "submitting", "error", "recovery"].includes(mutationPhase)
                     ? mutationPresentation.actionLabel

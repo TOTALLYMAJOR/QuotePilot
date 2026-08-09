@@ -5,14 +5,156 @@ import {
   loadQuotePortalConversation,
   sendQuotePortalConversationMessage
 } from "../lib/portalConversationClient";
+import { auth } from "../lib/firebase";
 
-function accessIdentity(access = {}) {
+const pendingConversationAttempts = new Map();
+const MAX_PENDING_CONVERSATION_ATTEMPTS = 25;
+let pendingConversationUnloadTarget = null;
+
+function protectPendingConversationAttempt(event) {
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+function browserUnloadTarget() {
+  return typeof window !== "undefined" ? window : null;
+}
+
+export function syncConversationPendingAttemptUnloadGuard(
+  requestedTarget = browserUnloadTarget()
+) {
+  const hasPendingAttempts = pendingConversationAttempts.size > 0;
+  if (!hasPendingAttempts) {
+    pendingConversationUnloadTarget?.removeEventListener(
+      "beforeunload",
+      protectPendingConversationAttempt
+    );
+    pendingConversationUnloadTarget = null;
+    return { active: false, pendingCount: 0 };
+  }
+
+  const target = requestedTarget && typeof requestedTarget.addEventListener === "function"
+    && typeof requestedTarget.removeEventListener === "function"
+    ? requestedTarget
+    : pendingConversationUnloadTarget;
+  if (!target) {
+    return { active: false, pendingCount: pendingConversationAttempts.size };
+  }
+  if (pendingConversationUnloadTarget !== target) {
+    pendingConversationUnloadTarget?.removeEventListener(
+      "beforeunload",
+      protectPendingConversationAttempt
+    );
+    target.addEventListener("beforeunload", protectPendingConversationAttempt);
+    pendingConversationUnloadTarget = target;
+  }
+  return { active: true, pendingCount: pendingConversationAttempts.size };
+}
+
+function accessIdentity(access = {}, authenticatedUid = "") {
+  const accessMode = String(access?.accessMode || "").trim();
   return [
-    access?.accessMode,
+    accessMode,
     access?.organizationId,
     access?.quoteId,
-    access?.portalKey
+    access?.portalKey,
+    accessMode === "staff" ? authenticatedUid : ""
   ].map((value) => String(value || "").trim()).join(":");
+}
+
+function normalizePendingAttemptIdentity(value) {
+  return String(value || "").trim();
+}
+
+function normalizePendingAttemptBody(value) {
+  return String(value ?? "").trim();
+}
+
+export function readConversationPendingAttempt(identity = "") {
+  const key = normalizePendingAttemptIdentity(identity);
+  const attempt = key ? pendingConversationAttempts.get(key) : null;
+  return attempt ? { ...attempt } : null;
+}
+
+export function beginConversationPendingAttempt({
+  identity = "",
+  body = "",
+  clientRequestId = "",
+  createRequestId = buildPortalConversationClientRequestId
+} = {}) {
+  const key = normalizePendingAttemptIdentity(identity);
+  const normalizedBody = normalizePendingAttemptBody(body);
+  if (!key || !normalizedBody || typeof createRequestId !== "function") {
+    throw new Error("Conversation identity and message are required for a safe send attempt.");
+  }
+  const restored = pendingConversationAttempts.get(key) || null;
+  if (!restored && pendingConversationAttempts.size >= MAX_PENDING_CONVERSATION_ATTEMPTS) {
+    throw new Error(
+      "Reconcile an unresolved conversation request before starting another message."
+    );
+  }
+  const requestId = String(
+    clientRequestId || restored?.clientRequestId || createRequestId()
+  ).trim();
+  if (!requestId) {
+    throw new Error("A safe message retry id is required.");
+  }
+  if (
+    restored
+    && restored.clientRequestId === requestId
+    && restored.body !== normalizedBody
+  ) {
+    throw new Error("The unresolved message must be retried unchanged with its original request identity.");
+  }
+  const attempt = {
+    clientRequestId: requestId,
+    body: normalizedBody,
+    error: restored?.error || "",
+    resetAllowed: restored?.resetAllowed === true
+  };
+  pendingConversationAttempts.delete(key);
+  pendingConversationAttempts.set(key, attempt);
+  syncConversationPendingAttemptUnloadGuard();
+  return {
+    ...attempt,
+    sendMode: restored || clientRequestId ? "reconcile" : "submit"
+  };
+}
+
+export function markConversationPendingAttemptError({
+  identity = "",
+  clientRequestId = "",
+  error = "",
+  resetAllowed = false
+} = {}) {
+  const key = normalizePendingAttemptIdentity(identity);
+  const requestId = String(clientRequestId || "").trim();
+  const current = key ? pendingConversationAttempts.get(key) : null;
+  if (!current || current.clientRequestId !== requestId) return false;
+  pendingConversationAttempts.set(key, {
+    ...current,
+    error: String(error || "").trim(),
+    resetAllowed: resetAllowed === true
+  });
+  syncConversationPendingAttemptUnloadGuard();
+  return true;
+}
+
+export function clearConversationPendingAttempt({
+  identity = "",
+  clientRequestId = "",
+  resolution = ""
+} = {}) {
+  if (!["receipt", "safe_reset"].includes(String(resolution || "").trim())) {
+    return false;
+  }
+  const key = normalizePendingAttemptIdentity(identity);
+  const requestId = String(clientRequestId || "").trim();
+  const current = key ? pendingConversationAttempts.get(key) : null;
+  if (!current || current.clientRequestId !== requestId) return false;
+  pendingConversationAttempts.delete(key);
+  syncConversationPendingAttemptUnloadGuard();
+  return true;
 }
 
 function friendlyConversationError(error, fallback) {
@@ -23,6 +165,7 @@ function friendlyConversationError(error, fallback) {
 }
 
 const DEFINITIVE_CONVERSATION_ERROR_CODES = new Set([
+  "already-exists",
   "failed-precondition",
   "invalid-argument",
   "not-found",
@@ -52,13 +195,12 @@ export function isDefinitiveConversationSendError(error) {
 
 export function buildConversationCloseGuard({ phase = "ready", pendingRequestId = "" } = {}) {
   const hasPendingRequest = Boolean(String(pendingRequestId || "").trim());
-  const blocked = phase === "sending" || hasPendingRequest;
+  const protectsUnload = phase === "sending" || hasPendingRequest;
   return {
-    blocked,
-    message: blocked
-      ? (phase === "sending"
-          ? "Keep this conversation open until the message request returns a receipt."
-          : "Reconcile the unresolved message request before closing this conversation.")
+    blocked: false,
+    protectsUnload,
+    message: protectsUnload
+      ? "The unresolved request will be kept for exact reconciliation when this conversation is reopened."
       : ""
   };
 }
@@ -124,6 +266,15 @@ export function buildConversationMutationPresentation({
       error: ""
     };
   }
+  if (phase === "send_error" && hasPendingRequest && sendMode === "safe_reset") {
+    return {
+      state: "error",
+      actionLabel: "Reset rejected attempt",
+      title: "Message request was rejected.",
+      detail: "The server returned a definitive rejection. Explicitly reset this request identity before editing or starting another attempt.",
+      error: normalizedError
+    };
+  }
   if (hasPendingRequest) {
     return {
       state: "uncertain",
@@ -156,7 +307,7 @@ export function buildConversationMutationPresentation({
       state: "recovery",
       actionLabel: "Send revised message",
       title: "Revised message ready.",
-      detail: "Editing cleared the prior retry identity. The earlier request remains unconfirmed until the conversation is refreshed.",
+      detail: "The definitively rejected request identity was explicitly cleared. Review the message before starting a new request.",
       error: ""
     };
   }
@@ -195,19 +346,30 @@ export default function QuoteConversationPanel({
   defaultOpen = false,
   onClose = null
 }) {
-  const identity = useMemo(() => accessIdentity(access), [
+  const authenticatedUid = String(auth?.currentUser?.uid || "").trim();
+  const identity = useMemo(() => accessIdentity(access, authenticatedUid), [
     access?.accessMode,
     access?.organizationId,
     access?.quoteId,
-    access?.portalKey
+    access?.portalKey,
+    authenticatedUid
   ]);
+  const initialPendingAttempt = readConversationPendingAttempt(identity);
   const [open, setOpen] = useState(defaultOpen);
-  const [phase, setPhase] = useState(defaultOpen ? "loading" : "closed");
+  const [phase, setPhase] = useState(
+    defaultOpen ? "loading" : initialPendingAttempt ? "send_error" : "closed"
+  );
   const [messages, setMessages] = useState([]);
-  const [body, setBody] = useState("");
-  const [pendingRequestId, setPendingRequestId] = useState("");
-  const [sendMode, setSendMode] = useState("idle");
-  const [error, setError] = useState("");
+  const [body, setBody] = useState(initialPendingAttempt?.body || "");
+  const [pendingRequestId, setPendingRequestId] = useState(
+    initialPendingAttempt?.clientRequestId || ""
+  );
+  const [sendMode, setSendMode] = useState(
+    initialPendingAttempt?.resetAllowed
+      ? "safe_reset"
+      : initialPendingAttempt ? "reconcile" : "idle"
+  );
+  const [error, setError] = useState(initialPendingAttempt?.error || "");
   const [status, setStatus] = useState("");
   const [readOnly, setReadOnly] = useState(false);
   const [readOnlyReason, setReadOnlyReason] = useState("");
@@ -222,16 +384,6 @@ export default function QuoteConversationPanel({
     status
   });
   const closeGuard = buildConversationCloseGuard({ phase, pendingRequestId });
-
-  useEffect(() => {
-    if (!closeGuard.blocked || typeof window === "undefined") return undefined;
-    const protectPendingMessage = (event) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", protectPendingMessage);
-    return () => window.removeEventListener("beforeunload", protectPendingMessage);
-  }, [closeGuard.blocked]);
 
   const beginRequestGeneration = () => {
     requestGenerationRef.current += 1;
@@ -250,11 +402,13 @@ export default function QuoteConversationPanel({
     })
   );
 
-  const load = async ({ refresh = false } = {}) => {
+  const load = async ({ refresh = false, pendingAttempt = null } = {}) => {
     const request = beginRequestGeneration();
-    const reconcilingUnknownRequest = Boolean(
-      refresh && String(pendingRequestId || "").trim()
-    );
+    const unresolvedAttempt = pendingAttempt || readConversationPendingAttempt(identity);
+    const unresolvedRequestId = String(
+      unresolvedAttempt?.clientRequestId || pendingRequestId || ""
+    ).trim();
+    const reconcilingUnknownRequest = Boolean(unresolvedRequestId);
     setPhase(refresh && messages.length ? "refreshing" : "loading");
     setError("");
     setStatus("");
@@ -265,8 +419,14 @@ export default function QuoteConversationPanel({
       setReadOnly(result.readOnly);
       setReadOnlyReason(result.readOnlyReason);
       if (reconcilingUnknownRequest) {
+        setBody(unresolvedAttempt?.body || body);
+        setPendingRequestId(unresolvedRequestId);
+        setSendMode(unresolvedAttempt?.resetAllowed ? "safe_reset" : "reconcile");
         setPhase("send_error");
-        setError("Conversation refreshed, but the prior message request still needs an exact retry to confirm its receipt.");
+        setError(
+          unresolvedAttempt?.error
+          || "Conversation refreshed, but the prior message request still needs an exact retry to confirm its receipt."
+        );
       } else {
         setPhase("ready");
         if (refresh) setStatus("Conversation refreshed.");
@@ -283,22 +443,27 @@ export default function QuoteConversationPanel({
   };
 
   const openConversation = () => {
+    const pendingAttempt = readConversationPendingAttempt(identity);
+    if (pendingAttempt) {
+      setBody(pendingAttempt.body);
+      setPendingRequestId(pendingAttempt.clientRequestId);
+      setSendMode(pendingAttempt.resetAllowed ? "safe_reset" : "reconcile");
+      setError(pendingAttempt.error);
+    }
     setOpen(true);
-    void load();
+    void load({ pendingAttempt });
   };
 
   const closeConversation = () => {
-    if (closeGuard.blocked) return;
     requestGenerationRef.current += 1;
     setOpen(false);
     setPhase("closed");
-    setError("");
     setStatus("");
     if (typeof onClose === "function") onClose();
   };
 
   const updateBody = (nextBody) => {
-    if (closeGuard.blocked) return;
+    if (pendingRequestId) return;
     setBody(nextBody);
     if (phase === "send_error") {
       setPendingRequestId("");
@@ -316,8 +481,21 @@ export default function QuoteConversationPanel({
     const normalizedBody = body.trim();
     if (!normalizedBody || readOnly) return;
     const request = beginRequestGeneration();
-    const clientRequestId = pendingRequestId || buildPortalConversationClientRequestId();
-    setSendMode(pendingRequestId ? "reconcile" : "submit");
+    let attempt = null;
+    try {
+      attempt = beginConversationPendingAttempt({
+        identity,
+        body: normalizedBody,
+        clientRequestId: pendingRequestId
+      });
+    } catch (attemptError) {
+      if (!requestGenerationIsCurrent(request)) return;
+      setPhase("send_error");
+      setError(friendlyConversationError(attemptError, "The message request could not start safely."));
+      return;
+    }
+    const clientRequestId = attempt.clientRequestId;
+    setSendMode(attempt.sendMode);
     setPendingRequestId(clientRequestId);
     setPhase("sending");
     setError("");
@@ -329,6 +507,11 @@ export default function QuoteConversationPanel({
         clientRequestId
       });
       if (!requestGenerationIsCurrent(request)) return;
+      clearConversationPendingAttempt({
+        identity,
+        clientRequestId,
+        resolution: "receipt"
+      });
       setMessages((current) => mergeConversationMessages(current, [result.message]));
       setReadOnly(result.readOnly);
       setReadOnlyReason(result.readOnlyReason);
@@ -340,31 +523,62 @@ export default function QuoteConversationPanel({
         : "Message recorded in this quote conversation.");
     } catch (sendError) {
       if (!requestGenerationIsCurrent(request)) return;
-      if (isDefinitiveConversationSendError(sendError)) {
-        setPendingRequestId("");
-      }
+      const definitive = isDefinitiveConversationSendError(sendError);
+      const nextError = friendlyConversationError(
+        sendError,
+        "The message request did not return a server receipt."
+      );
+      markConversationPendingAttemptError({
+        identity,
+        clientRequestId,
+        error: nextError,
+        resetAllowed: definitive
+      });
+      setSendMode(definitive ? "safe_reset" : "reconcile");
       setPhase("send_error");
-      setError(friendlyConversationError(sendError, "The message request did not return a server receipt."));
+      setError(nextError);
     }
+  };
+
+  const resetRejectedAttempt = () => {
+    if (
+      sendMode !== "safe_reset"
+      || !clearConversationPendingAttempt({
+        identity,
+        clientRequestId: pendingRequestId,
+        resolution: "safe_reset"
+      })
+    ) return;
+    setPendingRequestId("");
+    setSendMode("recovery");
+    setPhase("ready");
+    setError("");
+    setStatus("Rejected message attempt reset. Review the message before retrying.");
   };
 
   useEffect(() => {
     requestGenerationRef.current += 1;
+    const pendingAttempt = readConversationPendingAttempt(identity);
     setMessages([]);
-    setBody("");
-    setPendingRequestId("");
-    setSendMode("idle");
-    setError("");
+    setBody(pendingAttempt?.body || "");
+    setPendingRequestId(pendingAttempt?.clientRequestId || "");
+    setSendMode(
+      pendingAttempt?.resetAllowed ? "safe_reset" : pendingAttempt ? "reconcile" : "idle"
+    );
+    setError(pendingAttempt?.error || "");
     setStatus("");
     setReadOnly(false);
     setReadOnlyReason("");
     if (defaultOpen) {
       setOpen(true);
-      void load();
+      void load({ pendingAttempt });
     } else {
       setOpen(false);
-      setPhase("closed");
+      setPhase(pendingAttempt ? "send_error" : "closed");
     }
+    return () => {
+      requestGenerationRef.current += 1;
+    };
     // The normalized access identity is the boundary that requires a reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity, defaultOpen]);
@@ -384,7 +598,10 @@ export default function QuoteConversationPanel({
   }
 
   const busy = phase === "loading" || phase === "refreshing" || phase === "sending";
-  const canSend = !readOnly && body.trim().length > 0 && !busy;
+  const canSafelyReset = phase === "send_error"
+    && Boolean(pendingRequestId)
+    && sendMode === "safe_reset";
+  const canSend = !readOnly && body.trim().length > 0 && !busy && !canSafelyReset;
   return (
     <section className="quote-conversation" aria-busy={busy} aria-labelledby="quote-conversation-title">
       <header className="quote-conversation-head">
@@ -459,22 +676,28 @@ export default function QuoteConversationPanel({
                   rows="4"
                   maxLength={PORTAL_CONVERSATION_BODY_MAX_LENGTH}
                   value={body}
-                  disabled={phase === "sending" || closeGuard.blocked}
+                  disabled={phase === "sending" || Boolean(pendingRequestId)}
                   onChange={(event) => updateBody(event.target.value)}
                   placeholder="Ask a question or share an update"
                 />
               </label>
               <div className="quote-conversation-compose-footer">
                 <small>{body.length}/{PORTAL_CONVERSATION_BODY_MAX_LENGTH}</small>
-                <button
-                  type="button"
-                  className="cta"
-                  onClick={() => void send()}
-                  disabled={!canSend}
-                  aria-busy={phase === "sending"}
-                >
-                  {mutationPresentation.actionLabel}
-                </button>
+                {canSafelyReset ? (
+                  <button type="button" className="ghost" onClick={resetRejectedAttempt}>
+                    {mutationPresentation.actionLabel}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="cta"
+                    onClick={() => void send()}
+                    disabled={!canSend}
+                    aria-busy={phase === "sending"}
+                  >
+                    {mutationPresentation.actionLabel}
+                  </button>
+                )}
               </div>
             </div>
           )}

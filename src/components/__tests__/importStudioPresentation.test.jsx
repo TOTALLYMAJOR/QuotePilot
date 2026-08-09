@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 
 vi.mock("../../lib/importBatchService", () => ({
+  createCustomerImportBatchId: vi.fn(() => "customer_test"),
   createImportBatchId: vi.fn(() => "catalog_test"),
   createImportBatch: vi.fn(),
   isCatalogImportType: vi.fn(() => false),
@@ -16,6 +17,7 @@ import ImportStudioModal, {
   advanceImportFileReadGeneration,
   buildImportMutationPresentation,
   buildImportMutationResetGuard,
+  classifyImportMutationFailure,
   isDefinitiveImportMutationError,
   isImportFileReadGenerationCurrent,
   resolveImportBatchIdentity
@@ -75,6 +77,7 @@ describe("Import Studio presentation", () => {
     expect(submittingHtml).toContain('data-mutation-state="submitting"');
     expect(submittingHtml).toContain('data-capability-state="submitting"');
     expect(submittingHtml).toContain("Waiting for a server receipt");
+    expect(submittingHtml).toContain("new-file actions stay locked to this batch identity");
     expect(submittingHtml).toContain(">Importing...</button>");
   });
 
@@ -95,11 +98,13 @@ describe("Import Studio presentation", () => {
     expect(uncertainHtml).toContain('data-capability-state="uncertain"');
     expect(uncertainHtml).toContain("Import outcome is uncertain.");
     expect(uncertainHtml).toContain("same batch identity");
+    expect(uncertainHtml).toContain("new-file actions remain locked");
     expect(uncertainHtml).toContain(">Reconcile import</button>");
     expect(uncertainHtml).not.toContain("Import completed");
     expect(reconciliationHtml).toContain('data-mutation-state="reconciliation"');
     expect(reconciliationHtml).toContain('data-capability-state="reconciliation"');
     expect(reconciliationHtml).toContain("The same batch identity is being retried.");
+    expect(reconciliationHtml).toContain("source replacement remain locked");
     expect(reconciliationHtml).toContain(">Reconciling import...</button>");
   });
 
@@ -120,6 +125,19 @@ describe("Import Studio presentation", () => {
       error: "Review the latest catalog before retrying.",
       recoveryReady: true
     });
+    const waitingRecoveryHtml = renderImportMutationState({
+      phase: "recovery",
+      operation: "import",
+      error: "The source revision changed.",
+      recoveryReady: false,
+      recoveryRefreshBusy: false
+    });
+    const refreshingRecoveryHtml = renderImportMutationState({
+      phase: "recovery",
+      operation: "import",
+      recoveryReady: false,
+      recoveryRefreshBusy: true
+    });
 
     expect(receiptHtml).toContain('data-mutation-state="receipt"');
     expect(receiptHtml).toContain('data-capability-state="receipt"');
@@ -133,17 +151,22 @@ describe("Import Studio presentation", () => {
     expect(rollbackRecoveryHtml).toContain('data-capability-state="recovery"');
     expect(rollbackRecoveryHtml).toContain("The latest catalog revision is loaded.");
     expect(rollbackRecoveryHtml).toContain(">Retry undo</button>");
+    expect(waitingRecoveryHtml).toContain("same batch identity remains locked");
+    expect(waitingRecoveryHtml).toContain(">Retry source refresh</button>");
+    expect(refreshingRecoveryHtml).toContain(">Refreshing source...</button>");
   });
 
   test("keeps unresolved import identities locked to their source until reconciliation", () => {
-    expect(buildImportMutationResetGuard({
-      phase: "uncertain",
-      pendingImportBatchId: "customer_1234567890abcdef",
-      busy: false
-    })).toEqual({
-      blocked: true,
-      message: "Reconcile the current import batch before closing, changing its source, or starting another import."
-    });
+    for (const phase of ["submitting", "uncertain", "reconciling", "recovery"]) {
+      expect(buildImportMutationResetGuard({
+        phase,
+        pendingImportBatchId: "customer_1234567890abcdef",
+        busy: false
+      })).toEqual({
+        blocked: true,
+        message: "Reconcile the current import batch before closing, changing its source, or starting another import."
+      });
+    }
     expect(buildImportMutationResetGuard({
       phase: "recovery",
       pendingImportBatchId: "catalog_1234567890abcdef",
@@ -167,6 +190,33 @@ describe("Import Studio presentation", () => {
     expect(preserved).toBe("customer_existing_batch_1");
     expect(created).toBe("customer_explicit_batch_1");
     expect(createCustomerId).toHaveBeenCalledOnce();
+  });
+
+  test("preserves stable batch identity for uncertain outcomes and catalog refresh recovery", () => {
+    expect(classifyImportMutationFailure({
+      error: { code: "functions/unavailable" },
+      catalogImport: false
+    })).toEqual({
+      phase: "uncertain",
+      preserveBatchIdentity: true,
+      requiresCatalogRefresh: false
+    });
+    expect(classifyImportMutationFailure({
+      error: { code: "functions/aborted" },
+      catalogImport: true
+    })).toEqual({
+      phase: "recovery",
+      preserveBatchIdentity: true,
+      requiresCatalogRefresh: true
+    });
+    expect(classifyImportMutationFailure({
+      error: { code: "functions/invalid-argument" },
+      catalogImport: false
+    })).toEqual({
+      phase: "error",
+      preserveBatchIdentity: false,
+      requiresCatalogRefresh: false
+    });
   });
 
   test("invalidates a stale asynchronous file read on reset, close, or a newer file selection", () => {
