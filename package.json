@@ -54,6 +54,7 @@
     "deploy:vercel": "node ./scripts/deploy-vercel-production.mjs"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "firebase": "^11.0.0",
     "jspdf": "^4.2.0",
     "react": "^18.3.1",

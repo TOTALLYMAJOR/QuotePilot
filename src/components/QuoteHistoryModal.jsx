@@ -43,6 +43,7 @@ import {
   humanizeWorkspaceValue
 } from "../lib/workspacePresentation";
 import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";
+import EventWorkspaceView from "./EventWorkspaceView";
 import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
 import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
 import QuoteConversationPanel from "./QuoteConversationPanel";
@@ -740,6 +741,10 @@ export function QuoteHistoryView({
   focusAction = "",
   focusReason = "",
   onEditQuote,
+  onBackToQuotes,
+  onOpenSchedule,
+  scheduleAvailable = false,
+  onOpenCustomer,
   onOpenWorkflow,
   onOpenIntegrations,
   integrationsAvailable = true,
@@ -747,6 +752,7 @@ export function QuoteHistoryView({
   onToast
 }) {
   const embedded = presentation === "embedded";
+  const detailMode = embedded && Boolean(String(focusQuoteId || "").trim());
   const [state, setState] = useState({
     loading: false,
     source: "",
@@ -1956,6 +1962,124 @@ export function QuoteHistoryView({
     if (typeof onOpenIntegrations !== "function") return;
     onOpenIntegrations();
   };
+
+  if (detailMode) {
+    const ordinaryEditAllowed = Boolean(
+      focusedQuote
+      && permissions.canEditQuote
+      && canEditQuoteStatus(focusedQuoteStatus)
+      && !focusedDelivery.mutationLocked
+      && typeof onEditQuote === "function"
+    );
+    const beoAvailable = Boolean(
+      focusedQuote
+      && permissions.canExportBeo
+      && focusedRebookDeliveryGate.ready
+    );
+    const conversationAvailable = Boolean(
+      focusedQuote
+      && permissions.canCopyArtifacts
+      && state.source === "firebase"
+      && portalConversationAvailable()
+      && focusedQuoteCanUsePortal
+    );
+
+    return (
+      <main
+        className="container workspace-route-main embedded-workspace-route event-workspace-route"
+        role="region"
+        aria-label="Quote event workspace"
+      >
+        <div className="modal-card history-card workspace-route-card event-workspace-route-card" ref={dialogRef} tabIndex={-1}>
+          {state.loading && !focusedQuote && (
+            <div className="event-workspace-loading" role="status">Loading event workspace...</div>
+          )}
+          {state.error && <p className="error-note" role="alert">{state.error}</p>}
+          {state.feedback && <p className="source-note" role="status" aria-live="polite">{state.feedback}</p>}
+          {!state.loading && !focusedQuote && !state.error && (
+            <section className="event-workspace-missing">
+              <h1>Quote not found</h1>
+              <p>The requested quote is not available in this workspace.</p>
+              <button type="button" className="ghost" onClick={onBackToQuotes}>Back to Quotes</button>
+            </section>
+          )}
+          {focusedQuote && (
+            <EventWorkspaceView
+              ref={savedQuoteHandoffRef}
+              quote={focusedQuote}
+              source={state.source}
+              ordinaryEditAllowed={ordinaryEditAllowed}
+              scheduleAvailable={scheduleAvailable}
+              beoAvailable={beoAvailable}
+              conversationAvailable={conversationAvailable}
+              exportingPdf={exportingPdfId === focusedQuote.id}
+              onBackToQuotes={onBackToQuotes}
+              onEditQuote={handleEditQuote}
+              onMoreQuoteActions={onBackToQuotes}
+              onOpenWorkflow={onOpenWorkflow}
+              onOpenSchedule={onOpenSchedule}
+              onOpenCustomer={() => onOpenCustomer?.(focusedQuote.customerId)}
+              onOpenBeo={() => {
+                if (state.source === "firebase") handleOpenKitchenBeo(focusedQuote);
+                else handleExportLocalBeo(focusedQuote);
+              }}
+              onExportPdf={permissions.canExportProposal && focusedRebookDeliveryGate.ready
+                ? () => handleExportPdf(focusedQuote)
+                : undefined}
+              onOpenConversation={() => setConversationQuote(focusedQuote)}
+            />
+          )}
+          {focusedQuote
+            && state.source === "firebase"
+            && ["admin", "sales"].includes(permissions.role) && (
+            <CommercialDependencyStatePanel
+              organizationId={organizationId}
+              quoteId={focusedQuote.id}
+              quoteNumber={focusedQuote.quoteNumber}
+              available={Boolean(organizationId)}
+              canReconcile
+            />
+          )}
+          {focusedQuote && state.source === "firebase" && (
+            <QuoteDecisionDebtPanel
+              organizationId={organizationId}
+              quoteId={focusedQuote.id}
+              available={Boolean(organizationId)}
+              onOpenWorkflow={onOpenWorkflow}
+            />
+          )}
+          {conversationQuote && (
+            <aside className="quote-conversation-modal">
+              <QuoteConversationPanel
+                defaultOpen
+                title={`Conversation for ${formatWorkspaceText(conversationQuote.quoteNumber, { emptyLabel: "quote number pending" })}`}
+                access={{ accessMode: "staff", organizationId, quoteId: conversationQuote.id }}
+                onClose={() => setConversationQuote(null)}
+              />
+            </aside>
+          )}
+          {kitchenBeoQuote && state.source === "firebase" && (
+            <KitchenBeoArtifactPanel
+              open
+              presentation="modal"
+              organizationId={organizationId}
+              quoteId={kitchenBeoQuote.id}
+              quoteNumber={kitchenBeoQuote.quoteNumber}
+              returnFocusRef={kitchenBeoReturnFocusRef}
+              onClose={() => setKitchenBeoQuote(null)}
+              onGenerated={(result) => {
+                const feedback = result?.idempotent
+                  ? `Matching server Kitchen BEO receipt confirmed for ${kitchenBeoQuote.quoteNumber}.`
+                  : `Server Kitchen BEO receipt recorded for ${kitchenBeoQuote.quoteNumber}.`;
+                setState((current) => ({ ...current, feedback, error: "" }));
+                pushToast(feedback, "success");
+              }}
+            />
+          )}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div

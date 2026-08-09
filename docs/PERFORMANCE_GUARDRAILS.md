@@ -24,14 +24,14 @@ Threshold policy:
   for aggregate JavaScript and the largest chunk. The guard accepts it only
   when its ID is active and its pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The customer-centered workspace exception is currently capped at 2,597,989
+- The customer-centered workspace exception is currently capped at 2,650,137
   aggregate JavaScript bytes and a 390,494-byte largest chunk. These are the
-  exact measurements from the August 9 completed source/local convergence
+  exact measurements from the August 9 CWF-16 source/local candidate
   build, so the exception provides no additional growth headroom. Against the
-  unchanged clean-main baseline, aggregate output is 600,624 bytes (30.07%)
+  unchanged clean-main baseline, aggregate output is 652,772 bytes (32.68%)
   larger, while the largest chunk is only 2,565 bytes (0.66%) larger and remains
   16,831 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
-  splitting keeps the authenticated route at 310,102 bytes, and route-level
+  splitting keeps the authenticated route bounded, and route-level
   splitting keeps the new Customer 360, Workflow,
   commercial-authority, Decision Debt, Revenue Autopilot, and BEO surfaces out
   of the public entry chunk, but aggregate download, parse, and execution cost

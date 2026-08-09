@@ -135,28 +135,20 @@ Detailed contracts and invariants:
   not prove kitchen review, publication, delivery, booking, payment, or event
   completion.
 
-### Earliest Post-Stabilization Source Turn - Event Workspace and Intelligence
+### Earliest Post-Stabilization Source Turn - Intelligence
 
-- **CWF-16 — Canonical Event / Transaction Workspace (high).** Immediately
-  after the current working-tree convergence is validated and committed,
-  recompose `/app/quotes/:quoteId` into the commercial core of one event. Reuse
-  `/app/quotes/:quoteId/edit` and make **Edit quote** unmistakable; preserve
-  draft, customer-visible, accepted, and booked authority differences. Show
-  event/customer identity, sold scope, lifecycle, current attention, and only
-  repository-supported Schedule, Staffing, Rentals & Equipment, Production/BEO,
-  and Customer entry points. True inventory availability stays absent until a
-  reservation model exists. Complete the required capability-truth, UX,
-  intelligence, information-architecture, reuse, file-impact, authority-risk,
-  and test plan before code changes.
-- **CWF-17 — Deterministic Event Intelligence synthesis (high).** Add one pure,
-  centrally tested selector from bounded authoritative facts to operator-facing
-  **Condition**, **Readiness**, **Flexibility**, **Needs You**, **Change Impact**,
-  and **Alignment**. Readiness and Flexibility remain orthogonal. Raw
+- **CWF-17 — Complete deterministic Event Intelligence synthesis (high).**
+  Extend the CWF-16 presentation-only selector beyond exact Workflow Attention
+  and proposal readiness to every supported authoritative input and the
+  remaining operator-facing **Change Impact** conclusion. Preserve explicit
+  unavailable states for unsupported Flexibility and Alignment until their
+  authority contracts exist. Readiness and Flexibility remain orthogonal. Raw
   Optionality, Debt, pressure, leverage, reversibility, slack, fragility,
   freshness, and integrity stay behind one progressive **Why?** grammar. Every
   conclusion owns its state, machine-stable reason codes, evidence bounds, and
   explicit unavailable/insufficient-evidence result; UI components never infer
-  labels independently or manufacture precision.
+  labels independently or manufacture precision. Do not replace the shipped
+  proposal-completeness boundary with an event-wide readiness claim.
 - **CWF-18 — Flexibility and change-window authority (high prerequisite for a
   complete CWF-17).** Define versioned guest, menu, staffing, rental, special-
   order, and BEO windows from declared tenant policy plus proven commitments and

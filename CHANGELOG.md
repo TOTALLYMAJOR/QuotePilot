@@ -8,6 +8,23 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Source/local `CWF-16` Event Workspace. The flagged `/app/quotes/:quoteId`
+  route now presents one quote as an event-first commercial record with exact
+  event/customer identity, bounded Workflow condition and next action, existing
+  Schedule/Customer/BEO/PDF/conversation entry points, sold scope, and
+  Draft/Sent/Accepted/Booked lifecycle. One presentation-only deterministic
+  selector now reuses exact Workflow Attention and proposal-readiness facts for
+  `Condition`, proposal-scoped `Readiness`, and `Needs You`, exposes stable
+  reason codes behind one `Why?` disclosure, and returns explicit `Unavailable`
+  states for Flexibility and Alignment instead of guessing from Decision Debt
+  or other partial evidence. `/app/quotes` remains the complete
+  role-gated administration table and `/app/quotes/:quoteId/edit` remains the
+  trusted editor. Accepted/booked records do not expose ordinary Edit, empty
+  attention explicitly does not claim readiness/completion, and local BEO output
+  remains labeled as having no server receipt. Deterministic model, component,
+  integration, responsive browser, console-error, deterministic-repeat, and
+  same-state visual QA are covered. This adds no backend/data authority and is
+  not merged, deployed, hosted, flag-promoted, or human-accepted.
 - Source/local `CWF-11` authoritative post-event closeout. A governed booking
   with a verified private acceptance receipt now atomically creates one
   deterministic, same-tenant closeout record bound to the exact accepted
@@ -171,12 +188,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   actor, server-time, receipt, reconciliation, or publication evidence. It is
   source/local evidence only and is not deployed or hosted-operator accepted.
 - A named temporary bundle exception for the unmerged customer-centered
-  workspace convergence, with exact no-headroom ceilings of 2,597,989 aggregate
+  workspace convergence, with exact no-headroom ceilings of 2,650,137 aggregate
   JavaScript bytes and a 390,494-byte largest chunk. Targeted quote-store
   splitting reduced the authenticated route chunk from 448,190 to 310,102 bytes
   while preserving the unchanged clean-main baseline. The completed source/local
   checkpoint includes governed commercial-change, artifact-freshness, Decision
-  Debt, Revenue Autopilot, central reply Attention, and anniversary radar
+  Debt, Revenue Autopilot, central reply Attention, anniversary radar, and the
+  CWF-16 Event Workspace
   surfaces. The machine-readable
   exception is pinned to the unchanged clean-main metrics and blocks baseline
   updates while active; normal 5% limits resume when the exception is removed.

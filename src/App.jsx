@@ -3954,6 +3954,13 @@ export default function App({ tenantContext, authSession }) {
               requestWorkflowAttentionRefresh({ force: true });
               handleEditQuote(quote);
             }}
+            onBackToQuotes={() => {
+              setHistoryTarget({ quoteId: "", reason: "" });
+              navigateWorkspace(WORKSPACE_PATHS.quotes);
+            }}
+            onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
+            scheduleAvailable={eventScheduleEnabled}
+            onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
             onOpenIntegrations={() => {
               setHistoryTarget({ quoteId: "", reason: "" });
