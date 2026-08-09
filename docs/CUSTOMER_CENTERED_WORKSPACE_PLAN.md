@@ -1,9 +1,12 @@
 # Customer-Centered Workspace Plan
 
-Status: accepted product and architecture direction. Current delivery evidence
-lives in `PROJECT_STATUS.md`; remaining rollout work lives in `DEV_TASKS.md`.
-This document defines contracts and sequence, not implementation, deployment,
-provider, production-data, flag-promotion, or human-acceptance evidence.
+Status: accepted product and architecture direction. Current qualification and
+release evidence lives in `PROJECT_STATUS.md`; remaining rollout work lives in
+`DEV_TASKS.md`. This document defines contracts, sequence, and the scope boundary
+of named source tranches. A tranche described here as present or source-complete
+identifies the accepted implementation boundary only; it is not mutable test,
+deployment, provider, production-data, flag-promotion, or human-acceptance
+evidence.
 
 Last updated: August 9, 2026
 
@@ -96,8 +99,10 @@ Route invariants:
 - `/app/home` replaces to `/app` rather than creating another history entry.
 - An unknown `/app/*` path renders an authenticated 404 inside the staff shell.
 - Customer and quote identifiers are opaque URL-encoded IDs. Customer names,
-  email addresses, quote contents, and draft contents never enter URLs or
-  browser storage.
+  email addresses, quote contents, and draft contents never enter URLs, History
+  state, persisted search state, or route/draft-continuity storage. The existing
+  explicitly browser-local fallback may retain its local quote records; routed
+  draft continuity remains in memory and introduces no additional persistence.
 - Route changes use the browser History API. No routing dependency is added.
 - The existing workspace authority boundary remains mounted across path
   changes. A UID, role, tenant, organization, platform-authority, or host change
@@ -396,18 +401,31 @@ without reopening the customer/account or commercial-authority boundary.
   versioned registry/evaluator, browser/Node parity fixtures, and a visible BEO
   dependency fingerprint plus exact source and proof-boundary metadata. It does
   not change quote-write behavior or claim retained freshness. There is no
-  existing governed server BEO generation action. **CWF-15B** must separately
-  introduce a CWF-14-bound server generation/receipt action or move artifact
-  generation authority server-side before it can persist an immutable receipt.
-  The server must reload canonical same-tenant data and bind artifact type,
-  quote/revision identity, fingerprint schema, dependency fingerprint, actor,
-  and server time itself; browser-supplied digest, source revision, actor, or
-  time can never become receipt truth. CWF-15B also adds read-only impact
-  simulation and introduces no independent authorization, invalidation,
-  reconciliation, or publication mutation.
-  **CWF-15C** compares the current authoritative fingerprint with that trusted
-  receipt and delivers the staff Change Impact review plus the role-gated
-  `authorize -> invalidate -> reconcile -> publish` runtime workflow, its atomic
+  existing governed server BEO generation action.
+
+  **CWF-15B-a — generation authority** must introduce a CWF-14-bound server
+  generation/receipt action or move artifact generation authority server-side
+  before QuotePilot can persist an immutable artifact receipt. The server must
+  reload canonical same-tenant data and bind artifact type, quote/revision
+  identity, fingerprint schema, dependency fingerprint, actor, and server time
+  itself; browser-supplied digest, source revision, actor, or time can never
+  become receipt truth. This authority slice remains separate from the existing
+  browser download.
+
+  **CWF-15B-b — advisory Change Impact** is source-complete: the quote edit
+  surface uses the existing trusted pricing callable to return bounded snapshots
+  of the saved
+  canonical revision and server-authoritatively repriced proposed form, then
+  deterministically presents exact changes, commercial deltas, and affected
+  `REVIEW`/`STALE` nodes. It does not save, authorize, invalidate, regenerate,
+  reconcile, or publish. The delivered preview is only simulation evidence and
+  introduces no independent authorization, invalidation, reconciliation, or
+  publication mutation.
+
+  **CWF-15C** compares the current authoritative fingerprint with the trusted
+  CWF-15B-a receipt and promotes the existing CWF-15B-b advisory preview into the
+  role-gated `authorize -> invalidate -> reconcile -> publish` runtime workflow,
+  its atomic
   invalidation/audit receipts, Current/Stale/Review reconciliation controls, and
   explainable Decision Debt in Attention. Each slice must independently satisfy
   CWF-14; later slices cannot manufacture evidence missing from an earlier
@@ -492,12 +510,17 @@ without reopening the customer/account or commercial-authority boundary.
   a booked event, create a bounded staff closeout sequence for internal review,
   a tenant-branded thank-you/review opportunity, and unresolved operational
   follow-up. Add anniversary attention such as a same-week-last-year repeat-event
-  cue. A staff-initiated rebook may create a new draft from the last accepted
-  immutable version, but it must use the trusted duplicate/create path, current
-  catalog and server-authoritative repricing, explicit review, and a new customer
-  decision cycle. A reminder is an opportunity—not a lead, accepted quote,
-  booking, delivery, or revenue fact—and outbound review asks require consent,
-  suppression, idempotency, provider evidence, and tenant timezone controls.
+  cue. The first source tranche now exposes those bounded cues in Customer 360
+  and lets staff create one deterministic rebook draft only when the booked
+  source, acceptance receipt, stable customer, and retained accepted immutable
+  version still match. It overlays current customer contact, uses the current
+  catalog with server-authoritative repricing, and records source provenance.
+  Delivery remains blocked until staff saves a new current-or-future event date
+  later than the source event; creating the draft starts no customer message,
+  decision, booking, or payment. Scheduled closeout records and outbound review
+  asks remain later work and require consent, suppression, idempotency, provider
+  evidence, and tenant-time-zone controls. A reminder is an opportunity—not a
+  lead, accepted quote, booking, delivery, or revenue fact.
 - **CWF-12 — Revenue autopilot, email follow-ups, and payment dunning (medium).**
   Add scheduled tenant-branded email policies and Attention escalation on proven
   server/provider boundaries: quote reminders stop on exact portal view,
@@ -505,23 +528,39 @@ without reopening the customer/account or commercial-authority boundary.
   webhook-authoritative payment; final-balance reminders use tenant-local
   event-minus-14/7/3-day rules and stop on the matching settled rail; and a
   customer reply becomes "unacknowledged" only through an explicit trusted
-  staff-read marker, never by inference from message order. The first slice is
-  SMS-free and must include quiet hours, consent/suppression/unsubscribe,
-  idempotent scheduler jobs, bounded retry, templates, role gates, and distinct
-  provider-accepted/delivered/bounced/customer-viewed evidence. Any "recovered"
-  value requires an explicit attribution method and must keep booked value,
-  verified money received, and accounting revenue separate.
+  staff-read marker, never by inference from message order. The first source
+  tranche is a discoverable, deterministic, read-only Workflow preview. It
+  evaluates one quote from the bounded staff read in the authoritative tenant
+  IANA time zone, explains every eligible/stopped/blocked/not-due result, and
+  fails closed when portal, acceptance, payment, conversation, consent,
+  suppression, quiet-hour, template, or provider evidence is absent. It creates
+  no record, idempotency claim, schedule, Attention item, or send. The later
+  SMS-free execution tranche must add trusted staff-read receipts, quiet hours,
+  consent/suppression/unsubscribe, idempotent scheduler jobs, bounded retry,
+  templates, role gates, and distinct provider-accepted/delivered/bounced/
+  customer-viewed evidence. Any "recovered" value requires an explicit
+  attribution method and must keep booked value, verified money received, and
+  accounting revenue separate.
 - **CWF-13 — Customer 360 activation and CRM-grade relationship intelligence
   (medium).** Make the internal customer workspace the default answer to "show
   me everything about this customer": bounded quotes and immutable proposals,
   events, verified payment states, quote-scoped conversation summaries, repeat
-  patterns, and next safe actions. Add lifetime commercial measures only with
-  visible denominators and separate quoted, accepted, booked, and
-  webhook-verified money; never label them accounting revenue. This extends the
-  stable customer read model and Customer 360 contract rather than creating a
-  second customer identity, persisted `commercialSummary`, generic external
-  account, or customer-wide mutable conversation. Hosted activation and legacy
-  normalization remain release gates, not facts inferred from source presence.
+  patterns, and next safe actions. The first source tranche now derives a
+  visible commercial-measures panel directly from the bounded Customer 360 DTO:
+  quoted value, exact-state accepted and booked value, source-bounded deposit
+  and final-balance amounts, and recorded repeat-event evidence. Payment values
+  are promoted as provider-confirmed only for an exclusively Firebase-backed
+  DTO with the matching paid state and a valid provider confirmation timestamp;
+  browser-local, mixed, and unknown-source fields fail closed as unavailable.
+  Every result exposes its denominator and missing trusted-evidence count.
+  `Lifetime` is permitted only when the bounded customer quote read explicitly
+  reports complete; otherwise the UI says `Displayed-record`. These are
+  read-only operational measures, never accounting revenue, cash reconciliation,
+  forecasts, or a persisted rollup. This extends the stable customer read model
+  and Customer 360 contract rather than creating a second customer identity,
+  persisted `commercialSummary`, generic external account, or customer-wide
+  mutable conversation. Hosted activation and legacy normalization remain
+  release gates, not facts inferred from source presence.
 - **CWF-14 — No-orphan-capability productization gate (ongoing).** Treat an
   operator- or customer-relevant backend capability as incomplete until its
   intended audience has a discoverable, role/feature-safe entry point and a
@@ -542,11 +581,14 @@ without reopening the customer/account or commercial-authority boundary.
   not an inferred semantic call graph or visual/hosted acceptance; prose review
   alone is insufficient.
 
-Cross-track invariants remain absolute: no customer or quote content in URLs or
-browser storage, no generic authenticated customer portal, no accounting-revenue
-claims, no customer-supplied pricing authority, no weakening of exact-token or
-tenant boundaries, and no inference of hosted/provider/production/human evidence
-from source, tests, screenshots, animation, or presentation copy.
+Cross-track invariants remain absolute: no customer or quote content in URLs,
+History state, persisted search state, or route/draft-continuity storage; the
+supported explicitly browser-local fallback remains a separate local mode and
+never establishes canonical or provider evidence. Do not create a generic
+authenticated customer portal, make accounting-revenue claims, accept customer-
+supplied pricing authority, weaken exact-token or tenant boundaries, or infer
+hosted/provider/production/human evidence from source, tests, screenshots,
+animation, or presentation copy.
 
 ## Verification and evidence gates
 

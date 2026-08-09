@@ -66,6 +66,11 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
    whose safe retry window has closed starts a fresh delivery generation; an
    ambiguous outcome stays locked for provider review. Edit and save a new
    revision before sending updated content.
+7. Firebase-backed create, duplicate, edit, rebook, and Change Impact pricing
+   uses the signed-in staff identity and server calculation time. If QuotePilot
+   reports that catalog authority changed while the operation was being prepared,
+   refresh the catalog/quote, recalculate, and retry. The rejected attempt does
+   not establish a saved quote, reviewed rebook, or completed impact preview.
 
 ## Commercial Command Center (Home)
 - When the temporary customer-centered workspace build flag is enabled,
@@ -110,6 +115,25 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   derived staff presentation, and a fresh read never proves provider delivery,
   customer acceptance, booking, payment, or operational completion.
 
+## Commercial Search
+
+- In the flagged staff workspace, select `Search` or press `Ctrl+K` on Windows/
+  Linux or `Command+K` on macOS. The shortcut does not open over the customer
+  portal, an editable field, or another modal. Pressing it again while the
+  palette is open returns focus to its search field.
+- Enter at least two characters. The first slice searches up to six normalized
+  customer-prefix matches and up to six matches from the latest 50 same-tenant
+  quote records. Source and partial/truncated states remain visible; `Retry
+  search` repeats the same transient query after a bounded read failure.
+- Select a customer result to open Customer 360 or a quote result to open its
+  authoritative quote record. Navigation uses only opaque record IDs. Search
+  text and customer/quote content are not put in the URL, `localStorage`, or
+  `sessionStorage`.
+- The palette projects only staff-safe result labels. It does not expose portal
+  tokens, private claims, message bodies, signatures, raw analytics, private
+  payment/provider identifiers, or admin-only records, and it does not bypass
+  any confirmation, role, feature, approval, or provider-evidence gate.
+
 ## Customer Directory and Customer 360
 
 - Open `Customers` or `/app/customers` to load the paginated same-tenant
@@ -119,8 +143,51 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 - Select a customer name or `Open 360` to open
   `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
   customer and offers a safe return to the directory.
-- `Overview` shows active quote, accepted/booked-event, and attention counts,
-  the next safe staff action, and recent lifecycle activity.
+- `Customer directory read context` and `Customer 360 read context` name the
+  exact tenant, source, bounded contract, device-time last complete read, and
+  loading/current/partial/retained-stale/error outcome. A fresh staff read does
+  not prove delivery, viewing, acceptance, booking, payment, or operational
+  completion. A refresh failure keeps only a prior result from the exact same
+  tenant, search/page, or customer scope.
+- The `What matters next` briefing shows active records, current Attention,
+  next dated event, latest recorded activity, and the exact next safe staff
+  action from the bounded DTO. When older quotes exist, missing event/activity
+  copy says that it is limited to the bounded view instead of implying a
+  lifetime absence.
+- `Overview` starts with `Revenue opportunities`, a bounded, read-only view of
+  one-week post-event closeout checks and same-week anniversary cues from
+  recorded booked events. A cue is not a lead, booking, customer contact, or
+  revenue result. When QuotePilot verifies the booked source, matching
+  acceptance receipt, stable customer, and exact retained accepted version,
+  review the exact source shown, then select `Create rebook draft`. The trusted
+  operation creates or reconciles one deterministic draft, overlays current customer
+  contact, reprices it from the current catalog, and opens it for review. Set
+  and save a current-or-future event date later than the source event. The
+  `Exact-version rebook` banner must say `Staff review recorded` before any
+  delivery attempt. Creating or reviewing the draft sends no message and does
+  not accept, book, or collect payment. If the outcome is uncertain, reconcile
+  the same request; do not create another rebook.
+- `Commercial measures` on `Overview` reports quoted, exact-state accepted and
+  booked amounts, source-bounded deposit and final-balance measures, and a
+  recorded repeat-event signal. Deposit or final-balance value is labeled
+  provider-confirmed only when Customer 360 reports an exclusively
+  Firebase-backed read and the record has both its matching paid state and a
+  valid provider confirmation timestamp. Browser-local, mixed, and
+  unknown-source payment fields stay unavailable even if a local paid status or
+  timestamp is present. Read each amount with its eligible/known record count
+  and any missing trusted-evidence warning. `Lifetime commercial measures`
+  means only that this bounded customer quote read reported complete;
+  `Displayed-record commercial measures` means older linked records may be
+  outside the calculation. These values are operational and read-only—not an
+  accounting ledger, cash reconciliation, forecast, or recognized-revenue
+  report.
+- `Overview` contains a source-labeled `Commercial timeline` of recorded quote,
+  retained-version, provider-acceptance, recipient-view, decision, booking,
+  verified-payment-time, and latest quote-conversation-summary milestones. Each
+  row opens the authoritative quote. The timeline never exposes message bodies,
+  signatures, amounts, provider IDs, or tokens. Provider-reported delivery and
+  bounce milestones remain absent until the bounded Customer 360 DTO has an
+  authoritative receipt field for them.
 - `Quotes & Proposals` lists canonical staff records and up to the 10 most
   recent retained versions for each displayed quote. Expand `Review proposal
   versions` for version number, saved reason, and timestamp. QuotePilot labels
@@ -128,6 +195,12 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   the authoritative quote surface. `Preview` uses a read-only staff adapter,
   never opens the public token portal, and never records customer `viewed`
   evidence. Escape or `Close preview` returns focus to the Preview control.
+  When at least two retained immutable versions are available, select `Compare
+  latest versions` for an advisory, read-only explanation of recorded scope,
+  schedule, authoritative-pricing, and terms changes. `Not recorded` and
+  `Source unavailable` remain distinct; QuotePilot never recalculates or mutates
+  history and never treats lifecycle, portal, acceptance, payment, provider,
+  booking, workflow, or mutable current totals as version-comparison inputs.
 - `Events` lists accepted and booked events and provides the existing Schedule
   or quote/BEO entry points. Acceptance, booking, and operational readiness are
   separate facts. Contract conversion preserves the same server-owned customer
@@ -185,6 +258,19 @@ unchanged.
     from current tenant settings and atomically updates the quote/portal while
     creating the next version; terminal customer, booking, or payment evidence
     blocks the edit.
+  - While editing a Firebase-backed saved quote, use `Preview change impact` to
+    compare the saved canonical revision with a server-authoritatively repriced
+    snapshot of the unsaved form. Review exact fact changes, total and deposit
+    deltas, and dependency nodes labeled `REVIEW` or `STALE`; use `Return to
+    edit` to continue. Refresh the preview after further form changes. The
+    preview is advisory only: it does not save or authorize the edit, invalidate
+    a completed check, regenerate an artifact, reconcile a dependency, publish
+    a proposal, or establish retained `CURRENT`/`STALE` artifact truth.
+    The server owns the pricing actor and calculation time and verifies the
+    confirmed catalog revision and settings fingerprint around its reads. If
+    Catalog Admin changes pricing while the preview or save is being prepared,
+    QuotePilot aborts that result. Refresh the current catalog/quote, recalculate,
+    and retry; do not treat the rejected preview or edit as saved authority.
   - Duplicate to a new draft
   - Admin-only contract conversion remains bound to the exact approved
     Workflow request. An eligible row first says whether it is ready or still
@@ -395,6 +481,25 @@ unchanged.
   confirm payment, or create a booking. Use `Edit quote` and the normal
   send/review workflow for the actual revision.
 - The `Follow-ups` view supports lead stage, due date, note, completion state, proposal readiness, and a lifecycle timeline for each quote.
+- `Due cues & completion receipts` derives due-today, overdue, upcoming, and
+  aging guidance from the bounded Workflow snapshot and separately lists exact
+  stored internal completion evidence. Review its source, captured time,
+  calendar context, and displayed bounds before acting. An internal receipt
+  proves only the recorded staff action; it does not prove customer contact,
+  provider delivery, proposal resolution, payment, or booking. If refresh fails,
+  the last successful snapshot is labeled stale and `Retry read` requests a new
+  tenant-scoped snapshot.
+- `Revenue autopilot` is currently a non-sending eligibility preview. Select
+  one authoritative quote from the bounded Workflow snapshot, then review the
+  four deterministic evaluations: quote follow-up, deposit reminder,
+  event-minus-14/7/3 final-balance reminder, and unread customer reply. Every
+  result explains why it is `Review eligible`, `Stopped`, `Blocked`, or `Not
+  due` and lists the required evidence gates. The panel always reports `0
+  messages scheduled · 0 messages sent`; it creates no job, Attention item,
+  staff-read receipt, provider action, or recovered-revenue evidence. A missing
+  or invalid tenant business time zone, portal/acceptance/webhook/conversation
+  evidence, consent, unsubscribe/suppression check, quiet-hours policy,
+  template, or provider configuration keeps the applicable evaluation blocked.
 - Sales staff can request approval for sensitive actions such as payment requests, contract conversion, portal-link rotation, or quote deletion.
 - Admins can approve or reject those requests with a resolution note. Approval
   records authority but does not execute the action; select `Execute in Quotes`
@@ -415,6 +520,26 @@ unchanged.
 - Open `Reporting` or `/app/reporting` to review quote pipeline, conversion,
   accepted/booked quote value, and the separately verified paid-deposit total.
   These operational values are not accounting revenue.
+- Start with `Evidence and scope`. Reporting reads at most 500 same-tenant quote
+  records and shows the source, last complete client read, displayed-record
+  count, and whether the result is current, empty, partial, truncated, retained
+  stale, or unavailable. `Refresh snapshot` or `Retry read` requests a new
+  bounded read; a failed refresh leaves a prior completed snapshot visibly stale
+  instead of presenting it as current.
+- Every money total and rate names its displayed-record denominator. A missing
+  amount is excluded from its affected total and reported as unavailable; it is
+  never silently converted to zero. A truncated 500-record result is not a
+  tenant-wide or lifetime total.
+- Accepted/booked quote value comes from recorded lifecycle states. The
+  `Verified Paid-Deposit Total` is narrower: the read must be exclusively
+  Firebase-backed, and each included record must have the paid deposit state, a
+  valid provider-confirmation timestamp, and a recorded deposit amount. Local,
+  unconfirmed-source, missing-timestamp, or missing-amount evidence remains
+  excluded and visibly partial. Neither measure is cash reconciliation or
+  recognized revenue.
+- The six-month commercial trend uses UTC calendar-month boundaries and only
+  the displayed records. Read its quote count, sent/viewed/accepted/booked count,
+  accepted/booked denominator, and known/missing value coverage together.
 - `Quote wizard funnel` shows anonymous staff sessions that reached each step
   and the share that saved a draft during the last 30 days. A session is not a
   customer or unique person count.
@@ -446,6 +571,13 @@ unchanged.
   with confirmation pending is not displayed as a confirmed booking.
 - Each event includes a persistent production checklist covering event brief, guest count, dietary review, menu prep, equipment planning, staffing, pack-out, setup, service handoff, and closeout.
 - Checklist completion is an operational task record only. The app does not track inventory, so checklist state does not confirm stock counts or item availability.
+- `Run of show` is a bounded, read-only sequence for the selected date. It
+  includes only accepted or booked records from the current Schedule read,
+  labels the source and result bounds, and exposes the recorded timing basis or
+  exact unknowns for each expanded event. It does not establish payment,
+  staffing attendance, inventory availability, or operational readiness. A
+  failed refresh leaves the prior projection visibly stale; use `Retry run of
+  show` to request a new tenant-scoped Schedule read.
 
 ### Kitchen Sheet Input Provenance (CWF-15A)
 
@@ -512,6 +644,10 @@ unchanged.
   unselected choices do not appear in the customer scope, while selected
   choices appear at $0 and are not charged a second time.
 - Save overall catalog changes with `Save Catalog`.
+- In `Pricing` → `Quote Meta`, set `Business time zone` to a valid IANA value
+  such as `America/Chicago`, then save the catalog. Revenue timing uses this
+  tenant-owned calendar context and fails closed when it is blank or invalid;
+  the browser's local clock does not become Revenue Autopilot authority.
 - In `Pricing` → `Customer-facing business branding`, choose Midnight Amber,
   Warm Linen, Garden Sage, or Coastal Blue. The preview changes immediately;
   select `Save catalog changes` to persist the six existing brand colors for
@@ -813,6 +949,20 @@ Complete every item before calling the new tenant operational:
   QuotePilot records the signer, server time, consent version, exact delivered
   proposal revision, receipt ID, and signed proposal hash. A stale or changed
   proposal must be reloaded before it can be signed.
+- The decision feedback keeps each attempt explicit. `Recording your decision`
+  means the operation is still submitting. If QuotePilot cannot determine the
+  outcome, use `Check decision status`; it reloads the same portal and
+  reconciles the same request identity, issuance, revision, and—when accepting—
+  signer and consent rather than submitting a second decision. An exact receipt
+  identifies whether electronic acceptance or another portal decision was
+  recorded.
+- `Review latest proposal` means the revision or portal issuance changed and the
+  prior signature input was not applied to the newer proposal. A definitive
+  `Decision not recorded` state offers only the safe retry or return action for
+  that outcome. QuotePilot never auto-retries a decision. Missing legal name or
+  consent returns keyboard focus to the exact invalid control, completed feedback
+  is focusable, and decision animation honors the device's reduced-motion
+  preference.
 - Proposal acceptance is recorded separately from payment and booking
   confirmation. The receipt does not represent payment or a confirmed booking.
 - Portal updates are reflected in staff quote history.

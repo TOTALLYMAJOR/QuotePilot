@@ -52,14 +52,21 @@ hosted deep-link acceptance, or flag promotion. See the
 for the delivery and evidence contract.
 
 ## Product Scope
-The app supports a 5-step quote wizard, dynamic event-type menus, pricing
-configuration, proposal export, customer portal updates, tenant-locked
-customer/catalog CSV imports, server-authoritative deposit and final-balance
-collection in the current source, public invoice-first buyer onboarding on the
-existing `tonicatering` Firebase project, staff Kitchen BEO export, and
-operations workflows (history, scheduling, reporting, diagnostics). Source
-availability does not establish production deployment or provider acceptance;
-see `PROJECT_STATUS.md` for current operational truth.
+The current product direction is a customer-centered quote-to-booking workspace:
+Commercial Command Center, Customer Directory and Customer 360, routed Quotes,
+Workflow, Schedule, Reporting, and guarded administration, with the five-step
+quote builder retained as one focused commercial capability. The exact-token
+customer decision center remains the sole customer-facing experience.
+
+The live `v0.2.3` release and the temporary-flagged source do not have identical
+surface availability. Across those evidence layers QuotePilot includes dynamic
+event-type menus, authoritative pricing, proposal export and decisions,
+tenant-locked customer/catalog CSV imports, separate deposit and final-balance
+rails in current source, public invoice-first buyer onboarding on the existing
+`tonicatering` Firebase project, staff Kitchen BEO export, and operational
+history, scheduling, reporting, and diagnostics. Source availability does not
+establish production deployment or provider acceptance; see `PROJECT_STATUS.md`
+for current operational truth.
 
 Tenant safety mode:
 - Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
@@ -88,6 +95,18 @@ npm run check:env
 ```bash
 npm run dev
 ```
+
+To inspect the customer-centered workspace source in a POSIX shell without
+changing a tracked environment file, start Vite with the temporary build flag:
+
+```bash
+VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true npm run dev
+```
+
+Open `http://localhost:5173/app`. This proves only that the local source is
+rendering. Firebase-backed customer, quote, rebook, and Change Impact behavior
+still requires the repository's configured development/emulator environment;
+neither command deploys or changes production.
 
 ### Run (VS Code Dev Container, isolated)
 Prerequisites:
@@ -211,6 +230,7 @@ npm run check:env
 npm run test:unit
 npm run test:rules:firestore
 npm run test:catalog-import:emulator
+npm run test:rebook-quote:emulator
 npm run test:e2e
 npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
@@ -223,6 +243,14 @@ npm run check:capability-surfaces
 npm run check:perf:bundle
 npm run check:perf:cwv
 ```
+
+`test:rebook-quote:emulator` is a disposable `demo-*` Auth, Firestore, and
+Functions lane for the exact-version rebook callable. It verifies same-tenant
+authority, concurrent retry convergence, atomic quote/version/portal/customer
+writes, immutable accepted-version provenance, collision refusal, and the
+mandatory staff-review transition. Passing it is emulator evidence only, not a
+Functions deployment, hosted staff acceptance, customer delivery, booking,
+payment, or revenue result.
 
 `check:workflows` downloads only the platform-specific official actionlint
 v1.7.12 archive, verifies its repository-pinned SHA-256, and checks every
