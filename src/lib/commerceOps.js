@@ -169,7 +169,13 @@ export async function sendIntegrationTestSms({ message = "" } = {}) {
   return result.data || {};
 }
 
-export async function calculateQuotePricing({ organizationId = "", pricingInput = {}, form = null } = {}) {
+export async function calculateQuotePricing({
+  organizationId = "",
+  pricingInput = {},
+  form = null,
+  includeChangeImpactPreview = false,
+  expectedActiveVersionId = ""
+} = {}) {
   ensureFunctionsReady();
   const call = httpsCallable(cloudFunctions, "calculateQuotePricing");
   const payload = {
@@ -178,6 +184,10 @@ export async function calculateQuotePricing({ organizationId = "", pricingInput 
   };
   if (form && typeof form === "object") {
     payload.form = form;
+  }
+  if (includeChangeImpactPreview === true) {
+    payload.includeChangeImpactPreview = true;
+    payload.expectedActiveVersionId = String(expectedActiveVersionId || "").trim();
   }
   const result = await withTimeout(
     call(payload),

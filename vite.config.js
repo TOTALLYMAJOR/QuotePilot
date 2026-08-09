@@ -1,10 +1,23 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
+
+const COMMERCIAL_DEPENDENCY_GRAPH_CORE = fileURLToPath(
+  new URL("./src/lib/commercialDependencyGraphCore.cjs", import.meta.url)
+);
 
 export default defineConfig({
   envDir: ".",
   publicDir: "public",
   plugins: [react()],
+  resolve: {
+    alias: {
+      "commercial-dependency-graph-core": COMMERCIAL_DEPENDENCY_GRAPH_CORE
+    }
+  },
+  optimizeDeps: {
+    include: ["commercial-dependency-graph-core"]
+  },
   build: {
     rollupOptions: {
       output: {

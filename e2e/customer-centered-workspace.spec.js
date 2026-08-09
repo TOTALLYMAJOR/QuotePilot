@@ -366,6 +366,36 @@ test.describe("customer-centered workspace", () => {
     await expect(focusedQuote).toBeFocused();
   });
 
+  test("Workflow exposes Revenue Autopilot as an explicit non-sending, fail-closed preview", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("quoteWizard.quotes", JSON.stringify([{
+        id: "autopilot-browser-boundary-quote",
+        organizationId: "e2e-org",
+        quoteNumber: "Q-AUTOPILOT-BOUNDARY",
+        status: "sent",
+        createdAtISO: "2026-08-08T10:00:00.000Z",
+        updatedAtISO: "2026-08-08T11:00:00.000Z",
+        customer: { name: "Autopilot Boundary Customer", email: "autopilot@example.test" },
+        event: { name: "Boundary Dinner", date: "2027-03-12", guests: 40 },
+        totals: { total: 4000, deposit: 1000 },
+        payment: { depositStatus: "unpaid" }
+      }]));
+    });
+
+    await page.goto("/app/workflow");
+    const autopilotTab = page.getByRole("tab", { name: "Revenue autopilot" });
+    await expect(autopilotTab).toBeVisible();
+    await autopilotTab.click();
+
+    const panel = page.locator('[data-capability-id="cwf-12-revenue-autopilot-preview"]');
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAttribute("data-capability-state", "error");
+    await expect(panel).toContainText("0 messages scheduled · 0 messages sent");
+    await expect(page.locator('[data-autopilot-read-blocker="authoritative_quote_read_required"]'))
+      .toContainText("Browser-local quote data remains blocked");
+    await expect(panel).not.toContainText(/message (?:scheduled|sent) successfully/i);
+  });
+
   test("a portal token takes precedence over the staff surface on a nested workspace path", async ({ page }) => {
     const portalKey = "workspace-portal-precedence-12345678901234567890";
     const createdAtISO = "2026-08-08T12:00:00.000Z";
@@ -516,7 +546,7 @@ test.describe("customer-centered workspace", () => {
 
     await page.goto("/app/customers");
 
-    await expect(page.getByRole("heading", { name: "Customer directory" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Customer directory", exact: true })).toBeVisible();
     await expect(page.getByText("Source: Browser-local workspace", { exact: true })).toBeVisible();
     const customerRow = page.getByRole("row").filter({ hasText: "Avery O'Neil" });
     await expect(customerRow).toContainText("Q-C360-ACCEPTED");
@@ -539,8 +569,21 @@ test.describe("customer-centered workspace", () => {
     await expect(eventsTab).toBeVisible();
     await expect(moneyTab).toBeVisible();
     await expect(conversationsTab).toBeVisible();
-    await expect(page.locator("#customer-panel-overview")).toContainText("Accepted / booked events");
-    await expect(page.locator("#customer-panel-overview")).toContainText("Proposal accepted");
+    await expect(page.getByRole("heading", { name: "What matters next" })).toBeVisible();
+    await expect(page.locator("#customer-panel-overview")).toContainText("Customer accepted the proposal");
+    const commercialMeasures = page.locator('[data-capability-id="cwf-13-customer-commercial-measures"]');
+    await expect(commercialMeasures).toBeVisible();
+    await expect(commercialMeasures).toHaveAttribute("data-capability-state", "partial");
+    await expect(commercialMeasures).toContainText("Commercial measures");
+    await expect(commercialMeasures).toContainText("Quoted amount");
+    await expect(commercialMeasures).toContainText("$6,500.00");
+    const depositMeasure = commercialMeasures.locator('[data-measure-id="webhook_confirmed_deposit"]');
+    await expect(depositMeasure).toContainText("Amount unavailable");
+    await expect(depositMeasure).toContainText("lacks trusted Firebase provider evidence");
+    await expect(commercialMeasures).toContainText("do not treat these values as an accounting ledger");
+    const revenueOpportunities = page.locator('[data-capability-id="cwf-11-rebooking-radar"]');
+    await expect(revenueOpportunities).toBeVisible();
+    await expect(revenueOpportunities).toContainText("Revenue opportunities");
 
     await quotesTab.click();
     const quotesPanel = page.locator("#customer-panel-quotes");
@@ -618,6 +661,90 @@ test.describe("customer-centered workspace", () => {
         .find((item) => item.id === canonicalQuoteId);
       return Boolean(quote?.viewedAtISO || quote?.lifecycle?.viewedAtISO);
     }, quoteId)).toBe(false);
+  });
+
+  test("Customer 360 surfaces an exact-version anniversary rebook cue without inventing a local draft", async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-08-12T15:00:00.000Z"));
+    await page.addInitScript(() => {
+      const organizationId = "e2e-org";
+      const customerId = "customer-rebook-e2e";
+      const quoteId = "quote-rebook-source-e2e";
+      const portalIssuedAtISO = "2025-07-01T12:00:00.000Z";
+      const sourceQuote = {
+        id: quoteId,
+        organizationId,
+        customerId,
+        quoteNumber: "Q-REBOOK-SOURCE",
+        status: "booked",
+        activeVersionId: "v0002",
+        latestVersionNumber: 2,
+        createdAtISO: "2025-06-20T10:00:00.000Z",
+        updatedAtISO: "2025-07-03T12:00:00.000Z",
+        customer: {
+          name: "Henderson Group",
+          email: "henderson@example.test",
+          phone: "205-555-0155",
+          organization: "Henderson Industries"
+        },
+        event: {
+          name: "Annual Leadership Picnic",
+          date: "2025-08-14",
+          time: "12:00",
+          hours: 4,
+          guests: 160,
+          venue: "Oak Meadow",
+          style: "Buffet"
+        },
+        selection: { packageName: "Corporate Picnic" },
+        totals: { total: 8200, deposit: 2050 },
+        payment: { depositStatus: "paid", depositConfirmedAtISO: "2025-07-03T12:00:00.000Z" },
+        booking: {
+          contractNumber: "C-REBOOK-SOURCE",
+          contractConvertedAtISO: "2025-07-03T12:00:00.000Z"
+        },
+        acceptanceReceipt: {
+          receiptId: "acceptance-rebook-source-e2e",
+          acceptedAtISO: "2025-07-02T12:00:00.000Z",
+          portalIssuedAtISO,
+          quoteRevisionId: `v0002@${portalIssuedAtISO}`
+        },
+        lifecycle: {
+          acceptedAtISO: "2025-07-02T12:00:00.000Z",
+          bookedAtISO: "2025-07-03T12:00:00.000Z"
+        }
+      };
+      localStorage.setItem("quoteWizard.quotes", JSON.stringify([sourceQuote]));
+      localStorage.setItem("quoteWizard.quoteHistory", JSON.stringify([{
+        id: "quote-rebook-source-version-record",
+        versionId: "v0002",
+        versionNumber: 2,
+        quoteId,
+        organizationId,
+        customerId,
+        createdAtISO: "2025-07-01T12:00:00.000Z",
+        snapshot: sourceQuote
+      }]));
+    });
+
+    await page.goto("/app/customers/customer-rebook-e2e");
+    await expect(page.getByRole("heading", { name: "Henderson Group", level: 1 })).toBeVisible();
+
+    const radar = page.locator('[data-capability-id="cwf-11-rebooking-radar"]');
+    await expect(radar).toHaveAttribute("data-capability-state", "success");
+    await expect(radar).toContainText("Annual Leadership Picnic was scheduled for this week last year");
+    await expect(radar.locator('[data-rebook-source-state="verified"]')).toContainText(
+      "Accepted source identified: version v0002"
+    );
+
+    const action = radar.locator('[data-capability-id="cwf-11-exact-version-rebook"]');
+    await expect(action).toHaveAttribute("data-capability-state", "error");
+    await expect(action).toContainText("Trusted rebook creation is unavailable here");
+    await expect(action.getByRole("button", { name: "Unavailable" })).toBeDisabled();
+    await expect(action).toContainText("No customer message, acceptance, booking, or payment is created");
+
+    const measures = page.locator('[data-capability-id="cwf-13-customer-commercial-measures"]');
+    await expect(measures).toContainText("Booked amount");
+    await expect(measures).toContainText("$8,200.00");
   });
 
   test("a missing direct edit route fails closed without exposing a usable quote builder", async ({ page }) => {
@@ -733,6 +860,13 @@ test.describe("customer-centered workspace", () => {
     await expect(recap).toContainText("64");
     await expect(page.getByRole("button", { name: "Save Changes", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
+    const changeImpactPreview = page.locator('[data-capability-id="cwf-15b-commercial-change-impact-preview"]');
+    await expect(changeImpactPreview).toBeVisible();
+    await expect(changeImpactPreview).toContainText("Preview change blast radius");
+    await expect(changeImpactPreview).toContainText(
+      "Authoritative change impact is unavailable in browser-local mode"
+    );
+    await expect(changeImpactPreview.getByRole("button", { name: "Preview change impact" })).toBeDisabled();
 
     await page.evaluate(({ currentEditPath }) => {
       const currentState = window.history.state;

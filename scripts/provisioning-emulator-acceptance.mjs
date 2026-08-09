@@ -35,6 +35,34 @@ if (!projectId.startsWith("demo-") || !authHost || !firestoreHost || !functionsH
   );
 }
 
+assert.equal(
+  String(process.env.STRIPE_MODE || "").trim().toLowerCase(),
+  "test",
+  "STRIPE_MODE=test is required for quote payment webhook acceptance."
+);
+assert.ok(
+  String(process.env.STRIPE_WEBHOOK_SECRET || "").trim(),
+  "STRIPE_WEBHOOK_SECRET is required for quote payment webhook acceptance."
+);
+assert.equal(
+  String(process.env.BUYER_ACCESS_ENABLED || "").trim().toLowerCase(),
+  "true",
+  "BUYER_ACCESS_ENABLED=true is required for buyer invoice webhook acceptance."
+);
+assert.equal(
+  String(process.env.BUYER_ACCESS_STRIPE_MODE || "").trim().toLowerCase(),
+  "test",
+  "BUYER_ACCESS_STRIPE_MODE=test is required for buyer invoice webhook acceptance."
+);
+assert.ok(
+  String(process.env.BUYER_ACCESS_STRIPE_WEBHOOK_SECRET || "").trim(),
+  "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET is required for buyer invoice webhook acceptance."
+);
+assert.ok(
+  String(process.env.BUYER_ACCESS_APP_BASE_URL || "").trim(),
+  "BUYER_ACCESS_APP_BASE_URL is required for buyer invoice activation acceptance."
+);
+
 if (!admin.getApps().length) {
   admin.initializeApp({ projectId });
 }
@@ -2100,12 +2128,6 @@ assert.doesNotMatch(JSON.stringify(latePaidFinalBalancePortalPayment), /cs_[A-Za
 assert.equal(latePaidFinalBalanceAudit.data()?.status, "processed");
 assert.equal(latePaidFinalBalanceAudit.data()?.providerState, "paid");
 assert.equal(latePaidFinalBalanceAudit.data()?.paymentKind, "final_balance");
-
-assert.equal(
-  String(process.env.BUYER_ACCESS_STRIPE_MODE || "").trim().toLowerCase(),
-  "test",
-  "BUYER_ACCESS_STRIPE_MODE=test is required for buyer invoice webhook acceptance."
-);
 
 function buyerAccessOrderIdForFixtureRequest(email = "") {
   const normalizedEmail = String(email || "").trim().toLowerCase();

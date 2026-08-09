@@ -21,7 +21,9 @@ import {
   WORKFLOW_TIMING_INPUT_SCAN_LIMIT,
   buildWorkflowTimingCues
 } from "../lib/workflowTimingCues";
+import { buildRevenueAutopilotPreview } from "../lib/revenueAutopilotPreview";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import RevenueAutopilotPreviewPanel from "./RevenueAutopilotPreviewPanel";
 import WorkflowTimingPanel from "./WorkflowTimingPanel";
 import {
   formatWorkspaceDate,
@@ -31,7 +33,7 @@ import {
   humanizeWorkspaceValue
 } from "../lib/workspacePresentation";
 
-const WORKFLOW_TABS = ["attention", "followups", "approvals"];
+const WORKFLOW_TABS = ["attention", "followups", "autopilot", "approvals"];
 const PROVIDER_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
   "send_final_balance_request"
@@ -65,6 +67,122 @@ function captureWorkflowSnapshotContext() {
     snapshotTimeZone,
     snapshotTodayISO: `${dateValues.year}-${dateValues.month}-${dateValues.day}`
   };
+}
+
+function record(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeTimeZone(value) {
+  const requested = String(value || "").trim();
+  if (!requested) return "";
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: requested })
+      .resolvedOptions()
+      .timeZone;
+  } catch {
+    return "";
+  }
+}
+
+function calendarDateAt(instant, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    calendar: "gregory",
+    numberingSystem: "latn",
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(instant);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function revenueAutopilotReadFailure(code, detail) {
+  return {
+    preview: null,
+    error: code,
+    detail
+  };
+}
+
+export function buildWorkflowRevenueAutopilotInput({
+  organizationId = "",
+  quote = null,
+  source = "",
+  snapshotAtISO = "",
+  tenantTimeZone = ""
+} = {}) {
+  const scopedOrganizationId = String(organizationId || "").trim();
+  const quoteId = String(quote?.id || quote?.quoteId || "").trim();
+  if (String(source || "").trim().toLowerCase() !== "firebase") {
+    throw new TypeError("Revenue autopilot requires a canonical Firestore quote snapshot.");
+  }
+  if (!scopedOrganizationId || !record(quote) || !quoteId) {
+    throw new TypeError("Revenue autopilot requires one tenant-scoped quote snapshot.");
+  }
+  const instant = new Date(snapshotAtISO);
+  if (Number.isNaN(instant.getTime())) {
+    throw new TypeError("Revenue autopilot requires the successful quote-read timestamp.");
+  }
+  const normalizedTenantTimeZone = normalizeTimeZone(tenantTimeZone);
+  if (!normalizedTenantTimeZone) {
+    throw new TypeError("Revenue autopilot requires an explicit tenant IANA time zone.");
+  }
+  const calendarContext = {
+    date: calendarDateAt(instant, normalizedTenantTimeZone),
+    source: "tenant",
+    timeZone: normalizedTenantTimeZone
+  };
+  const ledger = record(quote?.payment?.ledger) ? quote.payment.ledger : null;
+  const evidence = ledger
+    ? {
+        paymentLedgers: [{
+          source: "canonical_payment_ledger",
+          organizationId: scopedOrganizationId,
+          quoteId,
+          observedForDate: calendarContext.date,
+          version: ledger.version,
+          entries: ledger.entries
+        }]
+      }
+    : {};
+
+  return {
+    organizationId: scopedOrganizationId,
+    quote,
+    calendarContext,
+    controls: {},
+    evidence
+  };
+}
+
+export function buildWorkflowRevenueAutopilotRead(input = {}) {
+  if (!input.quote) return { preview: null, error: "", detail: "" };
+  if (String(input.source || "").trim().toLowerCase() !== "firebase") {
+    return revenueAutopilotReadFailure(
+      "authoritative_quote_read_required",
+      "This preview requires the current Firestore staff quote snapshot. Browser-local quote data remains blocked."
+    );
+  }
+  if (!normalizeTimeZone(input.tenantTimeZone)) {
+    return revenueAutopilotReadFailure(
+      "tenant_calendar_authority_required",
+      "Tenant calendar policy is not available to this Workflow read. Eligibility remains blocked until an explicit tenant IANA time zone is supplied."
+    );
+  }
+  try {
+    return {
+      preview: buildRevenueAutopilotPreview(buildWorkflowRevenueAutopilotInput(input)),
+      error: "",
+      detail: ""
+    };
+  } catch {
+    return revenueAutopilotReadFailure(
+      "authoritative_preview_input_invalid",
+      "The selected quote could not be evaluated from the current bounded staff snapshot. No automation was authorized."
+    );
+  }
 }
 
 function actionLabel(action) {
@@ -107,6 +225,7 @@ export function SalesWorkflowView({
   organizationId = "",
   currentUserEmail = "",
   currentUserRole = "customer",
+  tenantTimeZone = "",
   onToast
 }) {
   const embedded = presentation === "embedded";
@@ -130,6 +249,7 @@ export function SalesWorkflowView({
   const [resolutionNotes, setResolutionNotes] = useState({});
   const [handlingNotes, setHandlingNotes] = useState({});
   const [busyKey, setBusyKey] = useState("");
+  const [workflowReadError, setWorkflowReadError] = useState("");
   const dialogRef = useRef(null);
   const routeHeadingRef = useWorkspaceRouteHeadingFocus(Boolean(open && embedded));
   const detailHeadingRef = useRef(null);
@@ -165,6 +285,7 @@ export function SalesWorkflowView({
     if (workflowScopeRef.current !== loadScope) return;
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
+    setWorkflowReadError("");
     setState((prev) => ({ ...prev, loading: true, error: "", feedback: "" }));
     try {
       const result = await getQuoteHistory({
@@ -194,6 +315,7 @@ export function SalesWorkflowView({
       }
     } catch (err) {
       if (generation !== loadGenerationRef.current || workflowScopeRef.current !== loadScope) return;
+      setWorkflowReadError(err?.message || "Failed to load sales workflow.");
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -224,6 +346,7 @@ export function SalesWorkflowView({
     setResolutionNotes({});
     setHandlingNotes({});
     setBusyKey("");
+    setWorkflowReadError("");
     load({ selectDefaultTab: true });
   }, [focusQuoteId, open, organizationId]);
 
@@ -340,6 +463,27 @@ export function SalesWorkflowView({
       };
     }
   }, [attentionSummary, state.quotes, state.snapshotAtISO, state.snapshotTimeZone]);
+
+  const revenueAutopilotRead = useMemo(
+    () => buildWorkflowRevenueAutopilotRead({
+      organizationId: state.organizationId || organizationId,
+      quote: selectedQuote,
+      source: state.source,
+      snapshotAtISO: state.snapshotAtISO,
+      tenantTimeZone
+    }),
+    [
+      organizationId,
+      selectedQuote,
+      state.organizationId,
+      state.snapshotAtISO,
+      state.source,
+      tenantTimeZone
+    ]
+  );
+  const quoteSnapshotBound = state.snapshotAtISO
+    ? (state.truncated ? "truncated" : "complete")
+    : "unknown";
 
   useEffect(() => {
     if (!open || state.loading || !focusQuoteId) return undefined;
@@ -808,6 +952,20 @@ export function SalesWorkflowView({
           <button
             type="button"
             role="tab"
+            id="workflow-tab-autopilot"
+            aria-controls="workflow-panel-autopilot"
+            tabIndex={activeTab === "autopilot" ? 0 : -1}
+            ref={(node) => { tabRefs.current.autopilot = node; }}
+            onKeyDown={(event) => handleTabKeyDown(event, "autopilot")}
+            aria-selected={activeTab === "autopilot"}
+            className={activeTab === "autopilot" ? "active" : ""}
+            onClick={() => selectTab("autopilot")}
+          >
+            Revenue autopilot
+          </button>
+          <button
+            type="button"
+            role="tab"
             id="workflow-tab-approvals"
             aria-controls="workflow-panel-approvals"
             tabIndex={activeTab === "approvals" ? 0 : -1}
@@ -1174,6 +1332,57 @@ export function SalesWorkflowView({
               )}
             </section>
         </div>
+
+        <section
+          className="workflow-attention-panel"
+          role="tabpanel"
+          id="workflow-panel-autopilot"
+          aria-labelledby="workflow-tab-autopilot"
+          tabIndex={0}
+          hidden={activeTab !== "autopilot"}
+          data-automation-surface="read-only-preview"
+        >
+          <p className="workflow-attention-boundary">
+            This tab evaluates one quote from the bounded Workflow read. It performs no provider, portal, payment-webhook, conversation, consent, suppression, template, or scheduling read of its own; missing evidence remains blocked.
+          </p>
+          <section className="workflow-form-section" aria-labelledby="workflow-autopilot-quote-title">
+            <h4 id="workflow-autopilot-quote-title">Quote snapshot</h4>
+            <label className="field">
+              <span>Authoritative quote</span>
+              <select
+                value={selectedQuoteId}
+                onChange={(event) => setSelectedQuoteId(event.target.value)}
+                disabled={state.loading || quoteSummaries.length === 0}
+              >
+                <option value="">Select a quote</option>
+                {quoteSummaries.map(({ quote }) => (
+                  <option key={quote.id} value={quote.id}>
+                    {formatWorkspaceText(quote.quoteNumber, { emptyLabel: "Quote number pending" })} · {quote.customer?.name || quote.customer?.email || "Customer"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p
+              className={state.truncated ? "warning-note" : "source-note"}
+              data-quote-snapshot-bound={quoteSnapshotBound}
+            >
+              {quoteSnapshotBound === "unknown"
+                ? `Awaiting the bounded Workflow quote snapshot. Each load reads at most ${WORKFLOW_TIMING_INPUT_SCAN_LIMIT} quotes.`
+                : <>Source: {formatWorkspaceSource(state.source)}. This Workflow load reads at most {WORKFLOW_TIMING_INPUT_SCAN_LIMIT} quotes{state.truncated ? "; older quotes are outside this selector." : "."}</>}
+            </p>
+          </section>
+          {revenueAutopilotRead.detail && (
+            <p className="warning-note" role="status" data-autopilot-read-blocker={revenueAutopilotRead.error}>
+              {revenueAutopilotRead.detail}
+            </p>
+          )}
+          <RevenueAutopilotPreviewPanel
+            preview={revenueAutopilotRead.preview}
+            loading={state.loading}
+            error={workflowReadError || revenueAutopilotRead.error}
+            stale={Boolean(workflowReadError && revenueAutopilotRead.preview)}
+          />
+        </section>
 
         <section
           className="approval-queue"

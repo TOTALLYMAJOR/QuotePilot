@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  assertRebookArtifactReady,
   canDeliverQuoteEmailStatus,
   canEditQuoteStatus,
   canRotateQuotePortal,
@@ -166,6 +167,17 @@ describe("quote history action permissions", () => {
     for (const status of ["accepted", "booked", "declined", "expired", "deleted"]) {
       expect(canEditQuoteStatus(status)).toBe(false);
     }
+  });
+
+  test("blocks customer and kitchen artifacts while exact-version rebook review is pending", () => {
+    expect(assertRebookArtifactReady({ status: "draft" })).toBe(true);
+    expect(() => assertRebookArtifactReady({
+      status: "draft",
+      rebooking: { state: "draft_created_for_staff_review" }
+    }, {
+      tenantTimeZone: "America/Chicago",
+      nowISO: "2026-08-09T18:00:00.000Z"
+    })).toThrow(/open edit.*save.*before delivery/i);
   });
 
   test("renders provider substates without widening the stored balance status", () => {

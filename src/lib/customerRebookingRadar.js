@@ -14,7 +14,21 @@ export const CUSTOMER_REBOOKING_RADAR_EVIDENCE_COPY = Object.freeze({
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const REBOOK_REQUEST_ID_PATTERN = /^rebook_[a-f0-9]{48}$/;
 const CALENDAR_SOURCES = new Set(["tenant", "device"]);
+const REBOOK_QUOTE_STATUSES = new Set([
+  "draft",
+  "sent",
+  "viewed",
+  "accepted",
+  "declined",
+  "expired",
+  "booked"
+]);
+const REBOOK_REVIEW_STATES = new Set([
+  "draft_created_for_staff_review",
+  "staff_review_completed"
+]);
 const CLOSEOUT_REVIEW_ITEMS = Object.freeze([
   Object.freeze({ code: "internal_closeout", label: "Review the internal event closeout" }),
   Object.freeze({ code: "thank_you", label: "Review a tenant-branded thank-you opportunity" }),
@@ -161,6 +175,23 @@ function validISO(value) {
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
 }
 
+function calendarDateAtISO(value, timeZone) {
+  const instant = validISO(value);
+  const zone = text(timeZone);
+  if (!instant || !validTimeZone(zone)) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    calendar: "gregory",
+    numberingSystem: "latn",
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(instant));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const date = `${values.year}-${values.month}-${values.day}`;
+  return parseDateOnly(date) ? date : "";
+}
+
 function versionId(version) {
   return safeOpaqueId(version?.versionId || version?.id || version?.revisionId);
 }
@@ -171,18 +202,157 @@ function versionHistoryTruncated(workspace, quoteId) {
     : []).some((id) => safeOpaqueId(id) === quoteId);
 }
 
-function unavailableRebookAction(quoteId, reason) {
+function unavailableRebookAction(quoteId, reason, sourceEvidence = {}) {
   return {
     kind: "review_rebook_draft",
     state: "unavailable",
     label: "Review rebook from accepted proposal",
     sourceQuoteId: quoteId,
+    ...sourceEvidence,
     reason,
     performed: false
   };
 }
 
-function buildReviewedRebookAction({ quote, versions, organizationId, historyTruncated }) {
+function validCompletedReviewEvidence(rebooking, quote, sourceEventDate) {
+  if (text(rebooking?.state) !== "staff_review_completed") return true;
+  const reviewedBy = isRecord(rebooking?.reviewedBy) ? rebooking.reviewedBy : {};
+  const reviewCalendar = isRecord(rebooking?.reviewCalendar) ? rebooking.reviewCalendar : {};
+  const reviewedAtISO = validISO(rebooking?.reviewedAtISO);
+  const reviewedEventDate = text(rebooking?.reviewedEventDate);
+  const reviewCalendarDate = text(reviewCalendar.date);
+  const reviewTimeZone = text(reviewCalendar.timeZone);
+  return Boolean(
+    parseDateOnly(reviewedEventDate)
+    && reviewedEventDate === text(quote?.event?.date)
+    && reviewedEventDate > sourceEventDate
+    && reviewedAtISO
+    && parseDateOnly(reviewCalendarDate)
+    && validTimeZone(reviewTimeZone)
+    && calendarDateAtISO(reviewedAtISO, reviewTimeZone) === reviewCalendarDate
+    && reviewedEventDate >= reviewCalendarDate
+    && safeOpaqueId(reviewedBy.uid)
+    && text(reviewedBy.email)
+    && ["admin", "sales"].includes(text(reviewedBy.role).toLowerCase())
+  );
+}
+
+function sameScopeRebookDescendantClaim(quote, {
+  organizationId,
+  customerId,
+  sourceQuoteId
+}) {
+  const quoteId = safeOpaqueId(quote?.id || quote?.quoteId);
+  const rebooking = isRecord(quote?.rebooking) ? quote.rebooking : null;
+  return Boolean(
+    quoteId !== sourceQuoteId
+    && rebooking
+    && safeOpaqueId(quote?.organizationId) === organizationId
+    && safeOpaqueId(quote?.customerId) === customerId
+    && (
+      safeOpaqueId(quote?.duplicatedFromQuoteId) === sourceQuoteId
+      || safeOpaqueId(rebooking.sourceQuoteId) === sourceQuoteId
+    )
+  );
+}
+
+function exactRebookDescendant(quote, {
+  organizationId,
+  customerId,
+  sourceQuoteId,
+  sourceVersionId,
+  sourceEventDate,
+  acceptanceReceiptId,
+  acceptedAtISO
+}) {
+  const quoteId = safeOpaqueId(quote?.id || quote?.quoteId);
+  const rebooking = isRecord(quote?.rebooking) ? quote.rebooking : null;
+  const reviewState = text(rebooking?.state);
+  const sourceAcceptedAtISO = validISO(rebooking?.sourceAcceptedAtISO);
+  const draftCreatedAtISO = validISO(rebooking?.draftCreatedAtISO);
+  const status = text(quote?.status).toLowerCase();
+  const eventDate = text(quote?.event?.date);
+  const rebookingRequestId = text(rebooking?.rebookingRequestId).toLowerCase();
+
+  if (
+    !quoteId
+    || quoteId === sourceQuoteId
+    || !rebooking
+    || Number(rebooking.schemaVersion) !== 1
+    || safeOpaqueId(quote?.organizationId) !== organizationId
+    || safeOpaqueId(quote?.customerId) !== customerId
+    || safeOpaqueId(quote?.duplicatedFromQuoteId) !== sourceQuoteId
+    || text(quote?.pricing?.authority) !== "server_authoritative"
+    || !REBOOK_QUOTE_STATUSES.has(status)
+    || safeOpaqueId(rebooking.sourceOrganizationId) !== organizationId
+    || safeOpaqueId(rebooking.sourceCustomerId) !== customerId
+    || safeOpaqueId(rebooking.sourceQuoteId) !== sourceQuoteId
+    || safeOpaqueId(rebooking.sourceVersionId) !== sourceVersionId
+    || safeOpaqueId(rebooking.acceptanceReceiptId) !== acceptanceReceiptId
+    || text(rebooking.sourceEventDate) !== sourceEventDate
+    || sourceAcceptedAtISO !== acceptedAtISO
+    || !draftCreatedAtISO
+    || !REBOOK_REQUEST_ID_PATTERN.test(rebookingRequestId)
+    || !REBOOK_REVIEW_STATES.has(reviewState)
+    || !parseDateOnly(eventDate)
+    || (
+      reviewState === "draft_created_for_staff_review"
+      && eventDate !== sourceEventDate
+    )
+    || !validCompletedReviewEvidence(rebooking, quote, sourceEventDate)
+  ) {
+    return null;
+  }
+
+  return {
+    quoteId,
+    quoteNumber: text(quote?.quoteNumber),
+    status,
+    reviewState,
+    eventDate,
+    rebookingRequestId
+  };
+}
+
+function existingRebookAction({
+  quoteId,
+  sourceVersionId,
+  acceptanceReceiptId,
+  acceptedAtISO,
+  descendant
+}) {
+  const openIntent = descendant.status === "draft"
+    && descendant.reviewState === "draft_created_for_staff_review"
+    ? "edit"
+    : "view";
+  return {
+    kind: "review_rebook_draft",
+    state: "existing_rebook",
+    label: openIntent === "edit" ? "Open rebook draft for staff review" : "Open existing rebook",
+    sourceQuoteId: quoteId,
+    sourceVersionId,
+    acceptanceReceiptId,
+    acceptedAtISO,
+    performed: true,
+    existingQuoteId: descendant.quoteId,
+    existingQuoteNumber: descendant.quoteNumber,
+    existingQuoteStatus: descendant.status,
+    existingReviewState: descendant.reviewState,
+    existingEventDate: descendant.eventDate,
+    rebookingRequestId: descendant.rebookingRequestId,
+    openIntent
+  };
+}
+
+function buildReviewedRebookAction({
+  quote,
+  quotes,
+  versions,
+  organizationId,
+  customerId,
+  historyTruncated,
+  quoteReadTruncated
+}) {
   const quoteId = safeOpaqueId(quote?.id || quote?.quoteId);
   const receipt = isRecord(quote?.acceptanceReceipt) ? quote.acceptanceReceipt : null;
   if (!receipt) return unavailableRebookAction(quoteId, "acceptance_receipt_missing");
@@ -190,7 +360,8 @@ function buildReviewedRebookAction({ quote, versions, organizationId, historyTru
   const receiptId = safeOpaqueId(receipt.receiptId);
   const acceptedAtISO = validISO(receipt.acceptedAtISO);
   const receiptRevisionId = text(receipt.quoteRevisionId);
-  if (!receiptId || !acceptedAtISO || !receiptRevisionId) {
+  const receiptPortalIssuedAtISO = validISO(receipt.portalIssuedAtISO);
+  if (!receiptId || !acceptedAtISO || !receiptRevisionId || !receiptPortalIssuedAtISO) {
     return unavailableRebookAction(quoteId, "acceptance_receipt_incomplete");
   }
 
@@ -198,7 +369,6 @@ function buildReviewedRebookAction({ quote, versions, organizationId, historyTru
   if (!acceptedVersionId) {
     return unavailableRebookAction(quoteId, "accepted_version_identity_missing");
   }
-  const receiptPortalIssuedAtISO = validISO(receipt.portalIssuedAtISO);
   if (
     receiptRevisionId !== acceptedVersionId
     && (
@@ -207,6 +377,58 @@ function buildReviewedRebookAction({ quote, versions, organizationId, historyTru
     )
   ) {
     return unavailableRebookAction(quoteId, "accepted_revision_mismatch");
+  }
+
+  const sourceEvidence = {
+    sourceVersionId: acceptedVersionId,
+    acceptanceReceiptId: receiptId,
+    acceptedAtISO
+  };
+  const sourceEventDate = text(quote?.event?.date);
+  const descendantClaims = quotes.filter((candidate) => sameScopeRebookDescendantClaim(
+    candidate,
+    {
+      organizationId,
+      customerId,
+      sourceQuoteId: quoteId
+    }
+  ));
+  const descendants = descendantClaims.map((candidate) => exactRebookDescendant(candidate, {
+    organizationId,
+    customerId,
+    sourceQuoteId: quoteId,
+    sourceVersionId: acceptedVersionId,
+    sourceEventDate,
+    acceptanceReceiptId: receiptId,
+    acceptedAtISO
+  })).filter(Boolean);
+  if (descendantClaims.length > 1) {
+    return unavailableRebookAction(
+      quoteId,
+      "existing_rebook_ambiguous",
+      sourceEvidence
+    );
+  }
+  if (descendants.length === 1) {
+    return existingRebookAction({
+      quoteId,
+      ...sourceEvidence,
+      descendant: descendants[0]
+    });
+  }
+  if (descendantClaims.length === 1) {
+    return unavailableRebookAction(
+      quoteId,
+      "existing_rebook_invalid",
+      sourceEvidence
+    );
+  }
+  if (quoteReadTruncated) {
+    return unavailableRebookAction(
+      quoteId,
+      "existing_rebook_not_found_quote_history_truncated",
+      sourceEvidence
+    );
   }
 
   const matchingVersions = versions.filter((version) => versionId(version) === acceptedVersionId);
@@ -224,6 +446,7 @@ function buildReviewedRebookAction({ quote, versions, organizationId, historyTru
 
   const acceptedVersion = matchingVersions[0];
   const snapshot = isRecord(acceptedVersion?.snapshot) ? acceptedVersion.snapshot : null;
+  const expectedCustomerId = safeOpaqueId(quote?.customerId);
   if (
     acceptedVersion?.legacySynthetic === true
     || !snapshot
@@ -231,6 +454,10 @@ function buildReviewedRebookAction({ quote, versions, organizationId, historyTru
     || safeOpaqueId(acceptedVersion?.organizationId) !== organizationId
     || safeOpaqueId(snapshot.id) !== quoteId
     || safeOpaqueId(snapshot.organizationId) !== organizationId
+    || safeOpaqueId(acceptedVersion?.customerId || snapshot.customerId) !== expectedCustomerId
+    || (safeOpaqueId(snapshot.customerId) && safeOpaqueId(snapshot.customerId) !== expectedCustomerId)
+    || !parseDateOnly(snapshot?.event?.date)
+    || text(snapshot.event.date) !== text(quote?.event?.date)
   ) {
     return unavailableRebookAction(quoteId, "accepted_source_version_invalid");
   }
@@ -422,9 +649,12 @@ export function buildCustomerRebookingRadar(customerWorkspace = {}, {
         quoteId,
         reviewedAction: buildReviewedRebookAction({
           quote,
+          quotes,
           versions: quoteVersions,
           organizationId: orgId,
-          historyTruncated: versionHistoryTruncated(customerWorkspace, quoteId)
+          customerId,
+          historyTruncated: versionHistoryTruncated(customerWorkspace, quoteId),
+          quoteReadTruncated: customerWorkspace?.quotePageInfo?.truncated === true
         })
       }));
     }

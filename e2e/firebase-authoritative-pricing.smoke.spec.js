@@ -61,6 +61,30 @@ async function advanceToSave(page, saveLabel = "Save draft") {
   throw new Error(`Unable to reach ${saveLabel}`);
 }
 
+async function advanceToFinalReview(page, saveLabel = "Save Changes") {
+  for (let i = 0; i < 6; i += 1) {
+    const saveButton = page.getByRole("button", { name: saveLabel, exact: true });
+    if (await saveButton.count()) {
+      await expect(saveButton).toBeVisible();
+      return;
+    }
+
+    const nextButton = page.getByRole("button", { name: "Next", exact: true });
+    if (!(await nextButton.count())) break;
+
+    const menuHeading = page.getByRole("heading", { name: "Customized Cuisine Menu" });
+    if (await menuHeading.isVisible()) {
+      const firstMenuItem = page.getByRole("checkbox").first();
+      await expect(firstMenuItem).toBeVisible();
+      if (!(await firstMenuItem.isChecked())) await firstMenuItem.check();
+    }
+
+    await nextButton.click();
+  }
+
+  throw new Error(`Unable to reach the final review with ${saveLabel}`);
+}
+
 test("owner saves an authoritative quote and disabled delivery cannot activate its portal", async ({ page }) => {
   test.setTimeout(180_000);
   await signInAsStaff(page);
@@ -162,6 +186,36 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   expect(directDeliveryClaimsRejected.status).toBe("draft");
   await expect(copyPortalButton).toBeDisabled();
   await expect(page.getByText(/Failed to calculate authoritative quote pricing/i)).toHaveCount(0);
+
+  await quoteRow.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/quotes/${quoteId}/edit$`));
+  const guestCount = page.getByRole("spinbutton", { name: /Guests \(max 400\)/i });
+  await expect(guestCount).toHaveValue("96", { timeout: 45_000 });
+  await guestCount.fill("104");
+  await advanceToFinalReview(page);
+
+  const changeImpactEntry = page.locator(
+    '[data-capability-id="cwf-15b-commercial-change-impact-preview"]'
+  );
+  const previewButton = changeImpactEntry.getByRole("button", {
+    name: "Preview change impact",
+    exact: true
+  });
+  await expect(previewButton).toBeEnabled();
+  await previewButton.click();
+
+  const changeImpact = page.locator(
+    '[data-capability-id="cwf-15b-commercial-change-impact-presentation"]'
+  );
+  await expect(changeImpact).toHaveAttribute("data-capability-state", "success", {
+    timeout: 45_000
+  });
+  await expect(changeImpact).toContainText("fact.event.guest_count");
+  await expect(changeImpact).toContainText("Commercial delta");
+  await expect(changeImpact).toContainText(
+    "Nothing is invalidated, regenerated, or published here."
+  );
+  await expect(page.getByRole("button", { name: "Save Changes", exact: true })).toBeVisible();
 });
 
 test("quote transactions reuse identity, move email ownership, and reject collisions", async ({ page }) => {

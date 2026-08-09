@@ -4,6 +4,7 @@ import {
   formatWorkspaceInteger,
   formatWorkspaceText
 } from "../lib/workspacePresentation";
+import CustomerRebookDraftAction from "./CustomerRebookDraftAction";
 
 const SOURCE_LABELS = Object.freeze({
   firebase: "Firestore customer workspace",
@@ -20,7 +21,13 @@ const REBOOK_UNAVAILABLE_REASONS = Object.freeze({
   accepted_source_version_not_loaded_history_truncated:
     "The accepted proposal version is older than the retained history loaded into this bounded view.",
   accepted_source_version_ambiguous: "More than one retained version matches the accepted version identity.",
-  accepted_source_version_invalid: "The retained accepted version does not pass quote and organization scope checks."
+  accepted_source_version_invalid: "The retained accepted version does not pass quote and organization scope checks.",
+  existing_rebook_not_found_quote_history_truncated:
+    "A matching rebook may exist outside this bounded Customer 360 quote read. Refresh or open Quotes before creating another draft.",
+  existing_rebook_invalid:
+    "A same-customer rebook record claims this source but its trusted provenance is incomplete. Open Quotes and repair that record before continuing.",
+  existing_rebook_ambiguous:
+    "More than one exact rebook record matches this accepted source. Open Quotes and resolve the conflict before continuing."
 });
 
 function text(value) {
@@ -139,6 +146,12 @@ function partialBoundsSummary(pageInfo = {}) {
   return notes.join(" ") || "This opportunity view is partial because an upstream Customer 360 read reached its bound.";
 }
 
+function rebookReviewLabel(state) {
+  if (text(state) === "draft_created_for_staff_review") return "Staff review required";
+  if (text(state) === "staff_review_completed") return "Staff review completed";
+  return "Review state unavailable";
+}
+
 function OpportunityEvidence({ opportunity }) {
   if (opportunity.type !== "anniversary_rebooking") {
     return <p className="source-note">{opportunity.evidenceCopy}</p>;
@@ -148,7 +161,17 @@ function OpportunityEvidence({ opportunity }) {
     return (
       <>
         <p className="source-note" data-rebook-source-state="verified">
-          Accepted source identified: version {formatWorkspaceText(action.sourceVersionId)}. No rebook draft has been created.
+          Accepted source identified: version {formatWorkspaceText(action.sourceVersionId)}. No matching trusted rebook record was found in this completed bounded customer read.
+        </p>
+        <p className="source-note">{opportunity.evidenceCopy}</p>
+      </>
+    );
+  }
+  if (action.state === "existing_rebook") {
+    return (
+      <>
+        <p className="source-note" data-rebook-source-state="existing">
+          Matching rebook found: {formatWorkspaceText(action.existingQuoteNumber || action.existingQuoteId)} ({formatWorkspaceText(action.existingQuoteStatus)}). {rebookReviewLabel(action.existingReviewState)}.
         </p>
         <p className="source-note">{opportunity.evidenceCopy}</p>
       </>
@@ -164,8 +187,22 @@ function OpportunityEvidence({ opportunity }) {
   );
 }
 
-function OpportunityCard({ opportunity, onOpenQuote }) {
+function OpportunityCard({
+  opportunity,
+  onOpenQuote,
+  onOpenQuoteEdit,
+  onCreateRebook,
+  rebookCreationAvailable
+}) {
   const actionQuoteId = opportunity.reviewedAction?.sourceQuoteId || opportunity.quoteId;
+  const reviewedAction = opportunity.reviewedAction || {};
+  const existingQuoteId = text(reviewedAction.existingQuoteId);
+  const existingNeedsEdit = reviewedAction.state === "existing_rebook"
+    && text(reviewedAction.existingQuoteStatus).toLowerCase() === "draft"
+    && text(reviewedAction.existingReviewState) === "draft_created_for_staff_review";
+  const existingOpenAvailable = existingNeedsEdit
+    ? typeof onOpenQuoteEdit === "function"
+    : typeof onOpenQuote === "function";
   const venue = text(opportunity.event?.venue);
   return (
     <article className="customer-revenue-opportunity" data-opportunity-type={opportunity.type}>
@@ -196,6 +233,35 @@ function OpportunityCard({ opportunity, onOpenQuote }) {
           </p>
         )}
         <OpportunityEvidence opportunity={opportunity} />
+        {opportunity.type === "anniversary_rebooking"
+          && opportunity.reviewedAction?.state === "ready_for_staff_review" && (
+          <CustomerRebookDraftAction
+            reviewedAction={opportunity.reviewedAction}
+            available={rebookCreationAvailable}
+            onCreateRebook={onCreateRebook}
+            onOpenQuote={onOpenQuote}
+            onOpenQuoteEdit={onOpenQuoteEdit}
+          />
+        )}
+        {opportunity.type === "anniversary_rebooking"
+          && reviewedAction.state === "existing_rebook"
+          && existingQuoteId && (
+          <div className="right-actions">
+            <button
+              type="button"
+              className="ghost compact"
+              data-capability-action="open-existing-rebook"
+              data-existing-quote-id={existingQuoteId}
+              disabled={!existingOpenAvailable}
+              onClick={() => {
+                if (existingNeedsEdit) onOpenQuoteEdit?.(existingQuoteId);
+                else onOpenQuote?.(existingQuoteId);
+              }}
+            >
+              {existingNeedsEdit ? "Open draft to review" : "Open matching quote"}
+            </button>
+          </div>
+        )}
       </div>
       {typeof onOpenQuote === "function" && actionQuoteId && (
         <div className="right-actions">
@@ -218,7 +284,10 @@ export function CustomerRevenueOpportunitiesPresentation({
   error = "",
   loading = false,
   stale = false,
-  onOpenQuote
+  onOpenQuote,
+  onOpenQuoteEdit,
+  onCreateRebook,
+  rebookCreationAvailable = true
 }) {
   const state = error && !radar
     ? "error"
@@ -294,6 +363,9 @@ export function CustomerRevenueOpportunitiesPresentation({
                   key={opportunity.id}
                   opportunity={opportunity}
                   onOpenQuote={onOpenQuote}
+                  onOpenQuoteEdit={onOpenQuoteEdit}
+                  onCreateRebook={onCreateRebook}
+                  rebookCreationAvailable={rebookCreationAvailable}
                 />
               ))}
             </div>

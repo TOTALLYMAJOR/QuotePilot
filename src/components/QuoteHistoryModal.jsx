@@ -13,6 +13,7 @@ import { getEventTypes } from "../lib/menuService";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import { buildQuoteEmailPayload } from "../lib/proposalPayload";
 import { getApprovalRequestExecutionEligibility } from "../lib/quoteWorkflow";
+import { getRebookDeliveryGate } from "../lib/rebookQuoteClient";
 import { portalConversationAvailable } from "../lib/portalConversationClient";
 import {
   classifyBookingConfirmation,
@@ -632,6 +633,16 @@ export function canEditQuoteStatus(status) {
   );
 }
 
+export function assertRebookArtifactReady(quote = {}, options = {}) {
+  const gate = getRebookDeliveryGate(quote, options);
+  if (!gate.ready) {
+    const error = new Error(gate.message);
+    error.code = "failed-precondition";
+    throw error;
+  }
+  return true;
+}
+
 export function QuoteHistoryView({
   open,
   onClose,
@@ -642,6 +653,7 @@ export function QuoteHistoryView({
   currentUserUid = "",
   currentUserEmail = "",
   currentUserRole = "customer",
+  tenantTimeZone = "",
   focusQuoteId = "",
   focusAction = "",
   focusReason = "",
@@ -1039,6 +1051,7 @@ export function QuoteHistoryView({
   const focusedQuoteStatus = String(focusedQuote?.status || "draft").trim().toLowerCase();
   const focusedQuoteStatusSemantics = getQuoteHistoryStatusSemantics(focusedQuote || {});
   const focusedQuoteIsDraft = focusedQuoteStatus === "draft";
+  const focusedRebookDeliveryGate = getRebookDeliveryGate(focusedQuote || {}, { tenantTimeZone });
   let focusedQuoteRevisionId = "";
   try {
     focusedQuoteRevisionId = focusedQuote
@@ -1054,12 +1067,13 @@ export function QuoteHistoryView({
   );
   const focusedQuoteCanUsePortal = isCustomerPortalShareable(focusedQuote, {
     requireDeliveryEvidence: state.source === "firebase"
-  });
+  }) && focusedRebookDeliveryGate.ready;
   const focusedQuoteDeliveryEligible = permissions.canSendQuoteEmail
     && state.source === "firebase"
     && canDeliverQuoteEmailStatus(focusedQuoteStatus)
     && Boolean(focusedQuoteRevisionId)
-    && focusedDelivery.canAttempt;
+    && focusedDelivery.canAttempt
+    && focusedRebookDeliveryGate.deliveryReady;
   const focusedQuoteCanSend = focusedQuoteDeliveryEligible
     && emailSetup.checked
     && emailSetup.configured;
@@ -1401,6 +1415,7 @@ export function QuoteHistoryView({
 
   const handleCopyEmail = async (quote) => {
     try {
+      assertRebookArtifactReady(quote, { tenantTimeZone });
       if (!navigator.clipboard) {
         throw new Error("Clipboard unavailable in this browser.");
       }
@@ -1425,6 +1440,7 @@ export function QuoteHistoryView({
   const handleExportPdf = async (quote) => {
     setExportingPdfId(quote.id);
     try {
+      assertRebookArtifactReady(quote, { tenantTimeZone });
       const { exportQuoteProposal } = await import("../lib/proposalExport");
       await exportQuoteProposal(quote, {
         basePortalUrl,
@@ -1444,6 +1460,7 @@ export function QuoteHistoryView({
   const handleExportBeo = async (quote) => {
     setExportingBeoId(quote.id);
     try {
+      assertRebookArtifactReady(quote, { tenantTimeZone });
       const { exportKitchenBeo } = await import("../lib/beoExport");
       await exportKitchenBeo(quote, { output: "save" });
       setState((prev) => ({ ...prev, feedback: `Downloaded kitchen sheet for ${quote.quoteNumber}.` }));
@@ -1876,7 +1893,9 @@ export function QuoteHistoryView({
           >
             <div className="saved-quote-handoff-copy">
               <p className="eyebrow">
-                {focusedDelivery.reviewRequired
+                {focusedRebookDeliveryGate.applies && !focusedRebookDeliveryGate.ready
+                  ? "Rebook review required"
+                  : focusedDelivery.reviewRequired
                   ? "Delivery needs review"
                   : focusedDelivery.activeLease
                     ? "Delivery in progress"
@@ -1896,7 +1915,9 @@ export function QuoteHistoryView({
                 <StatusChip {...focusedQuoteStatusSemantics.lifecycle} />
               </div>
               <p id="saved-quote-handoff-description" className="saved-quote-handoff-description">
-                {focusedDelivery.reviewRequired
+                {focusedRebookDeliveryGate.applies && !focusedRebookDeliveryGate.ready
+                  ? focusedRebookDeliveryGate.message
+                  : focusedDelivery.reviewRequired
                   ? "Check the provider outcome, then record whether the email was accepted or was not sent. Quote-changing actions remain locked until review is complete."
                   : focusedDelivery.activeLease
                     ? "Provider delivery is in progress. Quote-changing actions are temporarily locked."
@@ -1910,6 +1931,13 @@ export function QuoteHistoryView({
                     : `Saved as a draft. It has not been sent to ${focusedQuote.customer?.email || "the customer"}.`
                   : `Current quote status is ${focusedQuoteStatus}.`}
               </p>
+              {focusedRebookDeliveryGate.applies
+                && focusedRebookDeliveryGate.ready
+                && !focusedRebookDeliveryGate.deliveryReady && (
+                <p className="warning-note" role="status">
+                  {focusedRebookDeliveryGate.deliveryMessage}
+                </p>
+              )}
               {!focusedQuoteCanSend && (
                 focusedQuoteCanUsePortal ? (
                   <div className="portal-link-row">
@@ -1939,7 +1967,18 @@ export function QuoteHistoryView({
               )}
             </div>
             <div className="saved-quote-handoff-actions">
-              {focusedDelivery.reviewRequired
+              {focusedRebookDeliveryGate.applies
+                && !focusedRebookDeliveryGate.ready
+                && permissions.canEditQuote
+                && typeof onEditQuote === "function" ? (
+                <button
+                  type="button"
+                  className="cta"
+                  onClick={() => onEditQuote(focusedQuote)}
+                >
+                  Open edit and complete review
+                </button>
+              ) : focusedDelivery.reviewRequired
                 && permissions.canSendQuoteEmail
                 && state.source === "firebase" ? (
                 <button
@@ -1971,7 +2010,8 @@ export function QuoteHistoryView({
                   type="button"
                   className="cta"
                   onClick={() => handleExportPdf(focusedQuote)}
-                  disabled={exportingPdfId === focusedQuote.id}
+                  disabled={exportingPdfId === focusedQuote.id || !focusedRebookDeliveryGate.ready}
+                  title={!focusedRebookDeliveryGate.ready ? focusedRebookDeliveryGate.message : ""}
                   aria-busy={exportingPdfId === focusedQuote.id}
                 >
                   {exportingPdfId === focusedQuote.id ? "Generating draft PDF..." : "Download draft PDF"}
@@ -2002,7 +2042,8 @@ export function QuoteHistoryView({
                   type="button"
                   className="ghost"
                   onClick={() => handleExportPdf(focusedQuote)}
-                  disabled={exportingPdfId === focusedQuote.id}
+                  disabled={exportingPdfId === focusedQuote.id || !focusedRebookDeliveryGate.ready}
+                  title={!focusedRebookDeliveryGate.ready ? focusedRebookDeliveryGate.message : ""}
                   aria-busy={exportingPdfId === focusedQuote.id}
                 >
                   {exportingPdfId === focusedQuote.id ? "Generating PDF..." : "Download PDF"}
@@ -2177,13 +2218,15 @@ export function QuoteHistoryView({
                 );
                 const deliveryRecorded = deliveryUi.recorded;
                 const deliveryUnresolved = deliveryUi.mutationLocked;
+                const rebookDeliveryGate = getRebookDeliveryGate(quote, { tenantTimeZone });
                 const canDeliverCurrentQuote = state.source === "firebase"
                   && canDeliverQuoteEmailStatus(normalizedQuoteStatus)
                   && Boolean(quoteRevisionId)
                   && deliveryUi.canAttempt
+                  && rebookDeliveryGate.deliveryReady
                   && emailSetup.checked
                   && emailSetup.configured;
-                const portalShareable = isCustomerPortalShareable(quote, {
+                const portalShareable = rebookDeliveryGate.ready && isCustomerPortalShareable(quote, {
                   requireDeliveryEvidence: state.source === "firebase"
                 });
                 const publishedPaymentLink = (
@@ -2252,6 +2295,16 @@ export function QuoteHistoryView({
                         ) : deliveryUi.retryAvailable ? (
                           <small>Delivery readiness: Safe retry available</small>
                         ) : null}
+                        {rebookDeliveryGate.applies && (
+                          <small className={rebookDeliveryGate.ready ? "source-note" : "warning-note"}>
+                            Rebook review: {rebookDeliveryGate.ready ? "Completed" : "Required before delivery"}
+                          </small>
+                        )}
+                        {rebookDeliveryGate.applies
+                          && rebookDeliveryGate.ready
+                          && !rebookDeliveryGate.deliveryReady && (
+                          <small className="warning-note">{rebookDeliveryGate.deliveryMessage}</small>
+                        )}
                       </div>
                     </td>
                     <td>
@@ -2404,7 +2457,8 @@ export function QuoteHistoryView({
                             type="button"
                             className="ghost compact"
                             onClick={() => handleExportPdf(quote)}
-                            disabled={exportingPdfId === quote.id}
+                            disabled={exportingPdfId === quote.id || !rebookDeliveryGate.ready}
+                            title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
                           >
                             {exportingPdfId === quote.id ? "Generating PDF..." : "PDF"}
                           </button>
@@ -2414,7 +2468,8 @@ export function QuoteHistoryView({
                             type="button"
                             className="ghost compact"
                             onClick={() => handleExportBeo(quote)}
-                            disabled={exportingBeoId === quote.id}
+                            disabled={exportingBeoId === quote.id || !rebookDeliveryGate.ready}
+                            title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
                           >
                             {exportingBeoId === quote.id ? "Generating kitchen sheet..." : "Kitchen sheet"}
                           </button>
@@ -2437,6 +2492,8 @@ export function QuoteHistoryView({
                             disabled={sendingQuoteEmailId === quote.id || !canDeliverCurrentQuote}
                             title={state.source !== "firebase"
                               ? "Provider email requires Firebase-backed quote storage."
+                              : !rebookDeliveryGate.deliveryReady
+                                ? rebookDeliveryGate.deliveryMessage
                               : deliveryRecorded
                                 ? "This saved revision already has provider acceptance evidence."
                                 : deliveryUi.activeLease
@@ -2549,7 +2606,15 @@ export function QuoteHistoryView({
                                 Conversation
                               </button>
                             )}
-                            <button type="button" className="ghost compact" onClick={() => handleCopyEmail(quote)}>Copy Email</button>
+                            <button
+                              type="button"
+                              className="ghost compact"
+                              onClick={() => handleCopyEmail(quote)}
+                              disabled={!rebookDeliveryGate.ready}
+                              title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
+                            >
+                              Copy Email
+                            </button>
                             <button
                               type="button"
                               className="ghost compact"

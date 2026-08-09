@@ -9,6 +9,7 @@ import {
 const ORGANIZATION_ID = "org-1";
 const CUSTOMER_ID = "customer-1";
 const PORTAL_ISSUED_AT_ISO = "2025-07-01T12:00:00.000Z";
+const REBOOK_REQUEST_ID = `rebook_${"a".repeat(48)}`;
 
 function makeQuote({
   id = "quote-1",
@@ -66,14 +67,56 @@ function makeVersion(quote, versionId = "v0002", overrides = {}) {
     versionId,
     quoteId: quote.id,
     organizationId: quote.organizationId,
+    customerId: quote.customerId,
     versionNumber: Number(versionId.replace(/^v0*/, "")) || 1,
     createdAtISO: "2025-07-01T10:00:00.000Z",
     snapshot: {
       id: quote.id,
       organizationId: quote.organizationId,
+      customerId: quote.customerId,
       event: { ...quote.event }
     },
     ...overrides
+  };
+}
+
+function makeRebookDescendant(sourceQuote, {
+  id = `rebook-${sourceQuote.id}`,
+  status = "draft",
+  customerId = sourceQuote.customerId,
+  organizationId = sourceQuote.organizationId,
+  duplicatedFromQuoteId = sourceQuote.id,
+  pricingAuthority = "server_authoritative",
+  eventDate = sourceQuote.event.date,
+  rebooking = {}
+} = {}) {
+  return {
+    id,
+    quoteNumber: `Q-${id}`,
+    customerId,
+    organizationId,
+    status,
+    duplicatedFromQuoteId,
+    pricing: { authority: pricingAuthority },
+    event: {
+      name: sourceQuote.event.name,
+      date: eventDate,
+      venue: sourceQuote.event.venue
+    },
+    rebooking: {
+      schemaVersion: 1,
+      sourceOrganizationId: sourceQuote.organizationId,
+      sourceQuoteId: sourceQuote.id,
+      sourceVersionId: sourceQuote.activeVersionId,
+      sourceCustomerId: sourceQuote.customerId,
+      sourceEventDate: sourceQuote.event.date,
+      acceptanceReceiptId: sourceQuote.acceptanceReceipt.receiptId,
+      sourceAcceptedAtISO: sourceQuote.acceptanceReceipt.acceptedAtISO,
+      rebookingRequestId: REBOOK_REQUEST_ID,
+      draftCreatedAtISO: "2026-08-12T12:00:00.000Z",
+      state: "draft_created_for_staff_review",
+      ...rebooking
+    }
   };
 }
 
@@ -202,6 +245,219 @@ describe("Customer 360 rebooking radar", () => {
     });
     expect(action).not.toHaveProperty("snapshot");
     expect(action).not.toHaveProperty("pricing");
+  });
+
+  test("reconciles one exact same-tenant customer descendant instead of offering another draft", () => {
+    const source = makeQuote({ id: "accepted-source", date: "2025-08-14" });
+    const descendant = makeRebookDescendant(source);
+    const radar = build(makeWorkspace({
+      quotes: [descendant, source],
+      proposalVersions: [],
+      quoteTruncated: true,
+      versionTruncatedQuoteIds: [source.id]
+    }));
+
+    expect(radar.opportunities[0].reviewedAction).toEqual({
+      kind: "review_rebook_draft",
+      state: "existing_rebook",
+      label: "Open rebook draft for staff review",
+      sourceQuoteId: "accepted-source",
+      sourceVersionId: "v0002",
+      acceptanceReceiptId: "acceptance-accepted-source",
+      acceptedAtISO: "2025-07-02T12:00:00.000Z",
+      performed: true,
+      existingQuoteId: "rebook-accepted-source",
+      existingQuoteNumber: "Q-rebook-accepted-source",
+      existingQuoteStatus: "draft",
+      existingReviewState: "draft_created_for_staff_review",
+      existingEventDate: "2025-08-14",
+      rebookingRequestId: REBOOK_REQUEST_ID,
+      openIntent: "edit"
+    });
+    expect(radar.status).toBe("partial");
+  });
+
+  test("exposes a completed descendant as a viewable existing rebook", () => {
+    const source = makeQuote({ id: "accepted-source", date: "2025-08-14" });
+    const descendant = makeRebookDescendant(source, {
+      status: "sent",
+      eventDate: "2026-09-12",
+      rebooking: {
+        state: "staff_review_completed",
+        reviewedEventDate: "2026-09-12",
+        reviewedAtISO: "2026-08-12T12:30:00.000Z",
+        reviewedBy: {
+          uid: "staff-1",
+          email: "sales@example.com",
+          role: "sales"
+        },
+        reviewCalendar: {
+          date: "2026-08-12",
+          timeZone: "America/Chicago"
+        }
+      }
+    });
+    const action = build(makeWorkspace({ quotes: [descendant, source] }))
+      .opportunities[0].reviewedAction;
+
+    expect(action).toMatchObject({
+      state: "existing_rebook",
+      performed: true,
+      existingQuoteId: "rebook-accepted-source",
+      existingQuoteStatus: "sent",
+      existingReviewState: "staff_review_completed",
+      existingEventDate: "2026-09-12",
+      openIntent: "view"
+    });
+  });
+
+  test("validates completed review evidence in its persisted tenant calendar instead of UTC", () => {
+    const source = makeQuote({ id: "accepted-source", date: "2025-08-14" });
+    const descendant = makeRebookDescendant(source, {
+      status: "sent",
+      eventDate: "2027-09-12",
+      rebooking: {
+        state: "staff_review_completed",
+        reviewedEventDate: "2027-09-12",
+        reviewedAtISO: "2027-01-01T07:30:00.000Z",
+        reviewedBy: {
+          uid: "staff-1",
+          email: "sales@example.com",
+          role: "sales"
+        },
+        reviewCalendar: {
+          date: "2026-12-31",
+          timeZone: "America/Los_Angeles"
+        }
+      }
+    });
+
+    const action = build(makeWorkspace({ quotes: [descendant, source] }))
+      .opportunities[0].reviewedAction;
+
+    expect(action).toMatchObject({
+      state: "existing_rebook",
+      existingReviewState: "staff_review_completed",
+      existingQuoteId: descendant.id,
+      openIntent: "view"
+    });
+  });
+
+  test("ignores cross-scope records and ordinary duplicates when no rebook descendant exists", () => {
+    const source = makeQuote({ id: "accepted-source", date: "2025-08-14" });
+    const lookalikes = [
+      makeRebookDescendant(source, { id: "wrong-org", organizationId: "org-2" }),
+      makeRebookDescendant(source, { id: "wrong-customer", customerId: "customer-2" }),
+      {
+        ...makeRebookDescendant(source, { id: "ordinary-duplicate" }),
+        rebooking: null
+      },
+      makeRebookDescendant(source, {
+        id: "unrelated-rebook",
+        duplicatedFromQuoteId: "quote-other",
+        rebooking: { sourceQuoteId: "quote-other" }
+      })
+    ];
+    const action = build(makeWorkspace({ quotes: [...lookalikes, source] }))
+      .opportunities.find((opportunity) => opportunity.quoteId === source.id)
+      .reviewedAction;
+
+    expect(action).toMatchObject({
+      state: "ready_for_staff_review",
+      performed: false,
+      sourceQuoteId: source.id
+    });
+  });
+
+  test("fails closed for a same-scope descendant claim with invalid provenance", () => {
+    const source = makeQuote({ id: "accepted-source", date: "2025-08-14" });
+    const invalidClaims = [
+      makeRebookDescendant(source, {
+        id: "wrong-source-version",
+        rebooking: { sourceVersionId: "v0001" }
+      }),
+      makeRebookDescendant(source, {
+        id: "wrong-receipt",
+        rebooking: { acceptanceReceiptId: "acceptance-other" }
+      }),
+      makeRebookDescendant(source, {
+        id: "wrong-source-customer",
+        rebooking: { sourceCustomerId: "customer-2" }
+      }),
+      makeRebookDescendant(source, {
+        id: "wrong-accepted-at",
+        rebooking: { sourceAcceptedAtISO: "2025-07-03T12:00:00.000Z" }
+      }),
+      makeRebookDescendant(source, {
+        id: "wrong-request-id",
+        rebooking: { rebookingRequestId: "rebook_not_server_derived" }
+      }),
+      makeRebookDescendant(source, {
+        id: "wrong-duplicate-source",
+        duplicatedFromQuoteId: "quote-other"
+      }),
+      makeRebookDescendant(source, {
+        id: "untrusted-pricing",
+        pricingAuthority: "browser_calculated"
+      }),
+      makeRebookDescendant(source, {
+        id: "invalid-review",
+        status: "sent",
+        eventDate: "2026-09-12",
+        rebooking: { state: "staff_review_completed" }
+      }),
+      makeRebookDescendant(source, { id: "deleted-rebook", status: "deleted" })
+    ];
+
+    invalidClaims.forEach((candidate) => {
+      const action = build(makeWorkspace({ quotes: [candidate, source] }))
+        .opportunities.find((opportunity) => opportunity.quoteId === source.id)
+        .reviewedAction;
+      expect(action).toMatchObject({
+        state: "unavailable",
+        reason: "existing_rebook_invalid",
+        sourceQuoteId: source.id,
+        performed: false
+      });
+    });
+  });
+
+  test("fails closed when no exact descendant is found in a truncated quote read", () => {
+    const source = makeQuote({ id: "accepted-source", date: "2025-08-14" });
+    const action = build(makeWorkspace({
+      quotes: [source],
+      quoteTruncated: true
+    })).opportunities[0].reviewedAction;
+
+    expect(action).toMatchObject({
+      state: "unavailable",
+      reason: "existing_rebook_not_found_quote_history_truncated",
+      sourceQuoteId: "accepted-source",
+      sourceVersionId: "v0002",
+      acceptanceReceiptId: "acceptance-accepted-source",
+      performed: false
+    });
+  });
+
+  test("fails closed when more than one exact descendant claims the accepted source", () => {
+    const source = makeQuote({ id: "accepted-source", date: "2025-08-14" });
+    const action = build(makeWorkspace({
+      quotes: [
+        makeRebookDescendant(source, { id: "rebook-one" }),
+        makeRebookDescendant(source, {
+          id: "rebook-two",
+          rebooking: { rebookingRequestId: `rebook_${"b".repeat(48)}` }
+        }),
+        source
+      ]
+    })).opportunities[0].reviewedAction;
+
+    expect(action).toMatchObject({
+      state: "unavailable",
+      reason: "existing_rebook_ambiguous",
+      sourceQuoteId: "accepted-source",
+      performed: false
+    });
   });
 
   test("fails closed with an exact reason when accepted source evidence cannot be selected", () => {

@@ -7,10 +7,12 @@ import {
   describeUnavailableRebookReason,
   resolveCustomerRevenueCalendarContext
 } from "../CustomerRevenueOpportunities";
+import CustomerRebookDraftAction from "../CustomerRebookDraftAction";
 
 const ORGANIZATION_ID = "org-1";
 const CUSTOMER_ID = "customer-1";
 const PORTAL_ISSUED_AT_ISO = "2025-07-01T12:00:00.000Z";
+const REBOOK_REQUEST_ID = `rebook_${"a".repeat(48)}`;
 
 function makeQuote({ id, date, acceptanceReceipt = undefined } = {}) {
   const activeVersionId = "v0002";
@@ -55,10 +57,63 @@ function makeVersion(quote) {
     versionId: "v0002",
     quoteId: quote.id,
     organizationId: ORGANIZATION_ID,
+    customerId: quote.customerId,
     snapshot: {
       id: quote.id,
       organizationId: ORGANIZATION_ID,
+      customerId: quote.customerId,
       event: { ...quote.event }
+    }
+  };
+}
+
+function makeRebookDescendant(sourceQuote, {
+  status = "draft",
+  eventDate = sourceQuote.event.date,
+  reviewCompleted = false
+} = {}) {
+  return {
+    id: "rebook-anniversary",
+    quoteNumber: "QP-REBOOK-1",
+    customerId: sourceQuote.customerId,
+    organizationId: sourceQuote.organizationId,
+    status,
+    duplicatedFromQuoteId: sourceQuote.id,
+    pricing: { authority: "server_authoritative" },
+    event: {
+      name: sourceQuote.event.name,
+      date: eventDate,
+      venue: sourceQuote.event.venue
+    },
+    rebooking: {
+      schemaVersion: 1,
+      sourceOrganizationId: sourceQuote.organizationId,
+      sourceQuoteId: sourceQuote.id,
+      sourceVersionId: sourceQuote.activeVersionId,
+      sourceCustomerId: sourceQuote.customerId,
+      sourceEventDate: sourceQuote.event.date,
+      acceptanceReceiptId: sourceQuote.acceptanceReceipt.receiptId,
+      sourceAcceptedAtISO: sourceQuote.acceptanceReceipt.acceptedAtISO,
+      rebookingRequestId: REBOOK_REQUEST_ID,
+      draftCreatedAtISO: "2026-08-12T12:00:00.000Z",
+      state: reviewCompleted
+        ? "staff_review_completed"
+        : "draft_created_for_staff_review",
+      ...(reviewCompleted
+        ? {
+          reviewedEventDate: eventDate,
+          reviewedAtISO: "2026-08-12T12:30:00.000Z",
+          reviewCalendar: {
+            date: "2026-08-12",
+            timeZone: "America/Chicago"
+          },
+          reviewedBy: {
+            uid: "staff-1",
+            email: "sales@example.com",
+            role: "sales"
+          }
+        }
+        : {})
     }
   };
 }
@@ -89,8 +144,9 @@ function elementText(node) {
 
 function findElement(node, predicate) {
   if (!isValidElement(node)) return null;
-  if (typeof node.type === "function") return findElement(node.type(node.props), predicate);
   if (predicate(node)) return node;
+  if (node.type === CustomerRebookDraftAction) return null;
+  if (typeof node.type === "function") return findElement(node.type(node.props), predicate);
   const children = Array.isArray(node.props.children) ? node.props.children : [node.props.children];
   for (const child of children) {
     const match = findElement(child, predicate);
@@ -149,6 +205,9 @@ describe("Customer revenue opportunities presentation", () => {
     const sourceButton = findElement(anniversaryArticle, (element) => (
       element.type === "button" && elementText(element) === "Open source quote"
     ));
+    const rebookAction = findElement(anniversaryArticle, (element) => (
+      element.type === CustomerRebookDraftAction
+    ));
 
     expect(markup).toContain('data-capability-id="cwf-11-rebooking-radar"');
     expect(markup).toContain('data-capability-state="success"');
@@ -160,12 +219,92 @@ describe("Customer revenue opportunities presentation", () => {
     expect(markup).toContain("No thank-you or review request was sent");
     expect(markup).toContain("Henderson corporate picnic was scheduled for this week last year");
     expect(markup).toContain("Accepted source identified: version v0002");
-    expect(markup).toContain("No rebook draft has been created");
+    expect(markup).toContain("No matching trusted rebook record was found in this completed bounded customer read");
     expect(markup).toContain("not a lead, booking, delivery, payment, or revenue fact");
     expect(markup).not.toContain("Rebook now");
     expect(sourceButton.props["data-capability-action"]).toBe("open-authoritative-source-quote");
+    expect(rebookAction.props.reviewedAction).toMatchObject({
+      sourceQuoteId: "anniversary",
+      sourceVersionId: "v0002"
+    });
     sourceButton.props.onClick();
     expect(onOpenQuote).toHaveBeenCalledWith("anniversary");
+  });
+
+  test("opens an exact pending descendant for edit instead of rendering another create action", () => {
+    const source = makeQuote({ id: "anniversary", date: "2025-08-14" });
+    const descendant = makeRebookDescendant(source);
+    const radar = buildCustomerRevenueOpportunityRead({
+      workspace: makeWorkspace({
+        quotes: [descendant, source],
+        proposalVersions: [makeVersion(source)],
+        truncated: true
+      }),
+      organizationId: ORGANIZATION_ID,
+      loadedAt: Date.parse("2026-08-12T12:00:00.000Z"),
+      deviceTimeZone: "America/Chicago"
+    });
+    const onOpenQuote = vi.fn();
+    const onOpenQuoteEdit = vi.fn();
+    const tree = (
+      <CustomerRevenueOpportunitiesPresentation
+        radar={radar}
+        onOpenQuote={onOpenQuote}
+        onOpenQuoteEdit={onOpenQuoteEdit}
+      />
+    );
+    const markup = renderToStaticMarkup(tree);
+    const existingButton = findElement(tree, (element) => (
+      element.type === "button"
+      && element.props["data-capability-action"] === "open-existing-rebook"
+    ));
+
+    expect(markup).toContain("Matching rebook found: QP-REBOOK-1 (draft)");
+    expect(markup).toContain("Staff review required");
+    expect(markup).not.toContain("No matching trusted rebook record was found");
+    expect(existingButton.props["data-existing-quote-id"]).toBe("rebook-anniversary");
+    expect(elementText(existingButton)).toBe("Open draft to review");
+    expect(findElement(tree, (element) => element.type === CustomerRebookDraftAction)).toBeNull();
+    existingButton.props.onClick();
+    expect(onOpenQuoteEdit).toHaveBeenCalledWith("rebook-anniversary");
+    expect(onOpenQuote).not.toHaveBeenCalledWith("rebook-anniversary");
+  });
+
+  test("opens a progressed reviewed descendant as its authoritative quote record", () => {
+    const source = makeQuote({ id: "anniversary", date: "2025-08-14" });
+    const descendant = makeRebookDescendant(source, {
+      status: "sent",
+      eventDate: "2026-09-12",
+      reviewCompleted: true
+    });
+    const radar = buildCustomerRevenueOpportunityRead({
+      workspace: makeWorkspace({
+        quotes: [descendant, source],
+        proposalVersions: [makeVersion(source)]
+      }),
+      organizationId: ORGANIZATION_ID,
+      loadedAt: Date.parse("2026-08-12T12:00:00.000Z"),
+      deviceTimeZone: "America/Chicago"
+    });
+    const onOpenQuote = vi.fn();
+    const onOpenQuoteEdit = vi.fn();
+    const tree = (
+      <CustomerRevenueOpportunitiesPresentation
+        radar={radar}
+        onOpenQuote={onOpenQuote}
+        onOpenQuoteEdit={onOpenQuoteEdit}
+      />
+    );
+    const existingButton = findElement(tree, (element) => (
+      element.type === "button"
+      && element.props["data-capability-action"] === "open-existing-rebook"
+    ));
+
+    expect(renderToStaticMarkup(tree)).toContain("Staff review completed");
+    expect(elementText(existingButton)).toBe("Open matching quote");
+    existingButton.props.onClick();
+    expect(onOpenQuote).toHaveBeenCalledWith("rebook-anniversary");
+    expect(onOpenQuoteEdit).not.toHaveBeenCalled();
   });
 
   test("translates unavailable accepted-source evidence without exposing machine reason codes", () => {
@@ -190,6 +329,31 @@ describe("Customer revenue opportunities presentation", () => {
     expect(markup).toContain("No acceptance receipt is available for this booked quote.");
     expect(markup).not.toContain("acceptance_receipt_missing");
     expect(markup).not.toContain("Rebook now");
+  });
+
+  test("keeps creation unavailable when a bounded quote read cannot rule out an existing rebook", () => {
+    const quote = makeQuote({ id: "anniversary", date: "2025-08-14" });
+    const radar = buildCustomerRevenueOpportunityRead({
+      workspace: makeWorkspace({
+        quotes: [quote],
+        proposalVersions: [makeVersion(quote)],
+        truncated: true
+      }),
+      organizationId: ORGANIZATION_ID,
+      loadedAt: Date.parse("2026-08-12T12:00:00.000Z"),
+      tenantTimeZone: "America/Chicago"
+    });
+    const tree = <CustomerRevenueOpportunitiesPresentation radar={radar} />;
+    const markup = renderToStaticMarkup(tree);
+
+    expect(describeUnavailableRebookReason(
+      "existing_rebook_not_found_quote_history_truncated"
+    )).toContain("outside this bounded Customer 360 quote read");
+    expect(describeUnavailableRebookReason("existing_rebook_invalid"))
+      .toContain("trusted provenance is incomplete");
+    expect(markup).toContain("A matching rebook may exist outside this bounded Customer 360 quote read");
+    expect(markup).not.toContain("No matching trusted rebook record was found");
+    expect(findElement(tree, (element) => element.type === CustomerRebookDraftAction)).toBeNull();
   });
 
   test("shows explicit empty, partial, source, bounds, and evaluation error states", () => {

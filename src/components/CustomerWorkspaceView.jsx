@@ -6,6 +6,7 @@ import { buildPortalThemeStyle } from "../data/portalThemePresets";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { StaffReadContextRail } from "./StaffEvidenceRail";
 import CustomerCommercialTimeline from "./CustomerCommercialTimeline";
+import CustomerCommercialMeasures from "./CustomerCommercialMeasures";
 import CustomerRevenueOpportunities, {
   buildCustomerRevenueOpportunityRead
 } from "./CustomerRevenueOpportunities";
@@ -306,6 +307,8 @@ export default function CustomerWorkspaceView({
   onBack,
   onOpenQuotes,
   onOpenQuote,
+  onOpenQuoteEdit,
+  onCreateRebook,
   onOpenWorkflow,
   onOpenSchedule,
   scheduleAvailable = true,
@@ -545,6 +548,16 @@ export default function CustomerWorkspaceView({
             loading={state.loading}
             stale={state.stale}
             onOpenQuote={onOpenQuote}
+            onOpenQuoteEdit={onOpenQuoteEdit}
+            onCreateRebook={onCreateRebook}
+            rebookCreationAvailable={workspace.source === "firebase"}
+          />
+          <CustomerCommercialMeasures
+            workspace={workspace}
+            loading={state.loading}
+            error={state.error}
+            stale={state.stale}
+            onRetry={() => setRefreshToken((value) => value + 1)}
           />
           <CustomerCommercialTimeline workspace={workspace} onOpenQuote={onOpenQuote} />
         </section>

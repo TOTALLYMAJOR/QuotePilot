@@ -7,8 +7,13 @@ const Stripe = require("stripe");
 const twilio = require("twilio");
 const {
   PricingEngineError,
+  assertPricingCatalogAuthorityCurrent,
   calculateQuotePricingAuthoritative
 } = require("./pricingEngine");
+const {
+  CommercialChangeImpactPreviewError,
+  buildCommercialChangeImpactPreviewSnapshots
+} = require("./commercialChangeImpactPreview");
 const {
   QuoteCreationError,
   bindCustomerIdentityToQuoteDocuments,
@@ -26,6 +31,17 @@ const {
   projectCustomerIdentityToImmutableVersion,
   sanitizeQuoteCreationRequest
 } = require("./quoteCreation");
+const {
+  RebookQuoteDraftError,
+  assertRebookCurrentEventDate,
+  assertRebookReviewComplete,
+  buildRebookDraftId,
+  buildRebookProvenance,
+  matchesRebookDraft,
+  normalizeRebookQuoteDraftRequest,
+  overlayCurrentCustomerContact,
+  resolveAcceptedRebookSource
+} = require("./rebookQuoteDraft");
 const {
   buildExistingOrderMessage,
   buildExistingOrganizationMessage,
@@ -6965,6 +6981,7 @@ exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async
 exports.calculateQuotePricing = functions.region(REGION).https.onCall(async (data, context) => {
   const staff = await assertStaff(context);
   const actorEmail = normalizeEmail(context?.auth?.token?.email || "");
+  const calculatedAtISO = new Date().toISOString();
   const pricingStaff = {
     ...staff,
     email: actorEmail
@@ -6975,16 +6992,81 @@ exports.calculateQuotePricing = functions.region(REGION).https.onCall(async (dat
       db,
       data,
       staff: pricingStaff,
-      organizationsCollection: ORGANIZATIONS_COLLECTION
+      organizationsCollection: ORGANIZATIONS_COLLECTION,
+      nowISO: calculatedAtISO
     });
+    const quoteId = normalizeText(data?.pricingInput?.quoteId);
+    let changeImpactPreview = null;
+    if (quoteId && data?.includeChangeImpactPreview === true) {
+      const expectedActiveVersionId = normalizeText(data?.expectedActiveVersionId);
+      if (!expectedActiveVersionId) {
+        throw new CommercialChangeImpactPreviewError(
+          "invalid-argument",
+          "The loaded canonical quote revision is required for change-impact preview."
+        );
+      }
+      const sanitized = sanitizeQuoteCreationRequest({
+        organizationId: result.organizationId,
+        form: data?.pricingInput?.form || data?.form
+      });
+      const quoteRef = getQuoteDocRef(quoteId, result.organizationId);
+      const settingsRef = db
+        .collection(ORGANIZATIONS_COLLECTION)
+        .doc(result.organizationId)
+        .collection("settings")
+        .doc("config");
+      changeImpactPreview = await db.runTransaction(async (tx) => {
+        const [quoteSnap, settingsSnap] = await Promise.all([
+          tx.get(quoteRef),
+          tx.get(settingsRef)
+        ]);
+        if (!quoteSnap.exists) {
+          throw new CommercialChangeImpactPreviewError(
+            "not-found",
+            "Quote not found for change-impact preview."
+          );
+        }
+        if (!settingsSnap.exists) {
+          throw new CommercialChangeImpactPreviewError(
+            "failed-precondition",
+            "Pricing settings are unavailable for change-impact preview."
+          );
+        }
+        const currentQuote = quoteSnap.data() || {};
+        if (normalizeOrganizationId(currentQuote.organizationId) !== result.organizationId) {
+          throw new CommercialChangeImpactPreviewError(
+            "permission-denied",
+            "Quote is outside this organization."
+          );
+        }
+        assertPricingCatalogAuthorityCurrent(result.catalogAuthority, {
+          organizationId: result.organizationId,
+          catalogSource: result.catalogSource,
+          settings: settingsSnap.data() || {}
+        });
+        return buildCommercialChangeImpactPreviewSnapshots({
+          organizationId: result.organizationId,
+          quoteId,
+          expectedActiveVersionId,
+          currentQuote,
+          proposedForm: sanitized.form,
+          proposedPricing: result.pricing
+        });
+      });
+    }
     return {
       ok: true,
       organizationId: result.organizationId,
       catalogSource: result.catalogSource,
-      pricing: result.pricing
+      pricing: result.pricing,
+      ...(changeImpactPreview ? { changeImpactPreview } : {})
     };
   } catch (err) {
-    if (err instanceof PricingEngineError) {
+    if (
+      err instanceof PricingEngineError
+      || err instanceof CommercialChangeImpactPreviewError
+      || err instanceof QuoteCreationError
+    ) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
     functions.logger.error("calculateQuotePricing failed", {
@@ -7490,13 +7572,23 @@ async function createTrustedQuoteDraftInternal({
   staff,
   form,
   creationReason = "initial_quote_create",
-  sourceQuoteId = ""
+  sourceQuoteId = "",
+  trustedQuoteId = "",
+  expectedCustomerId = "",
+  expectedCustomerContact = null,
+  rebooking = null,
+  rebookSourceRequest = null,
+  requestedNowISO = ""
 }) {
   const sanitized = sanitizeQuoteCreationRequest({
     organizationId,
     form
   });
-  const nowISO = new Date().toISOString();
+  const requestedNow = requestedNowISO ? new Date(requestedNowISO) : new Date();
+  if (Number.isNaN(requestedNow.getTime())) {
+    throw new QuoteCreationError("invalid-argument", "Quote creation timestamp is invalid.");
+  }
+  const nowISO = requestedNow.toISOString();
   const pricingResult = await calculateQuotePricingAuthoritative({
     db,
     data: {
@@ -7514,7 +7606,8 @@ async function createTrustedQuoteDraftInternal({
       ...staff,
       email: normalizeEmail(staff.email)
     },
-    organizationsCollection: ORGANIZATIONS_COLLECTION
+    organizationsCollection: ORGANIZATIONS_COLLECTION,
+    nowISO
   });
 
   const settingsRef = db
@@ -7533,12 +7626,23 @@ async function createTrustedQuoteDraftInternal({
       "Pricing settings must exist before a quote can be created."
     );
   }
+  assertPricingCatalogAuthorityCurrent(pricingResult.catalogAuthority, {
+    organizationId,
+    catalogSource: pricingResult.catalogSource,
+    settings: settingsSnap.data() || {}
+  });
 
-  const quoteRef = db
+  const quoteCollectionRef = db
     .collection(ORGANIZATIONS_COLLECTION)
     .doc(organizationId)
-    .collection(QUOTES_COLLECTION)
-    .doc();
+    .collection(QUOTES_COLLECTION);
+  const normalizedTrustedQuoteId = normalizeText(trustedQuoteId);
+  if (normalizedTrustedQuoteId && /[\s/?#\\\u0000]/u.test(normalizedTrustedQuoteId)) {
+    throw new QuoteCreationError("invalid-argument", "Trusted quote identity is invalid.");
+  }
+  const quoteRef = normalizedTrustedQuoteId
+    ? quoteCollectionRef.doc(normalizedTrustedQuoteId)
+    : quoteCollectionRef.doc();
   const portalKey = randomUUID().replace(/-/g, "");
   const quoteNumber = buildServerQuoteNumber(nowISO, randomUUID());
   const documents = buildTrustedQuoteCreationDocuments({
@@ -7556,7 +7660,8 @@ async function createTrustedQuoteDraftInternal({
     },
     nowISO,
     creationReason,
-    sourceQuoteId
+    sourceQuoteId,
+    rebooking
   });
   const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
   const versionRef = quoteRef.collection("versions").doc(documents.version.versionId);
@@ -7575,6 +7680,63 @@ async function createTrustedQuoteDraftInternal({
     customerProjectionDocumentId(normalizedCustomerEmail)
   );
   const generatedCustomerRef = customerCollectionRef.doc();
+  const normalizedExpectedCustomerId = normalizeText(expectedCustomerId);
+  if (normalizedExpectedCustomerId && /[\s/?#\\\u0000]/u.test(normalizedExpectedCustomerId)) {
+    throw new QuoteCreationError("invalid-argument", "Expected customer identity is invalid.");
+  }
+  const expectedCustomerRef = normalizedExpectedCustomerId
+    ? customerCollectionRef.doc(normalizedExpectedCustomerId)
+    : null;
+  const normalizedRebookSourceRequest = rebookSourceRequest
+    ? normalizeRebookQuoteDraftRequest(rebookSourceRequest)
+    : null;
+  if (
+    normalizedRebookSourceRequest
+    && (
+      normalizedRebookSourceRequest.organizationId !== organizationId
+      || normalizeText(sourceQuoteId) !== normalizedRebookSourceRequest.sourceQuoteId
+      || normalizeText(rebooking?.sourceQuoteId) !== normalizedRebookSourceRequest.sourceQuoteId
+      || normalizeText(rebooking?.sourceVersionId) !== normalizedRebookSourceRequest.sourceVersionId
+      || normalizeText(rebooking?.acceptanceReceiptId) !== normalizedRebookSourceRequest.acceptanceReceiptId
+    )
+  ) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Rebook source request does not match the trusted creation scope."
+    );
+  }
+  const rebookSourceQuoteRef = normalizedRebookSourceRequest
+    ? getQuoteDocRef(normalizedRebookSourceRequest.sourceQuoteId, organizationId)
+    : null;
+  const rebookSourceVersionRef = rebookSourceQuoteRef
+    ? rebookSourceQuoteRef.collection("versions").doc(normalizedRebookSourceRequest.sourceVersionId)
+    : null;
+  const normalizedExpectedCustomerContact = expectedCustomerContact
+    && typeof expectedCustomerContact === "object"
+    ? {
+      name: normalizeText(expectedCustomerContact.name),
+      email: normalizeEmail(expectedCustomerContact.emailKey || expectedCustomerContact.email),
+      phone: normalizeText(expectedCustomerContact.phone),
+      company: normalizeText(expectedCustomerContact.company || expectedCustomerContact.organization)
+    }
+    : null;
+  if (
+    normalizedExpectedCustomerContact
+    && (
+      !normalizedExpectedCustomerId
+      || !normalizedExpectedCustomerContact.name
+      || !isValidEmail(normalizedExpectedCustomerContact.email)
+      || documents.quote.customer.name !== normalizedExpectedCustomerContact.name
+      || documents.quote.customer.email !== normalizedExpectedCustomerContact.email
+      || documents.quote.customer.phone !== normalizedExpectedCustomerContact.phone
+      || documents.quote.customer.organization !== normalizedExpectedCustomerContact.company
+    )
+  ) {
+    throw new QuoteCreationError(
+      "failed-precondition",
+      "Expected customer contact does not match the trusted quote form."
+    );
+  }
   const customerEmailClaimRef = organizationRef
     .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION)
     .doc(customerEmailClaimDocumentId(normalizedCustomerEmail));
@@ -7587,7 +7749,11 @@ async function createTrustedQuoteDraftInternal({
       customerEmailSnapshot,
       customerEmailKeySnapshot,
       deterministicCustomerSnapshot,
-      customerEmailClaimSnapshot
+      customerEmailClaimSnapshot,
+      expectedCustomerSnapshot,
+      rebookSourceQuoteSnapshot,
+      rebookSourceVersionSnapshot,
+      transactionPricingSettingsSnapshot
     ] = await Promise.all([
       tx.get(quoteRef),
       tx.get(portalRef),
@@ -7595,13 +7761,57 @@ async function createTrustedQuoteDraftInternal({
       tx.get(customerEmailQuery),
       tx.get(customerEmailKeyQuery),
       tx.get(deterministicCustomerRef),
-      tx.get(customerEmailClaimRef)
+      tx.get(customerEmailClaimRef),
+      expectedCustomerRef ? tx.get(expectedCustomerRef) : Promise.resolve(null),
+      rebookSourceQuoteRef ? tx.get(rebookSourceQuoteRef) : Promise.resolve(null),
+      rebookSourceVersionRef ? tx.get(rebookSourceVersionRef) : Promise.resolve(null),
+      tx.get(settingsRef)
     ]);
+    if (!transactionPricingSettingsSnapshot.exists) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "Pricing settings changed before the quote could be committed."
+      );
+    }
+    assertPricingCatalogAuthorityCurrent(pricingResult.catalogAuthority, {
+      organizationId,
+      catalogSource: pricingResult.catalogSource,
+      settings: transactionPricingSettingsSnapshot.data() || {}
+    });
     if (quoteSnap.exists || portalSnap.exists || versionSnap.exists) {
       throw new QuoteCreationError(
         "already-exists",
         "A generated quote identity collided. Retry quote creation."
       );
+    }
+    if (normalizedRebookSourceRequest) {
+      if (!rebookSourceQuoteSnapshot?.exists || !rebookSourceVersionSnapshot?.exists) {
+        throw new QuoteCreationError(
+          "failed-precondition",
+          "The reviewed accepted source changed before the rebook draft could be committed."
+        );
+      }
+      const transactionSource = resolveAcceptedRebookSource({
+        request: normalizedRebookSourceRequest,
+        sourceQuote: {
+          id: rebookSourceQuoteSnapshot.id,
+          ...(rebookSourceQuoteSnapshot.data() || {})
+        },
+        sourceVersion: {
+          id: rebookSourceVersionSnapshot.id,
+          ...(rebookSourceVersionSnapshot.data() || {})
+        }
+      });
+      if (
+        transactionSource.customerId !== normalizedExpectedCustomerId
+        || transactionSource.sourceEventDate !== normalizeText(rebooking?.sourceEventDate)
+        || transactionSource.acceptedAtISO !== normalizeText(rebooking?.sourceAcceptedAtISO)
+      ) {
+        throw new QuoteCreationError(
+          "failed-precondition",
+          "The reviewed accepted source no longer matches the rebook draft provenance."
+        );
+      }
     }
     const claimBinding = readCustomerEmailClaim(
       customerEmailClaimSnapshot,
@@ -7611,7 +7821,8 @@ async function createTrustedQuoteDraftInternal({
     const initialCustomerSnapshots = [
       customerEmailSnapshot,
       customerEmailKeySnapshot,
-      deterministicCustomerSnapshot
+      deterministicCustomerSnapshot,
+      expectedCustomerSnapshot
     ];
     const knownClaimedCustomerSnapshot = claimBinding
       ? customerProjectionDocuments(...initialCustomerSnapshots)
@@ -7644,9 +7855,46 @@ async function createTrustedQuoteDraftInternal({
         "The claimed customer record no longer matches its normalized email."
       );
     }
-    const existingCustomerDoc = claimBinding
-      ? claimedCustomerSnapshot
-      : emailMatchedCustomerDoc;
+    if (normalizedExpectedCustomerId) {
+      if (!expectedCustomerSnapshot?.exists) {
+        throw new QuoteCreationError(
+          "failed-precondition",
+          "The reviewed customer identity no longer exists."
+        );
+      }
+      const expectedCustomer = expectedCustomerSnapshot.data() || {};
+      const currentExpectedContact = {
+        name: normalizeText(expectedCustomer.name),
+        email: normalizeEmail(expectedCustomer.emailKey || expectedCustomer.email),
+        phone: normalizeText(expectedCustomer.phone),
+        company: normalizeText(expectedCustomer.company || expectedCustomer.organization)
+      };
+      if (
+        normalizeOrganizationId(expectedCustomer.organizationId) !== organizationId
+        || normalizeText(expectedCustomer.customerId || expectedCustomerSnapshot.id) !== normalizedExpectedCustomerId
+        || normalizeEmail(expectedCustomer.emailKey || expectedCustomer.email) !== normalizedCustomerEmail
+        || (
+          normalizedExpectedCustomerContact
+          && JSON.stringify(currentExpectedContact) !== JSON.stringify(normalizedExpectedCustomerContact)
+        )
+      ) {
+        throw new QuoteCreationError(
+          "failed-precondition",
+          "The reviewed customer identity no longer matches the accepted proposal contact."
+        );
+      }
+      if (claimBinding && claimBinding.customerId !== normalizedExpectedCustomerId) {
+        throw new QuoteCreationError(
+          "failed-precondition",
+          "The customer email claim conflicts with the reviewed customer identity."
+        );
+      }
+    }
+    const existingCustomerDoc = normalizedExpectedCustomerId
+      ? expectedCustomerSnapshot
+      : claimBinding
+        ? claimedCustomerSnapshot
+        : emailMatchedCustomerDoc;
     assertNoCustomerProjectionCollision(
       customerSnapshots,
       normalizedCustomerEmail,
@@ -7672,6 +7920,15 @@ async function createTrustedQuoteDraftInternal({
       existingCustomerId: existingCustomerDoc?.id || "",
       newCustomerId: generatedCustomerRef.id
     });
+    if (
+      normalizedExpectedCustomerId
+      && customerProjection.customerId !== normalizedExpectedCustomerId
+    ) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "Trusted quote creation did not preserve the reviewed customer identity."
+      );
+    }
     const customerRef = customerCollectionRef.doc(customerProjection.customerId);
     const customerEmailClaim = buildCustomerEmailClaim({
       organizationId,
@@ -7747,7 +8004,8 @@ async function updateTrustedQuoteDraftInternal({
       ...staff,
       email: normalizeEmail(staff.email)
     },
-    organizationsCollection: ORGANIZATIONS_COLLECTION
+    organizationsCollection: ORGANIZATIONS_COLLECTION,
+    nowISO
   });
   const settingsRef = db
     .collection(ORGANIZATIONS_COLLECTION)
@@ -7765,13 +8023,32 @@ async function updateTrustedQuoteDraftInternal({
       "Pricing settings must exist before a quote can be edited."
     );
   }
+  assertPricingCatalogAuthorityCurrent(pricingResult.catalogAuthority, {
+    organizationId,
+    catalogSource: pricingResult.catalogSource,
+    settings: settingsSnap.data() || {}
+  });
 
   const quoteRef = getQuoteDocRef(quoteId, organizationId);
   const result = await db.runTransaction(async (tx) => {
-    const quoteSnap = await tx.get(quoteRef);
+    const [quoteSnap, transactionPricingSettingsSnapshot] = await Promise.all([
+      tx.get(quoteRef),
+      tx.get(settingsRef)
+    ]);
     if (!quoteSnap.exists) {
       throw new QuoteCreationError("not-found", "Quote not found.");
     }
+    if (!transactionPricingSettingsSnapshot.exists) {
+      throw new QuoteCreationError(
+        "failed-precondition",
+        "Pricing settings changed before the quote edit could be committed."
+      );
+    }
+    assertPricingCatalogAuthorityCurrent(pricingResult.catalogAuthority, {
+      organizationId,
+      catalogSource: pricingResult.catalogSource,
+      settings: transactionPricingSettingsSnapshot.data() || {}
+    });
     const quote = quoteSnap.data() || {};
     if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
       throw new QuoteCreationError(
@@ -7790,7 +8067,7 @@ async function updateTrustedQuoteDraftInternal({
       pricing: pricingResult.pricing,
       catalogSource: pricingResult.catalogSource,
       settings: {
-        ...(settingsSnap.data() || {}),
+        ...(transactionPricingSettingsSnapshot.data() || {}),
         organizationName: normalizeText(organizationSnap.data()?.name)
       },
       nowISO
@@ -8055,6 +8332,7 @@ function quoteCreationFailure(err, {
   }
   if (
     err instanceof QuoteCreationError
+    || err instanceof RebookQuoteDraftError
     || err instanceof PricingEngineError
     || err instanceof ApprovalWorkflowError
     || err instanceof ContractWorkflowError
@@ -8135,6 +8413,163 @@ exports.duplicateQuoteDraft = functions.region(REGION).https.onCall(async (data,
       operation: "duplicateQuoteDraft",
       staff,
       organizationId
+    });
+  }
+});
+
+exports.createRebookQuoteDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  let request;
+  try {
+    request = normalizeRebookQuoteDraftRequest(data);
+  } catch (err) {
+    if (err instanceof RebookQuoteDraftError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    throw err;
+  }
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: request.organizationId
+  });
+  if (normalizeOrganizationId(staff.organizationId) !== request.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Rebook draft creation requires the active organization scope."
+    );
+  }
+
+  const draftId = buildRebookDraftId(request);
+  const draftRef = getQuoteDocRef(draftId, request.organizationId);
+  const responseFromExistingDraft = async () => {
+    const snapshot = await draftRef.get();
+    if (!snapshot.exists) return null;
+    const quote = { id: snapshot.id, ...(snapshot.data() || {}) };
+    if (!matchesRebookDraft(quote, { request, expectedDraftId: draftId })) {
+      throw new RebookQuoteDraftError(
+        "already-exists",
+        "The deterministic rebook identity is occupied by a different record."
+      );
+    }
+    if (
+      !normalizeText(quote.quoteNumber)
+      || normalizeText(quote.portalKey).length < 20
+      || !normalizeText(quote.activeVersionId)
+      || normalizeText(quote.customerId) !== normalizeText(quote.rebooking?.sourceCustomerId)
+    ) {
+      throw new RebookQuoteDraftError(
+        "failed-precondition",
+        "The matching rebook record is incomplete and requires staff review."
+      );
+    }
+    return {
+      ok: true,
+      organizationId: request.organizationId,
+      storage: "firebase",
+      id: draftId,
+      quoteNumber: normalizeText(quote.quoteNumber),
+      portalKey: normalizeText(quote.portalKey),
+      portalIssuedAtISO: normalizeText(quote.portalIssuedAtISO),
+      portalExpiresAtISO: normalizeText(quote.portalExpiresAtISO),
+      activeVersionId: normalizeText(quote.activeVersionId),
+      latestVersionNumber: Math.max(1, Number(quote.latestVersionNumber || 1)),
+      customerId: normalizeText(quote.customerId),
+      status: normalizeText(quote.status).toLowerCase(),
+      rebooking: {
+        sourceQuoteId: request.sourceQuoteId,
+        sourceVersionId: request.sourceVersionId,
+        sourceEventDate: normalizeText(quote.rebooking?.sourceEventDate),
+        acceptanceReceiptId: request.acceptanceReceiptId,
+        rebookingRequestId: request.rebookingRequestId,
+        state: normalizeText(quote.rebooking?.state)
+      },
+      idempotent: true
+    };
+  };
+
+  try {
+    const existing = await responseFromExistingDraft();
+    if (existing) return existing;
+
+    const source = await readQuoteOrThrow(request.sourceQuoteId, {
+      organizationId: request.organizationId
+    });
+    const versionSnap = await source.quoteRef
+      .collection("versions")
+      .doc(request.sourceVersionId)
+      .get();
+    if (!versionSnap.exists) {
+      throw new RebookQuoteDraftError(
+        "failed-precondition",
+        "The reviewed accepted proposal version is no longer available."
+      );
+    }
+    const resolved = resolveAcceptedRebookSource({
+      request,
+      sourceQuote: source.quote,
+      sourceVersion: { id: versionSnap.id, ...(versionSnap.data() || {}) }
+    });
+    const currentCustomerRef = db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .doc(request.organizationId)
+      .collection("customers")
+      .doc(resolved.customerId);
+    const currentCustomerSnap = await currentCustomerRef.get();
+    if (!currentCustomerSnap.exists) {
+      throw new RebookQuoteDraftError(
+        "failed-precondition",
+        "The stable customer record is no longer available for rebooking."
+      );
+    }
+    const currentCustomer = currentCustomerSnap.data() || {};
+    const rebookForm = overlayCurrentCustomerContact({
+      sourceForm: buildDuplicateQuoteForm(resolved.sourceSnapshot),
+      currentCustomer,
+      organizationId: request.organizationId,
+      customerId: resolved.customerId
+    });
+    const createdAtISO = new Date().toISOString();
+    const rebooking = buildRebookProvenance({
+      request,
+      customerId: resolved.customerId,
+      sourceEventDate: resolved.sourceSnapshot?.event?.date,
+      acceptedAtISO: resolved.acceptedAtISO,
+      createdAtISO
+    });
+    try {
+      const created = await createTrustedQuoteDraftInternal({
+        organizationId: request.organizationId,
+        staff,
+        form: rebookForm,
+        creationReason: "rebook_quote_create",
+        sourceQuoteId: request.sourceQuoteId,
+        trustedQuoteId: draftId,
+        expectedCustomerId: resolved.customerId,
+        expectedCustomerContact: currentCustomer,
+        rebooking,
+        rebookSourceRequest: request,
+        requestedNowISO: createdAtISO
+      });
+      return {
+        ...created,
+        status: "draft",
+        idempotent: false
+      };
+    } catch (err) {
+      if (err instanceof QuoteCreationError && err.code === "already-exists") {
+        const reconciled = await responseFromExistingDraft();
+        if (reconciled) return reconciled;
+      }
+      throw err;
+    }
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    if (err instanceof RebookQuoteDraftError) {
+      throw new functions.https.HttpsError(err.code, err.message);
+    }
+    return quoteCreationFailure(err, {
+      operation: "createRebookQuoteDraft",
+      staff,
+      organizationId: request.organizationId,
+      failureMessage: "Failed to create the reviewed rebook draft."
     });
   }
 });
@@ -9221,9 +9656,13 @@ exports.sendQuoteToCustomer = functions
     );
   }
   const quoteRef = getQuoteDocRef(quoteId, organizationId);
+  const deliverySettingsRef = db
+    .collection(ORGANIZATIONS_COLLECTION)
+    .doc(organizationId)
+    .collection("settings")
+    .doc("config");
   const attemptId = randomUUID();
   const startedAtISO = new Date().toISOString();
-  const attemptProvider = getEmailProvider();
 
   let claim;
   try {
@@ -9237,6 +9676,8 @@ exports.sendQuoteToCustomer = functions
         throw new QuoteDeliveryError("permission-denied", "Quote is outside your organization.");
       }
       assertQuoteDeliveryRevision(quote, expectedRevisionId, quoteId);
+      assertRebookReviewComplete(quote);
+      const attemptProvider = getEmailProvider();
       const existingDelivery = quote.workflow?.quoteDelivery || {};
       if (
         normalizeText(existingDelivery.revisionId) === expectedRevisionId
@@ -9301,6 +9742,13 @@ exports.sendQuoteToCustomer = functions
           };
         }
       }
+      if (quote.rebooking && typeof quote.rebooking === "object") {
+        const deliverySettingsSnap = await tx.get(deliverySettingsRef);
+        assertRebookCurrentEventDate(quote, {
+          nowISO: startedAtISO,
+          tenantTimeZone: deliverySettingsSnap.data()?.businessTimeZone
+        });
+      }
       assertNoConflictingQuoteExecution(quote);
       const portalKey = normalizeText(quote.portalKey);
       const portalRef = portalKey
@@ -9360,7 +9808,7 @@ exports.sendQuoteToCustomer = functions
       };
     });
   } catch (err) {
-    if (err instanceof QuoteDeliveryError) {
+    if (err instanceof QuoteDeliveryError || err instanceof RebookQuoteDraftError) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
     throw err;
@@ -13729,7 +14177,8 @@ exports.stripeWebhook = functions
       eventType: normalizeText(event.type),
       requestHost,
       requestIp,
-      message: normalizeText(err?.message).slice(0, 240)
+      errorCode: normalizeText(err?.code || err?.name || "processing_failed").slice(0, 80),
+      errorMessage: normalizeText(err?.message).slice(0, 240)
     });
     res.status(500).send("Failed to process checkout session.");
     return;

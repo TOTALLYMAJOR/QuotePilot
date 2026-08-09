@@ -381,6 +381,7 @@ export const DEFAULT_SETTINGS = {
   businessPhone: "",
   businessEmail: "",
   businessAddress: "",
+  businessTimeZone: "",
   acceptanceEmail: "",
   disposablesNote: "All disposables are included in this quote.",
   depositNotice: "30% deposit is required to lock in your date.",
@@ -746,6 +747,18 @@ function toTenantText(settings, key, fallback = "") {
   return String(settings?.[key] ?? "").trim();
 }
 
+function normalizeIanaTimeZone(value, fallback = "") {
+  const requested = String(value || "").trim();
+  if (!requested) return fallback;
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: requested })
+      .resolvedOptions()
+      .timeZone;
+  } catch {
+    return fallback;
+  }
+}
+
 function toBoolean(value, fallback = false) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
@@ -1104,6 +1117,10 @@ export function normalizeCatalog(raw) {
       businessPhone: toTenantText(inputSettings, "businessPhone", DEFAULT_SETTINGS.businessPhone),
       businessEmail: toTenantText(inputSettings, "businessEmail", DEFAULT_SETTINGS.businessEmail),
       businessAddress: toTenantText(inputSettings, "businessAddress", DEFAULT_SETTINGS.businessAddress),
+      businessTimeZone: normalizeIanaTimeZone(
+        toTenantText(inputSettings, "businessTimeZone", DEFAULT_SETTINGS.businessTimeZone),
+        DEFAULT_SETTINGS.businessTimeZone
+      ),
       acceptanceEmail: toTenantText(inputSettings, "acceptanceEmail", DEFAULT_SETTINGS.acceptanceEmail),
       disposablesNote: toTenantText(
         inputSettings,

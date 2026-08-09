@@ -58,15 +58,17 @@ describe("reporting evidence and scope", () => {
       totals: { total: 0 },
       payment: { depositStatus: "unpaid" }
     }]);
+    const emptyMarkup = renderToStaticMarkup(
+      <ReportingEvidenceRail state={baseState()} metrics={emptyMetrics} onRetry={() => {}} />
+    );
+    const successMarkup = renderToStaticMarkup(
+      <ReportingEvidenceRail state={baseState()} metrics={successMetrics} onRetry={() => {}} />
+    );
 
     expect(getReportingCapabilityState(baseState(), emptyMetrics)).toBe("empty");
     expect(getReportingCapabilityState(baseState(), successMetrics)).toBe("success");
-    expect(renderToStaticMarkup(
-      <ReportingEvidenceRail state={baseState()} metrics={emptyMetrics} onRetry={() => {}} />
-    )).toContain('data-capability-state="empty"');
-    expect(renderToStaticMarkup(
-      <ReportingEvidenceRail state={baseState()} metrics={successMetrics} onRetry={() => {}} />
-    )).toContain('data-capability-state="success"');
+    expect(emptyMarkup).toContain('data-capability-state="empty"');
+    expect(successMarkup).toContain('data-capability-state="success"');
   });
 
   test("renders truncated and incomplete records as a partial snapshot", () => {
@@ -74,8 +76,11 @@ describe("reporting evidence and scope", () => {
     const metrics = buildReportingMetrics([{
       status: "accepted",
       totals: {},
-      payment: { depositStatus: "paid" }
-    }]);
+      payment: {
+        depositStatus: "paid",
+        depositConfirmedAtISO: "2026-08-08T15:00:00.000Z"
+      }
+    }], { source: "firebase" });
     const markup = renderToStaticMarkup(
       <ReportingEvidenceRail state={state} metrics={metrics} onRetry={() => {}} />
     );
@@ -92,8 +97,11 @@ describe("reporting evidence and scope", () => {
     const metrics = buildReportingMetrics([{
       status: "booked",
       totals: { total: 1200, deposit: 300 },
-      payment: { depositStatus: "paid" }
-    }]);
+      payment: {
+        depositStatus: "paid",
+        depositConfirmedAtISO: "2026-08-08T15:00:00.000Z"
+      }
+    }], { source: "firebase" });
     const tree = ReportingEvidenceRail({ state, metrics, onRetry: retry });
     const markup = renderToStaticMarkup(tree);
     const retryButton = findElement(tree, (element) => (
@@ -132,19 +140,25 @@ describe("reporting metric evidence", () => {
       {
         status: "accepted",
         totals: { total: 4000, deposit: 1000 },
-        payment: { depositStatus: "paid" }
+        payment: {
+          depositStatus: "paid",
+          depositConfirmedAtISO: "2026-08-08T15:00:00.000Z"
+        }
       },
       {
         status: "booked",
         totals: {},
-        payment: { depositStatus: "paid" }
+        payment: {
+          depositStatus: "paid",
+          depositConfirmedAtISO: "2026-08-08T15:00:00.000Z"
+        }
       },
       {
         status: "migrated-unknown",
         totals: { total: "" },
         payment: {}
       }
-    ]);
+    ], { source: "firebase" });
 
     expect(metrics).toMatchObject({
       quotedValue: 4000,
@@ -160,6 +174,41 @@ describe("reporting metric evidence", () => {
       paymentUnknown: 1,
       wins: 2,
       decisionPool: 2
+    });
+  });
+
+  test("fails closed for local or timestamp-free paid states", () => {
+    const quote = {
+      status: "booked",
+      totals: { total: 4000, deposit: 1000 },
+      payment: { depositStatus: "paid" }
+    };
+    const local = buildReportingMetrics([quote], { source: "local" });
+    const timestampFreeFirebase = buildReportingMetrics([quote], { source: "firebase" });
+    const verified = buildReportingMetrics([{
+      ...quote,
+      payment: {
+        ...quote.payment,
+        depositConfirmedAtISO: "2026-08-08T15:00:00.000Z"
+      }
+    }], { source: "firebase" });
+
+    expect(local).toMatchObject({
+      paymentPaid: 1,
+      paymentPaidVerified: 0,
+      paymentPaidUnverified: 1,
+      paidDepositValue: 0,
+      paidDepositValueKnown: 0,
+      paidDepositEvidenceMissing: 1
+    });
+    expect(timestampFreeFirebase.paidDepositValueKnown).toBe(0);
+    expect(timestampFreeFirebase.paidDepositEvidenceMissing).toBe(1);
+    expect(verified).toMatchObject({
+      paymentPaidVerified: 1,
+      paymentPaidUnverified: 0,
+      paidDepositValue: 1000,
+      paidDepositValueKnown: 1,
+      paidDepositEvidenceMissing: 0
     });
   });
 

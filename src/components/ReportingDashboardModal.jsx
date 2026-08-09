@@ -14,6 +14,18 @@ function finiteMoney(value) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function normalizedEvidenceISO(value) {
+  let candidate = value;
+  if (typeof value?.toDate === "function") candidate = value.toDate();
+  if (candidate instanceof Date) {
+    return Number.isNaN(candidate.getTime()) ? "" : candidate.toISOString();
+  }
+  const raw = String(candidate ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(raw)) return "";
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
 function monthKeyFromISO(iso) {
   const dt = new Date(iso || "");
   if (Number.isNaN(dt.getTime())) return "";
@@ -40,8 +52,12 @@ function recentMonthKeys(count, nowDate = new Date()) {
   return out;
 }
 
-export function buildReportingMetrics(quotes = [], { nowDate = new Date() } = {}) {
+export function buildReportingMetrics(quotes = [], {
+  nowDate = new Date(),
+  source = ""
+} = {}) {
   const sourceQuotes = Array.isArray(quotes) ? quotes : [];
+  const providerPaymentEvidenceTrusted = String(source).trim().toLowerCase() === "firebase";
   const totals = {
     quotes: sourceQuotes.length,
     draft: 0,
@@ -55,6 +71,8 @@ export function buildReportingMetrics(quotes = [], { nowDate = new Date() } = {}
     paymentUnpaid: 0,
     paymentSent: 0,
     paymentPaid: 0,
+    paymentPaidVerified: 0,
+    paymentPaidUnverified: 0,
     paymentRefunded: 0,
     paymentUnknown: 0,
     quotedValue: 0,
@@ -68,7 +86,9 @@ export function buildReportingMetrics(quotes = [], { nowDate = new Date() } = {}
     wonValueKnown: 0,
     wonValueUnknown: 0,
     paidDepositValueKnown: 0,
-    paidDepositValueUnknown: 0
+    paidDepositValueUnknown: 0,
+    paidDepositAmountUnknown: 0,
+    paidDepositEvidenceMissing: 0
   };
 
   sourceQuotes.forEach((quote) => {
@@ -90,9 +110,18 @@ export function buildReportingMetrics(quotes = [], { nowDate = new Date() } = {}
     }
     if (paymentStatus === "paid") {
       totals.paymentPaid += 1;
-      if (depositValue === null) {
+      const providerConfirmed = providerPaymentEvidenceTrusted
+        && Boolean(normalizedEvidenceISO(quote?.payment?.depositConfirmedAtISO));
+      if (!providerConfirmed) {
+        totals.paymentPaidUnverified += 1;
+        totals.paidDepositEvidenceMissing += 1;
+        totals.paidDepositValueUnknown += 1;
+      } else if (depositValue === null) {
+        totals.paymentPaidVerified += 1;
+        totals.paidDepositAmountUnknown += 1;
         totals.paidDepositValueUnknown += 1;
       } else {
+        totals.paymentPaidVerified += 1;
         totals.paidDepositValue += depositValue;
         totals.paidDepositValueKnown += 1;
       }
@@ -203,6 +232,7 @@ export function getReportingCapabilityState(state = {}, metrics = {}) {
     || Number(metrics.statusUnknown || 0) > 0
     || Number(metrics.paymentUnknown || 0) > 0
     || Number(metrics.paidDepositValueUnknown || 0) > 0
+    || Number(metrics.paidDepositEvidenceMissing || 0) > 0
   ) {
     return "partial";
   }
@@ -217,7 +247,8 @@ export function ReportingEvidenceRail({ state, metrics, onRetry }) {
   const quoteCount = Number(metrics?.quotes || 0);
   const quoteLimit = Number(state?.limit || REPORTING_QUOTE_LIMIT);
   const incompleteMoney = Number(metrics?.quotedValueUnknown || 0)
-    + Number(metrics?.paidDepositValueUnknown || 0);
+    + Number(metrics?.paidDepositAmountUnknown || 0);
+  const unverifiedPaidStates = Number(metrics?.paidDepositEvidenceMissing || 0);
 
   return (
     <section
@@ -246,8 +277,9 @@ export function ReportingEvidenceRail({ state, metrics, onRetry }) {
           {" "}All commercial measures and denominators below use only the displayed records.
         </p>
         <p>
-          Six-month trends use UTC calendar months. Accepted/booked quote value and
-          webhook-confirmed paid deposits remain distinct from accounting revenue.
+          Six-month trends use UTC calendar months. Accepted/booked quote value remains
+          distinct from the paid-deposit total, which requires a Firebase-backed provider
+          confirmation timestamp. Neither measure is accounting revenue.
         </p>
         {state?.loading && hasCompletedRead && (
           <p className="source-note" role="status">Refreshing while the completed snapshot remains visible.</p>
@@ -259,6 +291,13 @@ export function ReportingEvidenceRail({ state, metrics, onRetry }) {
           <p className="warning-note">
             {incompleteMoney} required money field{incompleteMoney === 1 ? " is" : "s are"} unavailable;
             those records are excluded from the affected money total, not treated as zero.
+          </p>
+        )}
+        {unverifiedPaidStates > 0 && (
+          <p className="warning-note">
+            {unverifiedPaidStates} displayed paid state{unverifiedPaidStates === 1 ? " is" : "s are"}
+            {" "}excluded from the verified deposit total because Firebase-backed provider
+            confirmation evidence is unavailable.
           </p>
         )}
         {state?.analytics?.error && (
@@ -357,8 +396,9 @@ export function ReportingDashboardView({
   }, [load, open]);
 
   const metrics = useMemo(() => buildReportingMetrics(state.quotes, {
-    nowDate: new Date(state.loadedAtISO || initialNowISORef.current)
-  }), [state.loadedAtISO, state.quotes]);
+    nowDate: new Date(state.loadedAtISO || initialNowISORef.current),
+    source: state.source
+  }), [state.loadedAtISO, state.quotes, state.source]);
 
   const addonNames = useMemo(() => new Map(
     (Array.isArray(addons) ? addons : []).map((item) => [
@@ -441,7 +481,7 @@ export function ReportingDashboardView({
           <div className="metric-card">
             <span>Verified Paid-Deposit Total</span>
             <strong>{reportingMoney(metrics.paidDepositValue, metrics.paidDepositValueKnown)}</strong>
-            <small>{metrics.paidDepositValueKnown} of {metrics.paymentPaid} paid-deposit amounts recorded</small>
+            <small>{metrics.paidDepositValueKnown} of {metrics.paymentPaid} displayed paid states have provider confirmation and a recorded amount</small>
           </div>
           <div className="metric-card">
             <span>Decision Close Rate</span>
@@ -454,7 +494,7 @@ export function ReportingDashboardView({
             <small>{metrics.wins} accepted/booked of {metrics.quotes} loaded records</small>
           </div>
         </div>
-        <p className="source-note">Commercial quote and webhook-confirmed deposit states only; these figures are not accounting revenue.</p>
+        <p className="source-note">Commercial quote states only; the paid-deposit total additionally requires Firebase-backed provider confirmation. These figures are not accounting revenue.</p>
 
         <div className="status-strip">
           <span>Draft: {metrics.draft}</span>
@@ -466,8 +506,9 @@ export function ReportingDashboardView({
           <span>Expired: {metrics.expired}</span>
           <span>Payment Unpaid: {metrics.paymentUnpaid}</span>
           <span>Payment Sent: {metrics.paymentSent}</span>
-          <span>Payment Paid: {metrics.paymentPaid}</span>
-          <span>Payment Refunded: {metrics.paymentRefunded}</span>
+          <span>Recorded Payment Paid: {metrics.paymentPaid}</span>
+          <span>Provider-Confirmed Paid: {metrics.paymentPaidVerified}</span>
+          <span>Recorded Payment Refunded: {metrics.paymentRefunded}</span>
           {metrics.statusUnknown > 0 && <span>Lifecycle unavailable: {metrics.statusUnknown}</span>}
           {metrics.paymentUnknown > 0 && <span>Deposit state unavailable: {metrics.paymentUnknown}</span>}
         </div>

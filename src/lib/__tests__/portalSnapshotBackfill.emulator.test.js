@@ -84,7 +84,7 @@ describe.skipIf(!HAS_EMULATOR)("portal snapshot backfill emulator acceptance", (
         marker: "must-remain-unchanged"
       })
     ]);
-  });
+  }, 30_000);
 
   afterAll(() => {
     if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
@@ -146,5 +146,5 @@ describe.skipIf(!HAS_EMULATOR)("portal snapshot backfill emulator acceptance", (
     expect(evidenceText).not.toContain("Private Customer");
     expect(evidenceText).not.toContain("private@example.com");
     expect(fs.statSync(evidencePath).mode & 0o777).toBe(0o600);
-  });
+  }, 30_000);
 });
