@@ -10,6 +10,16 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function toPositiveInteger(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : 0;
+}
+
+function versionNumberFromId(value) {
+  const match = /^v0*(\d+)$/i.exec(cleanText(value));
+  return match ? toPositiveInteger(match[1]) : 0;
+}
+
 function toList(input) {
   return Array.isArray(input) ? input.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
 }
@@ -50,24 +60,46 @@ function buildProductionChecklistByPhase(quote) {
   return groups;
 }
 
-// Derives the revision stamp shown in the header/footer. versionMeta only
-// exists on quotes that have gone through a version save; legacy quotes fall
-// back to latestVersionNumber, then to 0 ("unversioned legacy"). createdOn is
-// a plain string slice (not a Date parse) so this stays new-Date()-free.
-function buildVersionBlock(quote) {
-  const versionMetaNumber = quote.versionMeta?.versionNumber;
-  const hasVersionMetaNumber = versionMetaNumber !== undefined && versionMetaNumber !== null;
-  const latestVersionNumber = toNumber(quote.latestVersionNumber, 0);
-  const number = hasVersionMetaNumber
-    ? toNumber(versionMetaNumber, 0)
-    : (latestVersionNumber > 0 ? latestVersionNumber : 0);
+// Resolves the commercial source independently from mutable booking/production
+// overlays. The active pointer is authoritative. Version metadata may lend a
+// timestamp only when it describes that exact pointer; legacy number-only
+// records deliberately carry no inferred creation timestamp.
+export function resolveBeoCommercialSourceRevision(quote = {}) {
+  const activeVersionId = cleanText(quote.activeVersionId);
+  const versionMetaId = cleanText(quote.versionMeta?.versionId);
+  const versionMetaNumber = toPositiveInteger(quote.versionMeta?.versionNumber);
+  const latestVersionNumber = toPositiveInteger(quote.latestVersionNumber);
 
-  const createdAtISO = cleanText(
-    quote.versionMeta?.createdAt || quote.updatedAtISO || quote.createdAtISO
-  );
+  let id = "legacy-unversioned";
+  let number = 0;
+  let createdAtISO = "";
+
+  if (activeVersionId) {
+    const metadataMatches = versionMetaId === activeVersionId;
+    id = activeVersionId;
+    number = metadataMatches
+      ? (versionMetaNumber || versionNumberFromId(activeVersionId))
+      : versionNumberFromId(activeVersionId);
+    createdAtISO = metadataMatches ? cleanText(quote.versionMeta?.createdAt) : "";
+  } else if (versionMetaId) {
+    id = versionMetaId;
+    number = versionMetaNumber || versionNumberFromId(versionMetaId);
+    createdAtISO = cleanText(quote.versionMeta?.createdAt);
+  } else {
+    number = latestVersionNumber || versionMetaNumber;
+    if (number > 0) {
+      id = `legacy-version-${number}`;
+    }
+  }
+
   const createdOn = createdAtISO.length >= 10 ? createdAtISO.slice(0, 10) : "-";
 
-  return { number, createdAtISO, createdOn };
+  return {
+    id,
+    number,
+    createdAtISO,
+    createdOn
+  };
 }
 
 export function buildBeoPayload(quote) {
@@ -78,7 +110,7 @@ export function buildBeoPayload(quote) {
   return {
     quoteNumber: cleanText(quote.quoteNumber),
     organizationName: cleanText(quote.quoteMeta?.organizationName),
-    version: buildVersionBlock(quote),
+    version: resolveBeoCommercialSourceRevision(quote),
     contacts: {
       clientName: cleanText(quote.customer?.name),
       clientPhone: cleanText(quote.customer?.phone),

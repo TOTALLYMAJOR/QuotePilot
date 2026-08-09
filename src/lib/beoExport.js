@@ -1,4 +1,8 @@
 import { jsPDF } from "jspdf";
+import {
+  BEO_ARTIFACT_PROVENANCE_DISCLAIMER,
+  createBeoArtifactFingerprint
+} from "./beoArtifactFingerprint";
 import { buildBeoPayload } from "./beoPayload";
 
 function text(v) {
@@ -70,7 +74,9 @@ export async function exportKitchenBeo(quote, { output = "save" } = {}) {
     throw new Error("Missing quote data for kitchen BEO export.");
   }
 
+  const generatedAt = new Date();
   const beo = buildBeoPayload(quote);
+  const artifactFingerprint = await createBeoArtifactFingerprint(beo);
   const doc = new jsPDF({
     unit: "pt",
     format: "letter"
@@ -145,7 +151,9 @@ export async function exportKitchenBeo(quote, { output = "save" } = {}) {
       beo.organizationName,
       `Quote #${text(beo.quoteNumber)}`,
       beo.event.name,
-      beo.version.number > 0 ? `Rev ${beo.version.number} (${beo.version.createdOn})` : ""
+      beo.version.number > 0
+        ? `Rev ${beo.version.number}${beo.version.createdOn !== "-" ? ` (${beo.version.createdOn})` : ""}`
+        : ""
     ].filter(Boolean).join(" · ") || "-",
     left,
     y
@@ -155,7 +163,7 @@ export async function exportKitchenBeo(quote, { output = "save" } = {}) {
   y += 14;
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(8);
-  doc.text(`Generated ${formatGeneratedTimestamp(new Date())}`, left, y);
+  doc.text(`Generated ${formatGeneratedTimestamp(generatedAt)}`, left, y);
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
   y += 18;
@@ -242,6 +250,18 @@ export async function exportKitchenBeo(quote, { output = "save" } = {}) {
       row(`${mark} ${item.label}`, detail || "-");
     });
   });
+
+  section("Artifact provenance");
+  row("Artifact type", artifactFingerprint.artifactType);
+  row("Commercial source revision", beo.version.id);
+  if (beo.version.createdAtISO) {
+    row("Source revision created", beo.version.createdAtISO);
+  }
+  row("Graph", `${artifactFingerprint.graphId} · ${artifactFingerprint.graphVersion}`);
+  row("Input schema", artifactFingerprint.fingerprintSchemaVersion);
+  row("Canonical schema", artifactFingerprint.canonicalSchemaVersion);
+  row("Dependency fingerprint", `sha256:${artifactFingerprint.dependencyFingerprint}`);
+  row("Proof boundary", BEO_ARTIFACT_PROVENANCE_DISCLAIMER);
 
   section("Sign-off");
   ensureSpace(50);
