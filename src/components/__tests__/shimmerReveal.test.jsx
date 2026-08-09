@@ -1,6 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import ShimmerReveal, { buildShimmerParticles } from "../ShimmerReveal";
 import { commercialRevealTone } from "../CommercialChangeImpactPanel";
 import { playShimmerChime } from "../shimmerChime";
@@ -68,5 +68,63 @@ describe("commercialRevealTone", () => {
 describe("playShimmerChime", () => {
   test("fails silent (returns false) when Web Audio is unavailable", () => {
     expect(playShimmerChime("positive")).toBe(false);
+  });
+});
+
+describe("playTick", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("schedules the two-grain click-chirp at bounded gain", async () => {
+    const grains = [];
+
+    class AudioContextStub {
+      constructor() {
+        this.currentTime = 4;
+        this.destination = {};
+        this.state = "running";
+      }
+
+      createOscillator() {
+        const grain = {
+          connect: vi.fn(),
+          detune: { setValueAtTime: vi.fn() },
+          frequency: { setValueAtTime: vi.fn() },
+          start: vi.fn(),
+          stop: vi.fn()
+        };
+        grains.push(grain);
+        return grain;
+      }
+
+      createGain() {
+        const gainNode = {
+          connect: vi.fn(),
+          gain: {
+            exponentialRampToValueAtTime: vi.fn(),
+            setValueAtTime: vi.fn()
+          }
+        };
+        grains.at(-1).gainNode = gainNode;
+        return gainNode;
+      }
+    }
+
+    vi.resetModules();
+    vi.stubGlobal("window", { AudioContext: AudioContextStub });
+    const { playTick } = await import("../shimmerChime");
+
+    expect(playTick()).toBe(true);
+    expect(grains).toHaveLength(2);
+    expect(grains.map((grain) => grain.frequency.setValueAtTime.mock.calls[0][0])).toEqual([
+      1318.5,
+      1975.5
+    ]);
+    expect(grains[0].start.mock.calls[0][0]).toBeCloseTo(4.01);
+    expect(grains[1].start.mock.calls[0][0]).toBeCloseTo(4.045);
+    expect(
+      grains.map((grain) => grain.gainNode.gain.exponentialRampToValueAtTime.mock.calls[0][0])
+    ).toEqual([0.034, 0.02]);
   });
 });
