@@ -1,0 +1,87 @@
+{
+  "canonicalValue": {
+    "z": [
+      3,
+      -0,
+      "é",
+      {
+        "β": "two",
+        "a": true
+      }
+    ],
+    "a": {
+      "nested": "🙂",
+      "nil": null
+    }
+  },
+  "canonicalBytes": "{\"a\":{\"nested\":\"🙂\",\"nil\":null},\"z\":[3,0,\"é\",{\"a\":true,\"β\":\"two\"}]}",
+  "sha256": "e0e7ed670a4add24c4a8258262524b1370a49154449282cf3c245572a1c49bdd",
+  "changedNodeIds": [
+    "fact.quote.accepted_revision"
+  ],
+  "expectedImpact": {
+    "graphId": "quotepilot-commercial",
+    "graphVersion": "commercial-dependency-graph-v1",
+    "changedNodeIds": [
+      "fact.quote.accepted_revision"
+    ],
+    "affectedNodes": [
+      {
+        "id": "artifact.contract",
+        "kind": "artifact",
+        "distance": 1,
+        "triggeredBy": [
+          "fact.quote.accepted_revision"
+        ]
+      },
+      {
+        "id": "artifact.kitchen_beo",
+        "kind": "artifact",
+        "distance": 1,
+        "triggeredBy": [
+          "fact.quote.accepted_revision"
+        ]
+      },
+      {
+        "id": "artifact.production_plan",
+        "kind": "artifact",
+        "distance": 1,
+        "triggeredBy": [
+          "fact.quote.accepted_revision"
+        ]
+      },
+      {
+        "id": "output.payment.deposit_requirement",
+        "kind": "output",
+        "distance": 1,
+        "triggeredBy": [
+          "fact.quote.accepted_revision"
+        ]
+      },
+      {
+        "id": "output.plan.production",
+        "kind": "output",
+        "distance": 1,
+        "triggeredBy": [
+          "fact.quote.accepted_revision"
+        ]
+      },
+      {
+        "id": "projection.customer_decision_center",
+        "kind": "projection",
+        "distance": 1,
+        "triggeredBy": [
+          "fact.quote.accepted_revision"
+        ]
+      },
+      {
+        "id": "output.payment.final_balance",
+        "kind": "output",
+        "distance": 2,
+        "triggeredBy": [
+          "fact.quote.accepted_revision"
+        ]
+      }
+    ]
+  }
+}
