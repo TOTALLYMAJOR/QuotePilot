@@ -8,13 +8,51 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- The governed customer-workspace enhancement track now spans `CWF-01`
+  through `CWF-15`,
+  covering visual credibility, evidence/freshness, bounded search and timelines,
+  proposal/workflow/event/reporting intelligence, post-event rebooking, email
+  follow-up and payment dunning, Customer 360 activation, a no-orphan-capability
+  gate, and a high-priority deterministic Commercial Dependency Graph for
+  change blast radius, artifact freshness, and decision debt. The track pairs
+  user-relevant backend contracts with polished, discoverable, role-safe
+  frontend states and keeps provider, payment, booking, pricing, customer-view,
+  and accounting authority distinct. CWF-15 is sequenced as registry/fingerprint,
+  existing-action generation receipts and read-only simulation, then UI-bound
+  authorized invalidation/reconciliation; no dependency-graph runtime capability
+  is claimed by this planning change.
+- A required diff-aware capability-surfacing check in `lane:core`, backed by a
+  versioned capability-surfacing contract manifest. It inventories changed,
+  new, or removed
+  Firebase Functions by exact symbol, resolves PR/push comparisons fail-closed,
+  falls back to `origin/main` when a branch upstream equals `HEAD`, includes
+  deleted authority paths, records shared-helper affected exports, and requires
+  assertion-bearing tests plus canonical per-state component markers for read
+  and mutation profiles. Only the explicitly deferred stale-read state may use
+  a narrow exception; callable exports cannot use any headless classification.
+  Reviewed entry, Feature Matrix, and User Manual locators remain
+  mandatory while structural evidence stays distinct from semantic, visual,
+  hosted, provider, production, and human acceptance.
+- Receipt-safe live mutation states for trusted customer import, quote-scoped
+  conversation send, and approval-bound contract conversion. Each surface now
+  distinguishes ready, submitting, uncertain, same-identity reconciliation,
+  trusted receipt, definitive error, and recovery without inferring outbound
+  delivery, payment settlement, customer confirmation, or operational
+  readiness. Contract conversion also preserves the canonical customer link on
+  both the immutable version and its snapshot, with passing local emulator
+  assertion coverage; coordinated deployment and hosted acceptance remain
+  pending.
 - A temporary-flagged, dependency-free staff route foundation for `/app`,
-  Customers, Quotes, the five-step builder, focused quote/edit records, and
-  Workflow. The browser History API preserves Back/Forward and the mounted
-  in-memory quote draft; `/app/home` canonicalizes to `/app`, unknown staff
-  paths receive an authenticated in-shell 404, and `?portal=<token>` retains
-  precedence with canonical `/app?portal=...` links. Dirty quote drafts receive
-  `beforeunload` protection and are not serialized into route state or storage.
+  Customers, Quotes, the five-step builder, focused quote/edit records,
+  Workflow, Schedule, Reporting, Catalog, Imports, Integrations, and
+  Diagnostics. The six operational tools use recoverably lazy embedded route
+  views with their existing role and feature gates, while contextual and
+  legacy callers retain the guarded modal wrappers. The browser History API
+  preserves Back/Forward and mounted in-memory work; `/app/home` canonicalizes
+  to `/app`, unknown staff paths receive an authenticated in-shell 404, and
+  `?portal=<token>` retains precedence with canonical `/app?portal=...` links.
+  Dirty quote drafts receive `beforeunload` protection and are not serialized
+  into route state or storage.
 - A recoverably lazy Commercial Command Center at `/app` when the temporary
   customer-centered workspace build flag is enabled. One generation-guarded
   quote/attention snapshot feeds Home and the header badge, and exact Workflow
@@ -22,22 +60,31 @@ This changelog is backfilled from git history and will be maintained going forwa
   new read contracts or data sources and no new commercial write authority. A
   shared status-semantics module and `StatusChip` keep quote lifecycle,
   acceptance, booking, deposit, final balance, readiness, and attention labels
-  textually distinct even when they share a visual family.
+  textually distinct even when they share a visual family. Customer names in
+  attention rows open Customer 360 when a stable ID exists, while the row action
+  retains its exact Workflow focus and quote/payment actions retain exact quote
+  focus.
 - A paginated same-tenant customer directory and Internal Customer 360 with
   Overview, Quotes & Proposals, Events, Money, and Conversations sections.
   Customer 360 derives bounded summaries from customer-scoped canonical quote
   reads, exposes quote/workflow/Schedule/BEO entry points, keeps payment states
   distinct from accounting revenue, and aggregates conversation links without
-  merging quote-scoped message histories. Its staff proposal preview adapts
+  merging quote-scoped message histories. It shows the bounded most-recent
+  immutable proposal versions per quote, reports version truncation explicitly,
+  and uses server-owned per-quote conversation counts/latest-actor summaries
+  when available. Its keyboard-recoverable staff proposal preview adapts
   canonical data without calling the public portal loader or creating customer
   `viewed` evidence.
 - Stable server-owned `customerId` bindings on trusted canonical quote writes
-  and immutable versions, normalized customer search keys, collision-safe edit
-  behavior that retains the existing identity, and a dry-run-first legacy
-  binding tool whose apply mode is restricted to loopback Firestore emulators
-  and `demo-*` projects. No customer ID is added to the public portal
-  projection, no persisted `commercialSummary` cache is introduced, and no
-  production backfill is authorized.
+  and immutable versions, generated opaque IDs for new quote-projected
+  customers, private server-only normalized-email ownership claims, normalized
+  customer search keys, collision-safe edit behavior that retains the existing
+  identity, and a dry-run-first legacy binding tool whose apply mode is
+  restricted to loopback Firestore emulators and `demo-*` projects. Customer
+  directory list reads require same-tenant staff and an explicit bounded query.
+  No customer ID or email-claim record is added to the public portal projection,
+  no persisted `commercialSummary` cache is introduced, and no production
+  backfill is authorized.
 - Customer CSV create and rollback now use admin-only trusted callables instead
   of direct browser writes. New imports receive opaque stable IDs and
   server-owned normalized directory keys, while receipts preserve exact-input
@@ -50,6 +97,13 @@ This changelog is backfilled from git history and will be maintained going forwa
   staff shells only: tenant identity remains in the workspace header chip,
   and the customer portal, proposal artifacts, and marketing surfaces keep
   their tenant-branded hospitality treatment unchanged.
+- Pre-host staff-shell polish keeps the full desktop action row contained at
+  the covered 1440px, 1366px, 1280px, and 1024px widths without changing the
+  mobile More menu. Embedded Schedule, Reporting, Catalog, Imports,
+  Integrations, and Diagnostics routes now say **Back to Home**, while their
+  true modal wrappers retain **Close**. Accepted calendar facts are labeled
+  accepted rather than hold, and programmatically focused routed-workspace
+  headings receive a scoped visible outline.
 - Independent recovery boundaries for every lazy public route and workspace
   tool. A failed chunk now preserves the surrounding app and exposes executing
   retry, reload, and close/back actions with sanitized diagnostics. The seven
@@ -134,6 +188,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Browser navigation smoke coverage now recognizes the Workflow button's live
   accessible-status suffix, preventing a release check race after attention
   data loads.
+- Quote History and Schedule now present quote/proposal lifecycle, booking
+  confirmation, deposit, final balance, and delivery readiness as separately
+  labeled facts. Reporting labels accepted/booked quote value separately from
+  verified paid-deposit totals and explicitly avoids describing either as
+  accounting revenue.
 - Firebase backend/all artifact preparation now includes the reviewed
   versioned starter-pack manifest required by staged organizations while
   rejecting every other unapproved nested Functions data file.

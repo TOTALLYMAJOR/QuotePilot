@@ -1,0 +1,700 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": 1,
+  "contracts": [
+    {
+      "id": "customer-directory-and-360",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Bounded same-tenant customer directory and Customer 360 reads are exposed through opaque customer routes and proof-safe staff presentation.",
+      "backendPaths": [
+        "firestore.indexes.json",
+        "firestore.rules",
+        "src/lib/customerWorkspace.js",
+        "src/lib/quoteStore.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/CustomerDirectoryView.jsx",
+        "src/components/CustomerWorkspaceView.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CustomerDirectoryView.jsx",
+          "locator": "id=\"customer-directory-title\">Customer directory"
+        },
+        {
+          "path": "src/components/CustomerWorkspaceView.jsx",
+          "locator": "Internal Customer 360"
+        }
+      ],
+      "testPaths": [
+        "e2e/customer-centered-workspace.spec.js",
+        "src/components/__tests__/customerWorkspaceStates.test.jsx",
+        "src/lib/__tests__/customerWorkspace.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "e2e/customer-centered-workspace.spec.js",
+          "locator": "Customer 360 keeps customer identity opaque and staff preview separate from portal evidence"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "customer directory lists require same-org staff and an explicit safe limit"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Stable same-tenant customer identity and Internal Customer 360:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Customer Directory and Customer 360"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The directory and Customer 360 routes, bounded partial state, safe proposal preview, responsive behavior, and recovery controls were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
+          "locator": "renders the customer directory loading state before results resolve",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
+          "locator": "renders the customer directory empty state after a completed read",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
+          "locator": "renders the customer directory success state with customer actions",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
+          "locator": "renders the Customer 360 partial state with its bounded-read limit",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
+          "locator": "renders the customer directory error state without claiming empty results",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
+          "locator": "executes the customer directory recovery control after an error",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {
+        "stale": {
+          "reasonCode": "separate_program",
+          "justification": "These reads do not yet expose a cache-age authority contract; the CWF-03 trust and freshness rail remains an explicit follow-on program."
+        }
+      },
+      "safeOutcome": "Staff can discover bounded customer context and exact next actions without exposing portal tokens, private claims, message bodies, or customer-view evidence."
+    },
+    {
+      "id": "trusted-customer-import",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "admin"
+      ],
+      "summary": "Customer CSV import and rollback use tenant-bound server callables, stable batch identity, reversible receipts, and explicit uncertain-outcome reconciliation.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "src/lib/importBatchService.js"
+      ],
+      "backendExports": [
+        "functions/index.js#createCustomerImportBatch",
+        "functions/index.js#rollbackCustomerImportBatch"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/ImportStudioModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/ImportStudioModal.jsx",
+          "locator": "Bring your business with you"
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/importStudioPresentation.test.jsx",
+        "src/lib/__tests__/customerImport.emulator.test.js",
+        "src/lib/__tests__/importBatchService.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/importStudioPresentation.test.jsx",
+          "locator": "renders uncertain customer imports and same-batch reconciliation without assuming success"
+        },
+        {
+          "path": "src/lib/__tests__/customerImport.emulator.test.js",
+          "locator": "server owns customer ids, normalized search fields, duplicate decisions, and receipts"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "customer projections and imported customer identity are server-owned"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Tenant Import Studio (customer/catalog CSV recognition, validation, receipts, rollback)"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Import Studio"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Import Studio now presents initial submission, stable-batch uncertainty, reconciliation, server receipt, definitive error, and retry states without assuming writes or outbound delivery.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/importStudioPresentation.test.jsx",
+          "locator": "renders trusted customer import idle, ready, and submitting states from the live presentation seam",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/importStudioPresentation.test.jsx",
+          "locator": "renders trusted customer import idle, ready, and submitting states from the live presentation seam",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/importStudioPresentation.test.jsx",
+          "locator": "renders uncertain customer imports and same-batch reconciliation without assuming success",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/importStudioPresentation.test.jsx",
+          "locator": "renders uncertain customer imports and same-batch reconciliation without assuming success",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/importStudioPresentation.test.jsx",
+          "locator": "renders server receipts and explicit retry recovery without outbound-message claims",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/importStudioPresentation.test.jsx",
+          "locator": "renders server receipts and explicit retry recovery without outbound-message claims",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/importStudioPresentation.test.jsx",
+          "locator": "renders server receipts and explicit retry recovery without outbound-message claims",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Admins can reconcile the same import batch, see a server-owned receipt, and undo eligible records without treating browser state as proof of a completed mutation."
+    },
+    {
+      "id": "quote-conversation-receipts",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff",
+        "portal_customer"
+      ],
+      "summary": "Quote-scoped conversation sends retain idempotent request identity, update a bounded server summary, and expose receipt-safe retry and reconciliation states.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "src/lib/customerWorkspace.js"
+      ],
+      "backendExports": [
+        "functions/index.js#sendQuotePortalConversationMessage"
+      ],
+      "frontendPaths": [
+        "src/components/CustomerWorkspaceView.jsx",
+        "src/components/QuoteConversationPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/QuoteConversationPanel.jsx",
+          "locator": "Open conversation"
+        }
+      ],
+      "testPaths": [
+        "e2e/firebase-auth-rules.smoke.spec.js",
+        "src/components/__tests__/quoteConversationPanel.test.jsx",
+        "src/lib/__tests__/customerWorkspace.test.js",
+        "src/lib/__tests__/portalConversation.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "e2e/firebase-auth-rules.smoke.spec.js",
+          "locator": "staff and the exact customer portal share one quote-scoped conversation"
+        },
+        {
+          "path": "src/lib/__tests__/portalConversation.server.test.js",
+          "locator": "callables revalidate activation, transact messages, and never trust client actor/time/message ids"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Customer decision center (tenant theme presets + snapshotted portal branding"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Customer Portal"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The live conversation component distinguishes submission, locked uncertain receipt, same-request reconciliation, recorded receipt, definitive error, and post-error message revision without claiming external delivery.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/quoteConversationPanel.test.jsx",
+          "locator": "renders conversation ready, submitting, and uncertain states through the live presentation seam",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/quoteConversationPanel.test.jsx",
+          "locator": "renders conversation ready, submitting, and uncertain states through the live presentation seam",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/quoteConversationPanel.test.jsx",
+          "locator": "renders conversation ready, submitting, and uncertain states through the live presentation seam",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/quoteConversationPanel.test.jsx",
+          "locator": "renders conversation reconciliation, receipt, error, and recovery without delivery claims",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/quoteConversationPanel.test.jsx",
+          "locator": "renders conversation reconciliation, receipt, error, and recovery without delivery claims",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/quoteConversationPanel.test.jsx",
+          "locator": "renders conversation reconciliation, receipt, error, and recovery without delivery claims",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/quoteConversationPanel.test.jsx",
+          "locator": "renders conversation reconciliation, receipt, error, and recovery without delivery claims",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff and the exact token holder can reconcile one quote-scoped message request and see its canonical conversation receipt without a customer-wide thread or delivery claim."
+    },
+    {
+      "id": "customer-linked-booking-conversion",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "admin"
+      ],
+      "summary": "Approval-gated contract conversion preserves its request identity through uncertain reconciliation, exposes a trusted receipt, and retains customer identity on the immutable source version.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/quoteCreation.js",
+        "scripts/provisioning-emulator-acceptance.mjs",
+        "src/lib/quoteStore.js"
+      ],
+      "backendExports": [
+        "functions/index.js#convertQuoteToContract"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#convertQuoteToContract"
+      ],
+      "frontendPaths": [
+        "src/components/CustomerWorkspaceView.jsx",
+        "src/components/EventScheduleModal.jsx",
+        "src/components/QuoteHistoryModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/QuoteHistoryModal.jsx",
+          "locator": "data-approval-action=\"convert_to_contract\""
+        }
+      ],
+      "testPaths": [
+        "e2e/quote-wizard.smoke.spec.js",
+        "src/components/__tests__/quoteHistoryContractConversion.test.jsx",
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/lib/__tests__/quoteStore.writeSafety.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "e2e/quote-wizard.smoke.spec.js",
+          "locator": "accepted quote can be converted and confirmation lifecycle is trackable"
+        },
+        {
+          "path": "src/lib/__tests__/quoteCreation.server.test.js",
+          "locator": "contract conversion preserves customer identity on the immutable source version"
+        },
+        {
+          "path": "src/components/__tests__/quoteHistoryContractConversion.test.jsx",
+          "locator": "renders contract conversion ready, submitting, uncertain, reconciliation, receipt, error, and recovery states"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Booking lifecycle (availability checks, approval-bound contract conversion with receipt-safe uncertainty/reconciliation/recovery states"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Quote History Operations"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Quote History now exposes live approval-ready, submission, uncertainty, same-request reconciliation, trusted receipt, definitive error, and canonical-history recovery states without inferring payment or confirmation.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/quoteHistoryContractConversion.test.jsx",
+          "locator": "renders contract conversion ready, submitting, uncertain, reconciliation, receipt, error, and recovery states",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/quoteHistoryContractConversion.test.jsx",
+          "locator": "renders contract conversion ready, submitting, uncertain, reconciliation, receipt, error, and recovery states",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/quoteHistoryContractConversion.test.jsx",
+          "locator": "renders contract conversion ready, submitting, uncertain, reconciliation, receipt, error, and recovery states",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/quoteHistoryContractConversion.test.jsx",
+          "locator": "renders contract conversion ready, submitting, uncertain, reconciliation, receipt, error, and recovery states",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/quoteHistoryContractConversion.test.jsx",
+          "locator": "renders contract conversion ready, submitting, uncertain, reconciliation, receipt, error, and recovery states",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/quoteHistoryContractConversion.test.jsx",
+          "locator": "renders contract conversion ready, submitting, uncertain, reconciliation, receipt, error, and recovery states",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/quoteHistoryContractConversion.test.jsx",
+          "locator": "renders contract conversion ready, submitting, uncertain, reconciliation, receipt, error, and recovery states",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Admins can reconcile the same approved conversion request, inspect the trusted contract/status receipt, and recover from canonical history without manufacturing payment, confirmation, or readiness evidence."
+    },
+    {
+      "id": "stable-customer-identity-projection",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "headless_operational",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Trusted quote create, duplicate, edit, and version writes bind one stable same-tenant customer identity without browser-selected reassignment.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/quoteCreation.js",
+        "src/lib/quoteStore.js"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [
+        "functions/index.js#createQuoteDraft",
+        "functions/index.js#convertQuoteToContract",
+        "functions/index.js#duplicateQuoteDraft",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#reopenQuote",
+        "functions/index.js#rotateQuotePortalKey"
+      ],
+      "frontendPaths": [
+        "src/components/CustomerWorkspaceView.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CustomerWorkspaceView.jsx",
+          "locator": "Internal Customer 360"
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/customerWorkspace.test.js",
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/quoteCreation.server.test.js",
+          "locator": "builds a stable, tenant-scoped customer projection from trusted quote data"
+        },
+        {
+          "path": "src/lib/__tests__/quoteCreation.server.test.js",
+          "locator": "retains an explicitly bound customer during a contact edit"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "version identity must match the canonical quote customer"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Stable same-tenant customer identity and Internal Customer 360:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Customer Directory and Customer 360"
+        }
+      ],
+      "headlessReason": "Stable identity is assigned and retained inside trusted quote transactions; exposing a customer-id selector would permit silent reassignment and weaken tenant authority.",
+      "safeOutcome": "Staff see the resulting customer relationship and collision-safe guidance in Customer 360 while generated IDs and ownership claims remain server controlled."
+    },
+    {
+      "id": "private-customer-authority",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "security_private",
+      "audiences": [
+        "internal_security"
+      ],
+      "summary": "Canonical quote authority and normalized-email ownership claims remain private while exact-token portal projection reads continue independently.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/quoteCreation.js"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [
+        "functions/index.js#createQuoteDraft",
+        "functions/index.js#convertQuoteToContract",
+        "functions/index.js#duplicateQuoteDraft",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#reopenQuote",
+        "functions/index.js#rotateQuotePortalKey"
+      ],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "canonical quotes are staff-readable only while exact-token portal reads continue"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "browser principals cannot create customer role documents"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "customer email claim documents are inaccessible to every browser principal"
+        },
+        {
+          "path": "src/lib/__tests__/quoteCreation.server.test.js",
+          "locator": "builds normalized server-owned email claims and rejects identity reassignment"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Stable same-tenant customer identity and Internal Customer 360:"
+        }
+      ],
+      "headlessReason": "Private ownership claims and canonical staff-only records are security primitives whose browser exposure would reveal identity or weaken exact-token projection boundaries.",
+      "safeOutcome": "Staff receive collision-safe customer behavior and customers retain exact-token decision-center access without browser access to canonical records or private claims."
+    },
+    {
+      "id": "legacy-customer-id-backfill",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "operator"
+      ],
+      "summary": "Legacy quote customer identity normalization is a dry-run-first operator tool with conflict reporting and emulator-only apply authority.",
+      "backendPaths": [
+        "scripts/backfill-customer-ids.mjs",
+        "scripts/customer-id-backfill-plan.mjs"
+      ],
+      "backendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/customerIdBackfill.emulator.test.js",
+        "src/lib/__tests__/customerIdBackfill.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/customerIdBackfill.test.js",
+          "locator": "defaults to dry-run and requires explicit scope"
+        },
+        {
+          "path": "src/lib/__tests__/customerIdBackfill.test.js",
+          "locator": "reports duplicate and missing matches without planning writes"
+        },
+        {
+          "path": "src/lib/__tests__/customerIdBackfill.emulator.test.js",
+          "locator": "dry-run is read-only and emulator apply binds only the unique match"
+        }
+      ],
+      "documentationPaths": [
+        "README.md",
+        "docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md",
+        "docs/FEATURE_MATRIX.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "README.md",
+          "locator": "## Customer Identity Backfill"
+        },
+        {
+          "path": "docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md",
+          "locator": "## Slice D: legacy backfill source"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Stable same-tenant customer identity and Internal Customer 360:"
+        }
+      ],
+      "headlessReason": "The backfill is an explicitly invoked migration utility rather than an end-user feature, and production apply requires a separate authorization and release record.",
+      "safeOutcome": "Operators receive a conflict report or an emulator receipt without creating delivery, viewed, acceptance, booking, payment, or production-migration evidence."
+    },
+    {
+      "id": "canonical-portal-route-generation",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "headless_operational",
+      "audiences": [
+        "staff",
+        "portal_customer"
+      ],
+      "summary": "Generated proposal and staff-copy portal links use the canonical app route while preserving exact-token eligibility and expiry evidence.",
+      "backendPaths": [
+        "src/lib/proposalExport.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/CustomerPortalView.jsx",
+        "src/components/QuoteHistoryModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/QuoteHistoryModal.jsx",
+          "locator": "Copy customer portal link"
+        }
+      ],
+      "testPaths": [
+        "e2e/quote-wizard.smoke.spec.js",
+        "src/lib/__tests__/proposalExport.test.js",
+        "src/lib/__tests__/workspaceRoutes.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/proposalExport.test.js",
+          "locator": "requires an explicit current-delivery decision before including a sent portal"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceRoutes.test.js",
+          "locator": "generates canonical encoded portal links"
+        },
+        {
+          "path": "e2e/quote-wizard.smoke.spec.js",
+          "locator": "valid and expired portal links use tenant branding without exposing token entry"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Quote management UI (list, sort, filters, exact draft-save handoff"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Quote History Operations"
+        }
+      ],
+      "headlessReason": "Canonical link construction is a presentation utility inside existing guarded share/export actions, not a new customer-authentication or portal-write authority.",
+      "safeOutcome": "Eligible staff-generated links open the exact token decision center at /app while ineligible drafts and stale delivery evidence continue to omit the link."
+    }
+  ]
+}

@@ -21,7 +21,16 @@
 ## Validation
 - [ ] `npm run check:env`
 - [ ] `npm run build`
+- [ ] `npm run check:capability-surfaces` (required for backend/data authority changes)
 - [ ] Manual behavior check completed (if needed)
+
+## Capability Surfacing Contract
+- Backend/data authority changed? yes / no
+- Capability contract id(s):
+- Audience and discoverable route/control/Attention entry:
+- Directly changed export owner(s) and shared-helper affected export(s):
+- UI state profile, canonical `data-capability-state` marker, and exact assertion-bearing test locator for each state/exception:
+- If headless: classification, safe outcome, and non-exposure/reconciliation test:
 
 ## Risk Review
 - Risk level: low / medium / high

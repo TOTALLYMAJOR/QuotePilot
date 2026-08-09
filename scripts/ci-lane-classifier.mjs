@@ -19,6 +19,8 @@ const HIGH_RISK_EXACT = new Set([
   "scripts/migrate-to-multi-tenant.mjs",
   "scripts/ci-lane-classifier.mjs",
   "scripts/orchestration-lanes.sh",
+  "scripts/check-capability-surfacing.mjs",
+  "docs/capability-surfacing-contracts.json",
   "scripts/deploy-firebase-production.mjs",
   "scripts/deploy-hosting-customer.mjs",
   "scripts/deploy-vercel-production.mjs",

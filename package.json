@@ -37,6 +37,7 @@
     "test:catalog-import:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-catalog-import emulators:exec --only auth,firestore,functions \"node scripts/catalog-import-emulator.mjs\"",
     "check:secrets": "node ./scripts/check-secret-assets.mjs",
     "check:docs:governance": "node ./scripts/check-doc-governance.mjs",
+    "check:capability-surfaces": "node ./scripts/check-capability-surfacing.mjs",
     "check:perf:bundle": "node ./scripts/check-bundle-budget.mjs",
     "check:perf:cwv": "bash ./scripts/run-lighthouse-cwv.sh",
     "release:uat:digest": "node ./scripts/release-uat-attestation.mjs --print-digest",
