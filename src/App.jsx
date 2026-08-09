@@ -3561,6 +3561,7 @@ export default function App({ tenantContext, authSession }) {
               });
               navigateWorkspace(buildQuotePath(quoteId));
             }}
+            onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             organizationId={authSession.organizationId}
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}

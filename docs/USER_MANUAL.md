@@ -167,6 +167,21 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   delivery attempt. Creating or reviewing the draft sends no message and does
   not accept, book, or collect payment. If the outcome is uncertain, reconcile
   the same request; do not create another rebook.
+- A successfully governed booking also creates one internal `Closeout review
+  record` for seven calendar days after the event. If it says `Configuration
+  blocked`, an admin must set `Pricing` -> `Quote Meta` -> `Business time zone`;
+  the booking itself remains valid. Return to the record and select `Check
+  configuration`; this creates a configuration receipt but reviews no closeout
+  item. A `Closeout source review needed` booking also remains valid, but its
+  legacy accepted source must be reviewed before authoritative closeout actions
+  are available. When the closeout is due, review Internal
+  closeout, Thank-you opportunity, Review request opportunity, and Operational
+  follow-up individually. `Mark reviewed` and `Reopen review` require an exact
+  server receipt. If the result is uncertain, use `Reconcile exact action`; if
+  the server definitively rejects it, reset the rejected action before starting
+  a revised request. These controls record internal staff review only. They do
+  not send email, prove provider delivery or opening, record a customer reply,
+  or establish a lead, booking, payment, or revenue result.
 - `Commercial measures` on `Overview` reports quoted, exact-state accepted and
   booked amounts, source-bounded deposit and final-balance measures, and a
   recorded repeat-event signal. Deposit or final-balance value is labeled

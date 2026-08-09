@@ -217,6 +217,7 @@ export function SalesWorkflowView({
   onClose,
   presentation = "embedded",
   onOpenQuoteHistory,
+  onOpenCustomer,
   onEditQuote,
   onAttentionSummaryChange,
   focusQuoteId = "",
@@ -310,7 +311,8 @@ export function SalesWorkflowView({
       });
       if (selectDefaultTab && !tabInteractedRef.current) {
         setActiveTab(buildWorkflowAttentionSummary(result.quotes, {
-          todayISO: snapshotContext.snapshotTodayISO
+          todayISO: snapshotContext.snapshotTodayISO,
+          nowISO: snapshotContext.snapshotAtISO
         }).quoteCount > 0 ? "attention" : "followups");
       }
     } catch (err) {
@@ -439,7 +441,8 @@ export function SalesWorkflowView({
 
   const attentionSummary = useMemo(
     () => buildWorkflowAttentionSummary(state.quotes, {
-      todayISO: state.snapshotTodayISO || undefined
+      todayISO: state.snapshotTodayISO || undefined,
+      nowISO: state.snapshotAtISO || undefined
     }),
     [state.quotes, state.snapshotTodayISO]
   );
@@ -543,10 +546,16 @@ export function SalesWorkflowView({
     return {
       active: state.quotes.filter((quote) => ["draft", "sent", "viewed", "accepted"].includes(quote.status)).length,
       needsReadiness: quoteSummaries.filter((item) => item.readiness.score < 100).length,
-      due: attentionSummary.counts.followUps,
+      due: attentionSummary.counts.followUps + attentionSummary.counts.postEventCloseouts,
       pendingApprovals: approvalQueue.filter((item) => item.request.state === "pending").length
     };
-  }, [state.quotes, quoteSummaries, approvalQueue, attentionSummary.counts.followUps]);
+  }, [
+    state.quotes,
+    quoteSummaries,
+    approvalQueue,
+    attentionSummary.counts.followUps,
+    attentionSummary.counts.postEventCloseouts
+  ]);
 
   const readiness = selectedQuote ? buildProposalReadiness(selectedQuote) : null;
   const timeline = selectedQuote ? buildQuoteLifecycleTimeline(selectedQuote) : [];
@@ -774,6 +783,16 @@ export function SalesWorkflowView({
     });
   };
 
+  const handleOpenCloseoutWorkspace = (quote) => {
+    const customerId = String(quote?.customerId || "").trim();
+    if (customerId && typeof onOpenCustomer === "function") {
+      skipReturnFocusRef.current = true;
+      onOpenCustomer(customerId);
+      return;
+    }
+    handleOpenQuoteHistory(quote, null);
+  };
+
   const focusAttentionItem = (candidateIds = []) => {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
@@ -916,7 +935,7 @@ export function SalesWorkflowView({
         <div className="workflow-metrics" aria-label="Sales workflow summary">
           <div><span>Active opportunities</span><strong>{metrics.active}</strong></div>
           <div><span>Readiness gaps</span><strong>{metrics.needsReadiness}</strong></div>
-          <div><span>Follow-ups due</span><strong>{metrics.due}</strong></div>
+          <div><span>Due work</span><strong>{metrics.due}</strong></div>
           <div><span>Pending approvals</span><strong>{metrics.pendingApprovals}</strong></div>
         </div>
 
@@ -1007,7 +1026,7 @@ export function SalesWorkflowView({
               && state.snapshotAtISO && (
               <div className="workflow-attention-empty">
                 <h3 ref={attentionEmptyHeadingRef} tabIndex={-1}>No workflow attention needed</h3>
-                <p>Due follow-ups, customer change requests, and pending approvals will appear here.</p>
+                <p>Due follow-ups, post-event closeouts, customer change requests, and pending approvals will appear here.</p>
               </div>
             )}
             <ol className="workflow-attention-list" aria-label="Quotes needing workflow attention">
@@ -1043,12 +1062,20 @@ export function SalesWorkflowView({
                                 ? item.state === "overdue"
                                   ? `Overdue follow-up${item.daysOverdue ? ` · ${item.daysOverdue}d` : ""}`
                                   : "Follow-up due today"
+                                : item.type === "post_event_closeout"
+                                  ? item.state === "blocked_source"
+                                    ? "Post-event closeout source review needed"
+                                    : item.state === "blocked_configuration"
+                                    ? "Post-event closeout configuration blocked"
+                                    : item.state === "overdue"
+                                      ? `Post-event closeout overdue${item.daysOverdue ? ` · ${item.daysOverdue}d` : ""}`
+                                      : "Post-event closeout due today"
                                 : `${item.pendingRequests.length} pending approval${item.pendingRequests.length === 1 ? "" : "s"}`}
                           </span>
                           <h3 id={`${itemDomId}-quote`}>{quoteLabel}</h3>
                           <p>{customerLabel}</p>
                         </div>
-                        <time dateTime={item.dateISO}>{item.type === "follow_up" ? fmtDueDate(item.dateISO) : fmtDateTime(item.dateISO)}</time>
+                        <time dateTime={item.dateISO}>{["follow_up", "post_event_closeout"].includes(item.type) ? fmtDueDate(item.dateISO) : fmtDateTime(item.dateISO)}</time>
                       </div>
 
                       {item.type === "change_request" && (
@@ -1143,6 +1170,28 @@ export function SalesWorkflowView({
                             Review approvals
                           </button>
                         </div>
+                      )}
+
+                      {item.type === "post_event_closeout" && (
+                        <>
+                          <p className={["blocked_configuration", "blocked_source"].includes(item.state) ? "warning-note" : "source-note"}>
+                            {item.state === "blocked_source"
+                              ? "This legacy booking is preserved, but its exact accepted proposal source could not establish an authoritative closeout. Review the quote record before follow-up."
+                              : item.state === "blocked_configuration"
+                              ? "Set a valid business time zone in Catalog Administration, then open Customer 360 to review closeout items."
+                              : "This internal closeout record is due in Customer 360. Reviewing it does not send a thank-you or review request."}
+                          </p>
+                          <div className="workflow-attention-actions">
+                            <button
+                              type="button"
+                              className="ghost compact"
+                              onClick={() => handleOpenCloseoutWorkspace(quote)}
+                              aria-label={`${quote.customerId && onOpenCustomer ? "Open Customer 360" : "Open quote"} for post-event closeout — ${quoteLabel}`}
+                            >
+                              {quote.customerId && onOpenCustomer ? "Open Customer 360" : "Open quote"}
+                            </button>
+                          </div>
+                        </>
                       )}
                     </article>
                   </li>

@@ -234,13 +234,18 @@ Detailed contracts and invariants:
   draft for the same stable customer, and requires staff to save a new
   current-or-future event date before delivery. Disposable local emulator
   acceptance for idempotency, collision, reconciliation, catalog repricing, and
-  recovery is complete; it is not hosted evidence. The remaining release task is
-  to promote the callable with its frontend on an exact candidate and verify
-  hosted staff review. Then add the
-  still-missing scheduled closeout records and outbound thank-you/review asks
-  behind consent, suppression, idempotency, tenant timezone, and provider
-  evidence. Never present a cue or draft as a lead, booking, delivery, or
-  revenue fact.
+  recovery is complete; it is not hosted evidence. Governed booking now also
+  creates a deterministic exact-version closeout record for verified canonical
+  acceptance sources, with a seven-day tenant-calendar due date, safe missing-
+  time-zone block plus explicit configuration recovery, private receipts, and
+  Customer 360 plus Workflow review/reopen states. The remaining release task is
+  to promote both callables with their frontend and rules on an exact candidate
+  and verify hosted staff review. Outbound thank-you/review asks remain a
+  separate Revenue Autopilot delivery step behind consent, unsubscribe,
+  suppression, idempotency, quiet hours, tenant time zone, and distinct provider
+  evidence. Legacy bookings remain bookable with a visible source-review block
+  instead of invented authority. Never present a cue, internal review, or draft as customer contact,
+  a lead, booking, delivery, or revenue fact.
 - **CWF-12:** Treat the source-complete, read-only Revenue Autopilot eligibility
   preview as the safety specification for the later scheduler. It evaluates one
   quote from the bounded Workflow read against exact portal decisions,

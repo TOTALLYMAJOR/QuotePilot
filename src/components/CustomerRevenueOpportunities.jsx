@@ -5,6 +5,7 @@ import {
   formatWorkspaceText
 } from "../lib/workspacePresentation";
 import CustomerRebookDraftAction from "./CustomerRebookDraftAction";
+import PostEventCloseoutReviewAction from "./PostEventCloseoutReviewAction";
 
 const SOURCE_LABELS = Object.freeze({
   firebase: "Firestore customer workspace",
@@ -88,7 +89,8 @@ export function resolveCustomerRevenueCalendarContext({
     return {
       date: calendarDateAt(instant, timeZone),
       source: "tenant",
-      timeZone
+      timeZone,
+      instantISO: instant.toISOString()
     };
   }
 
@@ -99,7 +101,8 @@ export function resolveCustomerRevenueCalendarContext({
   return {
     date: calendarDateAt(instant, timeZone),
     source: "device",
-    timeZone
+    timeZone,
+    instantISO: instant.toISOString()
   };
 }
 
@@ -192,7 +195,9 @@ function OpportunityCard({
   onOpenQuote,
   onOpenQuoteEdit,
   onCreateRebook,
-  rebookCreationAvailable
+  rebookCreationAvailable,
+  closeoutReviewAvailable,
+  onCloseoutReceipt
 }) {
   const actionQuoteId = opportunity.reviewedAction?.sourceQuoteId || opportunity.quoteId;
   const reviewedAction = opportunity.reviewedAction || {};
@@ -225,6 +230,11 @@ function OpportunityCard({
                 <li key={item.code}>{item.label}</li>
               ))}
             </ul>
+            <PostEventCloseoutReviewAction
+              opportunity={opportunity}
+              available={closeoutReviewAvailable}
+              onReceipt={onCloseoutReceipt}
+            />
           </>
         )}
         {opportunity.type === "anniversary_rebooking" && (
@@ -287,7 +297,9 @@ export function CustomerRevenueOpportunitiesPresentation({
   onOpenQuote,
   onOpenQuoteEdit,
   onCreateRebook,
-  rebookCreationAvailable = true
+  rebookCreationAvailable = true,
+  closeoutReviewAvailable = true,
+  onCloseoutReceipt
 }) {
   const state = error && !radar
     ? "error"
@@ -366,6 +378,8 @@ export function CustomerRevenueOpportunitiesPresentation({
                   onOpenQuoteEdit={onOpenQuoteEdit}
                   onCreateRebook={onCreateRebook}
                   rebookCreationAvailable={rebookCreationAvailable}
+                  closeoutReviewAvailable={closeoutReviewAvailable}
+                  onCloseoutReceipt={onCloseoutReceipt}
                 />
               ))}
             </div>

@@ -551,6 +551,8 @@ export default function CustomerWorkspaceView({
             onOpenQuoteEdit={onOpenQuoteEdit}
             onCreateRebook={onCreateRebook}
             rebookCreationAvailable={workspace.source === "firebase"}
+            closeoutReviewAvailable={workspace.source === "firebase"}
+            onCloseoutReceipt={() => setRefreshToken((value) => value + 1)}
           />
           <CustomerCommercialMeasures
             workspace={workspace}

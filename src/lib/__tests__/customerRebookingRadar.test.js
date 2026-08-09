@@ -510,7 +510,7 @@ describe("Customer 360 rebooking radar", () => {
     expect(radar.status).toBe("partial");
   });
 
-  test("uses explicit tenant or device calendar-date context without instant conversion", () => {
+  test("retains the exact evaluation instant alongside tenant or device calendar context", () => {
     const quote = makeQuote({ id: "calendar-context", date: "2025-08-14" });
     const workspace = makeWorkspace({ quotes: [quote] });
 
@@ -532,12 +532,14 @@ describe("Customer 360 rebooking radar", () => {
       date: "2026-08-12",
       source: "tenant",
       timeZone: "America/Chicago",
+      instantISO: "2026-08-12T12:00:00.000Z",
       label: "Tenant-local calendar date"
     });
     expect(device.calendarContext).toEqual({
       date: "2026-08-12",
       source: "device",
       timeZone: "Pacific/Honolulu",
+      instantISO: "2026-08-12T12:00:00.000Z",
       label: "Device-local calendar date"
     });
     expect(Object.isFrozen(tenant)).toBe(true);

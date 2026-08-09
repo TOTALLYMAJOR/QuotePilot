@@ -42,6 +42,16 @@ export function attentionRowCopy(item) {
       : "Due today";
     return { detail: overdueLabel, meta, customerName, quoteLabel };
   }
+  if (item.type === "post_event_closeout") {
+    const detail = item.state === "blocked_source"
+      ? "This booked legacy record needs accepted-source review before authoritative closeout actions are available."
+      : item.state === "blocked_configuration"
+      ? "Set a valid business time zone before internal closeout review can be recorded."
+      : item.daysOverdue > 0
+        ? `${item.daysOverdue} day${item.daysOverdue === 1 ? "" : "s"} overdue`
+        : "Due today";
+    return { detail, meta, customerName, quoteLabel };
+  }
   const count = Array.isArray(item.pendingRequests) ? item.pendingRequests.length : 0;
   return { detail: `${count} pending approval${count === 1 ? "" : "s"}`, meta, customerName, quoteLabel };
 }
@@ -220,7 +230,7 @@ export default function CommandCenterHome({
           )}
           {!state.loading && !hasAnyAttention && !state.error && (
             <p className="source-note">
-              Nothing needs you right now. New change requests, overdue follow-ups, and pending approvals will appear here.
+              Nothing needs you right now. New change requests, overdue follow-ups, post-event closeouts, and pending approvals will appear here.
             </p>
           )}
           {hasAnyAttention && (

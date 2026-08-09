@@ -1227,6 +1227,96 @@ assert.equal(
     ?.executionState,
   "succeeded"
 );
+const closeoutProjection = convertedCanonicalQuote?.workflow?.postEventCloseout;
+assert.ok(closeoutProjection?.closeoutId);
+assert.equal(closeoutProjection?.organizationId, organizationId);
+assert.equal(closeoutProjection?.quoteId, acceptanceQuoteId);
+assert.equal(closeoutProjection?.customerId, convertedCanonicalQuote.customerId);
+assert.equal(closeoutProjection?.sourceVersionId, convertedCanonicalQuote.activeVersionId);
+assert.equal(closeoutProjection?.eventDate, convertedCanonicalQuote.event?.date);
+assert.equal(closeoutProjection?.dueDate, "2026-08-22");
+assert.equal(closeoutProjection?.policy?.state, "blocked_configuration");
+assert.equal(closeoutProjection?.state, "blocked_configuration");
+assert.deepEqual(
+  Object.keys(closeoutProjection?.reviewItems || {}).sort(),
+  ["internal_closeout", "operational_follow_up", "review_request", "thank_you"]
+);
+const closeoutRecordSnap = await orgRef
+  .collection("postEventCloseouts")
+  .doc(closeoutProjection.closeoutId)
+  .get();
+assert.equal(closeoutRecordSnap.exists, true);
+assert.equal(closeoutRecordSnap.data()?.closeoutId, closeoutProjection.closeoutId);
+assert.equal(closeoutRecordSnap.data()?.acceptanceReceiptId, closeoutProjection.acceptanceReceiptId);
+assert.equal(closeoutRecordSnap.data()?.state, "blocked_configuration");
+await expectCallableError(
+  () => callFunction("recordPostEventCloseoutReview", bootstrapToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    closeoutId: closeoutProjection.closeoutId,
+    itemCode: "internal_closeout",
+    action: "review",
+    requestId: `closeout_${"c".repeat(32)}`,
+    note: "This must remain blocked until the tenant time zone is configured."
+  }),
+  "FAILED_PRECONDITION"
+);
+await settingsRef.set({ businessTimeZone: "America/Chicago" }, { merge: true });
+const closeoutConfigurationRequestId = `closeout_${"d".repeat(32)}`;
+const closeoutConfigurationRefresh = await callFunction(
+  "refreshPostEventCloseoutConfiguration",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    closeoutId: closeoutProjection.closeoutId,
+    requestId: closeoutConfigurationRequestId
+  }
+);
+assert.equal(closeoutConfigurationRefresh.ok, true);
+assert.equal(closeoutConfigurationRefresh.state, "pending");
+assert.equal(closeoutConfigurationRefresh.receipt?.action, "refresh_configuration");
+assert.equal(closeoutConfigurationRefresh.receipt?.applied, true);
+assert.equal(closeoutConfigurationRefresh.receipt?.resultPolicyState, "configured");
+assert.equal(closeoutConfigurationRefresh.receipt?.resultTimeZone, "America/Chicago");
+const closeoutProjectionAfterRefresh = (await orgRef
+  .collection("quotes")
+  .doc(acceptanceQuoteId)
+  .get()).data()?.workflow?.postEventCloseout;
+assert.equal(closeoutProjectionAfterRefresh?.state, "pending");
+assert.equal(closeoutProjectionAfterRefresh?.policy?.timeZone, "America/Chicago");
+const quoteUpdatedAtAfterRefresh = (await orgRef
+  .collection("quotes")
+  .doc(acceptanceQuoteId)
+  .get()).data()?.updatedAtISO;
+const repeatedCloseoutConfigurationRefresh = await callFunction(
+  "refreshPostEventCloseoutConfiguration",
+  bootstrapToken,
+  {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    closeoutId: closeoutProjection.closeoutId,
+    requestId: closeoutConfigurationRequestId
+  }
+);
+assert.equal(repeatedCloseoutConfigurationRefresh.idempotent, true);
+assert.equal(
+  (await orgRef.collection("quotes").doc(acceptanceQuoteId).get()).data()?.updatedAtISO,
+  quoteUpdatedAtAfterRefresh
+);
+await expectCallableError(
+  () => callFunction("recordPostEventCloseoutReview", bootstrapToken, {
+    organizationId,
+    quoteId: acceptanceQuoteId,
+    closeoutId: closeoutProjection.closeoutId,
+    itemCode: "internal_closeout",
+    action: "review",
+    requestId: `closeout_${"e".repeat(32)}`,
+    note: "The event has not reached its tenant-local closeout due date."
+  }),
+  "FAILED_PRECONDITION"
+);
+await settingsRef.set({ businessTimeZone: "" }, { merge: true });
 const repeatedContractConversion = await callFunction(
   "convertQuoteToContract",
   bootstrapToken,

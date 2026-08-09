@@ -54,7 +54,11 @@ const ATTENTION_ITEM_MAP = {
   "change_request:invalid": { family: STATUS_FAMILY.BLOCKED, label: "Change request data issue" },
   "follow_up:overdue": { family: STATUS_FAMILY.ACTION, label: "Overdue follow-up" },
   "follow_up:due_today": { family: STATUS_FAMILY.ACTION, label: "Follow-up due today" },
-  "approval:pending": { family: STATUS_FAMILY.ACTION, label: "Pending approval" }
+  "approval:pending": { family: STATUS_FAMILY.ACTION, label: "Pending approval" },
+  "post_event_closeout:overdue": { family: STATUS_FAMILY.ACTION, label: "Post-event closeout overdue" },
+  "post_event_closeout:due_today": { family: STATUS_FAMILY.ACTION, label: "Post-event closeout due" },
+  "post_event_closeout:blocked_configuration": { family: STATUS_FAMILY.BLOCKED, label: "Closeout configuration blocked" },
+  "post_event_closeout:blocked_source": { family: STATUS_FAMILY.BLOCKED, label: "Closeout source review needed" }
 };
 
 const UNKNOWN_ENTRY = Object.freeze({ family: STATUS_FAMILY.INFO, label: "Unknown" });

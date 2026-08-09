@@ -545,6 +545,143 @@ describe("quote workflow helpers", () => {
     expect(summary).toMatchObject({ quoteCount: 0, itemCount: 0 });
   });
 
+  test("surfaces only exact booked closeout projections when due or configuration-blocked", () => {
+    const closeout = {
+      closeoutId: `closeout_${"a".repeat(48)}`,
+      organizationId: "org-one",
+      quoteId: "booked-due",
+      customerId: "customer-one",
+      eventDate: "2026-07-27",
+      dueDate: "2026-08-03",
+      policy: { state: "configured", timeZone: "America/Chicago" },
+      state: "pending"
+    };
+    const summary = buildWorkflowAttentionSummary([
+      {
+        id: "booked-due",
+        organizationId: "org-one",
+        customerId: "customer-one",
+        status: "booked",
+        workflow: { postEventCloseout: closeout }
+      },
+      {
+        id: "booked-blocked",
+        organizationId: "org-one",
+        customerId: "customer-one",
+        status: "booked",
+        workflow: {
+          postEventCloseout: {
+            ...closeout,
+            closeoutId: `closeout_${"b".repeat(48)}`,
+            quoteId: "booked-blocked",
+            policy: { state: "blocked_configuration" },
+            state: "blocked_configuration"
+          }
+        }
+      },
+      {
+        id: "booked-complete",
+        organizationId: "org-one",
+        customerId: "customer-one",
+        status: "booked",
+        workflow: {
+          postEventCloseout: {
+            ...closeout,
+            closeoutId: `closeout_${"c".repeat(48)}`,
+            quoteId: "booked-complete",
+            state: "completed"
+          }
+        }
+      },
+      {
+        id: "booked-forged",
+        organizationId: "org-one",
+        customerId: "customer-one",
+        status: "booked",
+        workflow: {
+          postEventCloseout: {
+            ...closeout,
+            closeoutId: `closeout_${"d".repeat(48)}`,
+            quoteId: "another-quote"
+          }
+        }
+      }
+    ], { todayISO: "2026-08-03" });
+
+    expect(summary).toMatchObject({
+      quoteCount: 2,
+      itemCount: 2,
+      counts: { postEventCloseouts: 2, followUps: 0, approvals: 0, changeRequests: 0 }
+    });
+    expect(summary.items.map((item) => [item.quoteId, item.state])).toEqual([
+      ["booked-blocked", "blocked_configuration"],
+      ["booked-due", "due_today"]
+    ]);
+  });
+
+  test("evaluates closeout due state in the record policy time zone, not the browser date", () => {
+    const quote = {
+      id: "booked-boundary",
+      organizationId: "org-one",
+      customerId: "customer-one",
+      status: "booked",
+      workflow: {
+        postEventCloseout: {
+          closeoutId: `closeout_${"e".repeat(48)}`,
+          organizationId: "org-one",
+          quoteId: "booked-boundary",
+          customerId: "customer-one",
+          eventDate: "2026-07-27",
+          dueDate: "2026-08-03",
+          policy: { state: "configured", timeZone: "America/Chicago" },
+          state: "pending"
+        }
+      }
+    };
+
+    expect(buildWorkflowAttentionSummary([quote], {
+      todayISO: "2026-08-03",
+      nowISO: "2026-08-03T03:00:00.000Z"
+    }).itemCount).toBe(0);
+    expect(buildWorkflowAttentionSummary([{
+      ...quote,
+      workflow: {
+        postEventCloseout: {
+          ...quote.workflow.postEventCloseout,
+          policy: { state: "configured", timeZone: "Asia/Tokyo" }
+        }
+      }
+    }], {
+      todayISO: "2026-08-02",
+      nowISO: "2026-08-03T03:00:00.000Z"
+    }).items[0]).toMatchObject({ state: "due_today", daysOverdue: 0 });
+  });
+
+  test("preserves booking while surfacing a legacy closeout source review blocker", () => {
+    const summary = buildWorkflowAttentionSummary([{
+      id: "legacy-booked",
+      organizationId: "org-one",
+      status: "booked",
+      workflow: {
+        postEventCloseout: {
+          closeoutId: "",
+          organizationId: "org-one",
+          quoteId: "legacy-booked",
+          state: "blocked_source",
+          eventDate: "2026-08-01",
+          dueDate: "2026-08-08",
+          policy: { state: "blocked_source" }
+        }
+      }
+    }], { todayISO: "2026-08-09" });
+
+    expect(summary.items[0]).toMatchObject({
+      type: "post_event_closeout",
+      state: "blocked_source",
+      quoteId: "legacy-booked"
+    });
+  });
+
   test("computes default kitchen checkpoint offsets and clock times from an event start time", () => {
     const checkpoints = buildKitchenCheckpoints({ time: "18:00", hours: 5 });
 

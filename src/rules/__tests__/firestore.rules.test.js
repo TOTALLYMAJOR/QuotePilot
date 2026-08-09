@@ -1880,6 +1880,73 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }));
   });
 
+  test("post-event closeout records and action receipts are callable-only", async () => {
+    const closeoutId = `closeout_${"a".repeat(48)}`;
+    const receiptId = `closeout_action_${"b".repeat(48)}`;
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(
+        doc(db, "organizations", "org-a", "postEventCloseouts", closeoutId),
+        {
+          organizationId: "org-a",
+          quoteId: "q1",
+          customerId: "customer-a",
+          closeoutId,
+          state: "pending"
+        }
+      );
+      await setDoc(
+        doc(
+          db,
+          "organizations",
+          "org-a",
+          "postEventCloseouts",
+          closeoutId,
+          "actionReceipts",
+          receiptId
+        ),
+        {
+          organizationId: "org-a",
+          quoteId: "q1",
+          closeoutId,
+          receiptId
+        }
+      );
+    });
+
+    const contexts = [
+      testEnv.unauthenticatedContext(),
+      testEnv.authenticatedContext("customer-org-a", {
+        email: "customer-a@example.com",
+        email_verified: true
+      }),
+      testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true
+      }),
+      testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true
+      }),
+      testEnv.authenticatedContext("sales-org-b", {
+        email: "sales-b@example.com",
+        email_verified: true
+      })
+    ];
+
+    for (const context of contexts) {
+      const db = context.firestore();
+      const closeoutRef = doc(db, "organizations", "org-a", "postEventCloseouts", closeoutId);
+      const receiptRef = doc(closeoutRef, "actionReceipts", receiptId);
+      await assertFails(getDoc(closeoutRef));
+      await assertFails(getDoc(receiptRef));
+      await assertFails(setDoc(closeoutRef, { organizationId: "org-a", state: "completed" }));
+      await assertFails(updateDoc(closeoutRef, { state: "completed" }));
+      await assertFails(deleteDoc(closeoutRef));
+      await assertFails(setDoc(receiptRef, { forged: true }));
+    }
+  });
+
   test("product analytics events are callable-owned and cannot expose raw staff activity", async () => {
     const eventId = "analytics-event-0001";
     await testEnv.withSecurityRulesDisabled(async (context) => {

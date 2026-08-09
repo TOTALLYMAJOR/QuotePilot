@@ -142,6 +142,7 @@ function normalizeCalendarContext(calendarContext) {
   const date = text(calendarContext.date);
   const source = text(calendarContext.source).toLowerCase();
   const timeZone = text(calendarContext.timeZone);
+  const requestedInstantISO = text(calendarContext.instantISO);
   if (!parseDateOnly(date)) {
     throw new TypeError("calendarContext.date must be a valid YYYY-MM-DD calendar date.");
   }
@@ -151,12 +152,36 @@ function normalizeCalendarContext(calendarContext) {
   if (!validTimeZone(timeZone)) {
     throw new TypeError("calendarContext.timeZone must be a valid IANA time zone.");
   }
+  const instant = requestedInstantISO
+    ? new Date(requestedInstantISO)
+    : new Date(`${date}T12:00:00.000Z`);
+  if (Number.isNaN(instant.getTime())) {
+    throw new TypeError("calendarContext.instantISO must be a valid ISO timestamp when supplied.");
+  }
   return {
     date,
     source,
     timeZone,
+    instantISO: instant.toISOString(),
     label: source === "tenant" ? "Tenant-local calendar date" : "Device-local calendar date"
   };
+}
+
+function calendarDateForTimeZone(instantISO, timeZone) {
+  if (!validTimeZone(timeZone)) return "";
+  const instant = new Date(instantISO);
+  if (Number.isNaN(instant.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    calendar: "gregory",
+    numberingSystem: "latn",
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(instant);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const date = `${values.year}-${values.month}-${values.day}`;
+  return parseDateOnly(date) ? date : "";
 }
 
 function normalizeLimit(value) {
@@ -484,16 +509,78 @@ function eventName(quote, event) {
   return text(event?.eventName || quote?.event?.name || quote?.quoteNumber) || "Prior event";
 }
 
+function authoritativeCloseoutProjection(quote, { organizationId, customerId, quoteId, eventDate } = {}) {
+  const closeout = isRecord(quote?.workflow?.postEventCloseout)
+    ? quote.workflow.postEventCloseout
+    : null;
+  if (!closeout) return null;
+  const closeoutId = safeOpaqueId(closeout.closeoutId);
+  if (
+    !closeoutId
+    || safeOpaqueId(closeout.organizationId) !== organizationId
+    || safeOpaqueId(closeout.customerId) !== customerId
+    || safeOpaqueId(closeout.quoteId) !== quoteId
+    || text(closeout.eventDate) !== eventDate
+  ) return null;
+  const reviewItems = isRecord(closeout.reviewItems) ? closeout.reviewItems : {};
+  return {
+    ...closeout,
+    closeoutId,
+    reviewItems: CLOSEOUT_REVIEW_ITEMS.map((definition) => {
+      const stored = isRecord(reviewItems[definition.code]) ? reviewItems[definition.code] : {};
+      return {
+        ...definition,
+        state: text(stored.state).toLowerCase() === "reviewed" ? "reviewed" : "pending",
+        reviewedAtISO: text(stored.reviewedAtISO),
+        reviewedBy: text(stored.reviewedBy?.email || stored.reviewedBy),
+        lastActionReceiptId: safeOpaqueId(stored.lastActionReceiptId)
+      };
+    })
+  };
+}
+
+function authoritativeCloseoutCalendarDate(closeout, calendarContext) {
+  const policyState = text(closeout?.policy?.state).toLowerCase();
+  if (policyState !== "configured") return calendarContext.date;
+  return calendarDateForTimeZone(
+    calendarContext.instantISO,
+    text(closeout?.policy?.timeZone)
+  );
+}
+
+function closeoutDisplayState(closeout, calendarContext) {
+  if (!closeout) return "read_only_cue";
+  if (text(closeout?.policy?.state).toLowerCase() === "blocked_configuration") {
+    return "blocked_configuration";
+  }
+  const calendarDate = authoritativeCloseoutCalendarDate(closeout, calendarContext);
+  if (!calendarDate) return "blocked_configuration";
+  if (text(closeout.state).toLowerCase() === "completed") return "completed";
+  const dueDate = text(closeout.dueDate);
+  if (!parseDateOnly(dueDate)) return "blocked_configuration";
+  if (calendarDate < dueDate) return "scheduled";
+  if (calendarDate === dueDate) return "due";
+  return "overdue";
+}
+
 function buildCloseoutOpportunity({ quote, event, calendarContext, eventDate, quoteId }) {
   const eligibleFromDate = addCalendarDays(eventDate, POST_EVENT_CLOSEOUT_START_DAYS);
   const eligibleThroughDate = addCalendarDays(
     eligibleFromDate,
     POST_EVENT_CLOSEOUT_WINDOW_DAYS - 1
   );
+  const closeout = authoritativeCloseoutProjection(quote, {
+    organizationId: safeOpaqueId(quote.organizationId),
+    customerId: safeOpaqueId(quote.customerId),
+    quoteId,
+    eventDate
+  });
+  const displayState = closeoutDisplayState(closeout, calendarContext);
   return {
-    id: `post_event_closeout:${quoteId}:${eventDate}`,
+    id: closeout?.closeoutId || `post_event_closeout:${quoteId}:${eventDate}`,
     type: "post_event_closeout",
     title: `${eventName(quote, event)} reached its one-week closeout window`,
+    organizationId: safeOpaqueId(quote.organizationId),
     quoteId,
     quoteNumber: text(quote.quoteNumber),
     event: {
@@ -507,9 +594,26 @@ function buildCloseoutOpportunity({ quote, event, calendarContext, eventDate, qu
       eligibleFromDate,
       eligibleThroughDate
     },
-    reviewItems: CLOSEOUT_REVIEW_ITEMS.map((item) => ({ ...item })),
-    reviewedAction: null,
-    evidenceCopy: CUSTOMER_REBOOKING_RADAR_EVIDENCE_COPY.closeout
+    reviewItems: closeout?.reviewItems || CLOSEOUT_REVIEW_ITEMS.map((item) => ({
+      ...item,
+      state: "unavailable",
+      reviewedAtISO: "",
+      reviewedBy: "",
+      lastActionReceiptId: ""
+    })),
+    reviewedAction: closeout ? {
+      kind: "review_post_event_closeout",
+      state: displayState,
+      closeoutId: closeout.closeoutId,
+      dueDate: text(closeout.dueDate),
+      policy: isRecord(closeout.policy) ? { ...closeout.policy } : {},
+      completedAtISO: text(closeout.completedAtISO),
+      completedBy: text(closeout.completedBy?.email || closeout.completedBy),
+      performed: displayState === "completed"
+    } : null,
+    evidenceCopy: closeout
+      ? "This server-owned closeout record captures internal review receipts only. It does not claim that a thank-you or review request was sent, accepted, delivered, opened, or acted on."
+      : CUSTOMER_REBOOKING_RADAR_EVIDENCE_COPY.closeout
   };
 }
 
@@ -622,12 +726,29 @@ export function buildCustomerRebookingRadar(customerWorkspace = {}, {
       return;
     }
 
-    const closeoutAgeDays = daysBetween(quoteEventDate, calendar.date);
+    const authoritativeCloseout = authoritativeCloseoutProjection(quote, {
+      organizationId: orgId,
+      customerId,
+      quoteId,
+      eventDate: quoteEventDate
+    });
+    const closeoutCalendarDate = authoritativeCloseout
+      ? authoritativeCloseoutCalendarDate(authoritativeCloseout, calendar) || calendar.date
+      : calendar.date;
+    const closeoutAgeDays = daysBetween(quoteEventDate, closeoutCalendarDate);
     const closeoutEligible = closeoutAgeDays >= POST_EVENT_CLOSEOUT_START_DAYS
       && closeoutAgeDays < POST_EVENT_CLOSEOUT_START_DAYS + POST_EVENT_CLOSEOUT_WINDOW_DAYS;
+    const authoritativeCloseoutVisible = Boolean(
+      authoritativeCloseout
+      && closeoutAgeDays >= 0
+      && (
+        text(authoritativeCloseout.state).toLowerCase() !== "completed"
+        || closeoutAgeDays < POST_EVENT_CLOSEOUT_START_DAYS + 30
+      )
+    );
     const anniversaryDate = addCalendarYear(quoteEventDate);
     const anniversaryEligible = anniversaryDate >= week.startDate && anniversaryDate <= week.endDate;
-    if (closeoutEligible) {
+    if (closeoutEligible || authoritativeCloseoutVisible) {
       opportunities.push(buildCloseoutOpportunity({
         quote,
         event,
@@ -658,7 +779,7 @@ export function buildCustomerRebookingRadar(customerWorkspace = {}, {
         })
       }));
     }
-    if (!closeoutEligible && !anniversaryEligible) {
+    if (!closeoutEligible && !authoritativeCloseoutVisible && !anniversaryEligible) {
       incrementReason(excludedReasonCounts, "outside_opportunity_window");
     }
   });

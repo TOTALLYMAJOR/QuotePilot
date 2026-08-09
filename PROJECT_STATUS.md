@@ -278,8 +278,22 @@ Last updated: August 9, 2026
   Auth/Firestore/Functions emulator lane locally covers same-tenant denial,
   source-version drift, deterministic collision refusal, concurrent retry
   convergence, atomic initial records, current-catalog repricing, and the trusted
-  staff-review transition. Functions deployment, hosted staff review, scheduled
-  closeout records, and outbound thank-you/review delivery are pending.
+  staff-review transition. The same source now creates one deterministic
+  post-event closeout record atomically with an eligible governed booking,
+  bound to the exact accepted immutable version, private acceptance-receipt
+  snapshot hash, and stable customer. A legacy booking that lacks that newer
+  authority remains booked with a visible source-review block. A missing tenant
+  IANA time zone records a visible configuration block without blocking booking;
+  otherwise the four-item internal review becomes actionable seven tenant-
+  calendar days after the event. Customer 360 and Workflow consume the bounded
+  canonical-quote projection, while an exact idempotent callable owns review and
+  reopen receipts, a separate exact configuration-refresh receipt recovers a
+  repaired time-zone block without reviewing an item, and the private record remains browser-inaccessible and absent
+  from the token portal. The UI covers scheduled, due, overdue, blocked,
+  completed, uncertain, reconciliation, receipt, definitive error, and recovery
+  outcomes. These are internal-review facts only, not outbound contact or
+  provider evidence. Functions/rules deployment, hosted staff review, and
+  consent/provider-gated thank-you/review delivery remain pending.
 - Working-tree candidate `CWF-13` commercial measures: Customer 360 Overview
   derives quoted, exact-state accepted/booked, payment, and repeat-event measures from
   the bounded customer DTO. Deposit and final-balance values become
