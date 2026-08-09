@@ -4,6 +4,7 @@ import path from "node:path";
 const ROOT = process.cwd();
 const DIST_ASSETS_DIR = path.join(ROOT, "dist", "assets");
 const BUDGET_FILE = path.join(ROOT, "docs", "performance", "bundle-budget.json");
+const EXCEPTION_FILE = path.join(ROOT, "docs", "performance", "bundle-exception.json");
 const UPDATE_BASELINE = process.argv.includes("--update-baseline");
 
 function readJson(filePath) {
@@ -16,6 +17,33 @@ function writeJson(filePath, value) {
 
 function toDateStamp() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function readActiveException() {
+  if (!fs.existsSync(EXCEPTION_FILE)) {
+    return null;
+  }
+
+  const exception = readJson(EXCEPTION_FILE);
+  if (exception.status !== "active") {
+    throw new Error(
+      `${path.relative(ROOT, EXCEPTION_FILE)} must be removed when its status is not active.`
+    );
+  }
+  if (typeof exception.id !== "string" || !exception.id.trim()) {
+    throw new Error(`${path.relative(ROOT, EXCEPTION_FILE)} must declare a non-empty id.`);
+  }
+
+  for (const metric of ["totalJsBytes", "largestJsChunkBytes"]) {
+    const value = Number(exception.maxMetrics?.[metric]);
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      throw new Error(
+        `${path.relative(ROOT, EXCEPTION_FILE)} must declare a positive integer maxMetrics.${metric}.`
+      );
+    }
+  }
+
+  return exception;
 }
 
 function collectJsMetrics() {
@@ -46,8 +74,15 @@ function collectJsMetrics() {
 }
 
 const current = collectJsMetrics();
+const activeException = readActiveException();
 
 if (UPDATE_BASELINE) {
+  if (activeException) {
+    throw new Error(
+      `Remove active bundle exception ${activeException.id} before updating the clean-main baseline.`
+    );
+  }
+
   const existing = fs.existsSync(BUDGET_FILE)
     ? readJson(BUDGET_FILE)
     : { allowancePercent: 15 };
@@ -72,24 +107,53 @@ if (!fs.existsSync(BUDGET_FILE)) {
 
 const baseline = readJson(BUDGET_FILE);
 const allowance = Number(baseline.allowancePercent ?? 15) / 100;
-const maxTotal = Math.round(baseline.metrics.totalJsBytes * (1 + allowance));
-const maxLargest = Math.round(baseline.metrics.largestJsChunkBytes * (1 + allowance));
+const standardMaximums = {
+  totalJsBytes: Math.round(baseline.metrics.totalJsBytes * (1 + allowance)),
+  largestJsChunkBytes: Math.round(baseline.metrics.largestJsChunkBytes * (1 + allowance))
+};
+
+if (activeException) {
+  if (activeException.baselineGeneratedAt !== baseline.generatedAt) {
+    throw new Error(
+      `Bundle exception ${activeException.id} targets baseline ${activeException.baselineGeneratedAt}, not ${baseline.generatedAt}.`
+    );
+  }
+  for (const metric of ["totalJsBytes", "largestJsChunkBytes"]) {
+    if (Number(activeException.baselineMetrics?.[metric]) !== Number(baseline.metrics?.[metric])) {
+      throw new Error(
+        `Bundle exception ${activeException.id} does not match baseline ${metric} ${baseline.metrics?.[metric]}.`
+      );
+    }
+  }
+}
+
+const effectiveMaximums = activeException
+  ? {
+      totalJsBytes: Number(activeException.maxMetrics.totalJsBytes),
+      largestJsChunkBytes: Number(activeException.maxMetrics.largestJsChunkBytes)
+    }
+  : standardMaximums;
 
 const failures = [];
-if (current.totalJsBytes > maxTotal) {
+if (current.totalJsBytes > effectiveMaximums.totalJsBytes) {
   failures.push(
-    `totalJsBytes ${current.totalJsBytes} exceeds allowed ${maxTotal} (baseline ${baseline.metrics.totalJsBytes}, +${baseline.allowancePercent}%)`
+    `totalJsBytes ${current.totalJsBytes} exceeds allowed ${effectiveMaximums.totalJsBytes} (baseline ${baseline.metrics.totalJsBytes}, normal +${baseline.allowancePercent}%)`
   );
 }
-if (current.largestJsChunkBytes > maxLargest) {
+if (current.largestJsChunkBytes > effectiveMaximums.largestJsChunkBytes) {
   failures.push(
-    `largestJsChunkBytes ${current.largestJsChunkBytes} exceeds allowed ${maxLargest} (baseline ${baseline.metrics.largestJsChunkBytes}, +${baseline.allowancePercent}%)`
+    `largestJsChunkBytes ${current.largestJsChunkBytes} exceeds allowed ${effectiveMaximums.largestJsChunkBytes} (baseline ${baseline.metrics.largestJsChunkBytes}, normal +${baseline.allowancePercent}%)`
   );
 }
 
 console.log("Bundle budget baseline:", baseline.metrics);
 console.log("Current bundle metrics:", current);
-console.log("Allowance percent:", baseline.allowancePercent);
+console.log("Normal allowance percent:", baseline.allowancePercent);
+console.log("Normal maximum metrics:", standardMaximums);
+if (activeException) {
+  console.log("Active temporary exception:", activeException.id);
+  console.log("Temporary exception maximum metrics:", effectiveMaximums);
+}
 
 if (failures.length) {
   console.error("Bundle budget check failed:");

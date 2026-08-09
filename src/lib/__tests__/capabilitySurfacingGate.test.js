@@ -231,7 +231,7 @@ describe("capability surfacing delivery gate", () => {
   });
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
-    expect(parseFunctionExports(functionsEntrypointSource)).toHaveLength(48);
+    expect(parseFunctionExports(functionsEntrypointSource)).toHaveLength(49);
 
     const source = [
       "exports.first = onCall(async () => {",
@@ -687,6 +687,46 @@ describe("capability surfacing delivery gate", () => {
       baseBackendExports: [readNamedExport]
     });
     expect(nonExecutableWriteWords).toEqual([]);
+
+    const readOnlyTransaction = validateCapabilitySurfacing({
+      changedFiles: changedFiles(),
+      manifest: manifest(userContract()),
+      baseManifest: { schemaVersion: 1, catalogVersion: 0, contracts: [] },
+      pathExists: () => true,
+      readPath: readFixturePath,
+      currentBackendExports: [readNamedExport],
+      currentBackendExportSegments: new Map([[
+        readNamedExport,
+        [
+          "exports.getExampleCapability = onCall(async () => {",
+          "  return db.runTransaction(async (tx) => tx.get(targetRef));",
+          "});"
+        ].join("\n")
+      ]]),
+      baseBackendExports: [readNamedExport]
+    });
+    expect(readOnlyTransaction).toEqual([]);
+
+    const transactionWrite = validateCapabilitySurfacing({
+      changedFiles: changedFiles(),
+      manifest: manifest(userContract()),
+      baseManifest: { schemaVersion: 1, catalogVersion: 0, contracts: [] },
+      pathExists: () => true,
+      readPath: readFixturePath,
+      currentBackendExports: [readNamedExport],
+      currentBackendExportSegments: new Map([[
+        readNamedExport,
+        [
+          "exports.getExampleCapability = onCall(async () => {",
+          "  return db.runTransaction(async (tx) => tx.update(targetRef, { active: true }));",
+          "});"
+        ].join("\n")
+      ]]),
+      baseBackendExports: [readNamedExport]
+    });
+    expect(transactionWrite.join("\n")).toMatch(
+      /mutation-like backend export requires mutation_surface or mixed_surface.*getExampleCapability/i
+    );
 
     for (const capabilityKind of ["mutation_surface", "mixed_surface"]) {
       const allowed = validateCapabilitySurfacing({

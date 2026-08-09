@@ -77,7 +77,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FUNCTIONS_ENTRYPOINT_PATH = "functions/index.js";
 const FUNCTION_EXPORT_DECLARATION_PATTERN = /^[\t ]*exports\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=(?!=|>)/gm;
 const MUTATION_EXPORT_NAME_PATTERN = /^(?:accept|activate|apply|approve|archive|book|cancel|charge|claim|close|confirm|convert|create|deactivate|decline|delete|dispatch|duplicate|ensure|expire|finalize|hardDelete|invite|link|mark|mutate|notify|pay|persist|provision|publish|purge|reconcile|record|refund|reopen|repair|request|reschedule|rollback|rotate|save|schedule|send|set|sign|submit|sync|update|upsert|void|write)/i;
-const MUTATION_SOURCE_WRITE_PATTERN = /(?:\.\s*(?:add|commit|create|delete|set|update)\s*\(|\b(?:addDoc|createUser|deleteDoc|deleteUser|recursiveDelete|runTransaction|setCustomUserClaims|setDoc|updateDoc|updateUser|writeBatch)\s*\()/;
+// A Firestore transaction is an authority/consistency boundary, not inherently
+// a mutation. Classify the concrete write inside it (tx.set/create/update/delete)
+// so read-only transactions do not force a false mutation-surface contract.
+const MUTATION_SOURCE_WRITE_PATTERN = /(?:\.\s*(?:add|commit|create|delete|set|update)\s*\(|\b(?:addDoc|createUser|deleteDoc|deleteUser|recursiveDelete|setCustomUserClaims|setDoc|updateDoc|updateUser|writeBatch)\s*\()/;
 const CLIENT_PRESENTATION_PREFIXES = Object.freeze([
   "src/components/"
 ]);

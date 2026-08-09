@@ -1,28 +1,35 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 2,
+  "catalogVersion": 3,
   "contracts": [
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Bounded same-tenant customer directory and Customer 360 reads are exposed through opaque customer routes and proof-safe staff presentation.",
+      "summary": "Bounded same-tenant customer directory and Customer 360 reads are exposed through opaque customer routes, surface-scoped read context, a relationship briefing, a recorded commercial timeline, advisory immutable-version comparison, and displayed-record commercial measures.",
       "backendPaths": [
         "firestore.indexes.json",
         "firestore.rules",
+        "src/lib/customerCommercialMeasures.js",
+        "src/lib/customerCommercialTimeline.js",
         "src/lib/customerWorkspace.js",
-        "src/lib/quoteStore.js"
+        "src/lib/quoteStore.js",
+        "src/lib/quoteVersionComparison.js"
       ],
       "backendExports": [],
       "frontendPaths": [
         "src/App.jsx",
+        "src/components/CustomerCommercialMeasures.jsx",
+        "src/components/CustomerCommercialTimeline.jsx",
         "src/components/CustomerDirectoryView.jsx",
-        "src/components/CustomerWorkspaceView.jsx"
+        "src/components/CustomerWorkspaceView.jsx",
+        "src/components/QuoteVersionComparison.jsx",
+        "src/components/StaffEvidenceRail.jsx"
       ],
       "entryPointLocators": [
         {
@@ -32,12 +39,30 @@
         {
           "path": "src/components/CustomerWorkspaceView.jsx",
           "locator": "Internal Customer 360"
+        },
+        {
+          "path": "src/components/CustomerCommercialMeasures.jsx",
+          "locator": "id=\"customer-commercial-measures-title\">Commercial measures"
+        },
+        {
+          "path": "src/components/CustomerCommercialTimeline.jsx",
+          "locator": "Commercial timeline"
+        },
+        {
+          "path": "src/components/QuoteVersionComparison.jsx",
+          "locator": "Compare latest versions"
         }
       ],
       "testPaths": [
         "e2e/customer-centered-workspace.spec.js",
+        "src/components/__tests__/customerCommercialMeasuresPresentation.test.jsx",
+        "src/components/__tests__/customerCommercialTimelinePresentation.test.jsx",
         "src/components/__tests__/customerWorkspaceStates.test.jsx",
+        "src/components/__tests__/quoteVersionComparisonPresentation.test.jsx",
+        "src/lib/__tests__/customerCommercialTimeline.test.js",
+        "src/lib/__tests__/customerCommercialMeasures.test.js",
         "src/lib/__tests__/customerWorkspace.test.js",
+        "src/lib/__tests__/quoteVersionComparison.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
@@ -48,6 +73,26 @@
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
           "locator": "customer directory lists require same-org staff and an explicit safe limit"
+        },
+        {
+          "path": "src/lib/__tests__/customerWorkspace.test.js",
+          "locator": "fails closed across local tenant, customer, quote, and version collisions"
+        },
+        {
+          "path": "src/components/__tests__/customerCommercialMeasuresPresentation.test.jsx",
+          "locator": "binds the Customer 360 DTO to a polished, source-bounded successful view"
+        },
+        {
+          "path": "src/lib/__tests__/customerCommercialMeasures.test.js",
+          "locator": "requires exact paid state and valid canonical provider timestamps for payment inclusion"
+        },
+        {
+          "path": "src/lib/__tests__/customerCommercialTimeline.test.js",
+          "locator": "does not infer delivery, view, decisions, booking, or payment from status-like fields"
+        },
+        {
+          "path": "src/lib/__tests__/quoteVersionComparison.test.js",
+          "locator": "ignores lifecycle, portal, payment, booking, provider, and mutable totals evidence"
         }
       ],
       "documentationPaths": [
@@ -65,7 +110,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The directory and Customer 360 routes, bounded partial state, safe proposal preview, responsive behavior, and recovery controls were reviewed together.",
+      "surfaceReviewNote": "The directory and Customer 360 routes, surface-scoped read context, bounded briefing and timeline, immutable-version comparison, displayed-record commercial measures, safe proposal preview, responsive containment, keyboard tabs, and recovery controls were reviewed together.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -86,6 +131,12 @@
           "assertionLocator": "data-capability-state=\"success\""
         },
         {
+          "state": "stale",
+          "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
+          "locator": "retains a completed customer directory page with explicit stale read context",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
           "state": "partial",
           "path": "src/components/__tests__/customerWorkspaceStates.test.jsx",
           "locator": "renders the Customer 360 partial state with its bounded-read limit",
@@ -104,13 +155,119 @@
           "assertionLocator": "data-capability-state=\"recovery\""
         }
       ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can discover bounded customer context, understand read freshness and limits, inspect recorded milestones, compare stored immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures without treating browser-local payment fields as provider evidence, treating displayed-record operational amounts as accounting revenue, or exposing private evidence."
+    },
+    {
+      "id": "bounded-commercial-search",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "A recoverably lazy staff command palette federates bounded same-tenant customer-prefix and recent-quote reads, exposes source and truncation, and navigates only through opaque record IDs.",
+      "backendPaths": [
+        "src/lib/commercialSearch.js",
+        "src/lib/commercialSearchShell.js",
+        "src/lib/customerWorkspace.js",
+        "src/lib/quoteStore.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/CommercialSearchPalette.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CommercialSearchPalette.jsx",
+          "locator": "Find a customer or quote"
+        },
+        {
+          "path": "src/App.jsx",
+          "locator": "title=\"Search customers and quotes (Ctrl or Command K)\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/commercialSearchPalette.test.jsx",
+        "src/lib/__tests__/commercialSearch.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/commercialSearch.test.js",
+          "locator": "fails closed for cross-tenant and unscoped quote search records"
+        },
+        {
+          "path": "src/lib/__tests__/commercialSearch.test.js",
+          "locator": "portal mode has precedence over the staff search shortcut"
+        },
+        {
+          "path": "src/components/__tests__/commercialSearchPalette.test.jsx",
+          "locator": "uses the shared focus trap and explicit return-focus contract"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Bounded universal commercial search and keyboard command palette"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Commercial Search"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The palette's staff/tenant/portal/modal gates, transient query, generation guard, focus trap and restoration, responsive containment, source/bounds copy, exact actions, and recoverable lazy boundary were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/commercialSearchPalette.test.jsx",
+          "locator": "exposes the source and bounded loading state",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/commercialSearchPalette.test.jsx",
+          "locator": "distinguishes instructional and completed empty states",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/commercialSearchPalette.test.jsx",
+          "locator": "renders safe customer and quote actions in the success state",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/commercialSearchPalette.test.jsx",
+          "locator": "keeps partial results actionable and exposes retry",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/commercialSearchPalette.test.jsx",
+          "locator": "exposes a bounded error without leaking underlying read details",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/commercialSearchPalette.test.jsx",
+          "locator": "keeps partial results actionable and exposes retry",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
       "stateExceptions": {
         "stale": {
           "reasonCode": "separate_program",
-          "justification": "These reads do not yet expose a cache-age authority contract; the CWF-03 trust and freshness rail remains an explicit follow-on program."
+          "justification": "Search results are intentionally transient and are invalidated on query, tenant, or palette changes; a retained stale-result cache is outside this bounded search slice."
         }
       },
-      "safeOutcome": "Staff can discover bounded customer context and exact next actions without exposing portal tokens, private claims, message bodies, or customer-view evidence."
+      "safeOutcome": "Authorized same-tenant staff can jump to a bounded customer or quote result without placing query/customer content in URLs or storage and without exposing portal tokens, claims, messages, private payment data, provider identifiers, or admin-only records."
     },
     {
       "id": "trusted-customer-import",
@@ -457,7 +614,7 @@
       "audiences": [
         "staff"
       ],
-      "summary": "Trusted quote create, duplicate, edit, and version writes bind one stable same-tenant customer identity without browser-selected reassignment.",
+      "summary": "Trusted quote create, duplicate, exact-version rebook, edit, and version writes bind one stable same-tenant customer identity without browser-selected reassignment.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -467,6 +624,7 @@
       "backendExports": [],
       "affectedBackendExports": [
         "functions/index.js#createQuoteDraft",
+        "functions/index.js#createRebookQuoteDraft",
         "functions/index.js#convertQuoteToContract",
         "functions/index.js#duplicateQuoteDraft",
         "functions/index.js#updateQuoteDraft",
@@ -536,6 +694,7 @@
       "backendExports": [],
       "affectedBackendExports": [
         "functions/index.js#createQuoteDraft",
+        "functions/index.js#createRebookQuoteDraft",
         "functions/index.js#convertQuoteToContract",
         "functions/index.js#duplicateQuoteDraft",
         "functions/index.js#updateQuoteDraft",
@@ -695,6 +854,646 @@
       ],
       "headlessReason": "Canonical link construction is a presentation utility inside existing guarded share/export actions, not a new customer-authentication or portal-write authority.",
       "safeOutcome": "Eligible staff-generated links open the exact token decision center at /app while ineligible drafts and stale delivery evidence continue to omit the link."
+    },
+    {
+      "id": "event-run-of-show",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "The routed Schedule workspace exposes a bounded, source-labeled run of show for accepted or booked records while keeping acceptance, booking, and operational readiness independent.",
+      "backendPaths": [
+        "src/lib/eventRunOfShow.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/EventRunOfShowPanel.jsx",
+        "src/components/EventScheduleModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/EventRunOfShowPanel.jsx",
+          "locator": "id=\"event-run-of-show-title\">Run of show"
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/eventRunOfShowPanel.test.jsx",
+        "src/lib/__tests__/eventRunOfShow.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/eventRunOfShowPanel.test.jsx",
+          "locator": "renders a source-bound expandable accepted-event sequence without stronger evidence claims"
+        },
+        {
+          "path": "src/lib/__tests__/eventRunOfShow.test.js",
+          "locator": "keeps booked evidence distinct from acceptance and readiness"
+        },
+        {
+          "path": "src/lib/__tests__/eventRunOfShow.test.js",
+          "locator": "represents missing facts as unknown instead of zeroes or fabricated times"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "CWF-08 bounded event run of show:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "`Run of show` is a bounded, read-only sequence"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The Schedule entry point, expandable event sequence, exact source and bounds, unknown-value handling, status separation, responsive containment, and retry behavior were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/eventRunOfShowPanel.test.jsx",
+          "locator": "covers initial loading, completed empty, and unrecoverable empty-read states",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/eventRunOfShowPanel.test.jsx",
+          "locator": "covers initial loading, completed empty, and unrecoverable empty-read states",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/eventRunOfShowPanel.test.jsx",
+          "locator": "renders a source-bound expandable accepted-event sequence without stronger evidence claims",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/eventRunOfShowPanel.test.jsx",
+          "locator": "retains partial records after refresh failure and executes recovery",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/eventRunOfShowPanel.test.jsx",
+          "locator": "surfaces unknown inputs and duration-dependent timing gaps as a partial state",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/eventRunOfShowPanel.test.jsx",
+          "locator": "covers initial loading, completed empty, and unrecoverable empty-read states",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/eventRunOfShowPanel.test.jsx",
+          "locator": "retains partial records after refresh failure and executes recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can inspect a selected day's recorded event sequence and follow exact quote destinations without treating an accepted proposal as a booking, a booking as readiness, or missing duration and staffing facts as zero."
+    },
+    {
+      "id": "bounded-commercial-reporting",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "The routed Reporting workspace derives bounded displayed-record commercial measures with explicit denominators, source and freshness evidence, retained stale recovery, and Firebase-backed provider-confirmed deposit qualification.",
+      "backendPaths": [
+        "src/lib/quoteStore.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/ReportingDashboardModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/ReportingDashboardModal.jsx",
+          "locator": "id=\"reporting-dashboard-title\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/operationalWorkspaceViews.test.jsx",
+        "src/components/__tests__/reportingDashboardEvidence.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/operationalWorkspaceViews.test.jsx",
+          "locator": "separates accepted/booked quote value from verified paid-deposit totals"
+        },
+        {
+          "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+          "locator": "fails closed for local or timestamp-free paid states"
+        },
+        {
+          "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+          "locator": "excludes missing money from totals instead of coercing it to zero"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Reporting dashboard (pipeline, conversion, accepted/booked quote value"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Reporting Dashboard"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The routed entry point, displayed-record scope, source and freshness rail, bounded denominators, missing-money handling, provider-payment evidence gate, stale retention, responsive presentation, and recovery control were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+          "locator": "renders the bounded loading state without manufactured totals",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+          "locator": "distinguishes completed empty and successful bounded snapshots",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+          "locator": "distinguishes completed empty and successful bounded snapshots",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+          "locator": "retains a stale snapshot after refresh failure and exposes recovery",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+          "locator": "renders truncated and incomplete records as a partial snapshot",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+          "locator": "renders an initial error without claiming an empty read",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+          "locator": "retains a stale snapshot after refresh failure and exposes recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can inspect bounded quote-state measures and a separately evidence-qualified paid-deposit total without interpreting accepted or booked quote value as collected revenue, trusting browser-local payment claims, coercing missing values to zero, or mistaking a truncated snapshot for tenant-wide accounting."
+    },
+    {
+      "id": "workflow-timing-and-revenue-autopilot-preview",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "The routed Workflow workspace derives bounded timestamp-backed due cues and completion receipts, then offers a tenant-time-zone-bound Revenue Autopilot eligibility preview from the same canonical quote snapshot without scheduling or sending anything.",
+      "backendPaths": [
+        "src/data/mockCatalog.js",
+        "src/lib/revenueAutopilotPreview.js",
+        "src/lib/workflowTimingCues.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/RevenueAutopilotPreviewPanel.jsx",
+        "src/components/SalesWorkflowModal.jsx",
+        "src/components/WorkflowTimingPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/WorkflowTimingPanel.jsx",
+          "locator": "id=\"workflow-timing-title\">Due cues & completion receipts"
+        },
+        {
+          "path": "src/components/RevenueAutopilotPreviewPanel.jsx",
+          "locator": "id=\"revenue-autopilot-preview-title\">Revenue autopilot"
+        },
+        {
+          "path": "src/components/AdminCatalogModal.jsx",
+          "locator": "Business time zone"
+        }
+      ],
+      "testPaths": [
+        "e2e/customer-centered-workspace.spec.js",
+        "src/components/__tests__/revenueAutopilotPreviewPanel.test.jsx",
+        "src/components/__tests__/salesWorkflowRevenueAutopilot.test.jsx",
+        "src/components/__tests__/workflowTimingPanel.test.jsx",
+        "src/lib/__tests__/catalogBusinessTimeZone.test.js",
+        "src/lib/__tests__/revenueAutopilotPreview.test.js",
+        "src/lib/__tests__/workflowTimingCues.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "e2e/customer-centered-workspace.spec.js",
+          "locator": "Workflow exposes Revenue Autopilot as an explicit non-sending, fail-closed preview"
+        },
+        {
+          "path": "src/components/__tests__/workflowTimingPanel.test.jsx",
+          "locator": "shows explicit source, bounds, evidence limits, and compact overflow counts"
+        },
+        {
+          "path": "src/components/__tests__/revenueAutopilotPreviewPanel.test.jsx",
+          "locator": "renders every safety gate, reason, bound, timezone, proof boundary, and non-sending descriptor"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowRevenueAutopilot.test.jsx",
+          "locator": "renders a keyboard-addressable, non-sending Revenue autopilot tab in the real Workflow surface"
+        },
+        {
+          "path": "src/lib/__tests__/catalogBusinessTimeZone.test.js",
+          "locator": "binds the setting to discoverable admin configuration plus revenue and rebook surfaces"
+        },
+        {
+          "path": "src/lib/__tests__/revenueAutopilotPreview.test.js",
+          "locator": "fails closed on stale, missing, and ambiguous evidence"
+        },
+        {
+          "path": "src/lib/__tests__/workflowTimingCues.test.js",
+          "locator": "emits only timestamp-backed internal receipts and keeps evidence claims narrow"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "CWF-07 Workflow timing cues and internal completion receipts:"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "CWF-12 Revenue Autopilot eligibility preview:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "`Due cues & completion receipts` derives"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "`Revenue autopilot` is currently a non-sending eligibility preview"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The Workflow timing and Autopilot tabs, canonical snapshot selection, tenant time-zone control, explicit bounds, proof-safe status families, quote navigation, shared read failure, and retry behavior were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/salesWorkflowRevenueAutopilot.test.jsx",
+          "locator": "renders a keyboard-addressable, non-sending Revenue autopilot tab in the real Workflow surface",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/workflowTimingPanel.test.jsx",
+          "locator": "distinguishes initial loading from an empty successful snapshot",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/revenueAutopilotPreviewPanel.test.jsx",
+          "locator": "renders every safety gate, reason, bound, timezone, proof boundary, and non-sending descriptor",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/revenueAutopilotPreviewPanel.test.jsx",
+          "locator": "keeps partial and stale snapshots visible with explicit reliability boundaries",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/revenueAutopilotPreviewPanel.test.jsx",
+          "locator": "keeps partial and stale snapshots visible with explicit reliability boundaries",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/workflowTimingPanel.test.jsx",
+          "locator": "provides explicit unavailable recovery without inventing snapshot evidence",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/workflowTimingPanel.test.jsx",
+          "locator": "provides explicit unavailable recovery without inventing snapshot evidence",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can prioritize timestamp-backed work and inspect deterministic follow-up, deposit, final-balance, and unread-reply eligibility with explicit reasons and bounds, while the preview creates no job, idempotency claim, send, payment fact, or recovered-revenue claim."
+    },
+    {
+      "id": "exact-version-rebook-and-delivery-gate",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Customer 360 can request one deterministic draft from an exact booked and accepted immutable version, preserve stable customer identity, reprice from the current catalog, and block customer delivery until staff saves a reviewed current-or-future event date.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/quoteCreation.js",
+        "functions/rebookQuoteDraft.js",
+        "scripts/rebook-quote-emulator-acceptance.mjs",
+        "src/lib/customerRebookingRadar.js",
+        "src/lib/rebookQuoteClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#createRebookQuoteDraft",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#sendQuoteToCustomer"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#createRebookQuoteDraft",
+        "functions/index.js#updateQuoteDraft",
+        "functions/index.js#sendQuoteToCustomer"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/CustomerRebookDraftAction.jsx",
+        "src/components/CustomerRevenueOpportunities.jsx",
+        "src/components/CustomerWorkspaceView.jsx",
+        "src/components/QuoteHistoryModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CustomerRebookDraftAction.jsx",
+          "locator": "data-capability-id=\"cwf-11-exact-version-rebook\""
+        },
+        {
+          "path": "src/components/CustomerRebookDraftAction.jsx",
+          "locator": "data-capability-id=\"cwf-11-rebook-staff-review\""
+        }
+      ],
+      "testPaths": [
+        "e2e/customer-centered-workspace.spec.js",
+        "src/components/__tests__/customerRebookDraftAction.test.jsx",
+        "src/components/__tests__/customerRevenueOpportunities.test.jsx",
+        "src/components/__tests__/quoteHistoryPermissions.test.jsx",
+        "src/lib/__tests__/customerRebookingRadar.test.js",
+        "src/lib/__tests__/quoteCreation.server.test.js",
+        "src/lib/__tests__/rebookQuoteClient.test.js",
+        "src/lib/__tests__/rebookQuoteDraft.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "e2e/customer-centered-workspace.spec.js",
+          "locator": "Customer 360 surfaces an exact-version anniversary rebook cue without inventing a local draft"
+        },
+        {
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "creates once, preserves the receipt, and opens the pending draft in one click"
+        },
+        {
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "locks an ambiguous outcome to deterministic reconciliation"
+        },
+        {
+          "path": "src/components/__tests__/quoteHistoryPermissions.test.jsx",
+          "locator": "blocks customer and kitchen artifacts while exact-version rebook review is pending"
+        },
+        {
+          "path": "src/lib/__tests__/rebookQuoteDraft.server.test.js",
+          "locator": "exports a staff-only exact-version callable that never accepts quote content"
+        },
+        {
+          "path": "src/lib/__tests__/rebookQuoteClient.test.js",
+          "locator": "blocks an exact-version rebook until staff review is completed"
+        },
+        {
+          "path": "src/lib/__tests__/quoteCreation.server.test.js",
+          "locator": "turns a rebook review gate into immutable evidence only after a trusted future-date edit"
+        },
+        {
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "shows exact completed evidence and detects an unsaved date divergence"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "CWF-11 exact-version rebook draft:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Customer Directory and Customer 360"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The Customer 360 anniversary entry, exact immutable source labels, deterministic submission identity, uncertainty and reconciliation copy, new-draft handoff, staff review banner, and delivery gate were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "renders the ready boundary without claiming an outbound or commercial outcome",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "creates once, preserves the receipt, and opens the pending draft in one click",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "locks an ambiguous outcome to deterministic reconciliation",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "locks an ambiguous outcome to deterministic reconciliation",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "creates once, preserves the receipt, and opens the pending draft in one click",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "separates definitive rejection from recovery and hides raw errors",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/customerRebookDraftAction.test.jsx",
+          "locator": "separates definitive rejection from recovery and hides raw errors",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can create or reconcile exactly one review-required rebook draft and open it for editing, while no message, acceptance, booking, payment, or revenue outcome is inferred and outbound delivery remains blocked until trusted review evidence is saved."
+    },
+    {
+      "id": "commercial-change-impact-preview",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "The trusted quote edit flow can request server-authoritative current and proposed pricing snapshots, then traverse the Commercial Dependency Graph to show exact changed facts, money deltas, and advisory REVIEW or STALE consequences before any save.",
+      "backendPaths": [
+        "functions/commercialChangeImpactPreview.js",
+        "functions/index.js",
+        "functions/pricingEngine.js",
+        "src/lib/commerceOps.js",
+        "src/lib/commercialChangeImpact.js"
+      ],
+      "backendExports": [
+        "functions/index.js#calculateQuotePricing"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#calculateQuotePricing"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/CommercialChangeImpactPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/App.jsx",
+          "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-preview\""
+        },
+        {
+          "path": "src/components/CommercialChangeImpactPanel.jsx",
+          "locator": "data-capability-id=\"cwf-15b-commercial-change-impact-presentation\""
+        }
+      ],
+      "testPaths": [
+        "e2e/customer-centered-workspace.spec.js",
+        "e2e/firebase-authoritative-pricing.smoke.spec.js",
+        "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+        "src/lib/__tests__/commercialChangeImpact.test.js",
+        "src/lib/__tests__/commercialChangeImpactPreview.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "e2e/firebase-authoritative-pricing.smoke.spec.js",
+          "locator": "owner saves an authoritative quote and disabled delivery cannot activate its portal"
+        },
+        {
+          "path": "e2e/customer-centered-workspace.spec.js",
+          "locator": "history navigation from a direct edit route detaches the mounted form into create mode"
+        },
+        {
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "shows exact before and proposed facts plus authoritative commercial deltas"
+        },
+        {
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "is mechanically bound to the trusted quote edit and authoritative pricing path"
+        },
+        {
+          "path": "src/lib/__tests__/commercialChangeImpactPreview.server.test.js",
+          "locator": "never places customer contact content in the preview"
+        },
+        {
+          "path": "src/lib/__tests__/commercialChangeImpact.test.js",
+          "locator": "reports exact declared fact and supplied commercial-value changes without calculating them"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "CWF-15B read-only Commercial Change Impact preview:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Quote Builder Details"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The quote-edit entry point, server-authoritative repricing request, generation guard, exact before/proposed evidence, dependency classifications, proof boundary, retained stale result, and return-to-edit action were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "keeps a prior result visible while a replacement simulation is loading",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "distinguishes empty, partial, error, and stale evidence without inventing a completed result",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "shows exact before and proposed facts plus authoritative commercial deltas",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "distinguishes empty, partial, error, and stale evidence without inventing a completed result",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "distinguishes empty, partial, error, and stale evidence without inventing a completed result",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "distinguishes empty, partial, error, and stale evidence without inventing a completed result",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+          "locator": "exposes a canonical recovery state while retrying authoritative simulation",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can simulate the exact blast radius of an unsaved quote edit from canonical source and trusted pricing snapshots without exposing contact content or implying that any save, authorization, invalidation, regeneration, reconciliation, or publication occurred."
     },
     {
       "id": "commercial-dependency-graph-beo-provenance",

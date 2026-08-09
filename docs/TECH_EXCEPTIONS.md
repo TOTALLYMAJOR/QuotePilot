@@ -20,27 +20,53 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 9, 2026
 - Owner: QuotePilot maintainers
-- Change: Temporarily raise the aggregate JavaScript allowance from 5% to 5.5%
-  for the customer-centered workspace convergence branch without changing the
-  clean-main baseline.
+- Change: Apply named, absolute branch ceilings of 2,331,934 aggregate
+  JavaScript bytes and 413,275 bytes for the largest chunk while the
+  customer-centered workspace converges. The clean-main baseline remains
+  1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
+  allowance.
 - Exception type: `perf-threshold-temp`
-- Rationale: The complete routed staff workspace, Customer 360, mutation-state
-  recovery, and staff evidence presentation are being qualified together on an
-  unmerged branch. The clean-main baseline cannot be truthfully regenerated
-  until that source lands.
-- Risk impact: Aggregate lazy-loaded JavaScript may grow by up to an additional
-  0.5 percentage point during this branch. The largest-chunk gate remains
-  unchanged and all new work remains subject to build and browser checks.
-- Performance impact: The August 9 build contains 2,100,135 JavaScript bytes
-  versus the 1,997,365-byte clean-main baseline (5.15% growth); the largest
-  chunk is 390,494 bytes, within the existing largest-chunk allowance.
-- Rollback plan: Revert the allowance to 5% and remove or defer enough branch
-  source to pass the prior threshold.
-- Exit criteria: After the workspace source lands, build from a clean updated
-  `main`, reset the exact baseline per policy, restore the normal 5% allowance,
-  and pass bundle, CWV, default-route, and flagged-workspace browser checks.
-- Verification evidence: `npm run build`, `npm run check:perf:bundle`, the full
-  unit suite, and default plus flagged Playwright lanes.
+- Rationale: The routed staff workspace, Customer 360, commercial dependency
+  graph, rebooking, commercial-measures, Revenue Autopilot preview, and their
+  role-safe recovery/presentation states are being reviewed together on an
+  unmerged source branch. Resetting the baseline from that branch would erase
+  the comparison with clean `main`; one shared percentage would also grant the
+  largest chunk substantially more room than the measured build needs.
+- Risk impact: The emitted asset set is 334,569 bytes (16.75%) above the
+  clean-main aggregate baseline. The 413,275-byte `WorkspaceRoute` chunk is
+  25,346 bytes (6.53%) above the clean-main largest-chunk baseline and 5,950
+  bytes above the normal 5% ceiling. Lazy route boundaries reduce initial-load
+  exposure, but staff who enter affected routes can still incur added download,
+  parse, and execution cost, especially on slower mobile hardware. This
+  exception has zero byte headroom: any further growth fails the guard.
+- Performance impact: The larger of the August 9 disabled- and enabled-flag
+  source builds emitted 2,331,934 aggregate JavaScript bytes and a 413,275-byte
+  largest chunk. The other largest emitted
+  chunks were Firebase at 390,494 bytes and jsPDF at 385,630 bytes. These are
+  local source-build measurements, not Core Web Vitals, hosted, production, or
+  human-acceptance evidence.
+- Rollback plan: Delete `docs/performance/bundle-exception.json` and remove,
+  defer, or split enough branch code to pass the unchanged standard ceilings of
+  2,097,233 aggregate bytes and 407,325 bytes for the largest chunk. The
+  clean-main baseline needs no rollback because this exception does not change
+  it.
+- Exit criteria: Before this exception is closed, use one of two explicit
+  paths: (1) optimize the branch to the standard ceilings and delete the
+  exception, or (2) after the source is merged, obtain maintainer approval for
+  a clean updated-`main` baseline reset, delete the exception, and retain the
+  normal 5% allowance. Either path must pass a fresh build, the bundle guard
+  with no active exception, local CWV, and focused default plus flagged staff
+  route checks at desktop and mobile widths. Hosted signed-in acceptance, flag
+  removal, and production promotion remain separate release gates.
+- Verification evidence: fresh disabled- and enabled-flag `npm run build`
+  executions produced the measurements above, and `npm run check:perf:bundle`
+  passed while reporting this exact named exception, its absolute ceilings, and
+  the unchanged normal limits. `npm run check:perf:cwv` also passed locally on
+  the public `/` route at 0.90 performance, 3,292.5 ms LCP, 0 CLS, and 146.5 ms
+  TBT. That public-route result is not authenticated staff-workspace evidence
+  and does not waive the exit checks: a no-exception build, focused default and
+  flagged `/app` performance checks, hosted staff acceptance, flag removal, and
+  production promotion remain pending.
 
 ## Resolved Exceptions
 
