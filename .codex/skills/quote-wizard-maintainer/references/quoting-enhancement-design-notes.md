@@ -180,3 +180,66 @@ Design:
 Touchpoints: `CustomerPortalView.jsx`, `quoteWorkflow.js` attention builder.
 Risks: low; keep attention queue as tracking, not delivery proof.
 Validation: `test:unit`, `test:e2e`.
+
+## Repo health findings (August 2026 review)
+
+Backlog items for these live in `DEV_TASKS.md` under "P1 - Code Health and
+Reliability" and "P2 - Configurability". Evidence and suggested fixes:
+
+1. Duplicated pricing-classification logic. `resolveAddonStaffRole` and
+   `resolvePricingType` are copied in `src/lib/quoteCalculator.js`,
+   `src/components/WizardSteps.jsx`, and `src/components/LiveBreakdown.jsx`.
+   Drift between copies makes the charged price and the UI label disagree
+   silently. Staff role is inferred from item id/name substrings
+   ("chef", "server", "bartender", "event staff") when no explicit
+   `staffRole` field exists, so an add-on named "Chef's Tasting Board"
+   silently becomes quantity-priced staffing. Fix: one shared helper module
+   plus an explicit catalog `staffRole` field in Catalog Admin; keep the
+   name heuristic only as a legacy fallback.
+2. Analytics queue poisoning. The client queues events in `localStorage`
+   (`src/lib/productAnalytics.js`, cap 100, newest kept) and the server
+   (`functions/productAnalytics.js` `sanitizeAnalyticsEvent`) throws on the
+   first invalid event, failing the whole `recordProductAnalyticsEvents`
+   batch; the client swallows the error and dequeues nothing. One event
+   name outside `ANALYTICS_EVENT_NAMES` blocks that tenant's analytics
+   until the bad event ages past the queue cap. Fix server-side per-event
+   skip with per-item results, or client-side drop on `invalid-argument`.
+   Any new client event name must land in the server allowlist in the same
+   release.
+3. Dead staffing fields. `addonServers`/`addonChefs`/`addonBartenders` in
+   `calculateQuote` are always zero but flow into totals and persisted
+   snapshots — vestige of an unfinished add-on-driven staffing feature.
+   Complete it or remove the fields (removal touches snapshot consumers, so
+   sweep `proposalPayload.js`, exports, and fixtures).
+4. Hard-coded business caps. 400 guests (`calculateQuote` and the step-1
+   label), 30 servers, 20 chefs, 20 bartenders, 12 hours
+   (`MIN/MAX_EVENT_HOURS`) are code constants, not tenant policy. Move to
+   validated tenant settings with these values as defaults; keep the
+   displayed cap and the priced cap sourced from the same setting.
+5. Monolith concentration. `src/lib/quoteStore.js` (~4,500 lines) and
+   `src/App.jsx` (~3,000 lines) concentrate high-risk logic; AGENTS.md
+   already flags quoteStore. Split along existing seams (portal snapshot
+   projection, delivery evidence, availability, versioning). The
+   `e2e/quote-wizard.smoke.spec.js` file runs ~9 minutes serially; split it
+   so Playwright can parallelize.
+6. Test-time apt dependency. `scripts/ensure-playwright-linux-libs.sh`
+   downloads `.deb` packages from Ubuntu mirrors at run time and fails on
+   stale package indexes or egress-restricted runners (observed: mirror
+   404s aborting the lane before any test). Prefer system-installed
+   `libnspr4/libnss3/libasound` when present; vendor or pin the fallback.
+7. Environment-sensitive e2e failure. `e2e/ui-recovery.spec.js:196`
+   (failed public-route chunk → "Reload page" → `/system` heading) fails
+   consistently in a sandboxed container on current `main` (verified
+   pre-change), while the other 57 default-lane tests pass. Suspect
+   browser-build/runtime differences; confirm the spec is green in
+   canonical CI before treating any local red as a regression.
+8. Release-control gaps are already tracked. Zero required approvals on
+   `main`, missing `production-uat` environment, unprotected `Production`
+   environment, and the sole-admin review model are documented under
+   "P0 - Security and Reliability" in `DEV_TASKS.md`; treat them as the
+   highest-consequence open items. Not duplicated here.
+9. Deposit rounding parity. The client preview computes
+   `deposit = total x depositPct` in floats while authoritative snapshots
+   use integer minor units server-side; a one-cent display disagreement is
+   possible at rounding boundaries. Add one parity fixture at a boundary
+   value to `quoteCalculationFixtures` and the pricing-callable tests.

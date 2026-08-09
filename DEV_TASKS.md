@@ -88,6 +88,33 @@ load that reference before implementation.
 - Use the explicit quote valid-through date for a portal pricing-hold
   countdown and expiry-driven follow-up suggestions in Workflow Attention.
 
+## P1 - Code Health and Reliability
+Evidence and suggested fixes for this group live in
+`.codex/skills/quote-wizard-maintainer/references/quoting-enhancement-design-notes.md`
+(Repo health findings).
+- Consolidate the duplicated `resolveAddonStaffRole` and `resolvePricingType`
+  logic (quoteCalculator, WizardSteps, LiveBreakdown) into one shared helper so
+  charged price and UI labels cannot drift, and add an explicit catalog
+  `staffRole` field so staffing add-ons stop relying on item-name inference.
+- Make product analytics ingestion tolerate invalid events per-event (or drop
+  the rejected batch client-side on invalid-argument) so one disallowed event
+  name cannot block a tenant's queued analytics until it ages out of the
+  100-item cap; land any new client event name and its server allowlist entry
+  in the same release.
+- Remove or complete the always-zero addonServers/addonChefs/addonBartenders
+  fields carried through calculateQuote totals into persisted snapshots.
+- Split quoteStore.js (~4,500 lines) and App.jsx (~3,000 lines) along existing
+  seams consistent with the high-risk-file policy, and split the ~9-minute
+  quote-wizard smoke spec so Playwright can parallelize it.
+- Replace the test-time apt download in ensure-playwright-linux-libs.sh with
+  system-library detection plus a vendored or pinned fallback so the default
+  e2e lane runs on egress-restricted runners.
+- Confirm e2e ui-recovery public-route chunk-recovery (spec around line 196)
+  is green in canonical CI; it fails consistently in a sandboxed container on
+  current main while the rest of the default lane passes.
+- Add a client/server deposit rounding parity fixture (float preview versus
+  integer-minor-unit authoritative snapshot) at a rounding-boundary value.
+
 ## P1 - Product Capability
 - Add opt-in, provider-backed notifications and configurable escalation rules
   for due follow-ups and new customer change requests; preserve the in-app
@@ -107,5 +134,9 @@ load that reference before implementation.
 
 ## P2 - Configurability
 - Move more pricing behavior to config-driven policies.
+- Make wizard capacity caps tenant-configurable policy with the current
+  values as defaults (hard-coded today: 400 guests, 30 servers, 20 chefs,
+  20 bartenders, 12 event hours), keeping the displayed cap and the priced
+  cap sourced from the same setting.
 - Add feature flags for optional modules.
 - Add finer role-based controls for approvals/report visibility.
