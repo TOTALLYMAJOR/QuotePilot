@@ -12,6 +12,9 @@ import { buildPortalThemeStyle } from "../data/portalThemePresets";
 import { portalConversationAvailable } from "../lib/portalConversationClient";
 import ProductBrandLockup from "./ProductBrandLockup";
 import QuoteConversationPanel from "./QuoteConversationPanel";
+import ShimmerReveal from "./ShimmerReveal";
+import { playCue } from "./soundKit";
+import "./portalCeremony.css";
 
 const PAYMENT_CONFIRMATION_POLL_INTERVAL_MS = 1500;
 const PAYMENT_CONFIRMATION_MAX_ATTEMPTS = 10;
@@ -35,6 +38,10 @@ const PAYMENT_STATUS_LABELS = {
   paid: "Paid",
   refunded: "Refunded"
 };
+const ACCEPTED_PORTAL_STATUSES = new Set(["accepted", "booked"]);
+// Longest ceremony run: ShimmerReveal self-cleans at ~1520ms; ceremony classes
+// are removed just after so every one-shot effect leaves no residue.
+const PORTAL_CEREMONY_SETTLE_MS = 1600;
 
 function paymentStatusLabel(depositStatus) {
   const normalized = String(depositStatus || "unpaid").trim().toLowerCase();
@@ -453,6 +460,163 @@ export function PortalDecisionMutationState({
         </button>
       )}
     </div>
+  );
+}
+
+// --- Portal ceremony (one-shot, live-session only) -------------------------
+// The acceptance and payment ceremonies fire only on the transition INTO
+// accepted/confirmed observed during this session — never on page load of an
+// already-accepted quote. Transition tracking uses refs, mirroring
+// CommercialImpactShimmer in CommercialChangeImpactPanel.jsx.
+
+// True when ceremony motion must be skipped: no browser window (SSR) or the
+// visitor prefers reduced motion. On skip, the UI jumps straight to the
+// final state with no ceremony classes, shimmer, or cue.
+export function ceremonyMotionDisabled() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
+// Fresh acceptance = the SAME portal quote, already observed live in a
+// non-accepted status, moves into the accepted family. A null/blank previous
+// observation (first render of an already-accepted quote) never fires, and
+// neither does accepted -> booked or a jump between different portal keys.
+export function isFreshAcceptanceTransition(previous, next) {
+  const previousKey = normalizedDecisionText(previous?.portalKey);
+  const nextKey = normalizedDecisionText(next?.portalKey);
+  const previousStatus = normalizedDecisionText(previous?.status).toLowerCase();
+  const nextStatus = normalizedDecisionText(next?.status).toLowerCase();
+  return Boolean(previousKey)
+    && previousKey === nextKey
+    && Boolean(previousStatus)
+    && !ACCEPTED_PORTAL_STATUSES.has(previousStatus)
+    && ACCEPTED_PORTAL_STATUSES.has(nextStatus);
+}
+
+// Fresh payment confirmation = the payment-return flow was observed live in a
+// non-confirmed state and now reads confirmed. A first observation that is
+// already confirmed (no live previous state) never fires.
+export function isFreshPaymentConfirmationTransition(previousState, nextState) {
+  const previous = String(previousState || "").trim().toLowerCase();
+  const next = String(nextState || "").trim().toLowerCase();
+  return Boolean(previous) && previous !== "confirmed" && next === "confirmed";
+}
+
+// Electronic-acceptance receipt block plus its one-shot acceptance ceremony:
+// ink-drawn signer name, seal-stamp settle, positive shimmer, and a single
+// "seal" cue. Hook state lives in this child (not in a seam that tests invoke
+// as a plain function). Mounted whenever a quote is shown so it observes the
+// pre-acceptance status; it renders nothing until a receipt exists.
+export function AcceptanceCeremonyReceipt({ quote }) {
+  const observedRef = useRef(null);
+  const settleTimerRef = useRef(0);
+  const [ceremony, setCeremony] = useState({ active: false, run: 0 });
+  const portalKey = quote?.portalKey || "";
+  const status = quote?.status || "";
+
+  useEffect(() => () => {
+    if (typeof window !== "undefined") window.clearTimeout(settleTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const previous = observedRef.current;
+    const next = { portalKey, status };
+    observedRef.current = next;
+    if (!isFreshAcceptanceTransition(previous, next)) return;
+    if (ceremonyMotionDisabled()) return;
+    // One sound, once: the shimmer below is muted so "seal" stands alone.
+    playCue("seal");
+    setCeremony((prev) => ({ active: true, run: prev.run + 1 }));
+    window.clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = window.setTimeout(() => {
+      setCeremony((prev) => ({ ...prev, active: false }));
+    }, PORTAL_CEREMONY_SETTLE_MS);
+  }, [portalKey, status]);
+
+  const receipt = quote?.acceptanceReceipt;
+  if (!receipt || !ACCEPTED_PORTAL_STATUSES.has(String(status).trim().toLowerCase())) {
+    return null;
+  }
+  return (
+    <section
+      className={`portal-decision-note-receipt portal-signature-receipt${
+        ceremony.active ? " portal-ceremony-host portal-ceremony-stamp" : ""
+      }`}
+    >
+      <span>Electronic acceptance receipt</span>
+      <p>
+        Signed by <strong className={ceremony.active ? "portal-ceremony-ink" : undefined}>{receipt.signerName}</strong> on{" "}
+        {fmtDateTime(receipt.acceptedAtISO)}.
+      </p>
+      <small>
+        Receipt {receipt.receiptId} · Revision {receipt.quoteRevisionId}
+      </small>
+      <ShimmerReveal trigger={ceremony.run} tone="positive" sound={false} />
+    </section>
+  );
+}
+
+// Deposit payment-status block plus its one-shot payment-confirmed ceremony:
+// positive shimmer over the block, a self-drawing checkmark beside the
+// confirmation message, and a single positive chime. The fully drawn
+// checkmark remains part of the confirmed presentation; only the draw
+// animation class is one-shot.
+export function PaymentStatusCeremonyBlock({
+  payment = {},
+  confirmationState = "idle",
+  confirmationMessage = ""
+}) {
+  const observedRef = useRef(null);
+  const settleTimerRef = useRef(0);
+  const [ceremony, setCeremony] = useState({ active: false, run: 0 });
+
+  useEffect(() => () => {
+    if (typeof window !== "undefined") window.clearTimeout(settleTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const previous = observedRef.current;
+    observedRef.current = confirmationState;
+    if (!isFreshPaymentConfirmationTransition(previous, confirmationState)) return;
+    if (ceremonyMotionDisabled()) return;
+    // One sound, once: the shimmer below is muted so this chime stands alone.
+    playCue("chime", "positive");
+    setCeremony((prev) => ({ active: true, run: prev.run + 1 }));
+    window.clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = window.setTimeout(() => {
+      setCeremony((prev) => ({ ...prev, active: false }));
+    }, PORTAL_CEREMONY_SETTLE_MS);
+  }, [confirmationState]);
+
+  const confirmed = String(confirmationState || "").trim().toLowerCase() === "confirmed";
+  return (
+    <>
+      <div className={`portal-payment-state${ceremony.active ? " portal-ceremony-host" : ""}`}>
+        <span>Payment status</span>
+        <strong>{paymentStatusLabel(payment.depositStatus)}</strong>
+        {payment.depositConfirmedAtISO && <small>Confirmed {fmtDate(payment.depositConfirmedAtISO)}</small>}
+        <ShimmerReveal trigger={ceremony.run} tone="positive" sound={false} particleCount={120} />
+      </div>
+      {confirmationMessage && (
+        <p className="source-note" role="status" aria-live="polite">
+          {confirmed && (
+            <svg
+              className={`portal-ceremony-check${ceremony.active ? " portal-ceremony-check-drawing" : ""}`}
+              viewBox="0 0 18 18"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M3.5 9.5l4 4 7-8" />
+            </svg>
+          )}
+          {confirmationMessage}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -1080,16 +1244,11 @@ export default function CustomerPortalView({
                   <div className="portal-price-total"><dt>Total</dt><dd>{currency(quote.total || 0)}</dd></div>
                   <div className="portal-price-deposit"><dt>Deposit</dt><dd>{currency(quote.deposit || 0)}</dd></div>
                 </dl>
-                <div className="portal-payment-state">
-                  <span>Payment status</span>
-                  <strong>{paymentStatusLabel(payment.depositStatus)}</strong>
-                  {payment.depositConfirmedAtISO && <small>Confirmed {fmtDate(payment.depositConfirmedAtISO)}</small>}
-                </div>
-                {paymentConfirmationMessage && (
-                  <p className="source-note" role="status" aria-live="polite">
-                    {paymentConfirmationMessage}
-                  </p>
-                )}
+                <PaymentStatusCeremonyBlock
+                  payment={payment}
+                  confirmationState={paymentConfirmation.state}
+                  confirmationMessage={paymentConfirmationMessage}
+                />
                 {finalBalanceUi.visible && (
                   <div className="portal-payment-state">
                     <span>Final balance</span>
@@ -1260,18 +1419,7 @@ export default function CustomerPortalView({
               </section>
             )}
 
-            {quote.acceptanceReceipt && ["accepted", "booked"].includes(quote.status) && (
-              <section className="portal-decision-note-receipt portal-signature-receipt">
-                <span>Electronic acceptance receipt</span>
-                <p>
-                  Signed by <strong>{quote.acceptanceReceipt.signerName}</strong> on{" "}
-                  {fmtDateTime(quote.acceptanceReceipt.acceptedAtISO)}.
-                </p>
-                <small>
-                  Receipt {quote.acceptanceReceipt.receiptId} · Revision {quote.acceptanceReceipt.quoteRevisionId}
-                </small>
-              </section>
-            )}
+            <AcceptanceCeremonyReceipt quote={quote} />
 
             {quote.portalDecision?.message && decisionLocked && (
               <section className="portal-decision-note-receipt">

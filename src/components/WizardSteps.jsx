@@ -1,9 +1,79 @@
 import { useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import { MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
+import { playCue } from "./soundKit";
+import "./wizardMotion.css";
 
 function joinClassNames(...parts) {
   return parts.filter(Boolean).join(" ");
+}
+
+// ---------------------------------------------------------------------------
+// Selection micro-motion (one-shot classes; CSS lives in wizardMotion.css).
+// The classes are applied imperatively from user-event handlers only, so
+// static renders (and markup snapshots) never contain them, and programmatic
+// form updates (template application etc.) never trigger motion or sound.
+
+const SELECTION_SETTLE_CLASS = "selection-settle";
+const QTY_PULSE_CLASS = "qty-pulse";
+// Cleanup fallbacks land comfortably after the CSS animations finish
+// (settle runs --motion-base ~240ms, the wink 2x that; pulse ~240ms).
+const SELECTION_SETTLE_CLEANUP_MS = 700;
+const QTY_PULSE_CLEANUP_MS = 450;
+
+function prefersReducedMotion() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
+// Pending cleanup timers per element/class so rapid re-triggers restart cleanly.
+const oneShotMotionTimers = new WeakMap();
+
+// One-shot motion: adds `className` to `el`, restarting its keyframes if the
+// class is already present (remove -> forced reflow -> add), then removes it
+// after `cleanupMs`. Returns true only when the class was applied.
+export function runOneShotMotionClass(el, className, cleanupMs = SELECTION_SETTLE_CLEANUP_MS) {
+  if (!el || !el.classList) return false;
+  if (prefersReducedMotion()) return false;
+  const timers = oneShotMotionTimers.get(el) || {};
+  if (timers[className]) clearTimeout(timers[className]);
+  el.classList.remove(className);
+  // Reading offsetWidth forces a reflow so re-adding the class restarts the keyframes.
+  void el.offsetWidth;
+  el.classList.add(className);
+  timers[className] = setTimeout(() => {
+    el.classList.remove(className);
+    const pending = oneShotMotionTimers.get(el);
+    if (pending) delete pending[className];
+  }, cleanupMs);
+  oneShotMotionTimers.set(el, timers);
+  return true;
+}
+
+function closestFromEvent(event, selector) {
+  const node = event?.currentTarget || event?.target;
+  if (!node || typeof node.closest !== "function") return null;
+  return node.closest(selector);
+}
+
+function settleSelectionCard(event) {
+  return runOneShotMotionClass(
+    closestFromEvent(event, ".checkrow"),
+    SELECTION_SETTLE_CLASS,
+    SELECTION_SETTLE_CLEANUP_MS
+  );
+}
+
+function pulseQuantityControl(event, selector) {
+  return runOneShotMotionClass(
+    closestFromEvent(event, selector),
+    QTY_PULSE_CLASS,
+    QTY_PULSE_CLEANUP_MS
+  );
 }
 
 function Field({ label, children, error = "", hint = "", required = false, className = "" }) {
@@ -58,7 +128,7 @@ function AccordionGroup({
   );
 }
 
-function StepperNumberInput({
+export function StepperNumberInput({
   label,
   min,
   max,
@@ -79,7 +149,10 @@ function StepperNumberInput({
         <button
           type="button"
           className="ghost compact"
-          onClick={() => onChange(Math.max(min, safeValue - 1))}
+          onClick={(e) => {
+            pulseQuantityControl(e, ".stepper-input");
+            onChange(Math.max(min, safeValue - 1));
+          }}
           disabled={decrementDisabled}
           aria-label={`Decrease ${label}`}
         >
@@ -91,14 +164,20 @@ function StepperNumberInput({
           max={max}
           value={safeValue}
           aria-label={label}
-          onChange={(e) => onChange(Number(e.target.value || 0))}
+          onChange={(e) => {
+            pulseQuantityControl(e, ".stepper-input");
+            onChange(Number(e.target.value || 0));
+          }}
           onBlur={onBlur}
           aria-invalid={Boolean(error)}
         />
         <button
           type="button"
           className="ghost compact"
-          onClick={() => onChange(Math.min(max, safeValue + 1))}
+          onClick={(e) => {
+            pulseQuantityControl(e, ".stepper-input");
+            onChange(Math.min(max, safeValue + 1));
+          }}
           disabled={incrementDisabled}
           aria-label={`Increase ${label}`}
         >
@@ -568,10 +647,16 @@ export function StepMenu({
   };
   const menuQuantities = form.menuItemQuantities || {};
 
-  const toggleMenuItem = (item, checked) => {
+  const toggleMenuItem = (item, checked, event = null) => {
     const itemId = String(item?.id || "").trim();
     if (!itemId) return;
     const pricingType = resolvePricingType(item);
+    if (checked) {
+      // Explicit user selection only: this handler is reached solely from the
+      // checkbox change event, never from programmatic form updates.
+      settleSelectionCard(event);
+      playCue("tick");
+    }
     if (typeof onSelectionTouched === "function") onSelectionTouched("menuItems", itemId);
     setForm((f) => {
       const nextSelected = new Set(Array.isArray(f.menuItems) ? f.menuItems : []);
@@ -593,8 +678,9 @@ export function StepMenu({
     });
   };
 
-  const patchMenuQuantity = (itemId, value) => {
+  const patchMenuQuantity = (itemId, value, event = null) => {
     const quantity = Math.max(1, Math.round(Number(value || 1)));
+    pulseQuantityControl(event, ".checkrow");
     if (typeof onSelectionTouched === "function") onSelectionTouched("menuItems", itemId);
     setForm((f) => ({
       ...f,
@@ -675,7 +761,7 @@ export function StepMenu({
                       <input
                         type="checkbox"
                         checked={form.menuItems.includes(item.id)}
-                        onChange={(e) => toggleMenuItem(item, e.target.checked)}
+                        onChange={(e) => toggleMenuItem(item, e.target.checked, e)}
                       />
                       <span>{item.name}</span>
                       <small>{includedMenuItemIds.has(item.id) ? "Included at no added charge — select to add" : pricingLabel(item)}</small>
@@ -686,7 +772,7 @@ export function StepMenu({
                           min="1"
                           step="1"
                           value={Math.max(1, Number(menuQuantities[item.id] || 1))}
-                          onChange={(e) => patchMenuQuantity(item.id, e.target.value)}
+                          onChange={(e) => patchMenuQuantity(item.id, e.target.value, e)}
                         />
                       )}
                     </label>
@@ -772,13 +858,19 @@ export function StepServices({
     return currency(item.price);
   };
 
-  const toggle = (key, quantityKey, item, checked, fallbackQty = 1) => {
+  const toggle = (key, quantityKey, item, checked, fallbackQty = 1, event = null) => {
     const id = String(item?.id || "").trim();
     if (!id) return;
     const pricingType = resolvePricingType(item, key === "rentals" ? "per_item" : "per_event");
     const quantityEnabled = key === "addons"
       ? addonSupportsQuantity(item, pricingType)
       : pricingType === "per_item";
+    if (checked) {
+      // Explicit user selection only: this handler is reached solely from the
+      // checkbox change event, never from programmatic form updates.
+      settleSelectionCard(event);
+      playCue("tick");
+    }
     if (typeof onSelectionTouched === "function") onSelectionTouched(key, id);
     if (key === "addons" && typeof onAddonSelection === "function") {
       onAddonSelection(id, checked);
@@ -803,8 +895,9 @@ export function StepServices({
     });
   };
 
-  const patchQuantity = (quantityKey, id, value, touchedFieldName) => {
+  const patchQuantity = (quantityKey, id, value, touchedFieldName, event = null) => {
     const quantity = Math.max(1, Math.round(Number(value || 1)));
+    pulseQuantityControl(event, ".checkrow");
     if (typeof onSelectionTouched === "function") onSelectionTouched(touchedFieldName, id);
     setForm((f) => ({
       ...f,
@@ -870,7 +963,7 @@ export function StepServices({
                 <input
                   type="checkbox"
                   checked={selected}
-                  onChange={(e) => toggle("addons", "addonQuantities", item, e.target.checked, 1)}
+                  onChange={(e) => toggle("addons", "addonQuantities", item, e.target.checked, 1, e)}
                 />
                 <span>{item.name}</span>
                 <small>{includedAddonIds.has(item.id) ? "Included at no added charge — select to add" : pricingLabel(item, "per_person")}</small>
@@ -881,7 +974,7 @@ export function StepServices({
                     min="1"
                     step="1"
                     value={Math.max(1, Number(form.addonQuantities?.[item.id] || 1))}
-                    onChange={(e) => patchQuantity("addonQuantities", item.id, e.target.value, "addons")}
+                    onChange={(e) => patchQuantity("addonQuantities", item.id, e.target.value, "addons", e)}
                   />
                 )}
               </label>
@@ -905,7 +998,7 @@ export function StepServices({
                 <input
                   type="checkbox"
                   checked={selected}
-                  onChange={(e) => toggle("rentals", "rentalQuantities", item, e.target.checked, fallbackQty)}
+                  onChange={(e) => toggle("rentals", "rentalQuantities", item, e.target.checked, fallbackQty, e)}
                 />
                 <span>{item.name}</span>
                 <small>{includedRentalIds.has(item.id) ? "Included at no added charge — select to add" : pricingLabel(item, "per_item")}</small>
@@ -916,7 +1009,7 @@ export function StepServices({
                     min="1"
                     step="1"
                     value={Math.max(1, Number(form.rentalQuantities?.[item.id] || fallbackQty))}
-                    onChange={(e) => patchQuantity("rentalQuantities", item.id, e.target.value, "rentals")}
+                    onChange={(e) => patchQuantity("rentalQuantities", item.id, e.target.value, "rentals", e)}
                   />
                 )}
               </label>

@@ -10,6 +10,7 @@ import CustomerCommercialMeasures from "./CustomerCommercialMeasures";
 import CustomerRevenueOpportunities, {
   buildCustomerRevenueOpportunityRead
 } from "./CustomerRevenueOpportunities";
+import RevenueAutopilotCustomerControls from "./RevenueAutopilotCustomerControls";
 import QuoteVersionComparison from "./QuoteVersionComparison";
 import {
   formatWorkspaceDate,
@@ -312,7 +313,8 @@ export default function CustomerWorkspaceView({
   onOpenWorkflow,
   onOpenSchedule,
   scheduleAvailable = true,
-  tenantTimeZone = ""
+  tenantTimeZone = "",
+  isAdmin = false
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [previewQuoteId, setPreviewQuoteId] = useState("");
@@ -553,6 +555,15 @@ export default function CustomerWorkspaceView({
             rebookCreationAvailable={workspace.source === "firebase"}
             closeoutReviewAvailable={workspace.source === "firebase"}
             onCloseoutReceipt={() => setRefreshToken((value) => value + 1)}
+          />
+          <RevenueAutopilotCustomerControls
+            organizationId={organizationId}
+            customerId={customer.customerId || customer.id}
+            controls={customer.revenueAutopilotEmailControls}
+            isAdmin={isAdmin}
+            projectionStale={state.stale || state.loading}
+            projectionError={customer.revenueAutopilotEmailControlsError}
+            onRefresh={() => setRefreshToken((value) => value + 1)}
           />
           <CustomerCommercialMeasures
             workspace={workspace}

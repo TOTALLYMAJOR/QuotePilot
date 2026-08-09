@@ -307,7 +307,15 @@ describe("quoteStore Firebase write safety", () => {
             activeVersionId: "v0002",
             latestVersionNumber: 2,
             versionId: "v0002",
-            versionNumber: 2
+            versionNumber: 2,
+            commercialChange: {
+              authorityState: "enforced",
+              applyReceiptId: `ccp_${"c".repeat(48)}`,
+              state: "BLOCKED",
+              safeToPublish: false,
+              openInvalidationCount: 3,
+              totalInvalidationCount: 3
+            }
           }
         });
       }
@@ -446,7 +454,7 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.runTransaction).not.toHaveBeenCalled();
   });
 
-  test("updateQuote delegates only quote identity and presentation to the trusted edit callable", async () => {
+  test("updateQuote delegates only quote presentation and exact commercial authority identities to the trusted edit callable", async () => {
     const result = await updateQuote({
       quoteId: "quote-1",
       organizationId: "Org One",
@@ -488,7 +496,12 @@ describe("quoteStore Firebase write safety", () => {
         }]
       },
       ownerUid: "forged-owner",
-      ownerEmail: "forged-owner@example.com"
+      ownerEmail: "forged-owner@example.com",
+      commercialChangeAuthority: {
+        simulationReceiptId: `ccs_${"a".repeat(48)}`,
+        authorizationReceiptId: `cca_${"b".repeat(48)}`,
+        applyRequestId: `change_apply_${"d".repeat(32)}`
+      }
     });
 
     expect(result).toMatchObject({
@@ -497,7 +510,15 @@ describe("quoteStore Firebase write safety", () => {
       status: "draft",
       storage: "firebase",
       activeVersionId: "v0002",
-      latestVersionNumber: 2
+      latestVersionNumber: 2,
+      commercialChange: {
+        authorityState: "enforced",
+        applyReceiptId: `ccp_${"c".repeat(48)}`,
+        state: "BLOCKED",
+        safeToPublish: false,
+        openInvalidationCount: 3,
+        totalInvalidationCount: 3
+      }
     });
     expect(mockState.httpsCallable).toHaveBeenCalledWith(
       mockState.cloudFunctions,
@@ -510,7 +531,12 @@ describe("quoteStore Firebase write safety", () => {
       form: expect.objectContaining({
         name: "Updated Client",
         pkg: "classic"
-      })
+      }),
+      commercialChangeAuthority: {
+        simulationReceiptId: `ccs_${"a".repeat(48)}`,
+        authorizationReceiptId: `cca_${"b".repeat(48)}`,
+        applyRequestId: `change_apply_${"d".repeat(32)}`
+      }
     });
     const payload = callable.mock.calls[0][0];
     expect(payload).not.toHaveProperty("totals");
@@ -523,6 +549,34 @@ describe("quoteStore Firebase write safety", () => {
     expect(mockState.updateDoc).not.toHaveBeenCalled();
     expect(mockState.setDoc).not.toHaveBeenCalled();
     expect(mockState.runTransaction).not.toHaveBeenCalled();
+  });
+
+  test("updateQuote rejects malformed commercial authority before invoking the trusted edit", async () => {
+    await expect(updateQuote({
+      quoteId: "quote-1",
+      organizationId: "Org One",
+      form: {
+        name: "Updated Client",
+        email: "client@example.com",
+        eventName: "Updated Event",
+        date: "2026-09-12",
+        time: "18:00",
+        venue: "Venue",
+        guests: 75,
+        hours: 4,
+        pkg: "classic",
+        addons: [],
+        rentals: [],
+        menuItems: ["salad"]
+      },
+      commercialChangeAuthority: {
+        simulationReceiptId: "browser-chosen",
+        authorizationReceiptId: "",
+        applyRequestId: `change_apply_${"d".repeat(32)}`
+      }
+    })).rejects.toThrow(/commercial change authority receipt identity is invalid/i);
+
+    expect(mockState.httpsCallable).not.toHaveBeenCalled();
   });
 
   test("submitQuote and updateQuote reject empty menu selections before calling Firebase", async () => {

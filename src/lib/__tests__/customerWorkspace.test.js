@@ -13,6 +13,7 @@ import {
   encodeCustomerPathId,
   getCustomerDirectoryPage,
   getCustomerWorkspace,
+  normalizeRevenueAutopilotEmailControlsProjection,
   normalizeCustomerSearchKey
 } from "../customerWorkspace";
 
@@ -49,6 +50,53 @@ describe("customer workspace identity helpers", () => {
     expect(decodeCustomerPathId("cust_01ABC%20xyz")).toBe("cust_01ABC xyz");
     expect(decodeCustomerPathId("customer%2Fescape")).toBe("");
   });
+
+  test("accepts only exact same-customer server email-control projections", () => {
+    const dormant = {
+      schemaVersion: 1,
+      authority: "server_projection",
+      source: "firebase_server_projection",
+      organizationId: "org-1",
+      customerId: "customer-1",
+      observedAtISO: "2026-08-09T16:00:00.000Z",
+      authorityState: "dormant",
+      revision: 0,
+      consent: { state: "unknown", recordedAtISO: "" },
+      subscription: { state: "unknown", recordedAtISO: "" }
+    };
+    expect(normalizeRevenueAutopilotEmailControlsProjection(dormant, {
+      organizationId: "org-1",
+      customerId: "customer-1"
+    })).toMatchObject({ authorityState: "dormant", revision: 0 });
+    expect(normalizeRevenueAutopilotEmailControlsProjection({
+      ...dormant,
+      authorityState: "configured",
+      revision: 3,
+      consent: { state: "granted", recordedAtISO: "2026-08-09T15:00:00-05:00" },
+      subscription: { state: "subscribed", recordedAtISO: "2026-08-09T15:01:00-05:00" }
+    }, {
+      organizationId: "org-1",
+      customerId: "customer-1"
+    })).toMatchObject({
+      authorityState: "configured",
+      revision: 3,
+      consent: { state: "granted", recordedAtISO: "2026-08-09T20:00:00.000Z" }
+    });
+    expect(normalizeRevenueAutopilotEmailControlsProjection({
+      ...dormant,
+      customerId: "customer-2"
+    }, {
+      organizationId: "org-1",
+      customerId: "customer-1"
+    })).toBeNull();
+    expect(normalizeRevenueAutopilotEmailControlsProjection({
+      ...dormant,
+      revision: 1
+    }, {
+      organizationId: "org-1",
+      customerId: "customer-1"
+    })).toBeNull();
+  });
 });
 
 describe("buildCustomerWorkspaceDto", () => {
@@ -78,6 +126,39 @@ describe("buildCustomerWorkspaceDto", () => {
     expect(dto.money).toContainEqual(expect.objectContaining({ kind: "deposit", status: "unpaid", amount: 2500 }));
     expect(dto.proposalVersions[0]).toMatchObject({ quoteId: "quote-1", id: "v1" });
     expect(dto.nextAction).toMatchObject({ kind: "quote", quoteId: "quote-1" });
+  });
+
+  test("binds the persisted email-control projection and read error to Customer 360", () => {
+    const controls = {
+      schemaVersion: 1,
+      authority: "server_projection",
+      source: "firebase_server_projection",
+      organizationId: "org-1",
+      customerId: "customer-1",
+      observedAtISO: "2026-08-09T16:00:00.000Z",
+      authorityState: "configured",
+      revision: 4,
+      consent: { state: "granted", recordedAtISO: "2026-08-09T15:00:00.000Z" },
+      subscription: { state: "subscribed", recordedAtISO: "2026-08-09T15:00:00.000Z" }
+    };
+    const dto = buildCustomerWorkspaceDto({
+      customer: { id: "customer-1" },
+      revenueAutopilotEmailControls: controls,
+      revenueAutopilotEmailControlsError: ""
+    });
+    expect(dto.customer.revenueAutopilotEmailControls).toMatchObject({
+      authorityState: "configured",
+      revision: 4
+    });
+    expect(dto.customer.revenueAutopilotEmailControlsError).toBe("");
+
+    const unavailable = buildCustomerWorkspaceDto({
+      customer: { id: "customer-1" },
+      revenueAutopilotEmailControls: { ...controls, customerId: "customer-2" },
+      revenueAutopilotEmailControlsError: "Current customer email controls could not be loaded."
+    });
+    expect(unavailable.customer.revenueAutopilotEmailControls).toBeNull();
+    expect(unavailable.customer.revenueAutopilotEmailControlsError).toMatch(/could not be loaded/i);
   });
 
   test("aggregates conversation entry points without merging quote histories", () => {

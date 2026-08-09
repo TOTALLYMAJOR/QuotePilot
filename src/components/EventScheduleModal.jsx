@@ -27,6 +27,7 @@ import {
   hasWorkspaceNumber
 } from "../lib/workspacePresentation";
 import { buildEventRunOfShowReadModel } from "../lib/eventRunOfShow";
+import "./scheduleMotion.css";
 
 export const EVENT_SCHEDULE_QUOTE_LIMIT = 500;
 
@@ -251,6 +252,27 @@ function buildConflictInsights(events, capacityLimit) {
   };
 }
 
+// Drop physics: one-shot settle-bounce + tone-tinted lane glow after a staff
+// assignment persists. Backstop timeout (animationend clears earlier).
+const DROP_FEEDBACK_CLEAR_MS = 900;
+
+function prefersReducedMotion() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
+// Pure tone classification for drop feedback: reuses the blast-radius color
+// language — success (green family) when the conflict checker is clear,
+// danger (red family) when it flags a clash.
+export function getScheduleDropTone(conflictReasons = []) {
+  const reasons = Array.isArray(conflictReasons) ? conflictReasons.filter(Boolean) : [];
+  return reasons.length > 0 ? "negative" : "positive";
+}
+
 function reasonLabel(reason) {
   if (reason === "capacity") return "Capacity risk";
   if (reason === "time_overlap") return "Time overlap";
@@ -386,6 +408,8 @@ export function EventScheduleView({
   const [savingCheckpointId, setSavingCheckpointId] = useState("");
   const [savingChecklistId, setSavingChecklistId] = useState("");
   const [dropLaneKey, setDropLaneKey] = useState("");
+  const [dropFeedback, setDropFeedback] = useState(null);
+  const dropRunRef = useRef(0);
 
   const load = async () => {
     const readOrganizationId = String(organizationId || "").trim();
@@ -431,11 +455,22 @@ export function EventScheduleView({
     if (!open) return;
     setFeedback("");
     setDropLaneKey("");
+    setDropFeedback(null);
     load();
     return () => {
       loadGenerationRef.current += 1;
     };
   }, [open, organizationId]);
+
+  // Backstop clear so the one-shot drop-settle / lane-glow classes always
+  // come off and a repeat drop can re-fire them.
+  useEffect(() => {
+    if (!dropFeedback || typeof window === "undefined") return undefined;
+    const timer = window.setTimeout(() => {
+      setDropFeedback((prev) => (prev && prev.runId === dropFeedback.runId ? null : prev));
+    }, DROP_FEEDBACK_CLEAR_MS);
+    return () => window.clearTimeout(timer);
+  }, [dropFeedback]);
 
   const anchorDate = parseIsoDate(anchorIso) || parseIsoDate(todayIso) || new Date();
 
@@ -592,6 +627,19 @@ export function EventScheduleView({
     try {
       await updateQuoteBookingAssignment({ quoteId: id, staffLead: nextLead });
       setFeedback(nextLead ? `Assigned ${nextLead}.` : "Cleared staff assignment.");
+      // Drop physics: settle-bounce the moved card and glow the receiving
+      // lane, tinted by the conflict check result. Staff assignment does not
+      // feed the conflict checker, so the current reasons stay accurate for
+      // the post-move arrangement. Skipped entirely under reduced motion.
+      if (!prefersReducedMotion()) {
+        dropRunRef.current += 1;
+        setDropFeedback({
+          quoteId: id,
+          laneKey: nextLead || "__unassigned__",
+          tone: getScheduleDropTone(Array.from(reasonsById.get(id) || [])),
+          runId: dropRunRef.current
+        });
+      }
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -1178,17 +1226,30 @@ export function EventScheduleView({
                     {laneDefinitions.map((lane) => {
                       const laneKey = lane.id || "__unassigned__";
                       const laneItems = laneEvents.get(lane.id) || [];
+                      const laneGlow = dropFeedback && dropFeedback.laneKey === laneKey
+                        ? dropFeedback
+                        : null;
                       const laneClass = [
                         "schedule-staff-lane",
                         lane.id ? "assigned" : "unassigned",
-                        dropLaneKey === laneKey ? "drop-target" : ""
+                        dropLaneKey === laneKey ? "drop-target" : "",
+                        laneGlow ? "lane-glow" : ""
                       ]
                         .filter(Boolean)
                         .join(" ");
                       return (
                         <div
-                          key={laneKey}
+                          key={laneGlow ? `${laneKey}-glow-${laneGlow.runId}` : laneKey}
                           className={laneClass}
+                          data-tone={laneGlow ? laneGlow.tone : undefined}
+                          onAnimationEnd={laneGlow
+                            ? (event) => {
+                              if (event.animationName !== "schedule-lane-glow") return;
+                              setDropFeedback((prev) => (
+                                prev && prev.runId === laneGlow.runId ? null : prev
+                              ));
+                            }
+                            : undefined}
                           onDragOver={(event) => {
                             event.preventDefault();
                             if (!assigningId) {
@@ -1205,15 +1266,20 @@ export function EventScheduleView({
                           </header>
                           <div className="schedule-staff-items">
                             {laneItems.length === 0 && <p className="muted">Drop events here</p>}
-                            {laneItems.map((item) => (
+                            {laneItems.map((item) => {
+                              const settle = dropFeedback && dropFeedback.quoteId === item.id
+                                ? dropFeedback
+                                : null;
+                              return (
                               <button
-                                key={item.id}
+                                key={settle ? `${item.id}-drop-${settle.runId}` : item.id}
                                 type="button"
                                 className={[
                                   "schedule-staff-card",
                                   item.status,
                                   item.conflictReasons.length ? "has-conflict" : "",
-                                  item.conflictReasons.includes("capacity") ? "has-capacity" : ""
+                                  item.conflictReasons.includes("capacity") ? "has-capacity" : "",
+                                  settle ? "drop-settle" : ""
                                 ]
                                   .filter(Boolean)
                                   .join(" ")}
@@ -1239,7 +1305,8 @@ export function EventScheduleView({
                                   </small>
                                 )}
                               </button>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       );

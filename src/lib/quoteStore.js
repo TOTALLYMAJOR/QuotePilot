@@ -54,6 +54,12 @@ const QUOTE_DELIVERY_MUTATION_LOCK_STATES = new Set([
 ]);
 const HARD_DELETE_QUOTE_CALLABLE = "hardDeleteQuote";
 const UPDATE_QUOTE_DRAFT_CALLABLE = "updateQuoteDraft";
+const COMMERCIAL_CHANGE_REQUEST_PATTERNS = Object.freeze({
+  simulationReceiptId: /^ccs_[a-f0-9]{48}$/u,
+  authorizationReceiptId: /^cca_[a-f0-9]{48}$/u,
+  applyRequestId: /^change_apply_[a-f0-9]{32}$/u
+});
+const COMMERCIAL_CHANGE_APPLY_RECEIPT_PATTERN = /^ccp_[a-f0-9]{48}$/u;
 const REQUEST_QUOTE_APPROVAL_CALLABLE = "requestQuoteApproval";
 const RESOLVE_QUOTE_APPROVAL_CALLABLE = "resolveQuoteApprovalRequest";
 const CONVERT_QUOTE_TO_CONTRACT_CALLABLE = "convertQuoteToContract";
@@ -179,6 +185,76 @@ function requireWriteOrganizationId(organizationId = undefined, action = "quote 
     throw new Error(`organizationId is required for ${action}.`);
   }
   return resolvedOrganizationId;
+}
+
+function normalizeCommercialChangeAuthorityPayload(value) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Commercial change authority must be an exact receipt scope.");
+  }
+  const allowed = Object.keys(COMMERCIAL_CHANGE_REQUEST_PATTERNS);
+  const keys = Object.keys(value).sort();
+  if (keys.length !== allowed.length || keys.some((key) => !allowed.includes(key))) {
+    throw new Error("Commercial change authority must contain the exact simulation, authorization, and apply identities.");
+  }
+  const normalized = Object.fromEntries(allowed.map((key) => [
+    key,
+    String(value[key] || "").trim().toLowerCase()
+  ]));
+  if (
+    !COMMERCIAL_CHANGE_REQUEST_PATTERNS.simulationReceiptId.test(normalized.simulationReceiptId)
+    || !COMMERCIAL_CHANGE_REQUEST_PATTERNS.applyRequestId.test(normalized.applyRequestId)
+    || (
+      normalized.authorizationReceiptId
+      && !COMMERCIAL_CHANGE_REQUEST_PATTERNS.authorizationReceiptId.test(
+        normalized.authorizationReceiptId
+      )
+    )
+  ) {
+    throw new Error("Commercial change authority receipt identity is invalid.");
+  }
+  return normalized;
+}
+
+function normalizeCommercialChangeResult(value) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Trusted quote edit returned an invalid commercial change result.");
+  }
+  const applyReceiptId = String(value.applyReceiptId || "").trim().toLowerCase();
+  const authorityState = String(value.authorityState || "").trim().toLowerCase();
+  const state = String(value.state || "").trim().toUpperCase();
+  const safeToPublish = value.safeToPublish;
+  const openInvalidationCount = Number(value.openInvalidationCount);
+  const totalInvalidationCount = Number(value.totalInvalidationCount);
+  if (
+    (applyReceiptId && !COMMERCIAL_CHANGE_APPLY_RECEIPT_PATTERN.test(applyReceiptId))
+    || !["dormant", "enforced"].includes(authorityState)
+    || !["DORMANT", "READY", "BLOCKED"].includes(state)
+    || typeof safeToPublish !== "boolean"
+    || !Number.isSafeInteger(openInvalidationCount)
+    || openInvalidationCount < 0
+    || !Number.isSafeInteger(totalInvalidationCount)
+    || totalInvalidationCount < openInvalidationCount
+    || safeToPublish !== (state === "READY" && openInvalidationCount === 0)
+    || (authorityState === "dormant" && (
+      state !== "DORMANT"
+      || applyReceiptId
+      || openInvalidationCount !== 0
+      || totalInvalidationCount !== 0
+    ))
+    || (authorityState === "enforced" && state === "DORMANT")
+  ) {
+    throw new Error("Trusted quote edit returned inconsistent commercial dependency state.");
+  }
+  return Object.freeze({
+    applyReceiptId,
+    authorityState,
+    state,
+    safeToPublish,
+    openInvalidationCount,
+    totalInvalidationCount
+  });
 }
 
 function requireReadOrganizationId(organizationId = undefined, action = "quote read") {
@@ -3130,7 +3206,8 @@ export async function updateQuote({
   catalog = {},
   ownerUid = "",
   ownerEmail = "",
-  organizationId = undefined
+  organizationId = undefined,
+  commercialChangeAuthority = undefined
 }) {
   const id = String(quoteId || "").trim();
   if (!id) {
@@ -3144,11 +3221,17 @@ export async function updateQuote({
       "updateQuote"
     );
     ensureCallableReady("updateQuote");
+    const exactCommercialChangeAuthority = normalizeCommercialChangeAuthorityPayload(
+      commercialChangeAuthority
+    );
     const call = httpsCallable(cloudFunctions, UPDATE_QUOTE_DRAFT_CALLABLE);
     const response = await call({
       organizationId: writeOrganizationId,
       quoteId: id,
-      form
+      form,
+      ...(exactCommercialChangeAuthority
+        ? { commercialChangeAuthority: exactCommercialChangeAuthority }
+        : {})
     });
     const updated = response?.data && typeof response.data === "object"
       ? response.data
@@ -3166,6 +3249,7 @@ export async function updateQuote({
     ) {
       throw new Error("Trusted quote edit returned an invalid response.");
     }
+    const commercialChange = normalizeCommercialChangeResult(updated.commercialChange);
     return {
       id: updatedQuoteId,
       quoteNumber: String(updated.quoteNumber).trim(),
@@ -3179,7 +3263,8 @@ export async function updateQuote({
       latestVersionNumber: Math.max(
         1,
         Number(updated.latestVersionNumber || updated.versionNumber || 1)
-      )
+      ),
+      commercialChange
     };
   }
 

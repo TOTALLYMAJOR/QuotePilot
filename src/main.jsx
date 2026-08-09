@@ -16,6 +16,10 @@ const BuyerAccessPage = createRecoverableLazy(
   () => import("./components/BuyerAccessPage"),
   "BuyerAccessPage"
 );
+const RevenueAutopilotUnsubscribePage = createRecoverableLazy(
+  () => import("./components/RevenueAutopilotUnsubscribePage"),
+  "RevenueAutopilotUnsubscribePage"
+);
 const WorkspaceRoute = createRecoverableLazy(
   () => import("./components/WorkspaceRoute"),
   "WorkspaceRoute"
@@ -53,6 +57,8 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
 
 const searchParams = new URLSearchParams(window.location.search);
 const isPortalRoute = Boolean(String(searchParams.get("portal") || "").trim());
+const isRevenueAutopilotUnsubscribeRoute = !isPortalRoute
+  && Boolean(String(searchParams.get("unsubscribe") || "").trim());
 const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
 const isMarketingRoute = normalizedPath === "/" && !isPortalRoute;
 const isSystemMarketingRoute = normalizedPath === "/system" && !isPortalRoute;
@@ -60,7 +66,13 @@ const isBuyerAccessRoute = normalizedPath === "/start" && !isPortalRoute;
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {isMarketingRoute ? (
+    {isRevenueAutopilotUnsubscribeRoute ? (
+      <LazyPublicRoute
+        surfaceName="Email preferences"
+        loadingMessage="Loading email preferences..."
+        component={RevenueAutopilotUnsubscribePage}
+      />
+    ) : isMarketingRoute ? (
       <MarketingPage />
     ) : isSystemMarketingRoute ? (
       <LazyPublicRoute

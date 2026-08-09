@@ -136,6 +136,39 @@ if (stripeMode !== "live") {
   throw new Error("Production Firebase Functions deployment requires STRIPE_MODE=live.");
 }
 
+const commercialChangeAuthorityEnabled = optional(
+  "COMMERCIAL_CHANGE_AUTHORITY_ENABLED",
+  "false"
+).toLowerCase();
+if (!["true", "false"].includes(commercialChangeAuthorityEnabled)) {
+  throw new Error("COMMERCIAL_CHANGE_AUTHORITY_ENABLED must be true or false.");
+}
+
+const revenueAutopilotEnabled = optional(
+  "REVENUE_AUTOPILOT_ENABLED",
+  "false"
+).toLowerCase();
+const revenueAutopilotSendsEnabled = optional(
+  "REVENUE_AUTOPILOT_SENDS_ENABLED",
+  "false"
+).toLowerCase();
+if (!["true", "false"].includes(revenueAutopilotEnabled)) {
+  throw new Error("REVENUE_AUTOPILOT_ENABLED must be true or false.");
+}
+if (!["true", "false"].includes(revenueAutopilotSendsEnabled)) {
+  throw new Error("REVENUE_AUTOPILOT_SENDS_ENABLED must be true or false.");
+}
+if (revenueAutopilotSendsEnabled === "true" && revenueAutopilotEnabled !== "true") {
+  throw new Error(
+    "REVENUE_AUTOPILOT_SENDS_ENABLED cannot be true while REVENUE_AUTOPILOT_ENABLED is false."
+  );
+}
+if (revenueAutopilotSendsEnabled === "true" && emailProvider !== "resend") {
+  throw new Error(
+    "Revenue Autopilot sends require NOTIFICATIONS_EMAIL_PROVIDER=resend and its separately bound Secret Manager credential."
+  );
+}
+
 const buyerAccessEnabled = optional("BUYER_ACCESS_ENABLED", "false").toLowerCase();
 if (!["true", "false"].includes(buyerAccessEnabled)) {
   throw new Error("BUYER_ACCESS_ENABLED must be true or false.");
@@ -167,9 +200,11 @@ const normalizedBuyerAccessTurnstileHostnames = buyerAccessTurnstileHostnames
   : "";
 for (const secretName of [
   "RESEND_API_KEY",
+  "RESEND_WEBHOOK_SECRET",
   "TWILIO_AUTH_TOKEN",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
+  "REVENUE_AUTOPILOT_TOKEN_SECRET",
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_TURNSTILE_SECRET",
@@ -199,6 +234,9 @@ const values = {
     NOTIFICATIONS_OWNER_PHONE: ownerPhone
   } : {}),
   STRIPE_MODE: stripeMode,
+  COMMERCIAL_CHANGE_AUTHORITY_ENABLED: commercialChangeAuthorityEnabled,
+  REVENUE_AUTOPILOT_ENABLED: revenueAutopilotEnabled,
+  REVENUE_AUTOPILOT_SENDS_ENABLED: revenueAutopilotSendsEnabled,
   BUYER_ACCESS_ENABLED: buyerAccessEnabled,
   BUYER_ACCESS_STRIPE_MODE: buyerAccessStripeMode,
   BUYER_ACCESS_APP_BASE_URL: buyerAccessAppBaseUrl,

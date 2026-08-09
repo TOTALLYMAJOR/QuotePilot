@@ -1,0 +1,76 @@
+/* Schedule drop physics — one-shot feedback when a staff drag-assignment
+   (or the <select> fallback) lands on an Event Schedule staffing lane.
+   Owned by EventScheduleModal.jsx. Animates transform/opacity only. The
+   global prefers-reduced-motion rule in styles.css crushes these durations,
+   and the component additionally skips applying the classes entirely when
+   reduced motion is requested. Classes self-clear (animationend + timeout)
+   so repeated drops re-fire. */
+
+.schedule-staff-lane {
+  position: relative;
+}
+
+/* Settle-bounce on the moved card: drops in slightly raised/enlarged, lands
+   past the resting point, and springs back to neutral. */
+.schedule-staff-card.drop-settle {
+  animation: schedule-drop-settle var(--motion-slow) var(--ease-spring) both;
+  will-change: transform, opacity;
+}
+
+@keyframes schedule-drop-settle {
+  0% {
+    opacity: 0.7;
+    transform: translateY(-7px) scale(1.045);
+  }
+  52% {
+    opacity: 1;
+    transform: translateY(2px) scale(0.982);
+  }
+  78% {
+    transform: translateY(-1px) scale(1.008);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Lane glow: the tint/ring live statically on an overlay pseudo-element and
+   only its opacity is animated. Tone reuses the blast-radius color language:
+   positive = conflict-free (success family), negative = flagged clash
+   (danger family). */
+.schedule-staff-lane.lane-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  animation: schedule-lane-glow var(--motion-slow) var(--ease-out-soft) both;
+}
+
+.schedule-staff-lane.lane-glow[data-tone="positive"]::after {
+  background: color-mix(in srgb, var(--tone-success) 14%, transparent);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--tone-success) 65%, transparent),
+    0 0 16px color-mix(in srgb, var(--tone-success) 38%, transparent);
+}
+
+.schedule-staff-lane.lane-glow[data-tone="negative"]::after {
+  background: color-mix(in srgb, var(--tone-danger) 14%, transparent);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--tone-danger) 65%, transparent),
+    0 0 16px color-mix(in srgb, var(--tone-danger) 38%, transparent);
+}
+
+@keyframes schedule-lane-glow {
+  0% {
+    opacity: 0;
+  }
+  22% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

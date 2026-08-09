@@ -1,0 +1,68 @@
+/* DigitRoll — odometer roll for repriced currency values (LiveBreakdown
+   money rows). Owned by DigitRoll.jsx; imported from there.
+
+   Only transform animates. Strips exist just for the duration of a roll and
+   unmount afterwards, so the resting DOM is the plain formatted string.
+   The global reduced-motion rule crushes --motion-base; on top of that the
+   component never schedules a roll when reduced motion is preferred.
+   Colors are inherited from the surrounding row, so light/dark themes need
+   no special handling here. */
+
+.digit-roll {
+  position: relative;
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  font-kerning: none;
+  white-space: pre;
+}
+
+/* Screen-reader copy of the full value while the visual track is mid-roll. */
+.digit-roll-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Invisible copy of the final text keeps layout identical to the resting
+   state while the absolutely positioned track animates on top of it. */
+.digit-roll-ghost {
+  visibility: hidden;
+}
+
+.digit-roll-track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.digit-roll-cell {
+  flex: 0 0 auto;
+  display: block;
+}
+
+.digit-roll-cell-roll {
+  overflow: hidden;
+}
+
+/* Two-glyph vertical strip: --dr-pos 0 shows the first glyph, 1 the second.
+   translateY is a percentage of the strip (two line boxes), so -50% is
+   exactly one glyph regardless of font size or line-height. */
+.digit-roll-strip {
+  display: block;
+  will-change: transform;
+  transform: translateY(calc(var(--dr-pos, 0) * -50%));
+  transition: transform var(--motion-base) var(--ease-out-soft);
+  transition-delay: var(--dr-delay, 0ms);
+}
+
+.digit-roll-glyph {
+  display: block;
+}

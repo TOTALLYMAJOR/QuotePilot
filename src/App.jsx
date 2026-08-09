@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AttentionBadge from "./components/AttentionBadge";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "./components/CustomerPortalView";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
@@ -24,6 +25,7 @@ import {
   isCommercialSearchAvailable,
   resolveCommercialSearchShortcutAction
 } from "./lib/commercialSearchShell";
+import { areWorkspaceSoundsEnabled, setWorkspaceSoundsEnabled } from "./components/soundKit";
 import { setActiveOrganizationId } from "./lib/organizationService";
 import { isCatalogPricingConfirmationCurrent } from "./lib/catalogPricingConfirmation";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
@@ -220,7 +222,18 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   recovering: false,
   error: "",
   model: null,
-  formKey: ""
+  formKey: "",
+  authorityState: "",
+  simulationRequestId: "",
+  simulationReceiptId: "",
+  authorizationRequired: false,
+  approval: null,
+  authorizationReceiptId: "",
+  applyRequestId: "",
+  mutationState: "ready",
+  mutationKind: "",
+  mutationMessage: "",
+  applyResult: null
 });
 
 function readPortalKeyFromUrl() {
@@ -790,6 +803,20 @@ export default function App({ tenantContext, authSession }) {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [openHeaderMenu, setOpenHeaderMenu] = useState("");
+  const [workspaceSoundsOn, setWorkspaceSoundsOn] = useState(() => areWorkspaceSoundsEnabled());
+  const toggleWorkspaceSounds = useCallback(() => {
+    setWorkspaceSoundsOn((current) => {
+      setWorkspaceSoundsEnabled(!current);
+      return !current;
+    });
+  }, []);
+  // Directional wizard transitions: compare against the previously rendered
+  // step at render time so the entering stage animates from the correct side.
+  const previousStepRef = useRef(step);
+  const stepNavDir = step >= previousStepRef.current ? "fwd" : "back";
+  useEffect(() => {
+    previousStepRef.current = step;
+  }, [step]);
   const [commercialSearchOpen, setCommercialSearchOpen] = useState(false);
   const resolvedWorkspaceRouteId = (
     !CUSTOMER_CENTERED_WORKSPACE_ENABLED
@@ -1707,37 +1734,66 @@ export default function App({ tenantContext, authSession }) {
     const generation = changeImpactPreviewGenerationRef.current + 1;
     changeImpactPreviewGenerationRef.current = generation;
     const formKey = JSON.stringify(form);
+    const priorRequestId = recovery ? changeImpactPreview.simulationRequestId : "";
     setChangeImpactPreview((current) => ({
       ...current,
       requested: true,
       loading: true,
       recovering: recovery === true,
-      error: ""
+      error: "",
+      mutationState: recovery
+        ? priorRequestId ? "reconciliation" : "recovery"
+        : "submitting",
+      mutationKind: "simulation",
+      mutationMessage: recovery
+        ? priorRequestId
+          ? "Reconciling the exact commercial change simulation request."
+          : "Starting a corrected commercial change simulation after a definitive rejection."
+        : "Requesting a server-authoritative commercial change simulation."
     }));
     try {
-      const pricingResult = await calculateQuotePricing({
+      const {
+        buildCommercialChangeRequestId,
+        simulateCommercialQuoteChange
+      } = await import("./lib/commercialChangeAuthorityClient");
+      const simulationRequestId = priorRequestId
+        || buildCommercialChangeRequestId("simulation");
+      const result = await simulateCommercialQuoteChange({
         organizationId: authSession.organizationId || "",
-        pricingInput: buildCurrentPricingInput("commercial_change_impact_preview"),
-        includeChangeImpactPreview: true,
-        expectedActiveVersionId: editingQuote.activeVersionId
+        quoteId: editingQuote.id,
+        expectedActiveVersionId: editingQuote.activeVersionId,
+        requestId: simulationRequestId,
+        form
       });
-      const snapshots = pricingResult?.changeImpactPreview;
-      if (!snapshots || typeof snapshots !== "object") {
-        throw new Error("Authoritative change-impact snapshots were not returned.");
-      }
-      const { simulateCommercialChangeImpact } = await import("./lib/commercialChangeImpact");
-      const model = simulateCommercialChangeImpact(snapshots);
       if (changeImpactPreviewGenerationRef.current !== generation) return;
       setChangeImpactPreview({
         requested: true,
         loading: false,
         recovering: false,
         error: "",
-        model,
-        formKey
+        model: result.simulation,
+        formKey,
+        authorityState: result.authorityState,
+        simulationRequestId,
+        simulationReceiptId: result.simulationReceipt.receiptId,
+        authorizationRequired: result.simulationReceipt.authorizationRequired === true,
+        approval: null,
+        authorizationReceiptId: "",
+        applyRequestId: "",
+        mutationState: "receipt",
+        mutationKind: "simulation",
+        mutationMessage: result.authorityState === "enforced"
+          ? "The exact simulation receipt is ready for governed authorization."
+          : "The exact simulation receipt is ready; enforcement remains dormant for this workspace.",
+        applyResult: null
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;
+      const { isDefinitiveCommercialChangeError } = await import(
+        "./lib/commercialChangeAuthorityClient"
+      );
+      if (changeImpactPreviewGenerationRef.current !== generation) return;
+      const definitive = isDefinitiveCommercialChangeError(error);
       recordDiagnosticError(error, {
         surface: "quote-builder",
         action: "preview-commercial-change-impact",
@@ -1748,12 +1804,232 @@ export default function App({ tenantContext, authSession }) {
         requested: true,
         loading: false,
         recovering: false,
-        error: "Authoritative change impact is unavailable. Refresh the saved quote and retry; no change was authorized or applied."
+        error: definitive
+          ? "Authoritative change impact was rejected. Correct the saved quote source, then start a new simulation; no change was authorized or applied."
+          : "Authoritative change impact is unavailable. Reconcile the exact request before starting another simulation; no change was authorized or applied.",
+        simulationRequestId: definitive ? "" : current.simulationRequestId,
+        mutationState: definitive ? "error" : "uncertain",
+        mutationKind: "simulation",
+        mutationMessage: definitive
+          ? "The simulation was definitively rejected. Correct the quote source, then start a new simulation request."
+          : "No definitive simulation receipt was returned. The same request identity must be reconciled before another simulation starts."
       }));
     }
   };
 
-  const handleSubmitQuote = async () => {
+  const changeImpactScopeIsCurrent = () => Boolean(
+    changeImpactPreview.model
+    && changeImpactPreview.formKey
+    && changeImpactPreview.formKey === JSON.stringify(form)
+    && changeImpactPreview.simulationReceiptId
+    && changeImpactPreview.model?.identity?.beforeRevisionId === editingQuote.activeVersionId
+  );
+
+  const handleRequestChangeAuthorization = async () => {
+    if (!changeImpactScopeIsCurrent()) {
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: "Quote inputs or the saved revision changed after simulation. Re-simulate before requesting authorization.",
+        mutationState: "error",
+        mutationKind: "approval"
+      }));
+      return;
+    }
+    setChangeImpactPreview((current) => ({
+      ...current,
+      error: "",
+      mutationState: "submitting",
+      mutationKind: "approval",
+      mutationMessage: "Requesting approval for this exact simulation receipt."
+    }));
+    try {
+      const {
+        buildCommercialChangeRequestId,
+        requestCommercialQuoteChangeAuthorization
+      } = await import("./lib/commercialChangeAuthorityClient");
+      const result = await requestCommercialQuoteChangeAuthorization({
+        organizationId: authSession.organizationId || "",
+        quoteId: editingQuote.id,
+        simulationReceiptId: changeImpactPreview.simulationReceiptId,
+        requestId: buildCommercialChangeRequestId("approval")
+      });
+      setChangeImpactPreview((current) => ({
+        ...current,
+        approval: result.approval,
+        mutationState: result.approval?.state === "authorized" ? "authorized" : "pending",
+        mutationKind: "approval",
+        authorizationReceiptId: result.approval?.authorizationReceiptId || "",
+        mutationMessage: result.approval?.state === "authorized"
+          ? "Administrator authorization is ready for this exact simulation."
+          : "Authorization is pending administrator review."
+      }));
+    } catch (error) {
+      recordDiagnosticError(error, {
+        surface: "quote-builder",
+        action: "request-commercial-change-authorization",
+        quoteId: editingQuote.id
+      });
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: error?.message || "The authorization request did not complete.",
+        mutationState: "error",
+        mutationKind: "approval",
+        mutationMessage: "No approval state is assumed. Review the exact simulation and retry."
+      }));
+    }
+  };
+
+  const handleRefreshChangeAuthorization = async () => {
+    if (!changeImpactScopeIsCurrent()) return;
+    setChangeImpactPreview((current) => ({
+      ...current,
+      error: "",
+      mutationState: "reconciliation",
+      mutationKind: "approval",
+      mutationMessage: "Refreshing approval state for the exact simulation receipt."
+    }));
+    try {
+      const { getCommercialQuoteChangeAuthorizationState } = await import(
+        "./lib/commercialChangeAuthorityClient"
+      );
+      const result = await getCommercialQuoteChangeAuthorizationState({
+        organizationId: authSession.organizationId || "",
+        quoteId: editingQuote.id,
+        simulationReceiptId: changeImpactPreview.simulationReceiptId
+      });
+      setChangeImpactPreview((current) => ({
+        ...current,
+        approval: result.approval,
+        authorizationReceiptId: result.approval?.authorizationReceiptId || "",
+        mutationState: result.approval?.state === "authorized" ? "authorized" : "pending",
+        mutationKind: "approval",
+        mutationMessage: result.approval?.state === "authorized"
+          ? "Administrator authorization is ready for this exact simulation."
+          : "Authorization remains pending for this exact simulation."
+      }));
+    } catch (error) {
+      recordDiagnosticError(error, {
+        surface: "quote-builder",
+        action: "refresh-commercial-change-authorization",
+        quoteId: editingQuote.id
+      });
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: error?.message || "Authorization state could not be refreshed.",
+        mutationState: "uncertain",
+        mutationKind: "approval",
+        mutationMessage: "The retained approval state may be stale. Retry this exact state read before applying."
+      }));
+    }
+  };
+
+  const handleAuthorizeChange = async () => {
+    if (!changeImpactScopeIsCurrent()) return;
+    setChangeImpactPreview((current) => ({
+      ...current,
+      error: "",
+      mutationState: "submitting",
+      mutationKind: "authorization",
+      mutationMessage: "Recording administrator authorization for this exact simulation."
+    }));
+    try {
+      const {
+        authorizeCommercialQuoteChange,
+        buildCommercialChangeRequestId
+      } = await import("./lib/commercialChangeAuthorityClient");
+      const result = await authorizeCommercialQuoteChange({
+        organizationId: authSession.organizationId || "",
+        quoteId: editingQuote.id,
+        simulationReceiptId: changeImpactPreview.simulationReceiptId,
+        requestId: buildCommercialChangeRequestId("authorization")
+      });
+      setChangeImpactPreview((current) => ({
+        ...current,
+        approval: result.approval || current.approval,
+        authorizationReceiptId: result.authorizationReceipt.receiptId,
+        mutationState: "authorized",
+        mutationKind: "authorization",
+        mutationMessage: "Administrator authorization is bound to this simulation and saved revision."
+      }));
+    } catch (error) {
+      recordDiagnosticError(error, {
+        surface: "quote-builder",
+        action: "authorize-commercial-change",
+        quoteId: editingQuote.id
+      });
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: error?.message || "Commercial change authorization did not complete.",
+        mutationState: "error",
+        mutationKind: "authorization",
+        mutationMessage: "No administrator authorization is assumed. Re-simulate if the source changed."
+      }));
+    }
+  };
+
+  const handleApplyCommercialChange = async () => {
+    if (!changeImpactScopeIsCurrent() || !changeImpactPreview.authorizationReceiptId) return;
+    if (changeImpactPreview.applyRequestId) {
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: "The prior apply outcome is unresolved. QuotePilot does not yet have a read-only apply-outcome lookup, so it will not submit this edit again.",
+        mutationState: "uncertain",
+        mutationKind: "apply",
+        mutationMessage: "Refresh the authoritative quote record before taking another action. Do not create a second logical edit from this screen."
+      }));
+      return;
+    }
+    const {
+      buildCommercialChangeRequestId,
+      isDefinitiveCommercialChangeError
+    } = await import("./lib/commercialChangeAuthorityClient");
+    const applyRequestId = changeImpactPreview.applyRequestId
+      || buildCommercialChangeRequestId("apply");
+    setChangeImpactPreview((current) => ({
+      ...current,
+      applyRequestId,
+      error: "",
+      mutationState: "applying",
+      mutationKind: "apply",
+      mutationMessage: "Applying the authorized edit atomically with its immutable invalidation receipts."
+    }));
+    try {
+      const result = await handleSubmitQuote({
+        commercialChangeAuthority: {
+          simulationReceiptId: changeImpactPreview.simulationReceiptId,
+          authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
+          applyRequestId
+        },
+        propagateError: true
+      });
+      if (!result) return;
+      setChangeImpactPreview((current) => ({
+        ...current,
+        applyResult: result.commercialChange,
+        mutationState: "receipt",
+        mutationKind: "apply",
+        mutationMessage: result.commercialChange?.authorityState === "enforced"
+          ? `The edit and ${result.commercialChange.totalInvalidationCount} dependency invalidation receipt(s) were committed atomically.`
+          : "The quote edit was saved while commercial-change enforcement remained dormant."
+      }));
+    } catch (error) {
+      const definitive = isDefinitiveCommercialChangeError(error);
+      setChangeImpactPreview((current) => ({
+        ...current,
+        error: error?.message || "The commercial change apply did not return a receipt.",
+        mutationState: definitive ? "error" : "uncertain",
+        mutationKind: "apply",
+        mutationMessage: definitive
+          ? "The server definitively rejected this apply. Correct the source or authorization, then re-simulate."
+          : "The apply outcome is uncertain. This screen will not submit it again; refresh the authoritative quote record before taking another action."
+      }));
+    }
+  };
+
+  const handleSubmitQuote = async ({
+    commercialChangeAuthority = null,
+    propagateError = false
+  } = {}) => {
     if (quoteEditRouteId && !quoteEditReady) {
       setSubmitState((current) => ({
         ...current,
@@ -1761,6 +2037,29 @@ export default function App({ tenantContext, authSession }) {
         message: "This saved quote has not loaded for editing. Retry the edit before saving."
       }));
       return;
+    }
+    if (isEditingQuote && changeImpactPreviewAvailable && !commercialChangeAuthority) {
+      if (!changeImpactScopeIsCurrent()) {
+        setStep(5);
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: "Build and review a current Change Impact simulation before saving this edit."
+        }));
+        return null;
+      }
+      if (
+        changeImpactPreview.authorityState === "enforced"
+        && changeImpactPreview.authorizationRequired
+      ) {
+        setStep(5);
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: "This edit has governed dependencies. Authorize and apply it from Change Impact."
+        }));
+        return null;
+      }
     }
     if (selectedMenuItemCount < 1) {
       showMissingMenuSelection({ moveToMenuStep: true });
@@ -1899,7 +2198,8 @@ export default function App({ tenantContext, authSession }) {
             catalog,
             ownerUid: authSession.user?.uid || "",
             ownerEmail: authSession.user?.email || "",
-            organizationId: authSession.organizationId
+            organizationId: authSession.organizationId,
+            ...(commercialChangeAuthority ? { commercialChangeAuthority } : {})
           })
           : submitQuote({
             form,
@@ -1925,7 +2225,7 @@ export default function App({ tenantContext, authSession }) {
         pushToast(`Quote ${result.quoteNumber} updated.`, "success");
         setHistoryTarget({ quoteId: result.id, reason: "updated" });
         navigateWorkspace(buildQuotePath(result.id));
-        return;
+        return result;
       }
 
       const savedDraftMessage = `Quote ${result.quoteNumber} saved as a draft in ${result.storage}. It has not been sent to the customer.`;
@@ -1987,6 +2287,8 @@ export default function App({ tenantContext, authSession }) {
         saving: false,
         message: err?.message || "Failed to save quote."
       }));
+      if (propagateError) throw err;
+      return null;
     }
   };
 
@@ -2747,9 +3049,7 @@ export default function App({ tenantContext, authSession }) {
                   : "Workflow, no quotes need attention"}
             >
               <span>Workflow</span>
-              {workflowAttentionCount > 0 && (
-                <span className="workflow-attention-badge" aria-hidden="true">{workflowAttentionCount}</span>
-              )}
+              <AttentionBadge count={workflowAttentionCount} />
             </button>
             {CUSTOMER_CENTERED_WORKSPACE_ENABLED && eventScheduleEnabled && (
               <button
@@ -2807,6 +3107,9 @@ export default function App({ tenantContext, authSession }) {
                     <span>{authSession.role}</span>
                   </div>
                   {customerPortalEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); openPortalMode(); }}>Customer Portal</button>}
+                  <button type="button" role="menuitem" aria-pressed={workspaceSoundsOn} onClick={toggleWorkspaceSounds}>
+                    Sounds: {workspaceSoundsOn ? "On" : "Off"}
+                  </button>
                   <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); handleSignOut(); }}>Sign Out</button>
                 </div>
               )}
@@ -2836,6 +3139,9 @@ export default function App({ tenantContext, authSession }) {
                     <span>{authSession.role}</span>
                   </div>
                   {customerPortalEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); openPortalMode(); }}>Customer Portal</button>}
+                  <button type="button" role="menuitem" aria-pressed={workspaceSoundsOn} onClick={toggleWorkspaceSounds}>
+                    Sounds: {workspaceSoundsOn ? "On" : "Off"}
+                  </button>
                   <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); handleSignOut(); }}>Sign Out</button>
                 </div>
               )}
@@ -2919,6 +3225,7 @@ export default function App({ tenantContext, authSession }) {
             onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
             scheduleAvailable={eventScheduleEnabled}
             tenantTimeZone={tenantTimeZone}
+            isAdmin={authSession.isAdmin}
           />
         </WorkspaceLazyRoute>
       )}
@@ -3156,7 +3463,7 @@ export default function App({ tenantContext, authSession }) {
             toggleRef={mobilePricingToggleRef}
           />
 
-          <div className="step-stage" key={step}>
+          <div className="step-stage" key={step} data-nav-dir={stepNavDir}>
             {catalog.loading && <p className="source-note">Loading catalog...</p>}
             {!catalog.loading && step === 1 && (
               <StepEvent
@@ -3285,7 +3592,7 @@ export default function App({ tenantContext, authSession }) {
                         <p className="eyebrow">Commercial dependency graph</p>
                         <h3>Preview change blast radius</h3>
                         <p className="source-note">
-                          Read-only comparison of the saved canonical revision and a server-authoritative repricing of the current form. It does not authorize, save, invalidate, regenerate, or publish anything.
+                          Server-authoritative comparison of the saved canonical revision and current form. The simulation itself changes nothing; an exact authorization and atomic apply receipt are required when governed dependencies are affected.
                         </p>
                       </div>
                       <button
@@ -3296,7 +3603,7 @@ export default function App({ tenantContext, authSession }) {
                         })}
                         disabled={!changeImpactPreviewAvailable || changeImpactPreview.loading}
                         title={changeImpactPreviewAvailable
-                          ? "Build a new read-only authoritative change-impact preview."
+                          ? "Create an immutable server simulation receipt for the current form and saved revision."
                           : "Change impact requires a Firebase-backed canonical quote and trusted pricing."}
                       >
                         {changeImpactPreview.recovering
@@ -3329,7 +3636,21 @@ export default function App({ tenantContext, authSession }) {
                             recovering={changeImpactPreview.recovering}
                             error={changeImpactPresentationError}
                             partial={false}
+                            authorityState={changeImpactPreview.authorityState}
+                            authorizationRequired={changeImpactPreview.authorizationRequired}
+                            staffRole={authSession.role}
+                            approval={changeImpactPreview.approval}
+                            authorizationReceiptId={changeImpactPreview.authorizationReceiptId}
+                            mutationState={changeImpactPreview.mutationState}
+                            mutationKind={changeImpactPreview.mutationKind}
+                            mutationMessage={changeImpactPreview.mutationMessage}
+                            applyResult={changeImpactPreview.applyResult}
+                            scopeCurrent={!changeImpactPresentationError}
                             onRetry={() => handlePreviewChangeImpact({ recovery: true })}
+                            onRequestAuthorization={handleRequestChangeAuthorization}
+                            onRefreshAuthorization={handleRefreshChangeAuthorization}
+                            onAuthorize={handleAuthorizeChange}
+                            onApply={handleApplyCommercialChange}
                             onReturnToEdit={() => {
                               setStep(1);
                               window.requestAnimationFrame(() => {
@@ -3369,7 +3690,7 @@ export default function App({ tenantContext, authSession }) {
                 <button
                   className="cta"
                   ref={saveQuoteButtonRef}
-                  onClick={handleSubmitQuote}
+                  onClick={() => void handleSubmitQuote()}
                   disabled={submitState.saving || catalog.loading || totals.guests <= 0}
                 >
                     {submitState.saving ? (isEditingQuote ? "Saving Changes..." : "Saving Draft...") : (isEditingQuote ? "Save Changes" : "Save draft")}
@@ -3529,6 +3850,7 @@ export default function App({ tenantContext, authSession }) {
               requestWorkflowAttentionRefresh({ force: true });
               handleEditQuote(quote);
             }}
+            onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
             onOpenIntegrations={() => {
               setHistoryTarget({ quoteId: "", reason: "" });
               navigateWorkspace(WORKSPACE_PATHS.integrations);
@@ -3556,7 +3878,9 @@ export default function App({ tenantContext, authSession }) {
               setHistoryTarget({
                 quoteId,
                 action,
-                reason: `Execute approved ${actionLabel}`,
+                reason: action === "conversation"
+                  ? "Review unread customer reply"
+                  : `Execute approved ${actionLabel}`,
                 returnFocus: "workflow"
               });
               navigateWorkspace(buildQuotePath(quoteId));

@@ -14,6 +14,7 @@ import { db, firebaseReady } from "./firebase";
 import { getQuoteHistory, getQuoteVersionHistory, QUOTE_STATUSES } from "./quoteStore";
 import { buildWorkflowAttentionSummary } from "./quoteWorkflow";
 import { getFinalBalanceDisplayStatus } from "./statusSemantics";
+import { getRevenueAutopilotCustomerControls } from "./revenueAutopilotClient";
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
@@ -121,10 +122,75 @@ function normalizePageSize(value) {
   return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(parsed)));
 }
 
+export function normalizeRevenueAutopilotEmailControlsProjection(value, {
+  organizationId = "",
+  customerId = ""
+} = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (
+    Number(value.schemaVersion) !== 1
+    || text(value.authority).toLowerCase() !== "server_projection"
+    || text(value.source).toLowerCase() !== "firebase_server_projection"
+  ) return null;
+  const projectedOrganizationId = text(value.organizationId);
+  const projectedCustomerId = text(value.customerId);
+  if (
+    !projectedOrganizationId
+    || !projectedCustomerId
+    || (text(organizationId) && projectedOrganizationId !== text(organizationId))
+    || (text(customerId) && projectedCustomerId !== text(customerId))
+  ) return null;
+  const observedAtISO = toIso(value.observedAtISO);
+  const authorityState = text(value.authorityState).toLowerCase();
+  const revision = Number(value.revision);
+  const consentState = text(value.consent?.state).toLowerCase();
+  const subscriptionState = text(value.subscription?.state).toLowerCase();
+  const consentRecordedAtISO = toIso(value.consent?.recordedAtISO);
+  const subscriptionRecordedAtISO = toIso(value.subscription?.recordedAtISO);
+  if (!observedAtISO || !Number.isSafeInteger(revision) || revision < 0) return null;
+  if (authorityState === "dormant") {
+    if (
+      revision !== 0
+      || consentState !== "unknown"
+      || subscriptionState !== "unknown"
+      || consentRecordedAtISO
+      || subscriptionRecordedAtISO
+    ) return null;
+  } else if (authorityState === "configured") {
+    if (
+      revision < 1
+      || !new Set(["granted", "revoked"]).has(consentState)
+      || !new Set(["subscribed", "unsubscribed"]).has(subscriptionState)
+      || (consentState === "revoked" && subscriptionState === "subscribed")
+      || !consentRecordedAtISO
+      || !subscriptionRecordedAtISO
+    ) return null;
+  } else {
+    return null;
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    authority: "server_projection",
+    source: "firebase_server_projection",
+    organizationId: projectedOrganizationId,
+    customerId: projectedCustomerId,
+    observedAtISO,
+    authorityState,
+    revision,
+    consent: Object.freeze({ state: consentState, recordedAtISO: consentRecordedAtISO }),
+    subscription: Object.freeze({
+      state: subscriptionState,
+      recordedAtISO: subscriptionRecordedAtISO
+    })
+  });
+}
+
 function normalizeCustomerRecord(id, data = {}) {
+  const customerId = text(data.customerId || id);
+  const organizationId = text(data.organizationId);
   return {
     id,
-    customerId: text(data.customerId || id),
+    customerId,
     name: text(data.name),
     email: text(data.email).toLowerCase(),
     phone: text(data.phone),
@@ -136,7 +202,11 @@ function normalizeCustomerRecord(id, data = {}) {
     lastEventName: text(data.lastEventName),
     lastEventDate: text(data.lastEventDate),
     createdAtISO: toIso(data.createdAtISO || data.createdAt),
-    updatedAtISO: toIso(data.updatedAtISO || data.updatedAt)
+    updatedAtISO: toIso(data.updatedAtISO || data.updatedAt),
+    revenueAutopilotEmailControls: normalizeRevenueAutopilotEmailControlsProjection(
+      data.revenueAutopilotEmailControls,
+      { organizationId, customerId }
+    )
   };
 }
 
@@ -408,11 +478,22 @@ export function buildCustomerWorkspaceDto({
   quotes = [],
   versionsByQuote = {},
   versionTruncatedQuoteIds = [],
+  revenueAutopilotEmailControls = null,
+  revenueAutopilotEmailControlsError = "",
   quotePageInfo = { limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT, truncated: false },
   nowISO = new Date().toISOString(),
   todayDate = localCalendarDate()
 } = {}) {
   const effectiveNowISO = toIso(nowISO) || new Date().toISOString();
+  const normalizedCustomer = normalizeCustomerRecord(
+    customer?.id || customer?.customerId,
+    customer
+  );
+  const normalizedRevenueAutopilotEmailControls =
+    normalizeRevenueAutopilotEmailControlsProjection(
+      revenueAutopilotEmailControls,
+      { customerId: normalizedCustomer.customerId }
+    );
   const normalizedQuotes = quotes.map((quote) => (
     applyQuoteExpirySemantics(quote, effectiveNowISO)
   )).sort((left, right) => (
@@ -468,7 +549,13 @@ export function buildCustomerWorkspaceDto({
   };
 
   return {
-    customer: normalizeCustomerRecord(customer?.id || customer?.customerId, customer),
+    customer: {
+      ...normalizedCustomer,
+      revenueAutopilotEmailControls: normalizedRevenueAutopilotEmailControls
+        ? { ...normalizedRevenueAutopilotEmailControls }
+        : null,
+      revenueAutopilotEmailControlsError: text(revenueAutopilotEmailControlsError)
+    },
     quotes: normalizedQuotes,
     activeQuotes,
     proposalVersions: versions,
@@ -554,6 +641,8 @@ export async function getCustomerWorkspace({ organizationId = "", customerId = "
         quotes,
         versionsByQuote,
         versionTruncatedQuoteIds,
+        revenueAutopilotEmailControls: null,
+        revenueAutopilotEmailControlsError: "Customer email controls require a connected workspace.",
         quotePageInfo: {
           limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT,
           truncated: matchingQuotes.length > CUSTOMER_WORKSPACE_QUOTE_LIMIT
@@ -581,6 +670,19 @@ export async function getCustomerWorkspace({ organizationId = "", customerId = "
   const versionTruncatedQuoteIds = versionResults
     .filter(([, result]) => result.truncated)
     .map(([quoteId]) => quoteId);
+  let revenueAutopilotEmailControls = null;
+  let revenueAutopilotEmailControlsError = "";
+  try {
+    revenueAutopilotEmailControls = await getRevenueAutopilotCustomerControls({
+      organizationId: orgId,
+      customerId: id
+    });
+  } catch {
+    // Customer 360 remains available, but the independently private controls
+    // surface must fail closed and expose no inferred current state.
+    revenueAutopilotEmailControls = null;
+    revenueAutopilotEmailControlsError = "Current customer email controls could not be loaded.";
+  }
   return {
     source: "firebase",
     ...buildCustomerWorkspaceDto({
@@ -588,6 +690,8 @@ export async function getCustomerWorkspace({ organizationId = "", customerId = "
       quotes,
       versionsByQuote,
       versionTruncatedQuoteIds,
+      revenueAutopilotEmailControls,
+      revenueAutopilotEmailControlsError,
       quotePageInfo: {
         limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT,
         truncated: quoteSnapshot.size > CUSTOMER_WORKSPACE_QUOTE_LIMIT

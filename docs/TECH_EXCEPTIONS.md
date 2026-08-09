@@ -20,28 +20,30 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 9, 2026
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute branch ceilings of 2,331,934 aggregate
-  JavaScript bytes and 413,275 bytes for the largest chunk while the
+- Change: Apply named, absolute branch ceilings of 2,552,693 aggregate
+  JavaScript bytes and 426,521 bytes for the largest chunk while the
   customer-centered workspace converges. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.
 - Exception type: `perf-threshold-temp`
 - Rationale: The routed staff workspace, Customer 360, commercial dependency
-  graph, rebooking, commercial-measures, Revenue Autopilot preview, and their
+  graph, rebooking, commercial measures, governed commercial-change authority,
+  artifact freshness, Decision Debt, Revenue Autopilot operations, and their
   role-safe recovery/presentation states are being reviewed together on an
   unmerged source branch. Resetting the baseline from that branch would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 334,569 bytes (16.75%) above the
-  clean-main aggregate baseline. The 413,275-byte `WorkspaceRoute` chunk is
-  25,346 bytes (6.53%) above the clean-main largest-chunk baseline and 5,950
-  bytes above the normal 5% ceiling. Lazy route boundaries reduce initial-load
-  exposure, but staff who enter affected routes can still incur added download,
-  parse, and execution cost, especially on slower mobile hardware. This
-  exception has zero byte headroom: any further growth fails the guard.
-- Performance impact: The larger of the August 9 disabled- and enabled-flag
-  source builds emitted 2,331,934 aggregate JavaScript bytes and a 413,275-byte
-  largest chunk. The other largest emitted
+- Risk impact: The emitted asset set is 555,328 bytes (27.80%) above the
+  clean-main aggregate baseline. The 426,521-byte `WorkspaceRoute` chunk is
+  38,592 bytes (9.95%) above the clean-main largest-chunk baseline and 19,196
+  bytes above the normal 5% ceiling. Lazy route boundaries keep the new staff
+  route bodies out of the public entry chunk, but staff who enter affected
+  routes can still incur added download, parse, and execution cost, especially
+  on slower mobile hardware. This exception has zero byte headroom: any further
+  growth fails the guard.
+- Performance impact: The August 9 commercial-authority and Revenue Autopilot
+  checkpoint build emitted 2,552,693 aggregate JavaScript bytes and a
+  426,521-byte largest chunk. The other largest emitted
   chunks were Firebase at 390,494 bytes and jsPDF at 385,630 bytes. These are
   local source-build measurements, not Core Web Vitals, hosted, production, or
   human-acceptance evidence.
@@ -58,10 +60,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   with no active exception, local CWV, and focused default plus flagged staff
   route checks at desktop and mobile widths. Hosted signed-in acceptance, flag
   removal, and production promotion remain separate release gates.
-- Verification evidence: fresh disabled- and enabled-flag `npm run build`
-  executions produced the measurements above, and `npm run check:perf:bundle`
-  passed while reporting this exact named exception, its absolute ceilings, and
-  the unchanged normal limits. `npm run check:perf:cwv` also passed locally on
+- Verification evidence: a fresh `npm run build` execution produced the
+  checkpoint measurements above. `npm run check:perf:bundle` must report this
+  exact named exception, its absolute ceilings, and the unchanged normal limits
+  before the checkpoint is committed. The earlier converged-workspace
+  `npm run check:perf:cwv` run passed locally on
   the public `/` route at 0.90 performance, 3,292.5 ms LCP, 0 CLS, and 146.5 ms
   TBT. That public-route result is not authenticated staff-workspace evidence
   and does not waive the exit checks: a no-exception build, focused default and
