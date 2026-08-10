@@ -122,6 +122,7 @@ jobs:
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
           FIREBASE_SCOPE: ${{ inputs.firebase_scope }}
           DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
+          VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
           VITE_BUYER_ACCESS_ENABLED: "true"
           VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true"
           VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: ${{ vars.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY }}

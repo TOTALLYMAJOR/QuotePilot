@@ -14,6 +14,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- The governed Firebase Hosting and Vercel production builds now explicitly
+  enable the reviewed customer-centered workspace, including the CWF-16 Event
+  Workspace, in the credential-scoped deploy step. This keeps the source flag
+  available for rollback while preventing production behavior from depending
+  on an untracked operator shell or mutable repository variable. The named
+  temporary bundle exception is recalibrated by 167 bytes to the exact flag-on
+  build; the largest chunk remains unchanged.
+
 - Source/local `CWF-16` Event Workspace. The flagged `/app/quotes/:quoteId`
   route now presents one quote as an event-first commercial record with exact
   event/customer identity, bounded Workflow condition and next action, existing
