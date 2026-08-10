@@ -26,8 +26,8 @@ Last updated: August 9, 2026
   portal branding. The legacy `tonicatering` Firebase project, hosting site,
   environment filename, deployment confirmations, and service URLs remain
   unchanged infrastructure identifiers.
-- The August 9 Event Messaging Station source/local checkpoint passed 183 unit
-  files with 2,277 tests (4 files / 65 tests skipped), the complete flag-on
+- The August 10 merged-candidate checkpoint passed 183 unit
+  files with 2,279 tests (4 files / 65 tests skipped), the complete flag-on
   routed workspace suite at 19/19, the flag-off messaging deep-link contract at
   1/1, Firestore rules at 61/61, and an isolated Auth/Firestore/Functions
   two-browser staff/customer conversation at 1/1 without manual refresh. The
@@ -35,7 +35,7 @@ Last updated: August 9, 2026
   lane, its 21/21 workspace/accessibility selection, the full 4/4 Firebase
   staff/portal lane, and 3/3 authoritative quote-write coverage; those broader
   lanes were not all repeated after the final messaging-only refinements. The
-  current production build transformed 4,980 modules and emitted 2,689,366
+  current production build transformed 4,980 modules and emitted 2,691,344
   aggregate JavaScript bytes with a 391,596-byte largest chunk, within the exact
   named temporary exception. Environment, capability-surfacing, unit, build,
   documentation-governance, bundle, focused browser, rules, and emulator checks passed.
@@ -49,8 +49,8 @@ Last updated: August 9, 2026
 - Current source uses a named temporary bundle exception while the
   customer-centered workspace convergence completes release qualification. Its
   no-headroom
-  ceilings match the August 9 Event Messaging Station source/local candidate
-  build at 2,689,366 aggregate JavaScript bytes and a 391,596-byte largest chunk, versus
+  ceilings match the August 10 merged-candidate build at 2,691,344 aggregate
+  JavaScript bytes and a 391,596-byte largest chunk, versus
   unchanged pre-convergence main metrics of
   1,997,365 and 387,929 bytes. The normal allowance remains 5%, baseline updates
   are blocked while the exception is active, and closure requires the explicit

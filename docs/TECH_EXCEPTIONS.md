@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 9, 2026
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute branch ceilings of 2,689,366 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,691,344 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
@@ -34,7 +34,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 692,001 bytes (34.65%) above the
+- Risk impact: The emitted asset set is 693,979 bytes (34.74%) above the
   clean-main aggregate baseline. A targeted `quoteStore` manual chunk reduces
   `WorkspaceRoute` from 448,190 to 317,008 bytes; Firebase is now the largest
   chunk at 391,596 bytes, 3,667 bytes (0.95%) above the clean-main largest-
@@ -44,8 +44,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   routes can still incur added download, parse, and execution cost, especially
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
-- Performance impact: The August 9 Event Messaging Station source/local
-  candidate build emitted 2,689,366 aggregate JavaScript bytes and a 391,596-byte largest
+- Performance impact: The August 10 merged-candidate build emitted 2,691,344
+  aggregate JavaScript bytes and a 391,596-byte largest
   chunk. The other largest emitted chunks were jsPDF at 385,630 bytes,
   `WorkspaceRoute` at 317,008 bytes, and the isolated quote store at 146,071
   bytes. The station itself remains a 30,908-byte lazy route chunk. These are
