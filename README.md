@@ -95,7 +95,7 @@ history, scheduling, reporting, and diagnostics. Source availability does not
 establish production deployment or provider acceptance; see `PROJECT_STATUS.md`
 for current operational truth.
 
-The working-tree candidate also includes dormant Commercial Change Authority
+The live `v0.5.0` runtime also includes dormant Commercial Change Authority
 and Revenue Autopilot programs. Commercial changes can be simulated against
 authoritative pricing, authorized, atomically applied with dependency
 invalidations, reconciled by named dependency evidence, and surfaced through
@@ -103,10 +103,11 @@ trusted Kitchen BEO freshness and deterministic Decision Debt. Revenue
 Autopilot includes tenant controls, scheduled email lanes, unread-reply
 Attention escalation, post-event review requests, customer unsubscribe, and
 provider-webhook reconciliation. These are source/local capabilities behind
-default-off runtime gates; they are not deployed, enabled, provider-accepted,
-production-data, or human-acceptance evidence. A dedicated exact read/reconcile
-contract for a transport-ambiguous commercial apply remains required before
-Commercial Change enforcement may be enabled.
+default-off runtime gates. Their code and Functions are deployed, but neither
+global program is enabled, no observed tenant has opted in, and provider,
+production-data, hosted-role, and human acceptance remain separate. Commercial
+Change enforcement still requires exact hosted role acceptance and explicit
+tenant authorization.
 
 Tenant safety mode:
 - Firebase tenant business reads/writes fail closed when `organizationId` context is missing.
@@ -595,12 +596,10 @@ Admin reconciliation re-reads the exact server-recorded Session for the
 selected rail when provider delivery needs review, without overriding settled
 payment truth or mutating the other rail.
 
-This behavior remains source/local evidence until the coordinated deployment
-and hosted checks complete; deploying it does not configure Stripe or prove
-provider acceptance.
-Release requires one coordinated exact-revision frontend, Functions, and
-Firestore rules promotion plus mandatory hosted payment UAT in Stripe test
-mode and separately authorized live-mode acceptance for each enabled rail.
+This behavior is deployed in `v0.5.0`, but deployment does not configure every
+Stripe dependency or prove provider acceptance. Operational promotion still
+requires mandatory hosted payment UAT in Stripe test mode and separately
+authorized live-mode acceptance for each enabled rail.
 Refund initiation/status and dispute handling remain manual or unimplemented.
 See the
 [launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--twilio--resend-providers)
@@ -608,7 +607,7 @@ for configuration and proof requirements.
 
 ## Public $1 Invoice-First Buyer Access (`tonicatering`)
 
-The current source adds a public acquisition
+The deployed production frontend adds a public acquisition
 path at `/start` without creating a second Firebase environment. The buyer
 enters organization, owner, and invoice-email details and completes a fresh
 Turnstile challenge. QuotePilot does not collect a password or card details at
@@ -702,7 +701,8 @@ requirements.
 Provision a customer organization, enforce order-based feature entitlements
 (unpaid modules locked off), and generate a copy-ready onboarding message.
 
-Release status: the hardened provisioning workflow is deployed from `v0.2.3`,
+Release status: the hardened provisioning workflow is present in the current
+`v0.5.0` frontend, Functions, and rules deployment,
 but authenticated disposable-tenant owner activation and hosted acceptance are
 still pending. Do not infer tenant usability from deployment or `/app`
 reachability. See

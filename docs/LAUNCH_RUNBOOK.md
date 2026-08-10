@@ -117,7 +117,9 @@ values in the approved GitHub variable and Firebase Secret Manager channels:
 - Set trusted runtime configuration:
   - `APP_BASE_URL=https://quotepilot.mbmapps.com/app`
   - `APP_BASE_DOMAIN=mbmapps.com`
-  - `NOTIFICATIONS_EMAIL_PROVIDER=none` until the shared Resend sender is released and tested
+  - `NOTIFICATIONS_EMAIL_PROVIDER=resend` for the currently deployed approved
+    restricted sender; provider acceptance, delivery/bounce, and recipient
+    evidence still require an exact controlled attempt
   - `EMAIL_FROM_NAME=QuotePilot by MBMApps`
   - `EMAIL_FROM_EMAIL=quotepilot@leaguepilot.us`
   - `NOTIFICATIONS_SMS_PROVIDER=none` until Twilio is approved
@@ -178,8 +180,8 @@ Credential fields are intentionally blank. Never put production credentials in
 this local file. Do not enable a provider until every required production value
 has been supplied through the trusted runtime's approved secret channel.
 
-Keep this fail-safe state in the trusted production runtime during
-custom-domain setup (the same values may be used locally for validation):
+Use this fail-safe bootstrap state before sender activation or in an isolated
+validation environment. It is not the current QuotePilot production snapshot:
 
 ```dotenv
 NOTIFICATIONS_SMS_PROVIDER=none
@@ -211,9 +213,10 @@ archive/delete operations.
 The approved interim sender is
 `QuotePilot by MBMApps <quotepilot@leaguepilot.us>`. It deliberately reuses the
 existing verified `leaguepilot.us` Resend domain while the account has a
-single-domain limit. Do not represent it as operational until the restricted
-production key is bound, the exact Functions release is promoted, and provider
-acceptance, delivered-event, and recipient-inbox proof are captured. Replacing
+single-domain limit. The restricted production key and exact Functions release
+are now deployed. Do not represent an exact delivery attempt as complete until
+provider acceptance, delivered/bounced event, and recipient-inbox proof are
+captured. Replacing
 the shared sender with a dedicated QuotePilot domain remains a later migration,
 not a prerequisite for this interim activation.
 
@@ -261,11 +264,11 @@ coordinated frontend/Functions/rules deployment, hosted role acceptance, and
 operator review. Browser principals cannot promote either gate. Before any
 activation:
 
-1. Close the unresolved exact apply-outcome gap. A transport-ambiguous governed
-   `updateQuoteDraft` requires a dedicated same-tenant read/reconcile contract
+1. Exercise the deployed exact apply-outcome contract. A transport-ambiguous
+   governed `updateQuoteDraft` must use the same-tenant read/reconcile path
    bound to the original request, simulation, authorization, quote, revision,
-   and apply receipt. Atomic intent and idempotency do not justify a browser
-   success claim without that evidence.
+   and apply receipt. Verify committed receipt, not-committed fence, changed
+   source, uncertainty, and definitive rejection without resubmitting the edit.
 2. Verify sales can simulate/request but only tenant admins can authorize and
    edit policy. Cross-tenant, stale revision/catalog, expired authorization,
    over-bound, and browser-direct authority access must fail closed.
@@ -299,8 +302,12 @@ recorded:
 ```dotenv
 REVENUE_AUTOPILOT_ENABLED=false
 REVENUE_AUTOPILOT_SENDS_ENABLED=false
-NOTIFICATIONS_EMAIL_PROVIDER=none
+NOTIFICATIONS_EMAIL_PROVIDER=resend
 ```
+
+The shared email provider may remain enabled for ordinary quote and onboarding
+email while both Revenue Autopilot gates are off. Provider configuration never
+authorizes Autopilot dispatch by itself.
 
 Secret Manager ownership is intentionally split:
 
