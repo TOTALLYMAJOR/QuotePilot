@@ -9964,3 +9964,49 @@ hr {
   color: var(--tone-ink-3);
   line-height: 1.5;
 }
+
+/* ===== Pilot client-request panel (flag-gated, deterministic parse) ===== */
+
+.change-request-panel {
+  grid-column: 1 / -1;
+  margin-bottom: var(--space-4);
+}
+
+.change-request-message {
+  margin: 0.9rem 0 1rem;
+  padding: 0.85rem 1.05rem;
+  border-left: 3px solid var(--tone-gold-2);
+  border-radius: 0 10px 10px 0;
+  background: var(--tone-cream-2);
+}
+
+.change-request-message p {
+  margin: 0;
+  font-style: italic;
+  color: var(--tone-ink-2);
+  line-height: 1.6;
+}
+
+.change-request-message footer {
+  margin-top: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--tone-ink-3);
+}
+
+.change-request-ambiguity {
+  margin-top: 0.9rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px dashed var(--tone-cream-3);
+  border-radius: 10px;
+}
+
+.change-request-ambiguity-clause {
+  margin: 0 0 0.55rem;
+  font-style: italic;
+  color: var(--tone-ink-2);
+  font-size: 0.88rem;
+}
+
+.change-request-unparsed {
+  margin-top: 0.9rem;
+}

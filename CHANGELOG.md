@@ -8,6 +8,29 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Flag-gated client-request panel in the quote editor
+  (`VITE_PILOT_CHANGE_REQUESTS_ENABLED`, default off). When staff edit a
+  quote whose portal decision is `changes_requested`, the stored customer
+  message renders verbatim and a new deterministic
+  `change-request-parse-v1` selector splits it into clauses and parses
+  explicit change language into stageable proposals: guest-count changes,
+  staff additions, hour extensions (builder-bounded), house service-style
+  switches, and add/remove/swap of items resolved only against the quote's
+  own selections and the tenant's active catalog, with a bounded
+  token-window fallback for natural filler phrasing. Each proposal card
+  carries a preview delta priced by the same client calculator (fee and tax
+  cascade included) and Why? provenance; an ambiguous item reference
+  becomes an explicit choice, never a guess; clauses that change nothing or
+  cannot be read are listed as the customer's own text with nothing staged.
+  Staging applies the proposal to the draft form with ordinary
+  touched-field protection; the ordinary save path remains the sole
+  versioning and re-pricing authority, and no customer-facing state
+  changes. The panel and parser add 10,011 aggregate JavaScript bytes,
+  recorded by raising the active temporary bundle ceiling to 2,731,349
+  bytes (largest-chunk ceiling and clean-main baseline unchanged).
+  Source-only candidate work; not deployed, flag-promoted, or
+  human-accepted.
+
 - Draft-only band pricing for uncertain guest counts. When the CREATE
   intake canvas (`VITE_PILOT_CREATE_ENABLED`) applies a count the operator
   stated as approximate (±10%) or as a range, the live pricing rail shows a
