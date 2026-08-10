@@ -1,5 +1,5 @@
 {
-  "id": "workspace-convergence-pilot-now-2026-08-10",
+  "id": "workspace-convergence-pilot-phase1-2026-08-10",
   "status": "active",
   "recordedAt": "2026-08-10",
   "baselineGeneratedAt": "2026-08-07",
@@ -8,7 +8,7 @@
     "largestJsChunkBytes": 387929
   },
   "maxMetrics": {
-    "totalJsBytes": 2700437,
+    "totalJsBytes": 2705981,
     "largestJsChunkBytes": 391596
   }
 }

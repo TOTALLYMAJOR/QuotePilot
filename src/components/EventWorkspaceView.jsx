@@ -13,8 +13,18 @@ import {
   Armchair
 } from "@phosphor-icons/react";
 import { buildEventWorkspacePresentation } from "./eventWorkspacePresentation";
+import { buildDecideStack } from "./decideStackPresentation";
 import { formatWorkspaceMoney } from "../lib/workspacePresentation";
+import DecisionCard from "./DecisionCard";
+import ReadinessRing from "./ReadinessRing";
 import StatusChip from "./StatusChip";
+
+// Default-off presentation gate for the pilot Event Room dressing (readiness
+// ring + advisory decide stack). Absent or unrecognized values keep it off;
+// it never widens data access or authority.
+const PILOT_EVENT_ROOM_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_EVENT_ROOM_ENABLED || "").trim().toLowerCase()
+);
 
 function buildQuoteSummaryRows(totals) {
   if (!totals || !Number.isFinite(Number(totals.total)) || Number(totals.total) <= 0) return null;
@@ -101,13 +111,25 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
   onOpenCustomer,
   onOpenBeo,
   onExportPdf,
-  onOpenConversation
+  onOpenConversation,
+  pilotEventRoom = PILOT_EVENT_ROOM_ENABLED
 }, forwardedRef) {
   const soldScopeRef = useRef(null);
   const model = buildEventWorkspacePresentation(quote, {
     source,
     ordinaryEditAllowed
   });
+  const decideStack = pilotEventRoom
+    ? buildDecideStack(quote, { ordinaryEditAllowed })
+    : null;
+
+  const runDecideAction = (action) => {
+    if (action?.kind === "edit") {
+      onEditQuote?.(quote);
+      return;
+    }
+    onMoreQuoteActions?.();
+  };
 
   const runNextAction = () => {
     if (model.nextAction.kind === "workflow") {
@@ -190,6 +212,39 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
         </div>
       </section>
 
+      {decideStack && !decideStack.suppressed && decideStack.cards.length > 0 && (
+        <section
+          className="event-decide-stack"
+          aria-labelledby="event-decide-title"
+          data-decide-stack={decideStack.modelId}
+        >
+          <div className="event-section-heading">
+            <div>
+              <p className="eyebrow">Decide</p>
+              <h2 id="event-decide-title">Advisory decisions on this record</h2>
+            </div>
+            <p>{decideStack.boundsNote}</p>
+          </div>
+          <div className="now-stream">
+            {decideStack.cards.map((card) => (
+              <DecisionCard
+                key={card.id}
+                signal={card.signal}
+                family={card.family}
+                label={card.label}
+                title={card.title}
+                meta={card.meta}
+                sentence={card.sentence}
+                basis={card.basis}
+                impact={card.impact}
+                actions={[{ ...card.action, kind: card.action.kind === "edit" ? "primary" : "secondary", label: card.action.label }]}
+                onAction={() => runDecideAction(card.action)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section
         className="event-intelligence"
         aria-labelledby="event-intelligence-title"
@@ -210,11 +265,21 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
             style={{ "--readiness-score": model.intelligence.readiness.score }}
           >
             <span>{model.intelligence.readiness.label}</span>
-            <strong>{model.intelligence.readiness.score}%</strong>
-            <small>{model.intelligence.readiness.statusLabel}</small>
-            <progress max="100" value={model.intelligence.readiness.score}>
-              {model.intelligence.readiness.score}%
-            </progress>
+            {pilotEventRoom ? (
+              <ReadinessRing
+                score={model.intelligence.readiness.score}
+                label={model.intelligence.readiness.label}
+                sublabel={model.intelligence.readiness.statusLabel}
+              />
+            ) : (
+              <>
+                <strong>{model.intelligence.readiness.score}%</strong>
+                <small>{model.intelligence.readiness.statusLabel}</small>
+                <progress max="100" value={model.intelligence.readiness.score}>
+                  {model.intelligence.readiness.score}%
+                </progress>
+              </>
+            )}
             <em>{model.intelligence.readiness.scopeLabel}</em>
           </div>
           <div

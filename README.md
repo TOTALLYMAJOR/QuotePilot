@@ -206,6 +206,14 @@ Optional:
   Command Center snapshot, with the existing Workflow/quote/Customer 360
   resolution targets. Purely presentational: it adds no reads, writes, or
   authority, and enabling it is not a deployment or acceptance decision.)
+- `VITE_PILOT_EVENT_ROOM_ENABLED` (default off. Dresses the Event Workspace
+  with the pilot readiness ring — the existing proposal-completeness score —
+  and an advisory decide stack derived only from the selected quote's
+  recorded fields plus the static house staffing ratios. Advisory cards are
+  suppressed for accepted, booked, or terminal quotes, refuse labor
+  estimates the record cannot support, and route only to the existing
+  role-gated edit or administration surfaces. Purely presentational; not a
+  deployment or acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

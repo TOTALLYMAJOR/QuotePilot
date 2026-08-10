@@ -9709,3 +9709,85 @@ hr {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== Pilot Event Room: readiness ring + advisory decide stack (flag-gated) ===== */
+
+.now-card-basis {
+  margin: 0 0 0.3rem;
+  color: var(--tone-ink-3);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.now-card-impact {
+  margin: 0 0 0.65rem;
+  color: var(--tone-gold-3);
+  font-size: 0.84rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.event-decide-stack {
+  margin-top: var(--space-5);
+}
+
+.event-decide-stack .event-section-heading p {
+  max-width: 26rem;
+}
+
+.readiness-ring {
+  position: relative;
+  width: 76px;
+  margin: 0.35rem 0;
+}
+
+.readiness-ring svg {
+  display: block;
+}
+
+.readiness-ring-track {
+  fill: none;
+  stroke: var(--tone-cream-3);
+  stroke-width: 6;
+}
+
+.readiness-ring-arc {
+  fill: none;
+  stroke: var(--tone-gold-2);
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--motion-reveal, 900ms) cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.readiness-ring[data-complete="true"] .readiness-ring-arc {
+  stroke: var(--tone-success);
+}
+
+.readiness-ring-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.readiness-ring-value strong {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.readiness-ring-value small {
+  font-size: 0.56rem;
+  color: var(--tone-ink-3);
+  max-width: 56px;
+  line-height: 1.25;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .readiness-ring-arc {
+    transition: none;
+  }
+}
