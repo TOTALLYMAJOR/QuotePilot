@@ -12,6 +12,7 @@ export default function DecisionCard({
   sentence,
   basis = "",
   impact = "",
+  why = null,
   actions = [],
   onAction
 }) {
@@ -26,6 +27,14 @@ export default function DecisionCard({
         <p className="now-card-sentence">{sentence}</p>
         {basis ? <p className="now-card-basis">Based on: {basis}</p> : null}
         {impact ? <p className="now-card-impact">{impact}</p> : null}
+        {Array.isArray(why) && why.length > 0 ? (
+          <details className="now-card-why">
+            <summary>Why?</summary>
+            <ul>
+              {why.map((line) => <li key={line}>{line}</li>)}
+            </ul>
+          </details>
+        ) : null}
         <div className="now-card-foot">
           {family ? <StatusChip family={family} label={label} /> : null}
           <div className="now-card-actions">
@@ -35,6 +44,7 @@ export default function DecisionCard({
                 type="button"
                 className={action.kind === "primary" ? "cta" : "ghost"}
                 onClick={() => onAction?.(action)}
+                disabled={action.disabled === true}
               >
                 {action.label}
               </button>

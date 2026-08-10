@@ -1,8 +1,17 @@
 import { useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import { MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
+import DecisionCard from "./DecisionCard";
+import { buildGuidedSellingCards } from "./guidedSellingPresentation";
 import { playCue } from "./soundKit";
 import "./wizardMotion.css";
+
+// Default-off presentation gate for the pilot guided-selling decide cards.
+// Absent or unrecognized values keep it off; apply and autopilot semantics
+// are unchanged, so it never widens data access or authority.
+const PILOT_GUIDED_SELLING_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_GUIDED_SELLING_ENABLED || "").trim().toLowerCase()
+);
 
 function joinClassNames(...parts) {
   return parts.filter(Boolean).join(" ");
@@ -800,7 +809,8 @@ export function StepServices({
   templateNotice = null,
   onClearTemplateDefaults,
   onDismissTemplateNotice,
-  onAddonSelection
+  onAddonSelection,
+  pilotGuidedSelling = PILOT_GUIDED_SELLING_ENABLED
 }) {
   const guidedSellingEnabled =
     guidedSellingEnabledProp !== undefined
@@ -1030,25 +1040,50 @@ export function StepServices({
           <p className="source-note">No rule matches this quote yet. Increase guests/hours or adjust rule triggers.</p>
         )}
         {aiAssistEnabled && guidedSellingEnabled && recommendations.length > 0 && (
-          <div className="recommendation-list">
-            {recommendations.map((item) => (
-              <article className="recommendation-card" key={item.key}>
-                <div>
-                  <strong>{item.label}</strong>
-                  <p>{item.reason}</p>
-                  <small>{item.impact}</small>
-                </div>
-                <button
-                  type="button"
-                  className="ghost compact"
-                  onClick={() => onApplyRecommendation(item)}
-                  disabled={aiAutopilotEnabled}
-                >
-                  {aiAutopilotEnabled ? "Auto" : "Apply"}
-                </button>
-              </article>
-            ))}
-          </div>
+          pilotGuidedSelling ? (() => {
+            const guided = buildGuidedSellingCards({ recommendations, aiAutopilotEnabled });
+            return (
+              <div className="now-stream" data-guided-selling={guided.modelId}>
+                {guided.cards.map((card) => (
+                  <DecisionCard
+                    key={card.id}
+                    signal={card.signal}
+                    family={card.family}
+                    label={card.label}
+                    title={card.title}
+                    meta={card.meta}
+                    sentence={card.sentence}
+                    basis={card.basis}
+                    impact={card.impact}
+                    why={card.why}
+                    actions={[card.action]}
+                    onAction={() => onApplyRecommendation(card.recommendation)}
+                  />
+                ))}
+                <p className="source-note">{guided.boundsNote}</p>
+              </div>
+            );
+          })() : (
+            <div className="recommendation-list">
+              {recommendations.map((item) => (
+                <article className="recommendation-card" key={item.key}>
+                  <div>
+                    <strong>{item.label}</strong>
+                    <p>{item.reason}</p>
+                    <small>{item.impact}</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost compact"
+                    onClick={() => onApplyRecommendation(item)}
+                    disabled={aiAutopilotEnabled}
+                  >
+                    {aiAutopilotEnabled ? "Auto" : "Apply"}
+                  </button>
+                </article>
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>
