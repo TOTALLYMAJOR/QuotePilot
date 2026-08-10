@@ -6,6 +6,12 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Fixed
+
+- Clean CI installs now declare the `jsdom` test runtime required by Vitest
+  component suites, removing reliance on a previously populated local
+  `node_modules` tree.
+
 ### Added
 
 - Source/local `CWF-16` Event Workspace. The flagged `/app/quotes/:quoteId`
