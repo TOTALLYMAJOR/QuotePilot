@@ -1,24 +1,30 @@
 # Project Status
 
-Last updated: August 9, 2026
+Last updated: August 10, 2026
 
 ## Operational Health
-- Runtime: release `v0.2.3` is live from merged `main` commit
+- Public edge: release `v0.2.3` is live from merged `main` commit
   `d2747c693e4d15d0efc66cb3bbd76b03f31009f4`. Main CI run `31059404835`
   passed every required lane. The public custom domain
   (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment
   `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
-  Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`)
-  and was released with the same tagged source revision.
+  This is the intentionally restored rollback target after the first governed
+  Vercel release exposed a SPA fallback mismatch. Firebase Hosting remains the
+  origin/fallback (`https://tonicatering.web.app`) and its Hosting, Functions,
+  rules, and indexes are on the successful `v0.4.0` release described below.
 - Release candidate: the customer-centered workspace convergence plus CWF-16
-  stabilization is merged to `main` at
-  `91528d945b29a95362366d5dcaf332f70fd57dd8`. Exact-main CI run
-  `31344333805` passed all eight hard-gate jobs. Vercel preview deployment
-  `dpl_4WFBtPSnzMgMbRmvCGS6cAEUBwR3` is provider-reported `READY` and binds
-  that exact SHA. This is immutable staging evidence only;
-  production aliases, Firebase Hosting, Functions, Firestore rules/indexes,
-  runtime flags, hosted UAT, and human acceptance have not been promoted or
-  claimed for this candidate.
+  stabilization is merged to `main`. Firebase release run `31349796774`
+  successfully promoted Hosting, Functions, Firestore rules, and indexes from
+  tagged SHA `3ace410b8799ac33c9848ba0d188d209076ec9aa`. The first Vercel release
+  exposed a SPA fallback mismatch and was immediately rolled back to the healthy
+  `v0.2.3` edge; PR #46 then qualified the `/index.html` fallback on READY
+  deployment `dpl_2gwvt6gaoD3jv5u6iC68BgrKWv6J`, including authenticated root
+  and deep-route HTTP 200 responses, and merged at
+  `36a24aaf61207ee299ddec6136190b5158260cce`. The final release candidate now
+  explicitly compiles the customer-centered workspace flag on in both governed
+  frontend deployment paths. Final exact-main CI, production edge promotion,
+  hosted signed-in acceptance, and human acceptance remain separate pending
+  evidence.
 - Current source product identity: public, authentication, workspace, customer
   portal, proposal, install metadata, integration, and onboarding surfaces use
   the exact `QuotePilot by MBMApps` identity. The workspace header now labels
@@ -34,7 +40,7 @@ Last updated: August 9, 2026
   quote-write coverage passed 3/3. The Firebase lane exposed and then verified
   the fix for an invalid absent Attention-pointer delete sentinel during staff
   conversation send. The production build transformed 4,976 modules and emitted
-  2,650,137 aggregate JavaScript bytes with a 390,494-byte largest chunk, within
+  2,650,304 aggregate JavaScript bytes with a 390,494-byte largest chunk, within
   the exact named temporary exception. Environment, workflow, capability-
   surfacing, documentation-governance, secret, bundle, and diff checks passed.
   All of these are source/local/emulator results, not hosted tenant, provider,
@@ -47,7 +53,7 @@ Last updated: August 9, 2026
 - Current source uses a named temporary bundle exception while the
   customer-centered workspace convergence completes release qualification. Its
   no-headroom
-  ceilings match the August 9 CWF-16 source/local candidate build at 2,650,137
+  ceilings match the flag-on CWF-16 production candidate build at 2,650,304
   aggregate JavaScript bytes and a 390,494-byte largest chunk, versus
   unchanged pre-convergence main metrics of
   1,997,365 and 387,929 bytes. The normal allowance remains 5%, baseline updates
@@ -568,13 +574,13 @@ Last updated: August 9, 2026
   signature; it must be replaced with the provider-issued signing secret before
   the Resend webhook is enabled. Provider/DNS/webhook, scheduler, hosted,
   production-data, and human acceptance remain unproven.
-- The customer-centered staff shell is behind
-  `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED`, which defaults off. It still
-  requires an exact hosted candidate plus signed-in deep-link, Back/Forward,
-  mobile, portal-precedence, branding-isolation, and human acceptance before the
-  flag can be removed or enabled for production. The current convergence has
-  exact local/high-risk evidence, but no local result satisfies those hosted
-  gates.
+- The customer-centered staff shell remains behind
+  `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED` for a source-level rollback. The
+  governed Firebase and Vercel production workflows now set it explicitly to
+  `true` only in their credential-scoped deploy steps. Exact hosted signed-in
+  deep-link, Back/Forward, mobile, portal-precedence, branding-isolation, and
+  human acceptance are still separate gates; flag promotion alone does not
+  satisfy them.
 - The Home trust/freshness rail is a first surface-scoped CWF-03 slice, not a
   global evidence ledger. Directory and Customer 360 still expose their own
   bounded/source states rather than sharing a cross-surface freshness contract.

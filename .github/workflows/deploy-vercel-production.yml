@@ -84,6 +84,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
           VITE_BUYER_ACCESS_ENABLED: "true"
           VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true"
           VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: ${{ vars.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY }}

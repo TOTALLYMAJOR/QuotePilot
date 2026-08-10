@@ -811,6 +811,12 @@ reenable Git-triggered deployment. The reviewed Vercel SPA fallback resolves to
 `/index.html` without the incompatible `cleanUrls` redirect; filesystem assets
 retain precedence and authenticated deep links remain client-routed.
 
+Both production frontend paths explicitly compile the reviewed
+customer-centered workspace with
+`VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true` in the credential-scoped deploy
+step. The source flag remains available for a code-level rollback; it is not
+inherited from an operator shell or mutable repository variable.
+
 For a release containing either Stripe collection rail, every applicable
 `payment.*` item printed for the selected target is mandatory. Deposit and
 final-balance dispatch, signed-webhook/reconciliation behavior, cross-rail

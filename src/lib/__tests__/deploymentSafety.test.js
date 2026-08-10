@@ -72,11 +72,12 @@ describe("direct production deployment safety", () => {
   test.each([
     ["Firebase", FIREBASE_WORKFLOW],
     ["Vercel", VERCEL_WORKFLOW]
-  ])("binds the %s production build to explicit public buyer configuration", (_provider, workflow) => {
+  ])("binds the %s production build to explicit workspace and public buyer configuration", (_provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
     const stepsOffset = source.indexOf("\n    steps:");
     const jobConfiguration = source.slice(0, stepsOffset);
 
+    expect(source).toMatch(/^\s+VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED:\s*"true"\s*$/m);
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"true"\s*$/m);
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"true"\s*$/m);
     expect(source).toMatch(
@@ -85,9 +86,11 @@ describe("direct production deployment safety", () => {
     expect(source).not.toMatch(/vars\.VITE_BUYER_ACCESS_(?:ENABLED|PUBLIC_CTA_ENABLED)/);
     expect(source).not.toMatch(/BUYER_ACCESS_TURNSTILE_SECRET/);
     expect(stepsOffset).toBeGreaterThan(0);
+    expect(jobConfiguration).not.toContain("VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED");
     expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_ENABLED");
     expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED");
     expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY");
+    expect(source.match(/VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_ENABLED:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toHaveLength(1);
