@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 9, 2026
+Last updated: August 10, 2026
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -18,13 +18,14 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 ## Active Exceptions
 
-- Date: August 9, 2026
+- Date: August 10, 2026 (supersedes the August 9 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,691,344 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,700,437 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
-  customer-centered workspace converges. The clean-main baseline remains
-  1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
-  allowance.
+  customer-centered workspace converges and the flag-gated NOW home surface
+  candidate (`VITE_PILOT_NOW_ENABLED`, default off) is reviewed with it. The
+  clean-main baseline remains 1,997,365 aggregate bytes, a 387,929-byte
+  largest chunk, and a 5% normal allowance.
 - Exception type: `perf-threshold-temp`
 - Rationale: The routed staff workspace, Customer 360, commercial dependency
   graph, rebooking, commercial measures, governed commercial-change authority,
@@ -34,8 +35,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 693,979 bytes (34.74%) above the
-  clean-main aggregate baseline. A targeted `quoteStore` manual chunk reduces
+- Risk impact: The emitted asset set is 703,072 bytes (35.20%) above the
+  clean-main aggregate baseline, of which 9,093 bytes are the lazy-chunked,
+  default-off NOW home surface candidate. A targeted `quoteStore` manual chunk reduces
   `WorkspaceRoute` from 448,190 to 317,008 bytes; Firebase is now the largest
   chunk at 391,596 bytes, 3,667 bytes (0.95%) above the clean-main largest-
   chunk baseline and 15,729 bytes below the normal 5% ceiling. Lazy route
@@ -44,9 +46,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   routes can still incur added download, parse, and execution cost, especially
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
-- Performance impact: The August 10 merged-candidate build emitted 2,691,344
-  aggregate JavaScript bytes and a 391,596-byte largest
-  chunk. The other largest emitted chunks were jsPDF at 385,630 bytes,
+- Performance impact: The August 10 merged-candidate build with the flag-gated
+  NOW surface candidate emitted 2,700,437 aggregate JavaScript bytes and a
+  391,596-byte largest chunk (the prior converged checkpoint was 2,691,344). The other largest emitted chunks were jsPDF at 385,630 bytes,
   `WorkspaceRoute` at 317,008 bytes, and the isolated quote store at 146,071
   bytes. The station itself remains a 30,908-byte lazy route chunk. These are
   local source-build measurements, not Core Web Vitals, hosted, production, or

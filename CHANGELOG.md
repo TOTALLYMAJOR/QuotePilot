@@ -6,6 +6,27 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Added
+
+- Flag-gated NOW home surface candidate (`VITE_PILOT_NOW_ENABLED`, default
+  off, additive to the customer-centered workspace flag). When enabled, the
+  `/app` Home route renders the same bounded commercial workspace snapshot as
+  interpreted decision cards — one sentence of interpretation per tracked
+  attention item plus the exact existing Workflow/quote/Customer 360
+  resolution target — through a new deterministic
+  `now-presentation-v1` selector, a reusable `DecisionCard` presentation
+  component, and condensed Next-7-days and Money evidence rails. The surface
+  adds no reads, writes, evidence, or authority: it consumes the existing
+  Command Center snapshot, preserves the staff evidence rail, bounded
+  truncation language, and blocked-closeout copy verbatim, and the Command
+  Center remains the default and the flag-off rendering. The lazy NOW chunk
+  adds 9,093 aggregate JavaScript bytes, recorded by superseding the active
+  temporary bundle ceiling with `workspace-convergence-pilot-now-2026-08-10`
+  (2,700,437 bytes; largest-chunk ceiling and clean-main baseline unchanged)
+  in `docs/TECH_EXCEPTIONS.md` and `docs/performance/bundle-exception.json`.
+  This is source-only candidate work; it is not deployed, flag-promoted, or
+  human-accepted.
+
 ### Fixed
 
 - Clean CI installs now declare the `jsdom` test runtime required by Vitest
