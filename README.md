@@ -227,7 +227,12 @@ Optional:
   deterministic browser-only extractor — no provider, no I/O, no invention;
   every fact carries its source excerpt and confidence, low-confidence facts
   require one-tap confirmation, and applying prefills the ordinary editable
-  draft form only. Quote creation authority is unchanged; see
+  draft form only. When the operator's own phrasing was uncertain (an
+  approximate or ranged guest count), the live pricing rail additionally
+  shows a draft-only estimated/deposit band priced at the range ends by the
+  same preview calculator; typing any different exact count resolves it, and
+  saving always prices the exact recorded count. Quote creation authority is
+  unchanged; see
   [docs/INTENT_INTAKE_ADR.md](docs/INTENT_INTAKE_ADR.md). Not a deployment
   or acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
