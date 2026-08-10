@@ -6,7 +6,7 @@ const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  const quoteButton = page.getByRole("button", { name: "New Quote" });
+  const quoteButton = page.getByRole("banner").getByRole("button", { name: "New Quote" });
   await expect(signInHeading.or(quoteButton)).toBeVisible({ timeout: 45_000 });
   if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();
@@ -15,6 +15,8 @@ async function signInAsStaff(page) {
     await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
   }
   await expect(quoteButton).toBeVisible({ timeout: 45_000 });
+  await quoteButton.click();
+  await expect(page.getByLabel(/Event type/i)).toBeVisible({ timeout: 45_000 });
 }
 
 async function fillRequiredQuoteFields(page) {
@@ -91,15 +93,14 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   await fillRequiredQuoteFields(page);
   await advanceToSave(page, "Save draft");
 
-  const historyHeading = page.getByRole("heading", { name: "Quotes" });
-  await expect(historyHeading).toBeVisible({ timeout: 45_000 });
-  const handoff = page.getByRole("dialog", { name: "Quotes" }).locator(".saved-quote-handoff");
-  await expect(handoff).toContainText(/Saved as a draft/i, { timeout: 45_000 });
-  await expect(handoff).toBeFocused();
-  await expect(page.getByText(/Email delivery unavailable/i)).toBeVisible();
-  await expect(handoff.getByRole("button", { name: "Download draft PDF" })).toBeVisible();
-  await expect(handoff.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
-  const quoteId = await handoff.getAttribute("data-quote-id");
+  await expect(page).toHaveURL(/\/app\/quotes\/[^/]+$/, { timeout: 45_000 });
+  await expect(
+    page.getByRole("heading", { name: "Authoritative Pricing E2E" })
+  ).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByText("Draft", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download PDF" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
+  const quoteId = decodeURIComponent(new URL(page.url()).pathname.split("/").filter(Boolean).at(-1));
   expect(quoteId).toBeTruthy();
 
   const customerProjection = await page.evaluate(async () => {
@@ -147,10 +148,13 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
     draftPortalRejected: true
   });
 
-  const rows = page.locator(".history-table-wrap tbody tr").filter({
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  const quotesSurface = page.getByRole("region", { name: "Quotes" });
+  await expect(quotesSurface).toBeVisible();
+  const rows = quotesSurface.locator(".history-table-wrap tbody tr").filter({
     has: page.getByRole("button", { name: "Copy Email" })
   });
-  const refreshButton = page.getByRole("button", { name: "Refresh", exact: true });
+  const refreshButton = quotesSurface.getByRole("button", { name: "Refresh", exact: true });
   await expect.poll(async () => {
     if (await refreshButton.isVisible() && await refreshButton.isEnabled()) {
       await refreshButton.click();
