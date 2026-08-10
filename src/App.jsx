@@ -1657,7 +1657,18 @@ export default function App({ tenantContext, authSession }) {
   // extracted facts merge over that result and are marked touched — the same
   // protection ordinary typing gets. Draft-form state only; the trusted
   // create path remains the sole creation authority.
-  const applyIntentDraft = (draft = {}) => {
+  //
+  // guestBand holds the operator's own stated uncertainty for the preview
+  // band only (docs/POST_COMPETITIVE_DESIGN.md §4.2). It never persists and
+  // never reaches authoritative pricing; typing any different exact count
+  // resolves it.
+  const [guestBand, setGuestBand] = useState(null);
+  useEffect(() => {
+    if (!guestBand) return;
+    if (Number(form.guests) !== Number(guestBand.appliedValue)) setGuestBand(null);
+  }, [form.guests, guestBand]);
+
+  const applyIntentDraft = (draft = {}, meta = null) => {
     const { eventTypeId, ...rest } = draft || {};
     const entries = Object.entries(rest).filter(
       ([, value]) => value !== undefined && value !== null && String(value) !== ""
@@ -1671,6 +1682,9 @@ export default function App({ tenantContext, authSession }) {
         for (const [key, value] of entries) next[key] = value;
         return next;
       });
+    }
+    if (Object.prototype.hasOwnProperty.call(rest, "guests")) {
+      setGuestBand(meta?.guestBand || null);
     }
     if (eventTypeId || entries.length) setStep(1);
   };
@@ -3947,6 +3961,7 @@ export default function App({ tenantContext, authSession }) {
           catalog={catalog}
           mobileExpanded={mobilePricingOpen}
           onMobileClose={closeMobilePricing}
+          guestBand={guestBand}
         />
       </main>
       )}

@@ -1,5 +1,14 @@
 import { useState } from "react";
 import { INTENT_EXTRACTION_MODEL, extractIntentDraft } from "./intentExtraction";
+import { deriveGuestBand } from "./pricingBand";
+
+// Pure apply contract: the draft field map plus the guest band derived from
+// the operator's own uncertainty phrasing (null when the count was exact).
+export function buildApplyPayload(result) {
+  const draft = result?.draft || {};
+  const guestFact = (result?.facts || []).find((fact) => fact.id === "guests") || null;
+  return { draft, guestBand: deriveGuestBand(guestFact) };
+}
 
 // Flag-gated CREATE intake canvas (docs/INTENT_INTAKE_ADR.md). The operator
 // types or pastes anything; the deterministic extractor structures what it
@@ -32,7 +41,8 @@ export default function CreateIntake({
 
   const applyAll = () => {
     if (!result || !Object.keys(result.draft).length) return;
-    onApplyDraft?.(result.draft);
+    const payload = buildApplyPayload(result);
+    onApplyDraft?.(payload.draft, payload);
     setAppliedAt("all");
   };
 

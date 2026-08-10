@@ -8,6 +8,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Draft-only band pricing for uncertain guest counts. When the CREATE
+  intake canvas (`VITE_PILOT_CREATE_ENABLED`) applies a count the operator
+  stated as approximate (±10%) or as a range, the live pricing rail shows a
+  new deterministic `pricing-band-v1` strip: estimated-total and deposit
+  ranges priced at the band's exact ends by the same client preview
+  calculator the rail already uses — never a second pricing model — with
+  the note that saving always prices the exact recorded count. The band
+  lives only in draft session state: it never persists, never reaches the
+  authoritative pricing callable or any payment rail, and typing any
+  different exact guest count resolves it immediately. The strip adds 2,279
+  aggregate JavaScript bytes, recorded by raising the active temporary
+  bundle ceiling to 2,721,338 bytes (largest-chunk ceiling and clean-main
+  baseline unchanged). Source-only candidate work; not deployed,
+  flag-promoted, or human-accepted.
+
 - Flag-gated CREATE intake canvas (`VITE_PILOT_CREATE_ENABLED`, default
   off) and the intent-intake architecture record
   (`docs/INTENT_INTAKE_ADR.md`). On the new-quote surface, free text —
