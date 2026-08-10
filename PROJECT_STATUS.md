@@ -1,24 +1,20 @@
 # Project Status
 
-Last updated: August 9, 2026
+Last updated: August 10, 2026
 
 ## Operational Health
-- Runtime: release `v0.2.3` is live from merged `main` commit
-  `d2747c693e4d15d0efc66cb3bbd76b03f31009f4`. Main CI run `31059404835`
-  passed every required lane. The public custom domain
-  (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment
-  `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
-  Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`)
-  and was released with the same tagged source revision.
-- Release candidate: the customer-centered workspace convergence plus CWF-16
-  stabilization is merged to `main` at
-  `91528d945b29a95362366d5dcaf332f70fd57dd8`. Exact-main CI run
-  `31344333805` passed all eight hard-gate jobs. Vercel preview deployment
-  `dpl_4WFBtPSnzMgMbRmvCGS6cAEUBwR3` is provider-reported `READY` and binds
-  that exact SHA. This is immutable staging evidence only;
-  production aliases, Firebase Hosting, Functions, Firestore rules/indexes,
-  runtime flags, hosted UAT, and human acceptance have not been promoted or
-  claimed for this candidate.
+- Runtime: release `v0.5.0` is live from merged `main` commit
+  `3cca8cc4bb985de6ec08c9d62094cfe81b1d2a43`. Main-push CI run
+  `31420931622` passed all eight required jobs. Firebase `all` deployment run
+  `31421511861` updated Hosting, Firestore rules, and Functions and verified
+  `https://tonicatering.web.app`. Vercel deployment run `31422418387` promoted
+  `dpl_ykXq9U7wt2aZDg4zUR4hc8CCNMKq`, provider-reported `READY`, and bound
+  `https://quotepilot.mbmapps.com` to
+  `https://quoteflow-mlka1losf-mbmapps.vercel.app`. Independent probes returned
+  HTTP 200 for `/`, `/app`, `/app/messages`, and quote-detail deep links on the
+  public edge and for the tested Firebase origin routes. This is deployment and
+  public route evidence, not authenticated staff acceptance, production-data
+  behavior, provider email delivery, or human acceptance.
 - Current source product identity: public, authentication, workspace, customer
   portal, proposal, install metadata, integration, and onboarding surfaces use
   the exact `QuotePilot by MBMApps` identity. The workspace header now labels
@@ -31,16 +27,18 @@ Last updated: August 9, 2026
   routed workspace suite at 19/19, the flag-off messaging deep-link contract at
   1/1, Firestore rules at 61/61, and an isolated Auth/Firestore/Functions
   two-browser staff/customer conversation at 1/1 without manual refresh. The
-  broader prior CWF-16 checkpoint also passed the default 58-test Playwright
-  lane, its 21/21 workspace/accessibility selection, the full 4/4 Firebase
-  staff/portal lane, and 3/3 authoritative quote-write coverage; those broader
-  lanes were not all repeated after the final messaging-only refinements. The
+  broader CWF-16 checkpoint also passed the default 58-test Playwright lane,
+  its 21/21 workspace/accessibility selection, the full 4/4 Firebase
+  staff/portal lane, and 3/3 authoritative quote-write coverage. The final PR
+  and exact merged-main CI repeated the required quick, core, Playwright, CWV,
+  Firebase auth/rules, authoritative-pricing, and Docker lanes. The
   current production build transformed 4,980 modules and emitted 2,691,344
   aggregate JavaScript bytes with a 391,596-byte largest chunk, within the exact
   named temporary exception. Environment, capability-surfacing, unit, build,
   documentation-governance, bundle, focused browser, rules, and emulator checks passed.
-  All of these are source/local/emulator results, not hosted tenant, provider,
-  deployment, production-data, flag-promotion, or human-acceptance evidence.
+  These tests are source/local/emulator evidence; the separate production
+  receipts above establish deployment and public route reachability only, not
+  authenticated tenant, production-data, provider-delivery, or human acceptance.
 - Functions runtime readiness: all 74 production Functions are provider-reported
   `ACTIVE` on Node.js 22 in `us-central1`, with Firebase Admin 14 modular app,
   Auth, and Firestore APIs. The coordinated `v0.4.0` deployment and the local
@@ -71,8 +69,8 @@ Last updated: August 9, 2026
   authority tests, and no callable ownership. This is structural traceability
   evidence, not semantic completeness or proof of visual polish, hosted
   availability, provider behavior, production promotion, or human acceptance.
-- CWF-16 is merged/source complete behind the existing customer-centered
-  workspace flag. `/app/quotes/:quoteId` is an event-first record over the
+- CWF-16 is deployed in `v0.5.0` with the customer-centered workspace flag
+  enabled by the governed production builds. `/app/quotes/:quoteId` is an event-first record over the
   existing bounded quote and Workflow contracts; `/app/quotes` remains quote
   administration and `/app/quotes/:quoteId/edit` remains the trusted editor.
   Exact identity, sold scope, lifecycle, attention, existing context routes,
@@ -83,8 +81,9 @@ Last updated: August 9, 2026
   Condition, proposal-scoped Readiness, and Needs You, with stable reason codes
   behind `Why?`; Flexibility and Alignment fail closed as `Unavailable`. It adds
   no backend/data authority and does not establish event-wide readiness,
-  inventory, capacity, payment, booking, completion, deployment, hosted
-  availability, flag promotion, or human acceptance. CWF-17 remains the next
+  inventory, capacity, payment, booking, or completion inference. Public
+  route reachability is verified; authenticated hosted use and human
+  acceptance remain pending. CWF-17 remains the next
   open source program for broader intelligence synthesis. No formal
   Flexibility/change-window contract, authoritative Operational Slack or
   Execution Fragility model, combined Alignment projection, or complete Change
@@ -246,8 +245,9 @@ Last updated: August 9, 2026
   latency. This source branch has focused unit, local flag-on browser,
   and isolated Auth/Firestore/Functions emulator evidence that two independent
   browser contexts exchange staff/customer messages without manual refresh. It
-  is not yet deployed, hosted-accepted, production-data evidence, or human
-  acceptance.
+  is deployed in `v0.5.0` with public deep-link reachability verified;
+  authenticated hosted use, production-data behavior, and human acceptance
+  remain pending.
   Organization changes synchronously drop prior-scope inbox rows, and the open
   panel remounts on the complete staff/portal access identity so prior bodies or
   drafts cannot render under a new tenant, quote, principal, or portal token.
