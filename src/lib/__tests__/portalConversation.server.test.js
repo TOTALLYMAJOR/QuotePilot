@@ -263,4 +263,37 @@ describe("server-owned quote portal conversation", () => {
       expect(sendSource).not.toContain(forbidden);
     }
   });
+
+  test("new sends atomically project a body-free signal to the exact current portal after retry reconciliation", () => {
+    const sendStart = FUNCTIONS_INDEX_SOURCE.indexOf("exports.sendQuotePortalConversationMessage =");
+    const nextStart = FUNCTIONS_INDEX_SOURCE.indexOf("async function createTrustedQuoteDraftInternal", sendStart);
+    const sendSource = FUNCTIONS_INDEX_SOURCE.slice(sendStart, nextStart);
+    const idempotentReturnIndex = sendSource.indexOf("idempotent: true");
+    const summaryStart = sendSource.indexOf("const conversationSummary = {");
+    const summaryEnd = sendSource.indexOf("};", summaryStart);
+    const summarySource = sendSource.slice(summaryStart, summaryEnd);
+    const portalProjectionIndex = sendSource.indexOf(
+      "db.collection(PORTAL_COLLECTION).doc(scope.activation.portalKey)"
+    );
+
+    expect(idempotentReturnIndex).toBeGreaterThan(-1);
+    expect(summaryStart).toBeGreaterThan(idempotentReturnIndex);
+    expect(portalProjectionIndex).toBeGreaterThan(summaryStart);
+    expect(summarySource).toContain("schemaVersion: 1");
+    expect(summarySource).toContain("messageCount: nextMessageCount");
+    expect(summarySource).toContain("latestMessageId: generatedMessageId");
+    expect(summarySource).toContain("latestMessageAtISO: nowISO");
+    expect(summarySource).toContain("latestActorType: message.actorType");
+    for (const privateField of [
+      "body",
+      "bodySha256",
+      "actorName",
+      "actorUid",
+      "actorRole",
+      "portalKeySha256"
+    ]) {
+      expect(summarySource).not.toContain(privateField);
+    }
+    expect(sendSource).toContain("{ conversationSummary },\n        { merge: true }");
+  });
 });

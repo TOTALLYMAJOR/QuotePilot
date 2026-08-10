@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 6,
+  "catalogVersion": 8,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -383,7 +383,7 @@
     },
     {
       "id": "quote-conversation-receipts",
-      "reviewRevision": 1,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -391,26 +391,36 @@
         "staff",
         "portal_customer"
       ],
-      "summary": "Quote-scoped conversation sends retain idempotent request identity, update a bounded server summary, and expose receipt-safe retry and reconciliation states.",
+      "summary": "Quote-scoped conversation sends retain idempotent request identity and receipt-safe reconciliation from both the event workspace and the temporary-flagged Event Messaging Station.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
-        "src/lib/customerWorkspace.js"
+        "src/lib/customerWorkspace.js",
+        "src/lib/portalConversationClient.js"
       ],
       "backendExports": [
         "functions/index.js#sendQuotePortalConversationMessage"
       ],
       "frontendPaths": [
+        "src/App.jsx",
         "src/components/CustomerWorkspaceView.jsx",
-        "src/components/QuoteConversationPanel.jsx"
+        "src/components/MessagingStation.jsx",
+        "src/components/QuoteConversationPanel.jsx",
+        "src/components/QuoteHistoryModal.jsx",
+        "src/lib/workspaceRoutes.js"
       ],
       "entryPointLocators": [
+        {
+          "path": "src/App.jsx",
+          "locator": "data-capability-entry=\"event-messaging-station\""
+        },
         {
           "path": "src/components/QuoteConversationPanel.jsx",
           "locator": "Open conversation"
         }
       ],
       "testPaths": [
+        "e2e/customer-centered-workspace.spec.js",
         "e2e/firebase-auth-rules.smoke.spec.js",
         "src/components/__tests__/quoteConversationPanel.test.jsx",
         "src/lib/__tests__/customerWorkspace.test.js",
@@ -418,12 +428,20 @@
       ],
       "testLocators": [
         {
+          "path": "e2e/customer-centered-workspace.spec.js",
+          "locator": "Messages keeps event conversations segregated and stays usable at phone width"
+        },
+        {
           "path": "e2e/firebase-auth-rules.smoke.spec.js",
-          "locator": "staff and the exact customer portal share one quote-scoped conversation"
+          "locator": "staff and the exact customer portal share one near-real-time quote conversation"
         },
         {
           "path": "src/lib/__tests__/portalConversation.server.test.js",
           "locator": "callables revalidate activation, transact messages, and never trust client actor/time/message ids"
+        },
+        {
+          "path": "src/lib/__tests__/portalConversation.server.test.js",
+          "locator": "new sends atomically project a body-free signal to the exact current portal after retry reconciliation"
         }
       ],
       "documentationPaths": [
@@ -433,15 +451,15 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Customer decision center (tenant theme presets + snapshotted portal branding"
+          "locator": "Event Messaging Station at `/app/messages`"
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "## Customer Portal"
+          "locator": "## Event Messaging Station"
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The live conversation component distinguishes submission, locked uncertain receipt, same-request reconciliation, recorded receipt, definitive error, and post-error message revision without claiming external delivery.",
+      "surfaceReviewNote": "The temporary-flagged station entry point and existing receipt-safe mutation states were reviewed together without adding delivery, read, typing, or presence claims.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -487,7 +505,167 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff and the exact token holder can reconcile one quote-scoped message request and see its canonical conversation receipt without a customer-wide thread or delivery claim."
+      "safeOutcome": "Staff or the exact token holder can reconcile one quote-scoped message request without turning a stored receipt into a delivery, read, payment, or acceptance claim."
+    },
+    {
+      "id": "event-messaging-station-read",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff",
+        "portal_customer"
+      ],
+      "summary": "A bounded same-tenant event inbox and exact quote or portal-document signals provide best-effort near-real-time conversation refresh while canonical message bodies remain behind the authority-revalidated conversation callable.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "src/hooks/useConversationInbox.js",
+        "src/lib/conversationInbox.js",
+        "src/lib/conversationSignalClient.js",
+        "src/lib/portalConversationClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getQuotePortalConversation"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/CustomerWorkspaceView.jsx",
+        "src/components/MessagingStation.jsx",
+        "src/components/QuoteConversationPanel.jsx",
+        "src/components/QuoteHistoryModal.jsx",
+        "src/lib/workspaceRoutes.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/App.jsx",
+          "locator": "data-capability-entry=\"event-messaging-station\""
+        },
+        {
+          "path": "src/components/MessagingStation.jsx",
+          "locator": "id=\"messaging-station-title\""
+        }
+      ],
+      "testPaths": [
+        "e2e/customer-centered-workspace.spec.js",
+        "e2e/firebase-auth-rules.smoke.spec.js",
+        "src/components/__tests__/messagingStation.test.jsx",
+        "src/components/__tests__/quoteConversationPanelSignal.test.jsx",
+        "src/hooks/__tests__/useConversationInbox.test.js",
+        "src/lib/__tests__/conversationInboxSubscription.test.js",
+        "src/lib/__tests__/conversationInbox.test.js",
+        "src/lib/__tests__/conversationSignalClient.test.js",
+        "src/lib/__tests__/portalConversation.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "e2e/customer-centered-workspace.spec.js",
+          "locator": "Messages keeps event conversations segregated and stays usable at phone width"
+        },
+        {
+          "path": "src/components/__tests__/messagingStation.test.jsx",
+          "locator": "renders all canonical messaging read states through the station surface"
+        },
+        {
+          "path": "src/components/__tests__/quoteConversationPanelSignal.test.jsx",
+          "locator": "reloads an intervening concurrent message when the final signal matches the local receipt id"
+        },
+        {
+          "path": "src/components/__tests__/quoteConversationPanelSignal.test.jsx",
+          "locator": "remounts before rendering when the tenant, quote, or portal access identity changes"
+        },
+        {
+          "path": "src/hooks/__tests__/useConversationInbox.test.js",
+          "locator": "drops prior-tenant live and seed rows synchronously during an organization change"
+        },
+        {
+          "path": "src/lib/__tests__/conversationInbox.test.js",
+          "locator": "keeps duplicate customers segregated by quote and prioritizes customer replies"
+        },
+        {
+          "path": "src/lib/__tests__/conversationInboxSubscription.test.js",
+          "locator": "treats local pending writes as stale instead of claiming live updates"
+        },
+        {
+          "path": "src/lib/__tests__/conversationSignalClient.test.js",
+          "locator": "subscribes staff to the exact tenant quote and emits only normalized signal fields"
+        },
+        {
+          "path": "src/lib/__tests__/conversationSignalClient.test.js",
+          "locator": "subscribes portal access only to its exact bearer-key document and reports cache metadata"
+        },
+        {
+          "path": "e2e/firebase-auth-rules.smoke.spec.js",
+          "locator": "staff and the exact customer portal share one near-real-time quote conversation"
+        },
+        {
+          "path": "src/lib/__tests__/portalConversation.server.test.js",
+          "locator": "callables revalidate activation, transact messages, and never trust client actor/time/message ids"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Event Messaging Station at `/app/messages`"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Event Messaging Station"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The flag-gated station route, bounded event index, exact selected-thread signals, authoritative callable reload, pending/cache/paused language, mobile route and focus behavior, and manual recovery control were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/messagingStation.test.jsx",
+          "locator": "renders all canonical messaging read states through the station surface",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/messagingStation.test.jsx",
+          "locator": "renders all canonical messaging read states through the station surface",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/messagingStation.test.jsx",
+          "locator": "renders all canonical messaging read states through the station surface",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/messagingStation.test.jsx",
+          "locator": "renders all canonical messaging read states through the station surface",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/messagingStation.test.jsx",
+          "locator": "renders all canonical messaging read states through the station surface",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/messagingStation.test.jsx",
+          "locator": "renders all canonical messaging read states through the station surface",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/messagingStation.test.jsx",
+          "locator": "renders all canonical messaging read states through the station surface",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can discover and refresh one event-segregated conversation at a time, and the exact portal holder can observe that same quote thread, without treating a summary signal as message-body authority or claiming guaranteed latency, delivery, reading, typing, presence, payment, or acceptance."
     },
     {
       "id": "customer-linked-booking-conversion",

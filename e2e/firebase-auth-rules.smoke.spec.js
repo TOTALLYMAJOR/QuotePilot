@@ -148,7 +148,7 @@ test("switching authenticated principals destroys the prior tenant workspace sta
   await expect(page.getByRole("textbox", { name: /^Email$/i })).toHaveValue("");
 });
 
-test("staff and the exact customer portal share one quote-scoped conversation", async ({ page }) => {
+test("staff and the exact customer portal share one near-real-time quote conversation", async ({ page, browser }) => {
   await signInAsStaff(page);
   await page.getByRole("button", { name: "Quotes", exact: true }).click();
   const quotesDialog = page.getByRole("dialog", { name: "Quotes" });
@@ -159,42 +159,50 @@ test("staff and the exact customer portal share one quote-scoped conversation", 
   await expect(staffConversation.getByText(/No messages yet/i)).toBeVisible();
   await staffConversation.getByLabel("Message").fill("Staff confirms load-in begins at 4:30 PM.");
   await staffConversation.getByRole("button", { name: "Send message" }).click();
-  await expect(staffConversation.getByRole("status")).toContainText("Message recorded");
+  await expect(staffConversation.locator(".quote-conversation-mutation-status"))
+    .toContainText("Message recorded");
   await expect(staffConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
-  await staffConversation.getByRole("button", { name: "Close conversation" }).click();
-  await quotesDialog.getByRole("button", { name: "Close" }).click();
 
-  await page.goto(`/app?portal=${CONVERSATION_PORTAL_KEY}`);
-  await expect(page.getByRole("heading", { name: /Your proposal from E2E Organization/i }))
-    .toBeVisible({ timeout: 45_000 });
-  await page.getByRole("button", { name: "Open conversation" }).click();
-  const customerConversation = page.locator(".quote-conversation");
-  await expect(customerConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
-  await customerConversation.getByLabel("Message").fill("Thank you. The venue door will be open.");
-  await customerConversation.getByRole("button", { name: "Send message" }).click();
-  await expect(customerConversation.getByRole("status")).toContainText("Message recorded");
+  const customerContext = await browser.newContext({ baseURL: APP_URL });
+  try {
+    const customerPage = await customerContext.newPage();
+    await customerPage.goto(`/app?portal=${CONVERSATION_PORTAL_KEY}`);
+    await expect(customerPage.getByRole("heading", { name: /Your proposal from E2E Organization/i }))
+      .toBeVisible({ timeout: 45_000 });
+    await customerPage.getByRole("button", { name: "Open conversation" }).click();
+    const customerConversation = customerPage.locator(".quote-conversation");
+    await expect(customerConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
 
-  await customerConversation.getByRole("button", { name: "Close conversation" }).click();
-  await page.getByRole("button", { name: "Staff sign in" }).click();
-  await expect(page.getByRole("button", { name: "Quotes", exact: true })).toBeVisible();
-  const canonicalSummary = await readCanonicalConversationSummary();
-  expect(canonicalSummary).toMatchObject({
-    schemaVersion: 1,
-    messageCount: 2,
-    latestActorType: "customer",
-    unexpectedSummaryKeys: []
-  });
-  expect(canonicalSummary.latestMessageId).toBeTruthy();
-  expect(canonicalSummary.latestMessageAtISO).toBeTruthy();
-  await page.getByRole("button", { name: "Quotes", exact: true }).click();
-  const reopenedDialog = page.getByRole("dialog", { name: "Quotes" });
-  const reopenedRow = reopenedDialog.locator(`tr[data-quote-id="conversation-e2e-quote"]`);
-  await reopenedRow.getByRole("button", { name: "Conversation" }).click();
-  const reopenedConversation = reopenedDialog.locator(".quote-conversation-modal .quote-conversation");
-  await expect(reopenedConversation).toContainText("Staff confirms load-in begins at 4:30 PM.");
-  await expect(reopenedConversation).toContainText("Thank you. The venue door will be open.");
-  await reopenedConversation.getByRole("button", { name: "Refresh conversation" }).click();
-  await expect(reopenedConversation.getByText("Conversation refreshed.", { exact: true })).toBeVisible();
+    await customerConversation.getByLabel("Message").fill("Thank you. The venue door will be open.");
+    await customerConversation.getByRole("button", { name: "Send message" }).click();
+    await expect(customerConversation.locator(".quote-conversation-mutation-status"))
+      .toContainText("Message recorded");
+    await expect(staffConversation).toContainText(
+      "Thank you. The venue door will be open.",
+      { timeout: 45_000 }
+    );
+
+    await staffConversation.getByLabel("Message").fill("Perfect. We will meet you at the venue door.");
+    await staffConversation.getByRole("button", { name: "Send message" }).click();
+    await expect(staffConversation.locator(".quote-conversation-mutation-status"))
+      .toContainText("Message recorded");
+    await expect(customerConversation).toContainText(
+      "Perfect. We will meet you at the venue door.",
+      { timeout: 45_000 }
+    );
+
+    const canonicalSummary = await readCanonicalConversationSummary();
+    expect(canonicalSummary).toMatchObject({
+      schemaVersion: 1,
+      messageCount: 3,
+      latestActorType: "staff",
+      unexpectedSummaryKeys: []
+    });
+    expect(canonicalSummary.latestMessageId).toBeTruthy();
+    expect(canonicalSummary.latestMessageAtISO).toBeTruthy();
+  } finally {
+    await customerContext.close();
+  }
 });
 
 test("email-password staff can complete account recovery with the same on-screen confirmation", async ({ page, request }) => {

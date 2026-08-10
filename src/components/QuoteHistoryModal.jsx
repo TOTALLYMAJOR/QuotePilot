@@ -746,6 +746,7 @@ export function QuoteHistoryView({
   scheduleAvailable = false,
   onOpenCustomer,
   onOpenWorkflow,
+  onOpenConversation,
   onOpenIntegrations,
   integrationsAvailable = true,
   canDeleteQuotes = false,
@@ -2026,7 +2027,9 @@ export function QuoteHistoryView({
               onExportPdf={permissions.canExportProposal && focusedRebookDeliveryGate.ready
                 ? () => handleExportPdf(focusedQuote)
                 : undefined}
-              onOpenConversation={() => setConversationQuote(focusedQuote)}
+              onOpenConversation={() => onOpenConversation
+                ? onOpenConversation(focusedQuote.id)
+                : setConversationQuote(focusedQuote)}
             />
           )}
           {focusedQuote
@@ -2877,7 +2880,9 @@ export function QuoteHistoryView({
                                 type="button"
                                 className="ghost compact"
                                 data-capability-action="open-quote-conversation"
-                                onClick={() => setConversationQuote(quote)}
+                                onClick={() => onOpenConversation
+                                  ? onOpenConversation(quote.id)
+                                  : setConversationQuote(quote)}
                                 disabled={!canOpenQuoteConversation(conversationQuote)}
                                 title={conversationQuote
                                   ? "Close the current quote conversation before opening another."

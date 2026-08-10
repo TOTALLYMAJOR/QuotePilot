@@ -61,6 +61,7 @@ import {
 } from "./lib/quoteStore";
 import {
   buildCustomerPath,
+  buildMessagingPath,
   buildQuoteEditPath,
   buildQuotePath,
   buildWorkflowPath,
@@ -102,6 +103,10 @@ const CustomerDirectoryView = createRecoverableLazy(
 const CustomerWorkspaceView = createRecoverableLazy(
   () => import("./components/CustomerWorkspaceView"),
   "CustomerWorkspaceView"
+);
+const MessagingStation = createRecoverableLazy(
+  () => import("./components/MessagingStation"),
+  "MessagingStation"
 );
 const WorkspaceNotFound = createRecoverableLazy(
   () => import("./components/WorkspaceNotFound"),
@@ -613,7 +618,6 @@ export default function App({ tenantContext, authSession }) {
   const mobilePricingToggleRef = useRef(null);
   const historyTriggerRef = useRef(null);
   const workflowTriggerRef = useRef(null);
-  const scheduleTriggerRef = useRef(null);
   const headerMenusRef = useRef(null);
   const operationsMenuTriggerRef = useRef(null);
   const accountMenuTriggerRef = useRef(null);
@@ -824,6 +828,8 @@ export default function App({ tenantContext, authSession }) {
     && browserRoute.routeId === WORKSPACE_ROUTE_IDS.HOME
   ) ? WORKSPACE_ROUTE_IDS.QUOTE_NEW : browserRoute.routeId;
   const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL].includes(resolvedWorkspaceRouteId);
+  const messagingOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.MESSAGING;
   const salesWorkflowOpen = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.WORKFLOW;
   const scheduleRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE;
@@ -3135,6 +3141,20 @@ export default function App({ tenantContext, authSession }) {
             >
               Quotes
             </button>
+            {CUSTOMER_CENTERED_WORKSPACE_ENABLED && (
+              <button
+                className={`ghost${activeWorkspaceSection === "messaging" ? " nav-view-active" : ""}`}
+                type="button"
+                data-capability-entry="event-messaging-station"
+                aria-current={activeWorkspaceSection === "messaging" ? "page" : undefined}
+                onClick={() => {
+                  setOpenHeaderMenu("");
+                  navigateWorkspace(WORKSPACE_PATHS.messaging);
+                }}
+              >
+                Messages
+              </button>
+            )}
             <button
               className={`ghost workflow-attention-trigger${activeWorkspaceSection === "workflow" ? " nav-view-active" : ""}`}
               type="button"
@@ -3152,21 +3172,6 @@ export default function App({ tenantContext, authSession }) {
               <span>Workflow</span>
               <AttentionBadge count={workflowAttentionCount} />
             </button>
-            {CUSTOMER_CENTERED_WORKSPACE_ENABLED && eventScheduleEnabled && (
-              <button
-                className={`ghost${activeWorkspaceSection === "schedule" ? " nav-view-active" : ""}`}
-                type="button"
-                ref={scheduleTriggerRef}
-                onClick={() => openRoutedWorkspaceTool(
-                  WORKSPACE_PATHS.schedule,
-                  setScheduleOpen,
-                  { menuTriggerRef: scheduleTriggerRef }
-                )}
-              >
-                Schedule
-              </button>
-            )}
-
             <div className="header-menu desktop-header-menu">
               <button
                 className="ghost header-menu-trigger"
@@ -3320,6 +3325,7 @@ export default function App({ tenantContext, authSession }) {
             onBack={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
             onOpenQuotes={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
             onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+            onOpenConversation={(quoteId) => navigateWorkspace(buildMessagingPath({ quoteId }))}
             onOpenQuoteEdit={(quoteId) => navigateWorkspace(buildQuoteEditPath(quoteId))}
             onCreateRebook={handleCreateCustomerRebook}
             onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
@@ -3328,6 +3334,24 @@ export default function App({ tenantContext, authSession }) {
             tenantTimeZone={tenantTimeZone}
             isAdmin={authSession.isAdmin}
           />
+        </WorkspaceLazyRoute>
+      )}
+
+      {messagingOpen && (
+        <WorkspaceLazyRoute surfaceName="Messages" component={MessagingStation}>
+          <div className="container workspace-route-main messaging-route-main">
+            <MessagingStation
+              organizationId={authSession.organizationId}
+              seedQuotes={commercialSnapshot.quotes}
+              initialQuoteId={browserRoute.messagingFocus?.quoteId || ""}
+              onSelectQuote={(quoteId) => navigateWorkspace(
+                buildMessagingPath({ quoteId }),
+                { replace: !quoteId }
+              )}
+              onOpenEvent={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+              onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            />
+          </div>
         </WorkspaceLazyRoute>
       )}
 
@@ -3464,7 +3488,8 @@ export default function App({ tenantContext, authSession }) {
         ].includes(resolvedWorkspaceRouteId) && !routedToolAuthorized)
         || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && [
           WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
-          WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL
+          WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
+          WORKSPACE_ROUTE_IDS.MESSAGING
         ].includes(resolvedWorkspaceRouteId))) && (
         <WorkspaceLazyRoute surfaceName="Workspace page" component={WorkspaceNotFound}>
           <WorkspaceNotFound pathname={browserRoute.pathname} onHome={() => navigateWorkspace(WORKSPACE_PATHS.home)} />
@@ -3962,6 +3987,9 @@ export default function App({ tenantContext, authSession }) {
             scheduleAvailable={eventScheduleEnabled}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
             onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenConversation={CUSTOMER_CENTERED_WORKSPACE_ENABLED
+              ? (quoteId) => navigateWorkspace(buildMessagingPath({ quoteId }))
+              : undefined}
             onOpenIntegrations={() => {
               setHistoryTarget({ quoteId: "", reason: "" });
               navigateWorkspace(WORKSPACE_PATHS.integrations);
@@ -3985,6 +4013,10 @@ export default function App({ tenantContext, authSession }) {
             presentation={CUSTOMER_CENTERED_WORKSPACE_ENABLED ? "embedded" : "modal"}
             onClose={closeSalesWorkflowWorkspace}
             onOpenQuoteHistory={({ quoteId = "", action = "" } = {}) => {
+              if (action === "conversation" && CUSTOMER_CENTERED_WORKSPACE_ENABLED) {
+                navigateWorkspace(buildMessagingPath({ quoteId }));
+                return;
+              }
               const actionLabel = String(action || "approved action").replaceAll("_", " ");
               setHistoryTarget({
                 quoteId,

@@ -14,6 +14,31 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Source-branch Event Messaging Station candidate. The temporary-flagged staff
+  shell now routes `/app/messages` to one central inbox segregated by canonical
+  quote/event, with search, `Needs reply`/`Active` filters, event-oriented
+  groups, selected-thread context, and direct Event Workspace and Customer 360
+  actions. A bounded same-tenant listener watches up to 50 recently active quote
+  documents ordered by their body-free conversation summary and normalizes the
+  event/thread fields used by the inbox; the selected staff
+  quote or exact customer portal document emits a small summary signal, and a
+  higher-count or distinct non-older signal causes the existing access-validating
+  callable to reload canonical message bodies, including reconciliation when a
+  concurrent message precedes the local sender's latest receipt. New sends atomically project the same
+  body-free summary to the canonical quote and exact current portal document
+  in one transaction. Idempotent retries return the existing receipt before any
+  new projection write. This is a best-effort near-real-time refresh path: the
+  UI distinguishes `Catching up`, `Live updates`, `May be stale`, and `Updates
+  paused`, retains manual refresh, and makes no read-receipt, typing, presence,
+  external-delivery, guaranteed-latency, payment, or acceptance claim. Existing
+  callable ownership, limits, lifecycle checks, and receipt-safe retry behavior
+  are unchanged. Mobile thread selection now follows browser history, clears
+  its focused URL on return, and restores focus to the selected event row.
+  Organization-scoped inbox state and complete access-identity panel remounts
+  clear prior-tenant rows, bodies, and drafts before a new scope can render. This
+  source is not merged, deployed, flag-promoted, hosted-
+  accepted, or human-accepted. Draft, expired, deleted, and provider-unaccepted
+  portal records fail closed as unavailable instead of opening a callable thread.
 - Source/local `CWF-16` Event Workspace. The flagged `/app/quotes/:quoteId`
   route now presents one quote as an event-first commercial record with exact
   event/customer identity, bounded Workflow condition and next action, existing

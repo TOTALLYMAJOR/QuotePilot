@@ -26,17 +26,19 @@ Last updated: August 9, 2026
   portal branding. The legacy `tonicatering` Firebase project, hosting site,
   environment filename, deployment confirmations, and service URLs remain
   unchanged infrastructure identifiers.
-- The August 9 CWF-16 candidate checkpoint passed 177 unit files with 2,234
-  tests (4 files / 65 tests skipped). Default Playwright passed 58
-  tests with 20 intentionally flag-gated skips; the complete flag-on workspace
-  and accessibility run passed 21/21. Firestore rules passed 61/61 on isolated
-  ports, the Firebase staff/portal browser lane passed 4/4, and authoritative
-  quote-write coverage passed 3/3. The Firebase lane exposed and then verified
-  the fix for an invalid absent Attention-pointer delete sentinel during staff
-  conversation send. The production build transformed 4,976 modules and emitted
-  2,650,137 aggregate JavaScript bytes with a 390,494-byte largest chunk, within
-  the exact named temporary exception. Environment, workflow, capability-
-  surfacing, documentation-governance, secret, bundle, and diff checks passed.
+- The August 9 Event Messaging Station source/local checkpoint passed 183 unit
+  files with 2,277 tests (4 files / 65 tests skipped), the complete flag-on
+  routed workspace suite at 19/19, the flag-off messaging deep-link contract at
+  1/1, Firestore rules at 61/61, and an isolated Auth/Firestore/Functions
+  two-browser staff/customer conversation at 1/1 without manual refresh. The
+  broader prior CWF-16 checkpoint also passed the default 58-test Playwright
+  lane, its 21/21 workspace/accessibility selection, the full 4/4 Firebase
+  staff/portal lane, and 3/3 authoritative quote-write coverage; those broader
+  lanes were not all repeated after the final messaging-only refinements. The
+  current production build transformed 4,980 modules and emitted 2,689,366
+  aggregate JavaScript bytes with a 391,596-byte largest chunk, within the exact
+  named temporary exception. Environment, capability-surfacing, unit, build,
+  documentation-governance, bundle, focused browser, rules, and emulator checks passed.
   All of these are source/local/emulator results, not hosted tenant, provider,
   deployment, production-data, flag-promotion, or human-acceptance evidence.
 - Functions runtime readiness: all 29 production Functions now run on Node.js
@@ -47,16 +49,16 @@ Last updated: August 9, 2026
 - Current source uses a named temporary bundle exception while the
   customer-centered workspace convergence completes release qualification. Its
   no-headroom
-  ceilings match the August 9 CWF-16 source/local candidate build at 2,650,137
-  aggregate JavaScript bytes and a 390,494-byte largest chunk, versus
+  ceilings match the August 9 Event Messaging Station source/local candidate
+  build at 2,689,366 aggregate JavaScript bytes and a 391,596-byte largest chunk, versus
   unchanged pre-convergence main metrics of
   1,997,365 and 387,929 bytes. The normal allowance remains 5%, baseline updates
   are blocked while the exception is active, and closure requires the explicit
   optimization or reviewed clean-main recalibration path plus local bundle,
   browser, and CWV qualification. This is not hosted, production, or human-
   acceptance evidence. A targeted quote-store split reduced the authenticated
-  route chunk from 448,190 to 310,102 bytes, leaving Firebase as the largest
-  chunk at 390,494 bytes and under the normal per-chunk ceiling.
+  route chunk from 448,190 to 317,008 bytes, leaving Firebase as the largest
+  chunk at 391,596 bytes and under the normal per-chunk ceiling.
 - Current source delivery governance includes a required no-orphan-capability
   check in `lane:core`. It reviews the whole branch/PR backend diff, requires a
   versioned capability-surfacing contract manifest plus real frontend/Feature
@@ -221,6 +223,36 @@ Last updated: August 9, 2026
   exact retry receipt or explicit safe reset, and writes neither value to
   browser storage. Focused unit/rules/emulator evidence is local only; this conversation source is not
   part of live `v0.2.3` and has no hosted staff/customer acceptance.
+- Source-branch Event Messaging Station candidate: when the existing temporary
+  customer-centered workspace flag is enabled, authenticated staff can open
+  `/app/messages` as a central inbox whose threads remain segregated by the
+  canonical quote/event. Search, event-oriented groups, `Needs reply` and
+  `Active` filters, event context, and exact quote/customer navigation operate
+  over existing records. The inbox listener is bounded to 50 same-tenant quote
+  documents ordered by the most recent conversation summary. It normalizes the
+  event/thread fields used by the station and never queries canonical message records.
+  Each open staff thread watches only its exact organization quote signal; an
+  exact-token customer portal watches only its current portal document. A
+  higher-count or distinct non-older body-free summary triggers the existing
+  callable to revalidate authority and reload canonical message bodies,
+  including the same-latest-ID concurrent-send reconciliation case. New sends atomically project
+  that summary to both the quote and exact current portal in one transaction;
+  an idempotent retry returns its existing receipt before any new projection
+  write. This is best-effort near-real-time behavior. `Live updates` means a
+  server-origin snapshot was observed and a newer signal can prompt a callable
+  reload, while cache and failure remain visibly `May be stale` or `Updates
+  paused` and manual refresh remains available. There are no read receipts,
+  typing indicators, presence state, external-delivery claims, or guaranteed
+  latency. This source branch has focused unit, local flag-on browser,
+  and isolated Auth/Firestore/Functions emulator evidence that two independent
+  browser contexts exchange staff/customer messages without manual refresh. It
+  is not merged, deployed, flag-promoted, hosted-accepted, production-data
+  evidence, or human acceptance.
+  Organization changes synchronously drop prior-scope inbox rows, and the open
+  panel remounts on the complete staff/portal access identity so prior bodies or
+  drafts cannot render under a new tenant, quote, principal, or portal token.
+  Draft, expired, deleted, or provider-unaccepted portal
+  state is visibly unavailable and never starts a conversation callable load.
 - Current source `CWF-15` authority candidate preserves the pure frozen
   Commercial Dependency Graph while adding separate server-owned simulation,
   sales request/admin authorization, gated atomic quote/version apply plus

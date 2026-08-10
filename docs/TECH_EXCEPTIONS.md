@@ -20,8 +20,8 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 9, 2026
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute branch ceilings of 2,650,137 aggregate
-  JavaScript bytes and 390,494 bytes for the largest chunk while the
+- Change: Apply named, absolute branch ceilings of 2,689,366 aggregate
+  JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.
@@ -29,25 +29,26 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Rationale: The routed staff workspace, Customer 360, commercial dependency
   graph, rebooking, commercial measures, governed commercial-change authority,
   artifact freshness, Decision Debt, Revenue Autopilot operations, CWF-16 Event
-  Workspace, and their role-safe recovery/presentation states are being reviewed together on an
+  Workspace, the Event Messaging Station, and their role-safe
+  recovery/presentation states are being reviewed together on an
   unmerged source branch. Resetting the baseline from that branch would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 652,772 bytes (32.68%) above the
+- Risk impact: The emitted asset set is 692,001 bytes (34.65%) above the
   clean-main aggregate baseline. A targeted `quoteStore` manual chunk reduces
-  `WorkspaceRoute` from 448,190 to 310,102 bytes; Firebase is now the largest
-  chunk at 390,494 bytes, only 2,565 bytes (0.66%) above the clean-main largest-
-  chunk baseline and 16,831 bytes below the normal 5% ceiling. Lazy route
+  `WorkspaceRoute` from 448,190 to 317,008 bytes; Firebase is now the largest
+  chunk at 391,596 bytes, 3,667 bytes (0.95%) above the clean-main largest-
+  chunk baseline and 15,729 bytes below the normal 5% ceiling. Lazy route
   boundaries keep the new staff route bodies out of the public entry chunk,
   but staff who enter affected
   routes can still incur added download, parse, and execution cost, especially
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
-- Performance impact: The August 9 CWF-16 source/local candidate build emitted
-  2,650,137 aggregate JavaScript bytes and a 390,494-byte largest
+- Performance impact: The August 9 Event Messaging Station source/local
+  candidate build emitted 2,689,366 aggregate JavaScript bytes and a 391,596-byte largest
   chunk. The other largest emitted chunks were jsPDF at 385,630 bytes,
-  `WorkspaceRoute` at 310,102 bytes, and the isolated quote store at 146,067
-  bytes. These are
+  `WorkspaceRoute` at 317,008 bytes, and the isolated quote store at 146,071
+  bytes. The station itself remains a 30,908-byte lazy route chunk. These are
   local source-build measurements, not Core Web Vitals, hosted, production, or
   human-acceptance evidence.
 - Rollback plan: Delete `docs/performance/bundle-exception.json` and remove,

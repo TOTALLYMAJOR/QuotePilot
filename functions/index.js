@@ -9167,16 +9167,22 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
         } : {}),
         updatedAt: FieldValue.serverTimestamp()
       });
+      const conversationSummary = {
+        schemaVersion: 1,
+        messageCount: nextMessageCount,
+        latestMessageId: generatedMessageId,
+        latestMessageAtISO: nowISO,
+        latestActorType: message.actorType,
+        updatedAt: FieldValue.serverTimestamp()
+      };
       tx.set(scope.refs.quoteRef, {
-        conversationSummary: {
-          schemaVersion: 1,
-          messageCount: nextMessageCount,
-          latestMessageId: generatedMessageId,
-          latestMessageAtISO: nowISO,
-          latestActorType: message.actorType,
-          updatedAt: FieldValue.serverTimestamp()
-        }
+        conversationSummary
       }, { merge: true });
+      tx.set(
+        db.collection(PORTAL_COLLECTION).doc(scope.activation.portalKey),
+        { conversationSummary },
+        { merge: true }
+      );
       for (const attentionUpdate of attentionPlan.updates) {
         tx.set(attentionCollection.doc(attentionUpdate.attentionId), {
           ...attentionUpdate,

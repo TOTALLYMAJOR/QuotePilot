@@ -308,6 +308,7 @@ export default function CustomerWorkspaceView({
   onBack,
   onOpenQuotes,
   onOpenQuote,
+  onOpenConversation,
   onOpenQuoteEdit,
   onCreateRebook,
   onOpenWorkflow,
@@ -698,7 +699,13 @@ export default function CustomerWorkspaceView({
                     <p>Conversation summary is unavailable for this legacy quote; open the record for the authoritative thread.</p>
                   )}
                 </div>
-                <button type="button" className="ghost compact" onClick={() => onOpenQuote?.(conversation.quoteId)}>Open quote conversation</button>
+                <button
+                  type="button"
+                  className="ghost compact"
+                  onClick={() => (onOpenConversation || onOpenQuote)?.(conversation.quoteId)}
+                >
+                  Open event conversation
+                </button>
               </article>
             ))}
           </div>
