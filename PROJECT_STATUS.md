@@ -41,10 +41,10 @@ Last updated: August 9, 2026
   documentation-governance, bundle, focused browser, rules, and emulator checks passed.
   All of these are source/local/emulator results, not hosted tenant, provider,
   deployment, production-data, flag-promotion, or human-acceptance evidence.
-- Functions runtime readiness: all 29 production Functions now run on Node.js
-  22 with Firebase Admin 14 modular app, Auth, and Firestore APIs. The clean
-  cloud install and each function update completed successfully from `v0.2.3`;
-  the local authoritative and provisioning matrices also pass.
+- Functions runtime readiness: all 74 production Functions are provider-reported
+  `ACTIVE` on Node.js 22 in `us-central1`, with Firebase Admin 14 modular app,
+  Auth, and Firestore APIs. The coordinated `v0.4.0` deployment and the local
+  authoritative and provisioning matrices passed.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current source uses a named temporary bundle exception while the
   customer-centered workspace convergence completes release qualification. Its
@@ -221,9 +221,9 @@ Last updated: August 9, 2026
   source keeps unresolved send identity and unchanged body in bounded app
   memory across panel close/unmount, retains a global unload warning until an
   exact retry receipt or explicit safe reset, and writes neither value to
-  browser storage. Focused unit/rules/emulator evidence is local only; this conversation source is not
-  part of live `v0.2.3` and has no hosted staff/customer acceptance.
-- Source-branch Event Messaging Station candidate: when the existing temporary
+  browser storage. Focused unit/rules/emulator evidence is local only; the base
+  conversation source is deployed but has no hosted staff/customer acceptance.
+- Current-source Event Messaging Station: when the existing temporary
   customer-centered workspace flag is enabled, authenticated staff can open
   `/app/messages` as a central inbox whose threads remain segregated by the
   canonical quote/event. Search, event-oriented groups, `Needs reply` and
@@ -246,8 +246,8 @@ Last updated: August 9, 2026
   latency. This source branch has focused unit, local flag-on browser,
   and isolated Auth/Firestore/Functions emulator evidence that two independent
   browser contexts exchange staff/customer messages without manual refresh. It
-  is not merged, deployed, flag-promoted, hosted-accepted, production-data
-  evidence, or human acceptance.
+  is not yet deployed, hosted-accepted, production-data evidence, or human
+  acceptance.
   Organization changes synchronously drop prior-scope inbox rows, and the open
   panel remounts on the complete staff/portal access identity so prior bodies or
   drafts cannot render under a new tenant, quote, principal, or portal token.

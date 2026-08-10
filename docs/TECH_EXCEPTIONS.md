@@ -30,8 +30,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   graph, rebooking, commercial measures, governed commercial-change authority,
   artifact freshness, Decision Debt, Revenue Autopilot operations, CWF-16 Event
   Workspace, the Event Messaging Station, and their role-safe
-  recovery/presentation states are being reviewed together on an
-  unmerged source branch. Resetting the baseline from that branch would erase
+  recovery/presentation states are being reviewed together during production
+  release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
 - Risk impact: The emitted asset set is 692,001 bytes (34.65%) above the
@@ -57,8 +57,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   clean-main baseline needs no rollback because this exception does not change
   it.
 - Exit criteria: Before this exception is closed, use one of two explicit
-  paths: (1) optimize the branch to the standard ceilings and delete the
-  exception, or (2) after the source is merged, obtain maintainer approval for
+  paths: (1) optimize the source to the standard ceilings and delete the
+  exception, or (2) obtain maintainer approval for
   a clean updated-`main` baseline reset, delete the exception, and retain the
   normal 5% allowance. Either path must pass a fresh build, the bundle guard
   with no active exception, local CWV, and focused default plus flagged staff

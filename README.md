@@ -816,6 +816,25 @@ allowlisted human dispatcher. The same live evidence is checked again after
 the build and immediately before provider mutation. Provider tokens are scoped
 to that final workflow step.
 
+The Vercel step uses the fixed reviewed project link, pulls that project's
+production settings with the scoped token, revalidates the fixed project
+identity and live release evidence, and only then performs the prebuilt build
+and production promotion. Public Vite app URL, host, base-domain, and default-org
+values are supplied explicitly by the governed step so protected Vercel values
+cannot become literal redaction placeholders in the client bundle. The exact
+returned deployment URL is validated and explicitly bound to
+`quotepilot.mbmapps.com`, including after a prior provider rollback pinned that
+custom alias. The pull remains provider configuration input; it does not
+reenable Git-triggered deployment. The reviewed Vercel SPA fallback resolves to
+`/index.html` without the incompatible `cleanUrls` redirect; filesystem assets
+retain precedence and authenticated deep links remain client-routed.
+
+Both production frontend paths explicitly compile the reviewed
+customer-centered workspace with
+`VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true` in the credential-scoped deploy
+step. The source flag remains available for a code-level rollback; it is not
+inherited from an operator shell or mutable repository variable.
+
 For a release containing either Stripe collection rail, every applicable
 `payment.*` item printed for the selected target is mandatory. Deposit and
 final-balance dispatch, signed-webhook/reconciliation behavior, cross-rail

@@ -72,11 +72,18 @@ describe("direct production deployment safety", () => {
   test.each([
     ["Firebase", FIREBASE_WORKFLOW],
     ["Vercel", VERCEL_WORKFLOW]
-  ])("binds the %s production build to explicit public buyer configuration", (_provider, workflow) => {
+  ])("binds the %s production build to explicit workspace and public buyer configuration", (_provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
     const stepsOffset = source.indexOf("\n    steps:");
     const jobConfiguration = source.slice(0, stepsOffset);
 
+    expect(source).toMatch(/^\s+VITE_APP_URL:\s*\$\{\{ vars\.APP_BASE_URL \}\}\s*$/m);
+    expect(source).toMatch(/^\s+VITE_APP_HOST:\s*quotepilot\.mbmapps\.com\s*$/m);
+    expect(source).toMatch(/^\s+VITE_BASE_DOMAIN:\s*\$\{\{ vars\.APP_BASE_DOMAIN \}\}\s*$/m);
+    expect(source).toMatch(
+      /^\s+VITE_DEFAULT_ORGANIZATION_ID:\s*\$\{\{ vars\.VITE_DEFAULT_ORGANIZATION_ID \}\}\s*$/m
+    );
+    expect(source).toMatch(/^\s+VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED:\s*"true"\s*$/m);
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"true"\s*$/m);
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"true"\s*$/m);
     expect(source).toMatch(
@@ -85,9 +92,19 @@ describe("direct production deployment safety", () => {
     expect(source).not.toMatch(/vars\.VITE_BUYER_ACCESS_(?:ENABLED|PUBLIC_CTA_ENABLED)/);
     expect(source).not.toMatch(/BUYER_ACCESS_TURNSTILE_SECRET/);
     expect(stepsOffset).toBeGreaterThan(0);
+    expect(jobConfiguration).not.toContain("VITE_APP_URL");
+    expect(jobConfiguration).not.toContain("VITE_APP_HOST");
+    expect(jobConfiguration).not.toContain("VITE_BASE_DOMAIN");
+    expect(jobConfiguration).not.toContain("VITE_DEFAULT_ORGANIZATION_ID");
+    expect(jobConfiguration).not.toContain("VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED");
     expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_ENABLED");
     expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED");
     expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY");
+    expect(source.match(/VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED:/g)).toHaveLength(1);
+    expect(source.match(/VITE_APP_URL:/g)).toHaveLength(1);
+    expect(source.match(/VITE_APP_HOST:/g)).toHaveLength(1);
+    expect(source.match(/VITE_BASE_DOMAIN:/g)).toHaveLength(1);
+    expect(source.match(/VITE_DEFAULT_ORGANIZATION_ID:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_ENABLED:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:/g)).toHaveLength(1);
     expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toHaveLength(1);
@@ -119,6 +136,32 @@ describe("direct production deployment safety", () => {
     const config = JSON.parse(fs.readFileSync(VERCEL_CONFIG, "utf8"));
 
     expect(config.git).toEqual({ deploymentEnabled: false });
+  });
+
+  test("pulls fixed production project settings before the Vercel prebuilt build", () => {
+    const source = fs.readFileSync(VERCEL_STUB, "utf8");
+    const pullOffset = source.indexOf('"pull"');
+    const revalidateOffset = source.indexOf("validateVercelProjectLink();", pullOffset);
+    const buildOffset = source.indexOf('"build"', pullOffset);
+    const deployOffset = source.indexOf("deployAndBindProductionDomain(headSha);", buildOffset);
+
+    expect(pullOffset).toBeGreaterThan(0);
+    expect(source.slice(pullOffset, buildOffset)).toMatch(/--environment=production/);
+    expect(revalidateOffset).toBeGreaterThan(pullOffset);
+    expect(buildOffset).toBeGreaterThan(revalidateOffset);
+    expect(deployOffset).toBeGreaterThan(buildOffset);
+  });
+
+  test("binds the exact Vercel deployment to the public custom domain", () => {
+    const source = fs.readFileSync(VERCEL_STUB, "utf8");
+    const deployOffset = source.indexOf('"deploy"');
+    const aliasOffset = source.indexOf('"alias"', deployOffset);
+
+    expect(deployOffset).toBeGreaterThan(0);
+    expect(source.slice(deployOffset, aliasOffset)).toContain("deploymentUrl");
+    expect(aliasOffset).toBeGreaterThan(deployOffset);
+    expect(source.slice(aliasOffset)).toContain("PRODUCTION_DOMAIN");
+    expect(source).toContain('const PRODUCTION_DOMAIN = "quotepilot.mbmapps.com";');
   });
 });
 

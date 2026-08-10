@@ -8,6 +8,7 @@ import { verifyDirectProductionReleaseEvidence } from "./production-release-evid
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIRMATION = "DEPLOY quotepilot.mbmapps.com via vercel";
+const PRODUCTION_DOMAIN = "quotepilot.mbmapps.com";
 const EXPECTED_VERCEL_LINK = Object.freeze({
   projectId: "prj_epLi14LmBItwYkv25XZoAkWZf4Jk",
   orgId: "team_AW2QNNgYt5vESEO3eOTJXHp1",
@@ -59,6 +60,50 @@ function run(command, args) {
   const result = spawnSync(command, args, { cwd: ROOT, stdio: "inherit", shell: false });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status || 1);
+}
+
+function deployAndBindProductionDomain(headSha) {
+  const output = capture("npx", [
+    "--yes",
+    "vercel@57.0.0",
+    "deploy",
+    "--prebuilt",
+    "--prod",
+    "--yes",
+    "--meta",
+    `releaseSha=${headSha}`,
+    "--token",
+    process.env.VERCEL_TOKEN
+  ]);
+  const deploymentUrl = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .reverse()
+    .find((line) => /^https:\/\//i.test(line)) || "";
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(deploymentUrl);
+  } catch {
+    throw new Error("Vercel deployment did not return a valid deployment URL.");
+  }
+  if (
+    parsedUrl.protocol !== "https:"
+    || parsedUrl.pathname !== "/"
+    || !/^quoteflow-[a-z0-9-]+-mbmapps\.vercel\.app$/i.test(parsedUrl.hostname)
+  ) {
+    throw new Error("Vercel deployment returned an unexpected deployment URL.");
+  }
+  process.stdout.write(`${output}\n`);
+  run("npx", [
+    "--yes",
+    "vercel@57.0.0",
+    "alias",
+    "set",
+    deploymentUrl,
+    PRODUCTION_DOMAIN,
+    "--token",
+    process.env.VERCEL_TOKEN
+  ]);
 }
 
 function validateWorkflowContext() {
@@ -118,17 +163,17 @@ validateVercelProjectLink();
 const headSha = validateWorkflowContext();
 await verify(headSha);
 run("npm", ["run", "check:env"]);
-run("npx", ["--yes", "vercel@57.0.0", "build", "--prod", "--token", process.env.VERCEL_TOKEN]);
-await verify(validateWorkflowContext());
 run("npx", [
   "--yes",
   "vercel@57.0.0",
-  "deploy",
-  "--prebuilt",
-  "--prod",
+  "pull",
   "--yes",
-  "--meta",
-  `releaseSha=${headSha}`,
+  "--environment=production",
   "--token",
   process.env.VERCEL_TOKEN
 ]);
+validateVercelProjectLink();
+await verify(validateWorkflowContext());
+run("npx", ["--yes", "vercel@57.0.0", "build", "--prod", "--token", process.env.VERCEL_TOKEN]);
+await verify(validateWorkflowContext());
+deployAndBindProductionDomain(headSha);

@@ -36,9 +36,15 @@ This changelog is backfilled from git history and will be maintained going forwa
   its focused URL on return, and restores focus to the selected event row.
   Organization-scoped inbox state and complete access-identity panel remounts
   clear prior-tenant rows, bodies, and drafts before a new scope can render. This
-  source is not merged, deployed, flag-promoted, hosted-
-  accepted, or human-accepted. Draft, expired, deleted, and provider-unaccepted
+  source has not yet been deployed, hosted-accepted, or human-accepted. Draft,
+  expired, deleted, and provider-unaccepted
   portal records fail closed as unavailable instead of opening a callable thread.
+
+- The governed Firebase Hosting and Vercel production builds explicitly enable
+  the reviewed customer-centered workspace, including the CWF-16 Event
+  Workspace, in the credential-scoped deploy step. This keeps the source flag
+  available for rollback while preventing production behavior from depending
+  on an untracked operator shell or mutable repository variable.
 - Source/local `CWF-16` Event Workspace. The flagged `/app/quotes/:quoteId`
   route now presents one quote as an event-first commercial record with exact
   event/customer identity, bounded Workflow condition and next action, existing

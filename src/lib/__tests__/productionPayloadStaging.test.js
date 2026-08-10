@@ -29,7 +29,6 @@ function makeRoot() {
     "vercel.json": `${JSON.stringify({
       framework: "vite",
       git: { deploymentEnabled: false },
-      cleanUrls: true,
       buildCommand: "npm run check:env && npm run build",
       headers: [{
         source: "/(.*)",
@@ -38,7 +37,7 @@ function makeRoot() {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" }
         ]
       }],
-      rewrites: [{ source: "/(.*)", destination: "/" }]
+      rewrites: [{ source: "/(.*)", destination: "/index.html" }]
     }, null, 2)}\n`
   };
   for (const [relativePath, contents] of Object.entries(files)) {
