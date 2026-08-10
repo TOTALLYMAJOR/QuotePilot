@@ -8,6 +8,25 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Flag-gated pilot guided-selling decide cards
+  (`VITE_PILOT_GUIDED_SELLING_ENABLED`, default off). When enabled, the
+  quote builder's existing upsell recommendations render through a new
+  deterministic `guided-selling-cards-v1` presentation selector as
+  decision-grammar cards: the rule's own reason as the claim, an explicit
+  catalog-settings basis line, the existing live-preview impact label, a
+  Why? provenance disclosure (model id, rule reason, and the statement that
+  saving re-prices authoritatively on the server), and a one-tap Take it
+  action that calls the existing apply handler. Autopilot semantics are
+  preserved as a disabled Auto action. The shared `DecisionCard` gains the
+  optional Why? disclosure and disabled-action support. The recommendation
+  engine, tenant guided-selling/AI-assist gates, and flag-off rendering are
+  unchanged; the surface adds no reads, writes, evidence, or authority. The
+  cards add 1,560 aggregate JavaScript bytes, recorded by raising the active
+  `workspace-convergence-pilot-phase1-2026-08-10` ceiling to 2,707,541
+  bytes (largest-chunk ceiling and clean-main baseline unchanged).
+  Source-only candidate work; not deployed, flag-promoted, or
+  human-accepted.
+
 - Flag-gated pilot Event Room dressing (`VITE_PILOT_EVENT_ROOM_ENABLED`,
   default off). When enabled, the Event Workspace renders the existing
   `proposal-readiness-v1` score as an accessible readiness ring (completion

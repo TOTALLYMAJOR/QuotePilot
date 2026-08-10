@@ -210,6 +210,13 @@ Optional:
   estimates the record cannot support, and route only to the existing
   role-gated edit or administration surfaces. Purely presentational; not a
   deployment or acceptance decision.)
+- `VITE_PILOT_GUIDED_SELLING_ENABLED` (default off. Renders the quote
+  builder's existing guided-selling recommendations as decision-grammar
+  cards — claim, basis, impact, Why? provenance, one-tap Take it — instead
+  of the plain recommendation list. The recommendation engine, tenant
+  guided-selling/AI-assist gates, apply behavior, and autopilot semantics
+  are unchanged. Purely presentational; not a deployment or acceptance
+  decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

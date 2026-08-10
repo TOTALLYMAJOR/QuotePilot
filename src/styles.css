@@ -9791,3 +9791,28 @@ hr {
     transition: none;
   }
 }
+
+/* ===== Pilot guided-selling decide cards: Why? provenance disclosure ===== */
+
+.now-card-why {
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+}
+
+.now-card-why summary {
+  color: var(--tone-gold-3);
+  cursor: pointer;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.now-card-why ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--tone-ink-3);
+  line-height: 1.55;
+}
+
+.now-card-why li + li {
+  margin-top: 0.2rem;
+}
