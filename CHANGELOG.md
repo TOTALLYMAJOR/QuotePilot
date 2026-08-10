@@ -8,6 +8,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Production frontend workflows now bind the canonical public app URL, app
+  host, base domain, and reviewed default organization explicitly, preventing
+  protected Vercel values from compiling as literal `[SENSITIVE]` placeholders.
+  The Vercel deploy helper also validates the exact returned deployment URL and
+  explicitly assigns `quotepilot.mbmapps.com`, so a prior provider rollback
+  cannot leave the custom domain pinned to an older release.
+
 - Clean CI installs now declare the `jsdom` test runtime required by Vitest
   component suites, removing reliance on a previously populated local
   `node_modules` tree.
@@ -19,8 +26,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   Workspace, in the credential-scoped deploy step. This keeps the source flag
   available for rollback while preventing production behavior from depending
   on an untracked operator shell or mutable repository variable. The named
-  temporary bundle exception is recalibrated by 167 bytes to the exact flag-on
-  build; the largest chunk remains unchanged.
+  temporary bundle exception is recalibrated by 241 bytes to the exact
+  canonical-env, flag-on build; the largest chunk remains unchanged.
 
 - Source/local `CWF-16` Event Workspace. The flagged `/app/quotes/:quoteId`
   route now presents one quote as an event-first commercial record with exact

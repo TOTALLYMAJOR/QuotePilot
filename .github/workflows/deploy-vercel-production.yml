@@ -84,6 +84,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VITE_APP_URL: ${{ vars.APP_BASE_URL }}
+          VITE_APP_HOST: quotepilot.mbmapps.com
+          VITE_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
+          VITE_DEFAULT_ORGANIZATION_ID: ${{ vars.VITE_DEFAULT_ORGANIZATION_ID }}
           VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
           VITE_BUYER_ACCESS_ENABLED: "true"
           VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true"
