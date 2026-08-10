@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 10, 2026 (supersedes the August 9 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,731,349 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,734,964 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -38,13 +38,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 733,984 bytes (36.75%) above the
-  clean-main aggregate baseline, of which 40,005 bytes are the default-off
+- Risk impact: The emitted asset set is 737,599 bytes (36.93%) above the
+  clean-main aggregate baseline, of which 43,620 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
   cards, 13,797 for the CREATE intake canvas, deterministic extractor, and
-  draft-only band pricing strip, and 10,011 for the client-request panel
-  and parser). A targeted `quoteStore` manual chunk reduces
+  draft-only band pricing strip, 10,011 for the client-request panel
+  and parser, and 3,615 for the structured-record boundary and client). A targeted `quoteStore` manual chunk reduces
   `WorkspaceRoute` from 448,190 to 317,008 bytes; Firebase is now the largest
   chunk at 391,596 bytes, 3,667 bytes (0.95%) above the clean-main largest-
   chunk baseline and 15,729 bytes below the normal 5% ceiling. Lazy route
@@ -54,11 +54,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: The August 10 merged-candidate build with the flag-gated
-  pilot candidates emitted 2,731,349 aggregate JavaScript bytes and a
+  pilot candidates emitted 2,734,964 aggregate JavaScript bytes and a
   391,596-byte largest chunk (prior checkpoints: 2,691,344 converged;
   2,700,437 with the NOW surface only; 2,705,981 before the guided-selling
   cards; 2,707,541 before the CREATE intake canvas; 2,719,059 before the
-  band pricing strip; 2,721,338 before the client-request panel). The other largest emitted chunks were jsPDF at 385,630 bytes,
+  band pricing strip; 2,721,338 before the client-request panel; 2,731,349 before the structured-record boundary). The other largest emitted chunks were jsPDF at 385,630 bytes,
   `WorkspaceRoute` at 317,008 bytes, and the isolated quote store at 146,071
   bytes. The station itself remains a 30,908-byte lazy route chunk. These are
   local source-build measurements, not Core Web Vitals, hosted, production, or

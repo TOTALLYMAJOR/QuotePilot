@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 8,
+  "catalogVersion": 9,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -1876,7 +1876,7 @@
       "entryPointLocators": [
         {
           "path": "src/components/QuoteHistoryModal.jsx",
-          "locator": "Local BEO — no receipt"
+          "locator": "Local BEO \u2014 no receipt"
         }
       ],
       "testPaths": [
@@ -3022,6 +3022,152 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "A customer can stop future governed reminder eligibility without authenticating or exposing private quote data; the exact-token receipt changes only email subscription state and does not cancel an event, change acceptance, alter payment, delete conversations, or prove provider delivery."
+    },
+    {
+      "id": "structured-change-request-record",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "With the flag-gated client-request panel, staff record which deterministically parsed proposals were staged from one exact customer change request through a callable-only, create-only, replay-stable attestation that the server binds to the exact stored request identity and message hash, the acting staff member, and the quote revision at record time; the record never replies to the customer, mutates the quote, portal, or versions, and browser writes are rules-denied.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/changeRequestRecord.js",
+        "functions/index.js",
+        "src/lib/changeRequestRecordClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#recordChangeRequestParse"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#recordChangeRequestParse"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/ChangeRequestPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/ChangeRequestPanel.jsx",
+          "locator": "data-capability-id=\"structured-change-request-record\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/changeRequestRecordAction.test.jsx",
+        "src/lib/__tests__/changeRequestRecord.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "accepts a bounded staged parse and rejects staging outside the submitted proposals"
+        },
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "binds the record to the exact stored request and hashes the exact message"
+        },
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "fails closed when the stored request no longer matches"
+        },
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "produces a deterministic, staff-attributed, replay-stable record"
+        },
+        {
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "offers the record boundary only after staging and holds the ready state"
+        },
+        {
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "records once through the callable boundary and lands on an internal receipt"
+        },
+        {
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "treats a definitive server rejection as terminal without touching the staged draft"
+        },
+        {
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "stays a read-and-stage surface when the callable boundary is unavailable"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "browser principals can never write callable-owned change-request records"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "same-tenant staff read change-request records while foreign tenants stay denied"
+        },
+        {
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "locks an ambiguous outcome to replay-stable reconciliation and recovers a transient failure"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Structured change-request record:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Client Change Requests (Structured Record)"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The flag-gated client-request panel gains one explicit record boundary after staging: ready/submitting/receipt plus uncertain/reconciliation/recovery/error, with replay-stable reconciliation copy, terminal definitive-rejection copy, staged-draft-unchanged claims, and unavailability collapsing to the read-and-stage surface. The callable, pure validation core, create-only transaction, and rules denial were reviewed together.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "offers the record boundary only after staging and holds the ready state",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "records once through the callable boundary and lands on an internal receipt",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "records once through the callable boundary and lands on an internal receipt",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "locks an ambiguous outcome to replay-stable reconciliation and recovers a transient failure",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "locks an ambiguous outcome to replay-stable reconciliation and recovers a transient failure",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "locks an ambiguous outcome to replay-stable reconciliation and recovers a transient failure",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
+          "locator": "treats a definitive server rejection as terminal without touching the staged draft",
+          "assertionLocator": "data-capability-state=\"error\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff can attest which parsed proposals they staged from one exact customer request and receive an internal, replay-stable audit receipt, while the customer request, quote, portal, versions, and every delivery, acceptance, booking, and payment truth remain exactly as they were; a failed or unavailable record leaves the staged draft untouched."
     }
   ]
 }

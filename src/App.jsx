@@ -14,6 +14,7 @@ import { StepEvent, StepMenu, StepReview, StepServices } from "./components/Wiza
 import CreateIntake from "./components/CreateIntake";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
+import { isDefinitiveRecordError, recordChangeRequestParse } from "./lib/changeRequestRecordClient";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
 import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
@@ -3648,11 +3649,30 @@ export default function App({ tenantContext, authSession }) {
           <ChangeRequestPanel
             message={editingQuote.portalDecision.message}
             submittedAtISO={editingQuote.portalDecision.submittedAtISO || ""}
+            requestId={editingQuote.portalDecision.requestId || ""}
             form={form}
             catalog={catalog}
             settings={effectiveSettings}
             styles={Object.keys(STAFF_RULES)}
             onStageProposal={stageChangeRequestProposal}
+            onRecordParse={
+              String(catalog.source || "").trim().toLowerCase().startsWith("firebase")
+                ? async (payload) => {
+                    try {
+                      return await recordChangeRequestParse({
+                        organizationId: authSession.organizationId,
+                        quoteId: editingQuote.id,
+                        ...payload
+                      });
+                    } catch (error) {
+                      if (error && typeof error === "object") {
+                        error.definitive = isDefinitiveRecordError(error);
+                      }
+                      throw error;
+                    }
+                  }
+                : null
+            }
           />
         )}
         <section className="panel wizard-panel">

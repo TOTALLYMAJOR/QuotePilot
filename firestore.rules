@@ -1128,6 +1128,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Structured change-request records are callable-owned attestations.
+    // Same-tenant staff may read them; no browser principal may write.
+    match /organizations/{orgId}/quotes/{quoteId}/changeRequestResolutions/{resolutionId} {
+      allow read: if isOrgStaff(orgId);
+      allow write: if false;
+    }
+
     // Legacy global collections are retired. All business data must be org-scoped.
     match /catalogPackages/{docId} {
       allow read, write: if false;

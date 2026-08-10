@@ -16,13 +16,17 @@ import {
 export default function ChangeRequestPanel({
   message,
   submittedAtISO = "",
+  requestId = "",
   form,
   catalog,
   settings,
   styles = [],
-  onStageProposal
+  onStageProposal,
+  onRecordParse = null
 }) {
-  const [stagedIds, setStagedIds] = useState([]);
+  const [stagedProposals, setStagedProposals] = useState([]);
+  const [recordState, setRecordState] = useState({ phase: "ready" });
+  const stagedIds = stagedProposals.map((proposal) => proposal.id);
   const parsed = useMemo(
     () => parseChangeRequest(message, { form, catalog, styles }),
     [message, form, catalog, styles]
@@ -33,7 +37,39 @@ export default function ChangeRequestPanel({
   const stage = (proposal) => {
     if (stagedIds.includes(proposal.id)) return;
     onStageProposal?.(proposal);
-    setStagedIds((prev) => [...prev, proposal.id]);
+    setStagedProposals((prev) => [...prev, proposal]);
+    setRecordState((prev) => (prev.phase === "receipt" ? { phase: "ready" } : prev));
+  };
+
+  const recordPayload = () => {
+    const byId = new Map(parsed.proposals.map((proposal) => [proposal.id, proposal]));
+    for (const proposal of stagedProposals) byId.set(proposal.id, proposal);
+    return {
+      requestId,
+      submittedAtISO,
+      parseModelId: parsed.modelId,
+      proposals: [...byId.values()],
+      stagedProposalIds: stagedIds
+    };
+  };
+
+  // Recording is replay-stable server-side (deterministic record identity),
+  // so an ambiguous outcome reconciles safely: the same call either finds
+  // the existing record or creates it once. Definitive server rejection is
+  // terminal here; transient failure keeps a safe retry.
+  const recordReview = async (mode = "submit") => {
+    if (typeof onRecordParse !== "function" || !stagedProposals.length) return;
+    setRecordState({ phase: mode === "submit" ? "submitting" : "reconciliation" });
+    try {
+      const receipt = await onRecordParse(recordPayload());
+      setRecordState({ phase: "receipt", receipt });
+    } catch (error) {
+      if (error?.definitive === true) {
+        setRecordState({ phase: "error" });
+        return;
+      }
+      setRecordState({ phase: mode === "submit" ? "uncertain" : "recovery" });
+    }
   };
 
   const impactLine = (proposal) => {
@@ -144,6 +180,72 @@ export default function ChangeRequestPanel({
           Nothing stageable could be read from this message — it stays yours to
           act on directly. Nothing was changed.
         </p>
+      )}
+
+      {typeof onRecordParse === "function" && stagedProposals.length > 0 && (
+        <div
+          className="change-request-record"
+          data-capability-id="structured-change-request-record"
+          data-capability-state={recordState.phase}
+        >
+          {recordState.phase === "ready" && (
+            <>
+              <button type="button" className="ghost" onClick={() => recordReview("submit")}>
+                Record this review
+              </button>
+              <small>
+                Creates an internal audit record binding the exact request, the
+                parsed proposals, and what you staged to the current quote
+                revision. It does not reply to the customer, change the
+                proposal, or create a version.
+              </small>
+            </>
+          )}
+          {recordState.phase === "submitting" && (
+            <p className="source-note" role="status">Recording the review...</p>
+          )}
+          {recordState.phase === "receipt" && (
+            <p className="source-note" role="status">
+              Recorded — resolution {String(recordState.receipt?.resolutionId || "").slice(0, 16)}
+              {recordState.receipt?.alreadyRecorded ? " (already on file)" : ""}. Internal
+              audit record only; nothing was sent to the customer and no version
+              was created.
+            </p>
+          )}
+          {recordState.phase === "uncertain" && (
+            <>
+              <p className="source-note" role="status">
+                The record's outcome is unclear. Recording is replay-stable, so
+                reconciling checks safely without creating a duplicate. The
+                staged draft is unchanged.
+              </p>
+              <button type="button" className="ghost" onClick={() => recordReview("reconcile")}>
+                Reconcile record
+              </button>
+            </>
+          )}
+          {recordState.phase === "reconciliation" && (
+            <p className="source-note" role="status">Reconciling the record...</p>
+          )}
+          {recordState.phase === "recovery" && (
+            <>
+              <p className="source-note" role="status">
+                Still unreachable. The staged draft is unchanged and reconciling
+                remains safe to repeat.
+              </p>
+              <button type="button" className="ghost" onClick={() => recordReview("reconcile")}>
+                Try again
+              </button>
+            </>
+          )}
+          {recordState.phase === "error" && (
+            <p className="error-note" role="alert">
+              The server declined this record — the stored customer request may
+              have changed since this parse. Re-open the quote to review the
+              current request. The staged draft is unchanged.
+            </p>
+          )}
+        </div>
       )}
     </section>
   );

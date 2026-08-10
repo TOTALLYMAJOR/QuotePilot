@@ -27,13 +27,13 @@ Threshold policy:
 - The workspace-convergence exception (now including the flag-gated pilot
   candidates: NOW home surface, Event Room ring/decide stack, guided-selling
   decide cards, the CREATE intake canvas with its band pricing strip, and
-  the client-request panel) is
+  the client-request panel with its structured-record boundary) is
   currently capped at
-  2,731,349
+  2,734,964
   aggregate JavaScript bytes and a 391,596-byte largest chunk. These are the
   exact measurements from the August 10 candidate build, so the
   exception provides no additional growth headroom. Against the unchanged
-  clean-main baseline, aggregate output is 733,984 bytes (36.75%) larger, while
+  clean-main baseline, aggregate output is 737,599 bytes (36.93%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
   remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
   splitting keeps the authenticated route bounded, and route-level

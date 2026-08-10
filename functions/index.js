@@ -12320,6 +12320,88 @@ exports.updateQuoteDraft = functions.region(REGION).https.onCall(async (data, co
   }
 });
 
+// Structured change-request record (docs/POST_COMPETITIVE_DESIGN.md §4.8):
+// a create-only, staff-attributed attestation of which parsed proposals were
+// staged from one exact customer request. Server-bound to the exact stored
+// message hash and the quote revision at record time; it never mutates the
+// quote, versions, portal, or any customer-facing state.
+exports.recordChangeRequestParse = functions.region(REGION).https.onCall(async (data, context) => {
+  const {
+    ChangeRequestRecordError,
+    normalizeChangeRequestRecordRequest,
+    verifyChangeRequestRecordAgainstQuote,
+    buildChangeRequestRecord
+  } = require("./changeRequestRecord");
+
+  const toHttpsError = (err) => {
+    if (err instanceof functions.https.HttpsError) return err;
+    if (err instanceof ChangeRequestRecordError) {
+      return new functions.https.HttpsError(err.code, err.message);
+    }
+    return new functions.https.HttpsError("internal", "Failed to record the change-request review.");
+  };
+
+  let normalized;
+  try {
+    normalized = normalizeChangeRequestRecordRequest(data);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: normalized.organizationId
+  });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== normalized.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Recording a change-request review requires same-organization staff authority."
+    );
+  }
+
+  try {
+    const quoteRef = db
+      .collection("organizations").doc(normalized.organizationId)
+      .collection("quotes").doc(normalized.quoteId);
+
+    return await db.runTransaction(async (tx) => {
+      const quoteSnap = await tx.get(quoteRef);
+      if (!quoteSnap.exists) {
+        throw new ChangeRequestRecordError("not-found", "The quote for this record was not found.");
+      }
+      const verification = verifyChangeRequestRecordAgainstQuote(
+        normalized,
+        { organizationId: normalized.organizationId, ...quoteSnap.data() }
+      );
+      const built = buildChangeRequestRecord({
+        normalized,
+        verification,
+        actor: { uid: staff.uid, email: staff.email },
+        nowISO: new Date().toISOString()
+      });
+      const recordRef = quoteRef.collection("changeRequestResolutions").doc(built.resolutionId);
+      const existing = await tx.get(recordRef);
+      if (existing.exists) {
+        const prior = existing.data() || {};
+        return {
+          resolutionId: built.resolutionId,
+          recordedAtISO: prior.recordedAtISO || "",
+          activeVersionIdAtRecord: prior.activeVersionIdAtRecord || "",
+          alreadyRecorded: true
+        };
+      }
+      tx.create(recordRef, built.record);
+      return {
+        resolutionId: built.resolutionId,
+        recordedAtISO: built.record.recordedAtISO,
+        activeVersionIdAtRecord: built.record.activeVersionIdAtRecord,
+        alreadyRecorded: false
+      };
+    });
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
 exports.requestQuoteApproval = functions.region(REGION).https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
   const staff = await assertStaff(context, {

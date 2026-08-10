@@ -10010,3 +10010,20 @@ hr {
 .change-request-unparsed {
   margin-top: 0.9rem;
 }
+
+/* ===== Structured change-request record boundary ===== */
+
+.change-request-record {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--tone-cream-3);
+  display: grid;
+  gap: 0.45rem;
+  justify-items: start;
+}
+
+.change-request-record small {
+  color: var(--tone-ink-3);
+  max-width: 34rem;
+  line-height: 1.5;
+}

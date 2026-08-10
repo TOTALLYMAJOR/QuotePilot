@@ -8,6 +8,37 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Structured change-request record (callable-only). A new
+  `recordChangeRequestParse` Firebase Function lets same-tenant staff, from
+  the flag-gated client-request panel after staging at least one parsed
+  proposal, create an internal audit record binding the exact stored
+  customer request (id, submission time, and server-computed message hash),
+  the validated parsed proposals (bounded kinds, counts, and text), the
+  staged subset, the acting verified staff identity, and the quote's active
+  version at record time. Validation and shaping live in a pure
+  `functions/changeRequestRecord.js` core; the record identity is
+  deterministic over the request and payload hash, so the create-only
+  transaction is replay-stable — repeating the same review returns the
+  existing record instead of duplicating it. New
+  `organizations/{org}/quotes/{quote}/changeRequestResolutions` documents
+  are readable by same-tenant staff and browser-write-denied by rules, with
+  new rules tests for both boundaries. The panel gains a full
+  ready/submitting/receipt/uncertain/reconciliation/recovery/error record
+  boundary: definitive server rejection is terminal with honest copy, an
+  ambiguous outcome reconciles safely via the replay-stable identity, and
+  every failure path states that the staged draft is unchanged. The record
+  never replies to the customer, never mutates the quote, portal, or
+  versions, and the ordinary save path remains the sole versioning
+  authority. Capability-surfacing contract
+  `structured-change-request-record` (catalog version 9) binds the
+  callable, entry point, states, Feature Matrix row 49, and the new
+  "Client Change Requests (Structured Record)" User Manual section.
+  The isolated Firestore rules lane passes locally (63/63 including the two
+  new record boundaries). Emulator/hosted execution of the callable itself
+  is not claimed: this is source evidence with always-on unit/component
+  coverage plus local rules-lane evidence; Functions deployment, rules
+  promotion, and hosted staff acceptance remain pending.
+
 - Flag-gated client-request panel in the quote editor
   (`VITE_PILOT_CHANGE_REQUESTS_ENABLED`, default off). When staff edit a
   quote whose portal decision is `changes_requested`, the stored customer

@@ -1259,6 +1259,26 @@ Complete every item before calling the new tenant operational:
 - Permanent quote deletion uses an explicit admin confirmation and
   callable-owned quote/version/portal cleanup.
 
+## Client Change Requests (Structured Record)
+
+When a customer uses "Request changes" on their proposal, their message is
+tracked in Workflow and, with the pilot client-request panel enabled
+(`VITE_PILOT_CHANGE_REQUESTS_ENABLED`), the quote editor shows the message
+verbatim with deterministically parsed, stageable proposals.
+
+After staging at least one proposal in a Firebase-backed workspace, use
+`Record this review` to create an internal audit record. The record is
+callable-only: the server verifies the exact stored request (id, submission
+time, and message hash), attributes the acting staff member, and binds the
+record to the quote revision at record time. Recording is create-only and
+replay-stable — repeating the same review returns the same record.
+
+The record is internal evidence only. It does not reply to the customer,
+change the proposal or portal, or create a quote version; saving your edits
+through the normal path remains the only way changes become a new version.
+If recording fails, the staged draft is unchanged and the action can be
+retried.
+
 ## Troubleshooting
 - If catalog fails to load in non-dev environments, Firebase catalog access is required and the app blocks edits until resolved.
 - If you see `organizationId is required` errors, the signed-in account is missing tenant context (`userRoles/{uid}.organizationId`) and must be re-provisioned/invited into an organization.
