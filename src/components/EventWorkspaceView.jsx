@@ -166,7 +166,7 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
             </button>
           )}
           <button type="button" className="ghost" onClick={onMoreQuoteActions}>
-            Quote administration
+            More actions
           </button>
         </div>
       </header>
@@ -197,7 +197,7 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
       >
         <div className="event-section-heading">
           <div>
-            <p className="eyebrow">Deterministic intelligence</p>
+            <p className="eyebrow">Quote insights</p>
             <h2 id="event-intelligence-title">Decision support</h2>
           </div>
           <p>Existing evidence only. Unsupported conclusions stay unavailable.</p>

@@ -518,7 +518,7 @@ test.describe("customer-centered workspace", () => {
     await expect(focusedQuote).toContainText("combined_transaction_integrity_projection_absent");
     await focusedQuote.getByText("Why?", { exact: true }).click();
     await expect(focusedQuote.getByRole("button", { name: "Edit quote" })).toHaveCount(0);
-    await expect(focusedQuote.getByRole("button", { name: "Quote administration", exact: true })).toBeVisible();
+    await expect(focusedQuote.getByRole("button", { name: "More actions", exact: true })).toBeVisible();
 
     if (process.env.CWF16_SCREENSHOT_DESKTOP) {
       await page.setViewportSize({ width: 1440, height: 900 });

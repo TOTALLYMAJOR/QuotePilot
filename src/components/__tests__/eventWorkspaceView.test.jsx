@@ -115,7 +115,7 @@ describe("EventWorkspaceView", () => {
 
     act(() => button("Back to Quotes").click());
     act(() => button("Edit quote").click());
-    act(() => button("Quote administration").click());
+    act(() => button("More actions").click());
     act(() => button("Schedule").click());
     act(() => button("Production / BEO").click());
     act(() => button("Customer").click());
@@ -140,7 +140,7 @@ describe("EventWorkspaceView", () => {
 
     expect(button("Edit quote")).toBeUndefined();
     expect(container.textContent).toContain("governed change path");
-    expect(button("Quote administration")).toBeDefined();
+    expect(button("More actions")).toBeDefined();
   });
 
   test("routes an exact attention item to Workflow", () => {

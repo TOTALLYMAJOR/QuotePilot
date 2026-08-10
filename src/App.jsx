@@ -168,7 +168,7 @@ const SalesWorkflowView = createRecoverableLazy(
 const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING || "").trim().toLowerCase()
 );
-const CUSTOMER_CENTERED_WORKSPACE_ENABLED = ["1", "true", "yes", "on"].includes(
+const CUSTOMER_CENTERED_WORKSPACE_ENABLED = !["0", "false", "no", "off"].includes(
   String(import.meta.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED || "").trim().toLowerCase()
 );
 

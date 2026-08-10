@@ -141,7 +141,7 @@ export function StaffReadContextRail({
     >
       <div className="staff-evidence-head">
         <div>
-          <p className="eyebrow">Data confidence</p>
+          <p className="eyebrow">Data freshness</p>
           <h3 id={titleId}>{title}</h3>
         </div>
         <StatusChip {...model.presentation} />
