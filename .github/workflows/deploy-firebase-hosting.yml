@@ -1,19 +1,15 @@
-name: Prepare Firebase Production Artifact
-run-name: prepare/v2/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/firebase-${{ inputs.firebase_scope }}/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.uat_run_id }}/${{ inputs.rollback_sha }}
+name: Deploy Firebase Production
+run-name: deploy/v1/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/firebase-${{ inputs.firebase_scope }}/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.rollback_sha }}
 
 on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: Full tagged main commit SHA to prepare
+        description: Full tagged main commit SHA to deploy
         required: true
         type: string
       ci_run_id:
         description: Successful main-push CI Quality run id for release_sha
-        required: true
-        type: string
-      uat_run_id:
-        description: Successful Release UAT Attestation run id for release_sha
         required: true
         type: string
       rollback_sha:
@@ -21,7 +17,7 @@ on:
         required: true
         type: string
       firebase_scope:
-        description: Exact Firebase production surface covered by UAT
+        description: Exact Firebase production surface to deploy
         required: true
         default: hosting
         type: choice
@@ -29,17 +25,21 @@ on:
           - hosting
           - backend
           - all
+      confirmation:
+        description: Exact DEPLOY tonicatering confirmation for the selected scope
+        required: true
+        type: string
 
 concurrency:
-  group: prepare-firebase-production
+  group: deploy-firebase-production
   cancel-in-progress: false
 
 jobs:
-  prepare_firebase:
-    name: Verify + Prepare Firebase Artifact
+  deploy_firebase:
+    name: Verify + Deploy Firebase
     if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
     permissions:
       actions: read
@@ -47,7 +47,6 @@ jobs:
     env:
       RELEASE_APPROVAL_MODE: ${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}
       RELEASE_SOLO_OPERATOR_IDS: ${{ vars.RELEASE_SOLO_OPERATOR_IDS }}
-      RELEASE_UAT_ATTESTER_IDS: ${{ vars.RELEASE_UAT_ATTESTER_IDS }}
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
       VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
@@ -63,105 +62,87 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Verify exact tagged-main CI evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
+        run: |
+          node ./scripts/verify-direct-production-release.mjs \
+            --release-sha "${RELEASE_SHA}" \
+            --ci-run-id "${CI_RUN_ID}" \
+            --rollback-sha "${ROLLBACK_SHA}" \
+            --target "${RELEASE_TARGET}"
+
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
 
-      - name: Verify exact-SHA release evidence before dependency execution
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_SHA: ${{ inputs.release_sha }}
-          CI_RUN_ID: ${{ inputs.ci_run_id }}
-          UAT_RUN_ID: ${{ inputs.uat_run_id }}
-          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
-          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
-        run: |
-          set -euo pipefail
-          node ./scripts/production-release-evidence.mjs \
-            --release-sha "${RELEASE_SHA}" \
-            --ci-run-id "${CI_RUN_ID}" \
-            --uat-run-id "${UAT_RUN_ID}" \
-            --rollback-sha "${ROLLBACK_SHA}" \
-            --target "${RELEASE_TARGET}"
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Functions dependencies (backend/all)
+      - name: Install Functions dependencies
         if: inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'
         run: npm ci --prefix functions
 
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Validate production browser configuration
+      - name: Materialize validated Functions runtime configuration
+        if: inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'
         env:
-          VITE_BUYER_ACCESS_ENABLED: "true"
-          VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true"
-          VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: ${{ vars.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY }}
-        run: npm run check:env
+          FIREBASE_PROJECT_ID: tonicatering
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          APP_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
+          AUTH_PLATFORM_ADMIN_EMAILS: ${{ secrets.AUTH_PLATFORM_ADMIN_EMAILS }}
+          NOTIFICATIONS_EMAIL_PROVIDER: ${{ vars.NOTIFICATIONS_EMAIL_PROVIDER || 'none' }}
+          EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
+          EMAIL_FROM_EMAIL: ${{ vars.EMAIL_FROM_EMAIL }}
+          NOTIFICATIONS_SMS_PROVIDER: ${{ vars.NOTIFICATIONS_SMS_PROVIDER || 'none' }}
+          STRIPE_MODE: ${{ vars.STRIPE_MODE }}
+          COMMERCIAL_CHANGE_AUTHORITY_ENABLED: ${{ vars.COMMERCIAL_CHANGE_AUTHORITY_ENABLED || 'false' }}
+          REVENUE_AUTOPILOT_ENABLED: ${{ vars.REVENUE_AUTOPILOT_ENABLED || 'false' }}
+          REVENUE_AUTOPILOT_SENDS_ENABLED: ${{ vars.REVENUE_AUTOPILOT_SENDS_ENABLED || 'false' }}
+          BUYER_ACCESS_ENABLED: ${{ vars.BUYER_ACCESS_ENABLED || 'false' }}
+          BUYER_ACCESS_STRIPE_MODE: ${{ vars.BUYER_ACCESS_STRIPE_MODE || 'test' }}
+          BUYER_ACCESS_APP_BASE_URL: ${{ vars.BUYER_ACCESS_APP_BASE_URL }}
+          BUYER_ACCESS_TURNSTILE_HOSTNAMES: ${{ vars.BUYER_ACCESS_TURNSTILE_HOSTNAMES }}
+        run: node ./scripts/materialize-functions-env.mjs
 
-      - name: Build frontend payload (hosting/all)
-        if: inputs.firebase_scope == 'hosting' || inputs.firebase_scope == 'all'
+      - name: Deploy selected Firebase surface
         env:
-          VITE_BUYER_ACCESS_ENABLED: "true"
-          VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true"
-          VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: ${{ vars.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY }}
-        run: npm run build
-
-      - name: Re-verify evidence after repository execution
-        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           RELEASE_SHA: ${{ inputs.release_sha }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
-          UAT_RUN_ID: ${{ inputs.uat_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
-          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
-          GITHUB_TOKEN: ${{ github.token }}
+          FIREBASE_SCOPE: ${{ inputs.firebase_scope }}
+          DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
+          VITE_BUYER_ACCESS_ENABLED: "true"
+          VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true"
+          VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: ${{ vars.VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY }}
         run: |
-          set -euo pipefail
-          node ./scripts/production-release-evidence.mjs \
+          node ./scripts/deploy-firebase-production.mjs \
+            --scope "${FIREBASE_SCOPE}" \
+            --confirm "${DEPLOY_CONFIRMATION}" \
             --release-sha "${RELEASE_SHA}" \
             --ci-run-id "${CI_RUN_ID}" \
-            --uat-run-id "${UAT_RUN_ID}" \
-            --rollback-sha "${ROLLBACK_SHA}" \
-            --target "${RELEASE_TARGET}" \
-            --output artifacts/release/release-evidence.json
+            --rollback-sha "${ROLLBACK_SHA}"
 
-      - name: Stage exact Firebase payload
-        env:
-          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
-        run: |
-          node ./scripts/stage-production-payload.mjs \
-            --target "${RELEASE_TARGET}" \
-            --output "artifacts/release/payload/${RELEASE_TARGET}"
+      - name: Verify Firebase Hosting origin
+        if: inputs.firebase_scope == 'hosting' || inputs.firebase_scope == 'all'
+        run: curl --fail --silent --show-error --retry 5 --retry-all-errors https://tonicatering.web.app/ >/dev/null
 
-      - name: Create deterministic production artifact manifest
-        env:
-          RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
-        run: |
-          node ./scripts/prepare-production-artifact.mjs \
-            --evidence-file "${GITHUB_WORKSPACE}/artifacts/release/release-evidence.json" \
-            --artifact-root "${GITHUB_WORKSPACE}/artifacts/release/payload/${RELEASE_TARGET}"
-
-      - name: Upload verified prepare-only artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: production-input-firebase-${{ inputs.firebase_scope }}-${{ inputs.release_sha }}
-          path: |
-            artifacts/release/payload/firebase-${{ inputs.firebase_scope }}
-            artifacts/release/release-evidence.json
-            artifacts/release/firebase-${{ inputs.firebase_scope }}-${{ inputs.release_sha }}-*.manifest.json
-          if-no-files-found: error
-          include-hidden-files: true
-          retention-days: 30
-
-      - name: Summarize preparation boundary
+      - name: Record deployment
         run: |
           {
-            echo "### Firebase production artifact prepared"
-            echo "- Target: firebase-${{ inputs.firebase_scope }}"
+            echo "### Firebase production deployed"
+            echo "- Scope: ${{ inputs.firebase_scope }}"
             echo "- Release SHA: ${{ inputs.release_sha }}"
-            echo "- Production was not mutated. A separately owned trusted deployer is required."
+            echo "- CI run: ${{ inputs.ci_run_id }}"
+            echo "- Rollback SHA: ${{ inputs.rollback_sha }}"
           } >> "${GITHUB_STEP_SUMMARY}"

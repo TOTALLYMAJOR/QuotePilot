@@ -28,41 +28,51 @@ const CUSTOMER_DEPLOY_SCRIPT = path.join(ROOT, "scripts", "deploy-hosting-custom
 const CI_LANE_CLASSIFIER = path.join(ROOT, "scripts", "ci-lane-classifier.mjs");
 const VERCEL_CONFIG = path.join(ROOT, "vercel.json");
 
-describe("production mutation retirement", () => {
+describe("direct production deployment safety", () => {
   test.each([
     ["Firebase", FIREBASE_STUB],
     ["Vercel", VERCEL_STUB]
-  ])("keeps the legacy %s command fail-closed", (_provider, script) => {
+  ])("keeps the %s command fail-closed outside its exact workflow contract", (_provider, script) => {
     const result = spawnSync(process.execPath, [script, "--force"], {
       cwd: ROOT,
       encoding: "utf8"
     });
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toMatch(/direct .* production mutation is retired/i);
-    expect(result.stderr).toMatch(/separately owned trusted deployer/i);
-    expect(fs.readFileSync(script, "utf8")).not.toMatch(/\bnpx\b|spawnSync|execSync/);
+    expect(result.stderr).toMatch(/Unknown argument: --force/i);
+    const source = fs.readFileSync(script, "utf8");
+    expect(source).toMatch(/GITHUB_ACTIONS/);
+    expect(source).toMatch(/workflow_dispatch/);
+    expect(source).toMatch(/refs\/heads\/main/);
+    expect(source).toMatch(/verifyDirectProductionReleaseEvidence/);
   });
 
   test.each([
     ["Firebase", FIREBASE_WORKFLOW],
     ["Vercel", VERCEL_WORKFLOW]
-  ])("keeps the %s workflow provider-mutation-credential-free and prepare-only", (_provider, workflow) => {
+  ])("keeps the %s workflow manual, exact-SHA, protected, and credential-scoped", (provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
 
-    expect(source).toMatch(/name: Prepare .* Production Artifact/i);
-    expect(source).toMatch(/run-name: prepare\/v2\//);
-    expect(source).not.toMatch(/FIREBASE_TOKEN|VERCEL_TOKEN/);
-    expect(source).not.toMatch(/secrets\./);
-    expect(source).not.toMatch(/\bnpx\b|firebase-tools|vercel\s+(?:build|deploy)/i);
-    expect(source).not.toMatch(/scripts\/deploy-(?:firebase|vercel)-production\.mjs/);
+    expect(source).toMatch(/name: Deploy .* Production/i);
+    expect(source).toMatch(/run-name: deploy\/v1\//);
+    expect(source).toMatch(/workflow_dispatch:/);
+    expect(source).toMatch(/github\.sha == inputs\.release_sha/);
+    expect(source).toMatch(/environment:.*production-solo/);
     expect(source).toMatch(/persist-credentials:\s*false/);
+    expect(source).toMatch(/scripts\/verify-direct-production-release\.mjs/);
+    expect(source).toMatch(/scripts\/deploy-(?:firebase|vercel)-production\.mjs/);
+    expect(source).toMatch(new RegExp(`${provider.toUpperCase()}_TOKEN:\\s*\\$\\{\\{ secrets\\.${provider.toUpperCase()}_TOKEN \\}\\}`));
+    const tokenOffset = source.indexOf(`${provider.toUpperCase()}_TOKEN:`);
+    const deployStepOffset = source.indexOf(provider === "Firebase"
+      ? "- name: Deploy selected Firebase surface"
+      : "- name: Build and deploy exact release");
+    expect(tokenOffset).toBeGreaterThan(deployStepOffset);
   });
 
   test.each([
     ["Firebase", FIREBASE_WORKFLOW],
     ["Vercel", VERCEL_WORKFLOW]
-  ])("binds the %s artifact to explicit public buyer configuration", (_provider, workflow) => {
+  ])("binds the %s production build to explicit public buyer configuration", (_provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
     const stepsOffset = source.indexOf("\n    steps:");
     const jobConfiguration = source.slice(0, stepsOffset);
@@ -78,16 +88,16 @@ describe("production mutation retirement", () => {
     expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_ENABLED");
     expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED");
     expect(jobConfiguration).not.toContain("VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY");
-    expect(source.match(/VITE_BUYER_ACCESS_ENABLED:/g)).toHaveLength(2);
-    expect(source.match(/VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:/g)).toHaveLength(2);
-    expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toHaveLength(2);
+    expect(source.match(/VITE_BUYER_ACCESS_ENABLED:/g)).toHaveLength(1);
+    expect(source.match(/VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:/g)).toHaveLength(1);
+    expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toHaveLength(1);
   });
 
   test("does not persist checkout credentials in the UAT attestation job", () => {
     expect(fs.readFileSync(UAT_WORKFLOW, "utf8")).toMatch(/persist-credentials:\s*false/);
   });
 
-  test("retires the misleading Vercel build alias and legacy Functions scope", () => {
+  test("keeps one canonical deploy command per production target", () => {
     const rootPackage = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
     const functionsPackage = JSON.parse(
       fs.readFileSync(path.join(ROOT, "functions", "package.json"), "utf8")

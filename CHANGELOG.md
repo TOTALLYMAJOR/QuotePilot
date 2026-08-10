@@ -394,8 +394,8 @@ This changelog is backfilled from git history and will be maintained going forwa
   prepared-by and chef sign-off lines plus day-of notes.
 - Exact-SHA release evidence, versioned target-specific UAT, deterministic
   credential-free Firebase/Vercel payload manifests, and rollback ancestry
-  checks for a separately authorized trusted deployer. Repository preparation
-  workflows do not receive provider mutation credentials or change production.
+  checks. These evidence primitives remain available even though the normal
+  solo release path now performs the final provider mutation in-repository.
 - Separate server-authoritative Stripe deposit and final-balance collection
   rails with exact approval scope, private-before-provider-acceptance link
   handling, signed-event payment truth, replay-safe reconciliation, and
@@ -415,6 +415,13 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Production release operation now uses the existing repository's manual
+  Firebase and Vercel workflows instead of requiring a second deployer
+  repository. Each workflow binds the fixed provider target to an exact
+  semantically tagged `main` SHA, successful eight-job main CI run, rollback
+  ancestor, protected environment, allowlisted human dispatch, and typed
+  confirmation; it repeats evidence verification immediately before the
+  provider mutation and scopes each provider token to that deploy step.
 - Workspace selection cues now use a short two-grain click-chirp while
   remaining behind the central sound preference and fail-silent Web Audio
   boundary.
@@ -447,12 +454,12 @@ This changelog is backfilled from git history and will be maintained going forwa
   configuration. Merging or pushing a branch can no longer create or promote a
   Vercel deployment; production promotion remains a separate governed action
   against the deterministic release artifact.
-- Release evidence now supports an explicit solo-owner policy without
-  fabricating a second reviewer. Solo mode requires one allowlisted human,
-  separate exact-SHA UAT and preparation dispatches, protected-branch-only
-  environments, a 15-minute cooling period, rollback evidence, and the same
-  deterministic credential-free artifacts; independent-review mode remains
-  the default for team-owned repositories.
+- Release evidence supports an explicit solo-owner policy without fabricating
+  a second reviewer. The initial two-dispatch UAT/preparation design is retained
+  as an optional higher-assurance evidence path; the normal deploy path uses one
+  allowlisted human dispatch, protected-branch-only environment, exact CI,
+  rollback evidence, and typed target confirmation. Independent-review mode
+  remains available for team-owned repositories.
 
 - QuotePilot email now supports the approved interim sender
   `QuotePilot by MBMApps <quotepilot@leaguepilot.us>`, reusing the existing

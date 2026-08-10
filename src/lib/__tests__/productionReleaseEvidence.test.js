@@ -13,6 +13,7 @@ import {
   parseReleaseUatRunTitle,
   validateCiJobs,
   validateCiRun,
+  validateDirectDeploymentRun,
   validatePreparationDeploymentReviews,
   validatePreparationRun,
   validateSoloOperatorControls,
@@ -258,6 +259,44 @@ function makePreparationOptions(target = "vercel", overrides = {}) {
     preparationRunId: PREPARATION_RUN_ID,
     ciRunId: CI_RUN_ID,
     uatRunId: UAT_RUN_ID,
+    ...overrides
+  };
+}
+
+function makeDirectDeploymentTitle({
+  approvalMode = "solo-operator",
+  profile = "vercel",
+  releaseSha = RELEASE_SHA,
+  ciRunId = CI_RUN_ID,
+  rollbackSha = ROLLBACK_SHA
+} = {}) {
+  return [
+    "deploy",
+    "v1",
+    approvalMode,
+    profile,
+    releaseSha,
+    String(ciRunId),
+    rollbackSha
+  ].join("/");
+}
+
+function makeDirectDeploymentRun(profile = "vercel", overrides = {}) {
+  return makePreparationRun(profile, {
+    name: "Deploy Production",
+    display_title: makeDirectDeploymentTitle({ profile }),
+    ...overrides
+  });
+}
+
+function makeDirectDeploymentOptions(target = "vercel", overrides = {}) {
+  return {
+    releaseSha: RELEASE_SHA,
+    rollbackSha: ROLLBACK_SHA,
+    target,
+    deploymentRunId: PREPARATION_RUN_ID,
+    ciRunId: CI_RUN_ID,
+    approvalMode: "solo-operator",
     ...overrides
   };
 }
@@ -921,6 +960,36 @@ describe("current preparation workflow validator", () => {
       makePreparationRun("vercel", { display_title: displayTitle }),
       makePreparationOptions("vercel")
     )).toThrow(/title is not bound to the supplied evidence/i);
+  });
+});
+
+describe("direct deployment workflow validator", () => {
+  test.each(DEPLOYMENT_PROFILES)(
+    "accepts the active exact-evidence human %s dispatch",
+    (profile) => {
+      expect(validateDirectDeploymentRun(
+        makeDirectDeploymentRun(profile),
+        makeDirectDeploymentOptions(profile)
+      )).toEqual({ operatorId: OPERATOR_ID });
+    }
+  );
+
+  test.each([
+    [{ repository: { id: 1, full_name: "other/repo" } }, /different repository/i],
+    [{ id: 999 }, /response id does not match the current run/i],
+    [{ workflow_id: 1 }, /not the canonical target deployment workflow/i],
+    [{ event: "push" }, /not a main-branch manual dispatch/i],
+    [{ head_branch: "feature" }, /not a main-branch manual dispatch/i],
+    [{ head_sha: OTHER_SHA }, /not bound to the exact release SHA/i],
+    [{ display_title: "deploy/v1/tampered" }, /title is not bound/i],
+    [{ status: "completed", conclusion: "success" }, /not actively in progress/i],
+    [{ run_attempt: 2 }, /reruns are not accepted/i],
+    [{ actor: { id: OPERATOR_ID, type: "Bot" } }, /not dispatched by one human operator/i]
+  ])("rejects invalid direct deployment evidence %#", (overrides, expected) => {
+    expect(() => validateDirectDeploymentRun(
+      makeDirectDeploymentRun("vercel", overrides),
+      makeDirectDeploymentOptions("vercel")
+    )).toThrow(expected);
   });
 });
 
