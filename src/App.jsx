@@ -12,6 +12,8 @@ import {
 } from "./components/RecoverableErrorBoundary";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import CreateIntake from "./components/CreateIntake";
+import ChangeRequestPanel from "./components/ChangeRequestPanel";
+import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
 import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
@@ -187,6 +189,12 @@ const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
 // only; quote creation authority is unchanged.
 const PILOT_CREATE_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_CREATE_ENABLED || "").trim().toLowerCase()
+);
+// The client-request panel is an additional default-off presentation gate.
+// It parses the stored change-request message into stageable draft edits
+// only; the ordinary save path remains the sole versioning authority.
+const PILOT_CHANGE_REQUESTS_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_CHANGE_REQUESTS_ENABLED || "").trim().toLowerCase()
 );
 
 const INITIAL_FORM = {
@@ -1687,6 +1695,16 @@ export default function App({ tenantContext, authSession }) {
       setGuestBand(meta?.guestBand || null);
     }
     if (eventTypeId || entries.length) setStep(1);
+  };
+
+  // Client-request staging: applies one parsed proposal to the draft form
+  // with the same touched-field protection ordinary typing gets. Saving
+  // remains the approval — it re-prices authoritatively and versions.
+  const stageChangeRequestProposal = (proposal) => {
+    if (!proposal) return;
+    setQuoteDirty(true);
+    markFieldsTouched(proposalTouchedFields(proposal));
+    setForm((prev) => applyProposalToForm(prev, proposal));
   };
 
   const applyRecommendation = (item, { userOriginated = true } = {}) => {
@@ -3621,6 +3639,20 @@ export default function App({ tenantContext, authSession }) {
             eventTypes={catalog.eventTypes || []}
             styles={Object.keys(STAFF_RULES)}
             onApplyDraft={applyIntentDraft}
+          />
+        )}
+        {PILOT_CHANGE_REQUESTS_ENABLED
+          && isEditingQuote
+          && editingQuote?.portalDecision?.decision === "changes_requested"
+          && String(editingQuote?.portalDecision?.message || "").trim() && (
+          <ChangeRequestPanel
+            message={editingQuote.portalDecision.message}
+            submittedAtISO={editingQuote.portalDecision.submittedAtISO || ""}
+            form={form}
+            catalog={catalog}
+            settings={effectiveSettings}
+            styles={Object.keys(STAFF_RULES)}
+            onStageProposal={stageChangeRequestProposal}
           />
         )}
         <section className="panel wizard-panel">

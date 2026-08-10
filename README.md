@@ -235,6 +235,16 @@ Optional:
   unchanged; see
   [docs/INTENT_INTAKE_ADR.md](docs/INTENT_INTAKE_ADR.md). Not a deployment
   or acceptance decision.)
+- `VITE_PILOT_CHANGE_REQUESTS_ENABLED` (default off. In the quote editor,
+  shows the stored customer change-request message verbatim and parses it
+  deterministically into stageable proposals — guest count, staffing,
+  hours, service style, and add/remove/swap of catalog items — each priced
+  as a preview delta by the same client calculator. Ambiguous references
+  become an explicit choice, never a guess; unreadable clauses stay the
+  customer's text. Staging edits the draft form only: the ordinary save
+  path remains the sole versioning and re-pricing authority, and nothing is
+  sent to the customer. Purely presentational; not a deployment or
+  acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human
