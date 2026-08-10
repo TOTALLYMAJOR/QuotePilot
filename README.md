@@ -806,7 +806,12 @@ to that final workflow step.
 The Vercel step uses the fixed reviewed project link, pulls that project's
 production settings with the scoped token, revalidates the fixed project
 identity and live release evidence, and only then performs the prebuilt build
-and production promotion. The pull is provider configuration input; it does not
+and production promotion. Public Vite app URL, host, base-domain, and default-org
+values are supplied explicitly by the governed step so protected Vercel values
+cannot become literal redaction placeholders in the client bundle. The exact
+returned deployment URL is validated and explicitly bound to
+`quotepilot.mbmapps.com`, including after a prior provider rollback pinned that
+custom alias. The pull remains provider configuration input; it does not
 reenable Git-triggered deployment. The reviewed Vercel SPA fallback resolves to
 `/index.html` without the incompatible `cleanUrls` redirect; filesystem assets
 retain precedence and authenticated deep links remain client-routed.

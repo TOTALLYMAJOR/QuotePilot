@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 9, 2026
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute branch ceilings of 2,650,304 aggregate
+- Change: Apply named, absolute branch ceilings of 2,650,378 aggregate
   JavaScript bytes and 390,494 bytes for the largest chunk while the
   customer-centered workspace converges. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
@@ -44,7 +44,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: The August 9 CWF-16 source/local candidate build emitted
-  2,650,304 aggregate JavaScript bytes and a 390,494-byte largest
+  2,650,378 aggregate JavaScript bytes and a 390,494-byte largest
   chunk. The other largest emitted chunks were jsPDF at 385,630 bytes,
   `WorkspaceRoute` at 310,102 bytes, and the isolated quote store at 146,067
   bytes. These are

@@ -10,8 +10,9 @@ Last updated: August 10, 2026
   `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
   This is the intentionally restored rollback target after the first governed
   Vercel release exposed a SPA fallback mismatch. Firebase Hosting remains the
-  origin/fallback (`https://tonicatering.web.app`) and its Hosting, Functions,
-  rules, and indexes are on the successful `v0.4.0` release described below.
+  origin/fallback (`https://tonicatering.web.app`); Hosting is on successful
+  `v0.4.2`, while Functions, rules, and indexes remain on the successful
+  `v0.4.0` release described below.
 - Release candidate: the customer-centered workspace convergence plus CWF-16
   stabilization is merged to `main`. Firebase release run `31349796774`
   successfully promoted Hosting, Functions, Firestore rules, and indexes from
@@ -20,11 +21,19 @@ Last updated: August 10, 2026
   `v0.2.3` edge; PR #46 then qualified the `/index.html` fallback on READY
   deployment `dpl_2gwvt6gaoD3jv5u6iC68BgrKWv6J`, including authenticated root
   and deep-route HTTP 200 responses, and merged at
-  `36a24aaf61207ee299ddec6136190b5158260cce`. The final release candidate now
-  explicitly compiles the customer-centered workspace flag on in both governed
-  frontend deployment paths. Final exact-main CI, production edge promotion,
-  hosted signed-in acceptance, and human acceptance remain separate pending
-  evidence.
+  `36a24aaf61207ee299ddec6136190b5158260cce`. Tagged `v0.4.2` then deployed to
+  READY Vercel deployment `dpl_Dxdc2TC37XrnRkiDBBAEBt6pTNZj` and passed direct
+  deployment root/deep-route checks, but the custom domain remained pinned to
+  the earlier rollback. A manual alias proof exposed a second fail-closed issue:
+  protected Vercel public-app variables were embedded as literal `[SENSITIVE]`
+  values, causing the app host to enter Tenant Not Found. The custom domain was
+  restored to healthy `v0.2.3`. The current candidate explicitly binds the
+  public app URL, host, base domain, reviewed default organization `250`, customer-centered
+  workspace flag, buyer flags, and existing Turnstile site key in both governed
+  frontend paths; the Vercel deploy command also validates its returned URL and
+  binds that exact deployment to the custom domain. Final exact-main CI,
+  production promotion, hosted signed-in acceptance, and human acceptance
+  remain separate pending evidence.
 - Current source product identity: public, authentication, workspace, customer
   portal, proposal, install metadata, integration, and onboarding surfaces use
   the exact `QuotePilot by MBMApps` identity. The workspace header now labels
@@ -40,7 +49,7 @@ Last updated: August 10, 2026
   quote-write coverage passed 3/3. The Firebase lane exposed and then verified
   the fix for an invalid absent Attention-pointer delete sentinel during staff
   conversation send. The production build transformed 4,976 modules and emitted
-  2,650,304 aggregate JavaScript bytes with a 390,494-byte largest chunk, within
+  2,650,378 aggregate JavaScript bytes with a 390,494-byte largest chunk, within
   the exact named temporary exception. Environment, workflow, capability-
   surfacing, documentation-governance, secret, bundle, and diff checks passed.
   All of these are source/local/emulator results, not hosted tenant, provider,
@@ -53,7 +62,7 @@ Last updated: August 10, 2026
 - Current source uses a named temporary bundle exception while the
   customer-centered workspace convergence completes release qualification. Its
   no-headroom
-  ceilings match the flag-on CWF-16 production candidate build at 2,650,304
+  ceilings match the canonical-env, flag-on production build at 2,650,378
   aggregate JavaScript bytes and a 390,494-byte largest chunk, versus
   unchanged pre-convergence main metrics of
   1,997,365 and 387,929 bytes. The normal allowance remains 5%, baseline updates

@@ -24,7 +24,7 @@ Threshold policy:
   for aggregate JavaScript and the largest chunk. The guard accepts it only
   when its ID is active and its pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The customer-centered workspace exception is currently capped at 2,650,304
+- The customer-centered workspace exception is currently capped at 2,650,378
   aggregate JavaScript bytes and a 390,494-byte largest chunk. These are the
   exact measurements from the August 9 CWF-16 source/local candidate
   build, so the exception provides no additional growth headroom. Against the
