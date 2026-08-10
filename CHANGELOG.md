@@ -422,6 +422,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   ancestor, protected environment, allowlisted human dispatch, and typed
   confirmation; it repeats evidence verification immediately before the
   provider mutation and scopes each provider token to that deploy step.
+- The fixed Vercel production project now pulls its authenticated production
+  project settings before the prebuilt CLI build, then revalidates the fixed
+  project identity and live release evidence before continuing. This satisfies
+  Vercel CLI 57's local-settings requirement without restoring Git auto-deploy.
 - Workspace selection cues now use a short two-grain click-chirp while
   remaining behind the central sound preference and fail-silent Web Audio
   boundary.

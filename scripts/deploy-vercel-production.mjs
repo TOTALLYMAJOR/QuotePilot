@@ -118,6 +118,17 @@ validateVercelProjectLink();
 const headSha = validateWorkflowContext();
 await verify(headSha);
 run("npm", ["run", "check:env"]);
+run("npx", [
+  "--yes",
+  "vercel@57.0.0",
+  "pull",
+  "--yes",
+  "--environment=production",
+  "--token",
+  process.env.VERCEL_TOKEN
+]);
+validateVercelProjectLink();
+await verify(validateWorkflowContext());
 run("npx", ["--yes", "vercel@57.0.0", "build", "--prod", "--token", process.env.VERCEL_TOKEN]);
 await verify(validateWorkflowContext());
 run("npx", [
