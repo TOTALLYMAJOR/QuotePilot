@@ -9816,3 +9816,114 @@ hr {
 .now-card-why li + li {
   margin-top: 0.2rem;
 }
+
+/* ===== Pilot CREATE intake canvas (flag-gated, deterministic extraction) ===== */
+
+.create-intake-panel {
+  grid-column: 1 / -1;
+  margin-bottom: var(--space-4);
+}
+
+.create-intake-sub {
+  color: var(--tone-ink-2);
+  max-width: 40rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.92rem;
+}
+
+.create-intake-input {
+  width: 100%;
+  margin-top: 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--tone-cream-3);
+  border-radius: 10px;
+  background: var(--tone-cream-1);
+  color: var(--tone-ink-1);
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.create-intake-input:focus-visible {
+  outline: 2px solid var(--tone-gold-2);
+  outline-offset: 1px;
+}
+
+.create-intake-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.create-intake-result {
+  margin-top: 1rem;
+  border-top: 1px solid var(--tone-cream-3);
+  padding-top: 0.9rem;
+}
+
+.create-intake-group-label {
+  margin: 0.6rem 0 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tone-ink-3);
+}
+
+.create-intake-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.5rem;
+}
+
+.create-intake-fact {
+  border: 1px solid var(--tone-cream-3);
+  border-radius: 10px;
+  background: var(--tone-cream-1);
+  padding: 0.6rem 0.75rem;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.create-intake-fact-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tone-gold-3);
+}
+
+.create-intake-fact strong {
+  font-size: 0.92rem;
+}
+
+.create-intake-fact small {
+  color: var(--tone-ink-3);
+  font-size: 0.76rem;
+}
+
+.create-intake-fact.is-unconfirmed {
+  border-style: dashed;
+}
+
+.create-intake-fact.is-unconfirmed button {
+  justify-self: start;
+  margin-top: 0.35rem;
+}
+
+.create-intake-apply {
+  margin-top: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.create-intake-apply small {
+  color: var(--tone-ink-3);
+  max-width: 24rem;
+}

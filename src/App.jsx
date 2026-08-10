@@ -11,6 +11,7 @@ import {
   RecoverableErrorBoundary
 } from "./components/RecoverableErrorBoundary";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
+import CreateIntake from "./components/CreateIntake";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
 import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
@@ -181,6 +182,12 @@ const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
   && ["1", "true", "yes", "on"].includes(
     String(import.meta.env.VITE_PILOT_NOW_ENABLED || "").trim().toLowerCase()
   );
+// The CREATE intake canvas is an additional default-off presentation gate
+// (docs/INTENT_INTAKE_ADR.md). It prefills the ordinary editable draft form
+// only; quote creation authority is unchanged.
+const PILOT_CREATE_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_CREATE_ENABLED || "").trim().toLowerCase()
+);
 
 const INITIAL_FORM = {
   date: "",
@@ -1642,6 +1649,30 @@ export default function App({ tenantContext, authSession }) {
 
   const dismissTemplateDefaultsNotice = () => {
     setTemplateDefaultsNotice(null);
+  };
+
+  // CREATE intake apply (docs/INTENT_INTAKE_ADR.md): the extracted event type
+  // runs through the canonical handleEventTypeChange first so template
+  // defaults cascade for untouched fields, then the operator's explicit
+  // extracted facts merge over that result and are marked touched — the same
+  // protection ordinary typing gets. Draft-form state only; the trusted
+  // create path remains the sole creation authority.
+  const applyIntentDraft = (draft = {}) => {
+    const { eventTypeId, ...rest } = draft || {};
+    const entries = Object.entries(rest).filter(
+      ([, value]) => value !== undefined && value !== null && String(value) !== ""
+    );
+    if (eventTypeId) handleEventTypeChange(eventTypeId);
+    if (entries.length) {
+      setQuoteDirty(true);
+      markFieldsTouched(entries.map(([key]) => key));
+      setForm((prev) => {
+        const next = { ...prev };
+        for (const [key, value] of entries) next[key] = value;
+        return next;
+      });
+    }
+    if (eventTypeId || entries.length) setStep(1);
   };
 
   const applyRecommendation = (item, { userOriginated = true } = {}) => {
@@ -3569,6 +3600,15 @@ export default function App({ tenantContext, authSession }) {
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
+        {PILOT_CREATE_ENABLED
+          && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
+          && !editingQuote.id && (
+          <CreateIntake
+            eventTypes={catalog.eventTypes || []}
+            styles={Object.keys(STAFF_RULES)}
+            onApplyDraft={applyIntentDraft}
+          />
+        )}
         <section className="panel wizard-panel">
           <RebookQuoteReviewBanner
             quoteNumber={editingQuote.quoteNumber}

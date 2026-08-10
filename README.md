@@ -12,6 +12,7 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Event Messaging Station architecture: [docs/MESSAGING_STATION_ARCHITECTURE.md](docs/MESSAGING_STATION_ARCHITECTURE.md)
 - Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Post-competitive destination design: [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md)
+- Intent intake ADR: [docs/INTENT_INTAKE_ADR.md](docs/INTENT_INTAKE_ADR.md)
 - Customer workspace backend handoff: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
 - Commercial Change Authority ADR: [docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md](docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md)
 - Commercial Change Authority design/UI/work plan: [design](docs/COMMERCIAL_CHANGE_AUTHORITY_DESIGN.md), [UI specification](docs/COMMERCIAL_CHANGE_AUTHORITY_UI_SPEC.md), [work plan](docs/COMMERCIAL_CHANGE_AUTHORITY_WORK_PLAN.md)
@@ -221,6 +222,14 @@ Optional:
   guided-selling/AI-assist gates, apply behavior, and autopilot semantics
   are unchanged. Purely presentational; not a deployment or acceptance
   decision.)
+- `VITE_PILOT_CREATE_ENABLED` (default off. Renders the CREATE intake
+  canvas above the new-quote builder: free text is structured by a
+  deterministic browser-only extractor — no provider, no I/O, no invention;
+  every fact carries its source excerpt and confidence, low-confidence facts
+  require one-tap confirmation, and applying prefills the ordinary editable
+  draft form only. Quote creation authority is unchanged; see
+  [docs/INTENT_INTAKE_ADR.md](docs/INTENT_INTAKE_ADR.md). Not a deployment
+  or acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human
