@@ -10,6 +10,14 @@ Last updated: August 9, 2026
   `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
   Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`)
   and was released with the same tagged source revision.
+- Release candidate: the 39-commit customer-centered workspace convergence is
+  merged to `main` at `62d5136f5fdc8531f7b61f5fd2fb875ef0b30540` through
+  PR #42. Exact-main CI run `31343660836` passed all eight hard-gate jobs. Vercel
+  preview deployment `dpl_2nSEHnzLzyCNRCurby1dm9jJkULm` is provider-reported
+  `READY` and binds that exact SHA. This is immutable staging evidence only;
+  production aliases, Firebase Hosting, Functions, Firestore rules/indexes,
+  runtime flags, hosted UAT, and human acceptance have not been promoted or
+  claimed for this candidate.
 - Current source product identity: public, authentication, workspace, customer
   portal, proposal, install metadata, integration, and onboarding surfaces use
   the exact `QuotePilot by MBMApps` identity. The workspace header now labels
@@ -36,10 +44,11 @@ Last updated: August 9, 2026
   the local authoritative and provisioning matrices also pass.
 - Test coverage: unit + Playwright smoke suites are configured in CI.
 - Current source uses a named temporary bundle exception while the
-  customer-centered workspace convergence remains unmerged. Its no-headroom
+  customer-centered workspace convergence completes release qualification. Its
+  no-headroom
   ceilings match the August 9 CWF-16 source/local candidate build at 2,650,137
   aggregate JavaScript bytes and a 390,494-byte largest chunk, versus
-  unchanged clean-main metrics of
+  unchanged pre-convergence main metrics of
   1,997,365 and 387,929 bytes. The normal allowance remains 5%, baseline updates
   are blocked while the exception is active, and closure requires the explicit
   optimization or reviewed clean-main recalibration path plus local bundle,
@@ -59,7 +68,7 @@ Last updated: August 9, 2026
   authority tests, and no callable ownership. This is structural traceability
   evidence, not semantic completeness or proof of visual polish, hosted
   availability, provider behavior, production promotion, or human acceptance.
-- CWF-16 is source/local complete behind the existing customer-centered
+- CWF-16 is merged/source complete behind the existing customer-centered
   workspace flag. `/app/quotes/:quoteId` is an event-first record over the
   existing bounded quote and Workflow contracts; `/app/quotes` remains quote
   administration and `/app/quotes/:quoteId/edit` remains the trusted editor.
@@ -94,7 +103,7 @@ Last updated: August 9, 2026
   current customer change requests. Its post-idle header count preserves the
   lazy workspace boundary; request-ID-bound acknowledge/handled state is internal
   only and never edits customer decision evidence or sends email/SMS.
-- Current candidate customer-centered workspace: a dependency-free History API
+- Current merged customer-centered workspace: a dependency-free History API
   route layer defines `/app` Home, Customers, Quotes, the sticky-mounted quote
   builder, focused quote/edit records, Workflow focus, Schedule, Reporting,
   Catalog, Imports, Integrations, Diagnostics, `/app/home` canonicalization,
@@ -138,7 +147,7 @@ Last updated: August 9, 2026
   provider delivery/bounce because the current DTO has no authoritative receipt
   fields for those milestones; version comparison reads stored version scope,
   schedule, server-pricing, and terms only and never recalculates history. This
-  is current candidate source. The closing qualification above covers this
+  is current merged source. The closing qualification above covers this
   local convergence; hosted, deployment, production-data, and human-acceptance
   evidence remain separate and must not be inferred from the source claim.
 - Current source quote-entry simplification: Step 1 keeps attendance and role

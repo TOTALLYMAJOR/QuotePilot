@@ -29,8 +29,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   attention explicitly does not claim readiness/completion, and local BEO output
   remains labeled as having no server receipt. Deterministic model, component,
   integration, responsive browser, console-error, deterministic-repeat, and
-  same-state visual QA are covered. This adds no backend/data authority and is
-  not merged, deployed, hosted, flag-promoted, or human-accepted.
+  same-state visual QA are covered. This adds no backend/data authority. It is
+  merged to `main` at `62d5136f5fdc8531f7b61f5fd2fb875ef0b30540` and has an
+  exact-SHA READY Vercel preview, but is not production-deployed,
+  flag-promoted, or human-accepted.
 - Source/local `CWF-11` authoritative post-event closeout. A governed booking
   with a verified private acceptance receipt now atomically creates one
   deterministic, same-tenant closeout record bound to the exact accepted
