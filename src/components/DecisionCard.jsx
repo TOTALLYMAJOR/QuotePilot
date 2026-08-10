@@ -10,6 +10,8 @@ export default function DecisionCard({
   title,
   meta = "",
   sentence,
+  basis = "",
+  impact = "",
   actions = [],
   onAction
 }) {
@@ -22,6 +24,8 @@ export default function DecisionCard({
           {meta ? <p className="now-card-meta">{meta}</p> : null}
         </div>
         <p className="now-card-sentence">{sentence}</p>
+        {basis ? <p className="now-card-basis">Based on: {basis}</p> : null}
+        {impact ? <p className="now-card-impact">{impact}</p> : null}
         <div className="now-card-foot">
           {family ? <StatusChip family={family} label={label} /> : null}
           <div className="now-card-actions">

@@ -8,6 +8,26 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Flag-gated pilot Event Room dressing (`VITE_PILOT_EVENT_ROOM_ENABLED`,
+  default off). When enabled, the Event Workspace renders the existing
+  `proposal-readiness-v1` score as an accessible readiness ring (completion
+  marked only at exactly 100, reduced-motion safe) and adds an advisory
+  decide stack from a new deterministic `decide-stack-v1` presentation
+  selector: a staffing card comparing quoted counts against the static house
+  staffing ratios — priced only from the quote's own recorded labor totals,
+  with an explicit not-derivable statement otherwise — plus up to two
+  heaviest proposal-completeness gap cards. Cards are advisory-labelled,
+  suppressed entirely for accepted/booked/terminal quotes, keep the
+  "not operational event readiness" scope language, and route only to the
+  existing role-gated edit or quote-administration surfaces. The shared
+  `DecisionCard` gains optional basis/impact lines. Flag-off rendering is
+  unchanged, and the surface adds no reads, writes, evidence, or authority.
+  The dressing adds 5,544 aggregate JavaScript bytes, recorded by
+  superseding the temporary bundle ceiling with
+  `workspace-convergence-pilot-phase1-2026-08-10` (2,705,981 bytes;
+  largest-chunk ceiling and clean-main baseline unchanged). Source-only
+  candidate work; not deployed, flag-promoted, or human-accepted.
+
 - Flag-gated NOW home surface candidate (`VITE_PILOT_NOW_ENABLED`, default
   off, additive to the customer-centered workspace flag). When enabled, the
   `/app` Home route renders the same bounded commercial workspace snapshot as
