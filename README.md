@@ -183,10 +183,10 @@ Optional:
   authentication, existing role/feature gates, or exact-token portal precedence,
   and enabling it is not a deployment or production-acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
-  preparation workflows source-bind it to `true` only alongside syntactically
+  deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human
   review remain separate evidence)
-- `VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED` (defaults off; production preparation
+- `VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED` (defaults off; production deployment
   source-binds it to `true`, but `check:env` rejects it unless the route is also
   enabled and Turnstile is configured)
 - `VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY` (browser-visible public site key;
@@ -264,18 +264,17 @@ Store `BUYER_ACCESS_STRIPE_SECRET_KEY`,
 `BUYER_ACCESS_STRIPE_WEBHOOK_SECRET`, `BUYER_ACCESS_TURNSTILE_SECRET`, and an
 independently generated `BUYER_ACCESS_RATE_LIMIT_SECRET` of at least 32
 characters only in Firebase Secret Manager; none belongs in a Functions dotenv
-file, GitHub preparation job, browser variable, log, or release receipt. Do not
+file, GitHub deployment variable, browser variable, log, or release receipt. Do not
 reuse a Stripe or Turnstile secret as the rate-limit key. The server gate
 defaults off. The existing quote-payment `STRIPE_MODE`, credentials, and
 `stripeWebhook` remain independent and unchanged.
 
-The policy-enforcing repository preparation workflow packages Functions source without loading or
-materializing runtime secrets. Every `.env` file is excluded from the artifact.
-A separately owned trusted deployer must validate and materialize the approved
-Functions runtime configuration inside its credential-isolated boundary. The
-approved sender identity in configuration does not prove the Resend domain is
-verified or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider
-truth.
+The manual Firebase production workflow materializes only reviewed non-secret
+runtime configuration plus the allowlisted platform-admin identity immediately
+before deployment. Provider credentials remain in Firebase Secret Manager and
+are never written to Functions dotenv files, artifacts, or logs. The approved
+sender identity in configuration does not prove the Resend domain is verified
+or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider truth.
 
 ## Quality Gates
 ```bash
@@ -580,8 +579,9 @@ Admin reconciliation re-reads the exact server-recorded Session for the
 selected rail when provider delivery needs review, without overriding settled
 payment truth or mutating the other rail.
 
-This behavior is source/local evidence only. The repository preparation
-workflow does not deploy it, configure Stripe, or prove provider acceptance.
+This behavior remains source/local evidence until the coordinated deployment
+and hosted checks complete; deploying it does not configure Stripe or prove
+provider acceptance.
 Release requires one coordinated exact-revision frontend, Functions, and
 Firestore rules promotion plus mandatory hosted payment UAT in Stripe test
 mode and separately authorized live-mode acceptance for each enabled rail.
@@ -628,7 +628,7 @@ superseded, or mismatched targets fail closed, and the 24-hour email window stil
 applies before a fresh request. The old void order is marked superseded so a
 stale event cannot provision a second workspace.
 
-The Firebase Hosting and Vercel preparation workflows compile `/start` and its
+The Firebase Hosting and Vercel deployment workflows compile `/start` and its
 public marketing CTA only with a syntactically valid, non-placeholder,
 browser-visible Turnstile site key. `check:env` does not verify Cloudflare
 provider setup or human approval. Runtime remains fail closed until the
@@ -778,39 +778,30 @@ platform-admin workflow.
 
 ## Release Entry Points
 
-Primary production preparation is workflow-only:
+Primary production deployment is manual-workflow-only:
 
-- `Release UAT Attestation` records an allowlisted human's exact-main UAT
-  statement under the configured independent-review or solo-operator policy.
-- `Prepare Firebase Production Artifact` verifies the evidence, stages the
-  selected Firebase surface, and uploads a target-scoped payload with a
-  deterministic manifest.
-- `Prepare Vercel Production Artifact` verifies the same evidence contract,
-  builds the static SPA, translates it into a deployable `.vercel/output`
-  payload, and uploads it with a deterministic manifest.
+- `Deploy Firebase Production` deploys the explicitly selected `hosting`,
+  `backend`, or `all` surface to the fixed `tonicatering` project.
+- `Deploy Vercel Production` builds and promotes the exact release to the fixed
+  `mbmapps/quoteflow` project and `quotepilot.mbmapps.com` production edge.
+- `Release UAT Attestation` remains available when a release needs a separately
+  recorded human acceptance receipt, but it is not a prerequisite for the
+  normal solo-operator deployment path.
 - Customer-specific Firebase Hosting promotion is not yet supported by the
-  credential-isolated release path. The legacy tracked customer-site entrypoint
+  primary release path. The legacy tracked customer-site entrypoint
   fails closed without invoking a provider client.
 
-Each primary production workflow requires four inputs: the full release SHA,
-the successful exact-SHA `CI Quality` run id, the successful `Release UAT
-Attestation` run id, and a full target-specific rollback SHA. The preparation
-profile is also explicit and evidence-bound: `firebase-hosting`,
-`firebase-backend`, `firebase-all`, or `vercel`; a repository variable cannot
-silently widen the Firebase scope after UAT. The workflows fail before
-dependency execution
-unless the checkout is the exact tagged `main` SHA, all eight CI jobs passed,
-the tracked UAT checklist digest matches, the attestation is fresh and came
-from an allowlisted human, the current run is the canonical in-progress target
-preparation dispatched by a human, and the configured approval policy matches
-the source contract. Independent-review mode requires the exact UAT and
-preparation approvals from current direct reviewers. Solo-operator mode
-requires exactly one allowlisted human, distinct UAT and preparation
-dispatches, reviewless protected-branch-only solo environments, and at least a
-15-minute cooling period between those runs. The verifier still
-does not prove provider identity behind the human-entered staging id or the
-historical environment-policy snapshot. Run `npm run
-release:uat:digest` on the release SHA to obtain the checklist digest.
+Each deployment requires the full release SHA, the successful exact-SHA
+`CI Quality` run id, a full target-specific rollback SHA, and an exact typed
+deployment confirmation. Before dependency execution, the workflow verifies
+that the release is the current remotely published, semantically tagged
+`main`, that all eight required CI jobs passed, that the rollback is an
+available ancestor, that the dispatch came from the canonical workflow, and
+that the configured production environment is protected-branch-only with
+administrator bypass disabled. Solo mode additionally requires the one
+allowlisted human dispatcher. The same live evidence is checked again after
+the build and immediately before provider mutation. Provider tokens are scoped
+to that final workflow step.
 
 For a release containing either Stripe collection rail, every applicable
 `payment.*` item printed for the selected target is mandatory. Deposit and
@@ -833,31 +824,19 @@ negative paths, and isolation from the quote Stripe rail. No single target
 receipt proves an unbound frontend, backend, or provider dependency, so retain
 a coordinated provider record for the exact deployed surfaces.
 
-The `backend` and `all` scopes package Firestore rules plus Functions without
-runtime `.env` files. The manifest binds the Firebase project, Hosting target,
-Vercel project/team, exact release evidence, and the SHA-256/size/mode of every
-payload file. Provider/environment setup and the full operator sequence live in
-[docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md).
-
-These two primary preparation workflows are implemented source controls, not
-an operational production gate, and they do not mutate production. The legacy
-primary deploy commands fail closed. Promotion remains blocked until the
-configured protected environments and mode-specific controls exist, provider
-staging/rollback evidence is machine-bound, Vercel
-bypass paths are closed, and a separately owned trusted deployer revalidates the
-uploaded payload against its manifest and GitHub run/artifact identity before
-receiving provider mutation credentials.
+The `backend` and `all` scopes always deploy Firestore rules and Functions
+together. Vercel Git auto-deployment remains disabled so publication to `main`
+cannot silently mutate production. Provider/environment setup and the complete
+operator sequence live in [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md).
 
 ### Multi-Site Hosting (Per Customer)
 Use one Firebase project with multiple Hosting sites, then map each customer domain to its site.
 
-Create the site and domain mapping through an authorized provider operator, and
-promote only an independently verified target-specific artifact through the
-separately owned trusted deployer. The existing
+Create the site and domain mapping through an authorized provider operator. The existing
 `deploy:firebase:hosting:customer` helper is not an approved production path:
 it now fails closed without invoking a provider client. Customer-site promotion
-is blocked until it is implemented behind the same isolated, audited boundary
-as the primary targets.
+is blocked until it receives a fixed-target, exact-SHA workflow equivalent to
+the primary targets.
 
 ## Governance Docs
 - Contributor workflow: [CONTRIBUTING.md](CONTRIBUTING.md)

@@ -756,6 +756,66 @@ export function validatePreparationRun(
   };
 }
 
+export function validateDirectDeploymentRun(
+  run,
+  {
+    releaseSha,
+    rollbackSha,
+    target,
+    deploymentRunId,
+    ciRunId,
+    approvalMode = "independent-review"
+  }
+) {
+  const normalizedApprovalMode = parseReleaseApprovalMode(approvalMode);
+  validateCanonicalRepository(run, "the deployment run");
+  if (Number(run?.id) !== deploymentRunId) {
+    throw evidenceError("the deployment response id does not match the current run.");
+  }
+  const expectedWorkflow = RELEASE_EVIDENCE_POLICY.preparationWorkflows[target];
+  if (
+    !expectedWorkflow
+    || Number(run?.workflow_id) !== expectedWorkflow.id
+    || normalizeWorkflowPath(run?.path) !== expectedWorkflow.path
+  ) {
+    throw evidenceError("the current run is not the canonical target deployment workflow.");
+  }
+  if (run?.event !== "workflow_dispatch" || run?.head_branch !== "main") {
+    throw evidenceError("the current deployment is not a main-branch manual dispatch.");
+  }
+  if (String(run?.head_sha || "").toLowerCase() !== releaseSha) {
+    throw evidenceError("the current deployment is not bound to the exact release SHA.");
+  }
+  const expectedTitle = [
+    "deploy",
+    "v1",
+    normalizedApprovalMode,
+    target,
+    releaseSha,
+    String(ciRunId),
+    rollbackSha
+  ].join("/");
+  if (String(run?.display_title || "") !== expectedTitle) {
+    throw evidenceError("the current deployment title is not bound to the supplied evidence.");
+  }
+  if (run?.status !== "in_progress" || run?.conclusion !== null) {
+    throw evidenceError("the current deployment run is not actively in progress.");
+  }
+  if (Number(run?.run_attempt) !== 1) {
+    throw evidenceError("deployment workflow reruns are not accepted; dispatch a fresh run.");
+  }
+  const operatorId = Number(run?.actor?.id);
+  if (
+    run?.actor?.type !== "User"
+    || !Number.isSafeInteger(operatorId)
+    || operatorId <= 0
+    || Number(run?.triggering_actor?.id) !== operatorId
+  ) {
+    throw evidenceError("the deployment workflow was not dispatched by one human operator.");
+  }
+  return Object.freeze({ operatorId });
+}
+
 export function validateSoloOperatorControls({
   attesterId,
   operatorId,
@@ -1220,6 +1280,132 @@ export async function verifyProductionReleaseEvidence(
     productionReviewerId: preparationReview.reviewerId,
     productionReviewId: preparationReview.reviewId,
     checklistDigest: checklist.digest,
+    verifiedAt: (now instanceof Date ? now : new Date(Number(now))).toISOString()
+  });
+}
+
+export async function verifyDirectProductionReleaseEvidence(
+  {
+    releaseSha: releaseShaValue,
+    ciRunId: ciRunIdValue,
+    rollbackSha: rollbackShaValue,
+    target,
+    headSha,
+    deploymentRunId: deploymentRunIdValue,
+    token,
+    approvalMode: approvalModeValue = "independent-review",
+    soloOperatorIds: soloOperatorIdsValue = "",
+    root = ROOT
+  },
+  { fetchImpl = globalThis.fetch, git = defaultGit, now = new Date() } = {}
+) {
+  const releaseSha = requireFullSha(releaseShaValue, "--release-sha");
+  const rollbackSha = requireFullSha(rollbackShaValue, "--rollback-sha");
+  const ciRunId = requireRunId(ciRunIdValue, "--ci-run-id");
+  const deploymentRunId = requireRunId(deploymentRunIdValue, "GITHUB_RUN_ID");
+  if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
+    throw evidenceError(
+      "the deployment target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
+    );
+  }
+  const normalizedToken = String(token || "").trim();
+  if (!normalizedToken) {
+    throw evidenceError("GITHUB_TOKEN or GH_TOKEN is required for live evidence verification.");
+  }
+  if (typeof fetchImpl !== "function") {
+    throw evidenceError("the runtime does not provide a GitHub HTTP client.");
+  }
+  const approvalMode = parseReleaseApprovalMode(approvalModeValue);
+  const soloOperatorIds = approvalMode === "solo-operator"
+    ? (soloOperatorIdsValue instanceof Set
+      ? soloOperatorIdsValue
+      : parseSoloOperatorIds(soloOperatorIdsValue))
+    : new Set();
+  const environmentName = approvalMode === "solo-operator"
+    ? RELEASE_EVIDENCE_POLICY.environments.soloDeploy
+    : RELEASE_EVIDENCE_POLICY.environments.deploy;
+  const gitEvidence = validateGitEvidence(
+    { releaseSha, rollbackSha, headSha },
+    { git, root }
+  );
+  const requestOptions = { token: normalizedToken, fetchImpl };
+  const [publishedRevision, deploymentRun, ciRun, ciJobs, deployEnvironment] =
+    await Promise.all([
+      validatePublishedReleaseRevision({ releaseSha, ...gitEvidence }, requestOptions),
+      fetchGitHubJson(
+        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${deploymentRunId}`,
+        requestOptions
+      ),
+      fetchGitHubJson(
+        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${ciRunId}`,
+        requestOptions
+      ),
+      fetchRunJobs(ciRunId, requestOptions),
+      fetchGitHubJson(
+        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/environments/${environmentName}`,
+        requestOptions
+      )
+    ]);
+
+  const deployment = validateDirectDeploymentRun(deploymentRun, {
+    releaseSha,
+    rollbackSha,
+    target,
+    deploymentRunId,
+    ciRunId,
+    approvalMode
+  });
+  validateCiRun(ciRun, { releaseSha, ciRunId });
+  validateCiJobs(ciJobs);
+  const environmentPolicy = validateProtectedEnvironment(deployEnvironment, {
+    name: environmentName,
+    approvalMode
+  });
+
+  let productionReviewId;
+  let productionReviewerId;
+  if (approvalMode === "solo-operator") {
+    if (
+      soloOperatorIds.size !== 1
+      || !soloOperatorIds.has(deployment.operatorId)
+    ) {
+      throw evidenceError(
+        "solo-operator deployment requires the one allowlisted human operator."
+      );
+    }
+    productionReviewId = `solo-dispatch:${deploymentRunId}`;
+    productionReviewerId = deployment.operatorId;
+  } else {
+    const reviewLog = await fetchDeploymentReviews(
+      deploymentRun,
+      "deployment",
+      requestOptions
+    );
+    const review = validatePreparationDeploymentReviews(reviewLog, {
+      preparationRunId: deploymentRunId,
+      preparationNodeId: deploymentRun.node_id,
+      environmentName,
+      environmentId: environmentPolicy.environmentId,
+      operatorId: deployment.operatorId,
+      attesterId: deployment.operatorId,
+      requiredReviewerIds: environmentPolicy.reviewerIds
+    });
+    productionReviewId = review.reviewId;
+    productionReviewerId = review.reviewerId;
+  }
+
+  return Object.freeze({
+    schema: "com.mbmapps.quotepilot.direct-production-release-evidence/v1",
+    approvalMode,
+    releaseSha,
+    releaseTag: publishedRevision.releaseTag,
+    rollbackSha,
+    target,
+    ciRunId,
+    deploymentRunId,
+    operatorId: deployment.operatorId,
+    productionReviewerId,
+    productionReviewId,
     verifiedAt: (now instanceof Date ? now : new Date(Number(now))).toISOString()
   });
 }

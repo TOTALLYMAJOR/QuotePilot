@@ -1,7 +1,134 @@
 #!/usr/bin/env node
 
-throw new Error(
-  "Direct Vercel production mutation is retired from this repository. "
-  + "Use the policy-enforcing prepare workflow to produce a verified artifact, then "
-  + "promote it through a separately owned trusted deployer."
-);
+import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { verifyDirectProductionReleaseEvidence } from "./production-release-evidence.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const CONFIRMATION = "DEPLOY quotepilot.mbmapps.com via vercel";
+const EXPECTED_VERCEL_LINK = Object.freeze({
+  projectId: "prj_epLi14LmBItwYkv25XZoAkWZf4Jk",
+  orgId: "team_AW2QNNgYt5vESEO3eOTJXHp1",
+  projectName: "quoteflow"
+});
+
+function readArg(name) {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? String(process.argv[index + 1] || "").trim() : "";
+}
+
+function validateArgs() {
+  const allowed = new Set([
+    "--confirm",
+    "--release-sha",
+    "--ci-run-id",
+    "--rollback-sha"
+  ]);
+  const args = process.argv.slice(2);
+  const seen = new Set();
+  for (let index = 0; index < args.length; index += 2) {
+    const name = args[index];
+    const value = args[index + 1];
+    if (!allowed.has(name)) throw new Error(`Unknown argument: ${name || "<blank>"}`);
+    if (seen.has(name)) throw new Error(`Duplicate argument: ${name}`);
+    if (!value || String(value).startsWith("--")) throw new Error(`${name} requires a value.`);
+    seen.add(name);
+  }
+  if (seen.size !== allowed.size) {
+    throw new Error("Vercel deployment requires confirmation, release SHA, CI run, and rollback SHA.");
+  }
+}
+
+function capture(command, args) {
+  const result = spawnSync(command, args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    shell: false
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(String(result.stderr || result.stdout || "Command failed.").trim());
+  }
+  return String(result.stdout || "").trim();
+}
+
+function run(command, args) {
+  const result = spawnSync(command, args, { cwd: ROOT, stdio: "inherit", shell: false });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status || 1);
+}
+
+function validateWorkflowContext() {
+  if (
+    process.env.GITHUB_ACTIONS !== "true"
+    || process.env.GITHUB_EVENT_NAME !== "workflow_dispatch"
+    || process.env.GITHUB_REF !== "refs/heads/main"
+  ) {
+    throw new Error("Vercel production deployment requires a main-branch manual GitHub workflow.");
+  }
+  const head = capture("git", ["rev-parse", "HEAD"]);
+  if (String(process.env.GITHUB_SHA || "").toLowerCase() !== head.toLowerCase()) {
+    throw new Error("Vercel production deployment refused because GITHUB_SHA does not match HEAD.");
+  }
+  return head;
+}
+
+function validateVercelProjectLink() {
+  const linkPath = path.join(ROOT, ".vercel", "project.json");
+  let linkedProject;
+  try {
+    linkedProject = JSON.parse(fs.readFileSync(linkPath, "utf8"));
+  } catch {
+    throw new Error("Vercel production deployment requires the approved project link.");
+  }
+  const mismatches = Object.entries(EXPECTED_VERCEL_LINK)
+    .filter(([key, expected]) => String(linkedProject?.[key] || "") !== expected)
+    .map(([key]) => key);
+  if (mismatches.length) {
+    throw new Error(`Vercel production deployment refused for mismatched ${mismatches.join(", ")}.`);
+  }
+}
+
+async function verify(headSha) {
+  return verifyDirectProductionReleaseEvidence({
+    releaseSha: readArg("--release-sha"),
+    ciRunId: readArg("--ci-run-id"),
+    rollbackSha: readArg("--rollback-sha"),
+    target: "vercel",
+    headSha,
+    deploymentRunId: process.env.GITHUB_RUN_ID,
+    token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
+    approvalMode: process.env.RELEASE_APPROVAL_MODE,
+    soloOperatorIds: process.env.RELEASE_SOLO_OPERATOR_IDS,
+    root: ROOT
+  });
+}
+
+validateArgs();
+if (readArg("--confirm") !== CONFIRMATION) {
+  throw new Error(`Vercel production deployment requires --confirm "${CONFIRMATION}".`);
+}
+if (!String(process.env.VERCEL_TOKEN || "").trim()) {
+  throw new Error("Vercel production deployment requires VERCEL_TOKEN.");
+}
+validateVercelProjectLink();
+const headSha = validateWorkflowContext();
+await verify(headSha);
+run("npm", ["run", "check:env"]);
+run("npx", ["--yes", "vercel@57.0.0", "build", "--prod", "--token", process.env.VERCEL_TOKEN]);
+await verify(validateWorkflowContext());
+run("npx", [
+  "--yes",
+  "vercel@57.0.0",
+  "deploy",
+  "--prebuilt",
+  "--prod",
+  "--yes",
+  "--meta",
+  `releaseSha=${headSha}`,
+  "--token",
+  process.env.VERCEL_TOKEN
+]);

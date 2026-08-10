@@ -10,11 +10,12 @@ Last updated: August 9, 2026
   `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
   Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`)
   and was released with the same tagged source revision.
-- Release candidate: the 39-commit customer-centered workspace convergence is
-  merged to `main` at `62d5136f5fdc8531f7b61f5fd2fb875ef0b30540` through
-  PR #42. Exact-main CI run `31343660836` passed all eight hard-gate jobs. Vercel
-  preview deployment `dpl_2nSEHnzLzyCNRCurby1dm9jJkULm` is provider-reported
-  `READY` and binds that exact SHA. This is immutable staging evidence only;
+- Release candidate: the customer-centered workspace convergence plus CWF-16
+  stabilization is merged to `main` at
+  `91528d945b29a95362366d5dcaf332f70fd57dd8`. Exact-main CI run
+  `31344333805` passed all eight hard-gate jobs. Vercel preview deployment
+  `dpl_4WFBtPSnzMgMbRmvCGS6cAEUBwR3` is provider-reported `READY` and binds
+  that exact SHA. This is immutable staging evidence only;
   production aliases, Firebase Hosting, Functions, Firestore rules/indexes,
   runtime flags, hosted UAT, and human acceptance have not been promoted or
   claimed for this candidate.
@@ -87,14 +88,15 @@ Last updated: August 9, 2026
   Execution Fragility model, combined Alignment projection, or complete Change
   Impact synthesis exists yet.
 - Main release governance supports the repository's actual solo-owner
-  operating model without inventing an independent reviewer. The explicit
-  `solo-operator` policy retains exact-SHA CI/UAT, one allowlisted human,
-  separate dispatches, a 15-minute cooling period, protected-branch-only
-  environments, rollback ancestry, and deterministic credential-free
-  artifacts. The policy is merged and configured in GitHub. Vercel Git-triggered
-  deployments are disabled in source so future merges cannot bypass governed
-  preparation and promotion. Production promotion still requires a qualified
-  credential-isolated deployer plus provider and post-launch evidence.
+  operating model without inventing an independent reviewer or second
+  repository. The manual in-repository Firebase and Vercel paths retain exact
+  tagged-main SHA, all-eight-job CI, one allowlisted human, protected-branch-only
+  production environment, rollback ancestry, typed target confirmation, fixed
+  provider identities, and a second live evidence check immediately before
+  provider mutation. Provider tokens are scoped to the final deploy step.
+  Vercel Git-triggered deployments remain disabled so merges cannot bypass the
+  manual gate. Deployment and post-launch/provider/human acceptance remain
+  distinct evidence.
 - Current source workflow delivery: proposal readiness, Good/Better/Best
   scenarios, quote lifecycle timelines, lead follow-ups, sensitive-action
   approval requests, the customer decision center, and event production
@@ -541,8 +543,9 @@ Last updated: August 9, 2026
 - Functions emulator compatibility: `functions.config()` v7 removal path now degrades safely to environment values instead of throwing at runtime.
 - Deploy gate: production deployment is manual-only and requires a clean
   `main` commit that matches local upstream and `origin/main`, has a semantic
-  release tag published to `origin`, and has completed the required CI/UAT
-  evidence.
+  release tag published to `origin`, and has completed all eight required CI
+  jobs. Target-specific UAT remains available as additional human-acceptance
+  evidence but is not a normal solo-operator deploy input.
 - Delivery controls: canonical doc ownership and governance checks are now enforced in CI.
 - Commerce resilience: Twilio SMS failures are non-blocking for quote save and Stripe checkout.
 - Buyer onboarding: admin-only Integrations Ops includes an in-app setup assistant for optional Twilio configuration.
@@ -558,10 +561,13 @@ Last updated: August 9, 2026
   release remain required before considering either the global or tenant gate.
 - Revenue Autopilot evaluation and sends are independently default-off. The
   15-minute scheduler, Resend webhook, customer unsubscribe, post-event URL, and
-  operations UI have source/local evidence only. `RESEND_API_KEY`,
-  `RESEND_WEBHOOK_SECRET`, and `REVENUE_AUTOPILOT_TOKEN_SECRET` require isolated
-  Secret Manager provisioning and exact bindings; provider/DNS/webhook,
-  scheduler, hosted, production-data, and human acceptance remain unproven.
+  operations UI have source/local evidence only. `RESEND_API_KEY` and a unique
+  `REVENUE_AUTOPILOT_TOKEN_SECRET` are isolated in Firebase Secret Manager. A
+  fail-closed placeholder version exists for `RESEND_WEBHOOK_SECRET` so the
+  disabled Function can be deployed without accepting an unconfigured provider
+  signature; it must be replaced with the provider-issued signing secret before
+  the Resend webhook is enabled. Provider/DNS/webhook, scheduler, hosted,
+  production-data, and human acceptance remain unproven.
 - The customer-centered staff shell is behind
   `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED`, which defaults off. It still
   requires an exact hosted candidate plus signed-in deep-link, Back/Forward,

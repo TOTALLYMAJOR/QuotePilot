@@ -3,8 +3,9 @@
 Last updated: August 9, 2026
 
 ## Goal
-Prepare, promote, and verify QuotePilot safely with isolated credentials,
-target-scoped payloads, deterministic manifests, and clear post-launch evidence.
+Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
+credentials, fixed provider targets, explicit rollback inputs, and clear
+post-launch evidence.
 
 ## 1) Prepare Firebase
 1. Create/select Firebase project.
@@ -35,53 +36,38 @@ npm run check:env
 npm run build
 ```
 
-## 3) Prepare a Verified Release Artifact
+## 3) Deploy a Verified Release
 
-Do not run a primary production deploy from a workstation. After completing
-the exact-main evidence sequence in section 6, dispatch one of these
-policy-enforcing, prepare-only workflows from `main`:
+Do not run a primary production deploy from a workstation. After completing the
+exact-main sequence in section 6, manually dispatch one of these workflows from
+`main`:
 
-- `Prepare Firebase Production Artifact`
-- `Prepare Vercel Production Artifact`
+- `Deploy Firebase Production`
+- `Deploy Vercel Production`
 
-Both workflows accept the full release SHA, exact-SHA CI run id, environment-gated UAT
-run id, and target-specific rollback SHA. They check out the immutable dispatch
-SHA and reject the run before dependency execution when evidence is incomplete,
-mismatched, stale, or the current environment policy is unprotected. The
-verifier supports two explicit approval policies. `independent-review` queries
-the exact UAT and preparation deployment-review logs and requires one current
-independent approval at each gate. `solo-operator` requires exactly one
-allowlisted human to perform separate UAT and preparation dispatches, binds the
-mode into both workflow titles, rejects preparation during the first 15 minutes
-after UAT, and uses reviewless protected-branch-only solo environments. Solo
-mode is a repository policy for a genuinely solo owner, not a per-run bypass.
+Both workflows require the full semantically tagged release SHA, the matching
+successful main-push `CI Quality` run id, a target-specific rollback ancestor,
+and an exact typed confirmation. Firebase additionally requires an explicit
+`hosting`, `backend`, or `all` scope. Before installing dependencies, the
+workflow validates the canonical repository and workflow, remotely published
+tagged `main`, all eight CI jobs, protected environment, allowlisted human
+dispatcher, and rollback ancestry. It repeats the live evidence check after
+the build and immediately before provider mutation.
 
-Preparation runs tests and production configuration checks, builds only the
-selected target surface, stages an explicit payload, hashes every payload file,
-and uploads a deterministic manifest bound to the release evidence and fixed
-provider identifiers. Provider mutation credentials and Functions runtime
-secrets are deliberately absent. These workflows do not call Firebase or
-Vercel and do not change production.
+Provider credentials are available only to the final deployment step. Firebase
+runtime configuration is materialized from reviewed repository variables and
+the platform-admin GitHub secret; provider secrets remain bound through
+Firebase Secret Manager. Vercel deploys only to the fixed `mbmapps/quoteflow`
+project. Firebase deploys only to `tonicatering`, and backend/all always bind
+Firestore rules and Functions together.
 
-Production promotion remains blocked until a separately owned trusted deployer
-can download the artifact, independently revalidate the GitHub run and artifact
-identity/digest, repository, SHA, the mode-specific approval/control records,
-UAT, every payload file
-against the manifest, allowed paths, provider project, and rollback record, and
-perform only the final provider mutation with a locked audited client. The
-trusted deployer must then record provider acceptance/READY state and the new
-target-specific last-known-good receipt.
+For Vercel, preserve the reviewed SPA contract in `vercel.json`; Git-triggered
+deployments remain disabled. After deployment, verify that `/`, `/app`, and
+`/system` each return the application shell with HTTP 200 and retain the
+provider deployment id as the rollback receipt.
 
-For Vercel, preserve the reviewed SPA contract in `vercel.json`. Preparation
-validates that source contract and generates `.vercel/output/config.json` with
-filesystem-first routing, the security headers, and an `/index.html` SPA
-fallback so the exact payload can be promoted with `vercel deploy --prebuilt` by
-the trusted deployer. After
-an independently controlled promotion, verify that `/`, `/app`, and `/system`
-each return the application shell with HTTP 200.
-
-## 4) Configure CI Variables
-Set repository or environment variables used by the prepare workflows:
+## 4) Configure CI Variables and Secrets
+Set repository or environment variables used by the deploy workflows:
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
 - `VITE_FIREBASE_PROJECT_ID`
@@ -90,52 +76,44 @@ Set repository or environment variables used by the prepare workflows:
 - `VITE_FIREBASE_APP_ID`
 - optional: `VITE_FIREBASE_FUNCTIONS_REGION`
 - `VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY`: browser-visible public key with valid
-  non-placeholder syntax; preparation fails on syntax only, while Cloudflare
+  non-placeholder syntax; deployment fails on syntax only, while Cloudflare
   widget configuration and human review require separate evidence
-- `RELEASE_UAT_ATTESTER_IDS`: comma-separated numeric GitHub user ids for the
-  approved human UAT attesters; service/bot identities are not accepted
 - `RELEASE_APPROVAL_MODE`: `independent-review` (default) or `solo-operator`
 - `RELEASE_SOLO_OPERATOR_IDS`: in solo mode, exactly one numeric GitHub user id;
-  it must identify the same human who attests UAT and dispatches preparation
+  it must identify the human who dispatches production
+- `FIREBASE_TOKEN` and `VERCEL_TOKEN`: GitHub secrets scoped only to the final
+  provider-deploy steps
+- `AUTH_PLATFORM_ADMIN_EMAILS`: GitHub secret used only to materialize the
+  ignored Functions runtime configuration during an authorized backend deploy
 
-Do not expose `FIREBASE_TOKEN`, `VERCEL_TOKEN`, Stripe, Twilio, Resend, or
-platform-admin secrets to either prepare workflow. Provider credentials belong
-only in the independently owned trusted deployer.
+Stripe, Twilio, Resend, Turnstile, and rate-limit secrets stay in Firebase
+Secret Manager and must never enter GitHub variables, dotenv artifacts, or
+logs.
 
 Configure the external release controls before the first promotion:
 
 1. Protect `main` with required `CI Quality` checks and pull-request review.
-2. For `independent-review`, create `production-uat` and `production`, require a
-   directly assigned independent user reviewer, and prevent self-review. For a
-   genuinely solo repository, create reviewless `production-uat-solo` and
-   `production-solo`, set the one-user solo allowlist, and retain the enforced
-   two-dispatch 15-minute cooling period. Never mix the two environment sets in
-   one release.
+2. For `independent-review`, create `production`, require a directly assigned
+   independent user reviewer, and prevent self-review. For a genuinely solo
+   repository, create reviewless `production-solo` and set the one-user solo
+   allowlist. Never mix the two modes in one release.
 3. For every release environment, restrict deployment branches to protected
    branches and disable administrator bypass.
 4. Treat any approval-mode or solo-operator allowlist change as production
    authorization configuration: review it in source/config history and never
    change it to rescue an already-running release.
 5. Keep `vercel.json` `git.deploymentEnabled` set to `false` so Git pushes do
-   not create or promote Vercel deployments. The separately owned trusted
-   deployer must remain the only production mutation path. Confirm no alternate
-   Firebase automation or customer-site helper bypasses that boundary.
-6. Rehearse the prepare workflow with intentionally invalid evidence and
-   confirm it fails before dependency execution or artifact upload. Do not
-   treat repository source as proof that these external settings are active.
-7. Implement the separately owned trusted deployer before live use. It must use
-   a locked, audited, checksum-verified provider client, receive only the
-   minimum provider credential in an isolated environment, and never invoke
-   repository code while that credential is present. The repository's legacy
-   primary deploy commands now fail closed instead of calling `npx`.
-8. Replace the human-entered staging label and rollback ancestry with
-   provider-derived deployment manifests: project/environment, READY status,
-   source SHA, artifact and non-secret configuration digests, successful
-   deployment id, timestamp, and component-specific last-known-good record.
+   not create or promote Vercel deployments. Confirm no alternate Firebase
+   automation or customer-site helper bypasses the manual workflows.
+6. Rehearse each deploy workflow with intentionally invalid evidence and
+   confirmation, and confirm it fails before dependency execution. Do not treat
+   repository source as proof that external settings are active.
+7. Retain provider-derived deployment evidence: project/environment, READY
+   state, source SHA, successful deployment id, timestamp, and a
+   component-specific last-known-good record.
 
-For intentional Firebase backend promotion windows only, configure these
-values in the trusted deployer's approved runtime-configuration and secret
-channels, not in the prepare job:
+For intentional Firebase backend deployment windows only, configure these
+values in the approved GitHub variable and Firebase Secret Manager channels:
 - Set trusted runtime configuration:
   - `APP_BASE_URL=https://quotepilot.mbmapps.com/app`
   - `APP_BASE_DOMAIN=mbmapps.com`
@@ -162,7 +140,7 @@ channels, not in the prepare job:
     `BUYER_ACCESS_TURNSTILE_SECRET`, plus an independently generated
     `BUYER_ACCESS_RATE_LIMIT_SECRET` of at least 32 characters, in Firebase
     Secret Manager only when buyer
-    onboarding acceptance is approved; these never enter dotenv or the prepare
+    onboarding acceptance is approved; these never enter dotenv or the deploy
     workflow
   - `RESEND_API_KEY` in Firebase Secret Manager before any Resend-bound
     Function is deployed; provider enablement remains controlled separately by
@@ -175,15 +153,11 @@ channels, not in the prepare job:
   - `TWILIO_AUTH_TOKEN` in Firebase Secret Manager before any SMS-capable
     Function is deployed; keep the account SID, Messaging Service SID, and
     owner destination in trusted non-secret runtime configuration
-- Select `firebase_scope=backend` or `firebase_scope=all` only after the
-  matching evidence profile is attested (requires Blaze plan). The `backend`
-  artifact and any eventual promotion always include Firestore rules and
-  Functions together.
-- The prepare artifact intentionally excludes every `.env` file and all
-  provider secrets. The trusted deployer must validate and materialize runtime
-  configuration only inside its credential-isolated boundary.
-- Run the prepare workflow with the exact release evidence inputs, then provide
-  its immutable artifact to the trusted deployer.
+- Select `firebase_scope=backend` or `firebase_scope=all` only for an explicitly
+  authorized backend window (requires Blaze plan). Both scopes deploy Firestore
+  rules and Functions together.
+- The workflow-generated `functions/.env.tonicatering` is ignored, mode `0600`,
+  validated immediately before deployment, and never uploaded as an artifact.
 
 ## 5) Functions Runtime Configuration (Optional Stripe + Twilio + Resend Providers)
 These values are server-only Firebase Functions configuration. The repository
@@ -263,12 +237,10 @@ gated and send the copy-ready onboarding message manually. The recorded
 dashboard sandbox test; it is not an allowed QuotePilot Functions sender
 configuration, customer-ready sender-domain proof, or recipient-inbox proof.
 
-Prepare the Firebase backend only by dispatching `Prepare Firebase Production
-Artifact` with `firebase_scope=backend` and a successful `firebase-backend` UAT
-attestation. This scope packages `firestore,functions`; it does not deploy them
-or alter runtime configuration. Use `firebase_scope=all` only with a
-`firebase-all` attestation, then submit the exact artifact and approved runtime
-configuration to the separately owned trusted deployer.
+Deploy the Firebase backend only by dispatching `Deploy Firebase Production`
+with `firebase_scope=backend` and the exact tagged-main CI evidence. This scope
+deploys `firestore,functions` together. Use `firebase_scope=all` only for an
+explicitly coordinated Hosting, rules, and Functions release.
 
 After a controlled Resend deployment, send exactly one onboarding test to a
 controlled recipient and capture all three proof layers:
@@ -285,7 +257,7 @@ proof. Keep production customer email disabled if any layer fails.
 
 Keep `COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false` and the server-owned tenant
 setting `commercialChangeAuthorityEnabled=false` through source qualification,
-coordinated frontend/Functions/rules preparation, hosted role acceptance, and
+coordinated frontend/Functions/rules deployment, hosted role acceptance, and
 operator review. Browser principals cannot promote either gate. Before any
 activation:
 
@@ -679,10 +651,9 @@ Promote these rails only as one exact-revision frontend, Functions, and
 Firestore rules rollout. The frontend exposes the separate send/resume and
 reconciliation controls, Functions own approval scope/provider calls/webhook
 transitions, and rules deny browser payment-evidence writes. A frontend-only or
-backend-only promotion is not acceptance of this workflow. The prepare job
-still does not deploy or materialize provider secrets; the
-credential-isolated trusted deployer must configure the runtime and promote
-the coordinated artifact.
+backend-only promotion is not acceptance of this workflow. Provider secrets
+remain in Firebase Secret Manager; the manual workflow materializes only the
+reviewed non-secret runtime configuration immediately before deployment.
 
 Provider acceptance must cover, first in hosted test mode and then under a
 separate live-mode authorization:
@@ -888,93 +859,47 @@ emulator matrix in `scripts/provisioning-emulator-acceptance.mjs` is local
 evidence only; repeat the customer-visible flow against the exact hosted
 release before calling production onboarding seamless.
 
-### 6.2 Exact-Main Attestation and Promotion
+### 6.2 Exact-Main Deployment
 
 After the reviewed PR merges:
 
 1. Record the full current `main` SHA. Wait for the `push`-event `CI Quality`
    run for that exact SHA and confirm all eight named jobs succeeded. Record its
    numeric run id; a PR merge-ref run is not accepted.
-2. Exercise the exact main SHA on an immutable non-production deployment for
-   the intended target and record its provider deployment id. The source gate
-   still treats `staging_id` as a human-entered assertion; independently confirm
-   the provider maps that id to the exact SHA. A `firebase-all` pass needs a
-   provider-derived compound staging receipt that binds Hosting, Functions, and
-   Firestore rules to that SHA. Until provider-bound staging identity (including
-   that compound receipt) is implemented, do not treat this attestation as an
-   operational promotion gate.
-3. From the exact main checkout, print the checklist digest and the exact item
-   ids applicable to the intended target:
-   ```bash
-   npm run release:uat:digest
-   npm run release:uat:items -- --target <firebase-hosting|firebase-backend|firebase-all|vercel>
-   ```
-   Complete all and only those target-applicable items against the recorded
-   deployment. Portal projection backfill is not in any target set; retain its
-   separately authorized source/data-operation evidence instead.
-4. Dispatch `Release UAT Attestation` from `main` with:
-   - `release_sha`: the full exact-main SHA,
-   - `target`: `firebase-hosting`, `firebase-backend`, `firebase-all`, or
-     `vercel`, matching the exact intended production surface,
+2. Exercise an immutable exact-SHA preview when the release risk warrants it.
+   The optional `Release UAT Attestation` workflow can record human acceptance,
+   but the normal solo deployment does not depend on that separate ceremony.
+3. Create and publish the semantic version tag on that same SHA.
+4. Confirm the target-specific last-known-good rollback SHA remains an ancestor
+   of the release SHA.
+5. Dispatch `Deploy Firebase Production` or `Deploy Vercel Production` with:
+   - `release_sha`: the full tagged current-main SHA,
+   - `ci_run_id`: the exact successful main-push CI run id,
    - `rollback_sha`: the full target-specific last-known-good ancestor,
-   - `staging_id`: the immutable provider deployment id,
-   - `checklist_digest`: the printed 64-character digest,
-   - `checked_item_ids`: every id printed for that target exactly once,
-     comma-separated,
-   - `confirmation`: `ATTEST UAT <full-release-sha>`.
-   The verifier identifies the canonical UAT workflow by its immutable
-   repository workflow id and tracked path, and separately validates the full
-   evidence-bearing run title even when GitHub exposes that dynamic `run-name`
-   through the API `name` field.
-5. Complete the configured approval policy and record the successful workflow
-   run id. Independent mode requires a reviewer other than the attester at
-   `production-uat`. Solo mode requires the one allowlisted operator at
-   `production-uat-solo` and starts the 15-minute cooling period. Reruns, bot
-   actors, stale receipts, and a UAT run started before exact-SHA CI completion
-   are rejected.
-6. Create and publish the semantic version tag on that same SHA.
-7. Dispatch the target prepare workflow with `release_sha`, `ci_run_id`,
-   `uat_run_id`, and `rollback_sha`; Firebase also requires `firebase_scope`
-   matching the attested profile. Independent mode requires a protected
-   `production` reviewer other than both dispatcher and UAT attester. Solo mode
-   uses `production-solo`, requires the same allowlisted human to dispatch a
-   separate run, and rejects it until 15 minutes after UAT completion. Download
-   and record the resulting uploaded payload,
-   release-evidence receipt, and deterministic manifest. If targets have
-   different rollback SHAs, use separate target-specific attestations.
-   Firebase backend/all payloads include the reviewed versioned starter-pack
-   manifest at `functions/data/starterCatalogPacks.json`; preparation rejects
-   any other unreviewed nested Functions data artifact.
-   The verifier binds the preparation to the repository's immutable GitHub
-   workflow id, canonical workflow path, and complete evidence-bearing run
-   title. GitHub may expose that dynamic `run-name` through the API `name`
-   field, so the display name is not used as workflow identity.
-8. Only after the separately owned trusted deployer is implemented and
-   qualified, submit that exact artifact for final provider mutation. Record
-   the provider deployment id, accepted/READY state, and artifact and
-   configuration digests, but retain the existing target-specific
-   last-known-good receipt.
-9. Complete the post-launch verification in section 7. Only after every check
+   - `firebase_scope`: `hosting`, `backend`, or `all` when applicable,
+   - `confirmation`: the exact target-specific `DEPLOY ...` phrase displayed by
+     the workflow.
+6. The workflow must fail before dependency execution if the tag, remote main,
+   CI jobs, workflow identity, human actor, protected environment, allowlist,
+   rollback, or confirmation is wrong. It repeats the evidence check after the
+   build and immediately before provider mutation. Reruns are rejected; start a
+   fresh dispatch instead.
+7. Record the provider deployment id and accepted/READY state, but retain the
+   existing target-specific last-known-good receipt.
+8. Complete the post-launch verification in section 7. Only after every check
    succeeds, sign the new target-specific last-known-good receipt. On failure,
    keep the prior receipt authoritative and begin the rollback sequence.
 
-The verifier reads GitHub evidence live at preparation time. A protected
-environment configuration error, changed checklist digest, missing job, failed
-or skipped job, wrong workflow/repository/SHA, non-ancestor rollback, stale
-attestation, missing exact-run UAT or production approval,
-administrator-bypass setting, or
-disallowed actor stops preparation. GitHub's deployment-review object does not
-include an approval timestamp or historical environment-policy snapshot, so a
-separately owned audit/webhook record is still required for stronger historical
-proof.
+The verifier reads GitHub evidence live before installation and again before
+mutation. A protected-environment error, missing/failed/skipped CI job, wrong
+workflow/repository/SHA, non-ancestor rollback, administrator bypass, or
+disallowed actor stops deployment.
 
 Target applicability limits what one receipt claims. Hosting and Vercel items
 cover the built SPA plus observed compatibility with its test environment;
-backend items cover the prepared Functions/rules surface; `firebase-all` is the
+backend items cover the deployed Functions/rules surface; `firebase-all` is the
 union of the Firebase Hosting and backend item sets, not a cross-provider
-profile. No receipt proves the SHA or provider identity of an unbound
-dependency, and the current human-entered `staging_id` limitation remains a
-release blocker.
+profile. No receipt proves the SHA or provider identity of an unbound dependency.
 
 ## 7) Post-Launch Verification
 
@@ -1069,9 +994,9 @@ For an incident:
 2. Select the target's recorded last-known-good provider deployment or exact
    immutable artifact. Do not rebuild it from a Git checkout during the
    incident.
-3. Have the separately owned trusted deployer revalidate that receipt and use
-   its locked provider client to restore only the affected target. Repository
-   scripts and workflows must not receive the provider credential.
+3. Use the provider-native rollback control to restore only the exact recorded
+   deployment for the affected target. If a workflow dispatch is required,
+   retain the same exact-SHA, target, and typed-confirmation gates.
 4. Prefer provider-native restoration of the previously accepted Hosting or
    Vercel deployment. For Functions or Firestore rules, perform a compatibility
    review before restoring the prior target-specific artifact; do not widen a
@@ -1080,7 +1005,7 @@ For an incident:
    health evidence, then close the incident. Keep the prior receipt until the
    restored target is verified.
 
-The separately owned trusted deployer and signed provider-specific
-last-known-good receipts are not implemented yet. Until they are, production
-promotion and reliable rollback remain release blockers; the legacy local
-`npx` commands are not an approved break-glass substitute.
+Signed provider-specific last-known-good receipts remain a follow-up hardening
+item. Until they are automated, retain the exact provider deployment id, source
+SHA, target, timestamp, and post-launch result manually. Local `npx` commands
+are not an approved break-glass substitute.
