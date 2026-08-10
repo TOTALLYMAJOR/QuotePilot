@@ -6,6 +6,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Documentation
+
+- Reconciled canonical operational state after the `v0.5.0` coordinated
+  Firebase/Vercel release. `PROJECT_STATUS.md` now distinguishes deployed and
+  enabled capabilities from dormant global/tenant gates, hosted acceptance,
+  provider evidence, production data operations, and human acceptance.
+- Rebuilt `DEV_TASKS.md` as an open-work-only backlog. Completed runtime
+  promotion work was removed; buyer test-credential repair, authenticated
+  acceptance, Revenue Autopilot preparation-only promotion, Commercial Change
+  tenant enforcement, Resend evidence, A2P, data dry runs, CWF-17, performance,
+  and release-auth modernization remain explicit.
+- Corrected README and launch-runbook claims that still described merged
+  `v0.5.0` payment, provisioning, Commercial Change, Revenue Autopilot, and
+  Resend runtime state as undeployed or used obsolete activation prerequisites.
+
 ## [0.5.0] - 2026-08-10
 
 ### Released
