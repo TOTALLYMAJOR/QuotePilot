@@ -8,6 +8,32 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Flag-gated CREATE intake canvas (`VITE_PILOT_CREATE_ENABLED`, default
+  off) and the intent-intake architecture record
+  (`docs/INTENT_INTAKE_ADR.md`). On the new-quote surface, free text —
+  typed or pasted — is structured by a new deterministic, browser-only
+  `intent-extraction-v1` extractor into reviewable facts: guest counts with
+  the operator's own uncertainty phrasing (exact, approximate, or range
+  with a midpoint draft value and a preserved band note), dates with
+  forward year inference, times, builder-bounded durations, contact
+  details, service styles matched to the house list, tenant event types by
+  name or keyword, dietary clauses, and title-case event names. Every fact
+  carries its source excerpt and confidence tier; low-confidence venue and
+  address guesses require one-tap confirmation and are never auto-applied;
+  budget mentions surface as an honest note because the builder has no
+  budget field; unreadable text changes nothing and says so. Applying
+  prefills the ordinary editable draft form through the canonical
+  event-type template path (extracted facts are marked touched with the
+  same protection ordinary typing gets), and quote creation authority is
+  unchanged — the extractor performs no I/O and the trusted create path
+  remains the sole creation authority. The ADR also fixes the default-off
+  server posture (`INTENT_PARSER_ENABLED=false`, provider `none`) for the
+  future model-assisted lane. The canvas and extractor add 11,518 aggregate
+  JavaScript bytes, recorded by raising the active temporary bundle ceiling
+  to 2,719,059 bytes (largest-chunk ceiling and clean-main baseline
+  unchanged). Source-only candidate work; not deployed, flag-promoted, or
+  human-accepted.
+
 - Flag-gated pilot guided-selling decide cards
   (`VITE_PILOT_GUIDED_SELLING_ENABLED`, default off). When enabled, the
   quote builder's existing upsell recommendations render through a new

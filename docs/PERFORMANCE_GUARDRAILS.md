@@ -25,12 +25,13 @@ Threshold policy:
   when its ID is active and its pinned baseline date and metrics exactly match
   `bundle-budget.json`.
 - The workspace-convergence exception (now including the flag-gated pilot
-  phase-1 candidates: NOW home surface, Event Room ring/decide stack, and
-  guided-selling decide cards) is currently capped at 2,707,541
+  candidates: NOW home surface, Event Room ring/decide stack, guided-selling
+  decide cards, and the CREATE intake canvas) is currently capped at
+  2,719,059
   aggregate JavaScript bytes and a 391,596-byte largest chunk. These are the
   exact measurements from the August 10 candidate build, so the
   exception provides no additional growth headroom. Against the unchanged
-  clean-main baseline, aggregate output is 710,176 bytes (35.56%) larger, while
+  clean-main baseline, aggregate output is 721,694 bytes (36.13%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
   remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
   splitting keeps the authenticated route bounded, and route-level
