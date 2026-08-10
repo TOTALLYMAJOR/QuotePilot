@@ -807,7 +807,9 @@ The Vercel step uses the fixed reviewed project link, pulls that project's
 production settings with the scoped token, revalidates the fixed project
 identity and live release evidence, and only then performs the prebuilt build
 and production promotion. The pull is provider configuration input; it does not
-reenable Git-triggered deployment.
+reenable Git-triggered deployment. The reviewed Vercel SPA fallback resolves to
+`/index.html` without the incompatible `cleanUrls` redirect; filesystem assets
+retain precedence and authenticated deep links remain client-routed.
 
 For a release containing either Stripe collection rail, every applicable
 `payment.*` item printed for the selected target is mandatory. Deposit and
