@@ -11,6 +11,7 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Feature matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Event Messaging Station architecture: [docs/MESSAGING_STATION_ARCHITECTURE.md](docs/MESSAGING_STATION_ARCHITECTURE.md)
 - Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
+- Post-competitive destination design: [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md)
 - Customer workspace backend handoff: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
 - Commercial Change Authority ADR: [docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md](docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md)
 - Commercial Change Authority design/UI/work plan: [design](docs/COMMERCIAL_CHANGE_AUTHORITY_DESIGN.md), [UI specification](docs/COMMERCIAL_CHANGE_AUTHORITY_UI_SPEC.md), [work plan](docs/COMMERCIAL_CHANGE_AUTHORITY_WORK_PLAN.md)
