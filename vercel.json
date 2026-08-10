@@ -3,7 +3,6 @@
   "git": {
     "deploymentEnabled": false
   },
-  "cleanUrls": true,
   "buildCommand": "npm run check:env && npm run build",
   "headers": [
     {
@@ -23,7 +22,7 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/"
+      "destination": "/index.html"
     }
   ]
 }

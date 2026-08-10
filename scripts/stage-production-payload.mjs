@@ -15,7 +15,6 @@ const PROVIDER_CREDENTIAL_KEYS = [
 const VERCEL_SOURCE_CONFIGURATION = Object.freeze({
   framework: "vite",
   git: Object.freeze({ deploymentEnabled: false }),
-  cleanUrls: true,
   buildCommand: "npm run check:env && npm run build",
   headers: Object.freeze([
     Object.freeze({
@@ -27,7 +26,7 @@ const VERCEL_SOURCE_CONFIGURATION = Object.freeze({
     })
   ]),
   rewrites: Object.freeze([
-    Object.freeze({ source: "/(.*)", destination: "/" })
+    Object.freeze({ source: "/(.*)", destination: "/index.html" })
   ])
 });
 const VERCEL_BUILD_OUTPUT_CONFIGURATION = Object.freeze({

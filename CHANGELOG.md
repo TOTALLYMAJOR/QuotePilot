@@ -426,6 +426,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   project settings before the prebuilt CLI build, then revalidates the fixed
   project identity and live release evidence before continuing. This satisfies
   Vercel CLI 57's local-settings requirement without restoring Git auto-deploy.
+- The Vercel SPA fallback now rewrites unmatched routes to `/index.html`
+  instead of recursively targeting `/`, and removes the conflicting
+  `cleanUrls` transform that redirected the fallback target away. The prebuilt
+  production route therefore serves the application shell at `/` and deep links
+  while keeping filesystem assets ahead of the fallback.
 - Workspace selection cues now use a short two-grain click-chirp while
   remaining behind the central sound preference and fail-silent Web Audio
   boundary.
