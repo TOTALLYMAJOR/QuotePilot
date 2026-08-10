@@ -66,6 +66,7 @@
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.54.2",
     "@vitejs/plugin-react": "^5.2.0",
+    "jsdom": "^30.0.1",
     "pdf-parse": "^1.1.1",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
