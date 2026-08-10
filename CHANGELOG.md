@@ -8,27 +8,43 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
-- Production frontend workflows now bind the canonical public app URL, app
-  host, base domain, and reviewed default organization explicitly, preventing
-  protected Vercel values from compiling as literal `[SENSITIVE]` placeholders.
-  The Vercel deploy helper also validates the exact returned deployment URL and
-  explicitly assigns `quotepilot.mbmapps.com`, so a prior provider rollback
-  cannot leave the custom domain pinned to an older release.
-
 - Clean CI installs now declare the `jsdom` test runtime required by Vitest
   component suites, removing reliance on a previously populated local
   `node_modules` tree.
 
 ### Added
 
-- The governed Firebase Hosting and Vercel production builds now explicitly
-  enable the reviewed customer-centered workspace, including the CWF-16 Event
+- Source-branch Event Messaging Station candidate. The temporary-flagged staff
+  shell now routes `/app/messages` to one central inbox segregated by canonical
+  quote/event, with search, `Needs reply`/`Active` filters, event-oriented
+  groups, selected-thread context, and direct Event Workspace and Customer 360
+  actions. A bounded same-tenant listener watches up to 50 recently active quote
+  documents ordered by their body-free conversation summary and normalizes the
+  event/thread fields used by the inbox; the selected staff
+  quote or exact customer portal document emits a small summary signal, and a
+  higher-count or distinct non-older signal causes the existing access-validating
+  callable to reload canonical message bodies, including reconciliation when a
+  concurrent message precedes the local sender's latest receipt. New sends atomically project the same
+  body-free summary to the canonical quote and exact current portal document
+  in one transaction. Idempotent retries return the existing receipt before any
+  new projection write. This is a best-effort near-real-time refresh path: the
+  UI distinguishes `Catching up`, `Live updates`, `May be stale`, and `Updates
+  paused`, retains manual refresh, and makes no read-receipt, typing, presence,
+  external-delivery, guaranteed-latency, payment, or acceptance claim. Existing
+  callable ownership, limits, lifecycle checks, and receipt-safe retry behavior
+  are unchanged. Mobile thread selection now follows browser history, clears
+  its focused URL on return, and restores focus to the selected event row.
+  Organization-scoped inbox state and complete access-identity panel remounts
+  clear prior-tenant rows, bodies, and drafts before a new scope can render. This
+  source has not yet been deployed, hosted-accepted, or human-accepted. Draft,
+  expired, deleted, and provider-unaccepted
+  portal records fail closed as unavailable instead of opening a callable thread.
+
+- The governed Firebase Hosting and Vercel production builds explicitly enable
+  the reviewed customer-centered workspace, including the CWF-16 Event
   Workspace, in the credential-scoped deploy step. This keeps the source flag
   available for rollback while preventing production behavior from depending
-  on an untracked operator shell or mutable repository variable. The named
-  temporary bundle exception is recalibrated by 241 bytes to the exact
-  canonical-env, flag-on build; the largest chunk remains unchanged.
-
+  on an untracked operator shell or mutable repository variable.
 - Source/local `CWF-16` Event Workspace. The flagged `/app/quotes/:quoteId`
   route now presents one quote as an event-first commercial record with exact
   event/customer identity, bounded Workflow condition and next action, existing
@@ -437,15 +453,6 @@ This changelog is backfilled from git history and will be maintained going forwa
   ancestor, protected environment, allowlisted human dispatch, and typed
   confirmation; it repeats evidence verification immediately before the
   provider mutation and scopes each provider token to that deploy step.
-- The fixed Vercel production project now pulls its authenticated production
-  project settings before the prebuilt CLI build, then revalidates the fixed
-  project identity and live release evidence before continuing. This satisfies
-  Vercel CLI 57's local-settings requirement without restoring Git auto-deploy.
-- The Vercel SPA fallback now rewrites unmatched routes to `/index.html`
-  instead of recursively targeting `/`, and removes the conflicting
-  `cleanUrls` transform that redirected the fallback target away. The prebuilt
-  production route therefore serves the application shell at `/` and deep links
-  while keeping filesystem assets ahead of the fallback.
 - Workspace selection cues now use a short two-grain click-chirp while
   remaining behind the central sound preference and fail-silent Web Audio
   boundary.

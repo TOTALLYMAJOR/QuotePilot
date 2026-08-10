@@ -8,6 +8,7 @@ export const WORKSPACE_ROUTE_IDS = Object.freeze({
   QUOTE_NEW: "quote-new",
   QUOTE_DETAIL: "quote-detail",
   QUOTE_EDIT: "quote-edit",
+  MESSAGING: "messaging",
   WORKFLOW: "workflow",
   SCHEDULE: "schedule",
   REPORTING: "reporting",
@@ -25,6 +26,7 @@ export const WORKSPACE_PATHS = Object.freeze({
   customers: `${WORKSPACE_ROOT}/customers`,
   quotes: `${WORKSPACE_ROOT}/quotes`,
   quoteNew: `${WORKSPACE_ROOT}/quotes/new`,
+  messaging: `${WORKSPACE_ROOT}/messages`,
   workflow: `${WORKSPACE_ROOT}/workflow`,
   schedule: `${WORKSPACE_ROOT}/schedule`,
   reporting: `${WORKSPACE_ROOT}/reporting`,
@@ -42,6 +44,7 @@ const ROUTE_META = Object.freeze({
   [WORKSPACE_ROUTE_IDS.QUOTE_NEW]: Object.freeze({ section: "quotes", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.QUOTE_DETAIL]: Object.freeze({ section: "quotes", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.QUOTE_EDIT]: Object.freeze({ section: "quotes", delivery: "first-release" }),
+  [WORKSPACE_ROUTE_IDS.MESSAGING]: Object.freeze({ section: "messaging", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.WORKFLOW]: Object.freeze({ section: "workflow", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.SCHEDULE]: Object.freeze({ section: "schedule", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.REPORTING]: Object.freeze({ section: "reporting", delivery: "follow-on" }),
@@ -55,6 +58,7 @@ export const PRIMARY_WORKSPACE_NAVIGATION = Object.freeze([
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.HOME, label: "Home", path: WORKSPACE_PATHS.home }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.CUSTOMER_LIST, label: "Customers", path: WORKSPACE_PATHS.customers }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.QUOTE_LIST, label: "Quotes", path: WORKSPACE_PATHS.quotes }),
+  Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.MESSAGING, label: "Messages", path: WORKSPACE_PATHS.messaging }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.WORKFLOW, label: "Workflow", path: WORKSPACE_PATHS.workflow }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.SCHEDULE, label: "Schedule", path: WORKSPACE_PATHS.schedule })
 ]);
@@ -72,6 +76,7 @@ const STATIC_ROUTES = new Map([
   [WORKSPACE_PATHS.customers, WORKSPACE_ROUTE_IDS.CUSTOMER_LIST],
   [WORKSPACE_PATHS.quotes, WORKSPACE_ROUTE_IDS.QUOTE_LIST],
   [WORKSPACE_PATHS.quoteNew, WORKSPACE_ROUTE_IDS.QUOTE_NEW],
+  [WORKSPACE_PATHS.messaging, WORKSPACE_ROUTE_IDS.MESSAGING],
   [WORKSPACE_PATHS.workflow, WORKSPACE_ROUTE_IDS.WORKFLOW],
   [WORKSPACE_PATHS.schedule, WORKSPACE_ROUTE_IDS.SCHEDULE],
   [WORKSPACE_PATHS.reporting, WORKSPACE_ROUTE_IDS.REPORTING],
@@ -190,6 +195,12 @@ export function buildWorkflowPath({ quoteId = "", attentionType = "", requestId 
   return query ? `${WORKSPACE_PATHS.workflow}?${query}` : WORKSPACE_PATHS.workflow;
 }
 
+export function buildMessagingPath({ quoteId = "" } = {}) {
+  if (!quoteId) return WORKSPACE_PATHS.messaging;
+  const search = new URLSearchParams({ quoteId: normalizeOpaqueId(quoteId, "quoteId") });
+  return `${WORKSPACE_PATHS.messaging}?${search.toString()}`;
+}
+
 export function buildWorkspacePath(routeId, params = {}) {
   switch (routeId) {
     case WORKSPACE_ROUTE_IDS.HOME:
@@ -206,6 +217,8 @@ export function buildWorkspacePath(routeId, params = {}) {
       return buildQuotePath(params.quoteId);
     case WORKSPACE_ROUTE_IDS.QUOTE_EDIT:
       return buildQuoteEditPath(params.quoteId);
+    case WORKSPACE_ROUTE_IDS.MESSAGING:
+      return buildMessagingPath(params);
     case WORKSPACE_ROUTE_IDS.WORKFLOW:
       return buildWorkflowPath(params);
     case WORKSPACE_ROUTE_IDS.SCHEDULE:
@@ -303,6 +316,14 @@ export function parseWorkflowFocus(search = "") {
   });
 }
 
+export function parseMessagingFocus(search = "") {
+  const params = new URLSearchParams(typeof search === "string" ? search : "");
+  const rawQuoteId = params.get("quoteId") || "";
+  return Object.freeze({
+    quoteId: rawQuoteId ? decodeOpaqueId(encodeURIComponent(rawQuoteId), "quoteId") : ""
+  });
+}
+
 export function parseWorkspaceLocation({ pathname = "/", search = "", hash = "" } = {}) {
   const normalizedSearch = search && !String(search).startsWith("?") ? `?${search}` : String(search || "");
   const portalToken = getPortalToken(normalizedSearch);
@@ -323,10 +344,14 @@ export function parseWorkspaceLocation({ pathname = "/", search = "", hash = "" 
   const workflowFocus = route.routeId === WORKSPACE_ROUTE_IDS.WORKFLOW
     ? parseWorkflowFocus(normalizedSearch)
     : Object.freeze({ quoteId: "", attentionType: "", requestId: "" });
+  const messagingFocus = route.routeId === WORKSPACE_ROUTE_IDS.MESSAGING
+    ? parseMessagingFocus(normalizedSearch)
+    : Object.freeze({ quoteId: "" });
   return Object.freeze({
     ...route,
     search: normalizedSearch,
     hash: String(hash || ""),
-    workflowFocus
+    workflowFocus,
+    messagingFocus
   });
 }

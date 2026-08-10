@@ -270,17 +270,20 @@ export function ReportingEvidenceRail({ state, metrics, onRetry }) {
           Same-tenant source: {reportingSourceLabel(state?.source)}. Last complete client read:{" "}
           {formatLoadedAt(state?.loadedAtISO)}.
         </p>
-        <p>
-          {hasCompletedRead
-            ? `${quoteCount} quote record${quoteCount === 1 ? "" : "s"} loaded${state?.truncated ? `; results stop at ${quoteLimit} and additional records may exist` : ` within the ${quoteLimit}-record read cap`}.`
-            : `The read is capped at ${quoteLimit} quote records.`}
-          {" "}All commercial measures and denominators below use only the displayed records.
-        </p>
-        <p>
-          Six-month trends use UTC calendar months. Accepted/booked quote value remains
-          distinct from the paid-deposit total, which requires a Firebase-backed provider
-          confirmation timestamp. Neither measure is accounting revenue.
-        </p>
+        <details className="staff-evidence-disclosure">
+          <summary>How these numbers are read</summary>
+          <p>
+            {hasCompletedRead
+              ? `${quoteCount} quote record${quoteCount === 1 ? "" : "s"} loaded${state?.truncated ? `; results stop at ${quoteLimit} and additional records may exist` : ` within the ${quoteLimit}-record read cap`}.`
+              : `The read is capped at ${quoteLimit} quote records.`}
+            {" "}All commercial measures and denominators below use only the displayed records.
+          </p>
+          <p>
+            Six-month trends use UTC calendar months. Accepted/booked quote value remains
+            distinct from the paid-deposit total, which requires a Firebase-backed provider
+            confirmation timestamp. Neither measure is accounting revenue.
+          </p>
+        </details>
         {state?.loading && hasCompletedRead && (
           <p className="source-note" role="status">Refreshing while the completed snapshot remains visible.</p>
         )}

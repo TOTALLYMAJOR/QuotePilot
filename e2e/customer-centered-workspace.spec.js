@@ -44,8 +44,8 @@ test.describe("customer-centered workspace", () => {
     );
     await expect(staffHeader.getByRole("button", { name: "Customers", exact: true })).toBeVisible();
     await expect(staffHeader.getByRole("button", { name: "Quotes", exact: true })).toBeVisible();
+    await expect(staffHeader.getByRole("button", { name: "Messages", exact: true })).toBeVisible();
     await expect(staffHeader.getByRole("button", { name: /^Workflow/ })).toBeVisible();
-    await expect(staffHeader.getByRole("button", { name: "Schedule", exact: true })).toBeVisible();
 
     await staffHeader.getByRole("button", { name: "New quote", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/quotes\/new$/);
@@ -108,14 +108,15 @@ test.describe("customer-centered workspace", () => {
     await page.goto("/app");
 
     const header = page.locator(".site-header");
-    for (const name of ["Home", "Customers", "Quotes", "Schedule"]) {
+    for (const name of ["Home", "Customers", "Quotes", "Messages"]) {
       await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
     }
     await expect(header.getByRole("button", { name: /^Workflow/ })).toBeVisible();
     await expect(header.getByRole("button", { name: "More", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 
-    await header.getByRole("button", { name: "Schedule", exact: true }).click();
+    await header.getByRole("button", { name: "More", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Event Schedule" }).click();
     await expect(page).toHaveURL(/\/app\/schedule$/);
     await expect(page.getByRole("region", { name: "Event Schedule" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -127,7 +128,7 @@ test.describe("customer-centered workspace", () => {
       await page.goto("/app");
 
       const header = page.locator(".site-header");
-      for (const name of ["Home", "Customers", "Quotes", "Schedule", "Operations", "Account"]) {
+      for (const name of ["Home", "Customers", "Quotes", "Messages", "Operations", "Account"]) {
         await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
       }
       await expect(header.getByRole("button", { name: /^Workflow/ })).toBeVisible();
@@ -139,10 +140,123 @@ test.describe("customer-centered workspace", () => {
       ]);
       expect(homeBox).not.toBeNull();
       expect(accountBox).not.toBeNull();
-      expect(Math.abs(accountBox.y - homeBox.y)).toBeLessThanOrEqual(2);
-      await expect(header.locator(".header-actions")).toHaveCSS("flex-wrap", "nowrap");
+      if (width >= 1181) {
+        // Sidebar layout: Account stacks in the same rail column as Home.
+        expect(Math.abs(accountBox.x - homeBox.x)).toBeLessThanOrEqual(2);
+        await expect(header.locator(".header-actions")).toHaveCSS("flex-direction", "column");
+      } else {
+        expect(Math.abs(accountBox.y - homeBox.y)).toBeLessThanOrEqual(2);
+        await expect(header.locator(".header-actions")).toHaveCSS("flex-wrap", "nowrap");
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     }
+  });
+
+  test("Messages keeps event conversations segregated and stays usable at phone width", async ({ page }) => {
+    await page.addInitScript(() => {
+      const sharedCustomer = { name: "Jordan Customer", email: "jordan@example.test" };
+      localStorage.setItem("quoteWizard.quotes", JSON.stringify([
+        {
+          id: "message-event-a",
+          organizationId: "e2e-org",
+          customerId: "customer-jordan",
+          quoteNumber: "Q-MSG-101",
+          status: "sent",
+          portalKey: "message-event-a-portal-12345678901234567890",
+          activeVersionId: "v0001",
+          portalIssuedAtISO: "2026-08-08T09:00:00.000Z",
+          portalExpiresAtISO: "2099-08-08T09:00:00.000Z",
+          createdAtISO: "2026-08-08T10:00:00.000Z",
+          updatedAtISO: "2026-08-09T18:00:00.000Z",
+          customer: sharedCustomer,
+          event: { name: "Museum Dinner", date: "2027-03-12", venue: "City Museum" },
+          totals: { total: 4200 },
+          conversationSummary: {
+            messageCount: 3,
+            latestMessageId: "message-a-3",
+            latestMessageAtISO: "2026-08-09T18:00:00.000Z",
+            latestActorType: "customer"
+          },
+          workflow: { quoteDelivery: {
+            revisionId: "v0001@2026-08-08T09:00:00.000Z",
+            state: "provider_accepted",
+            portalActivationState: "active",
+            providerMessageId: "provider-message-event-a",
+            providerAcceptedAtISO: "2026-08-08T09:05:00.000Z",
+            portalKey: "message-event-a-portal-12345678901234567890",
+            portalIssuedAtISO: "2026-08-08T09:00:00.000Z"
+          } }
+        },
+        {
+          id: "message-event-b",
+          organizationId: "e2e-org",
+          customerId: "customer-jordan",
+          quoteNumber: "Q-MSG-102",
+          status: "accepted",
+          portalKey: "message-event-b-portal-12345678901234567890",
+          activeVersionId: "v0001",
+          portalIssuedAtISO: "2026-08-07T09:00:00.000Z",
+          portalExpiresAtISO: "2099-08-07T09:00:00.000Z",
+          createdAtISO: "2026-08-07T10:00:00.000Z",
+          updatedAtISO: "2026-08-08T18:00:00.000Z",
+          customer: sharedCustomer,
+          event: { name: "Garden Reception", date: "2027-04-18", venue: "North Garden" },
+          totals: { total: 6100 },
+          conversationSummary: {
+            messageCount: 1,
+            latestMessageId: "message-b-1",
+            latestMessageAtISO: "2026-08-08T18:00:00.000Z",
+            latestActorType: "staff"
+          },
+          workflow: { quoteDelivery: {
+            revisionId: "v0001@2026-08-07T09:00:00.000Z",
+            state: "provider_accepted",
+            portalActivationState: "active",
+            providerMessageId: "provider-message-event-b",
+            providerAcceptedAtISO: "2026-08-07T09:05:00.000Z",
+            portalKey: "message-event-b-portal-12345678901234567890",
+            portalIssuedAtISO: "2026-08-07T09:00:00.000Z"
+          } }
+        }
+      ]));
+    });
+
+    await page.goto("/app/messages");
+    const station = page.locator(".messaging-station");
+    await expect(page.getByRole("heading", { name: "Messages", exact: true })).toBeFocused();
+    await expect(station).toHaveAttribute("data-capability-state", "partial");
+    await expect(station.locator(".messaging-sync-state")).toHaveText(/Updates paused/);
+    await expect(station.getByText("Customer last replied", { exact: true }).first()).toBeVisible();
+    await expect(station.getByRole("button", { name: /Museum Dinner.*Q-MSG-101.*City Museum/ })).toBeVisible();
+    const gardenRow = station.getByRole("button", { name: /Garden Reception.*Q-MSG-102.*North Garden/ });
+    await expect(gardenRow).toBeVisible();
+
+    await gardenRow.click();
+    await expect(page).toHaveURL(/\/app\/messages\?quoteId=message-event-b$/);
+    const gardenHeading = station.getByRole("heading", { name: "Garden Reception" });
+    await expect(gardenHeading).toBeVisible();
+    await expect(station.getByText("$6,100.00", { exact: true })).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/app\/messages$/);
+    await expect(gardenRow).toBeVisible();
+    await expect(gardenRow).toBeFocused();
+
+    await page.goForward();
+    await expect(page).toHaveURL(/\/app\/messages\?quoteId=message-event-b$/);
+    await expect(gardenHeading).toBeVisible();
+    await expect(gardenHeading).toBeFocused();
+
+    await station.getByRole("button", { name: "Back to Messages" }).click();
+    await expect(page).toHaveURL(/\/app\/messages$/);
+    await expect(gardenRow).toBeVisible();
+    await expect(gardenRow).toBeFocused();
+    await page.reload();
+    await expect(page).toHaveURL(/\/app\/messages$/);
+    await expect(station.getByRole("button", { name: /Museum Dinner/ })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 
   test("unknown staff paths render an authenticated in-shell 404", async ({ page }) => {
@@ -193,7 +307,7 @@ test.describe("customer-centered workspace", () => {
       if (path === "/app/schedule") {
         await expect(heading).toBeFocused();
         await expect(heading).toHaveCSS("outline-style", "solid");
-        await expect(heading).toHaveCSS("outline-width", "3px");
+        await expect(heading).toHaveCSS("outline-width", "2px");
       }
       await expect(route.getByRole("button", { name: "Back to Home", exact: true })).toBeVisible();
       await expect(route.getByRole("button", { name: "Close", exact: true })).toHaveCount(0);
@@ -404,7 +518,7 @@ test.describe("customer-centered workspace", () => {
     await expect(focusedQuote).toContainText("combined_transaction_integrity_projection_absent");
     await focusedQuote.getByText("Why?", { exact: true }).click();
     await expect(focusedQuote.getByRole("button", { name: "Edit quote" })).toHaveCount(0);
-    await expect(focusedQuote.getByRole("button", { name: "Quote administration", exact: true })).toBeVisible();
+    await expect(focusedQuote.getByRole("button", { name: "More actions", exact: true })).toBeVisible();
 
     if (process.env.CWF16_SCREENSHOT_DESKTOP) {
       await page.setViewportSize({ width: 1440, height: 900 });
@@ -721,10 +835,10 @@ test.describe("customer-centered workspace", () => {
     await expect(conversationsPanel).toContainText("Messages remain bound to each quote");
     await expect(conversationsPanel).toContainText("2 messages recorded");
     await expect(conversationsPanel).toContainText("latest from customer");
-    const conversationAction = conversationsPanel.getByRole("button", { name: "Open quote conversation" });
+    const conversationAction = conversationsPanel.getByRole("button", { name: "Open event conversation" });
     await expect(conversationAction).toBeVisible();
     await conversationAction.click();
-    await expect(page).toHaveURL(new RegExp(`/app/quotes/${quoteId}$`));
+    await expect(page).toHaveURL(new RegExp(`/app/messages\\?quoteId=${quoteId}$`));
 
     expect(await page.evaluate((canonicalQuoteId) => {
       const quote = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]")

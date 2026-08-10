@@ -9,6 +9,7 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Event Messaging Station architecture: [docs/MESSAGING_STATION_ARCHITECTURE.md](docs/MESSAGING_STATION_ARCHITECTURE.md)
 - Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Customer workspace backend handoff: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
 - Commercial Change Authority ADR: [docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md](docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md)
@@ -34,6 +35,16 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   proposal-readiness selector through one deterministic presentation contract;
   it labels that result as proposal completeness and does not create an
   event-wide readiness or data-authority contract.
+- `/app/messages`: temporary-flagged staff Event Messaging Station. Each
+  conversation remains segregated by its canonical quote/event, the inbox
+  watches up to 50 same-tenant quote documents ordered by their body-free
+  conversation summary and normalizes the event/thread fields it displays. The
+  selected exact thread uses a best-effort near-real-time signal to reload canonical
+  message bodies through the existing callable. `Live updates`, cache, and
+  paused labels describe listener state only; they do not establish message
+  delivery, reading, typing, presence, or a latency SLA. This route is current
+  source and is not deployed or flag-promoted. Draft, expired, deleted, or
+  provider-unaccepted portal state is not exposed as an active conversation.
 - `/app/workflow`: routed attention, follow-up, and approval surface; optional
   query parameters focus an exact quote, attention type, and request.
 - `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
@@ -66,9 +77,10 @@ for the delivery and evidence contract.
 ## Product Scope
 The current product direction is a customer-centered quote-to-booking workspace:
 Commercial Command Center, Customer Directory and Customer 360, routed Quotes,
-Workflow, Schedule, Reporting, and guarded administration, with the five-step
-quote builder retained as one focused commercial capability. The exact-token
-customer decision center remains the sole customer-facing experience.
+the Event Messaging Station, Workflow, Schedule, Reporting, and guarded
+administration, with the five-step quote builder retained as one focused
+commercial capability. The exact-token customer decision center remains the
+sole customer-facing experience.
 
 The live `v0.2.3` release and the temporary-flagged source do not have identical
 surface availability. Across those evidence layers QuotePilot includes dynamic
@@ -178,10 +190,11 @@ Optional:
   accepted only for local development)
 - `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED` (temporary build-time gate for
   the native staff route shell, `/app` Command Center landing, customer
-  directory, Customer 360, and embedded Schedule/Reporting/Catalog/Imports/
-  Integrations/Diagnostics routes; defaults off. The flag does not bypass staff
-  authentication, existing role/feature gates, or exact-token portal precedence,
-  and enabling it is not a deployment or production-acceptance decision.)
+  directory, Customer 360, Event Messaging Station, and embedded Schedule/
+  Reporting/Catalog/Imports/Integrations/Diagnostics routes; defaults off. The
+  flag does not bypass staff authentication, existing role/feature gates, or
+  exact-token portal precedence, and enabling it is not a deployment or
+  production-acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

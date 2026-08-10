@@ -1,36 +1,24 @@
 # Project Status
 
-Last updated: August 10, 2026
+Last updated: August 9, 2026
 
 ## Operational Health
-- Public production: release `v0.4.3` is live from tagged `main` commit
-  `b996a19e180ce92d4efe5daad0be7e0f2464e14d`. Exact-main CI run
-  `31354244935` passed all eight required jobs. Vercel release run
-  `31354580909` deployed READY production deployment
-  `dpl_5eCf5864p7FK1jiS6ZrA9J5Tj1oq` and explicitly bound
-  `https://quotepilot.mbmapps.com` to it. Root, `/start`, and a direct
-  `/app/quotes/:quoteId` route return HTTP 200; the deep app route renders Staff
-  Sign In without application console errors, and `/start` renders the
-  controlled Stripe test-mode buyer flow. The emitted bundle contains the
-  buyer and workspace routes and no literal `[SENSITIVE]` redaction value.
-- Firebase production: Hosting release run `31354741814` promoted the same
-  `v0.4.3` frontend to `https://tonicatering.web.app`; its main bundle is byte-
-  identical to Vercel and passed root, `/start`, and deep-route HTTP probes.
-  Firebase release run `31349796774` previously promoted Functions, Firestore
-  rules, and indexes from tagged `v0.4.0` SHA
-  `3ace410b8799ac33c9848ba0d188d209076ec9aa`. Provider inventory now reports 74
-  Functions, all `ACTIVE`, all Node.js 22, and all in `us-central1`. No backend,
-  rule, or index source changed between `v0.4.0` and `v0.4.3`.
-- Release recovery evidence: the first Vercel attempt exposed an incompatible
-  SPA fallback; the second exposed a custom-domain rollback pin plus protected
-  public variables compiling as `[SENSITIVE]`. Both attempts were returned to
-  the verified `v0.2.3` deployment before correction. The governed path now
-  routes to `/index.html`, binds the canonical public app context and reviewed
-  default organization `250`, validates the exact returned deployment URL, and
-  explicitly assigns the existing custom domain. The old READY deployment
-  remains the recorded rollback. Authenticated quote/save/export, signed-in
-  CWF-16 navigation, provider outcomes, and human acceptance remain separate
-  post-release evidence.
+- Runtime: release `v0.2.3` is live from merged `main` commit
+  `d2747c693e4d15d0efc66cb3bbd76b03f31009f4`. Main CI run `31059404835`
+  passed every required lane. The public custom domain
+  (`https://quotepilot.mbmapps.com`) is aliased to Vercel production deployment
+  `dpl_DgDTcfpR411dXZ9x3hZhR6Gigf6Z`, which is provider-reported `READY`.
+  Firebase Hosting remains the origin/fallback (`https://tonicatering.web.app`)
+  and was released with the same tagged source revision.
+- Release candidate: the customer-centered workspace convergence plus CWF-16
+  stabilization is merged to `main` at
+  `91528d945b29a95362366d5dcaf332f70fd57dd8`. Exact-main CI run
+  `31344333805` passed all eight hard-gate jobs. Vercel preview deployment
+  `dpl_4WFBtPSnzMgMbRmvCGS6cAEUBwR3` is provider-reported `READY` and binds
+  that exact SHA. This is immutable staging evidence only;
+  production aliases, Firebase Hosting, Functions, Firestore rules/indexes,
+  runtime flags, hosted UAT, and human acceptance have not been promoted or
+  claimed for this candidate.
 - Current source product identity: public, authentication, workspace, customer
   portal, proposal, install metadata, integration, and onboarding surfaces use
   the exact `QuotePilot by MBMApps` identity. The workspace header now labels
@@ -38,19 +26,21 @@ Last updated: August 10, 2026
   portal branding. The legacy `tonicatering` Firebase project, hosting site,
   environment filename, deployment confirmations, and service URLs remain
   unchanged infrastructure identifiers.
-- The final exact-main checkpoint passed 177 unit files with 2,250
-  tests (4 files / 65 tests skipped). Default Playwright passed 58
-  tests with 20 intentionally flag-gated skips; the complete flag-on workspace
-  and accessibility run passed 21/21. Firestore rules passed 61/61 on isolated
-  ports, the Firebase staff/portal browser lane passed 4/4, and authoritative
-  quote-write coverage passed 3/3. The Firebase lane exposed and then verified
-  the fix for an invalid absent Attention-pointer delete sentinel during staff
-  conversation send. The production build transformed 4,976 modules and emitted
-  2,650,378 aggregate JavaScript bytes with a 390,494-byte largest chunk, within
-  the exact named temporary exception. Environment, workflow, capability-
-  surfacing, documentation-governance, secret, bundle, and diff checks passed.
-  These remain source/local/emulator results; the hosted and provider evidence
-  claimed above is narrower and does not establish signed-in or human acceptance.
+- The August 10 merged-candidate checkpoint passed 183 unit
+  files with 2,279 tests (4 files / 65 tests skipped), the complete flag-on
+  routed workspace suite at 19/19, the flag-off messaging deep-link contract at
+  1/1, Firestore rules at 61/61, and an isolated Auth/Firestore/Functions
+  two-browser staff/customer conversation at 1/1 without manual refresh. The
+  broader prior CWF-16 checkpoint also passed the default 58-test Playwright
+  lane, its 21/21 workspace/accessibility selection, the full 4/4 Firebase
+  staff/portal lane, and 3/3 authoritative quote-write coverage; those broader
+  lanes were not all repeated after the final messaging-only refinements. The
+  current production build transformed 4,980 modules and emitted 2,691,344
+  aggregate JavaScript bytes with a 391,596-byte largest chunk, within the exact
+  named temporary exception. Environment, capability-surfacing, unit, build,
+  documentation-governance, bundle, focused browser, rules, and emulator checks passed.
+  All of these are source/local/emulator results, not hosted tenant, provider,
+  deployment, production-data, flag-promotion, or human-acceptance evidence.
 - Functions runtime readiness: all 74 production Functions are provider-reported
   `ACTIVE` on Node.js 22 in `us-central1`, with Firebase Admin 14 modular app,
   Auth, and Firestore APIs. The coordinated `v0.4.0` deployment and the local
@@ -59,16 +49,16 @@ Last updated: August 10, 2026
 - Current source uses a named temporary bundle exception while the
   customer-centered workspace convergence completes release qualification. Its
   no-headroom
-  ceilings match the canonical-env, flag-on production build at 2,650,378
-  aggregate JavaScript bytes and a 390,494-byte largest chunk, versus
+  ceilings match the August 10 merged-candidate build at 2,691,344 aggregate
+  JavaScript bytes and a 391,596-byte largest chunk, versus
   unchanged pre-convergence main metrics of
   1,997,365 and 387,929 bytes. The normal allowance remains 5%, baseline updates
   are blocked while the exception is active, and closure requires the explicit
   optimization or reviewed clean-main recalibration path plus local bundle,
   browser, and CWV qualification. This is not hosted, production, or human-
   acceptance evidence. A targeted quote-store split reduced the authenticated
-  route chunk from 448,190 to 310,102 bytes, leaving Firebase as the largest
-  chunk at 390,494 bytes and under the normal per-chunk ceiling.
+  route chunk from 448,190 to 317,008 bytes, leaving Firebase as the largest
+  chunk at 391,596 bytes and under the normal per-chunk ceiling.
 - Current source delivery governance includes a required no-orphan-capability
   check in `lane:core`. It reviews the whole branch/PR backend diff, requires a
   versioned capability-surfacing contract manifest plus real frontend/Feature
@@ -81,9 +71,8 @@ Last updated: August 10, 2026
   authority tests, and no callable ownership. This is structural traceability
   evidence, not semantic completeness or proof of visual polish, hosted
   availability, provider behavior, production promotion, or human acceptance.
-- CWF-16 is deployed behind the retained customer-centered workspace source
-  flag, which both production frontend paths compile on. `/app/quotes/:quoteId`
-  is an event-first record over the
+- CWF-16 is merged/source complete behind the existing customer-centered
+  workspace flag. `/app/quotes/:quoteId` is an event-first record over the
   existing bounded quote and Workflow contracts; `/app/quotes` remains quote
   administration and `/app/quotes/:quoteId/edit` remains the trusted editor.
   Exact identity, sold scope, lifecycle, attention, existing context routes,
@@ -94,8 +83,8 @@ Last updated: August 10, 2026
   Condition, proposal-scoped Readiness, and Needs You, with stable reason codes
   behind `Why?`; Flexibility and Alignment fail closed as `Unavailable`. It adds
   no backend/data authority and does not establish event-wide readiness,
-  inventory, capacity, payment, booking, completion, signed-in hosted behavior,
-  or human acceptance. CWF-17 remains the next
+  inventory, capacity, payment, booking, completion, deployment, hosted
+  availability, flag promotion, or human acceptance. CWF-17 remains the next
   open source program for broader intelligence synthesis. No formal
   Flexibility/change-window contract, authoritative Operational Slack or
   Execution Fragility model, combined Alignment projection, or complete Change
@@ -232,8 +221,38 @@ Last updated: August 10, 2026
   source keeps unresolved send identity and unchanged body in bounded app
   memory across panel close/unmount, retains a global unload warning until an
   exact retry receipt or explicit safe reset, and writes neither value to
-  browser storage. Focused unit/rules/emulator evidence is local only; the
+  browser storage. Focused unit/rules/emulator evidence is local only; the base
   conversation source is deployed but has no hosted staff/customer acceptance.
+- Current-source Event Messaging Station: when the existing temporary
+  customer-centered workspace flag is enabled, authenticated staff can open
+  `/app/messages` as a central inbox whose threads remain segregated by the
+  canonical quote/event. Search, event-oriented groups, `Needs reply` and
+  `Active` filters, event context, and exact quote/customer navigation operate
+  over existing records. The inbox listener is bounded to 50 same-tenant quote
+  documents ordered by the most recent conversation summary. It normalizes the
+  event/thread fields used by the station and never queries canonical message records.
+  Each open staff thread watches only its exact organization quote signal; an
+  exact-token customer portal watches only its current portal document. A
+  higher-count or distinct non-older body-free summary triggers the existing
+  callable to revalidate authority and reload canonical message bodies,
+  including the same-latest-ID concurrent-send reconciliation case. New sends atomically project
+  that summary to both the quote and exact current portal in one transaction;
+  an idempotent retry returns its existing receipt before any new projection
+  write. This is best-effort near-real-time behavior. `Live updates` means a
+  server-origin snapshot was observed and a newer signal can prompt a callable
+  reload, while cache and failure remain visibly `May be stale` or `Updates
+  paused` and manual refresh remains available. There are no read receipts,
+  typing indicators, presence state, external-delivery claims, or guaranteed
+  latency. This source branch has focused unit, local flag-on browser,
+  and isolated Auth/Firestore/Functions emulator evidence that two independent
+  browser contexts exchange staff/customer messages without manual refresh. It
+  is not yet deployed, hosted-accepted, production-data evidence, or human
+  acceptance.
+  Organization changes synchronously drop prior-scope inbox rows, and the open
+  panel remounts on the complete staff/portal access identity so prior bodies or
+  drafts cannot render under a new tenant, quote, principal, or portal token.
+  Draft, expired, deleted, or provider-unaccepted portal
+  state is visibly unavailable and never starts a conversation callable load.
 - Current source `CWF-15` authority candidate preserves the pure frozen
   Commercial Dependency Graph while adding separate server-owned simulation,
   sales request/admin authorization, gated atomic quote/version apply plus
@@ -265,8 +284,8 @@ Last updated: August 10, 2026
   retains a validated bounded history of the current and up to nine prior exact
   receipts for separate download. This proves declared-input freshness only—not
   kitchen review, publication, customer acceptance, booking, payment, delivery,
-  or completion. The source is deployed; hosted operator acceptance remains
-  unproven.
+  or completion. The source/local invariant is not deployed or hosted-operator
+  accepted.
 - Decision Debt no longer assigns a fallback exposure multiplier when canonical
   commercial cents are unavailable. Those items remain visible with `UNKNOWN`
   score state and null factor/raw score/score/urgency; known-exposure items keep
@@ -320,7 +339,7 @@ Last updated: August 10, 2026
   limited to loopback emulators and `demo-*` projects. This is working-tree
   candidate source and is neither a production data operation nor deployment/
   hosted acceptance evidence.
-- Deployed-source `CWF-11` rebooking continuation: Home and Workflow now
+- Working-tree candidate `CWF-11` rebooking continuation: Home and Workflow now
   derive tenant-calendar anniversary Attention from the latest-200 canonical
   quote-history read, expose source/display incompleteness, and hand one click
   to the stable Customer 360 record without creating a draft or claiming a
@@ -351,9 +370,9 @@ Last updated: August 10, 2026
   from the token portal. The UI covers scheduled, due, overdue, blocked,
   completed, uncertain, reconciliation, receipt, definitive error, and recovery
   outcomes. These are internal-review facts only, not outbound contact or
-  provider evidence. The Functions/rules source is deployed; hosted staff review
-  and consent/provider-gated thank-you/review delivery remain pending.
-- Deployed-source `CWF-13` commercial measures: Customer 360 Overview
+  provider evidence. Functions/rules deployment, hosted staff review, and
+  consent/provider-gated thank-you/review delivery remain pending.
+- Working-tree candidate `CWF-13` commercial measures: Customer 360 Overview
   derives quoted, exact-state accepted/booked, payment, and repeat-event measures from
   the bounded customer DTO. Deposit and final-balance values become
   provider-confirmed only when the DTO reports an exclusively Firebase-backed
@@ -366,8 +385,8 @@ Last updated: August 10, 2026
   refresh, empty, partial, retained-stale, error, and retry presentation is
   source-covered. These values are read-only operational measures, not
   accounting revenue, cash reconciliation, forecasts, or a persisted rollup.
-  The source is deployed; hosted staff acceptance is pending.
-- Deployed-source `CWF-12` Revenue Autopilot authority candidate now includes
+  Deployment and hosted staff acceptance are pending.
+- Working-tree `CWF-12` Revenue Autopilot authority candidate now includes
   tenant policy and Customer 360 controls, deterministic idempotent jobs, four
   reminder lanes plus completed-closeout post-event review requests, unread-
   reply Attention escalation with latest-message supersession, staff-reply
@@ -385,10 +404,10 @@ Last updated: August 10, 2026
   reconciliation rechecks current authority before any provider call. The
   staff receipt now exposes a withheld retry as a distinct non-provider outcome
   rather than presenting every successful record mutation as provider accepted.
-  The source and isolated secrets are deployed, but the runtime gates remain
-  off. No scheduler execution, provider acceptance/delivery/bounce/complaint,
-  hosted behavior, recovered value, or human acceptance is established.
-- Deployed-source `CWF-07` and `CWF-08`: Workflow exposes bounded
+  No deployment, scheduler execution, secret provisioning, provider acceptance/
+  delivery/bounce/complaint, hosted behavior, recovered value, or human
+  acceptance is established by this source/local candidate.
+- Working-tree candidates `CWF-07` and `CWF-08`: Workflow exposes bounded
   timestamp-derived due-today, overdue, upcoming, and aging cues alongside exact
   stored internal completion receipts, while Schedule exposes a bounded,
   expandable run of show derived from recorded event, booking, staffing,
@@ -396,10 +415,9 @@ Last updated: August 10, 2026
   partial evidence, unknown timing, and retry behavior. They remain read-only
   projections: internal receipts do not prove customer/provider/commercial
   outcomes, and the run of show does not prove attendance, inventory, payment,
-  booking, or readiness. Persisted ownership/SLA escalation and collaborative
-  event operations remain deferred; the source is deployed and hosted
-  acceptance is pending.
-- Deployed-source `CWF-09` bounded commercial intelligence: Reporting
+  booking, or readiness. Persisted ownership/SLA escalation, collaborative event
+  operations, deployment, and hosted acceptance remain pending.
+- Working-tree candidate `CWF-09` bounded commercial intelligence: Reporting
   caps its same-tenant quote snapshot at 500 displayed records, labels source,
   last complete client read, truncation, explicit denominators, missing money,
   stale/partial/error/retry states, and UTC six-month trends. Accepted/booked
@@ -408,16 +426,16 @@ Last updated: August 10, 2026
   record has a paid state, valid provider-confirmation timestamp, and amount;
   local or incomplete evidence is excluded rather than coerced to zero. The
   measures are not accounting revenue and are not tenant-wide when truncated.
-  The source is deployed; hosted staff acceptance remains pending.
-- Deployed-source `CWF-10` portal decision recovery: the existing
+  Deployment and hosted staff acceptance remain pending.
+- Working-tree candidate `CWF-10` portal decision recovery: the existing
   exact-token decision center now presents submitting, uncertain, same-attempt
   reconciliation, exact receipt, changed-source review, definitive error, and
   recovery states for acceptance and requested changes. Missing typed signer or
   consent input receives focused validation, and decision motion honors reduced
   motion. The browser does not auto-retry a decision, and acceptance remains
-  separate from payment and booking. The source is deployed and has no hosted
-  customer acceptance.
-- Production `v0.4.3` starter catalog delivery: the existing post-login blank-catalog
+  separate from payment and booking. This source is not deployed and has no
+  hosted customer acceptance.
+- Production `v0.2.3` starter catalog delivery: the existing post-login blank-catalog
   gate now offers four one-click industry drafts in Catalog Admin. Versioned
   manifests populate tenant-scoped catalog and menu records with suggested
   minor-unit prices, provenance hashes, and unconfirmed pricing. Server
@@ -440,8 +458,7 @@ Last updated: August 10, 2026
   before menu removal, and requires browser catalog/pricing edits to advance
   the catalog revision atomically while reopening pricing review. Pack
   provenance and staged-pack metadata remain server-owned. These additions are
-  locally validated changes are deployed; hosted owner acceptance remains
-  pending.
+  locally validated source changes and are not part of deployed `v0.2.3`.
 - Production provisioning hardening includes verified-email,
   role-document, and allowlist-backed platform authority; explicit plan/create
   confirmation; atomic collision-safe creation; seven-day owner invitations;
@@ -457,17 +474,16 @@ Last updated: August 10, 2026
 - Controlled Functions CI deploys now materialize an ignored project
   environment only after validating the canonical `/app` URL, platform-admin
   allowlist, approved QuotePilot sender identity, Stripe secrets, and
-  credentials for any explicitly enabled provider. The legacy automatic path
-  remains gated by `ENABLE_FUNCTIONS_DEPLOY=false`; the manual production path
-  requires exact tagged-main CI evidence and explicit scope confirmation.
+  credentials for any explicitly enabled provider. The workflow remains gated
+  by `ENABLE_FUNCTIONS_DEPLOY=false` by default.
 - Current source tenant identity fix: explicit blank tenant logo/contact/address/crew values no longer fall back to the legacy customer profile, and Catalog Admin branding edits retain their draft through parent rerenders with persistent save/discard affordances.
 - Current source portal themes: Catalog Admin offers four named, contrast-safe
   presets that update only the existing tenant color fields, show an immediate
   preview, and persist through the existing revision-preconditioned catalog
   save. New authoritative and local quote snapshots carry the full six-color
   palette plus the existing logo reference into the customer portal; legacy
-  snapshots continue through safe visual fallbacks. The source/local evidence
-  is deployed but not hosted-accepted.
+  snapshots continue through safe visual fallbacks. This is source/local
+  evidence only and is not deployed or hosted-accepted.
 - Current source tenant authorization hardening: Firestore denies unverified
   email authority and conflicting claim/role organization scopes, permits
   tenant-domain mapping changes only for same-organization admins, and keeps
@@ -493,22 +509,22 @@ Last updated: August 10, 2026
   minor-unit totals, then writes matching quote/portal evidence plus a
   server-write-only tenant receipt with a SHA-256 proposal snapshot. Direct
   browser acceptance is denied; request changes and declines retain their
-  existing atomic portal path. The local source/emulator evidence is deployed
-  but not hosted-accepted.
+  existing atomic portal path. This is local source/emulator evidence only and
+  is not deployed or hosted-accepted.
 - Current source product analytics: the quote wizard records only anonymous
   session, step, mode, and add-on identifiers through same-tenant staff
   callables. Deterministic event identities make retries idempotent, raw events
   remain browser-inaccessible, and the existing Dashboard shows a 30-day
   funnel plus add-on selection/removal trends. Analytics storage or summary
   failures do not block quote work or the dashboard's quote metrics. This is
-  deployed source evidence only and is not production-accepted.
+  local source evidence only and is not deployed or production-accepted.
 - Current source operations audit: organization admins can review server-
   derived delivery retry/review counts, a seven-day trend over recorded
   integration outcomes, current admin/sales role counts, and recent role-
   stamped sensitive actions in Integrations Ops. Retry candidates do not claim
   that a resend occurred, and operator sync notes are not promoted to server
-  connector evidence. The local source/unit evidence is deployed but not
-  hosted-accepted.
+  connector evidence. This is local source/unit evidence only and is not
+  deployed or hosted-accepted.
 - Production approval authority: Firebase-backed approval request
   creation and admin resolution use same-tenant callable transactions with
   server-owned actor identity/timestamps and duplicate/replay rejection.
@@ -584,13 +600,13 @@ Last updated: August 10, 2026
   signature; it must be replaced with the provider-issued signing secret before
   the Resend webhook is enabled. Provider/DNS/webhook, scheduler, hosted,
   production-data, and human acceptance remain unproven.
-- The customer-centered staff shell remains behind
-  `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED` for a source-level rollback. The
-  governed Firebase and Vercel production workflows now set it explicitly to
-  `true` only in their credential-scoped deploy steps. Exact hosted signed-in
-  deep-link, Back/Forward, mobile, portal-precedence, branding-isolation, and
-  human acceptance are still separate gates; flag promotion alone does not
-  satisfy them.
+- The customer-centered staff shell is behind
+  `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED`, which defaults off. It still
+  requires an exact hosted candidate plus signed-in deep-link, Back/Forward,
+  mobile, portal-precedence, branding-isolation, and human acceptance before the
+  flag can be removed or enabled for production. The current convergence has
+  exact local/high-risk evidence, but no local result satisfies those hosted
+  gates.
 - The Home trust/freshness rail is a first surface-scoped CWF-03 slice, not a
   global evidence ledger. Directory and Customer 360 still expose their own
   bounded/source states rather than sharing a cross-surface freshness contract.
@@ -611,7 +627,8 @@ Last updated: August 10, 2026
   has been selected for the interim QuotePilot sender
   `QuotePilot by MBMApps <quotepilot@leaguepilot.us>`. A restricted send-only
   Resend key now has a Firebase Secret Manager version, and source plus local
-  non-secret configuration are aligned and deployed. Provider acceptance,
+  non-secret configuration are aligned. The currently deployed Functions still
+  have email disabled; the exact Functions release, provider acceptance,
   delivered-event, and recipient-inbox proof remain outstanding. Migration to
   a dedicated QuotePilot domain remains a separate follow-up. The prior
   `onboarding@resend.dev` sandbox result is not production sender or inbox
@@ -621,29 +638,30 @@ Last updated: August 10, 2026
   `TWILIO_AUTH_TOKEN` has a Firebase Secret Manager version. Source requires
   that bound secret and the Messaging Service SID instead of a raw sender
   number. Production SMS remains disabled because the Messaging Service has no
-  US A2P registration; A2P approval, provider acceptance, and destination-device
-  receipt remain separate gates.
+  US A2P registration; A2P approval, governed Functions release, provider
+  acceptance, and destination-device receipt remain separate gates.
 - The existing Import Studio frontend is deployed but not hosted-smoke-
   verified. The current branch replaces direct customer and receipt writes
   with admin-only callables and denies those browser writes; that coordinated
-  Functions/rules/frontend change is deployed but not hosted-smoke-verified.
-  Excel intake,
+  Functions/rules/frontend change is not deployed. Excel intake,
   merge/update policies, saved import history UI, and active
   quote/payment/contract/booking imports are intentionally not included in this
   first slice.
 - The customer decision frontend, `portalDecision` Firestore rules, and
   enriched portal snapshot support are deployed but not hosted-smoke-verified.
 - The electronic acceptance callable, typed-signature UI, immutable receipt,
-  and browser-write denial are deployed and locally validated. Customer
-  acceptance still requires a signed-out hosted test against an exact delivered
-  revision.
+  and browser-write denial are implemented and locally validated in the current
+  source but are not deployed. Production acceptance must wait for a coordinated
+  frontend, Functions, and Firestore rules release plus a signed-out hosted
+  acceptance test against an exact delivered revision.
 - Approval request creation, admin resolution, and action-specific execution
   linkage are deployed server-authoritatively; hosted authenticated acceptance
   remains pending.
 - Workflow Attention and its change-request handling rules are deployed and
   locally covered, but authenticated hosted acceptance has not been captured.
-  Automated email and escalation authority is deployed but default-off; it is
-  not provider-accepted or enabled.
+  Automated email and escalation authority now exists only in the current
+  default-off source candidate; it is not deployed, provider-accepted, or
+  enabled.
 - Existing portal snapshots still need a reviewed production dry run and apply
   before their customer-safe event, selection, and pricing projection is
   complete. Projection backfill is not delivery authority: legacy links without
@@ -674,7 +692,7 @@ Last updated: August 10, 2026
 ## Current Focus (Near-Term)
 1. Sign in as an allowlisted platform admin, create and activate a disposable
    second organization, then run the hosted owner/quote/portal tenant acceptance
-   checklist against the live `v0.4.3` frontend and `v0.4.0` backend.
+   checklist against the live `v0.2.3` frontend and backend.
 2. Promote the restricted-key interim Resend sender
    `quotepilot@leaguepilot.us`, then capture accepted, delivered-event, and
    recipient-inbox proof from one controlled test.

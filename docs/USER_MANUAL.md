@@ -280,6 +280,55 @@ orientation point. Dates, money, statuses, source names, and missing values are
 displayed as human-readable copy while their canonical stored values remain
 unchanged.
 
+## Event Messaging Station
+
+- In a build with `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`, authenticated
+  staff can select `Messages` or open `/app/messages`. This is a temporary-
+  flagged source route and is not evidence that the station is deployed,
+  enabled in production, hosted-accepted, or human-accepted. A focused link may
+  add `?quoteId=<opaque-id>`; it never places a portal token, message body, or
+  customer email in the URL.
+- The station keeps one canonical conversation per quote/event. It does not
+  combine every quote for one customer into a customer-wide chat. Search by
+  event, customer, or quote; use `Needs reply` or `Active`; and review the
+  event-oriented groups. `Customer last replied` means only that the latest
+  recorded actor in the server summary is the customer. It is not an unread or
+  read receipt.
+- The inbox listens to up to 50 same-tenant quote documents ordered by their
+  most recent conversation summary and merges that activity with the existing
+  bounded workspace context. The station normalizes event/thread identity plus
+  count, latest message identity/time, and latest actor type; it does not query
+  canonical message records or expose a body preview. Select one
+  event to load its canonical history through the existing conversation
+  callable; direct browser access to conversation records remains denied.
+- A thread opens only when the quote has a current unexpired portal whose exact
+  revision was provider-accepted and activated. Draft, expired, deleted, or
+  mismatched delivery state is labeled unavailable; use `View event` to repair
+  the delivery boundary instead of retrying the conversation.
+- For an open staff thread, QuotePilot watches only that exact organization
+  quote document. The customer decision center watches only the exact current
+  portal document. When a higher-count or distinct non-older body-free signal
+  arrives, QuotePilot calls the existing loader again so the server revalidates tenant, token,
+  issuance, lifecycle, expiry, and delivery activation before returning
+  canonical message bodies. A send remains callable-owned and is recorded only
+  after its exact receipt; idempotent reconciliation and existing message/rate
+  limits are unchanged.
+- Read the synchronization labels narrowly: `Catching up` means the listener is
+  connecting; `Live updates` means a server signal can prompt an automatic
+  callable reload as a best-effort near-real-time path; `May be stale` means
+  cached or incomplete signal metadata is visible; and `Updates paused` means
+  automatic refresh is unavailable. Use `Refresh conversation` while cached or
+  paused. These labels do not promise a latency SLA or prove provider delivery,
+  recipient viewing, acceptance, booking, or payment.
+- On mobile, selecting an event updates the focused `/app/messages` URL. Browser
+  Back/Forward follows that selection; `Back to Messages` clears the quote
+  focus and returns keyboard focus to the same event row. Each row includes its
+  quote number, event date/time, and venue to separate similar events.
+- This slice has no read receipts, typing indicators, online presence, or
+  delivered/seen state. Conversation activity and `Needs reply` are operational
+  cues only. Use `View event` for the authoritative quote record and `Customer
+  360` for bounded customer context.
+
 ## Quote Builder Details
 - Event Type drives dynamic menu categories and items.
 - `Core Event Basics` keeps guest count and the Servers, Chefs, and Bartenders

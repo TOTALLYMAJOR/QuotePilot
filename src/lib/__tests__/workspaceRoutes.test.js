@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   ADMIN_WORKSPACE_NAVIGATION,
   buildCustomerPath,
+  buildMessagingPath,
   buildPortalPath,
   buildQuoteEditPath,
   buildQuotePath,
@@ -20,6 +21,7 @@ describe("workspace route parsing and construction", () => {
     ["/app/customers", WORKSPACE_ROUTE_IDS.CUSTOMER_LIST, "first-release"],
     ["/app/quotes", WORKSPACE_ROUTE_IDS.QUOTE_LIST, "first-release"],
     ["/app/quotes/new", WORKSPACE_ROUTE_IDS.QUOTE_NEW, "first-release"],
+    ["/app/messages", WORKSPACE_ROUTE_IDS.MESSAGING, "first-release"],
     ["/app/workflow", WORKSPACE_ROUTE_IDS.WORKFLOW, "first-release"],
     ["/app/schedule", WORKSPACE_ROUTE_IDS.SCHEDULE, "follow-on"],
     ["/app/reporting", WORKSPACE_ROUTE_IDS.REPORTING, "follow-on"],
@@ -95,11 +97,13 @@ describe("workspace route parsing and construction", () => {
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.QUOTE_EDIT, { quoteId: "q-1" }))
       .toBe("/app/quotes/q-1/edit");
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.QUOTE_NEW)).toBe(WORKSPACE_PATHS.quoteNew);
+    expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.MESSAGING, { quoteId: "q-1" }))
+      .toBe("/app/messages?quoteId=q-1");
   });
 
   test("exposes the persistent primary navigation and separately scoped operational routes", () => {
     expect(PRIMARY_WORKSPACE_NAVIGATION.map((item) => item.label))
-      .toEqual(["Home", "Customers", "Quotes", "Workflow", "Schedule"]);
+      .toEqual(["Home", "Customers", "Quotes", "Messages", "Workflow", "Schedule"]);
     expect(ADMIN_WORKSPACE_NAVIGATION.map((item) => item.label))
       .toEqual(["Reporting", "Catalog", "Imports", "Integrations", "Diagnostics"]);
   });
@@ -152,5 +156,14 @@ describe("workspace location precedence", () => {
   test("rejects an unsupported workflow focus type instead of reflecting it into the route", () => {
     expect(() => buildWorkflowPath({ quoteId: "q-123", attentionType: "customer_email" }))
       .toThrow(/not a supported workflow attention type/i);
+  });
+
+  test("round-trips an event conversation focus without reflecting malformed ids", () => {
+    const path = buildMessagingPath({ quoteId: "quote:123" });
+    expect(path).toBe("/app/messages?quoteId=quote%3A123");
+    expect(parseWorkspaceLocation({ pathname: "/app/messages", search: "?quoteId=quote%3A123" }).messagingFocus)
+      .toEqual({ quoteId: "quote:123" });
+    expect(parseWorkspaceLocation({ pathname: "/app/messages", search: "?quoteId=bad%2Fid" }).messagingFocus)
+      .toEqual({ quoteId: "" });
   });
 });

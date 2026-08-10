@@ -5,6 +5,10 @@ import {
   loadQuotePortalConversation,
   sendQuotePortalConversationMessage
 } from "../lib/portalConversationClient";
+import {
+  isConversationSignalNewer,
+  subscribeToConversationSignal
+} from "../lib/conversationSignalClient";
 import { auth } from "../lib/firebase";
 
 const pendingConversationAttempts = new Map();
@@ -226,6 +230,67 @@ export function mergeConversationMessages(current, incoming) {
   ));
 }
 
+export function buildConversationSignalBaseline(messages = []) {
+  const ordered = mergeConversationMessages([], messages);
+  const latest = ordered[ordered.length - 1] || null;
+  return {
+    messageCount: ordered.length,
+    latestMessageId: String(latest?.messageId || "").trim(),
+    latestMessageAtISO: String(latest?.createdAtISO || "").trim()
+  };
+}
+
+export function shouldReloadConversationForSignal({
+  open = false,
+  phase = "closed",
+  pendingRequestId = "",
+  signal = null,
+  loadedSignal = null
+} = {}) {
+  if (!open || !signal || String(pendingRequestId || "").trim()) return false;
+  if (["closed", "loading", "refreshing", "sending"].includes(phase)) return false;
+  return isConversationSignalNewer(signal, loadedSignal || {});
+}
+
+export function buildConversationSyncPresentation({
+  state = "paused",
+  mutationPending = false
+} = {}) {
+  if (mutationPending) {
+    return {
+      state: "paused",
+      label: "Updates paused",
+      detail: "Automatic refresh is paused while this message request resolves."
+    };
+  }
+  if (state === "catching_up") {
+    return {
+      state,
+      label: "Catching up",
+      detail: "Connecting to the selected conversation update signal."
+    };
+  }
+  if (state === "live") {
+    return {
+      state,
+      label: "Live updates",
+      detail: "A server-confirmed signal will refresh this conversation when a newer message is recorded."
+    };
+  }
+  if (state === "stale") {
+    return {
+      state,
+      label: "May be stale",
+      detail: "Only cached or incomplete update metadata is available. Refresh for the authoritative conversation."
+    };
+  }
+  return {
+    state: "paused",
+    label: "Updates paused",
+    detail: "Automatic conversation updates are unavailable. Manual refresh remains available."
+  };
+}
+
 export function formatConversationTimestamp(value) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "Time unavailable";
@@ -340,13 +405,15 @@ export function QuoteConversationMutationStatus({ presentation, showReady = fals
   );
 }
 
-export default function QuoteConversationPanel({
+function QuoteConversationPanelInstance({
   access,
+  authenticatedUid = "",
   title = "Quote conversation",
   defaultOpen = false,
-  onClose = null
+  onClose = null,
+  presentation = "panel",
+  showCloseAction = true
 }) {
-  const authenticatedUid = String(auth?.currentUser?.uid || "").trim();
   const identity = useMemo(() => accessIdentity(access, authenticatedUid), [
     access?.accessMode,
     access?.organizationId,
@@ -373,7 +440,12 @@ export default function QuoteConversationPanel({
   const [status, setStatus] = useState("");
   const [readOnly, setReadOnly] = useState(false);
   const [readOnlyReason, setReadOnlyReason] = useState("");
+  const [syncState, setSyncState] = useState(defaultOpen ? "catching_up" : "paused");
+  const [signalVersion, setSignalVersion] = useState(0);
   const requestGenerationRef = useRef(0);
+  const loadInFlightRef = useRef(false);
+  const latestLoadedSignalRef = useRef(buildConversationSignalBaseline([]));
+  const queuedSignalRef = useRef(null);
   const identityRef = useRef(identity);
   identityRef.current = identity;
   const mutationPresentation = buildConversationMutationPresentation({
@@ -384,6 +456,11 @@ export default function QuoteConversationPanel({
     status
   });
   const closeGuard = buildConversationCloseGuard({ phase, pendingRequestId });
+  const syncPresentation = buildConversationSyncPresentation({
+    state: syncState,
+    mutationPending: phase === "sending" || Boolean(pendingRequestId)
+  });
+  const normalizedPresentation = presentation === "station" ? "station" : "panel";
 
   const beginRequestGeneration = () => {
     requestGenerationRef.current += 1;
@@ -402,8 +479,13 @@ export default function QuoteConversationPanel({
     })
   );
 
-  const load = async ({ refresh = false, pendingAttempt = null } = {}) => {
+  const load = async ({
+    refresh = false,
+    pendingAttempt = null,
+    signalRefresh = false
+  } = {}) => {
     const request = beginRequestGeneration();
+    loadInFlightRef.current = true;
     const unresolvedAttempt = pendingAttempt || readConversationPendingAttempt(identity);
     const unresolvedRequestId = String(
       unresolvedAttempt?.clientRequestId || pendingRequestId || ""
@@ -415,6 +497,7 @@ export default function QuoteConversationPanel({
     try {
       const result = await loadQuotePortalConversation(access);
       if (!requestGenerationIsCurrent(request)) return;
+      latestLoadedSignalRef.current = buildConversationSignalBaseline(result.messages);
       setMessages(result.messages);
       setReadOnly(result.readOnly);
       setReadOnlyReason(result.readOnlyReason);
@@ -429,16 +512,21 @@ export default function QuoteConversationPanel({
         );
       } else {
         setPhase("ready");
-        if (refresh) setStatus("Conversation refreshed.");
+        if (refresh) {
+          setStatus(signalRefresh ? "Conversation updated." : "Conversation refreshed.");
+        }
       }
     } catch (loadError) {
       if (!requestGenerationIsCurrent(request)) return;
+      if (signalRefresh) setSyncState("stale");
       setPhase(reconcilingUnknownRequest
         ? "send_error"
         : refresh && messages.length
           ? "refresh_error"
           : "load_error");
       setError(friendlyConversationError(loadError, "Unable to load this quote conversation."));
+    } finally {
+      if (requestGenerationIsCurrent(request)) loadInFlightRef.current = false;
     }
   };
 
@@ -450,6 +538,7 @@ export default function QuoteConversationPanel({
       setSendMode(pendingAttempt.resetAllowed ? "safe_reset" : "reconcile");
       setError(pendingAttempt.error);
     }
+    setSyncState("catching_up");
     setOpen(true);
     void load({ pendingAttempt });
   };
@@ -459,6 +548,7 @@ export default function QuoteConversationPanel({
     setOpen(false);
     setPhase("closed");
     setStatus("");
+    setSyncState("paused");
     if (typeof onClose === "function") onClose();
   };
 
@@ -512,7 +602,11 @@ export default function QuoteConversationPanel({
         clientRequestId,
         resolution: "receipt"
       });
-      setMessages((current) => mergeConversationMessages(current, [result.message]));
+      setMessages((current) => {
+        const nextMessages = mergeConversationMessages(current, [result.message]);
+        latestLoadedSignalRef.current = buildConversationSignalBaseline(nextMessages);
+        return nextMessages;
+      });
       setReadOnly(result.readOnly);
       setReadOnlyReason(result.readOnlyReason);
       setBody("");
@@ -559,6 +653,10 @@ export default function QuoteConversationPanel({
   useEffect(() => {
     requestGenerationRef.current += 1;
     const pendingAttempt = readConversationPendingAttempt(identity);
+    latestLoadedSignalRef.current = buildConversationSignalBaseline([]);
+    queuedSignalRef.current = null;
+    loadInFlightRef.current = false;
+    setSignalVersion(0);
     setMessages([]);
     setBody(pendingAttempt?.body || "");
     setPendingRequestId(pendingAttempt?.clientRequestId || "");
@@ -569,6 +667,7 @@ export default function QuoteConversationPanel({
     setStatus("");
     setReadOnly(false);
     setReadOnlyReason("");
+    setSyncState(defaultOpen ? "catching_up" : "paused");
     if (defaultOpen) {
       setOpen(true);
       void load({ pendingAttempt });
@@ -583,9 +682,69 @@ export default function QuoteConversationPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity, defaultOpen]);
 
+  useEffect(() => {
+    if (!open || !identity) {
+      setSyncState("paused");
+      return undefined;
+    }
+
+    const subscribedIdentity = identity;
+    setSyncState("catching_up");
+    try {
+      return subscribeToConversationSignal(access, {
+        onSignal: (signal) => {
+          if (identityRef.current !== subscribedIdentity) return;
+          if (!signal.documentExists) {
+            setSyncState("paused");
+            return;
+          }
+          const serverConfirmed = signal.metadata?.fromCache !== true
+            && signal.metadata?.hasPendingWrites !== true;
+          setSyncState(serverConfirmed ? "live" : "stale");
+          if (serverConfirmed && isConversationSignalNewer(signal, latestLoadedSignalRef.current)) {
+            queuedSignalRef.current = signal;
+            setSignalVersion((current) => current + 1);
+          }
+        },
+        onError: () => {
+          if (identityRef.current === subscribedIdentity) setSyncState("paused");
+        }
+      });
+    } catch {
+      setSyncState("paused");
+      return undefined;
+    }
+    // The normalized access identity is the subscription authority boundary.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, open]);
+
+  useEffect(() => {
+    const signal = queuedSignalRef.current;
+    if (!signal) return;
+    if (!isConversationSignalNewer(signal, latestLoadedSignalRef.current)) {
+      queuedSignalRef.current = null;
+      return;
+    }
+    if (loadInFlightRef.current) return;
+    if (!shouldReloadConversationForSignal({
+      open,
+      phase,
+      pendingRequestId,
+      signal,
+      loadedSignal: latestLoadedSignalRef.current
+    })) return;
+    queuedSignalRef.current = null;
+    void load({ refresh: true, signalRefresh: true });
+    // Signal changes and request state deliberately gate a single background reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signalVersion, phase, pendingRequestId, open, identity]);
+
   if (!open) {
     return (
-      <section className="quote-conversation-launch">
+      <section
+        className="quote-conversation-launch"
+        data-conversation-presentation={normalizedPresentation}
+      >
         <div>
           <h3>{title}</h3>
           <p>Keep quote questions and answers with this proposal.</p>
@@ -603,11 +762,24 @@ export default function QuoteConversationPanel({
     && sendMode === "safe_reset";
   const canSend = !readOnly && body.trim().length > 0 && !busy && !canSafelyReset;
   return (
-    <section className="quote-conversation" aria-busy={busy} aria-labelledby="quote-conversation-title">
+    <section
+      className="quote-conversation"
+      aria-busy={busy}
+      aria-labelledby="quote-conversation-title"
+      data-conversation-presentation={normalizedPresentation}
+    >
       <header className="quote-conversation-head">
         <div>
           <p className="eyebrow">Quote messages</p>
           <h3 id="quote-conversation-title">{title}</h3>
+          <p
+            className="source-note"
+            role="status"
+            data-conversation-sync-state={syncPresentation.state}
+            title={syncPresentation.detail}
+          >
+            {syncPresentation.label}
+          </p>
         </div>
         <div className="quote-conversation-head-actions">
           <button
@@ -618,15 +790,17 @@ export default function QuoteConversationPanel({
           >
             {phase === "refreshing" ? "Refreshing..." : "Refresh conversation"}
           </button>
-          <button
-            type="button"
-            className="ghost compact"
-            onClick={closeConversation}
-            disabled={closeGuard.blocked}
-            title={closeGuard.message}
-          >
-            Close conversation
-          </button>
+          {showCloseAction && (
+            <button
+              type="button"
+              className="ghost compact"
+              onClick={closeConversation}
+              disabled={closeGuard.blocked}
+              title={closeGuard.message}
+            >
+              Close conversation
+            </button>
+          )}
         </div>
       </header>
 
@@ -644,7 +818,13 @@ export default function QuoteConversationPanel({
 
       {phase !== "loading" && phase !== "load_error" && (
         <>
-          <div className="quote-conversation-messages" aria-live="polite">
+          <div
+            className="quote-conversation-messages"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+            aria-atomic="false"
+          >
             {messages.length === 0 ? (
               <p className="source-note">No messages yet. Start with a question or update about this quote.</p>
             ) : messages.map((message) => (
@@ -678,11 +858,19 @@ export default function QuoteConversationPanel({
                   value={body}
                   disabled={phase === "sending" || Boolean(pendingRequestId)}
                   onChange={(event) => updateBody(event.target.value)}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && canSend) {
+                      event.preventDefault();
+                      void send();
+                    }
+                  }}
                   placeholder="Ask a question or share an update"
                 />
               </label>
               <div className="quote-conversation-compose-footer">
-                <small>{body.length}/{PORTAL_CONVERSATION_BODY_MAX_LENGTH}</small>
+                <small>
+                  {body.length}/{PORTAL_CONVERSATION_BODY_MAX_LENGTH} · Ctrl/⌘ + Enter to send
+                </small>
                 {canSafelyReset ? (
                   <button type="button" className="ghost" onClick={resetRejectedAttempt}>
                     {mutationPresentation.actionLabel}
@@ -709,5 +897,17 @@ export default function QuoteConversationPanel({
         </>
       )}
     </section>
+  );
+}
+
+export default function QuoteConversationPanel(props) {
+  const authenticatedUid = String(auth?.currentUser?.uid || "").trim();
+  const identity = accessIdentity(props?.access, authenticatedUid);
+  return (
+    <QuoteConversationPanelInstance
+      key={identity}
+      {...props}
+      authenticatedUid={authenticatedUid}
+    />
   );
 }
