@@ -88,6 +88,10 @@ const CommandCenterHome = createRecoverableLazy(
   () => import("./components/CommandCenterHome"),
   "CommandCenterHome"
 );
+const NowView = createRecoverableLazy(
+  () => import("./components/NowView"),
+  "NowView"
+);
 const CommercialSearchPalette = createRecoverableLazy(
   () => import("./components/CommercialSearchPalette"),
   "CommercialSearchPalette"
@@ -171,6 +175,12 @@ const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
 const CUSTOMER_CENTERED_WORKSPACE_ENABLED = !["0", "false", "no", "off"].includes(
   String(import.meta.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED || "").trim().toLowerCase()
 );
+// The NOW surface is an additional default-off presentation gate. Absent or
+// unrecognized values keep it off; it never widens data access or authority.
+const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+  && ["1", "true", "yes", "on"].includes(
+    String(import.meta.env.VITE_PILOT_NOW_ENABLED || "").trim().toLowerCase()
+  );
 
 const INITIAL_FORM = {
   date: "",
@@ -3289,20 +3299,37 @@ export default function App({ tenantContext, authSession }) {
       </section>
 
       {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.HOME && (
-        <WorkspaceLazyRoute surfaceName="Command Center" component={CommandCenterHome}>
-          <main className="container workspace-route-main">
-            <CommandCenterHome
-              snapshot={commercialSnapshot}
-              organizationName={organizationName}
-              organizationId={authSession.organizationId}
-              onRefresh={commercialSnapshot.refresh}
-              onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
-              onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
-              onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
-              onNewQuote={handleGetInstantQuote}
-            />
-          </main>
-        </WorkspaceLazyRoute>
+        PILOT_NOW_ENABLED ? (
+          <WorkspaceLazyRoute surfaceName="Now" component={NowView}>
+            <main className="container workspace-route-main">
+              <NowView
+                snapshot={commercialSnapshot}
+                organizationName={organizationName}
+                organizationId={authSession.organizationId}
+                onRefresh={commercialSnapshot.refresh}
+                onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+                onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+                onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+                onNewQuote={handleGetInstantQuote}
+              />
+            </main>
+          </WorkspaceLazyRoute>
+        ) : (
+          <WorkspaceLazyRoute surfaceName="Command Center" component={CommandCenterHome}>
+            <main className="container workspace-route-main">
+              <CommandCenterHome
+                snapshot={commercialSnapshot}
+                organizationName={organizationName}
+                organizationId={authSession.organizationId}
+                onRefresh={commercialSnapshot.refresh}
+                onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+                onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+                onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+                onNewQuote={handleGetInstantQuote}
+              />
+            </main>
+          </WorkspaceLazyRoute>
+        )
       )}
 
       {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CUSTOMER_LIST && (

@@ -200,6 +200,12 @@ Optional:
   flag does not bypass staff authentication, existing role/feature gates, or
   exact-token portal precedence, and enabling it is not a deployment or
   production-acceptance decision.)
+- `VITE_PILOT_NOW_ENABLED` (default off; recognized only alongside the
+  customer-centered workspace flag. Renders the `/app` Home route as the
+  flag-gated NOW surface — interpreted decision cards over the same bounded
+  Command Center snapshot, with the existing Workflow/quote/Customer 360
+  resolution targets. Purely presentational: it adds no reads, writes, or
+  authority, and enabling it is not a deployment or acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

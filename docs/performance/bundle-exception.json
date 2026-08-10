@@ -1,14 +1,14 @@
 {
-  "id": "customer-centered-workspace-convergence-2026-08-09",
+  "id": "workspace-convergence-pilot-now-2026-08-10",
   "status": "active",
-  "recordedAt": "2026-08-09",
+  "recordedAt": "2026-08-10",
   "baselineGeneratedAt": "2026-08-07",
   "baselineMetrics": {
     "totalJsBytes": 1997365,
     "largestJsChunkBytes": 387929
   },
   "maxMetrics": {
-    "totalJsBytes": 2691344,
+    "totalJsBytes": 2700437,
     "largestJsChunkBytes": 391596
   }
 }
