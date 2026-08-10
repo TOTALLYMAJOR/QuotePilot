@@ -42,9 +42,11 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   selected exact thread uses a best-effort near-real-time signal to reload canonical
   message bodies through the existing callable. `Live updates`, cache, and
   paused labels describe listener state only; they do not establish message
-  delivery, reading, typing, presence, or a latency SLA. This route is current
-  source and is not deployed or flag-promoted. Draft, expired, deleted, or
-  provider-unaccepted portal state is not exposed as an active conversation.
+  delivery, reading, typing, presence, or a latency SLA. The governed `v0.5.0`
+  production builds enable this route, and its public deep link is reachable on
+  both production hosts. Authenticated hosted use and human acceptance remain
+  separate evidence. Draft, expired, deleted, or provider-unaccepted portal
+  state is not exposed as an active conversation.
 - `/app/workflow`: routed attention, follow-up, and approval surface; optional
   query parameters focus an exact quote, attention type, and request.
 - `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
@@ -69,8 +71,9 @@ When `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`, the six operational paths
 above render as recoverably lazy embedded workspace regions and preserve their
 mounted state during ordinary staff navigation. Contextual Catalog entry points
 and the flag-off/legacy shell retain the existing focus-contained modal wrappers
-and close guards. These are current source routes, not evidence of deployment,
-hosted deep-link acceptance, or flag promotion. See the
+and close guards. The governed `v0.5.0` builds promote these routes with the
+workspace flag enabled; public deep-link reachability is verified, while
+authenticated hosted and human acceptance remain separate. See the
 [customer-centered workspace plan](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 for the delivery and evidence contract.
 
@@ -82,8 +85,8 @@ administration, with the five-step quote builder retained as one focused
 commercial capability. The exact-token customer decision center remains the
 sole customer-facing experience.
 
-The live `v0.2.3` release and the temporary-flagged source do not have identical
-surface availability. Across those evidence layers QuotePilot includes dynamic
+The live `v0.5.0` release promotes the reviewed customer-centered workspace,
+CWF-16 Event Workspace, and Event Messaging Station. QuotePilot also includes dynamic
 event-type menus, authoritative pricing, proposal export and decisions,
 tenant-locked customer/catalog CSV imports, separate deposit and final-balance
 rails in current source, public invoice-first buyer onboarding on the existing

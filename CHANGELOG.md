@@ -6,6 +6,23 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-10
+
+### Released
+
+- Promoted the event-first customer workspace, CWF-16 quote detail,
+  deterministic quote insights, routed draft-save handoff, and Event Messaging
+  Station to production from tagged `main` commit
+  `3cca8cc4bb985de6ec08c9d62094cfe81b1d2a43`. Exact-SHA CI run
+  `31420931622` passed all eight required jobs. Firebase `all` deployment run
+  `31421511861` updated Hosting, Firestore rules, and Functions; Vercel run
+  `31422418387` promoted deployment
+  `dpl_ykXq9U7wt2aZDg4zUR4hc8CCNMKq` and rebound
+  `quotepilot.mbmapps.com`. Public `/`, `/app`, `/app/messages`, and quote-detail
+  deep links returned HTTP 200 on the production edge. These receipts establish
+  deployment and public route reachability, not authenticated staff acceptance,
+  production message exchange, provider email delivery, or human acceptance.
+
 ### Fixed
 
 - Clean CI installs now declare the `jsdom` test runtime required by Vitest
@@ -36,7 +53,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   its focused URL on return, and restores focus to the selected event row.
   Organization-scoped inbox state and complete access-identity panel remounts
   clear prior-tenant rows, bodies, and drafts before a new scope can render. This
-  source has not yet been deployed, hosted-accepted, or human-accepted. Draft,
+  source is deployed in `v0.5.0`; public deep-link reachability is verified,
+  while authenticated hosted use, production-data behavior, and human
+  acceptance remain unverified. Draft,
   expired, deleted, and provider-unaccepted
   portal records fail closed as unavailable instead of opening a callable thread.
 
@@ -61,9 +80,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   remains labeled as having no server receipt. Deterministic model, component,
   integration, responsive browser, console-error, deterministic-repeat, and
   same-state visual QA are covered. This adds no backend/data authority. It is
-  merged to `main` at `62d5136f5fdc8531f7b61f5fd2fb875ef0b30540` and has an
-  exact-SHA READY Vercel preview, but is not production-deployed,
-  flag-promoted, or human-accepted.
+  deployed from tagged `main` commit
+  `3cca8cc4bb985de6ec08c9d62094cfe81b1d2a43` with the governed production
+  workspace flag enabled. Public route reachability is verified, but
+  authenticated hosted use and human acceptance remain unverified.
 - Source/local `CWF-11` authoritative post-event closeout. A governed booking
   with a verified private acceptance receipt now atomically creates one
   deterministic, same-tenant closeout record bound to the exact accepted
