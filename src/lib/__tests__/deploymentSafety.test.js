@@ -120,6 +120,20 @@ describe("direct production deployment safety", () => {
 
     expect(config.git).toEqual({ deploymentEnabled: false });
   });
+
+  test("pulls fixed production project settings before the Vercel prebuilt build", () => {
+    const source = fs.readFileSync(VERCEL_STUB, "utf8");
+    const pullOffset = source.indexOf('"pull"');
+    const revalidateOffset = source.indexOf("validateVercelProjectLink();", pullOffset);
+    const buildOffset = source.indexOf('"build"', pullOffset);
+    const deployOffset = source.indexOf('"deploy"', buildOffset);
+
+    expect(pullOffset).toBeGreaterThan(0);
+    expect(source.slice(pullOffset, buildOffset)).toMatch(/--environment=production/);
+    expect(revalidateOffset).toBeGreaterThan(pullOffset);
+    expect(buildOffset).toBeGreaterThan(revalidateOffset);
+    expect(deployOffset).toBeGreaterThan(buildOffset);
+  });
 });
 
 describe("customer-site mutation retirement", () => {

@@ -803,6 +803,12 @@ allowlisted human dispatcher. The same live evidence is checked again after
 the build and immediately before provider mutation. Provider tokens are scoped
 to that final workflow step.
 
+The Vercel step uses the fixed reviewed project link, pulls that project's
+production settings with the scoped token, revalidates the fixed project
+identity and live release evidence, and only then performs the prebuilt build
+and production promotion. The pull is provider configuration input; it does not
+reenable Git-triggered deployment.
+
 For a release containing either Stripe collection rail, every applicable
 `payment.*` item printed for the selected target is mandatory. Deposit and
 final-balance dispatch, signed-webhook/reconciliation behavior, cross-rail
