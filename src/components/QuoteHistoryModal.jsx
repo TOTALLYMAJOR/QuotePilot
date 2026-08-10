@@ -2117,15 +2117,18 @@ export function QuoteHistoryView({
           </div>
         </div>
 
-        <p className="source-note">Source: {formatWorkspaceSource(state.source)}</p>
-        <p className="source-note">
-          Authority: {authorityCopy}
-        </p>
-        {state.source === "local" && permissions.canExportBeo && (
-          <p className="warning-note" role="status" data-beo-local-boundary="no-server-receipt">
-            Kitchen BEO fallback is browser-local in this workspace. It has no server generation receipt, retained artifact history, or authoritative freshness status.
+        <details className="staff-evidence-disclosure workspace-data-details">
+          <summary>Workspace data details</summary>
+          <p className="source-note">Source: {formatWorkspaceSource(state.source)}</p>
+          <p className="source-note">
+            Authority: {authorityCopy}
           </p>
-        )}
+          {state.source === "local" && permissions.canExportBeo && (
+            <p className="warning-note" role="status" data-beo-local-boundary="no-server-receipt">
+              Kitchen BEO fallback is browser-local in this workspace. It has no server generation receipt, retained artifact history, or authoritative freshness status.
+            </p>
+          )}
+        </details>
         {quoteHistoryCloseGuard.blocked && (
           <p className="warning-note" role="status">{quoteHistoryCloseGuard.message}</p>
         )}

@@ -147,44 +147,47 @@ export function StaffReadContextRail({
         <StatusChip {...model.presentation} />
       </div>
 
-      <dl className="staff-evidence-details">
-        <div>
-          <dt>Tenant scope</dt>
-          <dd>{scopeName}<small>Tenant key: {tenantKey}</small></dd>
-        </div>
-        <div>
-          <dt>Read contract</dt>
-          <dd>{readContract}</dd>
-        </div>
-        <div>
-          <dt>Presentation authority</dt>
-          <dd>{presentationAuthority(source)}</dd>
-        </div>
-        <div>
-          <dt>Last complete read (device time)</dt>
-          <dd>
-            {Number(loadedAt) > 0
-              ? <time dateTime={new Date(loadedAt).toISOString()}>{formatWorkspaceDateTime(loadedAt)}</time>
-              : "No complete read yet"}
-          </dd>
-        </div>
-        <div>
-          <dt>Source</dt>
-          <dd>{formatWorkspaceSource(source)}</dd>
-        </div>
-      </dl>
-
       <p className="staff-evidence-outcome" role="status" aria-live="polite" aria-atomic="true">
         {model.detail} {outcome}
       </p>
-      {truncationKnown && truncated && boundsNote && (
-        <p className="staff-evidence-bounds-note">
-          {boundsNote}
+
+      <details className="staff-evidence-disclosure">
+        <summary>Read details</summary>
+        <dl className="staff-evidence-details">
+          <div>
+            <dt>Tenant scope</dt>
+            <dd>{scopeName}<small>Tenant key: {tenantKey}</small></dd>
+          </div>
+          <div>
+            <dt>Read contract</dt>
+            <dd>{readContract}</dd>
+          </div>
+          <div>
+            <dt>Presentation authority</dt>
+            <dd>{presentationAuthority(source)}</dd>
+          </div>
+          <div>
+            <dt>Last complete read (device time)</dt>
+            <dd>
+              {Number(loadedAt) > 0
+                ? <time dateTime={new Date(loadedAt).toISOString()}>{formatWorkspaceDateTime(loadedAt)}</time>
+                : "No complete read yet"}
+            </dd>
+          </div>
+          <div>
+            <dt>Source</dt>
+            <dd>{formatWorkspaceSource(source)}</dd>
+          </div>
+        </dl>
+        {truncationKnown && truncated && boundsNote && (
+          <p className="staff-evidence-bounds-note">
+            {boundsNote}
+          </p>
+        )}
+        <p className="staff-evidence-caveat">
+          {caveat}
         </p>
-      )}
-      <p className="staff-evidence-caveat">
-        {caveat}
-      </p>
+      </details>
     </aside>
   );
 }

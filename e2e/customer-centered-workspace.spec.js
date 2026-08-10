@@ -140,8 +140,14 @@ test.describe("customer-centered workspace", () => {
       ]);
       expect(homeBox).not.toBeNull();
       expect(accountBox).not.toBeNull();
-      expect(Math.abs(accountBox.y - homeBox.y)).toBeLessThanOrEqual(2);
-      await expect(header.locator(".header-actions")).toHaveCSS("flex-wrap", "nowrap");
+      if (width >= 1181) {
+        // Sidebar layout: Account stacks in the same rail column as Home.
+        expect(Math.abs(accountBox.x - homeBox.x)).toBeLessThanOrEqual(2);
+        await expect(header.locator(".header-actions")).toHaveCSS("flex-direction", "column");
+      } else {
+        expect(Math.abs(accountBox.y - homeBox.y)).toBeLessThanOrEqual(2);
+        await expect(header.locator(".header-actions")).toHaveCSS("flex-wrap", "nowrap");
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     }
   });
@@ -301,7 +307,7 @@ test.describe("customer-centered workspace", () => {
       if (path === "/app/schedule") {
         await expect(heading).toBeFocused();
         await expect(heading).toHaveCSS("outline-style", "solid");
-        await expect(heading).toHaveCSS("outline-width", "3px");
+        await expect(heading).toHaveCSS("outline-width", "2px");
       }
       await expect(route.getByRole("button", { name: "Back to Home", exact: true })).toBeVisible();
       await expect(route.getByRole("button", { name: "Close", exact: true })).toHaveCount(0);

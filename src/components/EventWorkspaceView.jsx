@@ -13,7 +13,37 @@ import {
   Armchair
 } from "@phosphor-icons/react";
 import { buildEventWorkspacePresentation } from "./eventWorkspacePresentation";
+import { formatWorkspaceMoney } from "../lib/workspacePresentation";
 import StatusChip from "./StatusChip";
+
+function buildQuoteSummaryRows(totals) {
+  if (!totals || !Number.isFinite(Number(totals.total)) || Number(totals.total) <= 0) return null;
+  const part = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const subtotal = part(totals.base) + part(totals.addons) + part(totals.rentals)
+    + part(totals.menu) + part(totals.labor) + part(totals.travel);
+  const feePct = Number(totals.serviceFeePctApplied);
+  const taxPct = Number(totals.taxRateApplied);
+  const rows = [
+    { id: "subtotal", label: "Subtotal", value: formatWorkspaceMoney(subtotal) },
+    {
+      id: "service-fee",
+      label: Number.isFinite(feePct) && feePct > 0 ? `Service charge (${Math.round(feePct * 100)}%)` : "Service charge",
+      value: formatWorkspaceMoney(totals.serviceFee, { emptyLabel: "$0.00" })
+    },
+    {
+      id: "tax",
+      label: Number.isFinite(taxPct) && taxPct > 0 ? `Tax (${(taxPct * 100).toFixed(2).replace(/\.?0+$/, "")}%)` : "Tax",
+      value: formatWorkspaceMoney(totals.tax, { emptyLabel: "$0.00" })
+    }
+  ];
+  return {
+    rows,
+    total: formatWorkspaceMoney(totals.total),
+    deposit: Number.isFinite(Number(totals.deposit)) && Number(totals.deposit) > 0
+      ? formatWorkspaceMoney(totals.deposit)
+      : ""
+  };
+}
 
 const CONTEXT_ICONS = {
   schedule: CalendarBlank,
@@ -96,6 +126,8 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
     soldScopeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
+  const quoteSummary = buildQuoteSummaryRows(quote?.totals);
+
   return (
     <article
       className="event-workspace saved-quote-handoff"
@@ -139,6 +171,8 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
         </div>
       </header>
 
+      <div className="event-workspace-body">
+      <div className="event-main-col">
       <section className="event-triage-grid" aria-label="Current event condition and next action">
         <div className={`event-condition-card is-${model.attention.state}`}>
           <p className="eyebrow">Current condition</p>
@@ -173,6 +207,7 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
             className="event-intelligence-dimension"
             data-intelligence-dimension="readiness"
             data-intelligence-state={model.intelligence.readiness.state}
+            style={{ "--readiness-score": model.intelligence.readiness.score }}
           >
             <span>{model.intelligence.readiness.label}</span>
             <strong>{model.intelligence.readiness.score}%</strong>
@@ -271,30 +306,55 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
         </div>
       </section>
 
-      <div className="event-detail-grid">
-        <section
-          className="event-section event-sold-scope"
-          aria-labelledby="event-scope-title"
-          ref={soldScopeRef}
-          tabIndex={-1}
-        >
-          <div className="event-section-heading">
-            <div>
-              <p className="eyebrow">Sold scope</p>
-              <h2 id="event-scope-title">What this quote records</h2>
-            </div>
-            <span className="event-type-chip">{model.eventTypeLabel}</span>
+      <section
+        className="event-section event-sold-scope"
+        aria-labelledby="event-scope-title"
+        ref={soldScopeRef}
+        tabIndex={-1}
+      >
+        <div className="event-section-heading">
+          <div>
+            <p className="eyebrow">Sold scope</p>
+            <h2 id="event-scope-title">What this quote records</h2>
           </div>
-          <dl className="event-scope-list">
-            {model.soldScope.map((item) => (
-              <div key={item.id} data-scope={item.id}>
-                <dt>{item.label}</dt>
-                <dd>{item.value}</dd>
-                {item.detail && <small>{item.detail}</small>}
+          <span className="event-type-chip">{model.eventTypeLabel}</span>
+        </div>
+        <dl className="event-scope-list">
+          {model.soldScope.map((item) => (
+            <div key={item.id} data-scope={item.id}>
+              <dt>{item.label}</dt>
+              <dd>{item.value}</dd>
+              {item.detail && <small>{item.detail}</small>}
+            </div>
+          ))}
+        </dl>
+      </section>
+      </div>
+
+      <aside className="event-side-rail" aria-label="Quote summary and progress">
+        {quoteSummary && (
+          <section className="event-section event-summary-card" aria-labelledby="event-summary-title">
+            <p className="eyebrow" id="event-summary-title">Quote summary</p>
+            <dl className="event-summary-rows">
+              {quoteSummary.rows.map((row) => (
+                <div key={row.id} data-summary-row={row.id}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="event-summary-total">
+              <span>Total</span>
+              <strong>{quoteSummary.total}</strong>
+            </div>
+            {quoteSummary.deposit && (
+              <div className="event-summary-deposit">
+                <span>Deposit due</span>
+                <strong>{quoteSummary.deposit}</strong>
               </div>
-            ))}
-          </dl>
-        </section>
+            )}
+          </section>
+        )}
 
         <section className="event-section event-lifecycle" aria-labelledby="event-lifecycle-title">
           <div className="event-section-heading">
@@ -312,6 +372,7 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
             ))}
           </ol>
         </section>
+      </aside>
       </div>
 
       <footer className="event-workspace-footer">
