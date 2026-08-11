@@ -125,20 +125,37 @@ Only open work belongs here. Current operational truth lives in
 
 ## P1 - Post-Competitive Pilot Program (branch: claude/quotepilot-post-competitive-15hmny)
 
-The destination design (docs/POST_COMPETITIVE_DESIGN.md) has eight default-off
+The destination design (docs/POST_COMPETITIVE_DESIGN.md) has nine default-off
 pilot surfaces built as source-only candidates: NOW home, Event Room ring +
 decide stack + cascade receipts, guided-selling decide cards, CREATE intake
 with band pricing, the client-request panel with the structured record
-callable, and the Pilot command bar. Remaining program work:
+callable, the Pilot command bar, and the fail-closed margin strip (now with
+Catalog Admin cost entry and a below-target commercial advisor card; see the
+`catalog-cost-and-pricing-data-entry` capability contract). PR #53 merged
+this program's first delivery to `main` on 2026-08-11; every flag remains
+default off. Remaining program work:
 
-- Review and merge the pilot branch, then decide per-flag promotion; each
-  pilot surface has its own default-off `VITE_PILOT_*` build gate and adds
-  no authority while off. Bundle-exception exit (or reviewed recalibration)
-  is required per docs/PERFORMANCE_GUARDRAILS.md before flag promotion.
-- Phase 5 unit economics (high): tenant item/labor costs and a target-margin
-  policy in settings, margin computation in both pricing paths, and the
-  commercial advisor cards; margins must fail closed as "unavailable" until
-  a tenant records costs (design §4.5, §1.3).
+- Decide per-flag promotion for each `VITE_PILOT_*` build gate; every
+  surface adds no authority while off. Bundle-exception exit (or reviewed
+  recalibration) is required per docs/PERFORMANCE_GUARDRAILS.md before
+  flag promotion.
+- Phase 5 unit economics remainder: margin/cost awareness in the *other*
+  pricing path — `pricingBand.js`'s draft-only CREATE intake estimate —
+  was deliberately left out of the cost-entry delivery; that surface is
+  customer-adjacent (shown during intake, before a package is even fully
+  specified) and injecting internal cost data there deserves its own
+  considered pass rather than being folded in under time pressure
+  (design §4.5, §1.3).
+- Bug found while instrumenting Catalog Admin's save-state capability
+  evidence, not yet fixed (out of scope for that slice — a production
+  save-error-recovery behavior change deserves its own focused fix, not a
+  side effect of documentation work): `useCatalogData.js`'s `saveCatalog`
+  returns `{ refreshed: true }` for the "catalog changed while save was in
+  progress" reconciliation path, but `AdminCatalogModal.jsx`'s `handleSave`
+  checks `result?.refreshRequired`. The key-name mismatch means the
+  "Refresh latest catalog" recovery button silently never appears for that
+  (likely the most common) conflict case — only for the rarer case where
+  the post-error reload itself also fails.
 - Structured change-request version linking: extend the
   `recordChangeRequestParse` contract so a resolution can bind the resulting
   quote version after the trusted save, completing intent-to-version audit.

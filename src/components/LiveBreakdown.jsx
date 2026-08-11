@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import { detectBreakdownValueChanges } from "../lib/wizardUi";
 import { buildPricingBand } from "./pricingBand";
-import { buildMarginPresentation } from "./marginPresentation";
+import { buildMarginAdvisorCard, buildMarginPresentation } from "./marginPresentation";
 import DigitRoll from "./DigitRoll";
+import DecisionCard from "./DecisionCard";
 
 // Default-off gate for the staff-only margin strip; costs are tenant catalog
 // data and margin never renders in any customer-facing projection.
@@ -106,6 +107,7 @@ export default function LiveBreakdown({
     () => (PILOT_MARGINS_ENABLED ? buildMarginPresentation({ form, totals, catalog, settings }) : null),
     [form, totals, catalog, settings]
   );
+  const marginAdvisorCard = useMemo(() => buildMarginAdvisorCard(margin), [margin]);
   const effectTimersRef = useRef([]);
   const animationFrameRef = useRef(0);
 
@@ -545,12 +547,17 @@ export default function LiveBreakdown({
                   <span className="pricing-band-label">Margin</span>
                   <strong>{(margin.marginPct * 100).toFixed(1)}%</strong>
                 </p>
-                {margin.targetNote && <p className="pricing-band-note margin-target">{margin.targetNote}</p>}
+                {margin.targetNote && !marginAdvisorCard && <p className="pricing-band-note margin-target">{margin.targetNote}</p>}
                 <p className="pricing-band-note">{margin.note}</p>
               </>
             ) : (
               <p className="pricing-band-note">{margin.note}</p>
             )}
+          </div>
+        )}
+        {marginAdvisorCard && (
+          <div className="now-stream margin-advisor-stream">
+            <DecisionCard {...marginAdvisorCard} />
           </div>
         )}
       </section>

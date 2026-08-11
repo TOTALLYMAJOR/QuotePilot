@@ -23,6 +23,13 @@ import {
 } from "../lib/menuService";
 import { useModalDialog } from "../hooks/useModalDialog";
 
+// Same default-off gate as the staff-only margin strip in LiveBreakdown.jsx;
+// cost entry is only shown once a tenant has opted into the margin pilot,
+// since the fields do nothing on their own until that surface reads them.
+const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
+);
+
 const JSON_FIELD_META = [
   {
     key: "serviceFeeTiers",
@@ -715,6 +722,7 @@ export function AdminCatalogView({
             id,
             name: "",
             ppp: 0,
+            costPpp: null,
             includedMenuItemIds: [],
             includedAddonIds: [],
             includedRentalIds: [],
@@ -727,10 +735,11 @@ export function AdminCatalogView({
               pricingType: "per_person",
               type: "per_person",
               price: 0,
+              cost: null,
               staffRole: "",
               active: true
             }
-          : { id, name: "New Rental", pricingType: "per_item", type: "per_item", price: 0, qtyPerGuests: 10, active: true };
+          : { id, name: "New Rental", pricingType: "per_item", type: "per_item", price: 0, cost: null, qtyPerGuests: 10, active: true };
 
     setDraft((prev) => ({ ...prev, [key]: [...prev[key], template] }));
   };
@@ -779,6 +788,19 @@ export function AdminCatalogView({
       settings: {
         ...prev.settings,
         [field]: Number(value || 0)
+      }
+    }));
+  };
+
+  // Unlike patchNumericSetting, blank must persist as "not recorded" (null),
+  // not 0 — these back fail-closed margin math where an entered $0 and an
+  // unrecorded rate are different facts.
+  const patchNullableNumericSetting = (field, value) => {
+    setDraft((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        [field]: value === "" || value === null || value === undefined ? null : Number(value)
       }
     }));
   };
@@ -1386,6 +1408,27 @@ export function AdminCatalogView({
     }
   };
 
+  // Derived, canonical save-state marker (docs/capability-surfacing-contracts.json
+  // #catalog-cost-and-pricing-data-entry). Mirrors useCatalogData.js's saveCatalog
+  // real outcomes rather than inventing new ones: a concurrent-edit conflict that
+  // reload confirmed is "reconciliation"; a save whose revision matched but whose
+  // secondary pricing confirmation did not land is "uncertain" (data is saved, one
+  // fact about it is not yet confirmed); a reload-itself failure needing a manual
+  // refresh is "recovery"; anything else non-empty while idle is a plain "error".
+  const catalogSaveCapabilityState = saving
+    ? "submitting"
+    : status === "Catalog saved."
+      ? "receipt"
+      : catalogRefreshRequired
+        ? "recovery"
+        : status.includes("pricing is not confirmed for that revision")
+          ? "uncertain"
+          : status.includes("Catalog changed while the save was in progress")
+            ? "reconciliation"
+            : status && status !== "Your changes are not saved yet." && status !== "Settings are up to date."
+              ? "error"
+              : "ready";
+
   const selectedCategoryItems = menuItems.filter((item) => item.categoryId === selectedCategory);
   const featureFlagsLocked = draft.settings?.featureFlagsLocked === true;
   const featureFlagsPaid = Array.isArray(draft.settings?.featureFlagsPaid)
@@ -1601,6 +1644,7 @@ export function AdminCatalogView({
             <span>Package ID</span>
             <span>Display Name</span>
             <span>Price Per Person</span>
+            {PILOT_MARGINS_ENABLED && <span>Cost Per Person</span>}
             <span>Active</span>
             <span>Actions</span>
           </div>
@@ -1622,6 +1666,17 @@ export function AdminCatalogView({
                   value={item.ppp}
                   onChange={(e) => patchArrayItem("packages", i, "ppp", Number(e.target.value))}
                 />
+                {PILOT_MARGINS_ENABLED && (
+                  <input
+                    aria-label={`Package ${i + 1} cost per person`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Not recorded"
+                    value={item.costPpp ?? ""}
+                    onChange={(e) => patchArrayItem("packages", i, "costPpp", e.target.value === "" ? null : Number(e.target.value))}
+                  />
+                )}
                 <label className="admin-inline-toggle">
                   <span>Active</span>
                   <input
@@ -1681,6 +1736,7 @@ export function AdminCatalogView({
             <span>Display Name</span>
             <span>Pricing Type</span>
             <span>Price</span>
+            {PILOT_MARGINS_ENABLED && <span>Cost</span>}
             <span>Active</span>
             <span>Actions</span>
           </div>
@@ -1701,6 +1757,17 @@ export function AdminCatalogView({
                 <option value="per_event">per_event</option>
               </select>
               <input type="number" value={item.price} onChange={(e) => patchArrayItem("addons", i, "price", Number(e.target.value))} />
+              {PILOT_MARGINS_ENABLED && (
+                <input
+                  aria-label={`${item.name || `Add-on ${i + 1}`} cost`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Not recorded"
+                  value={item.cost ?? ""}
+                  onChange={(e) => patchArrayItem("addons", i, "cost", e.target.value === "" ? null : Number(e.target.value))}
+                />
+              )}
               <label className="admin-inline-toggle">
                 <span>Active</span>
                 <input
@@ -1734,6 +1801,17 @@ export function AdminCatalogView({
                 <option value="per_event">per_event</option>
               </select>
               <input type="number" value={item.price} onChange={(e) => patchArrayItem("rentals", i, "price", Number(e.target.value))} />
+              {PILOT_MARGINS_ENABLED && (
+                <input
+                  aria-label={`${item.name || `Rental ${i + 1}`} cost`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Not recorded"
+                  value={item.cost ?? ""}
+                  onChange={(e) => patchArrayItem("rentals", i, "cost", e.target.value === "" ? null : Number(e.target.value))}
+                />
+              )}
               <input type="number" value={item.qtyPerGuests} onChange={(e) => patchArrayItem("rentals", i, "qtyPerGuests", Number(e.target.value))} />
               <label className="admin-inline-toggle">
                 <span>Active</span>
@@ -2031,6 +2109,30 @@ export function AdminCatalogView({
               <small className="admin-field-hint">Event Basics uses this unless a quote-level chef rate override is entered.</small>
               <input type="number" step="0.01" value={draft.settings.chefRate} onChange={(e) => patchNumericSetting("chefRate", e.target.value)} />
             </label>
+            {PILOT_MARGINS_ENABLED && (
+              <>
+                <label>
+                  Server cost rate
+                  <small className="admin-field-hint">Staff-only; what a server actually costs you per hour. Leave blank until recorded — margin stays unavailable rather than guessing.</small>
+                  <input type="number" step="0.01" min="0" placeholder="Not recorded" value={draft.settings.serverCostRate ?? ""} onChange={(e) => patchNullableNumericSetting("serverCostRate", e.target.value)} />
+                </label>
+                <label>
+                  Chef cost rate
+                  <small className="admin-field-hint">Staff-only; what a chef actually costs you per hour.</small>
+                  <input type="number" step="0.01" min="0" placeholder="Not recorded" value={draft.settings.chefCostRate ?? ""} onChange={(e) => patchNullableNumericSetting("chefCostRate", e.target.value)} />
+                </label>
+                <label>
+                  Bartender cost rate
+                  <small className="admin-field-hint">Staff-only; what a bartender actually costs you per hour.</small>
+                  <input type="number" step="0.01" min="0" placeholder="Not recorded" value={draft.settings.bartenderCostRate ?? ""} onChange={(e) => patchNullableNumericSetting("bartenderCostRate", e.target.value)} />
+                </label>
+                <label>
+                  Target margin %
+                  <small className="admin-field-hint">Staff-only comparison line on the margin strip, e.g. 0.45 for 45%. Leave blank to see raw margin with no target comparison.</small>
+                  <input type="number" step="0.01" min="0" max="1" placeholder="Not set" value={draft.settings.targetMarginPct ?? ""} onChange={(e) => patchNullableNumericSetting("targetMarginPct", e.target.value)} />
+                </label>
+              </>
+            )}
             <label>Integration retry limit<input type="number" step="1" min="1" max="10" value={draft.settings.integrationRetryLimit || 3} onChange={(e) => patchNumericSetting("integrationRetryLimit", e.target.value)} /></label>
             <label>Integration audit retention<input type="number" step="1" min="10" max="200" value={draft.settings.integrationAuditRetention || 50} onChange={(e) => patchNumericSetting("integrationAuditRetention", e.target.value)} /></label>
           </div>
@@ -2477,7 +2579,7 @@ export function AdminCatalogView({
           </>
         )}
 
-        <div className="modal-foot">
+        <div className="modal-foot" data-capability-state={catalogSaveCapabilityState}>
           <span className="source-note">
             {status || (hasUnsavedChanges ? "Your changes are not saved yet." : "Settings are up to date.")}
           </span>

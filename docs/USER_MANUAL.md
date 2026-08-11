@@ -1279,6 +1279,31 @@ through the normal path remains the only way changes become a new version.
 If recording fails, the staged draft is unchanged and the action can be
 retried.
 
+## Catalog cost entry and margin advisory
+
+With the pilot margin strip enabled (`VITE_PILOT_MARGINS_ENABLED`), Catalog
+Admin gains cost fields beside the existing price fields — cost per person
+on packages, cost on add-ons and rentals — plus server, chef, and bartender
+cost rates and a target margin % policy in Numeric Settings. Blank always
+means the cost has not been recorded; it is never treated as $0, since an
+entered $0 and an unrecorded cost are different facts.
+
+The live pricing rail's margin strip computes margin only once every
+selected revenue line has a matching recorded cost. Any gap names the exact
+missing pieces instead of estimating. Once a target margin is recorded, a
+quote below it surfaces a below-target commercial advisor card with the
+point-and-dollar gap; meeting or beating the target stays a calm inline
+note, not a card — advisor cards appear only where there is something to
+decide. Costs are staff-only catalog data and never reach any
+customer-facing projection.
+
+Catalog Admin's save flow — ready, saving, a confirmed conflict
+(reconciliation), a saved-but-unconfirmed revision (uncertain), a clean
+success (receipt), a validation error, and a reload-required recovery when
+even reconciliation could not complete — is pre-existing behavior, now
+literally marked for automated coverage; recording a cost uses the exact
+same save path as every other catalog field.
+
 ## Troubleshooting
 - If catalog fails to load in non-dev environments, Firebase catalog access is required and the app blocks edits until resolved.
 - If you see `organizationId is required` errors, the signed-in account is missing tenant context (`userRoles/{uid}.organizationId`) and must be re-provisioned/invited into an organization.

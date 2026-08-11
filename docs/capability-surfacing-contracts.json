@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 9,
+  "catalogVersion": 10,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -3168,6 +3168,147 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "Staff can attest which parsed proposals they staged from one exact customer request and receive an internal, replay-stable audit receipt, while the customer request, quote, portal, versions, and every delivery, acceptance, booking, and payment truth remain exactly as they were; a failed or unavailable record leaves the staged draft untouched."
+    },
+    {
+      "id": "catalog-cost-and-pricing-data-entry",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable.",
+      "backendPaths": [
+        "src/data/mockCatalog.js",
+        "src/hooks/useCatalogData.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/LiveBreakdown.jsx",
+        "src/components/marginPresentation.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/AdminCatalogModal.jsx",
+          "locator": "Server cost rate"
+        },
+        {
+          "path": "src/components/LiveBreakdown.jsx",
+          "locator": "margin-advisor-stream"
+        },
+        {
+          "path": "src/components/marginPresentation.js",
+          "locator": "Below your margin target"
+        }
+      ],
+      "testPaths": [
+        "src/data/__tests__/mockCatalog.costFields.test.js",
+        "src/hooks/__tests__/useCatalogData.savePlan.test.js",
+        "src/components/__tests__/marginPresentation.test.js",
+        "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/data/__tests__/mockCatalog.costFields.test.js",
+          "locator": "a stored Minor-cents null survives as null, not 0 — the bug fromMinorUnits alone would reintroduce"
+        },
+        {
+          "path": "src/hooks/__tests__/useCatalogData.savePlan.test.js",
+          "locator": "writes a recorded cost as Minor-cents and an unset cost as null, never coerced to $0"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "starts ready with no unsaved changes and no message"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reflects submitting while the parent-owned saving prop is true"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "lands on receipt after a clean save"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a plain validation error as error, distinct from a conflict"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a reconciled concurrent-edit conflict as reconciliation"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a saved-but-unconfirmed revision as uncertain"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "offers recovery and its refresh action when reload itself failed"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Catalog cost entry and margin advisory"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Catalog cost entry and margin advisory"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "starts ready with no unsaved changes and no message",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reflects submitting while the parent-owned saving prop is true",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "lands on receipt after a clean save",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a plain validation error as error, distinct from a conflict",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a reconciled concurrent-edit conflict as reconciliation",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a saved-but-unconfirmed revision as uncertain",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "offers recovery and its refresh action when reload itself failed",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff see recorded costs and a below-target margin advisory only when real tenant-recorded evidence supports them; costs never appear to customers, and every save outcome (success, conflict, unconfirmed revision, validation error, or reload-required recovery) is now visibly and distinctly marked instead of collapsing into one generic status line."
     }
   ]
 }

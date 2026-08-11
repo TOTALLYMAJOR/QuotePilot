@@ -33,6 +33,41 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Unit-economics cost entry and a commercial advisor card for the
+  flag-gated margin pilot (`VITE_PILOT_MARGINS_ENABLED`, still default off;
+  docs/POST_COMPETITIVE_DESIGN.md §4.5 and §1.3), completing the data-entry
+  path the fail-closed margin strip needed to ever leave "unavailable" for
+  a real tenant:
+  - Catalog Admin gains cost fields alongside the existing price fields —
+    cost per person on packages, cost on add-ons and rentals — plus staff
+    cost rates (server/chef/bartender) and a target margin % policy in
+    Numeric Settings, all gated behind the same pilot flag. Blank always
+    means "not recorded" and stays `null` through normalize, save, and
+    reload; it is never coerced to $0, since an entered $0 cost and an
+    unrecorded one are different facts and margin must stay unavailable
+    for the latter. Item-level costs persist as nullable Minor-cents
+    (`costPppMinor`/`costMinor`), matching the existing `ppp`/`price`
+    convention; a `fromMinorUnits`-only read would have silently turned a
+    cleared cost back into $0 (`Number(null)` is a safe integer 0), so the
+    normalizer special-cases null before that conversion.
+  - `buildMarginAdvisorCard` turns a below-target margin into a
+    `decide-stack`-style decision card (claim, points-and-dollar gap,
+    basis) rendered inline in the live pricing rail. It stays silent for
+    on-target, no-target, and unavailable margins — restraint over
+    dashboard noise; meeting a target is already confirmed inline by the
+    existing strip text, not re-announced as a card.
+  - Catalog Admin's save flow now carries a literal, derived
+    `data-capability-state` marker (ready/submitting/receipt/error/
+    reconciliation/uncertain/recovery) on every save outcome, covered by
+    the new `catalog-cost-and-pricing-data-entry` capability contract
+    (catalog version 10). Every one of the seven states is a real,
+    pre-existing `useCatalogData.js` save outcome — a confirmed concurrent-
+    edit conflict, a saved-but-pricing-unconfirmed revision, a reload-
+    required recovery, and so on — now named instead of collapsing into
+    one generic status line.
+  - Source-only candidate work — not deployed, flag-promoted, or
+    human-accepted.
+
 - Flag-gated, fail-closed margin strip (`VITE_PILOT_MARGINS_ENABLED`,
   default off; docs/POST_COMPETITIVE_DESIGN.md §4.5 and §1.3). The live
   pricing rail gains a staff-only `margin-presentation-v1` strip that
