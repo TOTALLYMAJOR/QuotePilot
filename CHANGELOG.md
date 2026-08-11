@@ -8,6 +8,24 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Model-assisted intake core module (owner-approved lane, dormant): pure
+  `src/lib/intentParserCore.cjs` implements the ADR's parsing lane with
+  OpenAI and Anthropic as selectable providers — config gate (enabled
+  flag, provider allowlist, per-provider default models), bounded request
+  sanitization, a deterministic strict-JSON prompt, provider request
+  builders that never read the environment, and untrusted-output
+  validation that allowlists fact fields (mirroring the deterministic
+  extractor), bounds values, and forces every surviving fact to low
+  confidence with a model source so humans must confirm before anything
+  touches a draft. Deliberately module-only: the surfacing gate correctly
+  forbids callables without a user-reachable surface, so the
+  `parseIntentDraft` callable ships together with the CREATE canvas
+  integration. Dormant three ways until then — `INTENT_PARSER_ENABLED`,
+  provider selection, and the provider key (`INTENT_PARSER_OPENAI_KEY` /
+  `INTENT_PARSER_ANTHROPIC_KEY`, to be created in Secret Manager by the
+  owner) must all exist. New `model-assisted-intent-parse` contract;
+  README documents the env/secret names.
+
 - Assumptions and per-tenant terms blocks in the customer portal
   (`VITE_PILOT_DECISION_ROOM_ENABLED`), continuing the decided §4.7 block
   decomposition without inventing content: the assumptions block restates

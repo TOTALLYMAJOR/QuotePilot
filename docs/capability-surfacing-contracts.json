@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 16,
+  "catalogVersion": 17,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -3324,6 +3324,61 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "Staff see recorded costs and a below-target margin advisory only when real tenant-recorded evidence supports them; costs never appear to customers, and every save outcome (success, conflict, unconfirmed revision, validation error, or reload-required recovery) is now visibly and distinctly marked instead of collapsing into one generic status line."
+    },
+    {
+      "id": "model-assisted-intent-parse",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Pure core module (src/lib/intentParserCore.cjs; functions/ runtime twin arrives with the integration slice, per the commercialDependencyGraphCore pattern) for the model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11 with OpenAI and Anthropic as selectable providers). Dormant by default and fail-closed three ways: INTENT_PARSER_ENABLED must be true, INTENT_PARSER_PROVIDER must be openai or anthropic, and that provider's key (INTENT_PARSER_OPENAI_KEY / INTENT_PARSER_ANTHROPIC_KEY, read from env until the Secret Manager secrets exist and are bound) must be present — otherwise every request returns a definitive failed-precondition and the deterministic browser extractor remains the availability floor. The model reply is treated as untrusted input: strict-JSON parse, fact-field allowlist mirroring the deterministic extractor, bounded values and counts, and every surviving fact forced to low confidence with a model source so the CREATE canvas requires human confirmation. Persists nothing; no UI reads it yet — headless until the CREATE integration slice, which will bring its own user-relevant review. The parseIntentDraft callable export deliberately does NOT ship in this revision: the surfacing gate correctly requires every callable to be user-reachable, so the export lands together with the CREATE canvas integration in the next slice.",
+      "backendPaths": [
+        "src/lib/intentParserCore.cjs"
+      ],
+      "backendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/intentParser.server.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/intentParser.server.test.js",
+          "locator": "is disabled with provider none by default, and rejects unknown providers back to none"
+        },
+        {
+          "path": "src/lib/__tests__/intentParser.server.test.js",
+          "locator": "forces every surviving fact to low confidence with a model source, allowlisting fields"
+        },
+        {
+          "path": "src/lib/__tests__/intentParser.server.test.js",
+          "locator": "unreadable model output extracts nothing rather than guessing"
+        }
+      ],
+      "documentationPaths": [
+        "docs/INTENT_INTAKE_ADR.md",
+        "docs/FEATURE_MATRIX.md",
+        "README.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/INTENT_INTAKE_ADR.md",
+          "locator": "Allows the trusted parse callable to run at all"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Model-assisted intent parse module"
+        },
+        {
+          "path": "README.md",
+          "locator": "INTENT_PARSER_OPENAI_KEY"
+        }
+      ],
+      "safeOutcome": "With the lane disabled (the shipped default) every call fails closed with a named precondition and nothing reaches any provider; enabled, the parse returns only bounded, allowlisted, low-confidence facts a human must confirm, persists nothing, and never becomes pricing or saving authority.",
+      "headlessReason": "Pure core module with no runtime reachability: it exports config/sanitize/prompt/validate helpers consumed only by unit tests until the CREATE canvas integration slice ships the parseIntentDraft callable together with its staff-facing entry point, states, and a user_relevant contract. Shipping the module first keeps the callable from ever existing without a user-reachable surface, which the surfacing gate correctly forbids; until then nothing can invoke a provider because no export, flag, or key exists."
     }
   ]
 }

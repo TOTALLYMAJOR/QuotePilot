@@ -207,7 +207,15 @@ the owner asks for the merge.
     view/interaction telemetry gets built for now; revisit post-pilot
     with an explicit privacy-posture review if wanted.
 - Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md — decided: yes,
-  with BOTH OpenAI and Anthropic as selectable providers. Trusted
+  with BOTH OpenAI and Anthropic as selectable providers. The pure core
+  module is built and tested (src/lib/intentParserCore.cjs, contract
+  model-assisted-intent-parse): config gate, sanitization, strict-JSON
+  prompt, provider request builders, untrusted-output validation forcing
+  low confidence. Next: the CREATE canvas integration slice ships the
+  functions/ runtime twin plus the parseIntentDraft callable (staff-only,
+  same-org, stateless; add .runWith secrets binding when the owner creates
+  INTENT_PARSER_OPENAI_KEY / INTENT_PARSER_ANTHROPIC_KEY) under a
+  user_relevant contract with full state evidence. Trusted
   `parseIntentDraft` callable behind `INTENT_PARSER_ENABLED=false` /
   provider `none` (defaults unchanged: off, deterministic lane remains the
   availability floor), Secret Manager-bound keys, full backend capability

@@ -279,6 +279,17 @@ Optional:
   field, or trust boundary; a seeded draft never overwrites text the
   customer already typed or an unresolved send attempt.)
 
+- `INTENT_PARSER_ENABLED` / `INTENT_PARSER_PROVIDER` / `INTENT_PARSER_MODEL`
+  (server env, all dormant by default: `false` / `none` / per-provider
+  default. The owner-approved model-assisted intake lane; providers
+  `openai` and `anthropic`. Enabling later requires creating the
+  `INTENT_PARSER_OPENAI_KEY` and/or `INTENT_PARSER_ANTHROPIC_KEY` secrets
+  in Firebase Secret Manager and binding them to the parse callable when
+  it ships with the CREATE integration; until every piece exists, parsing
+  fails closed with a named precondition and the deterministic browser
+  extractor remains the availability floor. See
+  `docs/INTENT_INTAKE_ADR.md`.)
+
 The governed Firebase and Vercel production workflows source-bind all eight
 pilot gates above to `true` — the first seven since the `v0.6.0`
 production artifact, the decision-room gate by owner decision on 2026-08-11,
