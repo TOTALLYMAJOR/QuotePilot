@@ -13,6 +13,7 @@ import {
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import CreateIntake from "./components/CreateIntake";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
+import PilotCommandBar from "./components/PilotCommandBar";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
 import { isDefinitiveRecordError, recordChangeRequestParse } from "./lib/changeRequestRecordClient";
 import { useEventType } from "./context/EventTypeContext";
@@ -196,6 +197,12 @@ const PILOT_CREATE_ENABLED = ["1", "true", "yes", "on"].includes(
 // only; the ordinary save path remains the sole versioning authority.
 const PILOT_CHANGE_REQUESTS_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_CHANGE_REQUESTS_ENABLED || "").trim().toLowerCase()
+);
+// The Pilot command bar is an additional default-off presentation gate.
+// Commands preview before anything touches the draft; applying stages
+// draft edits only, and the save path remains the sole authority.
+const PILOT_COMMAND_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_COMMAND_ENABLED || "").trim().toLowerCase()
 );
 
 const INITIAL_FORM = {
@@ -3640,6 +3647,15 @@ export default function App({ tenantContext, authSession }) {
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
+        {PILOT_COMMAND_ENABLED && (
+          <PilotCommandBar
+            form={form}
+            catalog={catalog}
+            settings={effectiveSettings}
+            styles={Object.keys(STAFF_RULES)}
+            onStageProposal={stageChangeRequestProposal}
+          />
+        )}
         {PILOT_CREATE_ENABLED
           && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
           && !editingQuote.id && (

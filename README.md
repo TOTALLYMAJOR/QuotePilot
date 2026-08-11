@@ -250,6 +250,14 @@ Optional:
   path remains the sole versioning and re-pricing authority, and nothing is
   sent to the customer. Purely presentational; not a deployment or
   acceptance decision.)
+- `VITE_PILOT_COMMAND_ENABLED` (default off. Adds the Pilot command bar to
+  the quote builder: plain-words commands are parsed by the same
+  deterministic change grammar as client requests and always preview with
+  a priced delta before anything can be applied to the draft; applying
+  stages ordinary editable draft edits, and saving still re-prices on the
+  server. Voice input appears only when the browser provides speech
+  recognition. Purely presentational; not a deployment or acceptance
+  decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

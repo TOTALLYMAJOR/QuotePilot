@@ -8,6 +8,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Flag-gated Pilot command bar in the quote builder
+  (`VITE_PILOT_COMMAND_ENABLED`, default off). One input over the draft:
+  plain-words commands ("add another bartender", "switch to buffet",
+  "what if we are at 150 guests") are parsed by the same deterministic
+  `change-request-parse-v1` grammar used for client requests, and every
+  parsed proposal previews with its live fee-and-tax-cascade delta BEFORE
+  anything can be applied — the preview-confirm contract. Applying stages
+  ordinary editable draft edits through the existing touched-field-safe
+  handler; ambiguous references ask instead of guessing; unreadable
+  commands say so and change nothing; and saving remains the sole
+  re-pricing and versioning authority. Voice dictation appears only when
+  the browser itself provides speech recognition and degrades to typing
+  otherwise. Purely presentational; source-only candidate work — not
+  deployed, flag-promoted, or human-accepted.
+
 - Cascade receipts panel in the flag-gated pilot Event Room
   (`VITE_PILOT_EVENT_ROOM_ENABLED`). For accepted or booked quotes, the
   Event Workspace side rail renders the commercial afterlife as a receipt
