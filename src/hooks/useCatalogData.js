@@ -840,7 +840,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           if (reconciledSuccess) {
             return { ok: true, reconciled: true };
           }
-          return { ok: false, error: recoveryError, refreshed: true };
+          return { ok: false, error: recoveryError, refreshRequired: true };
         } catch (reloadError) {
           recordDiagnosticError(reloadError, {
             surface: "catalog",
@@ -959,7 +959,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         if (reconciledSuccess) {
           return { ok: true, reconciled: true };
         }
-        return { ok: false, error: recoveryError, refreshed: true };
+        return { ok: false, error: recoveryError, refreshRequired: true };
       } catch (reloadError) {
         recordDiagnosticError(reloadError, {
           surface: "catalog",

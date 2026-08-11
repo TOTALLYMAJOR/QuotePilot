@@ -8,6 +8,19 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Catalog Admin's "Refresh latest catalog" recovery button silently never
+  appeared for the most common save/starter-pack-apply conflict outcome —
+  a concurrent edit that the post-error reload successfully detected and
+  reported. `useCatalogData.js`'s `saveCatalog` and `stageStarterPack` both
+  returned `{ refreshed: true }` for that path, but `AdminCatalogModal.jsx`
+  checks `result?.refreshRequired`; the key-name mismatch meant only the
+  rarer case (the reload itself also failing) ever surfaced the button.
+  Found while instrumenting Catalog Admin's save flow with literal
+  `data-capability-state` markers for the `catalog-cost-and-pricing-data-entry`
+  capability contract, registered separately, and fixed on its own once
+  isolated. Not gated by any pilot flag — this is already-shipped,
+  always-active behavior.
+
 - Two correctness bugs in pilot source (`VITE_PILOT_MARGINS_ENABLED`,
   `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, `VITE_PILOT_COMMAND_ENABLED`),
   caught by automated PR review before merge:

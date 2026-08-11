@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 11,
+  "catalogVersion": 12,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -3185,7 +3185,7 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -3275,8 +3275,8 @@
           "locator": "## Catalog cost entry and margin advisory"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixes a real bug in that reviewed save/reconciliation machinery (useCatalogData.js returned refreshed instead of the refreshRequired key AdminCatalogModal.jsx checks, for both saveCatalog and stageStarterPack) with no change to any UI, state, or export — verified_existing rather than changed, since the surface itself is unmodified.",
       "stateEvidence": [
         {
           "state": "ready",

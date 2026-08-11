@@ -143,16 +143,6 @@ default off. Remaining program work:
   surface adds no authority while off. Bundle-exception exit (or reviewed
   recalibration) is required per docs/PERFORMANCE_GUARDRAILS.md before
   flag promotion.
-- Bug found while instrumenting Catalog Admin's save-state capability
-  evidence, not yet fixed (out of scope for that slice — a production
-  save-error-recovery behavior change deserves its own focused fix, not a
-  side effect of documentation work): `useCatalogData.js`'s `saveCatalog`
-  returns `{ refreshed: true }` for the "catalog changed while save was in
-  progress" reconciliation path, but `AdminCatalogModal.jsx`'s `handleSave`
-  checks `result?.refreshRequired`. The key-name mismatch means the
-  "Refresh latest catalog" recovery button silently never appears for that
-  (likely the most common) conflict case — only for the rarer case where
-  the post-error reload itself also fails.
 - Proposal decision room: portal upgrade with staff-marked decidable
   options, per-block questions through the existing conversation rail, and
   interpreted (portal-visit-only) activity counsel (design §4.7).
