@@ -2582,6 +2582,13 @@ export default function App({ tenantContext, authSession }) {
       organizationId: quote.organizationId || authSession.organizationId || "",
       rebooking: quote.rebooking && typeof quote.rebooking === "object"
         ? quote.rebooking
+        : null,
+      // Presentation context only: the client-request panel needs the stored
+      // request to render beside the editor. Carrying the snapshot grants no
+      // authority — the panel stages draft edits and the trusted save path
+      // remains the sole versioning authority.
+      portalDecision: quote.portalDecision && typeof quote.portalDecision === "object"
+        ? quote.portalDecision
         : null
     });
     setQuoteDirty(false);

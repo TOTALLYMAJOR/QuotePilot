@@ -163,6 +163,15 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- The flag-gated client-request panel now actually receives the stored
+  customer request in the real edit flow: `handleEditQuote` carries the
+  quote's `portalDecision` snapshot into the editing context (presentation
+  context only — staging and the trusted save path are unchanged).
+  Previously the panel's mount condition could never be satisfied because
+  the editing context stored only identity fields; caught during a
+  full-app screenshot walkthrough rather than by the panel's prop-driven
+  unit tests.
+
 - Clean CI installs now declare the `jsdom` test runtime required by Vitest
   component suites, removing reliance on a previously populated local
   `node_modules` tree.
