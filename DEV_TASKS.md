@@ -225,13 +225,13 @@ the owner asks for the merge.
   contract required. Owner action needed at enable time: create the
   Secret Manager secrets for the chosen provider key(s); the code ships
   dormant without them.
-- Deterministic intake reader, next capture families (owner-directed
-  strongest-deterministic goal, 2026-08-11): time ranges producing both a
-  start time and computed service hours ("6pm to 10pm", incl. cross-
-  midnight); reversed guest phrasing ("party of 50", "headcount of 80");
-  reversed dates ("the 12th of September"); relative dates ("next
-  Saturday") at confirm-required confidence only. Run each addition
-  through the same adversarial verification round before commit.
+- Deterministic intake reader (owner-directed strongest-deterministic
+  goal): staff counts, time ranges, party-of-N, reversed dates, and
+  confirm-only relative weekdays are all built and adversarially
+  verified. Remaining candidate families, same verification bar:
+  written-out guest counts ("eighty guests"), "noon"/"midnight",
+  multi-day mentions, and venue-name capitalization heuristics beyond
+  the current "at X" pattern.
 - Memory defaults (design §4.10) — decided scope for the first slice:
   event-shape memory (staffing/hours/rentals by event type and guest band,
   aggregated deterministically from the tenant's own saved quotes),

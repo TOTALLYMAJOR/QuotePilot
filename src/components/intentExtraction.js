@@ -86,6 +86,22 @@ function extractGuests(text) {
       };
     }
   }
+  const reversed = text.match(/\b(?:party|group|headcount|head\s+count|guest\s+count)\s+of\s+(\d{1,4})\b/i);
+  if (reversed) {
+    const value = Number(reversed[1]);
+    if (value > 0 && value <= 2000) {
+      return {
+        id: "guests",
+        field: "guests",
+        label: "Guest count",
+        value,
+        displayValue: `${value} guests`,
+        confidence: "high",
+        kind: "exact",
+        source: excerpt(reversed)
+      };
+    }
+  }
   const exact = text.match(new RegExp(`\\b(\\d{1,4})\\s*${GUEST_NOUN}\\b`, "i"));
   if (exact) {
     const value = Number(exact[1]);
@@ -120,9 +136,9 @@ function extractDate(text, nowDate) {
       return { id: "date", field: "date", label: "Event date", value, displayValue: value, confidence: "high", source: excerpt(usFull) };
     }
   }
-  const monthName = text.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(20\d{2}))?\b/i);
+  const monthName = text.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(20\d{2}))?\b/i);
   if (monthName) {
-    const month = MONTHS[monthName[1].toLowerCase()];
+    const month = MONTHS[monthName[1].toLowerCase().slice(0, 3)];
     const day = Number(monthName[2]);
     const year = monthName[3] ? Number(monthName[3]) : inferYear(month, day, nowDate);
     const value = isoFromParts(year, month, day);
@@ -138,6 +154,24 @@ function extractDate(text, nowDate) {
       };
     }
   }
+  const reversedDate = text.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+of\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?(?:,?\s*(20\d{2}))?\b/i);
+  if (reversedDate) {
+    const month = MONTHS[reversedDate[2].toLowerCase().slice(0, 3)];
+    const day = Number(reversedDate[1]);
+    const year = reversedDate[3] ? Number(reversedDate[3]) : inferYear(month, day, nowDate);
+    const value = isoFromParts(year, month, day);
+    if (value) {
+      return {
+        id: "date",
+        field: "date",
+        label: "Event date",
+        value,
+        displayValue: value,
+        confidence: reversedDate[3] ? "high" : "medium",
+        source: excerpt(reversedDate)
+      };
+    }
+  }
   const usShort = text.match(/\b(\d{1,2})\/(\d{1,2})\b(?!\/)/);
   if (usShort) {
     const month = Number(usShort[1]);
@@ -149,11 +183,113 @@ function extractDate(text, nowDate) {
       }
     }
   }
+  // Relative weekdays are computable from today's date, but "next Friday"
+  // genuinely means different days to different people — so the computed
+  // date is only ever a confirm-required suggestion, never auto-applied.
+  const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const relative = text.match(/\b(this|next)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i);
+  if (relative) {
+    const target = WEEKDAYS.indexOf(relative[2].toLowerCase());
+    const base = new Date(nowDate.getTime());
+    let ahead = (target - base.getDay() + 7) % 7;
+    if (ahead === 0) ahead = 7;
+    if (relative[1].toLowerCase() === "next") ahead += 7;
+    base.setDate(base.getDate() + ahead);
+    const value = isoFromParts(base.getFullYear(), base.getMonth() + 1, base.getDate());
+    if (value) {
+      return {
+        id: "date",
+        field: "date",
+        label: "Event date",
+        value,
+        displayValue: `${value} (read from "${clean(relative[0])}")`,
+        confidence: "low",
+        source: excerpt(relative)
+      };
+    }
+  }
   return null;
 }
 
+// A time range is two literal facts in one phrase: the start time AND the
+// service duration ("6pm to 10pm" = 18:00 start, 4 hours; "8pm to 1am"
+// crosses midnight = 5 hours). The end must carry an explicit am/pm; a
+// bare start digit inherits the end's meridiem the way people write
+// "6-10pm", at medium confidence since it is inferred. Both facts always
+// carry the full range as their source.
+function extractTimeRange(text) {
+  // Guards from the adversarial round: a start digit directly after a
+  // month name is a DATE's day, not a start time ("September 6 until
+  // 10pm"); and a range in contact/office context is not an event time
+  // ("call me 9am-5pm at ...").
+  const match = text.match(
+    /(?<!\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s{1,3})(?<!\b(?:call|reach|contact|available|office|business)\b[^.?!\n]{0,24})\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to|until|till)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i
+  );
+  if (!match) return null;
+  const to24 = (hourRaw, meridiem) => {
+    let hour = Number(hourRaw);
+    if (!(hour >= 1 && hour <= 12)) return null;
+    const isPm = meridiem.toLowerCase() === "pm";
+    if (isPm && hour !== 12) hour += 12;
+    if (!isPm && hour === 12) hour = 0;
+    return hour;
+  };
+  const endMeridiem = match[6];
+  // An inherited meridiem must yield a same-day span; if it wraps
+  // midnight, the writer almost certainly meant the opposite meridiem
+  // ("10-9pm" is 10am-9pm, not a 23-hour wraparound). If neither
+  // interpretation stays same-day, extract nothing rather than guess.
+  let startMeridiem = match[3] || endMeridiem;
+  let startHour = to24(match[1], startMeridiem);
+  const endHour = to24(match[4], endMeridiem);
+  if (!match[3] && startHour !== null && endHour !== null) {
+    const wraps = (h) => (endHour * 60 + (match[5] ? Number(match[5]) : 0))
+      <= (h * 60 + (match[2] ? Number(match[2]) : 0));
+    if (wraps(startHour)) {
+      const flipped = to24(match[1], endMeridiem.toLowerCase() === "pm" ? "am" : "pm");
+      if (flipped === null || wraps(flipped)) return null;
+      startMeridiem = endMeridiem.toLowerCase() === "pm" ? "am" : "pm";
+      startHour = flipped;
+    }
+  }
+  const startMinutes = match[2] ? Number(match[2]) : 0;
+  const endMinutes = match[5] ? Number(match[5]) : 0;
+  if (startHour === null || endHour === null || startMinutes > 59 || endMinutes > 59) return null;
+  const startTotal = startHour * 60 + startMinutes;
+  let endTotal = endHour * 60 + endMinutes;
+  if (endTotal <= startTotal) endTotal += 24 * 60;
+  const rawHours = (endTotal - startTotal) / 60;
+  const duration = Math.min(MAX_EVENT_HOURS, Math.max(MIN_EVENT_HOURS, Math.round(rawHours)));
+  const confidence = match[3] ? "high" : "medium";
+  const timeValue = `${pad2(startHour)}:${pad2(startMinutes)}`;
+  return {
+    time: {
+      id: "time",
+      field: "time",
+      label: "Start time",
+      value: timeValue,
+      displayValue: timeValue,
+      confidence,
+      source: excerpt(match)
+    },
+    hours: {
+      id: "hours",
+      field: "hours",
+      label: "Service hours",
+      value: duration,
+      displayValue: duration === Math.round(rawHours)
+        ? `${duration} hours (from the ${clean(match[0])} range)`
+        : `${Math.round(rawHours)} in the range (builder bound: ${duration})`,
+      confidence,
+      source: excerpt(match)
+    }
+  };
+}
+
 function extractTime(text) {
-  const meridiem = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  // Same contact-context guard as extractTimeRange: "call me after 9am"
+  // is availability, not an event start.
+  const meridiem = text.match(/(?<!\b(?:call|reach|contact|available|office|business)\b[^.?!\n]{0,24})\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
   if (meridiem) {
     let hour = Number(meridiem[1]);
     const minutes = meridiem[2] ? Number(meridiem[2]) : 0;
@@ -384,11 +520,15 @@ export function extractIntentDraft(text, { eventTypes = [], styles = [], nowDate
     return { modelId: INTENT_EXTRACTION_MODEL, facts: [], needsConfirmation: [], notes: [], draft: {}, empty: true };
   }
 
+  // A time range supplies both start time and duration; an explicit
+  // "N hours" phrase is more literal than a computed span, so it wins.
+  const timeRange = extractTimeRange(trimmed);
+  const explicitHours = extractHours(trimmed);
   const facts = [
     extractGuests(trimmed),
     extractDate(trimmed, nowDate),
-    extractTime(trimmed),
-    extractHours(trimmed),
+    timeRange ? timeRange.time : extractTime(trimmed),
+    explicitHours || (timeRange ? timeRange.hours : null),
     extractEmail(trimmed),
     extractPhone(trimmed),
     ...extractStaffCounts(trimmed),

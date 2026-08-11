@@ -8,6 +8,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Four more deterministic capture families in the CREATE reader, each
+  through the same adversarial verification round: time ranges fill both
+  start time and computed service hours ("6pm to 10pm" -> 18:00 + 4h,
+  cross-midnight "8pm to 1am" -> 5h, explicit "N hours" always wins);
+  "party of 50"/"headcount of 80" reversed guest phrasing; "the 12th of
+  September" reversed dates; and this/next-weekday relative dates,
+  computed but only ever confirm-required. The verification round's five
+  confirmed misfires are all fixed and locked in as regression tests:
+  contact-hours context ("call me 9am-5pm") extracts no event time,
+  a month's day digit is never stolen as a start time ("September 6
+  until 10pm"), an inherited meridiem that would wrap midnight flips to
+  the same-day reading ("10-9pm" -> 10:00, 11h) or extracts nothing,
+  month-prefix words ("decent", "maybe") no longer read as dates, and an
+  explicit numeric date always beats a relative-weekday mention.
+
 - Stronger deterministic intake reading: the CREATE reader now extracts
   staff counts (servers/chefs/bartenders, with waiter/waitstaff/cook/
   barkeep synonyms) from digits, small word-numbers, and ranges (midpoint

@@ -149,4 +149,57 @@ describe("extractIntentDraft", () => {
       expect(result.needsConfirmation.filter((fact) => ["servers", "chefs", "bartenders"].includes(fact.field)), text).toEqual([]);
     }
   });
+
+  test("reads a time range as both start time and computed service hours, including cross-midnight", () => {
+    const evening = run("Dinner from 6pm to 10pm at the hall.");
+    expect(evening.draft.time).toBe("18:00");
+    expect(evening.draft.hours).toBe(4);
+    const late = run("Reception 8pm to 1am.");
+    expect(late.draft.time).toBe("20:00");
+    expect(late.draft.hours).toBe(5);
+  });
+
+  test("a bare start digit inherits the end meridiem, and an explicit hours phrase beats the computed span", () => {
+    const inherited = run("Something like 6-10pm works.");
+    expect(inherited.draft.time).toBe("18:00");
+    expect(inherited.draft.hours).toBe(4);
+    const explicit = run("From 6pm to 10pm, but only 3 hours of service.");
+    expect(explicit.draft.hours).toBe(3);
+    expect(explicit.draft.time).toBe("18:00");
+  });
+
+  test("reads reversed guest and date phrasing", () => {
+    const result = run("A party of 50 on the 12th of September.");
+    expect(result.draft.guests).toBe(50);
+    expect(result.draft.date).toBe("2026-09-12");
+  });
+
+  test("relative weekdays are computed but only ever confirm-required", () => {
+    const result = run("Ideally next Saturday.");
+    expect(result.draft.date).toBeUndefined();
+    const pending = result.needsConfirmation.find((fact) => fact.field === "date");
+    expect(pending.confidence).toBe("low");
+    expect(pending.value).toBe("2026-08-22");
+  });
+
+  test("verifier regressions: contact hours, month-day theft, wraparound, and month-prefix words extract nothing wrong", () => {
+    const contact = run("Call me 9am-5pm at 555-867-5309.");
+    expect(contact.draft.time).toBeUndefined();
+    expect(contact.draft.hours).toBeUndefined();
+
+    const monthDay = run("The party is September 6 until 10pm.");
+    expect(monthDay.draft.date).toBe("2026-09-06");
+    expect(monthDay.draft.time).toBe("22:00");
+    expect(monthDay.draft.hours).toBeUndefined();
+
+    const flipped = run("Open house 10-9pm.");
+    expect(flipped.draft.time).toBe("10:00");
+    expect(flipped.draft.hours).toBe(11);
+
+    const decent = run("we want 2 of decent size and maybe 15 more");
+    expect(decent.draft.date).toBeUndefined();
+
+    const shadowed = run("Dinner next Friday 8/21 at 6pm.");
+    expect(shadowed.draft.date).toBe("2026-08-21");
+  });
 });
