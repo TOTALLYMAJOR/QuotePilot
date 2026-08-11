@@ -1,6 +1,6 @@
 {
-  "schema": "com.mbmapps.quotepilot.release-uat-checklist/v2",
-  "version": "2026-08-04.10",
+  "schema": "com.mbmapps.quotepilot.release-uat-checklist/v3",
+  "version": "2026-08-11.13",
   "maximumAttestationAgeHours": 24,
   "items": [
     {
@@ -149,9 +149,32 @@
       "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
     },
     {
+      "id": "sms.deployment-owned-provider",
+      "label": "The owner-SMS provider remains deployment-owned and accepts only none, twilio, or pingram; the browser cannot change it and exposes no credential, full phone number, private provider identifier, outbox, attempt, binding, control, rate-limit, or webhook-inbox record. Each enabled provider proves its shared SMS_CONTACT_DIGEST_SECRET binding without recording the value. A Pingram promotion additionally proves Secret Manager bindings for PINGRAM_API_KEY and PINGRAM_WEBHOOK_SECRET; one exact approved US, CA, or EU API origin; a new lowercase configuration generation; a server-owned E.164 owner destination; explicit consent; approved sender and applicable A2P/compliance state; the exact registered signed-webhook endpoint; and an immediate disable/rollback path. The scope remains existing one-way owner alerts only, not customer or two-way SMS.",
+      "targets": ["firebase-backend", "firebase-all"]
+    },
+    {
+      "id": "sms.owner-alert-surface",
+      "label": "The admin-only Integrations Ops surface reports the deployment-owned owner-SMS choice, non-secret runtime-field completeness, and recorded outcome evidence without inferring credential presence, offering provider selection, or exposing credentials, full phone numbers, private provider identity, or private journal records. It labels provider request acceptance as distinct from carrier delivery, directs an indeterminate request to reconciliation rather than retry, and describes the feature as existing one-way owner alerts only, not customer or two-way SMS.",
+      "targets": ["firebase-hosting", "firebase-all", "vercel"]
+    },
+    {
+      "id": "sms.pingram-signed-lifecycle",
+      "label": "One controlled owner-only Pingram UAT reserves one idempotent private attempt, permits one provider dispatch claim, and records request acceptance without calling it carrier delivery. A valid signed webhook inbox receipt establishes delivered or failed, a callback arriving before its provider binding is reprocessed after binding, structured uncertain tracking remains reconcilable, semantic replay is deduplicated, stale or tampered signatures fail closed, and an induced claimed or indeterminate outcome stays locked without an automatic or operator-created duplicate send. The signed delivered diagnostic proves readiness only for its exact configuration generation; signed unsubscribe or exact inbound STOP creates an indefinite v1 hold on all owner SMS sends across provider selection, with no browser or callable clear path. Recipient-device receipt, if checked, is recorded separately from provider acceptance and delivery evidence.",
+      "targets": ["firebase-backend", "firebase-all"],
+      "smsProviders": ["pingram"]
+    },
+    {
+      "id": "sms.twilio-controlled-lifecycle",
+      "label": "One controlled owner-only Twilio UAT reserves one idempotent private attempt, permits one provider dispatch claim, records request acceptance without calling it carrier delivery, and leaves a claimed or indeterminate provider outcome locked without an automatic or operator-created duplicate send. SMS_CONTACT_DIGEST_SECRET is bound without recording its value, and a pre-existing owner-SMS channel hold remains effective across the provider selection.",
+      "targets": ["firebase-backend", "firebase-all"],
+      "smsProviders": ["twilio"]
+    },
+    {
       "id": "sms.disabled-nonblocking",
       "label": "With SMS disabled, the SMS test reports disabled or not configured without blocking the core quote flow.",
-      "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"]
+      "targets": ["firebase-hosting", "firebase-backend", "firebase-all", "vercel"],
+      "smsProviders": ["none"]
     }
   ]
 }

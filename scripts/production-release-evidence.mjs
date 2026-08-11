@@ -114,7 +114,7 @@ export const RELEASE_APPROVAL_MODES = Object.freeze([
 ]);
 
 const RELEASE_UAT_CHECKLIST_SCHEMA =
-  "com.mbmapps.quotepilot.release-uat-checklist/v2";
+  "com.mbmapps.quotepilot.release-uat-checklist/v3";
 const RELEASE_UAT_TARGETS = Object.freeze([
   "firebase-hosting",
   "firebase-backend",
@@ -128,9 +128,46 @@ const RELEASE_UAT_CHECKLIST_KEYS = Object.freeze([
   "version"
 ]);
 const RELEASE_UAT_ITEM_KEYS = Object.freeze(["id", "label", "targets"]);
+const RELEASE_UAT_CONDITIONAL_ITEM_KEYS = Object.freeze([
+  "id",
+  "label",
+  "smsProviders",
+  "targets"
+]);
+export const RELEASE_SMS_PROVIDERS = Object.freeze(["none", "twilio", "pingram"]);
 
 function evidenceError(message) {
   return new Error(`Release evidence rejected: ${message}`);
+}
+
+export function parseReleaseSmsProvider(value) {
+  const provider = String(value || "").trim().toLowerCase();
+  if (!RELEASE_SMS_PROVIDERS.includes(provider)) {
+    throw evidenceError("the SMS provider must be none, twilio, or pingram.");
+  }
+  return provider;
+}
+
+export function parseReleaseSmsConfigurationGeneration(value, smsProviderValue) {
+  const provider = parseReleaseSmsProvider(smsProviderValue);
+  const generation = String(value || "").trim().toLowerCase();
+  if (provider !== "pingram") {
+    if (generation !== "not-applicable") {
+      throw evidenceError(
+        "the SMS configuration generation must be not-applicable unless Pingram is selected."
+      );
+    }
+    return generation;
+  }
+  if (
+    generation === "not-applicable"
+    || !/^[a-z0-9][a-z0-9._-]{2,63}$/.test(generation)
+  ) {
+    throw evidenceError(
+      "the Pingram SMS configuration generation must be a 3-64 character lowercase deployment generation."
+    );
+  }
+  return generation;
 }
 
 function requireFullSha(value, field) {
@@ -178,7 +215,7 @@ function readChecklist(root = ROOT) {
     || JSON.stringify(Object.keys(checklist).sort())
       !== JSON.stringify(RELEASE_UAT_CHECKLIST_KEYS)
   ) {
-    throw evidenceError("the release UAT checklist fields do not match the v2 contract.");
+    throw evidenceError("the release UAT checklist fields do not match the v3 contract.");
   }
   if (
     typeof checklist.version !== "string"
@@ -193,15 +230,24 @@ function readChecklist(root = ROOT) {
   const itemIdsByTarget = Object.fromEntries(
     RELEASE_UAT_TARGETS.map((target) => [target, []])
   );
+  const itemIdsByTargetAndSmsProvider = Object.fromEntries(
+    RELEASE_UAT_TARGETS.map((target) => [
+      target,
+      Object.fromEntries(RELEASE_SMS_PROVIDERS.map((provider) => [provider, []]))
+    ])
+  );
   const itemIds = [];
   for (const item of checklist.items) {
     if (
       !item
       || typeof item !== "object"
       || Array.isArray(item)
-      || JSON.stringify(Object.keys(item).sort()) !== JSON.stringify(RELEASE_UAT_ITEM_KEYS)
+      || ![
+        JSON.stringify(RELEASE_UAT_ITEM_KEYS),
+        JSON.stringify(RELEASE_UAT_CONDITIONAL_ITEM_KEYS)
+      ].includes(JSON.stringify(Object.keys(item).sort()))
     ) {
-      throw evidenceError("a release UAT checklist item does not match the v2 contract.");
+      throw evidenceError("a release UAT checklist item does not match the v3 contract.");
     }
     const itemId = typeof item.id === "string" ? item.id : "";
     const label = typeof item.label === "string" ? item.label : "";
@@ -224,6 +270,19 @@ function readChecklist(root = ROOT) {
     ) {
       throw evidenceError(`release UAT checklist item ${itemId} has invalid target applicability.`);
     }
+    const smsProviders = Object.hasOwn(item, "smsProviders")
+      ? item.smsProviders
+      : RELEASE_SMS_PROVIDERS;
+    if (
+      !Array.isArray(smsProviders)
+      || smsProviders.length === 0
+      || smsProviders.some((provider) => (
+        typeof provider !== "string" || !RELEASE_SMS_PROVIDERS.includes(provider)
+      ))
+      || new Set(smsProviders).size !== smsProviders.length
+    ) {
+      throw evidenceError(`release UAT checklist item ${itemId} has invalid SMS-provider applicability.`);
+    }
     const appliesToFirebaseHosting = item.targets.includes("firebase-hosting");
     const appliesToFirebaseBackend = item.targets.includes("firebase-backend");
     const appliesToFirebaseAll = item.targets.includes("firebase-all");
@@ -235,7 +294,12 @@ function readChecklist(root = ROOT) {
       );
     }
     itemIds.push(itemId);
-    for (const target of item.targets) itemIdsByTarget[target].push(itemId);
+    for (const target of item.targets) {
+      itemIdsByTarget[target].push(itemId);
+      for (const provider of smsProviders) {
+        itemIdsByTargetAndSmsProvider[target][provider].push(itemId);
+      }
+    }
   }
   if (
     new Set(itemIds).size !== itemIds.length
@@ -244,6 +308,13 @@ function readChecklist(root = ROOT) {
   }
   if (RELEASE_UAT_TARGETS.some((target) => itemIdsByTarget[target].length === 0)) {
     throw evidenceError("the release UAT checklist leaves a deployment target without required items.");
+  }
+  if (RELEASE_UAT_TARGETS.some((target) => (
+    RELEASE_SMS_PROVIDERS.some(
+      (provider) => itemIdsByTargetAndSmsProvider[target][provider].length === 0
+    )
+  ))) {
+    throw evidenceError("the release UAT checklist leaves an SMS release profile without required items.");
   }
   const maximumAttestationAgeHours = checklist.maximumAttestationAgeHours;
   if (
@@ -263,6 +334,15 @@ function readChecklist(root = ROOT) {
       RELEASE_UAT_TARGETS.map((target) => [
         target,
         Object.freeze([...itemIdsByTarget[target]])
+      ])
+    )),
+    itemIdsByTargetAndSmsProvider: Object.freeze(Object.fromEntries(
+      RELEASE_UAT_TARGETS.map((target) => [
+        target,
+        Object.freeze(Object.fromEntries(RELEASE_SMS_PROVIDERS.map((provider) => [
+          provider,
+          Object.freeze([...itemIdsByTargetAndSmsProvider[target][provider]])
+        ])))
       ])
     )),
     digest: crypto.createHash("sha256").update(raw).digest("hex"),
@@ -309,12 +389,17 @@ export function parseSoloOperatorIds(value) {
 
 export function parseReleaseUatRunTitle(value) {
   const parts = String(value || "").split("/");
-  if (parts.length !== 8 || parts[0] !== "release-uat" || parts[1] !== "v2") {
-    throw evidenceError("the UAT workflow title does not match the v2 evidence contract.");
+  if (parts.length !== 10 || parts[0] !== "release-uat" || parts[1] !== "v3") {
+    throw evidenceError("the UAT workflow title does not match the v3 evidence contract.");
   }
-  const [, , approvalModeValue, releaseShaValue, target, rollbackShaValue, stagingId,
-    checklistDigest] = parts;
+  const [, , approvalModeValue, releaseShaValue, target, smsProviderValue,
+    smsConfigurationGenerationValue, rollbackShaValue, stagingId, checklistDigest] = parts;
   const approvalMode = parseReleaseApprovalMode(approvalModeValue);
+  const smsProvider = parseReleaseSmsProvider(smsProviderValue);
+  const smsConfigurationGeneration = parseReleaseSmsConfigurationGeneration(
+    smsConfigurationGenerationValue,
+    smsProvider
+  );
   const releaseSha = requireFullSha(releaseShaValue, "UAT release SHA");
   const rollbackSha = requireFullSha(rollbackShaValue, "UAT rollback SHA");
   if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
@@ -328,7 +413,16 @@ export function parseReleaseUatRunTitle(value) {
   if (!/^[0-9a-f]{64}$/.test(checklistDigest)) {
     throw evidenceError("the UAT checklist digest is invalid.");
   }
-  return { approvalMode, releaseSha, target, rollbackSha, stagingId, checklistDigest };
+  return {
+    approvalMode,
+    releaseSha,
+    target,
+    smsProvider,
+    smsConfigurationGeneration,
+    rollbackSha,
+    stagingId,
+    checklistDigest
+  };
 }
 
 function validateCanonicalRepository(run, label) {
@@ -579,6 +673,8 @@ export function validateUatRun(
     releaseSha,
     rollbackSha,
     target,
+    smsProvider: smsProviderValue,
+    smsConfigurationGeneration: smsConfigurationGenerationValue,
     uatRunId,
     checklistDigest,
     attesterIds,
@@ -590,6 +686,11 @@ export function validateUatRun(
   }
 ) {
   const normalizedApprovalMode = parseReleaseApprovalMode(approvalMode);
+  const smsProvider = parseReleaseSmsProvider(smsProviderValue);
+  const smsConfigurationGeneration = parseReleaseSmsConfigurationGeneration(
+    smsConfigurationGenerationValue,
+    smsProvider
+  );
   validateCanonicalRepository(run, "the UAT run");
   if (Number(run?.id) !== uatRunId) {
     throw evidenceError("the UAT response id does not match the requested run.");
@@ -636,6 +737,12 @@ export function validateUatRun(
   if (title.target !== target) {
     throw evidenceError("the UAT attestation does not cover this deployment target.");
   }
+  if (title.smsProvider !== smsProvider) {
+    throw evidenceError("the UAT attestation covers a different SMS provider profile.");
+  }
+  if (title.smsConfigurationGeneration !== smsConfigurationGeneration) {
+    throw evidenceError("the UAT attestation covers a different SMS configuration generation.");
+  }
   if (title.approvalMode !== normalizedApprovalMode) {
     throw evidenceError("the UAT attestation used a different approval mode.");
   }
@@ -666,7 +773,9 @@ export function validateUatRun(
     approvalMode: normalizedApprovalMode,
     completedAt: new Date(uatCompletedMs).toISOString(),
     stagingId: title.stagingId,
-    attestedTarget: title.target
+    attestedTarget: title.target,
+    smsProvider,
+    smsConfigurationGeneration
   };
 }
 
@@ -764,6 +873,8 @@ export function validateDirectDeploymentRun(
     target,
     deploymentRunId,
     ciRunId,
+    smsProvider: smsProviderValue,
+    smsConfigurationGeneration: smsConfigurationGenerationValue,
     approvalMode = "independent-review"
   }
 ) {
@@ -786,15 +897,37 @@ export function validateDirectDeploymentRun(
   if (String(run?.head_sha || "").toLowerCase() !== releaseSha) {
     throw evidenceError("the current deployment is not bound to the exact release SHA.");
   }
-  const expectedTitle = [
-    "deploy",
-    "v1",
-    normalizedApprovalMode,
-    target,
-    releaseSha,
-    String(ciRunId),
-    rollbackSha
-  ].join("/");
+  const firebaseDeployment = String(target).startsWith("firebase-");
+  const smsProvider = firebaseDeployment
+    ? parseReleaseSmsProvider(smsProviderValue)
+    : "";
+  const smsConfigurationGeneration = firebaseDeployment
+    ? parseReleaseSmsConfigurationGeneration(
+      smsConfigurationGenerationValue,
+      smsProvider
+    )
+    : "";
+  const expectedTitle = firebaseDeployment
+    ? [
+      "deploy",
+      "v2",
+      normalizedApprovalMode,
+      target,
+      releaseSha,
+      String(ciRunId),
+      rollbackSha,
+      smsProvider,
+      smsConfigurationGeneration
+    ].join("/")
+    : [
+      "deploy",
+      "v1",
+      normalizedApprovalMode,
+      target,
+      releaseSha,
+      String(ciRunId),
+      rollbackSha
+    ].join("/");
   if (String(run?.display_title || "") !== expectedTitle) {
     throw evidenceError("the current deployment title is not bound to the supplied evidence.");
   }
@@ -1105,6 +1238,8 @@ export async function verifyProductionReleaseEvidence(
     uatRunId: uatRunIdValue,
     rollbackSha: rollbackShaValue,
     target,
+    smsProvider: smsProviderValue,
+    smsConfigurationGeneration: smsConfigurationGenerationValue,
     headSha,
     preparationRunId: preparationRunIdValue,
     token,
@@ -1120,6 +1255,11 @@ export async function verifyProductionReleaseEvidence(
   const ciRunId = requireRunId(ciRunIdValue, "--ci-run-id");
   const uatRunId = requireRunId(uatRunIdValue, "--uat-run-id");
   const preparationRunId = requireRunId(preparationRunIdValue, "GITHUB_RUN_ID");
+  const smsProvider = parseReleaseSmsProvider(smsProviderValue);
+  const smsConfigurationGeneration = parseReleaseSmsConfigurationGeneration(
+    smsConfigurationGenerationValue,
+    smsProvider
+  );
   if (!Object.hasOwn(RELEASE_EVIDENCE_POLICY.preparationWorkflows, target)) {
     throw evidenceError(
       "the deployment target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
@@ -1201,6 +1341,8 @@ export async function verifyProductionReleaseEvidence(
     releaseSha,
     rollbackSha,
     target,
+    smsProvider,
+    smsConfigurationGeneration,
     uatRunId,
     checklistDigest: checklist.digest,
     attesterIds,
@@ -1269,6 +1411,8 @@ export async function verifyProductionReleaseEvidence(
     releaseTag: publishedRevision.releaseTag,
     rollbackSha,
     target,
+    smsProvider,
+    smsConfigurationGeneration,
     ciRunId,
     uatRunId,
     preparationRunId,
@@ -1290,6 +1434,8 @@ export async function verifyDirectProductionReleaseEvidence(
     ciRunId: ciRunIdValue,
     rollbackSha: rollbackShaValue,
     target,
+    smsProvider: smsProviderValue,
+    smsConfigurationGeneration: smsConfigurationGenerationValue,
     headSha,
     deploymentRunId: deploymentRunIdValue,
     token,
@@ -1308,6 +1454,16 @@ export async function verifyDirectProductionReleaseEvidence(
       "the deployment target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
     );
   }
+  const firebaseDeployment = String(target).startsWith("firebase-");
+  const smsProvider = firebaseDeployment
+    ? parseReleaseSmsProvider(smsProviderValue)
+    : "";
+  const smsConfigurationGeneration = firebaseDeployment
+    ? parseReleaseSmsConfigurationGeneration(
+      smsConfigurationGenerationValue,
+      smsProvider
+    )
+    : "";
   const normalizedToken = String(token || "").trim();
   if (!normalizedToken) {
     throw evidenceError("GITHUB_TOKEN or GH_TOKEN is required for live evidence verification.");
@@ -1353,6 +1509,8 @@ export async function verifyDirectProductionReleaseEvidence(
     target,
     deploymentRunId,
     ciRunId,
+    smsProvider,
+    smsConfigurationGeneration,
     approvalMode
   });
   validateCiRun(ciRun, { releaseSha, ciRunId });
@@ -1401,6 +1559,7 @@ export async function verifyDirectProductionReleaseEvidence(
     releaseTag: publishedRevision.releaseTag,
     rollbackSha,
     target,
+    ...(firebaseDeployment ? { smsProvider, smsConfigurationGeneration } : {}),
     ciRunId,
     deploymentRunId,
     operatorId: deployment.operatorId,
@@ -1416,7 +1575,9 @@ export function parseReleaseEvidenceCliArgs(argv) {
     "--ci-run-id",
     "--uat-run-id",
     "--rollback-sha",
-    "--target"
+    "--target",
+    "--sms-provider",
+    "--sms-configuration-generation"
   ]);
   const allowed = new Set([...required, "--output"]);
   const values = new Map();
@@ -1498,6 +1659,8 @@ async function main() {
     uatRunId: args["uat-run-id"],
     rollbackSha: args["rollback-sha"],
     target: args.target,
+    smsProvider: args["sms-provider"],
+    smsConfigurationGeneration: args["sms-configuration-generation"],
     headSha: head,
     preparationRunId: process.env.GITHUB_RUN_ID,
     token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,

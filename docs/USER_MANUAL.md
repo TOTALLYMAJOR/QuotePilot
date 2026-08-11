@@ -820,6 +820,60 @@ unchanged.
   until a server-authorized connector is enabled; they do not prove that a CRM
   or accounting provider accepted or applied a change.
 
+## Owner SMS Provider
+
+- Organization admins can open `Integrations` or `/app/integrations` and review
+  `SMS provider choice & delivery evidence`. The panel reports the
+  deployment-owned choice (`None`, `Twilio`, or `Pingram`), non-secret runtime
+  field completeness, and recorded provider evidence. Runtime-field
+  completeness never proves that a bound credential exists; credential
+  presence is deliberately reported as unknown until provider evidence exists.
+  The panel never displays credentials, full phone numbers, or private provider
+  identifiers, and the browser cannot change the selected provider.
+- Current production remains `None`. The Pingram option exists in source but
+  has not been deployed, registered with the provider, used for a provider
+  request, or used to send a live SMS.
+- Owner SMS is one-way and limited to the existing owner-alert events plus an
+  admin-controlled setup diagnostic. It does not text customers or create a
+  two-way messaging inbox. Signed subscribe/inbound callbacks are quarantined;
+  any signed unsubscribe or exact inbound `STOP` signal creates an indefinite
+  v1 hold on all owner SMS sends across provider selection. There is no browser
+  or callable clear path; operator review or renewed consent does not resume
+  sending in this version. The destination is a
+  server-owned E.164 owner number and sends remain unavailable without explicit
+  recorded consent.
+- When a provider is later promoted, choose `Refresh SMS Status` before a test.
+  `Send Test SMS` is available only when local non-secret configuration permits
+  a controlled diagnostic attempt. The provider worker still verifies its
+  bound secret and fails closed before sending when that secret is unavailable.
+  Automatic Pingram alerts remain blocked until that exact configuration
+  generation receives a signed delivered diagnostic. A queued, submitting,
+  provider-accepted, or uncertain state identifies the exact original attempt;
+  the browser and server both prevent a second test while it is unresolved.
+- `Request accepted` means only that the provider accepted the send request. It
+  is not carrier delivery or recipient receipt. For Pingram, only a verified
+  signed webhook receipt can establish `delivered` or `failed`; reconciliation
+  only reloads that original server evidence.
+- If the result is indeterminate, it is unsafe to retry automatically. Use
+  `Refresh Recorded Evidence` to reload the same attempt and signed-webhook
+  receipts; this does not query the provider or create a second send. A
+  definitive rejection may enter recovery only after the recorded outcome
+  makes a fresh request safe.
+- QuotePilot keeps the transactional outbox command, attempt, provider-message
+  binding, rate limit, recipient fingerprint, readiness/opt-out controls, and
+  webhook inbox receipt in server-only records. Early signed callbacks remain
+  pending until their provider binding exists, then reprocess without requiring
+  another provider send. Recipient fingerprints are versioned, organization-
+  scoped HMACs so the same destination is not linkable across tenant records.
+  The admin panel exposes only the operational outcome needed to decide whether
+  to wait, reconcile, or recover.
+- Pingram promotion is an operator task, not an in-app toggle. It requires the
+  approved regional endpoint, a new `PINGRAM_CONFIGURATION_GENERATION`, Secret
+  Manager credentials, approved sender/A2P
+  state, explicit owner consent, registered signed webhook, governed
+  deployment, and a controlled hosted UAT. Until those gates pass, leave SMS
+  disabled.
+
 ## Event Schedule and Production Checklist
 - Open `Schedule` or `/app/schedule` to review accepted and booked events by
   month or week, inspect conflicts, and assign a staff lead. Quote/proposal

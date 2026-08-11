@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: August 9, 2026
+Last updated: August 11, 2026
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -88,6 +88,9 @@ git checkout -b feature/<scope>-<topic>
      - Firebase emulator lanes require Java 21 or newer. The package lane
        prepares and selects an isolated repository-local JRE before its first
        emulator command when the runner's system Java is older.
+     - `lane:firebase-auth-rules` runs Firestore rules, the disposable owner-SMS
+       transaction and signed-event acceptance matrix, and the Firebase browser
+       smoke as one indivisible CI path.
      - The CWV lane builds a fresh production bundle and explicitly selects the
        installed Playwright Chromium binary before Lighthouse starts.
    - `Docker Build Smoke`
@@ -98,7 +101,9 @@ git checkout -b feature/<scope>-<topic>
      mainline safety-net workflow.
 4. Complete the pre-merge release-candidate UAT checklist from
    `docs/LAUNCH_RUNBOOK.md` for every intended production target and record the
-   immutable candidate deployment. Portal projection backfill is separate
+   immutable candidate deployment. Bind the attestation to the exact
+   deployment-owned SMS provider and configuration generation; use
+   `not-applicable` for `none` or Twilio. Portal projection backfill is separate
    source/data-operation acceptance, not deployment-target evidence.
 5. Set/confirm rollback target:
    - Preserve the current target-specific signed provider receipt, including
@@ -118,10 +123,12 @@ git push origin v<major>.<minor>.<patch>
 ```
 10. Dispatch `Deploy Firebase Production` or `Deploy Vercel Production` with
     the release SHA, exact-SHA CI run id, target rollback SHA, exact scope, and
-    typed confirmation. The provider credential is available only to the final
-    deploy step. Record provider acceptance/READY evidence and update the
-    target-specific last-known-good receipt only after post-launch verification
-    succeeds.
+    typed confirmation. Firebase dispatch also requires the exact
+    `sms_provider` plus `sms_configuration_generation`; the workflow binds both
+    into its title and rejects drift from the current trusted runtime variables.
+    The provider credential is available only to the final deploy step. Record
+    provider acceptance/READY evidence and update the target-specific
+    last-known-good receipt only after post-launch verification succeeds.
 
 If Firebase and Vercel have different last-known-good SHAs, use separate
 target-specific deployment runs. Allowed deployment profiles
@@ -147,6 +154,13 @@ If a topic changes, only update the owning doc and cross-link from others.
   - `backend` deploys `firestore,functions`; `backend` and `all` never separate
     Functions from their reviewed rules. The selected scope is bound into the
     workflow title and typed confirmation.
+- Firebase workflow inputs: `sms_provider` and `sms_configuration_generation`
+  - `sms_provider` must exactly match the trusted runtime selection: `none`,
+    `twilio`, or `pingram`.
+  - Pingram requires its current lowercase configuration generation; `none`
+    and Twilio require exact `not-applicable`.
+  - Both values are bound into the workflow identity and rechecked against the
+    current GitHub runtime variables before provider mutation.
 - Project-scoped Functions environment: `NOTIFICATIONS_SMS_PROVIDER`
   - Default trusted runtime value: `none` unless buyer-approved SMS enablement
     is validated; local ignored Functions files are validation-only.

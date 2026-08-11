@@ -47,6 +47,7 @@ Each PR declares:
   - `npm run check:perf:bundle`
 - `lane:firebase-auth-rules`
   - `npm run test:rules:firestore`
+  - `npm run test:owner-sms:emulator`
   - `npm run test:e2e:firebase`
 - `lane:authoritative-pricing`
   - `npm run test:e2e:firebase:authoritative`

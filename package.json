@@ -17,6 +17,7 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:rules:firestore": "npx firebase-tools --config firebase.e2e.json --project demo-quote-wizard-rules emulators:exec --only firestore \"vitest run src/rules/__tests__/firestore.rules.test.js\"",
+    "test:owner-sms:emulator": "npx firebase-tools --config firebase.e2e.json --project demo-owner-sms emulators:exec --only firestore \"node scripts/owner-sms-emulator-acceptance.mjs\"",
     "test:e2e": "bash ./scripts/run-playwright.sh test",
     "test:e2e:headed": "bash ./scripts/run-playwright.sh test --headed",
     "test:e2e:firebase": "node ./scripts/run-firebase-e2e.mjs",

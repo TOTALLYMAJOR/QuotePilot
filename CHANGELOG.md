@@ -8,6 +8,42 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Source-only owner SMS provider slice: the deployment-owned runtime choice now
+  accepts only `none`, `twilio`, or `pingram`; a provider-neutral admin panel
+  reports safe configuration and exact request states; and Pingram joins the
+  existing one-way owner-alert path without adding customer SMS or two-way
+  messaging. Quote and payment alerts now reserve a transactional private
+  outbox before one provider claim, bind provider identity privately, and store
+  signed callbacks in a durable reprocessable inbox. Signed subscribe/inbound
+  callbacks are quarantined, while unsubscribe or exact inbound `STOP` creates
+  an indefinite v1 hold on all owner SMS sends across provider selection, with
+  no browser or callable clear path. Request acceptance remains
+  distinct from signed `delivered`/`failed` evidence. Indeterminate sends remain
+  locked for reconciliation and claimed attempts are never automatically
+  resent. Automatic Pingram alerts require a signed delivered diagnostic for
+  the exact current `PINGRAM_CONFIGURATION_GENERATION`. The trusted
+  runtime accepts only the exact US/CA/EU Pingram API origins and requires an
+  E.164 owner destination plus explicit consent; `PINGRAM_API_KEY`,
+  `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET` stay in Firebase
+  Secret Manager. Recipient fingerprints use a versioned, organization-scoped
+  HMAC, and the admin panel treats credential presence as unknown: non-secret
+  runtime-field completeness permits only a controlled diagnostic attempt,
+  while the provider worker still fails closed if its secret is unavailable.
+  The disposable owner-SMS transaction and signed-event acceptance matrix now
+  runs in `lane:firebase-auth-rules` beside Firestore rules and Firebase browser
+  smoke, so CI cannot silently omit it.
+  Release UAT and direct Firebase promotion now bind the exact SMS provider and
+  Pingram configuration generation into immutable workflow evidence. The admin
+  surface adds 12,759 aggregate JavaScript bytes in
+  both same-environment default and production-flag builds; the named
+  zero-headroom exception is recalibrated to the larger literal current build,
+  2,789,740 bytes, and requires exact-SHA CI confirmation before release. Current
+  production remains
+  `NOTIFICATIONS_SMS_PROVIDER=none`; no Pingram deployment, endpoint
+  registration, provider call, or live SMS is claimed. Credentials,
+  sender/A2P and consent evidence, registered webhook, and controlled hosted
+  UAT remain promotion gates.
+
 - Four more deterministic capture families closing out the CREATE reader's
   build-out queue, hardened by two adversarial-verification agents that
   wrote and ran real test cases against the real code rather than

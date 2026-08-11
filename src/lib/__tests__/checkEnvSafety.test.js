@@ -128,6 +128,21 @@ describe("Firebase browser environment safety", { timeout: 30_000 }, () => {
     expect(result.stderr).toMatch(/browser-visible/i);
   });
 
+  test.each([
+    "VITE_PINGRAM_API_KEY",
+    "VITE_PINGRAM_WEBHOOK_SECRET",
+    "VITE_SMS_CONTACT_DIGEST_SECRET",
+    "VITE_PINGRAM_FROM_NUMBER",
+    "VITE_NOTIFICATIONS_OWNER_PHONE"
+  ])("rejects server-owned Pingram and SMS values exposed through %s", (name) => {
+    const result = runCheck({
+      envProductionLocal: { [name]: "provider-value-fixture" }
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(name);
+    expect(result.stderr).toMatch(/server-owned/i);
+  });
+
   test("rejects ambiguous buyer-access flag values", () => {
     const result = runCheck({
       envProductionLocal: {

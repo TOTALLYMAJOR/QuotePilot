@@ -29,6 +29,8 @@ const HIGH_CONFIDENCE_PATTERNS = [
   { re: /\bAIza[0-9A-Za-z\-_]{20,}\b/, label: "Google API key" },
   { re: /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/, label: "Stripe secret key" },
   { re: /\bwhsec_[A-Za-z0-9]{16,}\b/, label: "Stripe webhook secret" },
+  { re: /\bpingram_sk_[A-Za-z0-9_-]{16,}\b/, label: "Pingram API key" },
+  { re: /\bpingram_whsecret_[A-Za-z0-9_-]{16,}\b/, label: "Pingram webhook secret" },
   { re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/, label: "SendGrid API key" },
   { re: /\bxox(?:a|b|p|r|s)-[A-Za-z0-9-]{10,}\b/, label: "Slack token" },
   { re: /\bAC[a-fA-F0-9]{32}\b/, label: "Twilio account SID" }
@@ -50,13 +52,16 @@ function listTrackedFiles() {
   return output.split(/\r?\n/).filter(Boolean);
 }
 
-function isTargetFile(file) {
+function isAssignmentSurface(file) {
   if (!file) return false;
-  if (file.toLowerCase().endsWith(".md")) return false;
-  if (file.startsWith("dist/")) return false;
-  if (file.startsWith("node_modules/")) return false;
   if (TARGET_FILES.has(file)) return true;
   return TARGET_PREFIXES.some((prefix) => file.startsWith(prefix));
+}
+
+function isTargetFile(file) {
+  if (!file) return false;
+  if (file.startsWith("dist/") || file.startsWith("node_modules/")) return false;
+  return true;
 }
 
 function isAllowedLiteral(value) {
@@ -86,6 +91,7 @@ function scanFile(file, findings) {
       }
     }
 
+    if (!isAssignmentSurface(file)) return;
     const kvMatch = KEY_VALUE_ASSIGNMENT.exec(line);
     if (!kvMatch) return;
 

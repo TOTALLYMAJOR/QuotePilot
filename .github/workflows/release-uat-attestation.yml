@@ -1,5 +1,5 @@
 name: Release UAT Attestation
-run-name: release-uat/v2/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/${{ inputs.release_sha }}/${{ inputs.target }}/${{ inputs.rollback_sha }}/${{ inputs.staging_id }}/${{ inputs.checklist_digest }}
+run-name: release-uat/v3/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/${{ inputs.release_sha }}/${{ inputs.target }}/${{ inputs.sms_provider }}/${{ inputs.sms_configuration_generation }}/${{ inputs.rollback_sha }}/${{ inputs.staging_id }}/${{ inputs.checklist_digest }}
 
 on:
   workflow_dispatch:
@@ -17,6 +17,18 @@ on:
           - firebase-backend
           - firebase-all
           - vercel
+      sms_provider:
+        description: Exact deployment-owned owner-SMS provider exercised by this UAT pass
+        required: true
+        type: choice
+        options:
+          - none
+          - twilio
+          - pingram
+      sms_configuration_generation:
+        description: Exact Pingram configuration generation, or not-applicable for none or Twilio
+        required: true
+        type: string
       rollback_sha:
         description: Full target-specific rollback commit SHA
         required: true
@@ -42,7 +54,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-uat-${{ inputs.release_sha }}-${{ inputs.target }}
+  group: release-uat-${{ inputs.release_sha }}-${{ inputs.target }}-${{ inputs.sms_provider }}
   cancel-in-progress: false
 
 jobs:
@@ -58,6 +70,8 @@ jobs:
       RELEASE_APPROVAL_MODE: ${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}
       RELEASE_SOLO_OPERATOR_IDS: ${{ vars.RELEASE_SOLO_OPERATOR_IDS }}
       RELEASE_UAT_ATTESTER_IDS: ${{ vars.RELEASE_UAT_ATTESTER_IDS }}
+      CONFIGURED_SMS_PROVIDER: ${{ vars.NOTIFICATIONS_SMS_PROVIDER || 'none' }}
+      CONFIGURED_PINGRAM_CONFIGURATION_GENERATION: ${{ vars.PINGRAM_CONFIGURATION_GENERATION }}
     steps:
       - name: Checkout exact release SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,10 +85,26 @@ jobs:
         with:
           node-version: 22
 
+      - name: Validate deployment-owned SMS release profile
+        env:
+          SMS_PROVIDER: ${{ inputs.sms_provider }}
+          SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
+        run: |
+          set -euo pipefail
+          test "${SMS_PROVIDER}" = "${CONFIGURED_SMS_PROVIDER}"
+          if test "${SMS_PROVIDER}" = "pingram"; then
+            test -n "${CONFIGURED_PINGRAM_CONFIGURATION_GENERATION}"
+            test "${SMS_CONFIGURATION_GENERATION}" = "${CONFIGURED_PINGRAM_CONFIGURATION_GENERATION}"
+          else
+            test "${SMS_CONFIGURATION_GENERATION}" = "not-applicable"
+          fi
+
       - name: Validate and record UAT evidence
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
           RELEASE_TARGET: ${{ inputs.target }}
+          SMS_PROVIDER: ${{ inputs.sms_provider }}
+          SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
           STAGING_ID: ${{ inputs.staging_id }}
           CHECKLIST_DIGEST: ${{ inputs.checklist_digest }}
@@ -88,6 +118,8 @@ jobs:
           node ./scripts/release-uat-attestation.mjs \
             --release-sha "${RELEASE_SHA}" \
             --target "${RELEASE_TARGET}" \
+            --sms-provider "${SMS_PROVIDER}" \
+            --sms-configuration-generation "${SMS_CONFIGURATION_GENERATION}" \
             --rollback-sha "${ROLLBACK_SHA}" \
             --staging-id "${STAGING_ID}" \
             --checklist-digest "${CHECKLIST_DIGEST}" \
@@ -107,11 +139,15 @@ jobs:
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
           RELEASE_TARGET: ${{ inputs.target }}
+          SMS_PROVIDER: ${{ inputs.sms_provider }}
+          SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
           STAGING_ID: ${{ inputs.staging_id }}
         run: |
           {
             echo "### Release UAT attested"
             echo "- Release SHA: ${RELEASE_SHA}"
             echo "- Target: ${RELEASE_TARGET}"
+            echo "- Owner SMS provider: ${SMS_PROVIDER}"
+            echo "- Owner SMS configuration generation: ${SMS_CONFIGURATION_GENERATION}"
             echo "- Immutable staging id: ${STAGING_ID}"
           } >> "${GITHUB_STEP_SUMMARY}"

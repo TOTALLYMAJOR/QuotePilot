@@ -67,4 +67,17 @@ describe("reproducible GitHub workflow lint gate", () => {
     );
     expect(quickLane).toContain("npm run check:workflows");
   });
+
+  test("keeps owner SMS acceptance inside the Firebase authorization lane", () => {
+    expect(packageJson.scripts["test:owner-sms:emulator"]).toContain(
+      "scripts/owner-sms-emulator-acceptance.mjs"
+    );
+    const firebaseLane = laneSource.slice(
+      laneSource.indexOf("  lane:firebase-auth-rules)"),
+      laneSource.indexOf("  lane:authoritative-pricing)")
+    );
+    expect(firebaseLane).toContain("npm run test:rules:firestore");
+    expect(firebaseLane).toContain("npm run test:owner-sms:emulator");
+    expect(firebaseLane).toContain("npm run test:e2e:firebase");
+  });
 });

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 19,
+  "catalogVersion": 21,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -160,7 +160,7 @@
     },
     {
       "id": "bounded-commercial-search",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -3557,6 +3557,161 @@
           "justification": "Every read calls getQuoteHistory fresh and nothing is cached client- or server-side, so no stale variant of the surface can exist to present or test."
         }
       }
+    },
+    {
+      "id": "sms-provider-choice-and-delivery-evidence",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "admin"
+      ],
+      "summary": "Admins can inspect the deployment-owned none, Twilio, or Pingram owner-alert provider, see non-secret runtime-field completeness without inferring credential presence, submit one idempotent diagnostic, and distinguish transactional outbox reservation, one-call dispatch, provider acceptance, indeterminate outcomes, signed delivery evidence, opt-out holds, and definitive failure without seeing credentials, full phone numbers, or provider message identifiers.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/ownerSmsAttempts.js",
+        "functions/pingramSms.js",
+        "scripts/materialize-functions-env.mjs",
+        "scripts/owner-sms-emulator-acceptance.mjs",
+        "scripts/provisioning-emulator-acceptance.mjs",
+        "src/lib/commerceOps.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getIntegrationSetupStatus",
+        "functions/index.js#sendIntegrationTestSms",
+        "functions/index.js#notifyOwnerNewQuote",
+        "functions/index.js#reserveOwnerSmsOutbox",
+        "functions/index.js#dispatchPingramOwnerSms",
+        "functions/index.js#dispatchTwilioOwnerSms",
+        "functions/index.js#processPingramSmsWebhookReceipt",
+        "functions/index.js#reconcilePingramSmsProviderBinding",
+        "functions/index.js#reconcileOwnerSmsEvidence",
+        "functions/index.js#pingramSmsWebhook",
+        "functions/index.js#stripeWebhook"
+      ],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/IntegrationOpsModal.jsx",
+        "src/components/SmsProviderPanel.jsx",
+        "src/lib/commerceOps.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/SmsProviderPanel.jsx",
+          "locator": "data-capability-id=\"sms-provider-choice\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/smsProviderPanel.test.jsx",
+        "src/lib/__tests__/buyerAccessIntegration.server.test.js",
+        "src/lib/__tests__/functionsEnvMaterializer.test.js",
+        "src/lib/__tests__/ownerSmsIntegration.server.test.js",
+        "src/lib/__tests__/ownerSmsAttempts.server.test.js",
+        "src/lib/__tests__/pingramSms.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/pingramSms.server.test.js",
+          "locator": "makes exactly one documented POST and returns only provider acceptance and tracking identity"
+        },
+        {
+          "path": "src/lib/__tests__/pingramSms.server.test.js",
+          "locator": "keeps timeout and network failures indeterminate without exposing exception details"
+        },
+        {
+          "path": "src/lib/__tests__/pingramSms.server.test.js",
+          "locator": "verifies exact raw bytes and returns only a normalized delivered event"
+        },
+        {
+          "path": "src/lib/__tests__/ownerSmsIntegration.server.test.js",
+          "locator": "isolates each provider worker and the Pingram ingress to its exact secrets"
+        },
+        {
+          "path": "src/lib/__tests__/ownerSmsAttempts.server.test.js",
+          "locator": "requires the provider worker to bind the HMAC recipient fingerprint while claiming"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "enumerates every owner SMS private collection for browser denial coverage"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Deployment-owned owner SMS provider choice"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Owner SMS Provider"
+        }
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getIntegrationSetupStatus",
+        "functions/index.js#sendIntegrationTestSms",
+        "functions/index.js#notifyOwnerNewQuote",
+        "functions/index.js#reserveOwnerSmsOutbox",
+        "functions/index.js#dispatchPingramOwnerSms",
+        "functions/index.js#dispatchTwilioOwnerSms",
+        "functions/index.js#processPingramSmsWebhookReceipt",
+        "functions/index.js#reconcilePingramSmsProviderBinding",
+        "functions/index.js#reconcileOwnerSmsEvidence",
+        "functions/index.js#pingramSmsWebhook",
+        "functions/index.js#stripeWebhook"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The provider-neutral admin panel, stable request identity, transactional private outbox, provider-specific credential workers, organization-scoped versioned recipient HMAC, durable signed Pingram inbox, callback-before-binding reconciliation, configuration-generation readiness, indefinite v1 cross-provider owner-SMS hold with no browser or callable clear path, claimed/indeterminate lockout, runtime materializer, and browser-denied evidence collections were reviewed as one fail-closed surface. Local runtime-field completeness never proves credential presence. Provider selection remains trusted-deployment-owned and production remains disabled until separate provider and hosted acceptance gates pass.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/smsProviderPanel.test.jsx",
+          "locator": "renders every canonical SMS provider mutation state from the exported resolver",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/smsProviderPanel.test.jsx",
+          "locator": "renders every canonical SMS provider mutation state from the exported resolver",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/smsProviderPanel.test.jsx",
+          "locator": "renders every canonical SMS provider mutation state from the exported resolver",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/smsProviderPanel.test.jsx",
+          "locator": "renders every canonical SMS provider mutation state from the exported resolver",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/smsProviderPanel.test.jsx",
+          "locator": "renders every canonical SMS provider mutation state from the exported resolver",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/smsProviderPanel.test.jsx",
+          "locator": "renders every canonical SMS provider mutation state from the exported resolver",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/smsProviderPanel.test.jsx",
+          "locator": "renders every canonical SMS provider mutation state from the exported resolver",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Admins can select no provider only through the trusted deployment, see non-secret local runtime-field completeness without treating it as credential proof, queue one bounded same-tenant diagnostic with one stable request identity, and read server-owned provider evidence without treating request acceptance as delivery. The worker fails closed when its bound secret is unavailable. Automatic Pingram alerts require a signed delivered diagnostic for the current generation; callback-before-binding is reprocessed; opt-out signals create an indefinite v1 hold on all owner SMS sends across provider selection with no browser or callable clear path; claimed or indeterminate work is never automatically resent; versioned recipient HMACs are organization-scoped. Stripe ingress receives no SMS sending credential, Pingram ingress receives only its signing secret, and browser principals cannot read or forge outbox commands, attempts, bindings, controls, rate limits, or webhook inbox receipts."
     }
   ]
 }

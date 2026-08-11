@@ -30,9 +30,9 @@ Each major topic has one source of truth. Other docs should link to that source 
 | backlog | roadmap/backlog/task artifacts | `DEV_TASKS.md` |
 
 The GitHub job named `lane:firebase-auth-rules` must invoke the package lane of
-the same name. That lane owns both Firestore rule tests and the Firebase-backed
-browser smoke, so CI cannot silently omit either half of the authorization
-contract.
+the same name. That lane owns Firestore rule tests, the disposable owner-SMS
+transaction and signed-event acceptance matrix, and the Firebase-backed browser
+smoke, so CI cannot silently omit any part of the authorization contract.
 
 The disposable matrix in `scripts/provisioning-emulator-acceptance.mjs` owns
 local signed-webhook acceptance for both Stripe payment rails. It must keep

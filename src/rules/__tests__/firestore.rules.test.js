@@ -124,6 +124,29 @@ const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
   ["revenueAutopilotSchedulerState", "global"]
 ]);
 
+const OWNER_SMS_SERVER_ONLY_GLOBAL_COLLECTIONS = Object.freeze([
+  ["ownerSmsAttempts", "sms-attempt-org-a-1"],
+  ["ownerSmsProviderMessageIndex", "provider-message-org-a-1"],
+  ["ownerSmsWebhookReceipts", "webhook-receipt-org-a-1"],
+  ["ownerSmsRateLimits", "rate-limit-org-a-1"],
+  ["ownerSmsOrganizationState", "organization-state-org-a-1"],
+  ["ownerSmsProviderControls", "provider-control-org-a-1"],
+  ["ownerSmsOutbox", "outbox-org-a-1"]
+]);
+
+test("enumerates every owner SMS private collection for browser denial coverage", () => {
+  expect(OWNER_SMS_SERVER_ONLY_GLOBAL_COLLECTIONS.map(([collectionName]) => collectionName))
+    .toEqual([
+      "ownerSmsAttempts",
+      "ownerSmsProviderMessageIndex",
+      "ownerSmsWebhookReceipts",
+      "ownerSmsRateLimits",
+      "ownerSmsOrganizationState",
+      "ownerSmsProviderControls",
+      "ownerSmsOutbox"
+    ]);
+});
+
 const CATALOG_COLLECTIONS = new Set([
   "catalogPackages",
   "catalogAddons",
@@ -2030,6 +2053,48 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       await assertFails(getDoc(existingRef));
       await assertFails(getDocs(query(collection(browserDb, ...collectionPath), limit(5))));
       await assertFails(setDoc(doc(browserDb, ...browserDocumentPath), {
+        organizationId: "org-a",
+        serverOwned: false
+      }));
+      await assertFails(updateDoc(existingRef, { serverOwned: false }));
+      await assertFails(deleteDoc(existingRef));
+    }
+  }, 30_000);
+
+  test.each([
+    ["signed-out", () => testEnv.unauthenticatedContext()],
+    ["same-tenant admin", () => testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    })],
+    ["cross-tenant user", () => testEnv.authenticatedContext("sales-org-b", {
+      email: "sales-b@example.com",
+      email_verified: true,
+      organizationId: "org-b"
+    })]
+  ])("owner SMS global collections deny %s document, list, and write access", async (_label, contextFactory) => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      for (const [collectionName, documentId] of OWNER_SMS_SERVER_ONLY_GLOBAL_COLLECTIONS) {
+        await setDoc(doc(db, collectionName, documentId), {
+          schemaVersion: 1,
+          organizationId: "org-a",
+          ownerUid: "admin-org-a",
+          providerReference: "private-provider-reference",
+          serverOwned: true
+        });
+      }
+    });
+
+    const browserDb = contextFactory().firestore();
+    for (const [collectionName, documentId] of OWNER_SMS_SERVER_ONLY_GLOBAL_COLLECTIONS) {
+      const existingRef = doc(browserDb, collectionName, documentId);
+      const browserCreatedRef = doc(browserDb, collectionName, `${documentId}-browser-created`);
+
+      await assertFails(getDoc(existingRef));
+      await assertFails(getDocs(query(collection(browserDb, collectionName), limit(5))));
+      await assertFails(setDoc(browserCreatedRef, {
         organizationId: "org-a",
         serverOwned: false
       }));

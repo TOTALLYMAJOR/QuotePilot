@@ -63,9 +63,14 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(INTEGRATION_OPS_SOURCE).toContain(
       "production provider credentials belong only in Firebase Secret Manager bindings"
     );
-    expect(INTEGRATION_OPS_SOURCE).toContain("TWILIO_MESSAGING_SERVICE_SID=");
+    expect(INTEGRATION_OPS_SOURCE).toContain("PINGRAM_API_ORIGIN=https://api.pingram.io");
+    expect(INTEGRATION_OPS_SOURCE).toContain("PINGRAM_FROM_NUMBER=");
+    expect(INTEGRATION_OPS_SOURCE).toContain("PINGRAM_CONFIGURATION_GENERATION=");
+    expect(INTEGRATION_OPS_SOURCE).toContain("NOTIFICATIONS_OWNER_SMS_CONSENT=granted");
     expect(INTEGRATION_OPS_SOURCE).not.toContain("TWILIO_FROM_NUMBER=");
     expect(INTEGRATION_OPS_SOURCE).not.toContain('"TWILIO_AUTH_TOKEN=",');
+    expect(INTEGRATION_OPS_SOURCE).not.toContain('"PINGRAM_API_KEY=",');
+    expect(INTEGRATION_OPS_SOURCE).not.toContain('"PINGRAM_WEBHOOK_SECRET=",');
     expect(INTEGRATION_OPS_SOURCE).not.toContain(
       "Use placeholders or non-production provider values only; never commit or paste secrets here"
     );
@@ -104,6 +109,13 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).not.toContain("REVENUE_AUTOPILOT_TOKEN_SECRET");
     expect(output).not.toContain("TWILIO_MESSAGING_SERVICE_SID");
     expect(output).not.toContain("NOTIFICATIONS_OWNER_PHONE");
+    expect(output).not.toContain("NOTIFICATIONS_OWNER_SMS_CONSENT");
+    expect(output).not.toContain("PINGRAM_API_ORIGIN");
+    expect(output).not.toContain("PINGRAM_FROM_NUMBER");
+    expect(output).not.toContain("PINGRAM_CONFIGURATION_GENERATION");
+    expect(output).not.toContain("PINGRAM_API_KEY");
+    expect(output).not.toContain("PINGRAM_WEBHOOK_SECRET");
+    expect(output).not.toContain("SMS_CONTACT_DIGEST_SECRET");
     expect(result.stdout).not.toContain("test_only_secret");
   });
 
@@ -253,6 +265,9 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
       ["RESEND_API_KEY", "re_secret_fixture"],
       ["RESEND_WEBHOOK_SECRET", "resend-webhook-secret-fixture"],
       ["TWILIO_AUTH_TOKEN", "twilio-secret-fixture"],
+      ["PINGRAM_API_KEY", "pingram-secret-fixture"],
+      ["PINGRAM_WEBHOOK_SECRET", "pingram-webhook-secret-fixture"],
+      ["SMS_CONTACT_DIGEST_SECRET", "sms-digest-secret-fixture"],
       ["STRIPE_SECRET_KEY", "rk_live_secret_fixture"],
       ["STRIPE_WEBHOOK_SECRET", "whsec_secret_fixture"],
       ["REVENUE_AUTOPILOT_TOKEN_SECRET", "autopilot-token-secret-fixture"]
@@ -316,7 +331,8 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
       NOTIFICATIONS_SMS_PROVIDER: "twilio",
       TWILIO_ACCOUNT_SID: `AC${"1".repeat(32)}`,
       TWILIO_MESSAGING_SERVICE_SID: `MG${"2".repeat(32)}`,
-      NOTIFICATIONS_OWNER_PHONE: "+13125550123"
+      NOTIFICATIONS_OWNER_PHONE: "+13125550123",
+      NOTIFICATIONS_OWNER_SMS_CONSENT: "granted"
     });
     expect(result.status).toBe(0);
 
@@ -328,8 +344,101 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain(`TWILIO_ACCOUNT_SID=AC${"1".repeat(32)}`);
     expect(output).toContain(`TWILIO_MESSAGING_SERVICE_SID=MG${"2".repeat(32)}`);
     expect(output).toContain("NOTIFICATIONS_OWNER_PHONE=+13125550123");
+    expect(output).toContain("NOTIFICATIONS_OWNER_SMS_CONSENT=granted");
     expect(output).not.toContain("TWILIO_AUTH_TOKEN");
     expect(output).not.toContain("TWILIO_FROM_NUMBER");
+  });
+
+  test("enables Pingram only with an approved origin, dedicated sender, consent, and no materialized secrets", () => {
+    const { cwd, result } = runMaterializer({
+      NOTIFICATIONS_SMS_PROVIDER: "pingram",
+      PINGRAM_API_ORIGIN: "https://api.pingram.io",
+      PINGRAM_FROM_NUMBER: "+13125550124",
+      PINGRAM_CONFIGURATION_GENERATION: "sandbox-2026-08-11-01",
+      NOTIFICATIONS_OWNER_PHONE: "+13125550123",
+      NOTIFICATIONS_OWNER_SMS_CONSENT: "granted"
+    });
+    expect(result.status).toBe(0);
+
+    const output = fs.readFileSync(
+      path.join(cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    );
+    expect(output).toContain("NOTIFICATIONS_SMS_PROVIDER=pingram");
+    expect(output).toContain("PINGRAM_API_ORIGIN=https://api.pingram.io");
+    expect(output).toContain("PINGRAM_FROM_NUMBER=+13125550124");
+    expect(output).toContain(
+      "PINGRAM_CONFIGURATION_GENERATION=sandbox-2026-08-11-01"
+    );
+    expect(output).toContain("NOTIFICATIONS_OWNER_PHONE=+13125550123");
+    expect(output).toContain("NOTIFICATIONS_OWNER_SMS_CONSENT=granted");
+    expect(output).not.toContain("PINGRAM_API_KEY");
+    expect(output).not.toContain("PINGRAM_WEBHOOK_SECRET");
+    expect(output).not.toContain("SMS_CONTACT_DIGEST_SECRET");
+    expect(output).not.toContain("TWILIO_ACCOUNT_SID");
+  });
+
+  test("rejects incomplete, unapproved, or cross-provider Pingram configuration", () => {
+    const base = {
+      NOTIFICATIONS_SMS_PROVIDER: "pingram",
+      PINGRAM_API_ORIGIN: "https://api.pingram.io",
+      PINGRAM_FROM_NUMBER: "+13125550124",
+      PINGRAM_CONFIGURATION_GENERATION: "sandbox-2026-08-11-01",
+      NOTIFICATIONS_OWNER_PHONE: "+13125550123",
+      NOTIFICATIONS_OWNER_SMS_CONSENT: "granted"
+    };
+    for (const key of [
+      "PINGRAM_API_ORIGIN",
+      "PINGRAM_FROM_NUMBER",
+      "PINGRAM_CONFIGURATION_GENERATION",
+      "NOTIFICATIONS_OWNER_PHONE",
+      "NOTIFICATIONS_OWNER_SMS_CONSENT"
+    ]) {
+      const result = runMaterializer({ ...base, [key]: "" }).result;
+      expect(result.status, key).not.toBe(0);
+    }
+
+    const unapprovedOrigin = runMaterializer({
+      ...base,
+      PINGRAM_API_ORIGIN: "https://api.example.com"
+    }).result;
+    expect(unapprovedOrigin.status).not.toBe(0);
+    expect(unapprovedOrigin.stderr).toMatch(/exact approved Pingram HTTPS API origin/i);
+
+    const invalidSender = runMaterializer({
+      ...base,
+      PINGRAM_FROM_NUMBER: "3125550124"
+    }).result;
+    expect(invalidSender.status).not.toBe(0);
+    expect(invalidSender.stderr).toMatch(/E\.164/i);
+
+    const invalidGeneration = runMaterializer({
+      ...base,
+      PINGRAM_CONFIGURATION_GENERATION: "Production Generation"
+    }).result;
+    expect(invalidGeneration.status).not.toBe(0);
+    expect(invalidGeneration.stderr).toMatch(/configuration_generation/i);
+
+    const crossProvider = runMaterializer({
+      ...base,
+      TWILIO_ACCOUNT_SID: `AC${"1".repeat(32)}`
+    }).result;
+    expect(crossProvider.status).not.toBe(0);
+    expect(crossProvider.stderr).toMatch(/Twilio configuration must be unset/i);
+  });
+
+  test("rejects owner destination or consent while SMS is disabled", () => {
+    for (const overrides of [
+      { NOTIFICATIONS_OWNER_PHONE: "+13125550123" },
+      { NOTIFICATIONS_OWNER_SMS_CONSENT: "granted" },
+      { PINGRAM_API_ORIGIN: "https://api.pingram.io" },
+      { PINGRAM_FROM_NUMBER: "+13125550124" },
+      { PINGRAM_CONFIGURATION_GENERATION: "sandbox-2026-08-11-01" }
+    ]) {
+      const result = runMaterializer(overrides).result;
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/must be unset/i);
+    }
   });
 
   test("rejects a Functions environment for a different Firebase project", () => {

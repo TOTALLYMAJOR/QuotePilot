@@ -54,13 +54,21 @@ describe("direct production deployment safety", () => {
     const source = fs.readFileSync(workflow, "utf8");
 
     expect(source).toMatch(/name: Deploy .* Production/i);
-    expect(source).toMatch(/run-name: deploy\/v1\//);
+    expect(source).toMatch(provider === "Firebase"
+      ? /run-name: deploy\/v2\/.+inputs\.sms_provider.+inputs\.sms_configuration_generation/
+      : /run-name: deploy\/v1\//);
     expect(source).toMatch(/workflow_dispatch:/);
     expect(source).toMatch(/github\.sha == inputs\.release_sha/);
     expect(source).toMatch(/environment:.*production-solo/);
     expect(source).toMatch(/persist-credentials:\s*false/);
     expect(source).toMatch(/scripts\/verify-direct-production-release\.mjs/);
     expect(source).toMatch(/scripts\/deploy-(?:firebase|vercel)-production\.mjs/);
+    if (provider === "Firebase") {
+      expect(source).toMatch(/--sms-provider "\$\{SMS_PROVIDER\}"/);
+      expect(source).toMatch(/--sms-configuration-generation "\$\{SMS_CONFIGURATION_GENERATION\}"/);
+      expect(source).toMatch(/EXPECTED_SMS_PROVIDER:\s*\$\{\{ inputs\.sms_provider \}\}/);
+      expect(source).toMatch(/EXPECTED_SMS_CONFIGURATION_GENERATION:\s*\$\{\{ inputs\.sms_configuration_generation \}\}/);
+    }
     expect(source).toMatch(new RegExp(`${provider.toUpperCase()}_TOKEN:\\s*\\$\\{\\{ secrets\\.${provider.toUpperCase()}_TOKEN \\}\\}`));
     const tokenOffset = source.indexOf(`${provider.toUpperCase()}_TOKEN:`);
     const deployStepOffset = source.indexOf(provider === "Firebase"

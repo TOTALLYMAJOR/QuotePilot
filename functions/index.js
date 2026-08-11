@@ -173,6 +173,24 @@ const {
   normalizeStripeWebhookSecrets
 } = require("./stripeWebhookSecrets");
 const {
+  PINGRAM_ALLOWED_API_ORIGINS,
+  isPingramWebhookSecretShape,
+  sendPingramSms,
+  verifyPingramSmsWebhook
+} = require("./pingramSms");
+const {
+  OWNER_SMS_ATTEMPT_STATES,
+  OwnerSmsAttemptError,
+  buildOwnerSmsAttemptId,
+  buildOwnerSmsAttemptReservation,
+  buildOwnerSmsPayloadDigest,
+  buildOwnerSmsRecipientFingerprint,
+  buildOwnerSmsWebhookReceiptId,
+  planOwnerSmsDispatch,
+  planOwnerSmsOutcome,
+  planOwnerSmsPreflightFailure
+} = require("./ownerSmsAttempts");
+const {
   PaymentDispatchStateError,
   beginPaymentDispatchAttempt,
   normalizePaymentDispatch,
@@ -304,7 +322,7 @@ const STAFF_ROLES = new Set(["admin", "sales"]);
 const ROLE_VALUES = new Set(["admin", "sales", "customer"]);
 const INVITES_COLLECTION = "organizationInvites";
 const ORGANIZATION_TOMBSTONES_COLLECTION = "organizationTombstones";
-const SMS_PROVIDERS = new Set(["twilio", "none"]);
+const SMS_PROVIDERS = new Set(["pingram", "twilio", "none"]);
 const EMAIL_PROVIDERS = new Set(["resend", "none"]);
 const APPROVED_EMAIL_FROM_NAME = "QuotePilot by MBMApps";
 const APPROVED_EMAIL_FROM_EMAIL = "quotepilot@leaguepilot.us";
@@ -351,6 +369,13 @@ const REVENUE_AUTOPILOT_PROVIDER_MESSAGE_INDEX_COLLECTION = "revenueAutopilotPro
 const REVENUE_AUTOPILOT_SCHEDULER_STATE_COLLECTION = "revenueAutopilotSchedulerState";
 const PROVISIONING_ORDERS_COLLECTION = "provisioningOrders";
 const WEBHOOK_EVENTS_COLLECTION = "webhookEvents";
+const OWNER_SMS_ATTEMPTS_COLLECTION = "ownerSmsAttempts";
+const OWNER_SMS_PROVIDER_MESSAGE_INDEX_COLLECTION = "ownerSmsProviderMessageIndex";
+const OWNER_SMS_WEBHOOK_RECEIPTS_COLLECTION = "ownerSmsWebhookReceipts";
+const OWNER_SMS_RATE_LIMITS_COLLECTION = "ownerSmsRateLimits";
+const OWNER_SMS_ORGANIZATION_STATE_COLLECTION = "ownerSmsOrganizationState";
+const OWNER_SMS_PROVIDER_CONTROLS_COLLECTION = "ownerSmsProviderControls";
+const OWNER_SMS_OUTBOX_COLLECTION = "ownerSmsOutbox";
 const BUYER_ACCESS_ORDERS_COLLECTION = "buyerAccessOrders";
 const BUYER_ACCESS_RATE_LIMITS_COLLECTION = "buyerAccessRateLimits";
 const STRIPE_SECRET_NAME = "STRIPE_SECRET_KEY";
@@ -359,6 +384,9 @@ const RESEND_API_KEY_SECRET_NAME = "RESEND_API_KEY";
 const RESEND_WEBHOOK_SECRET_NAME = "RESEND_WEBHOOK_SECRET";
 const REVENUE_AUTOPILOT_TOKEN_SECRET_NAME = "REVENUE_AUTOPILOT_TOKEN_SECRET";
 const TWILIO_AUTH_TOKEN_SECRET_NAME = "TWILIO_AUTH_TOKEN";
+const PINGRAM_API_KEY_SECRET_NAME = "PINGRAM_API_KEY";
+const PINGRAM_WEBHOOK_SECRET_NAME = "PINGRAM_WEBHOOK_SECRET";
+const SMS_CONTACT_DIGEST_SECRET_NAME = "SMS_CONTACT_DIGEST_SECRET";
 const BUYER_ACCESS_STRIPE_SECRET_NAME = "BUYER_ACCESS_STRIPE_SECRET_KEY";
 const BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME = "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET";
 const BUYER_ACCESS_TURNSTILE_SECRET_NAME = "BUYER_ACCESS_TURNSTILE_SECRET";
@@ -1100,12 +1128,38 @@ function getSmsProvider() {
   return provider;
 }
 
-function getTwilioConfig() {
+function getTwilioLocalConfig() {
   return {
     accountSid: readConfig("twilio.account_sid"),
-    authToken: readBoundSecret(TWILIO_AUTH_TOKEN_SECRET_NAME),
     messagingServiceSid: readConfig("twilio.messaging_service_sid"),
-    toNumber: readConfig("notifications.owner_phone")
+    toNumber: readConfig("notifications.owner_phone"),
+    ownerConsent: readConfig("notifications.owner_sms_consent").toLowerCase()
+  };
+}
+
+function getTwilioSendConfig() {
+  return {
+    ...getTwilioLocalConfig(),
+    authToken: readBoundSecret(TWILIO_AUTH_TOKEN_SECRET_NAME),
+    contactDigestSecret: readBoundSecret(SMS_CONTACT_DIGEST_SECRET_NAME)
+  };
+}
+
+function getPingramLocalConfig() {
+  return {
+    apiOrigin: readConfig("pingram.api_origin"),
+    fromNumber: readConfig("pingram.from_number"),
+    configurationGeneration: readConfig("pingram.configuration_generation"),
+    toNumber: readConfig("notifications.owner_phone"),
+    ownerConsent: readConfig("notifications.owner_sms_consent").toLowerCase()
+  };
+}
+
+function getPingramSendConfig() {
+  return {
+    ...getPingramLocalConfig(),
+    apiKey: readBoundSecret(PINGRAM_API_KEY_SECRET_NAME),
+    contactDigestSecret: readBoundSecret(SMS_CONTACT_DIGEST_SECRET_NAME)
   };
 }
 
@@ -2579,18 +2633,64 @@ function listMissingFields(fieldPairs) {
   return fieldPairs.filter((item) => !normalizeText(item.value)).map((item) => item.name);
 }
 
-function buildIntegrationSetupStatus() {
+function isE164Phone(value) {
+  return /^\+[1-9]\d{7,14}$/.test(normalizeText(value));
+}
+
+function ownerSmsCapabilityState(value, stateUpdatedAtISO = "") {
+  const state = normalizeText(value).toLowerCase();
+  if (state === OWNER_SMS_ATTEMPT_STATES.QUEUED || state === OWNER_SMS_ATTEMPT_STATES.DISPATCHING) {
+    const updatedAt = new Date(stateUpdatedAtISO || "");
+    if (!Number.isNaN(updatedAt.getTime()) && Date.now() - updatedAt.getTime() > 2 * 60 * 1000) {
+      return "uncertain";
+    }
+    return "submitting";
+  }
+  if (
+    state === OWNER_SMS_ATTEMPT_STATES.PROVIDER_ACCEPTED
+    || state === OWNER_SMS_ATTEMPT_STATES.DELIVERED
+  ) return "receipt";
+  if (state === OWNER_SMS_ATTEMPT_STATES.UNCERTAIN) return "uncertain";
+  if (
+    state === OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE
+    || state === OWNER_SMS_ATTEMPT_STATES.FAILED
+  ) return "error";
+  return "ready";
+}
+
+function buildIntegrationSetupStatus({
+  smsOrganizationState = null,
+  smsProviderReadiness = null,
+  smsProviderSuppression = null,
+  smsActiveDiagnostic = null
+} = {}) {
   const smsProvider = getSmsProvider();
   const emailConfig = getEmailConfig();
-  const twilioConfig = getTwilioConfig();
+  const twilioConfig = getTwilioLocalConfig();
+  const pingramConfig = getPingramLocalConfig();
   const stripeConfig = getStripeConfig();
   const appBaseUrl = readConfig("app.base_url");
 
   const twilioMissingFields = listMissingFields([
     { name: "TWILIO_ACCOUNT_SID", value: twilioConfig.accountSid },
-    { name: "TWILIO_AUTH_TOKEN", value: twilioConfig.authToken },
     { name: "TWILIO_MESSAGING_SERVICE_SID", value: twilioConfig.messagingServiceSid },
-    { name: "NOTIFICATIONS_OWNER_PHONE", value: twilioConfig.toNumber }
+    { name: "NOTIFICATIONS_OWNER_PHONE", value: isE164Phone(twilioConfig.toNumber) ? "valid" : "" },
+    { name: "NOTIFICATIONS_OWNER_SMS_CONSENT", value: twilioConfig.ownerConsent === "granted" ? "granted" : "" }
+  ]);
+  const pingramMissingFields = listMissingFields([
+    {
+      name: "PINGRAM_API_ORIGIN",
+      value: PINGRAM_ALLOWED_API_ORIGINS.includes(pingramConfig.apiOrigin)
+        ? pingramConfig.apiOrigin
+        : ""
+    },
+    { name: "PINGRAM_FROM_NUMBER", value: isE164Phone(pingramConfig.fromNumber) ? "valid" : "" },
+    {
+      name: "PINGRAM_CONFIGURATION_GENERATION",
+      value: normalizeOwnerSmsConfigurationGeneration(pingramConfig.configurationGeneration)
+    },
+    { name: "NOTIFICATIONS_OWNER_PHONE", value: isE164Phone(pingramConfig.toNumber) ? "valid" : "" },
+    { name: "NOTIFICATIONS_OWNER_SMS_CONSENT", value: pingramConfig.ownerConsent === "granted" ? "granted" : "" }
   ]);
   const stripeMissingFields = listMissingFields([
     { name: "STRIPE_MODE", value: stripeConfig.mode },
@@ -2605,6 +2705,23 @@ function buildIntegrationSetupStatus() {
     ] : [])
   ]);
   const twilioConfigured = twilioMissingFields.length === 0;
+  const pingramLocallyConfigured = pingramMissingFields.length === 0;
+  const pingramReadiness = smsProviderReadiness && typeof smsProviderReadiness === "object"
+    ? smsProviderReadiness
+    : {};
+  const smsChannelSuppression = smsProviderSuppression && typeof smsProviderSuppression === "object"
+    ? smsProviderSuppression
+    : {};
+  const smsChannelSuppressed = normalizeText(smsChannelSuppression.state).toLowerCase()
+    === "suppressed";
+  const pingramSignedDeliveryProven = (
+    normalizeText(pingramReadiness.state).toLowerCase() === "ready"
+    && normalizeOwnerSmsConfigurationGeneration(pingramReadiness.configurationGeneration)
+      === normalizeOwnerSmsConfigurationGeneration(pingramConfig.configurationGeneration)
+  );
+  const pingramAutomaticAlertsReady = pingramLocallyConfigured
+    && pingramSignedDeliveryProven
+    && !smsChannelSuppressed;
   let stripeConfigurationError = "";
   if (stripeMissingFields.length === 0) {
     try {
@@ -2616,19 +2733,98 @@ function buildIntegrationSetupStatus() {
   }
   const stripeConfigured = stripeMissingFields.length === 0 && !stripeConfigurationError;
   const emailConfigured = emailConfig.provider !== "none" && emailMissingFields.length === 0;
+  const selectedSmsLocalConfigComplete = smsProvider === "pingram"
+    ? pingramLocallyConfigured
+    : smsProvider === "twilio" ? twilioConfigured : smsProvider === "none";
+  const activeDiagnostic = smsActiveDiagnostic && typeof smsActiveDiagnostic === "object"
+    && isOwnerSmsUnresolvedState(smsActiveDiagnostic.state)
+    ? smsActiveDiagnostic
+    : null;
+  const latestSmsState = activeDiagnostic
+    || (smsOrganizationState && typeof smsOrganizationState === "object"
+      ? smsOrganizationState
+      : {});
+  const latestProvider = normalizeText(latestSmsState.provider).toLowerCase();
+  const latestState = normalizeText(latestSmsState.state).toLowerCase();
 
   return {
     evaluatedAtISO: new Date().toISOString(),
     smsProvider,
     smsProviderSupported: SMS_PROVIDERS.has(smsProvider),
+    sms: {
+      provider: smsProvider,
+      supported: SMS_PROVIDERS.has(smsProvider),
+      configured: null,
+      localConfigComplete: selectedSmsLocalConfigComplete,
+      canAttemptDiagnostic: (
+        (smsProvider === "pingram" && pingramLocallyConfigured && !smsChannelSuppressed)
+        || (smsProvider === "twilio" && twilioConfigured && !smsChannelSuppressed)
+      ),
+      automaticAlertsReady: smsProvider === "pingram"
+        ? pingramAutomaticAlertsReady
+        : smsProvider === "none" ? false : null,
+      canSend: smsProvider === "pingram"
+        ? pingramAutomaticAlertsReady
+        : smsProvider === "none" ? false : null,
+      suppressed: smsChannelSuppressed,
+      requiresOperatorReview: smsChannelSuppressed,
+      mutationState: ownerSmsCapabilityState(
+        latestState,
+        latestSmsState.stateUpdatedAtISO
+      ),
+      latestEvidence: latestState ? {
+        state: latestState,
+        provider: latestProvider,
+        notificationType: normalizeText(latestSmsState.notificationType),
+        stateUpdatedAtISO: normalizeText(latestSmsState.stateUpdatedAtISO),
+        revision: Number(latestSmsState.revision || 0),
+        delivered: latestState === OWNER_SMS_ATTEMPT_STATES.DELIVERED,
+        providerAccepted: [
+          OWNER_SMS_ATTEMPT_STATES.PROVIDER_ACCEPTED,
+          OWNER_SMS_ATTEMPT_STATES.DELIVERED,
+          OWNER_SMS_ATTEMPT_STATES.FAILED
+        ].includes(latestState),
+        safeToRetry: latestState === OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE,
+        attemptId: normalizeText(latestSmsState.attemptId)
+      } : null
+    },
     appBaseUrlConfigured: Boolean(normalizeText(appBaseUrl)),
     twilio: {
-      configured: twilioConfigured,
-      canSend: smsProvider === "twilio" && twilioConfigured,
+      configured: null,
+      localConfigComplete: twilioConfigured,
+      canAttemptDiagnostic: smsProvider === "twilio"
+        && twilioConfigured
+        && !smsChannelSuppressed,
+      canSend: null,
+      suppressed: smsChannelSuppressed,
+      requiresOperatorReview: smsChannelSuppressed,
+      credentialsConfigured: null,
+      messagingServiceConfigured: Boolean(twilioConfig.messagingServiceSid),
+      senderRegistered: null,
       missingFields: twilioMissingFields,
       accountSidHint: maskText(twilioConfig.accountSid),
-      fromNumberHint: maskText(twilioConfig.fromNumber),
       ownerPhoneHint: maskText(twilioConfig.toNumber)
+    },
+    pingram: {
+      configured: null,
+      locallyConfigured: pingramLocallyConfigured,
+      localConfigComplete: pingramLocallyConfigured,
+      eligibleForDiagnostic: smsProvider === "pingram"
+        && pingramLocallyConfigured
+        && !smsChannelSuppressed,
+      canSend: smsProvider === "pingram" && pingramAutomaticAlertsReady,
+      automaticAlertsReady: smsProvider === "pingram" && pingramAutomaticAlertsReady,
+      apiKeyConfigured: null,
+      senderConfigured: isE164Phone(pingramConfig.fromNumber),
+      webhookConfigured: null,
+      signedDeliveryProven: pingramSignedDeliveryProven,
+      reconciliationConfigured: pingramSignedDeliveryProven,
+      suppressed: smsChannelSuppressed,
+      requiresOperatorReview: smsChannelSuppressed,
+      configurationGeneration: normalizeOwnerSmsConfigurationGeneration(
+        pingramConfig.configurationGeneration
+      ),
+      missingFields: pingramMissingFields
     },
     stripe: {
       configured: stripeConfigured,
@@ -4753,58 +4949,1380 @@ async function finalizeProvisioningOrder({
   };
 }
 
-async function sendOwnerSms(message) {
-  const smsProvider = getSmsProvider();
-  if (smsProvider === "none") {
+function ownerSmsDocumentHash(kind, ...parts) {
+  return createHash("sha256")
+    .update(["quotepilot-owner-sms-v1", kind, ...parts].join("|"), "utf8")
+    .digest("hex");
+}
+
+function ownerSmsOrganizationStateRef(organizationId) {
+  return db.collection(OWNER_SMS_ORGANIZATION_STATE_COLLECTION).doc(
+    ownerSmsDocumentHash("organization-state", normalizeOrganizationId(organizationId))
+  );
+}
+
+function ownerSmsProviderMessageIndexRef(provider, providerTrackingId) {
+  return db.collection(OWNER_SMS_PROVIDER_MESSAGE_INDEX_COLLECTION).doc(
+    ownerSmsDocumentHash(
+      "provider-message",
+      normalizeText(provider).toLowerCase(),
+      normalizeText(providerTrackingId)
+    )
+  );
+}
+
+function ownerSmsRateLimitRef(organizationId, windowStartISO) {
+  return db.collection(OWNER_SMS_RATE_LIMITS_COLLECTION).doc(
+    ownerSmsDocumentHash(
+      "test-rate",
+      normalizeOrganizationId(organizationId),
+      normalizeText(windowStartISO)
+    )
+  );
+}
+
+function ownerSmsProviderReadinessRef(provider, organizationId) {
+  return db.collection(OWNER_SMS_PROVIDER_CONTROLS_COLLECTION).doc(
+    ownerSmsDocumentHash(
+      "provider-readiness",
+      normalizeText(provider).toLowerCase(),
+      normalizeOrganizationId(organizationId)
+    )
+  );
+}
+
+function ownerSmsProviderSuppressionRef(_provider = "") {
+  return db.collection(OWNER_SMS_PROVIDER_CONTROLS_COLLECTION).doc(
+    ownerSmsDocumentHash("channel-suppression", "owner-sms")
+  );
+}
+
+function ownerSmsTestLockRef(organizationId) {
+  return db.collection(OWNER_SMS_PROVIDER_CONTROLS_COLLECTION).doc(
+    ownerSmsDocumentHash("integration-test-lock", normalizeOrganizationId(organizationId))
+  );
+}
+
+function normalizeOwnerSmsConfigurationGeneration(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  return /^[a-z0-9][a-z0-9._-]{2,63}$/.test(normalized) ? normalized : "";
+}
+
+function ownerSmsProviderConfigurationDigest({
+  provider,
+  config,
+  recipientFingerprint
+} = {}) {
+  const normalizedProvider = normalizeText(provider).toLowerCase();
+  const generation = normalizeOwnerSmsConfigurationGeneration(
+    config?.configurationGeneration
+  );
+  const fingerprint = normalizeText(recipientFingerprint).toLowerCase();
+  if (
+    normalizedProvider !== "pingram"
+    || !generation
+    || !/^osrf_[a-f0-9]{64}$/.test(fingerprint)
+  ) {
+    throw new OwnerSmsAttemptError(
+      "failed-precondition",
+      "Pingram provider readiness identity is incomplete."
+    );
+  }
+  return createHash("sha256")
+    .update([
+      "quotepilot-owner-sms-provider-configuration-v1",
+      normalizedProvider,
+      generation,
+      normalizeText(config?.apiOrigin),
+      normalizeText(config?.fromNumber),
+      fingerprint
+    ].join("|"), "utf8")
+    .digest("hex");
+}
+
+function ownerSmsOutboxRef(input = {}) {
+  const attemptId = buildOwnerSmsAttemptId(input);
+  return db.collection(OWNER_SMS_OUTBOX_COLLECTION).doc(`oso_${attemptId.slice(4)}`);
+}
+
+function buildOwnerSmsOutboxCommand({
+  organizationId,
+  source,
+  sourceId,
+  notificationType,
+  message,
+  actorUid = "system",
+  nowISO = new Date().toISOString()
+} = {}) {
+  const messageBody = normalizeOwnerSmsBody(message);
+  const attemptId = buildOwnerSmsAttemptId({
+    organizationId,
+    source,
+    sourceId,
+    notificationType
+  });
+  if (!messageBody) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Owner SMS outbox message is required."
+    );
+  }
+  return {
+    schemaVersion: 1,
+    attemptId,
+    organizationId: normalizeOrganizationId(organizationId),
+    source: normalizeText(source).toLowerCase(),
+    sourceId: normalizeText(sourceId),
+    notificationType: normalizeText(notificationType).toLowerCase(),
+    messageBody,
+    messageDigest: createHash("sha256").update(messageBody, "utf8").digest("hex"),
+    actorUid: normalizeText(actorUid).slice(0, 128) || "system",
+    state: "pending",
+    queuedAtISO: "",
+    createdAtISO: nowISO
+  };
+}
+
+function ownerSmsPublicProjection(attempt = {}) {
+  const state = normalizeText(attempt.state).toLowerCase();
+  return {
+    queued: state === OWNER_SMS_ATTEMPT_STATES.QUEUED,
+    sent: false,
+    accepted: [
+      OWNER_SMS_ATTEMPT_STATES.PROVIDER_ACCEPTED,
+      OWNER_SMS_ATTEMPT_STATES.DELIVERED,
+      OWNER_SMS_ATTEMPT_STATES.FAILED
+    ].includes(state),
+    delivered: state === OWNER_SMS_ATTEMPT_STATES.DELIVERED,
+    state,
+    mutationState: ownerSmsCapabilityState(state, attempt.stateUpdatedAtISO),
+    provider: normalizeText(attempt.provider).toLowerCase(),
+    attemptId: normalizeText(attempt.attemptId),
+    safeToRetry: state === OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE,
+    requiresReconciliation: [
+      OWNER_SMS_ATTEMPT_STATES.UNCERTAIN,
+      OWNER_SMS_ATTEMPT_STATES.DISPATCHING
+    ].includes(state)
+  };
+}
+
+function shouldReplaceOwnerSmsOrganizationState(current = {}, attempt = {}) {
+  const currentReserved = Date.parse(normalizeText(current.reservedAtISO));
+  const nextReserved = Date.parse(normalizeText(attempt.reservedAtISO));
+  if (!Number.isFinite(currentReserved)) return true;
+  if (!Number.isFinite(nextReserved)) return false;
+  if (nextReserved !== currentReserved) return nextReserved > currentReserved;
+  if (normalizeText(current.attemptId) !== normalizeText(attempt.attemptId)) {
+    return normalizeText(attempt.attemptId) > normalizeText(current.attemptId);
+  }
+  return Number(attempt.revision || 0) >= Number(current.revision || 0);
+}
+
+function writeOwnerSmsOrganizationState(tx, stateRef, stateSnap, attempt) {
+  const current = stateSnap?.exists ? stateSnap.data() || {} : {};
+  if (!shouldReplaceOwnerSmsOrganizationState(current, attempt)) return;
+  tx.set(stateRef, {
+    schemaVersion: 1,
+    organizationId: normalizeOrganizationId(attempt.organizationId),
+    attemptId: normalizeText(attempt.attemptId),
+    provider: normalizeText(attempt.provider).toLowerCase(),
+    notificationType: normalizeText(attempt.notificationType).toLowerCase(),
+    state: normalizeText(attempt.state).toLowerCase(),
+    revision: Number(attempt.revision || 0),
+    reservedAtISO: normalizeText(attempt.reservedAtISO),
+    stateUpdatedAtISO: normalizeText(attempt.stateUpdatedAtISO),
+    providerAccepted: [
+      OWNER_SMS_ATTEMPT_STATES.PROVIDER_ACCEPTED,
+      OWNER_SMS_ATTEMPT_STATES.DELIVERED,
+      OWNER_SMS_ATTEMPT_STATES.FAILED
+    ].includes(normalizeText(attempt.state).toLowerCase()),
+    delivered: normalizeText(attempt.state).toLowerCase() === OWNER_SMS_ATTEMPT_STATES.DELIVERED,
+    safeReason: normalizeText(attempt.outcomeReason).slice(0, 80),
+    updatedAt: FieldValue.serverTimestamp()
+  }, { merge: false });
+}
+
+function ownerSmsQueueConfiguration(provider) {
+  const toNumber = readConfig("notifications.owner_phone");
+  const ownerConsent = readConfig("notifications.owner_sms_consent").toLowerCase();
+  const base = { provider, toNumber, ownerConsent };
+  if (provider === "pingram") {
     return {
-      sent: false,
-      reason: "sms_disabled"
+      ...base,
+      apiOrigin: readConfig("pingram.api_origin"),
+      fromNumber: readConfig("pingram.from_number"),
+      configurationGeneration: readConfig("pingram.configuration_generation")
     };
   }
-
-  if (!SMS_PROVIDERS.has(smsProvider)) {
+  if (provider === "twilio") {
     return {
+      ...base,
+      accountSid: readConfig("twilio.account_sid"),
+      messagingServiceSid: readConfig("twilio.messaging_service_sid")
+    };
+  }
+  return base;
+}
+
+function ownerSmsFrozenPayload({ provider, config, notificationType, messageBody }) {
+  return {
+    schemaVersion: 1,
+    provider,
+    notificationType,
+    to: config.toNumber,
+    ...(provider === "pingram" ? { from: config.fromNumber } : {}),
+    message: messageBody
+  };
+}
+
+function validateOwnerSmsQueueConfiguration(provider, config) {
+  if (config.ownerConsent !== "granted" || !isE164Phone(config.toNumber)) {
+    return false;
+  }
+  if (provider === "pingram") {
+    return PINGRAM_ALLOWED_API_ORIGINS.includes(config.apiOrigin)
+      && isE164Phone(config.fromNumber)
+      && Boolean(normalizeOwnerSmsConfigurationGeneration(config.configurationGeneration));
+  }
+  if (provider === "twilio") {
+    return Boolean(normalizeText(config.accountSid) && normalizeText(config.messagingServiceSid));
+  }
+  return false;
+}
+
+function normalizeOwnerSmsBody(value) {
+  return Array.from(normalizeText(value)).slice(0, 800).join("");
+}
+
+function ownerSmsTestWindow(now = new Date()) {
+  const windowStart = new Date(now);
+  windowStart.setUTCMinutes(0, 0, 0);
+  return windowStart.toISOString();
+}
+
+function isOwnerSmsUnresolvedState(value) {
+  return [
+    OWNER_SMS_ATTEMPT_STATES.QUEUED,
+    OWNER_SMS_ATTEMPT_STATES.DISPATCHING,
+    OWNER_SMS_ATTEMPT_STATES.PROVIDER_ACCEPTED,
+    OWNER_SMS_ATTEMPT_STATES.UNCERTAIN
+  ].includes(normalizeText(value).toLowerCase());
+}
+
+async function queueOwnerSmsAttempt({
+  organizationId,
+  source,
+  sourceId,
+  notificationType,
+  message,
+  actorUid = "system",
+  enforceTestRateLimit = false
+} = {}) {
+  const provider = getSmsProvider();
+  if (provider === "none") {
+    return {
+      queued: false,
       sent: false,
+      accepted: false,
+      state: "disabled",
+      mutationState: "ready",
+      reason: "sms_disabled",
+      provider,
+      safeToRetry: false
+    };
+  }
+  if (!SMS_PROVIDERS.has(provider)) {
+    return {
+      queued: false,
+      sent: false,
+      accepted: false,
+      state: OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE,
+      mutationState: "error",
       reason: "sms_provider_unsupported",
-      provider: smsProvider
+      provider,
+      safeToRetry: false
     };
   }
 
-  const twilioConfig = getTwilioConfig();
-  const missingFields = listMissingFields([
-    { name: "twilio.account_sid", value: twilioConfig.accountSid },
-    { name: "twilio.auth_token", value: twilioConfig.authToken },
-    { name: "twilio.messaging_service_sid", value: twilioConfig.messagingServiceSid },
-    { name: "notifications.owner_phone", value: twilioConfig.toNumber }
-  ]);
-  if (missingFields.length) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  const messageBody = normalizeOwnerSmsBody(message);
+  const config = ownerSmsQueueConfiguration(provider);
+  if (!normalizedOrganizationId || !messageBody || !validateOwnerSmsQueueConfiguration(provider, config)) {
     return {
+      queued: false,
       sent: false,
+      accepted: false,
+      state: OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE,
+      mutationState: "error",
       reason: "sms_not_configured",
-      missingFields
+      provider,
+      safeToRetry: true
     };
   }
 
-  try {
-    const client = twilio(twilioConfig.accountSid, twilioConfig.authToken);
-    const payload = await client.messages.create({
-      messagingServiceSid: twilioConfig.messagingServiceSid,
-      to: twilioConfig.toNumber,
-      body: normalizeText(message).slice(0, 1500)
+  const now = new Date();
+  const nowISO = now.toISOString();
+  const payloadDigest = buildOwnerSmsPayloadDigest(ownerSmsFrozenPayload({
+    provider,
+    config,
+    notificationType,
+    messageBody
+  }));
+  const reservation = buildOwnerSmsAttemptReservation({
+    source,
+    sourceId,
+    organizationId: normalizedOrganizationId,
+    notificationType,
+    provider,
+    payloadDigest,
+    nowISO
+  });
+  const attemptRef = db.collection(OWNER_SMS_ATTEMPTS_COLLECTION).doc(reservation.attemptId);
+  const stateRef = ownerSmsOrganizationStateRef(normalizedOrganizationId);
+  const isIntegrationDiagnostic = enforceTestRateLimit
+    && normalizeText(source).toLowerCase() === "integration"
+    && normalizeText(notificationType).toLowerCase() === "integration_test";
+  const rateWindowStartISO = enforceTestRateLimit ? ownerSmsTestWindow(now) : "";
+  const rateRef = enforceTestRateLimit
+    ? ownerSmsRateLimitRef(normalizedOrganizationId, rateWindowStartISO)
+    : null;
+  const suppressionRef = ownerSmsProviderSuppressionRef(provider);
+  const readinessRef = provider === "pingram"
+    ? ownerSmsProviderReadinessRef(provider, normalizedOrganizationId)
+    : null;
+  const testLockRef = isIntegrationDiagnostic
+    ? ownerSmsTestLockRef(normalizedOrganizationId)
+    : null;
+
+  const persisted = await db.runTransaction(async (tx) => {
+    const attemptSnap = await tx.get(attemptRef);
+    if (attemptSnap.exists) {
+      const existing = attemptSnap.data() || {};
+      if (
+        normalizeText(existing.payloadDigest) !== payloadDigest
+        || normalizeText(existing.provider).toLowerCase() !== provider
+      ) {
+        throw new functions.https.HttpsError(
+          "already-exists",
+          "This SMS request ID is already bound to different content."
+        );
+      }
+      return existing;
+    }
+
+    const stateSnap = await tx.get(stateRef);
+    let rateSnap = null;
+    if (rateRef) rateSnap = await tx.get(rateRef);
+    const suppressionSnap = suppressionRef ? await tx.get(suppressionRef) : null;
+    const readinessSnap = readinessRef ? await tx.get(readinessRef) : null;
+    const testLockSnap = testLockRef ? await tx.get(testLockRef) : null;
+    let activeTestAttemptSnap = null;
+    if (testLockSnap?.exists && normalizeText(testLockSnap.data()?.attemptId)) {
+      const activeAttemptId = normalizeText(testLockSnap.data()?.attemptId).toLowerCase();
+      if (!/^osa_[a-f0-9]{48}$/.test(activeAttemptId)) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "The SMS diagnostic lock requires operator review."
+        );
+      }
+      activeTestAttemptSnap = await tx.get(
+        db.collection(OWNER_SMS_ATTEMPTS_COLLECTION).doc(activeAttemptId)
+      );
+    }
+    if (normalizeText(suppressionSnap?.data()?.state).toLowerCase() === "suppressed") {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Owner SMS is paused after a provider opt-out signal and requires operator review."
+      );
+    }
+    if (provider === "pingram" && !isIntegrationDiagnostic) {
+      const readiness = readinessSnap?.exists ? readinessSnap.data() || {} : {};
+      if (
+        normalizeText(readiness.state).toLowerCase() !== "ready"
+        || normalizeOwnerSmsConfigurationGeneration(readiness.configurationGeneration)
+          !== normalizeOwnerSmsConfigurationGeneration(config.configurationGeneration)
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Pingram automatic alerts require a current signed delivery diagnostic."
+        );
+      }
+    }
+    if (
+      activeTestAttemptSnap?.exists
+      && isOwnerSmsUnresolvedState(activeTestAttemptSnap.data()?.state)
+    ) {
+      throw new functions.https.HttpsError(
+        "already-exists",
+        "An SMS diagnostic is still unresolved. Refresh its recorded evidence before continuing."
+      );
+    }
+    if (rateRef) {
+      const currentCount = Number(rateSnap?.data()?.count || 0);
+      if (!Number.isSafeInteger(currentCount) || currentCount < 0 || currentCount >= 3) {
+        throw new functions.https.HttpsError(
+          "resource-exhausted",
+          "The organization SMS test limit has been reached for this hour."
+        );
+      }
+      tx.set(rateRef, {
+        schemaVersion: 1,
+        organizationId: normalizedOrganizationId,
+        windowStartISO: rateWindowStartISO,
+        count: currentCount + 1,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: false });
+    }
+
+    const attempt = {
+      ...reservation,
+      messageBody,
+      actorUid: normalizeText(actorUid).slice(0, 128) || "system",
+      createdAt: FieldValue.serverTimestamp()
+    };
+    tx.create(attemptRef, attempt);
+    if (testLockRef) {
+      tx.set(testLockRef, {
+        schemaVersion: 1,
+        kind: "integration_test_lock",
+        organizationId: normalizedOrganizationId,
+        provider,
+        attemptId: reservation.attemptId,
+        state: "active",
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: false });
+    }
+    writeOwnerSmsOrganizationState(tx, stateRef, stateSnap, attempt);
+    return attempt;
+  });
+
+  return ownerSmsPublicProjection(persisted);
+}
+
+async function persistOwnerSmsOutbox(input = {}) {
+  const command = buildOwnerSmsOutboxCommand(input);
+  const outboxRef = ownerSmsOutboxRef(command);
+  const persisted = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(outboxRef);
+    if (snap.exists) {
+      const existing = snap.data() || {};
+      if (
+        normalizeText(existing.attemptId) !== command.attemptId
+        || normalizeText(existing.messageDigest) !== command.messageDigest
+      ) {
+        throw new functions.https.HttpsError(
+          "already-exists",
+          "Owner SMS outbox identity is already bound to different content."
+        );
+      }
+      const attemptId = normalizeText(existing.attemptId).toLowerCase();
+      const attemptSnap = /^osa_[a-f0-9]{48}$/.test(attemptId)
+        ? await tx.get(db.collection(OWNER_SMS_ATTEMPTS_COLLECTION).doc(attemptId))
+        : null;
+      return {
+        created: false,
+        outboxState: normalizeText(existing.state).toLowerCase(),
+        attemptState: normalizeText(attemptSnap?.data()?.state || existing.attemptState)
+          .toLowerCase(),
+        safeReason: normalizeText(existing.safeReason).toLowerCase()
+      };
+    }
+    tx.create(outboxRef, {
+      ...command,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
     });
-
     return {
-      sent: true,
-      sid: payload.sid
+      created: true,
+      outboxState: "pending",
+      attemptState: "",
+      safeReason: ""
     };
-  } catch (err) {
-    functions.logger.error("Twilio SMS send failed", err);
-    return {
-      sent: false,
-      reason: "sms_send_failed",
-      message: normalizeText(err?.message).slice(0, 180)
+  });
+  return {
+    outboxId: outboxRef.id,
+    attemptId: command.attemptId,
+    ...persisted
+  };
+}
+
+function ownerSmsOutboxPublicProjection(outbox = {}) {
+  const outboxState = normalizeText(outbox.outboxState).toLowerCase();
+  const attemptState = normalizeText(outbox.attemptState).toLowerCase();
+  const state = outboxState === "not_queued"
+    ? attemptState || OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE
+    : ["pending", "reserving"].includes(outboxState)
+      ? "outbox_reserved"
+      : attemptState || OWNER_SMS_ATTEMPT_STATES.QUEUED;
+  const providerAccepted = [
+    OWNER_SMS_ATTEMPT_STATES.PROVIDER_ACCEPTED,
+    OWNER_SMS_ATTEMPT_STATES.DELIVERED,
+    OWNER_SMS_ATTEMPT_STATES.FAILED
+  ].includes(state);
+  return {
+    queued: outboxState !== "not_queued",
+    accepted: providerAccepted,
+    delivered: state === OWNER_SMS_ATTEMPT_STATES.DELIVERED,
+    state,
+    mutationState: state === "outbox_reserved"
+      ? "submitting"
+      : ownerSmsCapabilityState(state),
+    safeToRetry: false,
+    attemptId: normalizeText(outbox.attemptId),
+    outboxState,
+    reused: outbox.created === false,
+    ...(normalizeText(outbox.safeReason) ? {
+      reason: normalizeText(outbox.safeReason).toLowerCase()
+    } : {})
+  };
+}
+
+function isDefiniteOwnerSmsOutboxError(error) {
+  return error instanceof functions.https.HttpsError && [
+    "already-exists",
+    "failed-precondition",
+    "invalid-argument",
+    "resource-exhausted"
+  ].includes(normalizeText(error.code).toLowerCase());
+}
+
+async function claimOwnerSmsOutbox(outboxRef) {
+  const reservationLeaseId = `sms_outbox_${randomUUID().replace(/-/g, "")}`;
+  const reservationStartedAtISO = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(outboxRef);
+    if (!snap.exists) return { kind: "missing" };
+    const command = snap.data() || {};
+    if (normalizeText(command.state).toLowerCase() !== "pending") {
+      return { kind: "noop", command };
+    }
+    tx.set(outboxRef, {
+      state: "reserving",
+      reservationLeaseId,
+      reservationStartedAtISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { kind: "claimed", command, reservationLeaseId };
+  });
+}
+
+async function finalizeOwnerSmsOutbox(
+  outboxRef,
+  command,
+  reservationLeaseId,
+  result
+) {
+  const finalizedAtISO = new Date().toISOString();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(outboxRef);
+    if (!snap.exists) return;
+    const current = snap.data() || {};
+    if (
+      normalizeText(current.attemptId) !== normalizeText(command.attemptId)
+      || normalizeText(current.messageDigest) !== normalizeText(command.messageDigest)
+    ) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Owner SMS outbox changed before finalization."
+      );
+    }
+    if (
+      normalizeText(current.state).toLowerCase() !== "reserving"
+      || normalizeText(current.reservationLeaseId) !== normalizeText(reservationLeaseId)
+    ) return;
+    tx.set(outboxRef, {
+      state: result?.queued === true ? "attempt_reserved" : "not_queued",
+      attemptState: normalizeText(result?.state).toLowerCase(),
+      safeReason: normalizeText(result?.reason).toLowerCase().slice(0, 80),
+      messageBody: FieldValue.delete(),
+      queuedAtISO: result?.queued === true ? finalizedAtISO : "",
+      finalizedAtISO,
+      reservationLeaseId: FieldValue.delete(),
+      reservationStartedAtISO: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+}
+
+async function processOwnerSmsOutboxSnapshot(snapshot) {
+  const claim = await claimOwnerSmsOutbox(snapshot.ref);
+  if (claim.kind !== "claimed") return null;
+  const { command, reservationLeaseId } = claim;
+  const messageBody = normalizeOwnerSmsBody(command.messageBody);
+  const messageDigest = createHash("sha256").update(messageBody, "utf8").digest("hex");
+  if (!messageBody || messageDigest !== normalizeText(command.messageDigest).toLowerCase()) {
+    await finalizeOwnerSmsOutbox(snapshot.ref, command, reservationLeaseId, {
+      queued: false,
+      state: OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE,
+      reason: "outbox_payload_invalid"
+    });
+    return null;
+  }
+
+  let result;
+  try {
+    result = await queueOwnerSmsAttempt({
+      organizationId: command.organizationId,
+      source: command.source,
+      sourceId: command.sourceId,
+      notificationType: command.notificationType,
+      message: messageBody,
+      actorUid: command.actorUid || "system"
+    });
+  } catch (error) {
+    if (!isDefiniteOwnerSmsOutboxError(error)) throw error;
+    result = {
+      queued: false,
+      state: OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE,
+      reason: normalizeText(error.code).toLowerCase() || "outbox_blocked"
     };
   }
+  await finalizeOwnerSmsOutbox(snapshot.ref, command, reservationLeaseId, result);
+  return result;
+}
+
+async function recoverStaleOwnerSmsOutboxReservation(outboxRef) {
+  const recoveredAtISO = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const outboxSnap = await tx.get(outboxRef);
+    if (!outboxSnap.exists) return { kind: "missing" };
+    const command = outboxSnap.data() || {};
+    if (normalizeText(command.state).toLowerCase() !== "reserving") {
+      return { kind: "noop" };
+    }
+    const attemptId = normalizeText(command.attemptId).toLowerCase();
+    if (!/^osa_[a-f0-9]{48}$/.test(attemptId)) {
+      tx.set(outboxRef, {
+        state: "not_queued",
+        attemptState: OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE,
+        safeReason: "outbox_identity_invalid",
+        messageBody: FieldValue.delete(),
+        finalizedAtISO: recoveredAtISO,
+        reservationLeaseId: FieldValue.delete(),
+        reservationStartedAtISO: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { kind: "invalid" };
+    }
+    const attemptRef = db.collection(OWNER_SMS_ATTEMPTS_COLLECTION).doc(attemptId);
+    const attemptSnap = await tx.get(attemptRef);
+    if (attemptSnap.exists) {
+      tx.set(outboxRef, {
+        state: "attempt_reserved",
+        attemptState: normalizeText(attemptSnap.data()?.state).toLowerCase(),
+        safeReason: "recovered_existing_attempt",
+        messageBody: FieldValue.delete(),
+        queuedAtISO: normalizeText(command.queuedAtISO) || recoveredAtISO,
+        finalizedAtISO: recoveredAtISO,
+        reservationLeaseId: FieldValue.delete(),
+        reservationStartedAtISO: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { kind: "recovered_attempt" };
+    }
+    tx.set(outboxRef, {
+      state: "pending",
+      reservationLeaseId: FieldValue.delete(),
+      reservationStartedAtISO: FieldValue.delete(),
+      recoveredAtISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { kind: "retry" };
+  });
+}
+
+async function readOwnerSmsStatusEvidence(organizationId) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  if (!normalizedOrganizationId) {
+    return {
+      smsOrganizationState: null,
+      smsProviderReadiness: null,
+      smsProviderSuppression: null,
+      smsActiveDiagnostic: null
+    };
+  }
+  const provider = getSmsProvider();
+  const [stateSnap, readinessSnap, suppressionSnap, testLockSnap] = await db.getAll(
+    ownerSmsOrganizationStateRef(normalizedOrganizationId),
+    ownerSmsProviderReadinessRef(provider, normalizedOrganizationId),
+    ownerSmsProviderSuppressionRef(provider),
+    ownerSmsTestLockRef(normalizedOrganizationId)
+  );
+  let activeDiagnostic = null;
+  const activeAttemptId = normalizeText(testLockSnap.data()?.attemptId).toLowerCase();
+  if (
+    testLockSnap.exists
+    && normalizeText(testLockSnap.data()?.state).toLowerCase() === "active"
+    && /^osa_[a-f0-9]{48}$/.test(activeAttemptId)
+  ) {
+    const activeAttemptSnap = await db.collection(OWNER_SMS_ATTEMPTS_COLLECTION)
+      .doc(activeAttemptId)
+      .get();
+    activeDiagnostic = activeAttemptSnap.exists ? activeAttemptSnap.data() || null : null;
+  }
+  return {
+    smsOrganizationState: stateSnap.exists ? stateSnap.data() || null : null,
+    smsProviderReadiness: readinessSnap.exists ? readinessSnap.data() || null : null,
+    smsProviderSuppression: suppressionSnap.exists ? suppressionSnap.data() || null : null,
+    smsActiveDiagnostic: activeDiagnostic
+  };
+}
+
+function writeOwnerSmsTestLock(tx, testLockRef, attempt) {
+  if (!testLockRef) return;
+  const active = isOwnerSmsUnresolvedState(attempt.state);
+  tx.set(testLockRef, {
+    schemaVersion: 1,
+    kind: "integration_test_lock",
+    organizationId: normalizeOrganizationId(attempt.organizationId),
+    provider: normalizeText(attempt.provider).toLowerCase(),
+    attemptId: normalizeText(attempt.attemptId),
+    state: active ? "active" : "resolved",
+    attemptState: normalizeText(attempt.state).toLowerCase(),
+    updatedAtISO: normalizeText(attempt.stateUpdatedAtISO),
+    updatedAt: FieldValue.serverTimestamp()
+  }, { merge: false });
+}
+
+async function recordOwnerSmsPreflightFailure({
+  attemptRef,
+  expectedProvider,
+  safeReason
+}) {
+  return db.runTransaction(async (tx) => {
+    const attemptSnap = await tx.get(attemptRef);
+    if (!attemptSnap.exists) return null;
+    const attempt = attemptSnap.data() || {};
+    if (
+      normalizeText(attempt.provider).toLowerCase() !== expectedProvider
+      || normalizeText(attempt.state).toLowerCase() !== OWNER_SMS_ATTEMPT_STATES.QUEUED
+    ) return attempt;
+    const stateRef = ownerSmsOrganizationStateRef(attempt.organizationId);
+    const testLockRef = normalizeText(attempt.notificationType).toLowerCase() === "integration_test"
+      ? ownerSmsTestLockRef(attempt.organizationId)
+      : null;
+    const stateSnap = await tx.get(stateRef);
+    if (testLockRef) await tx.get(testLockRef);
+    const failed = planOwnerSmsPreflightFailure({
+      attempt,
+      safeReason,
+      nowISO: new Date().toISOString()
+    });
+    tx.set(attemptRef, {
+      ...failed,
+      messageBody: FieldValue.delete(),
+      completedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    writeOwnerSmsOrganizationState(tx, stateRef, stateSnap, failed);
+    writeOwnerSmsTestLock(tx, testLockRef, failed);
+    return failed;
+  });
+}
+
+async function claimOwnerSmsAttempt({
+  attemptRef,
+  expectedProvider,
+  leaseId,
+  workerConfig,
+  recipientFingerprint,
+  providerConfigurationDigest = ""
+}) {
+  return db.runTransaction(async (tx) => {
+    const attemptSnap = await tx.get(attemptRef);
+    if (!attemptSnap.exists) return { kind: "noop", attempt: null };
+    const attempt = attemptSnap.data() || {};
+    if (normalizeText(attempt.provider).toLowerCase() !== expectedProvider) {
+      return { kind: "noop", attempt };
+    }
+    const currentState = normalizeText(attempt.state).toLowerCase();
+    if (currentState === OWNER_SMS_ATTEMPT_STATES.DISPATCHING) {
+      return { kind: "recover_dispatching", attempt };
+    }
+    if (currentState !== OWNER_SMS_ATTEMPT_STATES.QUEUED) {
+      return { kind: "noop", attempt };
+    }
+
+    const stateRef = ownerSmsOrganizationStateRef(attempt.organizationId);
+    const testLockRef = normalizeText(attempt.notificationType).toLowerCase() === "integration_test"
+      ? ownerSmsTestLockRef(attempt.organizationId)
+      : null;
+    const suppressionRef = ownerSmsProviderSuppressionRef(expectedProvider);
+    const readinessRef = expectedProvider === "pingram"
+      ? ownerSmsProviderReadinessRef(expectedProvider, attempt.organizationId)
+      : null;
+    const stateSnap = await tx.get(stateRef);
+    if (testLockRef) await tx.get(testLockRef);
+    const suppressionSnap = suppressionRef ? await tx.get(suppressionRef) : null;
+    const readinessSnap = readinessRef ? await tx.get(readinessRef) : null;
+
+    const messageBody = normalizeOwnerSmsBody(attempt.messageBody);
+    const expectedDigest = buildOwnerSmsPayloadDigest(ownerSmsFrozenPayload({
+      provider: expectedProvider,
+      config: workerConfig,
+      notificationType: normalizeText(attempt.notificationType).toLowerCase(),
+      messageBody
+    }));
+    const isDiagnostic = normalizeText(attempt.notificationType).toLowerCase()
+      === "integration_test";
+    const readiness = readinessSnap?.exists ? readinessSnap.data() || {} : {};
+    let preflightReason = "";
+    if (!messageBody || expectedDigest !== normalizeText(attempt.payloadDigest).toLowerCase()) {
+      preflightReason = "frozen_payload_mismatch";
+    } else if (
+      normalizeText(suppressionSnap?.data()?.state).toLowerCase() === "suppressed"
+    ) {
+      preflightReason = "provider_opt_out_hold";
+    } else if (
+      expectedProvider === "pingram"
+      && !isDiagnostic
+      && (
+        normalizeText(readiness.state).toLowerCase() !== "ready"
+        || normalizeText(readiness.providerConfigurationDigest).toLowerCase()
+          !== normalizeText(providerConfigurationDigest).toLowerCase()
+        || normalizeOwnerSmsConfigurationGeneration(readiness.configurationGeneration)
+          !== normalizeOwnerSmsConfigurationGeneration(workerConfig.configurationGeneration)
+      )
+    ) {
+      preflightReason = "provider_readiness_unproven";
+    }
+    if (preflightReason) {
+      const failed = planOwnerSmsPreflightFailure({
+        attempt,
+        safeReason: preflightReason,
+        nowISO: new Date().toISOString()
+      });
+      tx.set(attemptRef, {
+        ...failed,
+        messageBody: FieldValue.delete(),
+        completedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      writeOwnerSmsOrganizationState(tx, stateRef, stateSnap, failed);
+      writeOwnerSmsTestLock(tx, testLockRef, failed);
+      return { kind: "preflight_failed", attempt: failed };
+    }
+
+    const claimed = {
+      ...planOwnerSmsDispatch({
+        attempt,
+        leaseId,
+        recipientFingerprint,
+        nowISO: new Date().toISOString()
+      }),
+      configurationGeneration: normalizeOwnerSmsConfigurationGeneration(
+        workerConfig.configurationGeneration
+      ),
+      providerConfigurationDigest: normalizeText(providerConfigurationDigest).toLowerCase()
+    };
+    tx.set(attemptRef, claimed, { merge: false });
+    writeOwnerSmsOrganizationState(tx, stateRef, stateSnap, claimed);
+    writeOwnerSmsTestLock(tx, testLockRef, claimed);
+    return { kind: "claimed", attempt: claimed };
+  });
+}
+
+async function finalizeOwnerSmsDispatch({ attemptRef, leaseId, result }) {
+  return db.runTransaction(async (tx) => {
+    const attemptSnap = await tx.get(attemptRef);
+    if (!attemptSnap.exists) return null;
+    const attempt = attemptSnap.data() || {};
+    if (
+      normalizeText(attempt.state).toLowerCase() !== OWNER_SMS_ATTEMPT_STATES.DISPATCHING
+      || normalizeText(attempt.dispatchLeaseId) !== leaseId
+    ) return attempt;
+
+    const reportedTrackingId = normalizeText(result?.trackingId);
+    const indexRef = reportedTrackingId
+      ? ownerSmsProviderMessageIndexRef(attempt.provider, reportedTrackingId)
+      : null;
+    const stateRef = ownerSmsOrganizationStateRef(attempt.organizationId);
+    const testLockRef = normalizeText(attempt.notificationType).toLowerCase() === "integration_test"
+      ? ownerSmsTestLockRef(attempt.organizationId)
+      : null;
+    const stateSnap = await tx.get(stateRef);
+    if (testLockRef) await tx.get(testLockRef);
+    const indexSnap = indexRef ? await tx.get(indexRef) : null;
+    let outcome = result?.outcome === "provider_accepted"
+      ? OWNER_SMS_ATTEMPT_STATES.PROVIDER_ACCEPTED
+      : result?.outcome === "rejected"
+        ? OWNER_SMS_ATTEMPT_STATES.DEFINITE_FAILURE
+        : OWNER_SMS_ATTEMPT_STATES.UNCERTAIN;
+    let reason = outcome === OWNER_SMS_ATTEMPT_STATES.PROVIDER_ACCEPTED
+      ? "provider_accepted"
+      : normalizeText(result?.reason).toLowerCase();
+    let providerTrackingId = reportedTrackingId;
+    if (
+      indexSnap?.exists
+      && normalizeText(indexSnap.data()?.attemptId) !== normalizeText(attempt.attemptId)
+    ) {
+      outcome = OWNER_SMS_ATTEMPT_STATES.UNCERTAIN;
+      reason = "provider_binding_collision";
+      providerTrackingId = "";
+    }
+    const completed = planOwnerSmsOutcome({
+      attempt,
+      outcome,
+      reason: reason || "provider_outcome_unknown",
+      providerTrackingId,
+      nowISO: new Date().toISOString()
+    });
+    tx.set(attemptRef, {
+      ...completed,
+      messageBody: FieldValue.delete(),
+      completedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    if (indexRef && providerTrackingId && !indexSnap.exists) {
+      tx.create(indexRef, {
+        schemaVersion: 1,
+        provider: normalizeText(attempt.provider).toLowerCase(),
+        providerTrackingId,
+        attemptId: normalizeText(attempt.attemptId),
+        organizationId: normalizeOrganizationId(attempt.organizationId),
+        recipientFingerprint: normalizeText(attempt.recipientFingerprint).toLowerCase(),
+        configurationGeneration: normalizeOwnerSmsConfigurationGeneration(
+          attempt.configurationGeneration
+        ),
+        providerConfigurationDigest: normalizeText(
+          attempt.providerConfigurationDigest
+        ).toLowerCase(),
+        bindingState: outcome === OWNER_SMS_ATTEMPT_STATES.PROVIDER_ACCEPTED
+          ? "provider_accepted"
+          : "outcome_uncertain",
+        boundAtISO: completed.outcomeRecordedAtISO,
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+    writeOwnerSmsOrganizationState(tx, stateRef, stateSnap, completed);
+    writeOwnerSmsTestLock(tx, testLockRef, completed);
+    return completed;
+  });
+}
+
+async function dispatchOwnerSmsAttempt({ snapshot, expectedProvider, workerConfig, send }) {
+  const initialAttempt = snapshot.data() || {};
+  if (normalizeText(initialAttempt.provider).toLowerCase() !== expectedProvider) return null;
+  const currentSnapshot = await snapshot.ref.get();
+  if (!currentSnapshot.exists) return null;
+  const currentAttempt = currentSnapshot.data() || {};
+  const currentState = normalizeText(currentAttempt.state).toLowerCase();
+  if (currentState === OWNER_SMS_ATTEMPT_STATES.DISPATCHING) {
+    // Another invocation owns the persisted dispatch lease. Do not race its
+    // provider call or overwrite a later accepted result; the bounded
+    // reconciler converts only stale dispatches to an uncertain terminal state.
+    return currentAttempt;
+  }
+  if (currentState !== OWNER_SMS_ATTEMPT_STATES.QUEUED) return currentAttempt;
+  const leaseId = `sms_dispatch_${randomUUID().replace(/-/g, "")}`;
+  let recipientFingerprint;
+  let providerConfigurationDigest = "";
+  try {
+    recipientFingerprint = buildOwnerSmsRecipientFingerprint({
+      organizationId: currentAttempt.organizationId,
+      recipient: workerConfig.toNumber,
+      secret: workerConfig.contactDigestSecret
+    });
+    if (expectedProvider === "pingram") {
+      providerConfigurationDigest = ownerSmsProviderConfigurationDigest({
+        provider: expectedProvider,
+        config: workerConfig,
+        recipientFingerprint
+      });
+    }
+  } catch (error) {
+    if (!(error instanceof OwnerSmsAttemptError)) throw error;
+    functions.logger.error("Owner SMS dispatch configuration failed closed", {
+      attemptId: snapshot.id,
+      provider: expectedProvider,
+      error: normalizeText(error.message).slice(0, 160)
+    });
+    return recordOwnerSmsPreflightFailure({
+      attemptRef: snapshot.ref,
+      expectedProvider,
+      safeReason: "dispatch_configuration_invalid"
+    });
+  }
+
+  const claim = await claimOwnerSmsAttempt({
+    attemptRef: snapshot.ref,
+    expectedProvider,
+    leaseId,
+    workerConfig,
+    recipientFingerprint,
+    providerConfigurationDigest
+  });
+  if (claim.kind === "recover_dispatching") {
+    return claim.attempt;
+  }
+  if (claim.kind !== "claimed") return claim.attempt;
+
+  let result;
+  try {
+    result = await send({ attempt: claim.attempt, config: workerConfig });
+  } catch (error) {
+    result = { outcome: "indeterminate", reason: "transport_outcome_unknown" };
+    functions.logger.error("Owner SMS provider outcome is indeterminate", {
+      attemptId: snapshot.id,
+      provider: expectedProvider,
+      error: normalizeText(error?.message).slice(0, 160)
+    });
+  }
+  return finalizeOwnerSmsDispatch({ attemptRef: snapshot.ref, leaseId, result });
+}
+
+function pingramWebhookReceiptId(event, semanticEventKey) {
+  const eventType = normalizeText(event?.eventType).toLowerCase();
+  if (["sms_delivered", "sms_failed"].includes(eventType)) {
+    return buildOwnerSmsWebhookReceiptId({
+      provider: "pingram",
+      eventType,
+      providerTrackingId: event?.trackingId
+    });
+  }
+  const semanticKey = normalizeText(semanticEventKey).toLowerCase();
+  if (!/^pgsms_[a-f0-9]{64}$/.test(semanticKey)) {
+    throw new OwnerSmsAttemptError(
+      "invalid-argument",
+      "Pingram webhook semantic identity is invalid."
+    );
+  }
+  return `oswr_${createHash("sha256")
+    .update(`quotepilot-owner-sms-consent-event-v1|${semanticKey}`, "utf8")
+    .digest("hex")
+    .slice(0, 48)}`;
+}
+
+function pingramCounterpartReceiptRef(eventType, providerTrackingId) {
+  const counterpartType = normalizeText(eventType).toLowerCase() === "sms_delivered"
+    ? "sms_failed"
+    : "sms_delivered";
+  return db.collection(OWNER_SMS_WEBHOOK_RECEIPTS_COLLECTION).doc(
+    buildOwnerSmsWebhookReceiptId({
+      provider: "pingram",
+      eventType: counterpartType,
+      providerTrackingId
+    })
+  );
+}
+
+async function processPingramSmsWebhookReceiptRef(receiptRef) {
+  const processedAtISO = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const receiptSnap = await tx.get(receiptRef);
+    if (!receiptSnap.exists) return { state: "missing" };
+    const receipt = receiptSnap.data() || {};
+    const currentReceiptState = normalizeText(receipt.state).toLowerCase();
+    if ([
+      "processed",
+      "processed_opt_out_hold",
+      "requires_operator_review",
+      "requires_review_conflicting_events"
+    ].includes(currentReceiptState)) {
+      return { state: currentReceiptState, duplicate: true };
+    }
+
+    const eventType = normalizeText(receipt.eventType).toLowerCase();
+    if (
+      receipt.optOutSignal === true
+      || eventType === "sms_unsubscribe"
+    ) {
+      const suppressionRef = ownerSmsProviderSuppressionRef("pingram");
+      await tx.get(suppressionRef);
+      tx.set(suppressionRef, {
+        schemaVersion: 1,
+        kind: "provider_suppression",
+        provider: "all",
+        signalProvider: "pingram",
+        channel: "owner_sms",
+        state: "suppressed",
+        safeReason: "signed_provider_opt_out_signal",
+        requiresOperatorReview: true,
+        webhookReceiptId: receiptRef.id,
+        suppressedAtISO: processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: false });
+      tx.set(receiptRef, {
+        state: "processed_opt_out_hold",
+        processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { state: "processed_opt_out_hold" };
+    }
+
+    if (["sms_subscribe", "sms_inbound"].includes(eventType)) {
+      tx.set(receiptRef, {
+        state: "requires_operator_review",
+        safeReason: eventType === "sms_subscribe"
+          ? "subscribe_identity_unbound"
+          : "inbound_message_quarantined",
+        processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { state: "requires_operator_review" };
+    }
+
+    if (!["sms_delivered", "sms_failed"].includes(eventType)) {
+      tx.set(receiptRef, {
+        state: "requires_operator_review",
+        safeReason: "unsupported_verified_event",
+        processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { state: "requires_operator_review" };
+    }
+
+    const providerTrackingId = normalizeText(receipt.providerTrackingId);
+    const indexRef = ownerSmsProviderMessageIndexRef("pingram", providerTrackingId);
+    const counterpartRef = pingramCounterpartReceiptRef(eventType, providerTrackingId);
+    const suppressionRef = ownerSmsProviderSuppressionRef("pingram");
+    const [indexSnap, counterpartSnap, suppressionSnap] = await Promise.all([
+      tx.get(indexRef),
+      tx.get(counterpartRef),
+      tx.get(suppressionRef)
+    ]);
+    if (counterpartSnap.exists) {
+      const conflictPatch = {
+        state: "requires_review_conflicting_events",
+        safeReason: "conflicting_terminal_provider_events",
+        processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      };
+      tx.set(receiptRef, conflictPatch, { merge: true });
+      tx.set(counterpartRef, conflictPatch, { merge: true });
+      tx.set(suppressionRef, {
+        schemaVersion: 1,
+        kind: "provider_suppression",
+        provider: "all",
+        signalProvider: "pingram",
+        channel: "owner_sms",
+        state: "suppressed",
+        safeReason: "conflicting_terminal_provider_events",
+        requiresOperatorReview: true,
+        conflictingWebhookReceiptId: receiptRef.id,
+        suppressedAtISO: normalizeText(suppressionSnap.data()?.suppressedAtISO)
+          || processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { state: "requires_review_conflicting_events" };
+    }
+    if (!indexSnap.exists) {
+      tx.set(receiptRef, {
+        state: "pending_binding",
+        lastAttemptAtISO: processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { state: "pending_binding" };
+    }
+
+    const binding = indexSnap.data() || {};
+    const attemptRef = db.collection(OWNER_SMS_ATTEMPTS_COLLECTION).doc(
+      normalizeText(binding.attemptId).toLowerCase()
+    );
+    const attemptSnap = await tx.get(attemptRef);
+    if (!attemptSnap.exists) {
+      tx.set(receiptRef, {
+        state: "pending_attempt",
+        lastAttemptAtISO: processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { state: "pending_attempt" };
+    }
+
+    const attempt = attemptSnap.data() || {};
+    const stateRef = ownerSmsOrganizationStateRef(attempt.organizationId);
+    const testLockRef = normalizeText(attempt.notificationType).toLowerCase() === "integration_test"
+      ? ownerSmsTestLockRef(attempt.organizationId)
+      : null;
+    const readinessRef = normalizeText(attempt.notificationType).toLowerCase() === "integration_test"
+      ? ownerSmsProviderReadinessRef("pingram", attempt.organizationId)
+      : null;
+    const stateSnap = await tx.get(stateRef);
+    if (testLockRef) await tx.get(testLockRef);
+    if (readinessRef) await tx.get(readinessRef);
+
+    let completed;
+    try {
+      completed = planOwnerSmsOutcome({
+        attempt,
+        outcome: eventType === "sms_delivered"
+          ? OWNER_SMS_ATTEMPT_STATES.DELIVERED
+          : OWNER_SMS_ATTEMPT_STATES.FAILED,
+        reason: eventType === "sms_failed"
+          ? `provider_${normalizeText(receipt.failureCode).toLowerCase() || "reported_failed"}`
+          : "provider_reported_delivered",
+        providerTrackingId,
+        providerEventType: eventType,
+        providerOccurrenceAtISO: normalizeText(receipt.providerOccurrenceAtISO),
+        webhookSentAtISO: normalizeText(receipt.webhookSentAtISO),
+        webhookReceiptId: receiptRef.id,
+        nowISO: processedAtISO
+      });
+    } catch (error) {
+      if (!(error instanceof OwnerSmsAttemptError)) throw error;
+      tx.set(receiptRef, {
+        state: "requires_operator_review",
+        safeReason: normalizeText(error.code).slice(0, 80),
+        attemptId: normalizeText(attempt.attemptId),
+        organizationId: normalizeOrganizationId(attempt.organizationId),
+        processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { state: "requires_operator_review" };
+    }
+
+    tx.set(attemptRef, {
+      ...completed,
+      completedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    writeOwnerSmsOrganizationState(tx, stateRef, stateSnap, completed);
+    writeOwnerSmsTestLock(tx, testLockRef, completed);
+    if (
+      readinessRef
+      && eventType === "sms_delivered"
+      && normalizeOwnerSmsConfigurationGeneration(binding.configurationGeneration)
+        === normalizeOwnerSmsConfigurationGeneration(
+          readConfig("pingram.configuration_generation")
+        )
+      && /^[a-f0-9]{64}$/.test(
+        normalizeText(binding.providerConfigurationDigest).toLowerCase()
+      )
+    ) {
+      tx.set(readinessRef, {
+        schemaVersion: 1,
+        kind: "provider_readiness",
+        provider: "pingram",
+        organizationId: normalizeOrganizationId(attempt.organizationId),
+        state: "ready",
+        configurationGeneration: normalizeOwnerSmsConfigurationGeneration(
+          binding.configurationGeneration
+        ),
+        providerConfigurationDigest: normalizeText(
+          binding.providerConfigurationDigest
+        ).toLowerCase(),
+        recipientFingerprint: normalizeText(binding.recipientFingerprint).toLowerCase(),
+        signedDeliveryReceiptId: receiptRef.id,
+        readyAtISO: processedAtISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: false });
+    }
+    tx.set(receiptRef, {
+      state: "processed",
+      attemptId: normalizeText(attempt.attemptId),
+      organizationId: normalizeOrganizationId(attempt.organizationId),
+      processedAtISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { state: "processed" };
+  });
+}
+
+async function reconcilePingramReceiptsForTrackingId(providerTrackingId) {
+  const normalizedTrackingId = normalizeText(providerTrackingId);
+  if (!normalizedTrackingId) return [];
+  const refs = ["sms_delivered", "sms_failed"].map((eventType) => (
+    db.collection(OWNER_SMS_WEBHOOK_RECEIPTS_COLLECTION).doc(
+      buildOwnerSmsWebhookReceiptId({
+        provider: "pingram",
+        eventType,
+        providerTrackingId: normalizedTrackingId
+      })
+    )
+  ));
+  const snapshots = await db.getAll(...refs);
+  const results = [];
+  for (const snapshot of snapshots) {
+    if (snapshot.exists) {
+      results.push(await processPingramSmsWebhookReceiptRef(snapshot.ref));
+    }
+  }
+  return results;
+}
+
+async function reconcileOwnerSmsEvidenceBatch() {
+  const staleCutoffMs = Date.now() - 10 * 60 * 1000;
+  const [queuedSnap, dispatchingSnap, receiptSnap, outboxSnap, reservingOutboxSnap]
+    = await Promise.all([
+    db.collection(OWNER_SMS_ATTEMPTS_COLLECTION)
+      .where("state", "==", OWNER_SMS_ATTEMPT_STATES.QUEUED)
+      .limit(25)
+      .get(),
+    db.collection(OWNER_SMS_ATTEMPTS_COLLECTION)
+      .where("state", "==", OWNER_SMS_ATTEMPT_STATES.DISPATCHING)
+      .limit(25)
+      .get(),
+    db.collection(OWNER_SMS_WEBHOOK_RECEIPTS_COLLECTION)
+      .where("state", "in", ["received", "pending_binding", "pending_attempt"])
+      .limit(50)
+      .get(),
+    db.collection(OWNER_SMS_OUTBOX_COLLECTION)
+      .where("state", "==", "pending")
+      .limit(25)
+      .get(),
+    db.collection(OWNER_SMS_OUTBOX_COLLECTION)
+      .where("state", "==", "reserving")
+      .limit(25)
+      .get()
+  ]);
+
+  let reconciled = 0;
+  for (const snapshot of queuedSnap.docs) {
+    const attempt = snapshot.data() || {};
+    const reservedAtMs = Date.parse(normalizeText(attempt.reservedAtISO));
+    if (Number.isFinite(reservedAtMs) && reservedAtMs <= staleCutoffMs) {
+      await recordOwnerSmsPreflightFailure({
+        attemptRef: snapshot.ref,
+        expectedProvider: normalizeText(attempt.provider).toLowerCase(),
+        safeReason: "stale_queue_not_dispatched"
+      });
+      reconciled += 1;
+    }
+  }
+  for (const snapshot of dispatchingSnap.docs) {
+    const attempt = snapshot.data() || {};
+    const startedAtMs = Date.parse(normalizeText(attempt.dispatchStartedAtISO));
+    if (Number.isFinite(startedAtMs) && startedAtMs <= staleCutoffMs) {
+      await finalizeOwnerSmsDispatch({
+        attemptRef: snapshot.ref,
+        leaseId: normalizeText(attempt.dispatchLeaseId),
+        result: {
+          outcome: "indeterminate",
+          reason: "dispatch_completion_unavailable",
+          trackingId: normalizeText(attempt.providerTrackingId)
+        }
+      });
+      reconciled += 1;
+    }
+  }
+  for (const snapshot of receiptSnap.docs) {
+    await processPingramSmsWebhookReceiptRef(snapshot.ref);
+    reconciled += 1;
+  }
+  for (const snapshot of outboxSnap.docs) {
+    await processOwnerSmsOutboxSnapshot(snapshot);
+    reconciled += 1;
+  }
+  for (const snapshot of reservingOutboxSnap.docs) {
+    const reservationStartedAtMs = Date.parse(
+      normalizeText(snapshot.data()?.reservationStartedAtISO)
+    );
+    if (
+      Number.isFinite(reservationStartedAtMs)
+      && reservationStartedAtMs <= staleCutoffMs
+    ) {
+      const recovery = await recoverStaleOwnerSmsOutboxReservation(snapshot.ref);
+      if (recovery.kind === "retry") {
+        await processOwnerSmsOutboxSnapshot(await snapshot.ref.get());
+      }
+      reconciled += 1;
+    }
+  }
+  return {
+    reconciled,
+    queuedInspected: queuedSnap.size,
+    dispatchingInspected: dispatchingSnap.size,
+    receiptsInspected: receiptSnap.size,
+    outboxInspected: outboxSnap.size,
+    reservingOutboxInspected: reservingOutboxSnap.size
+  };
 }
 
 async function patchPaymentState({
@@ -4817,7 +6335,8 @@ async function patchPaymentState({
   webhookEvent = null,
   checkoutTransition = null,
   providerObservation = null,
-  paymentKind = "deposit"
+  paymentKind = "deposit",
+  ownerSmsOutboxCommand = null
 }) {
   const flow = getPaymentRequestFlow(paymentKind);
   const normalizedQuoteId = normalizeText(quoteId);
@@ -4837,6 +6356,10 @@ async function patchPaymentState({
   const webhookRef = webhookEventId
     ? db.collection(WEBHOOK_EVENTS_COLLECTION).doc(`stripe-${webhookEventId}`)
     : null;
+  const outboxCommand = ownerSmsOutboxCommand && typeof ownerSmsOutboxCommand === "object"
+    ? ownerSmsOutboxCommand
+    : null;
+  const outboxRef = outboxCommand ? ownerSmsOutboxRef(outboxCommand) : null;
   const nowISO = new Date().toISOString();
 
   try {
@@ -4844,11 +6367,15 @@ async function patchPaymentState({
       const reads = [transaction.get(quoteRef)];
       if (portalRef) reads.push(transaction.get(portalRef));
       if (webhookRef) reads.push(transaction.get(webhookRef));
+      if (outboxRef) reads.push(transaction.get(outboxRef));
       const snapshots = await Promise.all(reads);
       const quoteSnap = snapshots[0];
       const portalSnap = portalRef ? snapshots[1] : null;
       const webhookSnap = webhookRef
         ? snapshots[portalRef ? 2 : 1]
+        : null;
+      const outboxSnap = outboxRef
+        ? snapshots[1 + (portalRef ? 1 : 0) + (webhookRef ? 1 : 0)]
         : null;
 
       if (webhookSnap?.exists) {
@@ -5030,6 +6557,28 @@ async function patchPaymentState({
           processedAtISO: nowISO,
           createdAt: FieldValue.serverTimestamp()
         });
+      }
+
+      if (outboxRef && shouldUpdatePayment) {
+        if (outboxSnap?.exists) {
+          const existingOutbox = outboxSnap.data() || {};
+          if (
+            normalizeText(existingOutbox.attemptId) !== normalizeText(outboxCommand.attemptId)
+            || normalizeText(existingOutbox.messageDigest)
+              !== normalizeText(outboxCommand.messageDigest)
+          ) {
+            throw new functions.https.HttpsError(
+              "already-exists",
+              "Stripe payment SMS outbox identity collided with different content."
+            );
+          }
+        } else {
+          transaction.create(outboxRef, {
+            ...outboxCommand,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+          });
+        }
       }
 
       return {
@@ -17038,7 +18587,6 @@ exports.rotateQuotePortalKey = functions
   });
 
 exports.notifyOwnerNewQuote = functions
-  .runWith({ secrets: [TWILIO_AUTH_TOKEN_SECRET_NAME] })
   .region(REGION)
   .https.onCall(async (data, context) => {
   const staff = assertAdminStaff(await assertStaff(context));
@@ -17058,12 +18606,22 @@ exports.notifyOwnerNewQuote = functions
   const smsText =
     `New quote ${quoteNumber} saved for ${customerName}. ` +
     `Event ${eventDate}. Total ${total}.`;
-  const smsResult = await sendOwnerSms(smsText);
+  const quoteRevisionId = normalizeText(
+    quote.activeVersionId || quote.versionMeta?.versionId || quote.latestVersionNumber
+  );
+  const smsOutbox = await persistOwnerSmsOutbox({
+    organizationId: staff.organizationId,
+    source: "quote",
+    sourceId: `${quoteId}:${quoteRevisionId || "current"}`,
+    notificationType: "quote_saved",
+    message: smsText,
+    actorUid: staff.uid
+  });
 
   return {
     ok: true,
     quoteNumber,
-    sms: smsResult
+    sms: ownerSmsOutboxPublicProjection(smsOutbox)
   };
 });
 
@@ -18624,43 +20182,345 @@ exports.getIntegrationSetupStatus = functions
     secrets: [
       STRIPE_SECRET_NAME,
       STRIPE_WEBHOOK_SECRET_NAME,
-      RESEND_API_KEY_SECRET_NAME,
-      TWILIO_AUTH_TOKEN_SECRET_NAME
+      RESEND_API_KEY_SECRET_NAME
     ]
   })
   .region(REGION)
   .https.onCall(async (_data, context) => {
-    assertAdminStaff(await assertStaff(context));
+    const staff = assertAdminStaff(await assertStaff(context));
+    const smsEvidence = await readOwnerSmsStatusEvidence(staff.organizationId);
     return {
       ok: true,
-      status: buildIntegrationSetupStatus()
+      status: buildIntegrationSetupStatus(smsEvidence)
     };
   });
 
 exports.sendIntegrationTestSms = functions
-  .runWith({
-    secrets: [
-      STRIPE_SECRET_NAME,
-      STRIPE_WEBHOOK_SECRET_NAME,
-      RESEND_API_KEY_SECRET_NAME,
-      TWILIO_AUTH_TOKEN_SECRET_NAME
-    ]
-  })
   .region(REGION)
   .https.onCall(async (data, context) => {
     const staff = assertAdminStaff(await assertStaff(context));
+    const supplied = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+    const unexpectedKeys = Object.keys(supplied).filter(
+      (key) => !["requestId", "message"].includes(key)
+    );
+    if (unexpectedKeys.length) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "SMS test request contains unsupported fields."
+      );
+    }
+    const requestId = normalizeText(supplied.requestId).toLowerCase();
+    if (!/^sms_test_[a-f0-9]{32}$/.test(requestId)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "A valid SMS test request ID is required."
+      );
+    }
     const actorEmail = normalizeEmail(context?.auth?.token?.email || staff.uid);
-    const customMessage = normalizeText(data?.message);
+    const customMessage = normalizeText(supplied.message);
+    if (Array.from(customMessage).length > 320) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "SMS test message must be 320 characters or fewer."
+      );
+    }
     const message =
       customMessage ||
-      `Integration SMS test from QuotePilot (${new Date().toISOString()}) sent by ${actorEmail}.`;
-    const sms = await sendOwnerSms(message);
+      `Integration SMS test from QuotePilot requested by ${actorEmail}.`;
+    const sms = await queueOwnerSmsAttempt({
+      organizationId: staff.organizationId,
+      source: "integration",
+      sourceId: requestId,
+      notificationType: "integration_test",
+      message,
+      actorUid: staff.uid,
+      enforceTestRateLimit: true
+    });
 
     return {
       ok: true,
-      sms,
-      status: buildIntegrationSetupStatus()
+      sms
     };
+  });
+
+exports.reserveOwnerSmsOutbox = functions
+  .runWith({ failurePolicy: true })
+  .region(REGION)
+  .firestore.document(`${OWNER_SMS_OUTBOX_COLLECTION}/{outboxId}`)
+  .onCreate(async (snapshot) => processOwnerSmsOutboxSnapshot(snapshot));
+
+exports.dispatchPingramOwnerSms = functions
+  .runWith({
+    failurePolicy: true,
+    secrets: [PINGRAM_API_KEY_SECRET_NAME, SMS_CONTACT_DIGEST_SECRET_NAME]
+  })
+  .region(REGION)
+  .firestore.document(`${OWNER_SMS_ATTEMPTS_COLLECTION}/{attemptId}`)
+  .onCreate(async (snapshot) => {
+    const config = getPingramSendConfig();
+    return dispatchOwnerSmsAttempt({
+      snapshot,
+      expectedProvider: "pingram",
+      workerConfig: config,
+      send: ({ attempt, config: worker }) => sendPingramSms({
+        apiOrigin: worker.apiOrigin,
+        apiKey: worker.apiKey,
+        to: worker.toNumber,
+        from: worker.fromNumber,
+        type: normalizeText(attempt.notificationType).toLowerCase(),
+        message: normalizeText(attempt.messageBody)
+      })
+    });
+  });
+
+exports.dispatchTwilioOwnerSms = functions
+  .runWith({
+    failurePolicy: true,
+    secrets: [TWILIO_AUTH_TOKEN_SECRET_NAME, SMS_CONTACT_DIGEST_SECRET_NAME]
+  })
+  .region(REGION)
+  .firestore.document(`${OWNER_SMS_ATTEMPTS_COLLECTION}/{attemptId}`)
+  .onCreate(async (snapshot) => {
+    const config = getTwilioSendConfig();
+    return dispatchOwnerSmsAttempt({
+      snapshot,
+      expectedProvider: "twilio",
+      workerConfig: config,
+      send: async ({ attempt, config: worker }) => {
+        if (
+          !normalizeText(worker.accountSid)
+          || !normalizeText(worker.authToken)
+          || !normalizeText(worker.messagingServiceSid)
+          || !isE164Phone(worker.toNumber)
+        ) {
+          return { outcome: "rejected", reason: "invalid_twilio_configuration" };
+        }
+        try {
+          const client = twilio(worker.accountSid, worker.authToken, {
+            autoRetry: false,
+            maxRetries: 0,
+            timeout: 5_000
+          });
+          const response = await client.messages.create({
+            messagingServiceSid: worker.messagingServiceSid,
+            to: worker.toNumber,
+            body: normalizeText(attempt.messageBody)
+          });
+          const trackingId = normalizeText(response?.sid);
+          if (!trackingId) {
+            return { outcome: "indeterminate", reason: "malformed_provider_response" };
+          }
+          return { outcome: "provider_accepted", trackingId };
+        } catch (err) {
+          const status = Number(err?.status);
+          return Number.isInteger(status) && status >= 400 && status <= 499
+            ? { outcome: "rejected", reason: "provider_http_4xx" }
+            : { outcome: "indeterminate", reason: "transport_outcome_unknown" };
+        }
+      }
+    });
+  });
+
+exports.processPingramSmsWebhookReceipt = functions
+  .runWith({ failurePolicy: true })
+  .region(REGION)
+  .firestore.document(`${OWNER_SMS_WEBHOOK_RECEIPTS_COLLECTION}/{receiptId}`)
+  .onCreate(async (snapshot) => processPingramSmsWebhookReceiptRef(snapshot.ref));
+
+exports.reconcilePingramSmsProviderBinding = functions
+  .runWith({ failurePolicy: true })
+  .region(REGION)
+  .firestore.document(`${OWNER_SMS_PROVIDER_MESSAGE_INDEX_COLLECTION}/{bindingId}`)
+  .onCreate(async (snapshot) => {
+    const binding = snapshot.data() || {};
+    if (normalizeText(binding.provider).toLowerCase() !== "pingram") return null;
+    return reconcilePingramReceiptsForTrackingId(binding.providerTrackingId);
+  });
+
+exports.reconcileOwnerSmsEvidence = functions
+  .runWith({ timeoutSeconds: 120 })
+  .region(REGION)
+  .pubsub.schedule("every 15 minutes")
+  .onRun(async () => reconcileOwnerSmsEvidenceBatch());
+
+exports.pingramSmsWebhook = functions
+  .runWith({ secrets: [PINGRAM_WEBHOOK_SECRET_NAME] })
+  .region(REGION)
+  .https.onRequest(async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+    const contentType = normalizeText(req.headers["content-type"]).toLowerCase();
+    if (!contentType.startsWith("application/json")) {
+      res.status(415).send("Unsupported Media Type");
+      return;
+    }
+    const webhookSecret = readBoundSecret(PINGRAM_WEBHOOK_SECRET_NAME);
+    if (!isPingramWebhookSecretShape(webhookSecret)) {
+      functions.logger.error("Pingram SMS webhook runtime is unavailable", {
+        reason: "webhook_secret_unavailable"
+      });
+      res.status(500).send("Pingram webhook is temporarily unavailable.");
+      return;
+    }
+    const verified = verifyPingramSmsWebhook({
+      rawBody: req.rawBody,
+      headers: req.headers,
+      webhookSecret
+    });
+    if (!verified.ok) {
+      functions.logger.warn("Pingram SMS webhook rejected", {
+        reason: normalizeText(verified.reason).slice(0, 80)
+      });
+      res.status(400).send("Invalid Pingram webhook.");
+      return;
+    }
+
+    const event = verified.event;
+    const providerEventType = normalizeText(event.eventType).toLowerCase();
+    const receiptId = pingramWebhookReceiptId(event, verified.semanticEventKey);
+    const receiptRef = db.collection(OWNER_SMS_WEBHOOK_RECEIPTS_COLLECTION).doc(receiptId);
+    const signatureTimestampMs = Number(req.headers["x-pingram-timestamp"]);
+    const webhookSentAtISO = Number.isSafeInteger(signatureTimestampMs)
+      ? new Date(signatureTimestampMs).toISOString()
+      : new Date().toISOString();
+    const observedAtISO = new Date().toISOString();
+
+    try {
+      const result = await db.runTransaction(async (tx) => {
+        const receiptSnap = await tx.get(receiptRef);
+        const optOutSignal = event.optOutSignal === true
+          || providerEventType === "sms_unsubscribe";
+        const terminalEvent = ["sms_delivered", "sms_failed"].includes(providerEventType);
+        const counterpartRef = terminalEvent
+          ? pingramCounterpartReceiptRef(providerEventType, event.trackingId)
+          : null;
+        const counterpartSnap = counterpartRef ? await tx.get(counterpartRef) : null;
+        const conflictingTerminalEvent = counterpartSnap?.exists === true;
+        const suppressionRef = optOutSignal || conflictingTerminalEvent
+          ? ownerSmsProviderSuppressionRef("pingram")
+          : null;
+        const suppressionSnap = suppressionRef ? await tx.get(suppressionRef) : null;
+        const persistSuppression = ({
+          safeReason = "signed_provider_opt_out_signal",
+          merge = false
+        } = {}) => {
+          if (!suppressionRef) return;
+          tx.set(suppressionRef, {
+            schemaVersion: 1,
+            kind: "provider_suppression",
+            provider: "all",
+            signalProvider: "pingram",
+            channel: "owner_sms",
+            state: "suppressed",
+            safeReason,
+            requiresOperatorReview: true,
+            ...(safeReason === "conflicting_terminal_provider_events"
+              ? { conflictingWebhookReceiptId: receiptRef.id }
+              : { webhookReceiptId: receiptRef.id }),
+            suppressedAtISO: normalizeText(suppressionSnap?.data()?.suppressedAtISO)
+              || observedAtISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge });
+        };
+        const conflictPatch = {
+          state: "requires_review_conflicting_events",
+          safeReason: "conflicting_terminal_provider_events",
+          processedAtISO: observedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        if (receiptSnap.exists) {
+          if (conflictingTerminalEvent) {
+            tx.set(receiptRef, conflictPatch, { merge: true });
+            tx.set(counterpartRef, conflictPatch, { merge: true });
+            persistSuppression({
+              safeReason: "conflicting_terminal_provider_events",
+              merge: true
+            });
+          } else if (optOutSignal) {
+            if (
+              normalizeText(suppressionSnap?.data()?.state).toLowerCase() !== "suppressed"
+            ) persistSuppression();
+            tx.set(receiptRef, {
+              state: "processed_opt_out_hold",
+              processedAtISO: observedAtISO,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+          }
+          return {
+            duplicate: true,
+            state: conflictingTerminalEvent
+              ? "requires_review_conflicting_events"
+              : optOutSignal
+                ? "processed_opt_out_hold"
+                : receiptSnap.data()?.state || "received"
+          };
+        }
+        tx.create(receiptRef, {
+          schemaVersion: 1,
+          provider: "pingram",
+          eventType: providerEventType,
+          semanticEventDigest: createHash("sha256")
+            .update(normalizeText(verified.semanticEventKey), "utf8")
+            .digest("hex"),
+          headerEventDigest: createHash("sha256")
+            .update(normalizeText(event.headerEventId), "utf8")
+            .digest("hex"),
+          ...(event.trackingId ? { providerTrackingId: event.trackingId } : {}),
+          ...(event.lastTrackingId ? { lastTrackingId: event.lastTrackingId } : {}),
+          ...(event.notificationId ? {
+            notificationDigest: createHash("sha256")
+              .update(normalizeText(event.notificationId), "utf8")
+              .digest("hex")
+          } : {}),
+          ...(event.failureCode ? { failureCode: normalizeText(event.failureCode).toLowerCase() } : {}),
+          optOutSignal,
+          payloadDigest: createHash("sha256").update(req.rawBody).digest("hex"),
+          webhookSentAtISO,
+          observedAtISO,
+          state: conflictingTerminalEvent
+            ? "requires_review_conflicting_events"
+            : optOutSignal
+              ? "processed_opt_out_hold"
+              : "received",
+          ...(conflictingTerminalEvent
+            ? {
+              safeReason: "conflicting_terminal_provider_events",
+              processedAtISO: observedAtISO
+            }
+            : optOutSignal
+              ? { processedAtISO: observedAtISO }
+              : {}),
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        if (conflictingTerminalEvent) {
+          tx.set(counterpartRef, conflictPatch, { merge: true });
+          persistSuppression({
+            safeReason: "conflicting_terminal_provider_events",
+            merge: true
+          });
+        } else {
+          persistSuppression();
+        }
+        return {
+          duplicate: false,
+          state: conflictingTerminalEvent
+            ? "requires_review_conflicting_events"
+            : optOutSignal
+              ? "processed_opt_out_hold"
+              : "received"
+        };
+      });
+      res.status(200).json({ received: true, duplicate: result.duplicate === true });
+    } catch (err) {
+      functions.logger.error("Pingram SMS webhook persistence failed", {
+        receiptId,
+        error: normalizeText(err?.message).slice(0, 180)
+      });
+      res.status(500).send("Failed to persist Pingram webhook.");
+    }
   });
 
 function normalizeApprovedCheckoutPreparation(input = {}) {
@@ -21308,7 +23168,7 @@ exports.buyerAccessStripeWebhook = functions
   });
 
 exports.stripeWebhook = functions
-  .runWith({ secrets: [STRIPE_WEBHOOK_SECRET_NAME, TWILIO_AUTH_TOKEN_SECRET_NAME] })
+  .runWith({ secrets: [STRIPE_WEBHOOK_SECRET_NAME] })
   .region(REGION)
   .https.onRequest(async (req, res) => {
   if (req.method !== "POST") {
@@ -21521,8 +23381,23 @@ exports.stripeWebhook = functions
       const staleScopeResult = commercialScopeValid
         ? staleResult
         : `${staleResult}_scope_mismatch`;
+      const staleOutboxCommand = stalePaidReview
+        ? buildOwnerSmsOutboxCommand({
+          organizationId: quoteDetails.organizationId,
+          source: "stripe",
+          sourceId: eventId,
+          notificationType: "stale_paid_review",
+          message: `Stripe reported a paid delayed checkout for ${quoteNumber}. Review event ${eventId} before changing payment evidence.`
+        })
+        : null;
+      const staleOutboxRef = staleOutboxCommand
+        ? ownerSmsOutboxRef(staleOutboxCommand)
+        : null;
       const staleAudit = await db.runTransaction(async (tx) => {
-        const existingSnap = await tx.get(dedupeRef);
+        const [existingSnap, staleOutboxSnap] = await Promise.all([
+          tx.get(dedupeRef),
+          staleOutboxRef ? tx.get(staleOutboxRef) : Promise.resolve(null)
+        ]);
         if (existingSnap.exists) return { duplicate: true };
         tx.create(dedupeRef, {
           provider: "stripe",
@@ -21549,16 +23424,18 @@ exports.stripeWebhook = functions
           processedAtISO: new Date().toISOString(),
           createdAt: FieldValue.serverTimestamp()
         });
+        if (staleOutboxRef && !staleOutboxSnap?.exists) {
+          tx.create(staleOutboxRef, {
+            ...staleOutboxCommand,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+          });
+        }
         return { duplicate: false };
       });
       if (staleAudit.duplicate) {
         res.json({ received: true, duplicate: true });
         return;
-      }
-      if (stalePaidReview) {
-        await sendOwnerSms(
-          `Stripe reported a paid delayed checkout for ${quoteNumber}. Review event ${eventId} before changing payment evidence.`
-        );
       }
       res.json({
         received: true,
@@ -21573,6 +23450,17 @@ exports.stripeWebhook = functions
       organizationId: quoteDetails.organizationId
     });
     assertStripePaymentKindMetadata(session, flow.paymentKind);
+    const paymentOwnerSmsOutboxCommand = providerObservation.providerState === "paid"
+      ? buildOwnerSmsOutboxCommand({
+        organizationId: quoteDetails.organizationId,
+        source: "stripe",
+        sourceId: eventId,
+        notificationType: flow.paymentKind === "final_balance"
+          ? "final_balance_paid"
+          : "deposit_paid",
+        message: `${flow.paymentKind === "final_balance" ? "Final balance" : "Deposit"} paid for ${quoteNumber}. Amount ${currencyLabel(validatedSession.amountTotal / 100)}.`
+      })
+      : null;
     const paymentResult = await patchPaymentState({
       quoteId,
       organizationId: quoteDetails.organizationId,
@@ -21586,6 +23474,7 @@ exports.stripeWebhook = functions
       stripeSession: session,
       providerObservation,
       paymentKind: flow.paymentKind,
+      ownerSmsOutboxCommand: paymentOwnerSmsOutboxCommand,
       webhookEvent: {
         eventId,
         eventType: event.type,
@@ -21599,11 +23488,6 @@ exports.stripeWebhook = functions
     if (paymentResult.duplicate) {
       res.json({ received: true, duplicate: true });
       return;
-    }
-    if (paymentResult.applied && providerObservation.providerState === "paid") {
-      await sendOwnerSms(
-        `${flow.paymentKind === "final_balance" ? "Final balance" : "Deposit"} paid for ${quoteNumber}. Amount ${currencyLabel(validatedSession.amountTotal / 100)}.`
-      );
     }
     if (paymentResult.ignored) {
       res.json({ received: true, ignored: paymentResult.ignored });

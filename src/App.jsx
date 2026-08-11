@@ -2473,14 +2473,18 @@ export default function App({ tenantContext, authSession }) {
         )
           .then((smsResult) => {
             let smsSuffix = "";
-            if (smsResult?.sms?.sent) {
-              smsSuffix = " Owner SMS sent.";
+            if (smsResult?.sms?.queued || smsResult?.sms?.state === "queued") {
+              smsSuffix = " Owner SMS queued; delivery is not yet proven.";
+            } else if (smsResult?.sms?.accepted) {
+              smsSuffix = " Owner SMS request accepted; delivery is not yet proven.";
             } else if (smsResult?.sms?.reason === "sms_not_configured") {
               smsSuffix = " Owner SMS not configured yet.";
             } else if (smsResult?.sms?.reason === "sms_disabled") {
               smsSuffix = " Owner SMS disabled by configuration.";
-            } else if (smsResult?.sms?.reason === "sms_send_failed") {
-              smsSuffix = " Owner SMS failed to send.";
+            } else if (smsResult?.sms?.requiresReconciliation) {
+              smsSuffix = " Owner SMS outcome needs reconciliation; do not retry blindly.";
+            } else if (smsResult?.sms?.state === "definite_failure") {
+              smsSuffix = " Owner SMS was not accepted.";
             }
             if (!smsSuffix) return;
             setSubmitState((current) => current.message.startsWith(savedDraftMessage)
@@ -2489,7 +2493,7 @@ export default function App({ tenantContext, authSession }) {
           })
           .catch(() => {
             setSubmitState((current) => current.message.startsWith(savedDraftMessage)
-              ? { ...current, message: `${savedDraftMessage} Owner SMS failed to send.${pricingAdjustmentNote}` }
+              ? { ...current, message: `${savedDraftMessage} Owner SMS status is unavailable; do not retry blindly.${pricingAdjustmentNote}` }
               : current);
           });
       }

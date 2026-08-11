@@ -46,7 +46,7 @@
 - Candidate commit SHA:
 - Immutable candidate deployment id/URL:
 - Checklist digest (`npm run release:uat:digest`):
-- Intended target(s) and applicable ids (`npm run release:uat:items -- --target <profile>`):
+- Intended target(s), SMS provider profile(s), and applicable ids (`npm run release:uat:items -- --target <target> --sms-provider <none|twilio|pingram>`):
 - Candidate UAT attester and evidence link:
 - Post-merge release SHA / exact-main CI run id (release operator):
 - Protected UAT run id / exact deploy profile / rollback SHA (release operator):

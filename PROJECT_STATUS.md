@@ -4,32 +4,32 @@ Last updated: August 11, 2026
 
 ## Current Production Release
 
-- PR #54 merged the governed post-competitive pilot release into `main` at
-  `4f4e00d3829eb29a1ee90d7d8402b786344dd158`; annotated tag `v0.6.0`
+- PR #57 merged the governed workspace and messaging release into `main` at
+  `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`; annotated tag `v0.7.0`
   resolves to that exact commit.
-- Exact-main CI Quality run `31452570192` passed all eight required jobs,
-  including the default-off rollback suite and the exact seven-flag production
-  bundle/browser matrix.
-- Governed Firebase `all` run `31452927999` and governed Vercel run
-  `31452928296` both completed successfully from that tagged revision with
-  `v0.5.0` commit `3cca8cc4bb985de6ec08c9d62094cfe81b1d2a43`
+- Exact-main CI Quality run `31528176575` passed all eight required jobs.
+- Governed Firebase `all` run `31529170963` and governed Vercel run
+  `31530050353` both completed successfully from that tagged revision with
+  `v0.6.0` commit `4f4e00d3829eb29a1ee90d7d8402b786344dd158`
   recorded as the rollback target.
 
 ## Operational Health
 
-- Production runtime: `v0.6.0` is live from tagged `main` commit
-  `4f4e00d3829eb29a1ee90d7d8402b786344dd158`.
-- Exact-main CI: run `31452570192` passed all eight required jobs.
-- Firebase: `all` deployment run `31452927999` updated Hosting, Firestore rules,
-  indexes, and Functions, then verified `https://tonicatering.web.app`.
-- Vercel: deployment run `31452928296` promoted immutable deployment
-  `quoteflow-3q51ufo9y-mbmapps.vercel.app` and rebound
+- Production runtime: `v0.7.0` is live from tagged `main` commit
+  `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`.
+- Exact-main CI: run `31528176575` passed all eight required jobs.
+- Firebase: `all` deployment run `31529170963` published Hosting release
+  `sites/tonicatering/releases/1786477743665000` (version
+  `a9f6a7ded70efcc0`), verified rules/index parity, and left every deployed
+  Function active.
+- Vercel: deployment run `31530050353` promoted deployment
+  `dpl_HQaLBMe93QfNqgwZmT7ov9WzR9Z5` at
+  `quoteflow-duqhsqfau-mbmapps.vercel.app` and rebound
   `https://quotepilot.mbmapps.com`.
 - Public reachability: `/`, `/app`, and `/app/messages` returned HTTP 200 on
   the production edge; `/` and `/app` also returned HTTP 200 on the Firebase
   origin.
-- Runtime inventory: Firebase lists 75 Functions. The newly deployed callable
-  `recordChangeRequestParse` reports `ACTIVE` on Node.js 22 in `us-central1`.
+- Runtime inventory: Firebase lists 77 Functions, all `ACTIVE`.
 - Merged/deployed parity: both production workflows checked out the exact
   tagged release SHA. This receipt-only documentation reconciliation does not
   change the deployed runtime.
@@ -82,6 +82,27 @@ Authenticated hosted use and human acceptance remain separate for the listed
 staff capabilities even where source, local/emulator, CI, deployment, and public
 route evidence are complete.
 
+### Implemented in source, not deployed
+
+- The owner-SMS rail now has a deployment-owned
+  `NOTIFICATIONS_SMS_PROVIDER=none|twilio|pingram` choice, a provider-neutral
+  admin status/test surface, a transactional private outbox, single-call
+  attempt, provider binding, durable signed-callback inbox, and
+  reconciliation-safe outcomes. It remains one-way for existing owner alerts
+  only; it does not add customer SMS or a two-way inbox. Signed unsubscribe or
+  exact inbound STOP creates an indefinite v1 hold on all owner SMS sends across
+  provider selection, with no browser or callable clear path; provider
+  acceptance is not delivery, and claimed or indeterminate attempts are not
+  automatically resent.
+- No Pingram Functions deployment, endpoint registration, provider call, or
+  live SMS has occurred. Production remains
+  `NOTIFICATIONS_SMS_PROVIDER=none`. Promotion requires `PINGRAM_API_KEY`,
+  `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET` in Firebase Secret
+  Manager, one exact approved US/CA/EU Pingram origin, a new lowercase
+  `PINGRAM_CONFIGURATION_GENERATION`, a server-owned E.164
+  owner destination, explicit consent, sender/A2P approval, exact
+  signed-webhook registration, and controlled hosted/provider UAT.
+
 ### Deployed but intentionally dormant
 
 | Capability | Current gate | Reason it remains off |
@@ -90,16 +111,23 @@ route evidence are complete.
 | Commercial Change enforcement | global `false`; all five observed tenant gates off | Simulation and evidence review remain usable. Enforcement requires authenticated admin-role acceptance and a separately authorized exact tenant gate. |
 | Revenue Autopilot preparation | `REVENUE_AUTOPILOT_ENABLED=false`; no observed tenant policies | The complete local authority matrix passes, but an authenticated hosted admin acceptance is still required before the global preparation-only gate is promoted. |
 | Revenue Autopilot outbound sends | `REVENUE_AUTOPILOT_SENDS_ENABLED=false` | The restricted Resend key can send but cannot independently verify webhook registration. Signed provider webhook, delivery/bounce/complaint, and recipient evidence remain open. |
-| SMS | `NOTIFICATIONS_SMS_PROVIDER=none` | The Twilio Messaging Service has no approved US A2P registration. Repeated carrier-rejected tests are prohibited until approval. |
+| SMS | `NOTIFICATIONS_SMS_PROVIDER=none` | Current production is off. Twilio still lacks approved US A2P registration, and the Pingram source slice has not been deployed or provider-tested. No provider may be selected until its sender/compliance, consent, secret, endpoint, and controlled-UAT gates pass. |
 | CRM synchronization | disabled | No reviewed server-authorized connector with provider acceptance is deployed. |
 
 ## Current Validation Evidence
 
-- The `v0.6.0` checkpoint passed 202 unit files with 2,390 tests (plus the
-  documented skips), the full 59-test default browser suite, the exact
-  production-flag matrix, 63 Firestore rules tests, Firebase Auth/rules and
-  authoritative-pricing browser lanes, CWV, bundle, governance, Docker, and all
-  exact-main CI gates.
+- The `v0.7.0` exact-main CI checkpoint passed all eight required jobs; both
+  governed deployment workflows then accepted the exact tagged SHA. Public
+  routes returned HTTP 200 on both edges, and all 50 sampled built assets were
+  byte-identical between Vercel and Firebase Hosting.
+- The source-only Pingram slice passes 2,610 unit tests and 67 Firestore rules
+  tests, a production build, environment/governance/capability/secret/workflow
+  checks, and disposable Firestore acceptance for callback-before-binding,
+  signed diagnostic readiness, STOP suppression, held-outbox redaction, and
+  claimed-retry-without-resend. The disposable acceptance now runs inside the
+  standard `lane:firebase-auth-rules` CI path. These are local results, not
+  deployment, provider, carrier-delivery, recipient, or human-acceptance
+  evidence.
 - The August 10 customer-centered authority emulator acceptance passed against
   real Auth, Firestore, and Functions emulators with Commercial Change
   enforcement and Revenue Autopilot preparation enabled while outbound sends
@@ -131,17 +159,22 @@ route evidence are complete.
    until role-specific hosted acceptance and exact tenant authorization close.
 5. Revenue Autopilot outbound sends lack independently verified provider webhook
    registration and hosted scheduler/provider acceptance. Keep sends off.
-6. Twilio SMS lacks A2P approval. Keep SMS off and avoid additional carrier-
-   rejected tests.
+6. Owner SMS remains off. Twilio lacks A2P approval; Pingram still lacks a
+   deployed credential/sender/consent/webhook/UAT receipt. Do not run another
+   provider attempt or automatically retry an indeterminate send before one
+   complete governed promotion path is approved.
 7. A disposable second-tenant create/activate/isolation/cleanup acceptance is
    still required. Existing organization documents do not substitute for that
    exact lifecycle proof.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. The customer-centered convergence bundle still uses the named temporary
-   no-headroom exception. Optimization or reviewed clean-main recalibration is
-   required before removing it.
+9. The workspace plus owner-SMS bundle uses a named temporary no-headroom
+   2,789,740-byte exception. The Pingram source delta is 12,759 bytes in both
+   identical-profile comparisons against released `v0.7.0` main; the
+   extrapolated ceiling still needs exact-SHA CI confirmation before release,
+   and optimization or reviewed clean-main recalibration is required before
+   removing it.
 10. `functions.config()` compatibility remains in source and must migrate before
     Firebase removes the legacy API in March 2027.
 11. The repository still lacks an independent human reviewer for stronger
@@ -159,9 +192,13 @@ route evidence are complete.
    separate provider-delivery acceptance.
 4. Capture one controlled Resend quote-delivery attempt with provider accepted,
    delivered/bounced reconciliation, and recipient-inbox evidence kept distinct.
-5. Run the disposable second-tenant lifecycle and hosted cross-tenant/portal
+5. Prepare, but do not yet execute, the Pingram owner-SMS promotion record:
+   Secret Manager bindings, exact regional origin, new configuration generation,
+   sender/A2P and owner-consent evidence, registered signed endpoint, rollback,
+   opt-out-hold proof, and one controlled UAT plan.
+6. Run the disposable second-tenant lifecycle and hosted cross-tenant/portal
    denial matrix.
-6. Complete the bundle-exception closure path and continue `functions.config()`
+7. Complete the bundle-exception closure path and continue `functions.config()`
    migration planning.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).

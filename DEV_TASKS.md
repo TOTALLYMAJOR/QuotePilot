@@ -72,10 +72,25 @@ Only open work belongs here. Current operational truth lives in
   Kitchen BEO freshness, and Decision Debt. Enable the global enforcement gate
   only with an explicitly named tenant and rollback record; never bulk-enable
   all tenants.
-- Complete Twilio Messaging Service US A2P registration and approval. Only then
-  add the reviewed non-secret runtime inventory, deploy
-  `NOTIFICATIONS_SMS_PROVIDER=twilio`, and run one controlled destination-device
-  acceptance. Do not retry known carrier-rejected traffic before approval.
+- Keep production `NOTIFICATIONS_SMS_PROVIDER=none` while qualifying exactly
+  one owner-SMS provider. For the Pingram path, create `PINGRAM_API_KEY`,
+  `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET` only in Firebase
+  Secret Manager; choose one exact approved US/CA/EU origin and a new lowercase
+  `PINGRAM_CONFIGURATION_GENERATION`; verify the
+  server-owned E.164 owner destination, explicit consent, sender/A2P state, and
+  exact signed-webhook registration; then use the governed release path for one
+  controlled owner-only UAT. Preserve request acceptance, signed
+  delivery/failure, and recipient receipt as separate evidence. Require a
+  signed delivered diagnostic before automatic alerts, verify that signed
+  unsubscribe/STOP creates an indefinite v1 hold on all owner SMS sends across
+  provider selection with no browser or callable clear path, and never
+  automatically resend a claimed or indeterminate attempt.
+- If Twilio remains the selected alternative, complete its Messaging Service
+  US A2P registration and approval before deploying
+  `NOTIFICATIONS_SMS_PROVIDER=twilio`. Do not configure both providers, fall
+  back between them, or retry known carrier-rejected traffic. Neither path adds
+  customer SMS or two-way messaging; signed inbound callbacks are quarantined
+  and opt-out signals fail closed.
 
 ## P0 - Release and Security Controls
 
