@@ -1,4 +1,5 @@
 import { calculateQuote } from "../lib/quoteCalculator";
+import { buildMarginPresentation } from "./marginPresentation";
 
 // Deterministic band-pricing presentation for the draft preview
 // (docs/POST_COMPETITIVE_DESIGN.md §4.2, docs/INTENT_INTAKE_ADR.md). A band
@@ -40,6 +41,16 @@ export function buildPricingBand({ form, catalog, settings, band } = {}) {
   const highTotals = calculateQuote({ ...form, guests: max }, catalog, settings);
   if (!lowTotals || !highTotals) return null;
 
+  // Margin at both band ends, same fail-closed rule as the applied-count
+  // strip: only ever shown when every selected line has a recorded cost at
+  // BOTH endpoints. One end missing costs makes the whole range unavailable
+  // rather than implying a false precision from a half-known range.
+  const lowMargin = buildMarginPresentation({ form: { ...form, guests: min }, totals: lowTotals, catalog, settings });
+  const highMargin = buildMarginPresentation({ form: { ...form, guests: max }, totals: highTotals, catalog, settings });
+  const margin = lowMargin?.available && highMargin?.available
+    ? { lowPct: lowMargin.marginPct, highPct: highMargin.marginPct }
+    : null;
+
   return {
     modelId: PRICING_BAND_MODEL,
     kind: band.kind,
@@ -50,6 +61,7 @@ export function buildPricingBand({ form, catalog, settings, band } = {}) {
     highTotal: Number(highTotals.total || 0),
     lowDeposit: Number(lowTotals.deposit || 0),
     highDeposit: Number(highTotals.deposit || 0),
+    margin,
     note: band.kind === "range"
       ? `Priced at the ends of the stated ${min}–${max} guest range. Confirming the count makes this exact.`
       : `Priced at ±10% around ~${band.appliedValue} guests. Confirming the count makes this exact.`

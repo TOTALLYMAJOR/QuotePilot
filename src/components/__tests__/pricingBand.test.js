@@ -102,6 +102,26 @@ describe("buildPricingBand", () => {
     expect(buildPricingBand({ form, catalog, settings, band: { kind: "range", min: 10, max: 10 } })).toBeNull();
     expect(buildPricingBand({ band: { kind: "range", min: 10, max: 20 } })).toBeNull();
   });
+
+  test("stays fail-closed on margin: null without recorded costs at both band ends", () => {
+    const result = buildPricingBand({ form, catalog, settings, band });
+    expect(result.margin).toBeNull();
+  });
+
+  test("prices a margin range at both band ends once costs are recorded", () => {
+    const costedCatalog = {
+      ...catalog,
+      packages: [{ id: "classic", name: "Classic", ppp: 20, costPpp: 8 }]
+    };
+    const costedSettings = { ...settings, targetMarginPct: 0.5 };
+    const result = buildPricingBand({ form, catalog: costedCatalog, settings: costedSettings, band });
+    expect(result.margin).not.toBeNull();
+    expect(result.margin.lowPct).toBeGreaterThan(0);
+    expect(result.margin.highPct).toBeGreaterThan(0);
+    // Same package cost-per-person as revenue-per-person basis, so margin
+    // percentage should not swing wildly between the two band ends here.
+    expect(Math.abs(result.margin.lowPct - result.margin.highPct)).toBeLessThan(0.05);
+  });
 });
 
 describe("buildApplyPayload", () => {

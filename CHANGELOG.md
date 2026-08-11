@@ -33,6 +33,20 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Margin range in the CREATE intake band-pricing preview
+  (`VITE_PILOT_MARGINS_ENABLED`, still default off), closing the Phase 5
+  gap between the app's two pricing paths: `buildPricingBand` now prices
+  margin at both band endpoints the exact same fail-closed way the applied-
+  count margin strip already does, and shows a range only when costs are
+  recorded at *both* ends — one end missing costs makes the whole range
+  unavailable rather than implying false precision. Displayed low/high are
+  sorted for display (margin % is not guaranteed to move the same
+  direction as guest count the way totals do, since fixed costs amortize
+  differently at different guest counts). `CreateIntake`/`pricingBand.js`
+  is a staff-only surface — same trust boundary as the main pricing rail,
+  not customer-facing — so this needed no different treatment than the
+  cost-entry delivery already gave the applied-count strip.
+
 - Structured change-request version linking (`functions/index.js#linkChangeRequestResolutionVersion`),
   completing the intent-to-version audit trail for the flag-gated
   client-request panel (`VITE_PILOT_CHANGE_REQUESTS_ENABLED`, still default

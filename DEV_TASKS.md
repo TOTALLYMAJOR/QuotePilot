@@ -132,7 +132,9 @@ with band pricing, the client-request panel with the structured record
 callable (now including best-effort structured change-request version
 linking; see the `structured-change-request-record` capability contract),
 the Pilot command bar, and the fail-closed margin strip (now with Catalog
-Admin cost entry and a below-target commercial advisor card; see the
+Admin cost entry, a below-target commercial advisor card, and a margin
+range in the CREATE intake band-pricing preview — both pricing paths now
+share the same fail-closed cost basis; see the
 `catalog-cost-and-pricing-data-entry` capability contract). PR #53 merged
 this program's first delivery to `main` on 2026-08-11; every flag remains
 default off. Remaining program work:
@@ -141,13 +143,6 @@ default off. Remaining program work:
   surface adds no authority while off. Bundle-exception exit (or reviewed
   recalibration) is required per docs/PERFORMANCE_GUARDRAILS.md before
   flag promotion.
-- Phase 5 unit economics remainder: margin/cost awareness in the *other*
-  pricing path — `pricingBand.js`'s draft-only CREATE intake estimate —
-  was deliberately left out of the cost-entry delivery; that surface is
-  customer-adjacent (shown during intake, before a package is even fully
-  specified) and injecting internal cost data there deserves its own
-  considered pass rather than being folded in under time pressure
-  (design §4.5, §1.3).
 - Bug found while instrumenting Catalog Admin's save-state capability
   evidence, not yet fixed (out of scope for that slice — a production
   save-error-recovery behavior change deserves its own focused fix, not a

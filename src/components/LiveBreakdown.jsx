@@ -534,6 +534,19 @@ export default function LiveBreakdown({
               <span className="pricing-band-label">Deposit range</span>
               <strong>{money(pricingBand.lowDeposit)} – {money(pricingBand.highDeposit)}</strong>
             </p>
+            {PILOT_MARGINS_ENABLED && pricingBand.margin && (
+              <p className="pricing-band-figures">
+                <span className="pricing-band-label">Margin range</span>
+                <strong>
+                  {/* Margin % does not necessarily move the same direction as
+                      guest count (fixed costs amortize differently), so sort
+                      for display rather than assuming low-guests -> low-%. */}
+                  {(Math.min(pricingBand.margin.lowPct, pricingBand.margin.highPct) * 100).toFixed(1)}%
+                  {" – "}
+                  {(Math.max(pricingBand.margin.lowPct, pricingBand.margin.highPct) * 100).toFixed(1)}%
+                </strong>
+              </p>
+            )}
             <p className="pricing-band-note">
               {pricingBand.note} Saving always prices the exact recorded count.
             </p>
