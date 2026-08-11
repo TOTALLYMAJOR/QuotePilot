@@ -46,8 +46,8 @@ const ACCEPTED_PORTAL_STATUSES = new Set(["accepted", "booked"]);
 // portal already renders (no invented blocks or content), and the block
 // reference travels inside the ordinary message body, verbatim and staff-
 // visible, over the customer's existing send authority. No new callable,
-// field, or trust boundary. Default off; the production deployment
-// workflows do not bind this flag, so it stays off in production builds.
+// field, or trust boundary. Generic/local builds default off; the production
+// deployment workflows bind this flag on for the governed release candidate.
 const PILOT_DECISION_ROOM_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_DECISION_ROOM_ENABLED || "").trim().toLowerCase()
 );

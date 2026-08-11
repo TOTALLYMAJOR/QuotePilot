@@ -118,9 +118,10 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
   until recovery, revocation, multi-organization membership, and exact-token
   coexistence are specified.
 - Complete hosted acceptance for the deployed callable-only structured
-  change-request record, then specify any future link from its internal staging
-  receipt to an authoritative resulting quote version. Keep the current
-  freeform request-changes path and ordinary save authority intact.
+  change-request record and the source-built, write-once
+  `linkChangeRequestResolutionVersion` follow-up that binds a recorded
+  resolution to the later saved quote version. Keep the current freeform
+  request-changes path and ordinary save authority intact.
 
 ## P1 - Customer-Flow Follow-through
 
