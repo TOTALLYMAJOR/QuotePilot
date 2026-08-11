@@ -1318,8 +1318,8 @@ message, establish delivery/payment/booking, or replace the existing role
 gates. Use the ordinary save, Workflow, quote administration, and provider
 receipts for those actions and evidence.
 
-A further source-only candidate, `VITE_PILOT_DECISION_ROOM_ENABLED`, is not
-part of the production gate set and stays off in every deployed build. When
+An eighth gate, `VITE_PILOT_DECISION_ROOM_ENABLED`, joins the production
+gate set at the next release (currently deployed builds predate it). When
 enabled, each of the customer portal's existing content sections (event
 details, package and menu, pricing) shows a quiet "Ask about this" button
 that opens the existing quote conversation with the composer pre-filled to

@@ -9,8 +9,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 ### Added
 
 - Per-block "Ask about this" in the customer portal
-  (`VITE_PILOT_DECISION_ROOM_ENABLED`, default off and bound by no
-  deployment workflow, so it stays off in production builds) — the
+  (`VITE_PILOT_DECISION_ROOM_ENABLED`, default off in generic/local builds;
+  by owner decision the production workflows now bind it to `true`
+  alongside the other seven pilot gates, taking effect at the next
+  release) — the
   conservative, invent-nothing subset of the design's decision room
   (docs/POST_COMPETITIVE_DESIGN.md §4.7 "Questions in place"): the three
   content sections the portal already renders (event details, package and
@@ -29,6 +31,19 @@ This changelog is backfilled from git history and will be maintained going forwa
   deliberately tags only what already exists.
 
 ### Changed
+
+- Bound `VITE_PILOT_DECISION_ROOM_ENABLED` to `true` in both production
+  deployment workflows and both CI production-flag steps, by owner
+  decision (2026-08-11) — the eighth pilot gate, joining the seven bound
+  since `v0.6.0`. Takes effect at the next release from this branch;
+  generic/local builds keep it default-off for build-time rollback. The
+  same decision round settled the remaining §4.7 scope (decidable options
+  land as staged requests for staff approval, with no signature at the
+  option tap; terms content becomes per-tenant; block tags stay
+  message-body text; activity counsel is deferred), approved the
+  AI-assisted intake lane with OpenAI and Anthropic providers behind the
+  existing default-off ADR gates, and approved a post-merge clean-main
+  bundle-baseline recalibration — all recorded in DEV_TASKS.md.
 
 - Promoted `v0.6.0` to both production providers from exact tagged `main` commit
   `4f4e00d3829eb29a1ee90d7d8402b786344dd158`. Exact-main CI Quality run

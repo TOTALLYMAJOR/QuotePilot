@@ -128,61 +128,76 @@ Only open work belongs here. Current operational truth lives in
 
 ## P1 - Post-Competitive Pilot Program
 
-The destination design (docs/POST_COMPETITIVE_DESIGN.md) has nine source
-capabilities grouped behind seven build gates: NOW home, Event Room ring +
+The destination design (docs/POST_COMPETITIVE_DESIGN.md) has its source
+capabilities grouped behind eight build gates: NOW home, Event Room ring +
 decide stack + cascade receipts, guided-selling decide cards, CREATE intake
 with band pricing, the client-request panel with the structured record
 callable (plus best-effort structured change-request version linking; see
 the `structured-change-request-record` capability contract), the Pilot
-command bar, and the fail-closed margin strip (plus Catalog Admin cost
+command bar, the fail-closed margin strip (plus Catalog Admin cost
 entry, a below-target commercial advisor card, a margin range in the CREATE
 intake band-pricing preview, and margin awareness in Scenario Compare and
 the change-request/command-bar impact preview; see the
-`catalog-cost-and-pricing-data-entry` capability contract). PR #53 merged
+`catalog-cost-and-pricing-data-entry` capability contract), and the
+decision-room ask-about affordance in the customer portal. PR #53 merged
 the original seven-gate source to `main`, and `v0.6.0` deployed all seven
 gates to both production providers (PROJECT_STATUS.md has the exact
 CI/deployment run evidence). Everything built after that promotion — cost
 entry, the advisor card, version linking, the two later margin-range
-extensions, and the catalog recovery-button bugfix — remains unmerged and
-undeployed. Remaining program work:
+extensions, the catalog recovery-button bugfix, the ask-about affordance,
+and the production binding of its `VITE_PILOT_DECISION_ROOM_ENABLED` gate —
+remains unmerged and undeployed. Remaining program work:
 
-- Merge and promote the post-`v0.6.0` pilot work above, then run an
-  authenticated staff acceptance pass across all seven gates' production
-  flag combination, including what shipped after `v0.6.0`. Public route
-  reachability and provider acceptance do not substitute for that pass.
-- Exit the temporary bundle exception through optimization or a reviewed
-  clean-main baseline recalibration after production stabilization.
-- Proposal decision room (design §4.7), three pieces, each blocked on a
-  different decision — none is safe to freelance mid-implementation:
-  - Staff-marked decidable options that land as "a governed change with
-    receipt" on client acceptance: needs a decision on how a
-    customer-initiated change interacts with the existing governed
-    commercial-change authority (CWF-13) — immediate apply, or staff
-    approval first, and whether it rides the same `proposal-acceptance-v1`
-    signature ceremony or a separate one.
-  - Interpreted, portal-visit-only activity counsel: needs new view/
-    interaction telemetry infrastructure that doesn't exist today.
-  - Per-block questions ("Ask about this" threaded to a block): the
-    conservative subset is now built behind the unbound
-    `VITE_PILOT_DECISION_ROOM_ENABLED` gate — the portal's three existing
-    sections (event details, package and menu, pricing) are addressable
-    blocks with "Ask about this" buttons that pre-seed the existing
-    conversation composer with the block's name in the ordinary message
-    body (no new callable, field, or trust boundary; seeded text never
-    overwrites a typed draft or an unresolved send attempt). Still open:
-    §4.7's full nine-block decomposition (cover, event summary, menu,
-    services, options, investment, assumptions with true-up rules,
-    deposit, terms, acceptance) needs a portal information-architecture
-    decision — several of those blocks (investment, assumptions, terms)
-    have no customer-facing content at all today — and a decision on
-    whether the block tag should become a structured message field for
-    staff-side threading rather than message-body text.
-- Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md: trusted
+On 2026-08-11 the owner settled this program's open decisions in one round;
+each bullet below carries its decided direction. Owner-decided, not yet
+merged: no PR yet — work continues accumulating on the pilot branch until
+the owner asks for the merge.
+
+- Merge and promote the post-`v0.6.0` pilot work above (owner will say
+  when; no PR until then), then run an authenticated staff acceptance pass
+  across all eight gates' production flag combination, including what
+  shipped after `v0.6.0`. Public route reachability and provider
+  acceptance do not substitute for that pass.
+- Bundle-baseline recalibration: owner-approved (2026-08-11), contingent
+  on it benefiting the app — execute after the pilot branch merges, from a
+  clean `main` checkout per docs/PERFORMANCE_GUARDRAILS.md (regenerate
+  baseline, delete the exception, keep the 5% allowance). Until then the
+  zero-headroom exception continues to be re-measured per checkpoint.
+- Proposal decision room (design §4.7) — decided directions:
+  - Decidable options (decided: staged requests, no signature at the tap):
+    a customer's option choice in the portal lands as a staged change
+    request for staff approval, riding the existing change-request path —
+    it is a request, not an authoritative change, so the
+    `proposal-acceptance-v1` signature ceremony stays exactly where it is
+    (final proposal acceptance) and is not repeated per option. Build
+    next: staff mark catalog options as portal-decidable, the portal
+    projects those options with price effect, and a tap composes the
+    canonical change request.
+  - Per-block questions (conservative subset built; decided: block tags
+    stay message-body text, not a structured field — revisit only if
+    staff-side threading is actually wanted later). The full nine-block
+    decomposition is now unblocked by decision: terms content becomes a
+    per-tenant setting (authored in Catalog Admin), and the
+    investment/assumptions blocks derive from existing pricing and
+    guest-count data. Build the block decomposition + per-tenant terms
+    next.
+  - Activity counsel: deferred by owner decision (2026-08-11) — no portal
+    view/interaction telemetry gets built for now; revisit post-pilot
+    with an explicit privacy-posture review if wanted.
+- Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md — decided: yes,
+  with BOTH OpenAI and Anthropic as selectable providers. Trusted
   `parseIntentDraft` callable behind `INTENT_PARSER_ENABLED=false` /
-  provider `none`, Secret Manager-bound key, deterministic lane remains the
-  availability floor; full backend capability contract required.
-- Memory defaults (design §4.10): venue/client/season defaults with
-  provenance and instant human override, tenant-isolated.
+  provider `none` (defaults unchanged: off, deterministic lane remains the
+  availability floor), Secret Manager-bound keys, full backend capability
+  contract required. Owner action needed at enable time: create the
+  Secret Manager secrets for the chosen provider key(s); the code ships
+  dormant without them.
+- Memory defaults (design §4.10) — decided scope for the first slice:
+  event-shape memory (staffing/hours/rentals by event type and guest band,
+  aggregated deterministically from the tenant's own saved quotes),
+  surfaced as a provenance-labeled suggestion in CREATE with instant
+  override; venue/client/season memory stay later phases. Tenant-isolated,
+  no cross-tenant learning, honest cold start.
 
 ## P1 - Performance and Accessibility
 

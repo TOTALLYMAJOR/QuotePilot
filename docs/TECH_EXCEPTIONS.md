@@ -20,16 +20,17 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,755,354 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,755,358 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
   `VITE_PILOT_GUIDED_SELLING_ENABLED`, `VITE_PILOT_CREATE_ENABLED`,
   `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, `VITE_PILOT_COMMAND_ENABLED`,
   `VITE_PILOT_MARGINS_ENABLED`, and `VITE_PILOT_DECISION_ROOM_ENABLED`, all
-  default off; the first seven are production-bound to true by the
-  deployment workflows since `v0.6.0`, while the decision-room gate is not
-  bound anywhere and stays off in every deployed build) are reviewed with
+  default off in generic/local builds; the first seven are production-bound
+  to true by the deployment workflows since `v0.6.0`, and the decision-room
+  gate is production-bound the same way by owner decision on 2026-08-11,
+  taking effect at the next release from this branch) are reviewed with
   it. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.
@@ -42,7 +43,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The production-flag asset set is 757,690 bytes (37.93%) above
+- Risk impact: The production-flag asset set is 757,694 bytes (37.93%) above
   the clean-main aggregate baseline, of which 62,993 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
@@ -60,7 +61,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   the Pilot command bar and client-request panel, plus 775 for the
   decision-room ask-about affordance (portal block tags, per-block "Ask
   about this" buttons, and the conversation composer prefill wiring, all
-  behind the unbound `VITE_PILOT_DECISION_ROOM_ENABLED` gate) — this
+  behind the `VITE_PILOT_DECISION_ROOM_ENABLED` gate) — this
   branch's own
   bugfix corrections (guest cap and staffing-labor gating in the margin
   strip; clause-index-anchored proposal/ambiguity ids in the change-request
@@ -68,9 +69,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   they landed in rather than split out as a separate line, unlike the
   now-superseded `v0.6.0` ceiling record this reconciles with) and 347 bytes
   are non-feature deltas: 299 are the confirmed CI-vs-local build-environment
-  offset (see Verification evidence below) and 48 are this reconciled tree's
-  own measured flag-off-to-production-flag build delta, superseding the
-  32-byte figure measured before this branch's post-`v0.6.0` work landed. A
+  offset (see Verification evidence below) and 52 are this tree's own
+  measured flag-off-to-production-flag build delta with all eight gates
+  bound, superseding the earlier 48-byte seven-gate figure and the 32-byte
+  figure measured before this branch's post-`v0.6.0` work landed. A
   small remainder of the pilot-candidate delta belongs to the always-loaded
   catalog normalizer (nullable cost-field parsing shared by every tenant,
   not itself flag-gated) rather than the named pilot surfaces; it is folded
@@ -92,8 +94,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   about this" buttons that open the existing conversation rail pre-seeded
   with the block's name in the ordinary message body. No new callable,
   message field, or trust boundary — the customer could already type the
-  identical message — and the new gate is bound by no deployment workflow,
-  so it stays off in every production build. The
+  identical message. By owner decision (2026-08-11) the new gate is
+  production-bound to true in both deployment workflows and both CI
+  production-flag steps alongside the existing seven, taking effect at the
+  next release from this branch. The
   extrapolation method already validated exactly
   (to the byte) on the first checkpoint it was ever applied to. The last
   exact-SHA CI-confirmed value remains 2,747,012: CI Quality run
@@ -122,11 +126,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   configurations are re-measured fresh at every checkpoint since the
   reconciliation rather than projecting an old delta forward:
   contributor-sandbox default-off is 2,755,007 bytes and the
-  same-environment production-flag build is 2,755,055 bytes — the same
-  48-byte configuration delta measured at the reconciliation checkpoint
-  (the new decision-room gate is bound by no workflow, so it adds nothing
-  to the production-flag configuration). The ceiling above (2,755,354) is
-  the larger of the two, 2,755,055, plus the confirmed +299 CI-vs-sandbox
+  same-environment production-flag build — now all eight gates true,
+  including the newly bound decision-room gate — is 2,755,059 bytes, a
+  52-byte configuration delta (4 bytes above the seven-gate delta, from
+  the eighth flag's inlined value). The ceiling above (2,755,358) is
+  the larger of the two, 2,755,059, plus the confirmed +299 CI-vs-sandbox
   offset, so one number safely covers both the default-off and
   production-flag CI bundle checks; no CI run against this exact commit
   exists yet, so treat it as provisional exactly like every prior
@@ -170,10 +174,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This checkpoint's own ceiling (2,755,354)
+  with `conclusion: success`. This checkpoint's own ceiling (2,755,358)
   is the same extrapolation applied a ninth time, against the larger of
   the two build configurations — this commit's contributor-sandbox
-  production-flag measurement (2,755,055) plus the confirmed +299 offset —
+  eight-gate production-flag measurement (2,755,059) plus the confirmed
+  +299 offset —
   since it has no CI run of its own yet at record time; correct it to the
   literal exact-SHA CI value in a follow-up commit if either the default-off
   or production-flag CI run reports a different number, per the same
