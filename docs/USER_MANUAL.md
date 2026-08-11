@@ -1318,6 +1318,17 @@ message, establish delivery/payment/booking, or replace the existing role
 gates. Use the ordinary save, Workflow, quote administration, and provider
 receipts for those actions and evidence.
 
+A further source-only candidate, `VITE_PILOT_DECISION_ROOM_ENABLED`, is not
+part of the production gate set and stays off in every deployed build. When
+enabled, each of the customer portal's existing content sections (event
+details, package and menu, pricing) shows a quiet "Ask about this" button
+that opens the existing quote conversation with the composer pre-filled to
+reference that section — for example "Question about the pricing: ". The
+pre-fill is ordinary message text the customer can edit or discard; nothing
+is sent until they send it, a pre-fill never overwrites something they
+already typed, and an unresolved message attempt always keeps its exact
+retry text.
+
 ## Catalog cost entry and margin advisory
 
 With the pilot margin strip enabled (`VITE_PILOT_MARGINS_ENABLED`), Catalog

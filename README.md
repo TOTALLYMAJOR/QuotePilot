@@ -270,9 +270,19 @@ Optional:
   pieces named — nothing is estimated; travel and tax are excluded from
   both sides, and costs never appear in any customer-facing projection.
   Purely presentational; not a deployment or acceptance decision.)
+- `VITE_PILOT_DECISION_ROOM_ENABLED` (default off, and bound by no deployment
+  workflow — unlike the seven gates above it stays off in production builds.
+  Adds per-block "Ask about this" buttons to the customer portal's existing
+  content sections (event details, package and menu, pricing) that open the
+  existing quote conversation pre-seeded with the block's name in the
+  ordinary message body — text the customer could already type, sent over
+  the customer's existing conversation authority. No new callable, message
+  field, or trust boundary; a seeded draft never overwrites text the
+  customer already typed or an unresolved send attempt.)
 
-The governed Firebase and Vercel production workflows source-bind all seven
-pilot gates above to `true` for the `v0.6.0` production artifact. Generic and
+The governed Firebase and Vercel production workflows source-bind the seven
+pilot gates above (all but the decision-room gate) to `true` for the `v0.6.0`
+production artifact. Generic and
 local builds still default them to `false`, preserving a build-time rollback
 mode. CI validates both modes and runs a focused production-flag browser matrix
 before release; a successful build or deployment remains separate from

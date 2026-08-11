@@ -6,6 +6,28 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Added
+
+- Per-block "Ask about this" in the customer portal
+  (`VITE_PILOT_DECISION_ROOM_ENABLED`, default off and bound by no
+  deployment workflow, so it stays off in production builds) — the
+  conservative, invent-nothing subset of the design's decision room
+  (docs/POST_COMPETITIVE_DESIGN.md §4.7 "Questions in place"): the three
+  content sections the portal already renders (event details, package and
+  menu, pricing) become addressable blocks (`data-portal-block`), each
+  with a quiet "Ask about this" button that opens the existing quote
+  conversation pre-seeded with the block's name in the ordinary message
+  body. The block reference travels verbatim inside the message text the
+  customer could already type — no new callable, no new message field, no
+  new trust boundary, and nothing is sent until the customer sends it.
+  `QuoteConversationPanel` gains an additive `prefill` prop with hard
+  guards: a seeded draft never overwrites text the customer already typed
+  and never disturbs an unresolved send attempt awaiting its exact
+  reconciliation retry. The full §4.7 decision room (staff-marked
+  decidable options, nine named blocks including content that does not
+  exist yet, activity counsel) remains open in DEV_TASKS.md — this slice
+  deliberately tags only what already exists.
+
 ### Changed
 
 - Promoted `v0.6.0` to both production providers from exact tagged `main` commit

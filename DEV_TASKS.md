@@ -163,21 +163,20 @@ undeployed. Remaining program work:
   - Interpreted, portal-visit-only activity counsel: needs new view/
     interaction telemetry infrastructure that doesn't exist today.
   - Per-block questions ("Ask about this" threaded to a block): the
-    conversation rail itself (`QuoteConversationPanel.jsx`,
-    `functions/portalConversation.js`, both callables in
-    `functions/index.js`) is already callable-only and already accepts
-    customer-authored text from `accessMode: "portal"`, so a block-tag
-    field on the existing message shape is additive, not a new trust
-    boundary — the cheapest of the three once unblocked. But §4.7's "any
-    block" presupposes nine named portal blocks (cover, event summary,
-    menu, services, options, investment, assumptions with true-up rules,
-    deposit, terms, acceptance) that don't exist yet: `CustomerPortalView.jsx`
-    today renders exactly two coarse, hand-bundled sections, and "terms"
-    has no customer-facing content at all. Needs a portal information-
-    architecture decision (how to decompose the page into addressable
-    blocks, and what to put in the ones — investment, assumptions, terms —
-    that don't exist in any form today) before the additive wiring is
-    attachable to anything.
+    conservative subset is now built behind the unbound
+    `VITE_PILOT_DECISION_ROOM_ENABLED` gate — the portal's three existing
+    sections (event details, package and menu, pricing) are addressable
+    blocks with "Ask about this" buttons that pre-seed the existing
+    conversation composer with the block's name in the ordinary message
+    body (no new callable, field, or trust boundary; seeded text never
+    overwrites a typed draft or an unresolved send attempt). Still open:
+    §4.7's full nine-block decomposition (cover, event summary, menu,
+    services, options, investment, assumptions with true-up rules,
+    deposit, terms, acceptance) needs a portal information-architecture
+    decision — several of those blocks (investment, assumptions, terms)
+    have no customer-facing content at all today — and a decision on
+    whether the block tag should become a structured message field for
+    staff-side threading rather than message-body text.
 - Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md: trusted
   `parseIntentDraft` callable behind `INTENT_PARSER_ENABLED=false` /
   provider `none`, Secret Manager-bound key, deterministic lane remains the

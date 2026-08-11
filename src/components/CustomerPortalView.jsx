@@ -39,6 +39,18 @@ const PAYMENT_STATUS_LABELS = {
   refunded: "Refunded"
 };
 const ACCEPTED_PORTAL_STATUSES = new Set(["accepted", "booked"]);
+// Flag-gated decision-room pilot piece (docs/POST_COMPETITIVE_DESIGN.md
+// §4.7, "Questions in place"): per-block "Ask about this" buttons that open
+// the existing conversation rail pre-seeded with the block's name. This is
+// deliberately the conservative subset — it tags only the sections the
+// portal already renders (no invented blocks or content), and the block
+// reference travels inside the ordinary message body, verbatim and staff-
+// visible, over the customer's existing send authority. No new callable,
+// field, or trust boundary. Default off; the production deployment
+// workflows do not bind this flag, so it stays off in production builds.
+const PILOT_DECISION_ROOM_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_DECISION_ROOM_ENABLED || "").trim().toLowerCase()
+);
 // Longest ceremony run: ShimmerReveal self-cleans at ~1520ms; ceremony classes
 // are removed just after so every one-shot effect leaves no residue.
 const PORTAL_CEREMONY_SETTLE_MS = 1600;
@@ -658,6 +670,30 @@ export default function CustomerPortalView({
     status: "",
     quote: null
   });
+  const [conversationPrefill, setConversationPrefill] = useState(null);
+  const conversationAnchorRef = useRef(null);
+  const conversationPrefillCounterRef = useRef(0);
+
+  const askAboutBlock = (blockLabel) => {
+    conversationPrefillCounterRef.current += 1;
+    setConversationPrefill({
+      id: conversationPrefillCounterRef.current,
+      text: `Question about ${blockLabel}: `
+    });
+    conversationAnchorRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  };
+
+  const askAboutButton = (blockLabel) => (
+    PILOT_DECISION_ROOM_ENABLED && portalConversationAvailable() ? (
+      <button
+        type="button"
+        className="ghost compact portal-ask-about"
+        onClick={() => askAboutBlock(blockLabel)}
+      >
+        Ask about this
+      </button>
+    ) : null
+  );
 
   const quote = state.quote;
   const quoteMeta = quote?.quoteMeta || {};
@@ -1215,16 +1251,16 @@ export default function CustomerPortalView({
             </header>
 
             <div className="portal-content-grid">
-              <section className="portal-detail-section">
-                <h3>Event details</h3>
+              <section className="portal-detail-section" data-portal-block="event-details">
+                <h3>Event details {askAboutButton("the event details")}</h3>
                 <dl className="portal-detail-grid">
                   {eventRows.map(([label, value]) => (
                     <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
                   ))}
                 </dl>
                 {quote.venueAddress && <p className="portal-address">{quote.venueAddress}</p>}
-                <div className="portal-scope-block">
-                  <h4>{scope.packageName || "Catering package"}</h4>
+                <div className="portal-scope-block" data-portal-block="package-and-menu">
+                  <h4>{scope.packageName || "Catering package"} {askAboutButton("the package and menu")}</h4>
                   {scopeRows.map(([label, items]) => (
                     <div key={label}><span>{label}</span><p>{items.join(", ")}</p></div>
                   ))}
@@ -1235,8 +1271,8 @@ export default function CustomerPortalView({
                 </div>
               </section>
 
-              <section className="portal-detail-section portal-pricing-section">
-                <h3>Pricing</h3>
+              <section className="portal-detail-section portal-pricing-section" data-portal-block="pricing">
+                <h3>Pricing {askAboutButton("the pricing")}</h3>
                 <dl className="portal-price-list">
                   {pricingRows.map(([label, amount]) => (
                     <div key={label}><dt>{label}</dt><dd>{currency(amount || 0)}</dd></div>
@@ -1429,10 +1465,13 @@ export default function CustomerPortalView({
             )}
 
             {portalConversationAvailable() && (
-              <QuoteConversationPanel
-                title="Conversation with your catering team"
-                access={{ accessMode: "portal", portalKey: quote.portalKey }}
-              />
+              <div ref={conversationAnchorRef}>
+                <QuoteConversationPanel
+                  title="Conversation with your catering team"
+                  access={{ accessMode: "portal", portalKey: quote.portalKey }}
+                  prefill={PILOT_DECISION_ROOM_ENABLED ? conversationPrefill : null}
+                />
+              </div>
             )}
           </div>
         )}

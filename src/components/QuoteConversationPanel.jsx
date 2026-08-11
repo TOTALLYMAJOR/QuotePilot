@@ -412,7 +412,8 @@ function QuoteConversationPanelInstance({
   defaultOpen = false,
   onClose = null,
   presentation = "panel",
-  showCloseAction = true
+  showCloseAction = true,
+  prefill = null
 }) {
   const identity = useMemo(() => accessIdentity(access, authenticatedUid), [
     access?.accessMode,
@@ -566,6 +567,24 @@ function QuoteConversationPanelInstance({
     }
     setStatus("");
   };
+
+  // A prefill request opens the panel and seeds the composer with starter
+  // text (e.g. "Question about Pricing: "). It is presentation-only sugar
+  // over the existing send path — the text lands in the ordinary message
+  // body, verbatim — and it must never disturb stronger state: an
+  // unresolved send attempt keeps its exact reconciliation body, and a
+  // draft the user already typed is never overwritten.
+  useEffect(() => {
+    const text = String(prefill?.text || "");
+    if (!prefill?.id || !text) return;
+    if (!open) openConversation();
+    if (readConversationPendingAttempt(identity)) return;
+    if (body.trim()) return;
+    updateBody(text);
+    // Each distinct prefill request is identified by its id; the other
+    // values are read once at request time, not re-run when they change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.id]);
 
   const send = async () => {
     const normalizedBody = body.trim();

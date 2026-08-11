@@ -20,14 +20,17 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,754,579 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,755,354 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
   `VITE_PILOT_GUIDED_SELLING_ENABLED`, `VITE_PILOT_CREATE_ENABLED`,
-  `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, `VITE_PILOT_COMMAND_ENABLED`, and
-  `VITE_PILOT_MARGINS_ENABLED`, all
-  default off) are reviewed with it. The clean-main baseline remains
+  `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, `VITE_PILOT_COMMAND_ENABLED`,
+  `VITE_PILOT_MARGINS_ENABLED`, and `VITE_PILOT_DECISION_ROOM_ENABLED`, all
+  default off; the first seven are production-bound to true by the
+  deployment workflows since `v0.6.0`, while the decision-room gate is not
+  bound anywhere and stays off in every deployed build) are reviewed with
+  it. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.
 - Exception type: `perf-threshold-temp`
@@ -39,8 +42,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The production-flag asset set is 757,214 bytes (37.91%) above
-  the clean-main aggregate baseline, of which 62,218 bytes are the default-off
+- Risk impact: The production-flag asset set is 757,690 bytes (37.93%) above
+  the clean-main aggregate baseline, of which 62,993 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
   cards, 13,797 for the CREATE intake canvas, deterministic extractor, and
@@ -54,7 +57,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   `data-capability-state` markers, the CREATE intake band-pricing
   preview's margin range, Scenario Compare's margin figures and
   comparison row, and the change-request impact preview's margin delta in
-  the Pilot command bar and client-request panel — this branch's own
+  the Pilot command bar and client-request panel, plus 775 for the
+  decision-room ask-about affordance (portal block tags, per-block "Ask
+  about this" buttons, and the conversation composer prefill wiring, all
+  behind the unbound `VITE_PILOT_DECISION_ROOM_ENABLED` gate) — this
+  branch's own
   bugfix corrections (guest cap and staffing-labor gating in the margin
   strip; clause-index-anchored proposal/ambiguity ids in the change-request
   parser — see CHANGELOG.md `### Fixed`) are folded into the feature figures
@@ -78,16 +85,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: This checkpoint's contributor-sandbox `npm run build`
-  emitted 2,754,232 aggregate JavaScript bytes and a 391,596-byte largest
-  chunk (default-off configuration), extending the same fail-closed margin
-  computation into `buildChangeImpact` (a `marginDelta` alongside its
-  existing total and deposit delta) and rendering it, flag-gated, in the
-  impact line of both the Pilot command bar and the client-request panel —
-  the fourth and fifth surfaces to reuse `buildMarginPresentation` without
-  adding a new computation path — and reconciling this branch's whole
-  post-`v0.6.0` chain onto `main` after `v0.6.0` deployed all seven pilot
-  gates to production directly from a commit this branch never had (see
-  Rationale and Verification evidence below for the full basis). The
+  emitted 2,755,007 aggregate JavaScript bytes and a 391,596-byte largest
+  chunk (default-off configuration), adding the decision-room ask-about
+  affordance: the portal's three existing content sections (event details,
+  package and menu, pricing) become addressable blocks with per-block "Ask
+  about this" buttons that open the existing conversation rail pre-seeded
+  with the block's name in the ordinary message body. No new callable,
+  message field, or trust boundary — the customer could already type the
+  identical message — and the new gate is bound by no deployment workflow,
+  so it stays off in every production build. The
   extrapolation method already validated exactly
   (to the byte) on the first checkpoint it was ever applied to. The last
   exact-SHA CI-confirmed value remains 2,747,012: CI Quality run
@@ -105,27 +111,28 @@ Use this log when a change intentionally departs from stable-first policy or req
   card; 2,750,912 before the capability-state markers; 2,751,241 before
   version linking; 2,752,078 before the band-pricing margin range; 2,752,617
   after the recovery-button bugfix; 2,753,614 before the command-bar and
-  change-request margin delta). Separately, from that same 2,747,012
-  anchor, the `v0.6.0` release checkout's own local production-flag build
-  (all seven `VITE_PILOT_*` gates true) measured 2,747,156 bytes against a
-  2,747,124-byte same-environment default-off build — a 32-byte
-  configuration delta. Release PR CI run `31452174098` and exact-main CI
-  run `31452570192` both passed the exact production-flag `Build production
-  pilot bundle` check before `v0.6.0` deployed to both providers (see
-  PROJECT_STATUS.md). This reconciliation re-measures both configurations
-  fresh on the combined tree rather than projecting `v0.6.0`'s 32-byte
-  delta forward: contributor-sandbox default-off is 2,754,232 bytes,
-  matching the checkpoint figure above exactly, and the same-environment
-  production-flag build is 2,754,280 bytes — a 48-byte configuration delta,
-  superseding the pre-reconciliation 32-byte figure now that this branch's
-  post-`v0.6.0` work is folded in. The ceiling above (2,754,579) is the
-  larger of the two, 2,754,280, plus the confirmed +299 CI-vs-sandbox
+  change-request margin delta; 2,754,232 after the `v0.6.0` `main`
+  reconciliation, before the ask-about affordance). Separately, from the
+  2,747,012 anchor, the `v0.6.0` release checkout's own local
+  production-flag build (all seven `VITE_PILOT_*` gates true) measured a
+  32-byte configuration delta over its same-environment default-off build;
+  release PR CI run `31452174098` and exact-main CI run `31452570192` both
+  passed the exact production-flag `Build production pilot bundle` check
+  before `v0.6.0` deployed to both providers (see PROJECT_STATUS.md). Both
+  configurations are re-measured fresh at every checkpoint since the
+  reconciliation rather than projecting an old delta forward:
+  contributor-sandbox default-off is 2,755,007 bytes and the
+  same-environment production-flag build is 2,755,055 bytes — the same
+  48-byte configuration delta measured at the reconciliation checkpoint
+  (the new decision-room gate is bound by no workflow, so it adds nothing
+  to the production-flag configuration). The ceiling above (2,755,354) is
+  the larger of the two, 2,755,055, plus the confirmed +299 CI-vs-sandbox
   offset, so one number safely covers both the default-off and
-  production-flag CI bundle checks; no CI run against this exact
-  reconciled commit exists yet, so treat it as provisional exactly like
-  every prior checkpoint until its own CI run confirms or corrects it. The
-  other largest emitted chunks were jsPDF at 385,630 bytes, `WorkspaceRoute`
-  at 357,957 bytes, and the isolated quote store at 145,728 bytes. The
+  production-flag CI bundle checks; no CI run against this exact commit
+  exists yet, so treat it as provisional exactly like every prior
+  checkpoint until its own CI run confirms or corrects it. The other
+  largest emitted chunks were jsPDF at 385,630 bytes, `WorkspaceRoute` at
+  357,957 bytes, and the isolated quote store at 145,728 bytes. The
   Messaging Station itself remains a 30,941-byte lazy route chunk. These
   are local source-build measurements, not Core Web Vitals, hosted,
   production, or human-acceptance evidence.
@@ -163,10 +170,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This reconciliation's own ceiling (2,754,579)
-  is the same extrapolation applied an eighth time, now against the larger
-  of two configurations instead of one — this commit's contributor-sandbox
-  production-flag measurement (2,754,280) plus the confirmed +299 offset —
+  with `conclusion: success`. This checkpoint's own ceiling (2,755,354)
+  is the same extrapolation applied a ninth time, against the larger of
+  the two build configurations — this commit's contributor-sandbox
+  production-flag measurement (2,755,055) plus the confirmed +299 offset —
   since it has no CI run of its own yet at record time; correct it to the
   literal exact-SHA CI value in a follow-up commit if either the default-off
   or production-flag CI run reports a different number, per the same

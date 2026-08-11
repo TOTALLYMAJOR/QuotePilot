@@ -5186,6 +5186,16 @@ hr {
   font-size: 0.84rem;
 }
 
+/* Flag-gated decision-room pilot: per-block "Ask about this" affordance,
+   kept visually quiet next to its block heading. */
+.portal-ask-about {
+  margin-left: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .portal-detail-grid {
   margin: 0;
   display: grid;
