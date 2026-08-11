@@ -123,22 +123,24 @@ Only open work belongs here. Current operational truth lives in
   backend/data authority: discoverable role-safe UI, canonical state markers,
   executable state tests, Feature Matrix, User Manual, and capability manifest.
 
-## P1 - Post-Competitive Pilot Program (branch: claude/quotepilot-post-competitive-15hmny)
+## P1 - Post-Competitive Pilot Program
 
-The destination design (docs/POST_COMPETITIVE_DESIGN.md) has eight default-off
-pilot surfaces built as source-only candidates: NOW home, Event Room ring +
+The destination design (docs/POST_COMPETITIVE_DESIGN.md) has nine source
+capabilities grouped behind seven build gates: NOW home, Event Room ring +
 decide stack + cascade receipts, guided-selling decide cards, CREATE intake
 with band pricing, the client-request panel with the structured record
-callable, and the Pilot command bar. Remaining program work:
+callable, the Pilot command bar, and fail-closed margin presentation. PR #53
+merged the source and the `v0.6.0` release branch binds all seven gates into the
+governed production workflows. Remaining program work:
 
-- Review and merge the pilot branch, then decide per-flag promotion; each
-  pilot surface has its own default-off `VITE_PILOT_*` build gate and adds
-  no authority while off. Bundle-exception exit (or reviewed recalibration)
-  is required per docs/PERFORMANCE_GUARDRAILS.md before flag promotion.
-- Phase 5 unit economics (high): tenant item/labor costs and a target-margin
-  policy in settings, margin computation in both pricing paths, and the
-  commercial advisor cards; margins must fail closed as "unavailable" until
-  a tenant records costs (design §4.5, §1.3).
+- Complete the governed `v0.6.0` merge/tag/deployment sequence, then run an
+  authenticated staff acceptance pass for each promoted surface. Public route
+  reachability and provider acceptance do not substitute for that pass.
+- Exit the temporary bundle exception through optimization or a reviewed
+  clean-main baseline recalibration after production stabilization.
+- Continue Phase 5 unit economics with authoritative tenant cost maintenance
+  and commercial advisor cards. The current presentation must continue to fail
+  closed as `Margins unavailable` when any required cost is absent.
 - Structured change-request version linking: extend the
   `recordChangeRequestParse` contract so a resolution can bind the resulting
   quote version after the trusted save, completing intent-to-version audit.

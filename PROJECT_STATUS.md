@@ -2,6 +2,19 @@
 
 Last updated: August 10, 2026
 
+## Release Candidate
+
+- PR #53 merged the post-competitive pilot source into `main` at
+  `c9819f9990e8e6d6256a94724783fd6bce33a633`; its exact-main CI run
+  `31448547709` passed all required jobs.
+- The `v0.6.0` release candidate promotes all seven pilot build gates through
+  the governed Firebase and Vercel workflows and adds an exact production-flag
+  bundle/browser matrix. Merge, semantic tag, coordinated Firebase `all` plus
+  Vercel deployments, and hosted acceptance are not yet claimed in this
+  pre-deployment record.
+- `v0.5.0` remains the last proven production rollback target until both new
+  provider promotions and post-launch route checks succeed.
+
 ## Operational Health
 
 - Production runtime: `v0.5.0` is live from tagged `main` commit

@@ -6,6 +6,25 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Changed
+
+- Prepared the complete post-competitive pilot for the governed `v0.6.0`
+  production rollout. Both production deployment workflows now source-bind
+  all seven `VITE_PILOT_*` gates to `true`: NOW, Event Room (including the
+  cascade receipt chain), guided selling, CREATE with draft-only price bands,
+  staged client change requests, the Pilot command bar, and fail-closed staff
+  margins. Generic/local builds keep every gate default-off for rollback.
+- Added a separate production-flag browser and bundle matrix to CI. The
+  rollback-mode browser suite still runs first; the production matrix then
+  exercises NOW, Event Room, deterministic CREATE, draft-only band pricing,
+  staged customer changes, command preview/apply, and the margin rail under
+  the exact gate combination used by both production providers.
+- Raised the named temporary aggregate bundle ceiling only for the measured
+  32-byte flag-on configuration delta, from the exact CI-confirmed 2,747,012
+  default-off bytes to a provisional 2,747,044 production-flag ceiling. The
+  largest-chunk ceiling remains 391,596 bytes, and the release PR must confirm
+  the extrapolated aggregate value on its own exact SHA.
+
 ### Fixed
 
 - Two correctness bugs in pilot source (`VITE_PILOT_MARGINS_ENABLED`,

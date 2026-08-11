@@ -269,6 +269,13 @@ Optional:
   pieces named — nothing is estimated; travel and tax are excluded from
   both sides, and costs never appear in any customer-facing projection.
   Purely presentational; not a deployment or acceptance decision.)
+
+The governed Firebase and Vercel production workflows source-bind all seven
+pilot gates above to `true` for the `v0.6.0` production artifact. Generic and
+local builds still default them to `false`, preserving a build-time rollback
+mode. CI validates both modes and runs a focused production-flag browser matrix
+before release; a successful build or deployment remains separate from
+authenticated staff and provider acceptance.
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

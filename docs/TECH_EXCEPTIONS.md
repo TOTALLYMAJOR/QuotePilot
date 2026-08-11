@@ -20,12 +20,13 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 10, 2026 (supersedes the August 9 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,747,012 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,747,044 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
-  `VITE_PILOT_GUIDED_SELLING_ENABLED`, `VITE_PILOT_CREATE_ENABLED`, and
-  `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, all
+  `VITE_PILOT_GUIDED_SELLING_ENABLED`, `VITE_PILOT_CREATE_ENABLED`,
+  `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, `VITE_PILOT_COMMAND_ENABLED`, and
+  `VITE_PILOT_MARGINS_ENABLED`, all
   default off) are reviewed with it. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.
@@ -38,7 +39,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 749,647 bytes (37.53%) above the
+- Risk impact: The production-flag asset set is 749,679 bytes (37.53%) above the
   clean-main aggregate baseline, of which 55,297 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
@@ -48,10 +49,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   the cascade receipts panel, 2,993 for the Pilot command bar, and 3,189 for
   the fail-closed margin strip) and 371 bytes are non-feature deltas: 299 are
   the confirmed CI-vs-local build-environment offset (see Verification
-  evidence below) and 72 are automated-review bugfix corrections (guest cap
+  evidence below), 72 are automated-review bugfix corrections (guest cap
   and staffing-labor gating in the margin strip; clause-index-anchored
   proposal/ambiguity ids in the change-request parser — see CHANGELOG.md
-  `### Fixed`). A targeted `quoteStore` manual chunk reduces
+  `### Fixed`), and 32 are the measured flag-off to production-flag build
+  delta. A targeted `quoteStore` manual chunk reduces
   `WorkspaceRoute` from 448,190 to 317,008 bytes; Firebase is now the largest
   chunk at 391,596 bytes, 3,667 bytes (0.95%) above the clean-main largest-
   chunk baseline and 15,729 bytes below the normal 5% ceiling. Lazy route
@@ -60,7 +62,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   routes can still incur added download, parse, and execution cost, especially
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
-- Performance impact: The exact-SHA CI build of commit
+- Performance impact: The default-off exact-SHA CI build of commit
   `20f69e7bc94fd8adaef5195e0bda0dde326bcb8b` (the automated-review bugfix
   commit) emitted 2,747,012 aggregate JavaScript bytes and a 391,596-byte
   largest chunk — confirmed by CI Quality run `31447641093`, whose
@@ -78,7 +80,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   before the band pricing strip; 2,721,338 before the client-request panel;
   2,731,349 before the structured-record boundary; 2,734,964 before the
   cascade panel; 2,740,459 before the command bar; 2,743,452 before the
-  margin strip). The other largest emitted chunks were jsPDF at 385,630 bytes,
+  margin strip). The release candidate's local production-flag build emitted
+  2,747,156 aggregate bytes with the same 391,596-byte largest chunk, exactly
+  32 bytes above its 2,747,124-byte same-environment local default-off build.
+  The temporary ceiling therefore carries that measured 32-byte configuration
+  delta over the exact CI-confirmed default-off build
+  (2,747,012 + 32 = 2,747,044).
+  This extrapolation remains provisional until the release PR's exact-SHA
+  `Build production pilot bundle` check reports its own metric. The other
+  largest emitted chunks were jsPDF at 385,630 bytes,
   `WorkspaceRoute` at 317,008 bytes, and the isolated quote store at 146,071
   bytes. The station itself remains a 30,908-byte lazy route chunk. These are
   local source-build measurements, not Core Web Vitals, hosted, production, or
@@ -119,7 +129,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
   with `conclusion: success`. Earlier checkpoint figures
   in this record were sandbox-measured and are superseded by this
-  correction. `npm run check:perf:bundle` must report this
+  correction. The release PR additionally builds with all seven pilot gates
+  enabled and runs the same bundle guard before its production-mode browser
+  matrix. `npm run check:perf:bundle` must report this
   exact named exception, its absolute ceilings, and the unchanged normal limits
   before the checkpoint is committed. The earlier converged-workspace
   `npm run check:perf:cwv` run passed locally on
