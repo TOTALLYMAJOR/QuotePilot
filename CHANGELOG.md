@@ -6,6 +6,31 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Fixed
+
+- Two correctness bugs in pilot source (`VITE_PILOT_MARGINS_ENABLED`,
+  `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, `VITE_PILOT_COMMAND_ENABLED`),
+  caught by automated PR review before merge:
+  - `buildMarginPresentation` now caps its guest basis at 400 and gates
+    labor cost behind `settings.staffingLaborEnabled`, exactly mirroring
+    `calculateQuote`. Previously an uncapped guest count could cost more
+    guests than the revenue side ever recognized once the calculator's own
+    capacity cap applied, and labor cost was charged (or demanded as a
+    missing rate) even in tenants where labor charging is disabled and
+    revenue never bills it — both understated margin or falsely reported
+    it unavailable.
+  - `change-request-parse-v1` proposal and ambiguity ids are now anchored
+    to each clause's fixed position in the original message instead of a
+    running per-parse counter. `ChangeRequestPanel` and the Pilot command
+    bar re-parse reactively as staging edits the draft form, and a clause
+    that becomes satisfied (`set_guests`/`set_hours`) stops producing an
+    artifact on the next parse; with counter-based ids this silently
+    shifted every later clause's id, orphaning an already-staged
+    proposal's tracked id and allowing its one-tap action to be triggered
+    again — double-applying it (e.g. adding a second bartender when only
+    one was requested). Five new regression tests cover both fixes,
+    including the exact re-parse sequence that reproduced the id shift.
+
 ### Added
 
 - Flag-gated, fail-closed margin strip (`VITE_PILOT_MARGINS_ENABLED`,

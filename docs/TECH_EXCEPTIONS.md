@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 10, 2026 (supersedes the August 9 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,746,940 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,747,012 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -38,7 +38,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 749,575 bytes (37.53%) above the
+- Risk impact: The emitted asset set is 749,647 bytes (37.53%) above the
   clean-main aggregate baseline, of which 55,297 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
@@ -46,9 +46,12 @@ Use this log when a change intentionally departs from stable-first policy or req
   draft-only band pricing strip, 10,011 for the client-request panel
   and parser, 3,615 for the structured-record boundary and client, 5,495 for
   the cascade receipts panel, 2,993 for the Pilot command bar, and 3,189 for
-  the fail-closed margin strip) and 299 bytes are a discovered CI-vs-local
-  build-environment delta (see Verification evidence below); the ceiling now
-  uses the CI-measured value directly. A targeted `quoteStore` manual chunk reduces
+  the fail-closed margin strip) and 371 bytes are non-feature deltas: 299 are
+  the confirmed CI-vs-local build-environment offset (see Verification
+  evidence below) and 72 are automated-review bugfix corrections (guest cap
+  and staffing-labor gating in the margin strip; clause-index-anchored
+  proposal/ambiguity ids in the change-request parser — see CHANGELOG.md
+  `### Fixed`). A targeted `quoteStore` manual chunk reduces
   `WorkspaceRoute` from 448,190 to 317,008 bytes; Firebase is now the largest
   chunk at 391,596 bytes, 3,667 bytes (0.95%) above the clean-main largest-
   chunk baseline and 15,729 bytes below the normal 5% ceiling. Lazy route
@@ -57,15 +60,23 @@ Use this log when a change intentionally departs from stable-first policy or req
   routes can still incur added download, parse, and execution cost, especially
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
-- Performance impact: The exact-SHA CI build of the August 10 merged-candidate
-  head (commit `d5dead033aba5376104ca7c176f1a97fbecffd4e`) emitted 2,746,940
-  aggregate JavaScript bytes and a 391,596-byte largest chunk (prior
-  contributor-sandbox checkpoints, corrected below: 2,691,344 converged;
-  2,700,437 with the NOW surface only; 2,705,981 before the guided-selling
-  cards; 2,707,541 before the CREATE intake canvas; 2,719,059 before the
-  band pricing strip; 2,721,338 before the client-request panel; 2,731,349
-  before the structured-record boundary; 2,734,964 before the cascade panel;
-  2,740,459 before the command bar; 2,743,452 before the margin strip). The other largest emitted chunks were jsPDF at 385,630 bytes,
+- Performance impact: The exact-SHA CI build of commit
+  `d5dead033aba5376104ca7c176f1a97fbecffd4e` (before the automated-review
+  bugfix corrections) emitted 2,746,940 aggregate JavaScript bytes and a
+  391,596-byte largest chunk — the most recent exact-SHA CI-confirmed value.
+  The ceiling above (2,747,012) is that confirmed value plus the +72
+  contributor-sandbox delta measured for the bugfix commit that follows it
+  (2,746,713 local, up from 2,746,641 local for `d5dead0`), extrapolated
+  using the confirmed +299 CI-vs-sandbox offset rather than a fresh CI run,
+  since no CI run against the bugfix commit exists yet at record time; treat
+  it as provisional until that commit's own CI run confirms or corrects it
+  (prior contributor-sandbox checkpoints, all now superseded: 2,691,344
+  converged; 2,700,437 with the NOW surface only; 2,705,981 before the
+  guided-selling cards; 2,707,541 before the CREATE intake canvas; 2,719,059
+  before the band pricing strip; 2,721,338 before the client-request panel;
+  2,731,349 before the structured-record boundary; 2,734,964 before the
+  cascade panel; 2,740,459 before the command bar; 2,743,452 before the
+  margin strip). The other largest emitted chunks were jsPDF at 385,630 bytes,
   `WorkspaceRoute` at 317,008 bytes, and the isolated quote store at 146,071
   bytes. The station itself remains a 30,908-byte lazy route chunk. These are
   local source-build measurements, not Core Web Vitals, hosted, production, or
@@ -93,8 +104,14 @@ Use this log when a change intentionally departs from stable-first policy or req
   than a source or dependency-resolution difference. The ceiling above is the
   literal `totalJsBytes` CI reported for commit `d5dead0`; future ceiling
   updates on this exception should be taken from an exact-SHA CI run rather
-  than a contributor sandbox to avoid repeating this gap. Earlier checkpoint
-  figures in this record were sandbox-measured and are superseded by this
+  than a contributor sandbox to avoid repeating this gap. The ceiling was
+  then extrapolated forward by the automated-review bugfix commit's own
+  contributor-sandbox delta (+72 bytes) plus the confirmed +299 offset, in
+  lieu of a CI run against that exact commit at record time — an estimate,
+  not a second confirmed CI measurement; if that commit's own CI run reports
+  a different value, correct the ceiling to the literal value in a
+  follow-up commit rather than re-extrapolating. Earlier checkpoint figures
+  in this record were sandbox-measured and are superseded by this
   correction. `npm run check:perf:bundle` must report this
   exact named exception, its absolute ceilings, and the unchanged normal limits
   before the checkpoint is committed. The earlier converged-workspace

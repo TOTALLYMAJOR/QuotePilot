@@ -94,13 +94,20 @@ function splitClauses(message) {
     .filter((clause) => clause.length >= 3);
 }
 
-let idCounter = 0;
-function proposalId(prefix) {
-  idCounter += 1;
-  return `${prefix}-${idCounter}`;
+// Ids are anchored to the clause's own position in the ORIGINAL message
+// (clauseIndex), never to a running "how many artifacts so far" counter.
+// ChangeRequestPanel re-parses reactively as staging changes the draft
+// form, and a clause that becomes satisfied (set_guests/set_hours) stops
+// producing an artifact on the next parse — a counter-based id would shift
+// every later clause's id down a slot when that happens, orphaning an
+// already-staged proposal's tracked id and letting it be staged again.
+// Clause-index anchoring keeps every clause's id stable for the life of
+// the message regardless of what any other clause does.
+function proposalId(prefix, clauseIndex) {
+  return `${prefix}-${clauseIndex}`;
 }
 
-function parseClause(clause, { form, catalog, styles }) {
+function parseClause(clause, clauseIndex, { form, catalog, styles }) {
   const lower = clause.toLowerCase();
 
   const guestSet = lower.match(/\b(?:to|at|now at|now)\s+(\d{1,4})\s*(?:guests|people|persons|ppl)\b/)
@@ -111,7 +118,7 @@ function parseClause(clause, { form, catalog, styles }) {
     if (value > 0 && value !== Number(form?.guests)) {
       return {
         proposal: {
-          id: proposalId("guests"),
+          id: proposalId("guests", clauseIndex),
           kind: "set_guests",
           value,
           title: `Guest count → ${value}`,
@@ -130,7 +137,7 @@ function parseClause(clause, { form, catalog, styles }) {
     if (count > 0 && field) {
       return {
         proposal: {
-          id: proposalId("staff"),
+          id: proposalId("staff", clauseIndex),
           kind: "add_staff",
           field,
           count,
@@ -152,7 +159,7 @@ function parseClause(clause, { form, catalog, styles }) {
     if (value !== current) {
       return {
         proposal: {
-          id: proposalId("hours"),
+          id: proposalId("hours", clauseIndex),
           kind: "set_hours",
           value,
           title: `Service hours → ${value}`,
@@ -173,7 +180,7 @@ function parseClause(clause, { form, catalog, styles }) {
     if (canonical && canonical !== form?.style) {
       return {
         proposal: {
-          id: proposalId("style"),
+          id: proposalId("style", clauseIndex),
           kind: "set_style",
           value: canonical,
           title: `Service style → ${canonical}`,
@@ -195,7 +202,7 @@ function parseClause(clause, { form, catalog, styles }) {
     if (removeResolved.match && addResolved.match) {
       return {
         proposal: {
-          id: proposalId("swap"),
+          id: proposalId("swap", clauseIndex),
           kind: "swap_item",
           remove: removeResolved.match,
           add: addResolved.match,
@@ -211,7 +218,7 @@ function parseClause(clause, { form, catalog, styles }) {
         ? { verb: "add", query: addQuery, candidates: addResolved.candidates }
         : null;
     if (ambiguousSide) {
-      return { ambiguity: { id: proposalId("choice"), clause, ...ambiguousSide } };
+      return { ambiguity: { id: proposalId("choice", clauseIndex), clause, ...ambiguousSide } };
     }
     return {};
   }
@@ -222,7 +229,7 @@ function parseClause(clause, { form, catalog, styles }) {
     if (resolved.match) {
       return {
         proposal: {
-          id: proposalId("remove"),
+          id: proposalId("remove", clauseIndex),
           kind: "remove_item",
           ...resolved.match,
           title: `Remove ${resolved.match.itemName}`,
@@ -232,7 +239,7 @@ function parseClause(clause, { form, catalog, styles }) {
       };
     }
     if (resolved.candidates.length > 1) {
-      return { ambiguity: { id: proposalId("choice"), clause, verb: "remove", query: removal[1], candidates: resolved.candidates } };
+      return { ambiguity: { id: proposalId("choice", clauseIndex), clause, verb: "remove", query: removal[1], candidates: resolved.candidates } };
     }
     return {};
   }
@@ -247,7 +254,7 @@ function parseClause(clause, { form, catalog, styles }) {
     if (resolved.match) {
       return {
         proposal: {
-          id: proposalId("add"),
+          id: proposalId("add", clauseIndex),
           kind: "add_item",
           ...resolved.match,
           title: `Add ${resolved.match.itemName}`,
@@ -257,7 +264,7 @@ function parseClause(clause, { form, catalog, styles }) {
       };
     }
     if (resolved.candidates.length > 1) {
-      return { ambiguity: { id: proposalId("choice"), clause, verb: "add", query: addition[1], candidates: resolved.candidates } };
+      return { ambiguity: { id: proposalId("choice", clauseIndex), clause, verb: "add", query: addition[1], candidates: resolved.candidates } };
     }
     return {};
   }
@@ -266,14 +273,15 @@ function parseClause(clause, { form, catalog, styles }) {
 }
 
 export function parseChangeRequest(message, { form = {}, catalog = {}, styles = [] } = {}) {
-  idCounter = 0;
   const trimmed = clean(message);
   const proposals = [];
   const ambiguities = [];
   const unparsedClauses = [];
 
-  for (const clause of splitClauses(trimmed)) {
-    const result = parseClause(clause, { form, catalog, styles });
+  const clauses = splitClauses(trimmed);
+  for (let clauseIndex = 0; clauseIndex < clauses.length; clauseIndex += 1) {
+    const clause = clauses[clauseIndex];
+    const result = parseClause(clause, clauseIndex, { form, catalog, styles });
     if (result.proposal) proposals.push(result.proposal);
     else if (result.ambiguity) ambiguities.push(result.ambiguity);
     else if (!result.consumed) unparsedClauses.push(clause);

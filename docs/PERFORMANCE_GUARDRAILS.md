@@ -29,13 +29,15 @@ Threshold policy:
   decide cards, the CREATE intake canvas with its band pricing strip, and
   the client-request panel with its structured-record boundary, the Event Room cascade panel, the Pilot command bar, and the fail-closed margin strip) is
   currently capped at
-  2,746,940
-  aggregate JavaScript bytes and a 391,596-byte largest chunk. These are the
-  exact-SHA CI-measured bytes for the August 10 candidate build (not a
-  contributor-sandbox measurement — see `docs/TECH_EXCEPTIONS.md` for a
-  discovered small CI-vs-local build-environment delta), so the
+  2,747,012
+  aggregate JavaScript bytes and a 391,596-byte largest chunk. This ceiling
+  extrapolates the most recent exact-SHA CI-measured value (2,746,940 — not
+  a contributor-sandbox measurement) forward by a bugfix commit's own
+  sandbox delta plus the confirmed CI-vs-local offset; see
+  `docs/TECH_EXCEPTIONS.md` for the full basis and its provisional status
+  pending that commit's own CI confirmation. The
   exception provides no additional growth headroom. Against the unchanged
-  clean-main baseline, aggregate output is 749,575 bytes (37.53%) larger, while
+  clean-main baseline, aggregate output is 749,647 bytes (37.53%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
   remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
   splitting keeps the authenticated route bounded, and route-level

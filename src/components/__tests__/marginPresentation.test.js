@@ -104,4 +104,46 @@ describe("buildMarginPresentation", () => {
     expect(buildMarginPresentation({ form, totals: { total: 0 }, catalog, settings })).toBeNull();
     expect(buildMarginPresentation({ form: { ...form, pkg: "ghost" }, totals, catalog, settings })).toBeNull();
   });
+
+  test("caps the cost guest basis at 400 exactly like calculateQuote, so cost and revenue share one basis", () => {
+    // calculateQuote caps guests at 400 before pricing anything; totals below
+    // are what it would actually emit for a 500-guest form (i.e. priced at
+    // 400). If margin priced cost on the uncapped 500, cost would exceed what
+    // this same revenue could ever justify.
+    const cappedTotals = { ...totals, base: 20 * 400, addons: 15 * 400 };
+    const over = buildMarginPresentation({
+      form: { ...form, guests: 500 },
+      totals: cappedTotals,
+      catalog,
+      settings
+    });
+    const atCap = buildMarginPresentation({
+      form: { ...form, guests: 400 },
+      totals: cappedTotals,
+      catalog,
+      settings
+    });
+    expect(over.available).toBe(true);
+    expect(over.cost).toBe(atCap.cost);
+    expect(over.marginPct).toBeCloseTo(atCap.marginPct, 6);
+  });
+
+  test("skips labor cost entirely when staffing labor is disabled, matching calculateQuote's zeroed labor total", () => {
+    // No cost rates recorded at all — if labor cost were still required here,
+    // this would report unavailable even though nothing about labor is
+    // actually being billed.
+    const laborOff = { ...settings, staffingLaborEnabled: false, serverCostRate: undefined, chefCostRate: undefined, bartenderCostRate: undefined };
+    const disabledTotals = { ...totals, labor: 0 };
+    const result = buildMarginPresentation({ form, totals: disabledTotals, catalog, settings: laborOff });
+    expect(result.available).toBe(true);
+    // Same cost as the always-on case minus the labor component (2532 - 852).
+    expect(result.cost).toBe(1680);
+
+    // Even when rates ARE recorded, disabled labor must still contribute
+    // zero cost — a recorded rate must never resurrect a charge the revenue
+    // side isn't billing.
+    const laborOffWithRates = { ...settings, staffingLaborEnabled: false };
+    const withRates = buildMarginPresentation({ form, totals: disabledTotals, catalog, settings: laborOffWithRates });
+    expect(withRates.cost).toBe(1680);
+  });
 });

@@ -35,7 +35,11 @@ function itemCost(item, { guests, quantity, defaultMode }) {
 
 export function buildMarginPresentation({ form, totals, catalog, settings } = {}) {
   if (!form || !totals || !catalog || !settings) return null;
-  const guests = Math.max(0, Number(form.guests) || 0);
+  // Mirrors calculateQuote's capacity cap exactly (src/lib/quoteCalculator.js)
+  // so cost and revenue are computed on the same guest basis; otherwise a
+  // form carrying more than the capacity limit would cost more guests than
+  // the revenue side ever recognized.
+  const guests = Math.min(400, Math.max(0, Number(form.guests) || 0));
   if (guests <= 0 || !(Number(totals.total) > 0)) return null;
 
   const missing = [];
@@ -64,18 +68,25 @@ export function buildMarginPresentation({ form, totals, catalog, settings } = {}
     }
   }
 
-  const hourFactor = String(settings.staffingChargeMode || "") === "per_event_per_staff"
-    ? 1
-    : Math.max(1, Number(form.hours) || 1);
-  const staffRoles = [
-    { count: Number(form.servers) || 0, rate: num(settings.serverCostRate), label: "serverCostRate" },
-    { count: Number(form.chefs) || 0, rate: num(settings.chefCostRate), label: "chefCostRate" },
-    { count: Number(form.bartenders) || 0, rate: num(settings.bartenderCostRate), label: "bartenderCostRate" }
-  ];
-  for (const role of staffRoles) {
-    if (role.count <= 0) continue;
-    if (role.rate === null) missing.push(`Settings (${role.label})`);
-    else cost += role.rate * role.count * hourFactor;
+  // calculateQuote zeroes labor entirely when staffing labor is disabled
+  // (totals.labor === 0 in that mode); mirror that so cost never charges for
+  // staff the revenue side never bills, and cost rates are never demanded
+  // for a mode where no rate could possibly matter.
+  const staffingLaborEnabled = settings.staffingLaborEnabled !== false;
+  if (staffingLaborEnabled) {
+    const hourFactor = String(settings.staffingChargeMode || "") === "per_event_per_staff"
+      ? 1
+      : Math.max(1, Number(form.hours) || 1);
+    const staffRoles = [
+      { count: Number(form.servers) || 0, rate: num(settings.serverCostRate), label: "serverCostRate" },
+      { count: Number(form.chefs) || 0, rate: num(settings.chefCostRate), label: "chefCostRate" },
+      { count: Number(form.bartenders) || 0, rate: num(settings.bartenderCostRate), label: "bartenderCostRate" }
+    ];
+    for (const role of staffRoles) {
+      if (role.count <= 0) continue;
+      if (role.rate === null) missing.push(`Settings (${role.label})`);
+      else cost += role.rate * role.count * hourFactor;
+    }
   }
 
   if (missing.length) {

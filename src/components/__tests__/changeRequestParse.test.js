@@ -166,3 +166,64 @@ describe("buildChangeImpact", () => {
     expect(buildChangeImpact({ proposal: { kind: "set_guests", value: 1 } })).toBeNull();
   });
 });
+
+describe("proposal id stability across re-parses", () => {
+  // ChangeRequestPanel re-parses reactively as staging edits the draft form
+  // (the same message, evaluated against the newly-changed form). A clause
+  // that becomes satisfied (set_guests/set_hours) stops producing a
+  // proposal on the next parse. If ids were assigned by a running "how many
+  // artifacts so far" counter, every later clause's id would shift down a
+  // slot when an earlier one drops out — orphaning an already-staged
+  // proposal's tracked id and allowing its Stage action to fire again.
+  const message = "we're now at 95 guests, add another bartender, and extend to 7 hours.";
+
+  test("a later clause keeps the same id before and after an earlier clause is satisfied", () => {
+    const before = parse(message);
+    const bartenderBefore = before.proposals.find((p) => p.kind === "add_staff");
+    expect(bartenderBefore).toBeDefined();
+
+    // Simulate staging the guest-count clause: the form now satisfies it.
+    const afterGuestsStaged = parseChangeRequest(message, {
+      form: { ...form, guests: 95 },
+      catalog,
+      styles: STYLES
+    });
+    const bartenderAfter = afterGuestsStaged.proposals.find((p) => p.kind === "add_staff");
+
+    expect(afterGuestsStaged.proposals.some((p) => p.kind === "set_guests")).toBe(false);
+    expect(bartenderAfter.id).toBe(bartenderBefore.id);
+  });
+
+  test("ids stay anchored to clause position even with two earlier clauses satisfied out of order", () => {
+    const before = parse(message);
+    const hoursBefore = before.proposals.find((p) => p.kind === "set_hours");
+
+    const afterGuestsStaged = parseChangeRequest(message, {
+      form: { ...form, guests: 95 },
+      catalog,
+      styles: STYLES
+    });
+    const hoursAfterFirstShift = afterGuestsStaged.proposals.find((p) => p.kind === "set_hours");
+    expect(hoursAfterFirstShift.id).toBe(hoursBefore.id);
+
+    const afterBartenderStagedToo = parseChangeRequest(message, {
+      form: { ...form, guests: 95, bartenders: (form.bartenders || 0) + 1 },
+      catalog,
+      styles: STYLES
+    });
+    const hoursAfterSecondShift = afterBartenderStagedToo.proposals.find((p) => p.kind === "set_hours");
+    expect(hoursAfterSecondShift.id).toBe(hoursBefore.id);
+  });
+
+  test("ambiguity ids are likewise anchored to clause position, not artifact count", () => {
+    const twoAmbiguous = "please add a station, and we're now at 95 guests.";
+    const before = parseChangeRequest(twoAmbiguous, { form, catalog, styles: STYLES });
+    const stationChoiceBefore = before.ambiguities[0];
+    expect(stationChoiceBefore).toBeDefined();
+
+    const after = parseChangeRequest(twoAmbiguous, { form: { ...form, guests: 95 }, catalog, styles: STYLES });
+    const stationChoiceAfter = after.ambiguities[0];
+    expect(after.proposals.some((p) => p.kind === "set_guests")).toBe(false);
+    expect(stationChoiceAfter.id).toBe(stationChoiceBefore.id);
+  });
+});
