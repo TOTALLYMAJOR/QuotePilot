@@ -1348,9 +1348,33 @@ export default function CustomerPortalView({
               </section>
             </div>
 
+            {PILOT_DECISION_ROOM_ENABLED && (
+              <section className="portal-detail-section portal-assumptions" data-portal-block="assumptions">
+                <h3>What this price assumes {askAboutButton("the assumptions")}</h3>
+                <p className="portal-decidable-sub">
+                  {[
+                    Number(quote.eventGuests ?? quote.guests) > 0
+                      ? `${quote.eventGuests ?? quote.guests} guests` : "",
+                    quote.eventDate ? `on ${fmtDate(quote.eventDate)}` : "",
+                    Number(quote.eventHours) > 0 ? `${quote.eventHours} hours of service` : "",
+                    quote.eventStyle ? `${String(quote.eventStyle).toLowerCase()} service` : ""
+                  ].filter(Boolean).join(" · ") || "The recorded event details above."}
+                  {" "}If any of these change, ask below — your caterer re-prices
+                  from the updated details before anything is promised.
+                </p>
+              </section>
+            )}
+
+            {PILOT_DECISION_ROOM_ENABLED && String(quoteMeta.portalTermsText || "").trim() && (
+              <section className="portal-detail-section portal-terms" data-portal-block="terms">
+                <h3>Terms {askAboutButton("the terms")}</h3>
+                <p className="portal-terms-text">{quoteMeta.portalTermsText}</p>
+              </section>
+            )}
+
             {PILOT_DECISION_ROOM_ENABLED && !decisionLocked
               && Array.isArray(quote.decidableOptions) && quote.decidableOptions.length > 0 && (
-              <section className="portal-decidable-options" aria-labelledby="portal-decidable-title">
+              <section className="portal-decidable-options" data-portal-block="options" aria-labelledby="portal-decidable-title">
                 <h3 id="portal-decidable-title">Options you can ask to add</h3>
                 <p className="portal-decidable-sub">
                   Choosing one drafts a change request below — your caterer reviews

@@ -2405,6 +2405,17 @@ export function AdminCatalogView({
                 onChange={(e) => patchTextSetting("depositNotice", e.target.value)}
               />
             </label>
+            {PILOT_DECISION_ROOM_ENABLED && (
+              <label>
+                Portal terms (shown to customers in their proposal; leave blank for no terms block)
+                <textarea
+                  rows="5"
+                  maxLength={5000}
+                  value={draft.settings.portalTermsText || ""}
+                  onChange={(e) => patchTextSetting("portalTermsText", e.target.value)}
+                />
+              </label>
+            )}
           </div>
             </section>
 

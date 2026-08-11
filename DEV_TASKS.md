@@ -194,12 +194,15 @@ the owner asks for the merge.
     whole loop.
   - Per-block questions (conservative subset built; decided: block tags
     stay message-body text, not a structured field — revisit only if
-    staff-side threading is actually wanted later). The full nine-block
-    decomposition is now unblocked by decision: terms content becomes a
-    per-tenant setting (authored in Catalog Admin), and the
-    investment/assumptions blocks derive from existing pricing and
-    guest-count data. Build the block decomposition + per-tenant terms
-    next.
+    staff-side threading is actually wanted later). Terms and assumptions
+    are built: the tenant-authored portalTermsText setting flows Catalog
+    Admin -> settings -> quoteMeta -> snapshot -> a verbatim portal terms
+    block (absent while empty), and the assumptions block restates
+    recorded facts only; the options section is block-tagged too — six
+    addressable blocks plus the header. Remaining for full nine-block
+    parity: a dedicated investment breakdown block beyond the existing
+    pricing section, and cover/experience-narrative treatments
+    (presentational, no new data).
   - Activity counsel: deferred by owner decision (2026-08-11) — no portal
     view/interaction telemetry gets built for now; revisit post-pilot
     with an explicit privacy-posture review if wanted.

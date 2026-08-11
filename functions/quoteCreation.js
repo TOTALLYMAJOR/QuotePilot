@@ -708,6 +708,10 @@ function buildQuoteMeta(settings, form, pricing) {
     businessPhone: text(settings.businessPhone, 40),
     businessEmail: email(settings.businessEmail),
     businessAddress: text(settings.businessAddress, 500),
+    // Decision-room pilot (§4.7, per-tenant terms by owner decision):
+    // tenant-authored portal terms text, projected verbatim; absent means
+    // the portal simply renders no terms block — nothing is invented.
+    portalTermsText: text(settings.portalTermsText, 5_000),
     acceptanceEmail: email(settings.acceptanceEmail),
     includeDisposables: form.includeDisposables !== false,
     disposablesNote: text(settings.disposablesNote, 800),
@@ -932,7 +936,8 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
       brandBackgroundMid: text(quoteMeta.brandBackgroundMid, 32),
       brandBackgroundEnd: text(quoteMeta.brandBackgroundEnd, 32),
       businessPhone: text(quoteMeta.businessPhone, 40),
-      businessEmail: email(quoteMeta.businessEmail)
+      businessEmail: email(quoteMeta.businessEmail),
+      portalTermsText: text(quoteMeta.portalTermsText, 5_000)
     },
     status: text(quote?.status, 32).toLowerCase() || "draft",
     expiresAtISO: normalizeISO(quote?.expiresAtISO, portalExpiresAtISO),

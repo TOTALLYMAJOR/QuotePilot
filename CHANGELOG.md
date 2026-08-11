@@ -8,6 +8,32 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Assumptions and per-tenant terms blocks in the customer portal
+  (`VITE_PILOT_DECISION_ROOM_ENABLED`), continuing the decided §4.7 block
+  decomposition without inventing content: the assumptions block restates
+  only recorded facts (guest count, date, hours of service, style) with a
+  note that changes are asked below and re-priced by the caterer; the
+  terms block renders the tenant's own text verbatim from the new bounded
+  `portalTermsText` setting (authored in a flag-gated Catalog Admin
+  textarea, carried through quoteMeta into the canonical snapshot) and
+  renders nothing while the setting is empty. Both blocks — and the
+  offer-cards options section — are addressable `data-portal-block`
+  targets with their own "Ask about this" buttons, bringing the portal to
+  six addressable blocks plus the header.
+
+- Assumptions and per-tenant terms blocks in the customer portal
+  (`VITE_PILOT_DECISION_ROOM_ENABLED`), continuing the decided §4.7 block
+  decomposition without inventing content: the assumptions block restates
+  only recorded facts (guest count, date, hours of service, style) with a
+  note that changes are asked below and re-priced by the caterer; the
+  terms block renders the tenant's own text verbatim from the new bounded
+  `portalTermsText` setting (authored in a flag-gated Catalog Admin
+  textarea, carried through quoteMeta into the canonical snapshot) and
+  renders nothing while the setting is empty. Both blocks — and the
+  offer-cards options section — are addressable `data-portal-block`
+  targets with their own "Ask about this" buttons, bringing the portal to
+  six addressable blocks plus the header.
+
 - Portal offer cards complete the decidable-options loop
   (`VITE_PILOT_DECISION_ROOM_ENABLED`): an unlocked portal now shows its
   projected options ("Options you can ask to add") with honest

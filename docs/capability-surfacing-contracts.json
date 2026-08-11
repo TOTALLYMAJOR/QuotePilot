@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 15,
+  "catalogVersion": 16,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -856,14 +856,14 @@
     },
     {
       "id": "private-customer-authority",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
       "audiences": [
         "internal_security"
       ],
-      "summary": "Canonical quote authority and normalized-email ownership claims remain private while exact-token portal projection reads continue independently. Revision 2: the canonical portal snapshot additionally projects decidableOptions — a bounded, name-and-price-only list of staff-marked (portalDecidable) active catalog options the quote does not already include, built by the exported pure buildPortalDecidableOptions and empty (fail-closed) at every call site until a later slice threads the org catalog in; no call-site behavior changes, no new Firebase Function export, and no portal UI reads the field yet.",
+      "summary": "Canonical quote authority and normalized-email ownership claims remain private while exact-token portal projection reads continue independently. Revision 2: the canonical portal snapshot additionally projects decidableOptions — a bounded, name-and-price-only list of staff-marked (portalDecidable) active catalog options the quote does not already include, built by the exported pure buildPortalDecidableOptions and empty (fail-closed) at every call site until a later slice threads the org catalog in; no call-site behavior changes, no new Firebase Function export, and no portal UI reads the field yet. Revision 3: quoteMeta additionally carries the tenant-authored portalTermsText (bounded, verbatim) into the canonical snapshot's projected quoteMeta subset, so the portal can render a per-tenant terms block; absent text projects empty and the portal renders nothing.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -913,7 +913,8 @@
         }
       ],
       "headlessReason": "Private ownership claims and canonical staff-only records are security primitives whose browser exposure would reveal identity or weaken exact-token projection boundaries.",
-      "safeOutcome": "Staff receive collision-safe customer behavior and customers retain exact-token decision-center access without browser access to canonical records or private claims."
+      "safeOutcome": "Staff receive collision-safe customer behavior and customers retain exact-token decision-center access without browser access to canonical records or private claims.",
+      "surfaceReviewNote": ""
     },
     {
       "id": "legacy-customer-id-backfill",
@@ -3185,7 +3186,7 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -3276,7 +3277,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths.",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block.",
       "stateEvidence": [
         {
           "state": "ready",

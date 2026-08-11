@@ -387,6 +387,7 @@ export const DEFAULT_SETTINGS = {
   businessAddress: "",
   businessTimeZone: "",
   acceptanceEmail: "",
+  portalTermsText: "",
   disposablesNote: "All disposables are included in this quote.",
   depositNotice: "30% deposit is required to lock in your date.",
   crmEnabled: false,
@@ -1162,6 +1163,9 @@ export function normalizeCatalog(raw) {
         DEFAULT_SETTINGS.businessTimeZone
       ),
       acceptanceEmail: toTenantText(inputSettings, "acceptanceEmail", DEFAULT_SETTINGS.acceptanceEmail),
+      // Decision-room pilot: tenant-authored portal terms. Default empty —
+      // the portal renders no terms block until the tenant writes one.
+      portalTermsText: toTenantText(inputSettings, "portalTermsText", "").slice(0, 5000),
       disposablesNote: toTenantText(
         inputSettings,
         "disposablesNote",

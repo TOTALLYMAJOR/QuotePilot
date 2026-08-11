@@ -92,6 +92,8 @@ describe("customer portal ask-about with the decision-room flag off (default)", 
     expect(container.textContent).not.toContain("Ask about this");
     expect(container.querySelector(".portal-decidable-options")).toBeNull();
     expect(container.textContent).not.toContain("Premium Bar");
+    expect(container.querySelector('[data-portal-block="assumptions"]')).toBeNull();
+    expect(container.querySelector('[data-portal-block="terms"]')).toBeNull();
     expect(container.querySelector('[data-testid="conversation-panel"]')).toBeTruthy();
     expect(stores.panelProps.current?.prefill ?? null).toBeNull();
   });

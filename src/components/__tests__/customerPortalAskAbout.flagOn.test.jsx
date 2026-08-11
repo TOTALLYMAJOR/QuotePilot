@@ -47,6 +47,11 @@ function portalQuote() {
     deposit: 1500,
     portalIssuedAtISO: "2026-08-11T09:00:00.000Z",
     deliveryEvidence: { revisionId: "v0004" },
+    eventGuests: 90,
+    eventDate: "2027-09-12",
+    eventHours: 4,
+    eventStyle: "Plated",
+    quoteMeta: { portalTermsText: "Deposit is non-refundable within 14 days.\nMenu locks 7 days out." },
     decidableOptions: [
       { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" },
       { itemType: "rental", name: "Linens", price: 9, pricingType: "per_item" }
@@ -98,10 +103,23 @@ describe("customer portal ask-about with the decision-room flag on", () => {
     await renderPortal();
 
     const buttons = [...container.querySelectorAll(".portal-ask-about")];
-    expect(buttons).toHaveLength(3);
+    expect(buttons).toHaveLength(5);
     const blocks = [...container.querySelectorAll("[data-portal-block]")]
       .map((element) => element.dataset.portalBlock);
-    expect(blocks).toEqual(["event-details", "package-and-menu", "pricing"]);
+    expect(blocks).toEqual([
+      "event-details", "package-and-menu", "pricing", "assumptions", "terms", "options"
+    ]);
+  });
+
+  test("assumptions restate recorded facts and terms render the tenant's own text verbatim", async () => {
+    await renderPortal();
+    const assumptions = container.querySelector('[data-portal-block="assumptions"]');
+    expect(assumptions.textContent).toContain("90 guests");
+    expect(assumptions.textContent).toContain("4 hours of service");
+    expect(assumptions.textContent).toContain("plated service");
+    const terms = container.querySelector('[data-portal-block="terms"]');
+    expect(terms.textContent).toContain("Deposit is non-refundable within 14 days.");
+    expect(terms.textContent).toContain("Menu locks 7 days out.");
   });
 
   test("asking about a block seeds the conversation prefill with that block's name", async () => {
