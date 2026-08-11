@@ -46,6 +46,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Margin awareness in Scenario Compare (`VITE_PILOT_MARGINS_ENABLED`, still
+  default off), matching design §4.6's own what-if mock ("margin 30.5% →
+  31.2%"): each good/better/best preset card now shows its margin, and the
+  current-vs-scenario table gains a Margin row with a points delta. Reuses
+  `buildMarginPresentation` a third time against the exact `totals`
+  Scenario Compare already computes for each side — no new pricing model.
+  Fail-closed per side independently (a `MarginComparisonRow` renders
+  "Unavailable" for whichever side lacks recorded costs, "—" for the delta
+  only when both sides are unavailable, and nothing at all when neither
+  side has anything to show), since a scenario's package swap can put it
+  in cost-coverage a tenant's current draft never needed.
+
 - Margin range in the CREATE intake band-pricing preview
   (`VITE_PILOT_MARGINS_ENABLED`, still default off), closing the Phase 5
   gap between the app's two pricing paths: `buildPricingBand` now prices

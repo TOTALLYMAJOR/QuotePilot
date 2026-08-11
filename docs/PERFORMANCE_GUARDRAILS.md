@@ -30,14 +30,14 @@ Threshold policy:
   the client-request panel with its structured-record boundary, the Event Room cascade panel, the Pilot command bar, and the fail-closed margin strip
   with its Catalog Admin cost-entry fields and below-target advisor card) is
   currently capped at
-  2,752,904
+  2,753,913
   aggregate JavaScript bytes and a 391,596-byte largest chunk. This figure
   extrapolates the current contributor-sandbox measurement forward by the
   confirmed CI-vs-sandbox offset and is provisional pending this exact
   commit's own CI confirmation — see `docs/TECH_EXCEPTIONS.md` for the full
   basis and evidence. The
   exception provides no additional growth headroom. Against the unchanged
-  clean-main baseline, aggregate output is 755,539 bytes (37.83%) larger, while
+  clean-main baseline, aggregate output is 756,548 bytes (37.88%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
   remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
   splitting keeps the authenticated route bounded, and route-level
