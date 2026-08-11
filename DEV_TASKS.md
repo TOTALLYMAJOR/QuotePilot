@@ -94,6 +94,20 @@ Only open work belongs here. Current operational truth lives in
   without mutating production.
 - Migrate remaining `functions.config()` compatibility before March 2027.
 
+## P1 - Workspace Design Follow-ups
+
+Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
+
+- Promote Catalog from the Operations menu into primary sidebar navigation,
+  keeping the admin role gate.
+- Add a first-class Templates surface for event-type presets, default terms,
+  and reusable scope blocks (today editable only inside Catalog Admin).
+- Add inline editing on the event workspace quote page: editable fields with
+  simulate-pricing round trips and Commercial Change Authority integration for
+  committed quotes; saving stays intentional and versioned.
+- Continue the plain-language terminology pass on remaining expert labels
+  (Decision Debt, Revenue Autopilot, attention projections).
+
 ## P1 - Data Operations
 
 - Run tenant-scoped dry runs for portal projection and legacy customer identity/
