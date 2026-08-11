@@ -730,7 +730,51 @@ function buildQuoteMeta(settings, form, pricing) {
   };
 }
 
-function buildCanonicalPortalSnapshot(quoteId, quote) {
+// Decision-room pilot (design §4.7, staged-requests direction): project the
+// staff-marked decidable options a portal may OFFER — never apply. Bounded,
+// name-and-price only (no catalog ids), active + explicitly marked items
+// only, and never an item the quote already includes. Callers that do not
+// have the org catalog in hand at snapshot-build time pass nothing and the
+// projection is an empty list — fail closed, no stale offers invented.
+const MAX_PORTAL_DECIDABLE_OPTIONS = 12;
+
+function buildPortalDecidableOptions(catalog, selection) {
+  if (!isRecord(catalog)) return [];
+  const selectedIds = new Set();
+  const selectedNames = new Set();
+  const noteSelected = (items) => (Array.isArray(items) ? items : []).forEach((item) => {
+    const id = sanitizeIdentifier(item?.id, 128);
+    const name = text(item?.name || item, 200).toLowerCase();
+    if (id) selectedIds.add(id);
+    if (name) selectedNames.add(name);
+  });
+  noteSelected(selection?.addonSnapshots);
+  noteSelected(selection?.rentalSnapshots);
+  noteSelected(selection?.addons);
+  noteSelected(selection?.rentals);
+
+  const offerable = (items, itemType) => (Array.isArray(items) ? items : [])
+    .filter((item) => isRecord(item)
+      && item.portalDecidable === true
+      && item.active !== false
+      && !selectedIds.has(sanitizeIdentifier(item.id, 128))
+      && !selectedNames.has(text(item.name, 200).toLowerCase()))
+    .map((item) => ({
+      itemType,
+      name: text(item.name, 200),
+      price: numberInRange(item.price, 0, 0, 1_000_000_000),
+      pricingType: ["per_person", "per_item", "per_event"].includes(text(item.pricingType || item.type, 32))
+        ? text(item.pricingType || item.type, 32)
+        : itemType === "addon" ? "per_person" : "per_item"
+    }))
+    .filter((item) => Boolean(item.name));
+
+  return [...offerable(catalog.addons, "addon"), ...offerable(catalog.rentals, "rental")]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, MAX_PORTAL_DECIDABLE_OPTIONS);
+}
+
+function buildCanonicalPortalSnapshot(quoteId, quote, { catalog = null } = {}) {
   const customer = isRecord(quote?.customer) ? quote.customer : {};
   const event = isRecord(quote?.event) ? quote.event : {};
   const totals = isRecord(quote?.totals) ? quote.totals : {};
@@ -811,6 +855,7 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
   return {
     quoteId: sanitizeIdentifier(quoteId),
     organizationId: sanitizeIdentifier(quote?.organizationId),
+    decidableOptions: buildPortalDecidableOptions(catalog, selection),
     portalKey,
     portalIssuedAtISO,
     portalExpiresAtISO,
@@ -1868,6 +1913,7 @@ module.exports = {
   QUOTE_VERSION_ID,
   QuoteCreationError,
   buildCanonicalPortalSnapshot,
+  buildPortalDecidableOptions,
   buildCustomerEmailClaim,
   bindCustomerIdentityToQuoteDocuments,
   buildCustomerProjection,

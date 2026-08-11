@@ -8,6 +8,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Decidable-option portal projection (server, dormant): the canonical
+  portal snapshot (`functions/quoteCreation.js#buildCanonicalPortalSnapshot`)
+  now carries `decidableOptions` — a bounded (max 12), name-and-price-only
+  list of staff-marked, active catalog options the quote does not already
+  include (excluded by id and by name), built by the exported pure
+  `buildPortalDecidableOptions`. Fail-closed everywhere: every existing
+  call site builds without a catalog and projects an empty list, so no
+  offer can appear until a later slice deliberately threads the org
+  catalog into chosen snapshot moments. No new Firebase Function export,
+  no call-site behavior change, no portal UI reads the field yet
+  (`private-customer-authority` contract revision 2).
+
 - Decidable-option marks in Catalog Admin (`VITE_PILOT_DECISION_ROOM_ENABLED`;
   first slice of the decided §4.7 direction): add-ons and rentals gain a
   strictly default-false `portalDecidable` boolean — normalize, storage,

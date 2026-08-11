@@ -173,13 +173,18 @@ the owner asks for the merge.
     staff-side data model is built: `portalDecidable` marks on add-ons and
     rentals (strictly default false, explicit-true only) with a flag-gated
     Portal offer checkbox in Catalog Admin, covered by the
-    `catalog-cost-and-pricing-data-entry` contract revision 3. Build next:
-    project marked options into the portal snapshot with price effect
-    (`buildCanonicalPortalSnapshot` in functions/quoteCreation.js plus the
-    client mirror in src/lib/quoteStore.js, fail-closed when the catalog
-    is unavailable at build time), then the portal offer cards whose tap
-    pre-fills the existing Request Changes flow with a canonical sentence
-    the staff-side parser already reads.
+    `catalog-cost-and-pricing-data-entry` contract revision 3. The
+    projection core is also built and dormant: the canonical snapshot
+    carries `decidableOptions` via the exported pure
+    `buildPortalDecidableOptions` (bounded, name-and-price only, excludes
+    already-included items by id and name), empty at every call site
+    until the org catalog is threaded in (`private-customer-authority`
+    revision 2). Build next: thread the catalog into the draft-save and
+    send snapshot moments (and mirror the field in
+    src/lib/quoteStore.js's client `buildPortalSnapshot`, which needs a
+    quoteStore-owning contract bump), then the portal offer cards whose
+    tap pre-fills the existing Request Changes flow with a canonical
+    sentence the staff-side parser already reads.
   - Per-block questions (conservative subset built; decided: block tags
     stay message-body text, not a structured field — revisit only if
     staff-side threading is actually wanted later). The full nine-block

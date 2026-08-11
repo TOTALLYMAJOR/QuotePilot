@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 13,
+  "catalogVersion": 14,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -856,14 +856,14 @@
     },
     {
       "id": "private-customer-authority",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
       "audiences": [
         "internal_security"
       ],
-      "summary": "Canonical quote authority and normalized-email ownership claims remain private while exact-token portal projection reads continue independently.",
+      "summary": "Canonical quote authority and normalized-email ownership claims remain private while exact-token portal projection reads continue independently. Revision 2: the canonical portal snapshot additionally projects decidableOptions — a bounded, name-and-price-only list of staff-marked (portalDecidable) active catalog options the quote does not already include, built by the exported pure buildPortalDecidableOptions and empty (fail-closed) at every call site until a later slice threads the org catalog in; no call-site behavior changes, no new Firebase Function export, and no portal UI reads the field yet.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
