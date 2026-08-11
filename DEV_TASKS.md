@@ -226,12 +226,13 @@ the owner asks for the merge.
   Secret Manager secrets for the chosen provider key(s); the code ships
   dormant without them.
 - Deterministic intake reader (owner-directed strongest-deterministic
-  goal): staff counts, time ranges, party-of-N, reversed dates, and
-  confirm-only relative weekdays are all built and adversarially
-  verified. Remaining candidate families, same verification bar:
-  written-out guest counts ("eighty guests"), "noon"/"midnight",
-  multi-day mentions, and venue-name capitalization heuristics beyond
-  the current "at X" pattern.
+  goal): staff counts, time ranges, party-of-N, reversed dates,
+  confirm-only relative weekdays, "noon"/"midnight" clock words (bare and
+  in a range), written-out guest counts ("eighty guests", "two hundred
+  and fifty guests"), a multi-day-mention note (never the draft date),
+  and labeled venue names ("Venue: X", "the venue is X") beyond the
+  original "at X" pattern are all built. The queued family list from the
+  prior checkpoint is now fully closed out.
 - Memory defaults (design §4.10) — decided scope for the first slice:
   event-shape memory is built and tested (`src/lib/eventShapeMemory.js`,
   contract `event-shape-memory`): staffing/hours by exact event type and

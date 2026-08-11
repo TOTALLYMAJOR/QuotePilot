@@ -8,6 +8,52 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Four more deterministic capture families closing out the CREATE reader's
+  build-out queue, hardened by two adversarial-verification agents that
+  wrote and ran real test cases against the real code rather than
+  reasoning about it — six confirmed defects found and fixed, one of them
+  serious (an auto-applied, high-confidence guest count silently
+  multiplied to 2000):
+  - "noon"/"midnight" as clock words, standalone and in a time range
+    ("6pm to midnight" -> 18:00 + 6h), including "til"/"'til" as a
+    recognized separator alongside "to"/"until"/"till". Guarded against
+    reading a name as a time ("the Midnight Garden Estate", "the midnight
+    buffet" as a menu feature) and against mislabeling the unresolved END
+    of a dangling range as the start ("6 to midnight", "six til midnight"
+    extract neither time nor hours, since neither side states am/pm). A
+    "not followed by a Capitalized word" guard, meant to also catch a name
+    like "Midnight Masquerade" without a leading "the", was tried and then
+    dropped once adversarial verification showed it rejected far more real
+    sentences than it protected — "at midnight New Year's Eve", "at noon
+    Friday", "at noon Eastern time" all lost their time fact purely
+    because a capitalized word happened to follow. The "the "-guard alone
+    covers the dominant real-world case.
+  - Written-out guest counts ("eighty guests", "about a hundred people",
+    "two hundred and fifty guests") parsed against a real English-number
+    grammar — "and" is legal only directly after "hundred" — rather than a
+    generic bag of words, and a genuine word-form range ("eighty to a
+    hundred guests", "between twenty and a hundred guests") is read as a
+    range with a midpoint, exactly like the existing digit range. The
+    defect this closes: a looser first-draft grammar let "and" bridge two
+    independent numbers in a range, so "between twenty and a hundred
+    guests" was silently misread as 20 x 100 = 2000 — hitting this file's
+    own cap while looking like a confident, valid count with no
+    confirmation required.
+  - A multi-day mention (a month-anchored day range, or an explicit
+    digit-or-word "N-day event" phrase, "3-day"/"three-day") surfaced as
+    an informational note only — never the draft date, never a fact —
+    since the builder plans exactly one event date. Guarded against
+    reading setup/breakdown lead time as the event's own span ("2 days
+    before the wedding" is not a two-day wedding) and against firing on an
+    explicitly negated mention ("this is NOT a multi-day event").
+  - Venue names introduced by an explicit label ("Venue: X", "the venue is
+    X") alongside the existing "at X" pattern. A captured name now stops
+    at the next sentence instead of swallowing it ("Venue: The Grand
+    Ballroom. Please confirm by Friday." no longer captures "The Grand
+    Ballroom. Please"), while a real abbreviation period still survives
+    ("St. Mary's Hall"); and a placeholder or non-answer ("TBD", "N/A",
+    "not sure yet") is never offered as a one-tap-confirmable venue guess.
+
 - Event-shape memory (design §4.10, first memory slice, flag-gated behind
   `VITE_PILOT_MEMORY_ENABLED`, off by default and not production-bound):
   once Structure it reads both an event type and a guest count,

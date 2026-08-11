@@ -30,16 +30,18 @@ Threshold policy:
   the client-request panel with its structured-record boundary, the Event Room cascade panel, the Pilot command bar, the fail-closed margin strip
   with its Catalog Admin cost-entry fields and below-target advisor card,
   the decision-room ask-about affordance in the customer portal, the
-  Model assist intake lane, two hardened rounds of the deterministic
-  CREATE reader, and event-shape memory) is
+  Model assist intake lane, three hardened rounds of the deterministic
+  CREATE reader (its queued family list now fully closed out, adversarially
+  verified by two independent agents), and
+  event-shape memory) is
   currently capped at
-  2,770,846
+  2,776,845
   aggregate JavaScript bytes and a 391,596-byte largest chunk, covering both
   the default-off and production-flag (all eight `VITE_PILOT_*` gates true,
   including the newly production-bound decision-room gate; event-shape
   memory's own gate is deliberately not one of the eight and stays unbound)
   CI bundle checks with one number — the larger of two fresh same-environment
-  measurements (2,770,547 production-flag, 2,770,495 default-off) plus the
+  measurements (2,776,546 production-flag, 2,776,494 default-off) plus the
   confirmed CI-vs-sandbox offset, provisional pending this exact commit's own
   CI confirmation. `v0.6.0`'s release PR run `31452174098` and exact-main run
   `31452570192` already passed the production-flag build and bundle guard
@@ -47,8 +49,8 @@ Threshold policy:
   re-measured fresh at each checkpoint now that further pilot work has
   landed on top. See `docs/TECH_EXCEPTIONS.md` for the full basis and
   evidence. The exception provides no additional growth headroom. Against
-  the unchanged clean-main baseline, aggregate output is 773,182 bytes
-  (38.71%) larger, while
+  the unchanged clean-main baseline, aggregate output is 779,181 bytes
+  (39.01%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
   remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
   splitting keeps the authenticated route bounded, and route-level

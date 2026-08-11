@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,770,846 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,776,845 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -43,8 +43,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The production-flag asset set is 773,182 bytes (38.71%) above
-  the clean-main aggregate baseline, of which 78,481 bytes are the default-off
+- Risk impact: The production-flag asset set is 779,181 bytes (39.01%) above
+  the clean-main aggregate baseline, of which 84,480 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
   cards, 13,797 for the CREATE intake canvas, deterministic extractor, and
@@ -85,18 +85,37 @@ Use this log when a change intentionally departs from stable-first policy or req
   pure tenant-history aggregation module and the CREATE section that
   renders it, ships unconditionally like every other pilot lane's client
   code even though the section itself renders nothing until the flag is
-  on and a reading yields both an event type and a guest count — this
+  on and a reading yields both an event type and a guest count, plus
+  5,999 for the CREATE reader's four remaining queued capture families —
+  "noon"/"midnight" clock words bare and in a range, written-out guest
+  counts, a multi-day mention surfaced as a note only (never the draft
+  date), and labeled venue names ("Venue: X", "the venue is X") beyond
+  the original "at X" pattern — closing out that queue, together with the
+  guard fixes two independent adversarial-verification agents' confirmed
+  findings required before this figure was final: a "not followed by a
+  Capitalized word" guard that broke under its own regex's `/i` flag
+  (rejecting ordinary sentences like "starts at Noon sharp") and was then
+  dropped outright once further adversarial testing showed it rejected
+  more real sentences than it protected; "til"/"'til" added as a
+  recognized range separator (and a matching word-form-hour case) after
+  it was found to slip past the dangling-range guard; a real English-
+  number grammar for written-out guest counts after a looser one let
+  "and" bridge two independent numbers in a range and silently misread
+  "between twenty and a hundred guests" as 20 x 100 = 2000; a sentence-
+  boundary stop and a placeholder-phrase guard ("TBD", "N/A") for venue
+  capture; and a lead-time/negation guard for the multi-day note (see
+  CHANGELOG.md for the full list) — this
   branch's own
   bugfix corrections (guest cap and staffing-labor gating in the margin
   strip; clause-index-anchored proposal/ambiguity ids in the change-request
   parser — see CHANGELOG.md `### Fixed`) are folded into the feature figures
   they landed in rather than split out as a separate line, unlike the
-  now-superseded `v0.6.0` ceiling record this reconciles with) and 347 bytes
+  now-superseded `v0.6.0` ceiling record this reconciles with) and 351 bytes
   are non-feature deltas: 299 are the confirmed CI-vs-local build-environment
-  offset (see Verification evidence below) and 56 are this tree's own
+  offset (see Verification evidence below) and 52 are this tree's own
   measured flag-off-to-production-flag build delta with all eight gates
-  bound, superseding the earlier 52- and 48-byte figures and the 32-byte
-  figure measured before this branch's post-`v0.6.0` work landed. A
+  bound, superseding the earlier 56-, 52-, and 48-byte figures and the
+  32-byte figure measured before this branch's post-`v0.6.0` work landed. A
   small remainder of the pilot-candidate delta belongs to the always-loaded
   catalog normalizer (nullable cost-field parsing shared by every tenant,
   not itself flag-gated) rather than the named pilot surfaces; it is folded
@@ -111,23 +130,33 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: This checkpoint's contributor-sandbox `npm run build`
-  emitted 2,770,495 aggregate JavaScript bytes and a 391,596-byte largest
-  chunk (default-off configuration), adding event-shape memory (design
-  §4.10): a pure, tenant-scoped aggregate of the tenant's own accepted/
-  booked quote history, plus the CREATE section that renders it behind its
-  own `VITE_PILOT_MEMORY_ENABLED` gate, deliberately not one of the eight
-  production-bound gates below — median staffing/hours from at least 3
+  emitted 2,776,494 aggregate JavaScript bytes and a 391,596-byte largest
+  chunk (default-off configuration), closing out the CREATE reader's
+  build-out queue with its four remaining families: "noon"/"midnight"
+  clock words (bare and in a range, guarded against reading a name as a
+  time and against mislabeling a dangling range's unresolved end as its
+  start), written-out guest counts parsed against a real English-number
+  grammar including a genuine word-form range, a multi-day mention
+  surfaced as an informational note only (never the draft date), and
+  labeled venue names ("Venue: X", "the venue is X") beyond the original
+  "at X" pattern — each hardened by two adversarial-verification agents
+  that found and fixed six real defects (one serious: a silently
+  multiplied guest count) before this figure was final; see CHANGELOG.md
+  for the full list. Prior checkpoints at this ceiling
+  added event-shape memory (design §4.10, its own
+  `VITE_PILOT_MEMORY_ENABLED` gate, not one of the eight production-bound
+  gates below): median staffing/hours from at least 3
   same-event-type-and-guest-band matches, any rental in a strict majority
   as a read-only mention, an honest below-threshold reply, and six literal
   `data-capability-state` markers (loading/empty/partial/success/error/
-  recovery). Prior checkpoints at this ceiling added the CREATE canvas
+  recovery); the CREATE canvas
   Model assist section and client boundary for the owner-approved
   model-assisted intake lane (a staff-only parseIntentDraft callable,
   dormant three ways until flag, provider, and Secret Manager key all
   exist, with per-state UI whose model suggestions each require explicit
-  confirmation before touching the draft), two further adversarially
+  confirmation before touching the draft); two further adversarially
   hardened rounds of the deterministic CREATE reader (staff counts, then
-  time ranges/party-of-N/reversed dates/relative weekdays), and the
+  time ranges/party-of-N/reversed dates/relative weekdays); and the
   decision-room portal pieces end to end (ask-about, decidable-option
   marks, projection pipeline, offer cards, assumptions and per-tenant
   terms blocks); by owner decision (2026-08-11) the decision-room gate is
@@ -158,7 +187,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   before the assumptions and per-tenant terms blocks; 2,758,603 before
   the CREATE Model assist section; 2,761,388 before the staff-count
   extraction; 2,762,786 before the four capture families; 2,765,589
-  before event-shape memory). Separately,
+  before event-shape memory; 2,770,495 before the reader's final four
+  queued families). Separately,
   from the
   2,747,012 anchor, the `v0.6.0` release checkout's own local
   production-flag build (all seven `VITE_PILOT_*` gates true) measured a
@@ -168,18 +198,19 @@ Use this log when a change intentionally departs from stable-first policy or req
   before `v0.6.0` deployed to both providers (see PROJECT_STATUS.md). Both
   configurations are re-measured fresh at every checkpoint since the
   reconciliation rather than projecting an old delta forward:
-  contributor-sandbox default-off is 2,770,495 bytes and the
+  contributor-sandbox default-off is 2,776,494 bytes and the
   same-environment production-flag build — all eight gates true,
-  event-shape memory's own gate unbound and unchanged — is 2,770,547
-  bytes, a 52-byte configuration delta, superseding the earlier 56-byte
-  figure. The ceiling above (2,770,846) is
-  the larger of the two, 2,770,547, plus the confirmed +299 CI-vs-sandbox
+  event-shape memory's own gate unbound and unchanged — is 2,776,546
+  bytes, a 52-byte configuration delta, matching the prior checkpoint's
+  figure exactly (no production-bound gate changed). The ceiling above
+  (2,776,845) is
+  the larger of the two, 2,776,546, plus the confirmed +299 CI-vs-sandbox
   offset, so one number safely covers both the default-off and
   production-flag CI bundle checks; no CI run against this exact commit
   exists yet, so treat it as provisional exactly like every prior
   checkpoint until its own CI run confirms or corrects it. The other
   largest emitted chunks were jsPDF at 385,630 bytes, `WorkspaceRoute` at
-  373,221 bytes, and the isolated quote store at 145,728 bytes. The
+  379,220 bytes, and the isolated quote store at 145,728 bytes. The
   Messaging Station itself remains a 30,941-byte lazy route chunk. These
   are local source-build measurements, not Core Web Vitals, hosted,
   production, or human-acceptance evidence.
@@ -217,10 +248,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This checkpoint's own ceiling (2,770,846)
-  is the same extrapolation applied a sixteenth time, against the larger
+  with `conclusion: success`. This checkpoint's own ceiling (2,776,845)
+  is the same extrapolation applied a seventeenth time, against the larger
   of the two build configurations — this commit's contributor-sandbox
-  eight-gate production-flag measurement (2,770,547) plus the confirmed
+  eight-gate production-flag measurement (2,776,546) plus the confirmed
   +299 offset —
   since it has no CI run of its own yet at record time; correct it to the
   literal exact-SHA CI value in a follow-up commit if either the default-off
