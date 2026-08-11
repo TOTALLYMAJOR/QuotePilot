@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 10, 2026
+Last updated: August 11, 2026
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,753,913 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,754,531 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -39,23 +39,25 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 756,548 bytes (37.88%) above the
-  clean-main aggregate baseline, of which 61,600 bytes are the default-off
+- Risk impact: The emitted asset set is 757,166 bytes (37.91%) above the
+  clean-main aggregate baseline, of which 62,218 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
   cards, 13,797 for the CREATE intake canvas, deterministic extractor, and
   draft-only band pricing strip, 10,011 for the client-request panel
   and parser, 4,452 for the structured-record boundary and client (now
   including best-effort version linking after save), 5,495 for
-  the cascade receipts panel, 2,993 for the Pilot command bar, and 8,655 for
+  the cascade receipts panel, 2,993 for the Pilot command bar, and 9,273 for
   the fail-closed margin strip, its Catalog Admin cost-entry fields
   (package/add-on/rental cost, staff cost rates, target margin), its
   below-target commercial advisor card, its literal save-outcome
   `data-capability-state` markers, the CREATE intake band-pricing
-  preview's margin range, and Scenario Compare's margin figures and
-  comparison row) and 299 bytes are the confirmed
-  CI-vs-local build-environment offset extrapolated into this checkpoint's
-  ceiling (see Performance impact and Verification evidence below). A small
+  preview's margin range, Scenario Compare's margin figures and
+  comparison row, and the change-request impact preview's margin delta in
+  the Pilot command bar and client-request panel) and 299 bytes are the
+  confirmed CI-vs-local build-environment offset extrapolated into this
+  checkpoint's ceiling (see Performance impact and Verification evidence
+  below). A small
   remainder of the pilot-candidate delta belongs to the always-loaded
   catalog normalizer (nullable cost-field parsing shared by every tenant,
   not itself flag-gated) rather than the named pilot surfaces; it is folded
@@ -70,20 +72,21 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: This checkpoint's contributor-sandbox `npm run build`
-  emitted 2,753,614 aggregate JavaScript bytes and a 391,596-byte largest
-  chunk, adding margin awareness to Scenario Compare (good/better/best
-  preset cards and the current-vs-scenario table, both via the same
-  buildMarginPresentation used everywhere else). A separate bugfix commit
-  in between (the Catalog Admin recovery-button key mismatch) added only
-  +12 bytes and needed no ceiling change. No CI run against this exact
-  commit exists yet at record time, so the ceiling above (2,753,913) is
-  this local figure plus the confirmed +299 CI-vs-sandbox offset (see
-  Verification evidence below); treat it as provisional until that
-  commit's own CI run confirms or corrects it, the same extrapolation
-  method already validated exactly (to the byte) on the first checkpoint
-  it was ever applied to. The last exact-SHA CI-confirmed
-  value remains 2,747,012: CI Quality run `31447641093` on commit
-  `20f69e7bc94fd8adaef5195e0bda0dde326bcb8b` reported
+  emitted 2,754,232 aggregate JavaScript bytes and a 391,596-byte largest
+  chunk, extending the same fail-closed margin computation into
+  `buildChangeImpact` (a `marginDelta` alongside its existing total and
+  deposit delta) and rendering it, flag-gated, in the impact line of both
+  the Pilot command bar and the client-request panel — the fourth and
+  fifth surfaces to reuse `buildMarginPresentation` without adding a new
+  computation path. No CI run against this exact commit exists yet at
+  record time, so the ceiling above (2,754,531) is this local figure plus
+  the confirmed +299 CI-vs-sandbox offset (see Verification evidence
+  below); treat it as provisional until that commit's own CI run confirms
+  or corrects it, the same extrapolation method already validated exactly
+  (to the byte) on the first checkpoint it was ever applied to. The last
+  exact-SHA CI-confirmed value remains 2,747,012: CI Quality run
+  `31447641093` on commit `20f69e7bc94fd8adaef5195e0bda0dde326bcb8b`
+  reported
   `Current bundle metrics: { totalJsBytes: 2747012, largestJsChunkBytes: 391596 }`
   against that ceiling and passed (prior contributor-sandbox checkpoints,
   all now superseded: 2,691,344
@@ -95,11 +98,12 @@ Use this log when a change intentionally departs from stable-first policy or req
   margin strip; 2,746,713 before Catalog Admin cost entry and the advisor
   card; 2,750,912 before the capability-state markers; 2,751,241 before
   version linking; 2,752,078 before the band-pricing margin range; 2,752,617
-  after the recovery-button bugfix). The other largest emitted chunks were jsPDF at 385,630 bytes,
-  `WorkspaceRoute` at 355,953 bytes, and the isolated quote store at 145,728
-  bytes. The station itself remains a 30,908-byte lazy route chunk. These are
-  local source-build measurements, not Core Web Vitals, hosted, production, or
-  human-acceptance evidence.
+  after the recovery-button bugfix; 2,753,614 before the command-bar and
+  change-request margin delta). The other largest emitted chunks were jsPDF
+  at 385,630 bytes, `WorkspaceRoute` at 355,953 bytes, and the isolated
+  quote store at 145,728 bytes. The station itself remains a 30,908-byte
+  lazy route chunk. These are local source-build measurements, not Core Web
+  Vitals, hosted, production, or human-acceptance evidence.
 - Rollback plan: Delete `docs/performance/bundle-exception.json` and remove,
   defer, or split enough branch code to pass the unchanged standard ceilings of
   2,097,233 aggregate bytes and 407,325 bytes for the largest chunk. The
@@ -134,9 +138,9 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This checkpoint's own ceiling (2,753,913) is
-  the same extrapolation applied a sixth time — this commit's
-  contributor-sandbox measurement (2,753,614) plus the confirmed +299
+  with `conclusion: success`. This checkpoint's own ceiling (2,754,531) is
+  the same extrapolation applied a seventh time — this commit's
+  contributor-sandbox measurement (2,754,232) plus the confirmed +299
   offset — since it has no CI run of its own yet at record time; correct it
   to the literal exact-SHA CI value in a follow-up commit if that run
   reports a different number, per the same commitment that already proved

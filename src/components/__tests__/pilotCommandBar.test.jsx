@@ -114,4 +114,14 @@ describe("PilotCommandBar", () => {
     expect(container.innerHTML).toContain("nothing was read from this; the draft is unchanged");
     expect(container.innerHTML).not.toContain(">Speak<");
   });
+
+  test("never shows a margin note while the margin pilot flag is off, even with recorded costs", () => {
+    const costedSettings = { ...settings, bartenderCostRate: 22 };
+    const costedCatalog = { ...catalog, packages: [{ id: "classic", name: "Classic", ppp: 20, costPpp: 8 }], settings: costedSettings };
+    render({ catalog: costedCatalog, settings: costedSettings });
+    setCommand("add another bartender");
+    clickByText("Preview");
+    expect(container.innerHTML).toContain("total (preview, fee and tax cascade included)");
+    expect(container.innerHTML).not.toContain("Margin");
+  });
 });

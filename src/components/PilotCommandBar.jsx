@@ -16,6 +16,12 @@ import {
 // the browser's own speech recognition and is absent when unsupported.
 export const PILOT_COMMAND_MODEL = CHANGE_REQUEST_PARSE_MODEL;
 
+// Same default-off gate as every other margin surface; costs are tenant
+// catalog data and margin never renders in any customer-facing projection.
+const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
+);
+
 function speechRecognitionCtor() {
   if (typeof window === "undefined") return null;
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -82,7 +88,10 @@ export default function PilotCommandBar({
     const impact = buildChangeImpact({ form, catalog, settings, proposal });
     if (!impact) return "";
     const sign = impact.delta > 0 ? "+" : impact.delta < 0 ? "−" : "±";
-    return `${sign}${currency(Math.abs(impact.delta))} total (preview, fee and tax cascade included).`;
+    const marginNote = PILOT_MARGINS_ENABLED && impact.marginDelta
+      ? ` Margin ${(impact.marginDelta.beforePct * 100).toFixed(1)}% → ${(impact.marginDelta.afterPct * 100).toFixed(1)}%.`
+      : "";
+    return `${sign}${currency(Math.abs(impact.delta))} total (preview, fee and tax cascade included).${marginNote}`;
   };
 
   return (

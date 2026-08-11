@@ -96,4 +96,35 @@ describe("ChangeRequestPanel", () => {
     expect(markup).toContain("Nothing was changed");
     expect(markup).not.toContain("Stage this");
   });
+
+  test("never shows a margin note while the margin pilot flag is off, even with recorded costs", () => {
+    const costedSettings = {
+      ...settings,
+      serverCostRate: 16,
+      chefCostRate: 20,
+      bartenderCostRate: 22,
+      menuSections: [{
+        id: "mains",
+        name: "Mains",
+        items: [
+          { id: "salmon", name: "Grilled Salmon", price: 6, pricingType: "per_person", cost: 2.5 },
+          { id: "chicken", name: "Herb Chicken", price: 4, pricingType: "per_person", cost: 1.5 }
+        ]
+      }]
+    };
+    const costedCatalog = { ...catalog, packages: [{ id: "classic", name: "Classic", ppp: 20, costPpp: 8 }], settings: costedSettings };
+    const markup = renderToStaticMarkup(
+      <ChangeRequestPanel
+        message="Could we do chicken instead of the salmon?"
+        submittedAtISO="2026-08-10T11:24:00Z"
+        form={form}
+        catalog={costedCatalog}
+        settings={costedSettings}
+        styles={["Buffet", "Plated", "Stations", "Drop-off"]}
+        onStageProposal={() => {}}
+      />
+    );
+    expect(markup).toContain("total after the fee and tax cascade");
+    expect(markup).not.toContain("Margin");
+  });
 });

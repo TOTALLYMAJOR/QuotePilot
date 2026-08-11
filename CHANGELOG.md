@@ -46,6 +46,19 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Margin delta in the change-request impact preview (`VITE_PILOT_MARGINS_ENABLED`,
+  still default off), extending the same fail-closed computation to the two
+  surfaces that price a client-requested change before it's staged: the
+  Pilot command bar and the client-request panel. `buildChangeImpact`
+  (`changeRequestParse.js`) now also returns a `marginDelta` alongside its
+  existing total/deposit delta, reusing `buildMarginPresentation` a fourth
+  and fifth time — both surfaces already called `buildChangeImpact` for
+  their impact line, so the change is additive to an existing computation
+  rather than a new one. Fail-closed exactly like every other margin
+  surface: `marginDelta` stays `null`, and no margin note renders, unless
+  every selected line on both the before and after side of the proposed
+  change has a recorded cost.
+
 - Margin awareness in Scenario Compare (`VITE_PILOT_MARGINS_ENABLED`, still
   default off), matching design §4.6's own what-if mock ("margin 30.5% →
   31.2%"): each good/better/best preset card now shows its margin, and the
