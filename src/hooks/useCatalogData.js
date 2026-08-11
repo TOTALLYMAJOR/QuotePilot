@@ -219,7 +219,8 @@ function addonWriteShape(item = {}) {
     priceMinor: Math.round(Number(item.price || 0) * 100),
     costMinor: toNullableMinor(item.cost),
     staffRole: normalizeAddonStaffRole(item.staffRole),
-    active: item.active !== false
+    active: item.active !== false,
+    portalDecidable: item.portalDecidable === true
   };
 }
 
@@ -232,7 +233,8 @@ function rentalWriteShape(item = {}) {
     qtyPerGuests: Number(item.qtyPerGuests || 1),
     pricingType,
     type: pricingType,
-    active: item.active !== false
+    active: item.active !== false,
+    portalDecidable: item.portalDecidable === true
   };
 }
 

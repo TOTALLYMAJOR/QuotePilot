@@ -169,10 +169,17 @@ the owner asks for the merge.
     request for staff approval, riding the existing change-request path —
     it is a request, not an authoritative change, so the
     `proposal-acceptance-v1` signature ceremony stays exactly where it is
-    (final proposal acceptance) and is not repeated per option. Build
-    next: staff mark catalog options as portal-decidable, the portal
-    projects those options with price effect, and a tap composes the
-    canonical change request.
+    (final proposal acceptance) and is not repeated per option. The
+    staff-side data model is built: `portalDecidable` marks on add-ons and
+    rentals (strictly default false, explicit-true only) with a flag-gated
+    Portal offer checkbox in Catalog Admin, covered by the
+    `catalog-cost-and-pricing-data-entry` contract revision 3. Build next:
+    project marked options into the portal snapshot with price effect
+    (`buildCanonicalPortalSnapshot` in functions/quoteCreation.js plus the
+    client mirror in src/lib/quoteStore.js, fail-closed when the catalog
+    is unavailable at build time), then the portal offer cards whose tap
+    pre-fills the existing Request Changes flow with a canonical sentence
+    the staff-side parser already reads.
   - Per-block questions (conservative subset built; decided: block tags
     stay message-body text, not a structured field — revisit only if
     staff-side threading is actually wanted later). The full nine-block

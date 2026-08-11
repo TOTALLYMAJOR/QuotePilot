@@ -8,6 +8,19 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Decidable-option marks in Catalog Admin (`VITE_PILOT_DECISION_ROOM_ENABLED`;
+  first slice of the decided §4.7 direction): add-ons and rentals gain a
+  strictly default-false `portalDecidable` boolean — normalize, storage,
+  and both catalog write shapes accept only an explicit boolean `true`, so
+  truthy junk from hand-edited JSON can never silently offer an option to
+  customers — surfaced as a flag-gated "Portal offer" checkbox beside each
+  add-on and rental row's Active toggle. Data model and staff opt-in only:
+  the portal does not read these marks yet. The next slices project marked
+  options into the customer portal with their price effect and let a tap
+  pre-fill the existing Request Changes flow — every customer choice
+  arriving as a staged request for staff approval, never a self-applying
+  change, per the owner-decided direction recorded in DEV_TASKS.md.
+
 - Per-block "Ask about this" in the customer portal
   (`VITE_PILOT_DECISION_ROOM_ENABLED`, default off in generic/local builds;
   by owner decision the production workflows now bind it to `true`

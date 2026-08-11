@@ -95,3 +95,36 @@ describe("normalizeCatalog cost fields", () => {
     expect(stored.rentals[0].cost).toBe(3);
   });
 });
+
+describe("normalizeCatalog portalDecidable marks", () => {
+  test("defaults strictly false on addons and rentals — no option is customer-offered without a deliberate mark", () => {
+    const catalog = catalogWith({
+      addons: [{ id: "bar", name: "Bar", price: 15 }],
+      rentals: [{ id: "linens", name: "Linens", price: 9, qtyPerGuests: 8 }]
+    });
+    expect(catalog.addons[0].portalDecidable).toBe(false);
+    expect(catalog.rentals[0].portalDecidable).toBe(false);
+  });
+
+  test("accepts only an explicit boolean true, rejecting truthy junk from hand-edited JSON", () => {
+    const catalog = catalogWith({
+      addons: [
+        { id: "bar", name: "Bar", price: 15, portalDecidable: true },
+        { id: "coffee", name: "Coffee", price: 95, portalDecidable: "yes" }
+      ],
+      rentals: [{ id: "linens", name: "Linens", price: 9, qtyPerGuests: 8, portalDecidable: 1 }]
+    });
+    expect(catalog.addons[0].portalDecidable).toBe(true);
+    expect(catalog.addons[1].portalDecidable).toBe(false);
+    expect(catalog.rentals[0].portalDecidable).toBe(false);
+  });
+
+  test("round-trips through toStorageCatalog (local dev fallback path) without loosening the default", () => {
+    const stored = toStorageCatalog(catalogWith({
+      addons: [{ id: "bar", name: "Bar", price: 15, portalDecidable: true }],
+      rentals: [{ id: "linens", name: "Linens", price: 9, qtyPerGuests: 8 }]
+    }));
+    expect(stored.addons[0].portalDecidable).toBe(true);
+    expect(stored.rentals[0].portalDecidable).toBe(false);
+  });
+});

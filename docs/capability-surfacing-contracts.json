@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 12,
+  "catalogVersion": 13,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -3185,14 +3185,14 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable.",
+      "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, plus a strictly default-false per-option portalDecidable mark on add-ons and rentals (the decision-room pilot's staff opt-in for which options the customer portal may offer as staged requests), all using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable.",
       "backendPaths": [
         "src/data/mockCatalog.js",
         "src/hooks/useCatalogData.js"
@@ -3275,8 +3275,8 @@
           "locator": "## Catalog cost entry and margin advisory"
         }
       ],
-      "surfaceReview": "verified_existing",
-      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixes a real bug in that reviewed save/reconciliation machinery (useCatalogData.js returned refreshed instead of the refreshRequired key AdminCatalogModal.jsx checks, for both saveCatalog and stageStarterPack) with no change to any UI, state, or export — verified_existing rather than changed, since the surface itself is unmodified.",
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths.",
       "stateEvidence": [
         {
           "state": "ready",

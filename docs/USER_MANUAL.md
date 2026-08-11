@@ -1329,6 +1329,13 @@ is sent until they send it, a pre-fill never overwrites something they
 already typed, and an unresolved message attempt always keeps its exact
 retry text.
 
+With the same gate enabled, Catalog Admin's add-on and rental rows gain a
+"Portal offer" checkbox. It is a mark only — off for every item unless you
+deliberately check it — and it does nothing customer-facing yet; upcoming
+slices will let the portal offer marked options, with every customer choice
+arriving as an ordinary change request for your review, never a
+self-applying change.
+
 ## Catalog cost entry and margin advisory
 
 With the pilot margin strip enabled (`VITE_PILOT_MARGINS_ENABLED`), Catalog

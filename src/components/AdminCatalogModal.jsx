@@ -29,6 +29,15 @@ import { useModalDialog } from "../hooks/useModalDialog";
 const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
 );
+// Decision-room pilot gate (design §4.7): the per-option "Portal offer"
+// mark below decides which add-ons/rentals the customer portal may offer
+// as decidable options. Marking is staff data entry only — every offer a
+// customer taps still arrives as a staged change request for staff
+// approval through the ordinary Request Changes path; nothing applies
+// itself.
+const PILOT_DECISION_ROOM_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_DECISION_ROOM_ENABLED || "").trim().toLowerCase()
+);
 
 const JSON_FIELD_META = [
   {
@@ -1738,6 +1747,7 @@ export function AdminCatalogView({
             <span>Price</span>
             {PILOT_MARGINS_ENABLED && <span>Cost</span>}
             <span>Active</span>
+            {PILOT_DECISION_ROOM_ENABLED && <span>Portal offer</span>}
             <span>Actions</span>
           </div>
           {draft.addons.map((item, i) => (
@@ -1776,6 +1786,17 @@ export function AdminCatalogView({
                   onChange={(e) => patchArrayItem("addons", i, "active", e.target.checked)}
                 />
               </label>
+              {PILOT_DECISION_ROOM_ENABLED && (
+                <label className="admin-inline-toggle">
+                  <span>Portal offer</span>
+                  <input
+                    type="checkbox"
+                    aria-label={`Offer ${item.name || `add-on ${i + 1}`} as a decidable option in the customer portal`}
+                    checked={item.portalDecidable === true}
+                    onChange={(e) => patchArrayItem("addons", i, "portalDecidable", e.target.checked)}
+                  />
+                </label>
+              )}
               <button type="button" className="ghost" onClick={() => removeRow("addons", i)}>Delete</button>
             </div>
           ))}
@@ -1821,6 +1842,17 @@ export function AdminCatalogView({
                   onChange={(e) => patchArrayItem("rentals", i, "active", e.target.checked)}
                 />
               </label>
+              {PILOT_DECISION_ROOM_ENABLED && (
+                <label className="admin-inline-toggle">
+                  <span>Portal offer</span>
+                  <input
+                    type="checkbox"
+                    aria-label={`Offer ${item.name || `rental ${i + 1}`} as a decidable option in the customer portal`}
+                    checked={item.portalDecidable === true}
+                    onChange={(e) => patchArrayItem("rentals", i, "portalDecidable", e.target.checked)}
+                  />
+                </label>
+              )}
               <button type="button" className="ghost" onClick={() => removeRow("rentals", i)}>Delete</button>
             </div>
           ))}

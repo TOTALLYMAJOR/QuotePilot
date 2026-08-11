@@ -889,7 +889,11 @@ export function normalizeCatalog(raw) {
       ? fromNullableMinorUnits(a.costMinor)
       : toNullableNumber(a.cost),
     staffRole: inferAddonStaffRole(a),
-    active: a.active !== false
+    active: a.active !== false,
+    // Staff opt-in per option for the decision-room portal offer (design
+    // §4.7): strictly default-off so no option is ever customer-offered
+    // without a deliberate mark.
+    portalDecidable: a.portalDecidable === true
   }));
   const rentals = (raw.rentals || DEFAULT_RENTALS).map((r) =>
     normalizeRental({
@@ -904,7 +908,8 @@ export function normalizeCatalog(raw) {
       qtyPerGuests: Number(r.qtyPerGuests || 1),
       pricingType: normalizePricingType(r.pricingType || r.type, "per_item"),
       type: normalizePricingType(r.pricingType || r.type, "per_item"),
-      active: r.active !== false
+      active: r.active !== false,
+      portalDecidable: r.portalDecidable === true
     })
   );
   const serviceFeeTiers = normalizeServiceFeeTiers(pricingValue(
@@ -1223,7 +1228,7 @@ export function toStorageCatalog(catalog) {
       includedRentalIds: normalizeStableIdList(includedRentalIds),
       active: active !== false
     })),
-    addons: catalog.addons.map(({ id, name, type, pricingType, price, cost, staffRole, active }) => ({
+    addons: catalog.addons.map(({ id, name, type, pricingType, price, cost, staffRole, active, portalDecidable }) => ({
       id,
       name,
       type: normalizePricingType(pricingType || type, "per_person"),
@@ -1231,9 +1236,10 @@ export function toStorageCatalog(catalog) {
       price,
       cost: toNullableNumber(cost),
       staffRole: normalizeAddonStaffRole(staffRole),
-      active: active !== false
+      active: active !== false,
+      portalDecidable: portalDecidable === true
     })),
-    rentals: catalog.rentals.map(({ id, name, price, cost, qtyPerGuests, type, pricingType, active }) => ({
+    rentals: catalog.rentals.map(({ id, name, price, cost, qtyPerGuests, type, pricingType, active, portalDecidable }) => ({
       id,
       name,
       price,
@@ -1241,7 +1247,8 @@ export function toStorageCatalog(catalog) {
       qtyPerGuests,
       type: normalizePricingType(pricingType || type, "per_item"),
       pricingType: normalizePricingType(pricingType || type, "per_item"),
-      active: active !== false
+      active: active !== false,
+      portalDecidable: portalDecidable === true
     })),
     settings: catalog.settings
   };

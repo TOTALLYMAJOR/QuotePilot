@@ -147,6 +147,33 @@ describe("catalog record save planning", () => {
     expect(changes.find((c) => c.id === "rental-a").writeData.costMinor).toBeNull();
   });
 
+  test("writes portalDecidable true only on an explicit staff mark, defaulting strictly false", () => {
+    const baseline = catalog({
+      addons: [{ id: "addon-a", name: "Dessert", price: 4, pricingType: "per_person", type: "per_person", staffRole: "", active: true }],
+      rentals: [{ id: "rental-a", name: "Linens", price: 9, qtyPerGuests: 8, pricingType: "per_item", type: "per_item", active: true }]
+    });
+    const next = catalog({
+      addons: [{ ...baseline.addons[0], portalDecidable: true }],
+      // Anything short of an explicit boolean true (including truthy junk
+      // from hand-edited JSON) must write false — no option is ever
+      // customer-offered without a deliberate mark.
+      rentals: [{ ...baseline.rentals[0], portalDecidable: "yes" }]
+    });
+
+    const changes = buildCatalogRecordChanges({
+      catalog: next,
+      baselineCatalog: baseline,
+      serverFingerprints: {
+        addons: { "addon-a": "fp-addon" },
+        rentals: { "rental-a": "fp-rental" }
+      }
+    });
+
+    expect(changes.find((c) => c.id === "addon-a").writeData.portalDecidable).toBe(true);
+    const rentalChange = changes.find((c) => c.id === "rental-a");
+    expect(rentalChange?.writeData.portalDecidable ?? false).toBe(false);
+  });
+
   test("distinguishes a fingerprint-guarded delete from a collision-checked create", () => {
     const baseline = catalog({
       rentals: [

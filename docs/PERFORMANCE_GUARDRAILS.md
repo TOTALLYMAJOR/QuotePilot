@@ -31,12 +31,12 @@ Threshold policy:
   with its Catalog Admin cost-entry fields and below-target advisor card,
   and the decision-room ask-about affordance in the customer portal) is
   currently capped at
-  2,755,358
+  2,756,352
   aggregate JavaScript bytes and a 391,596-byte largest chunk, covering both
   the default-off and production-flag (all eight `VITE_PILOT_*` gates true,
   including the newly production-bound decision-room gate)
   CI bundle checks with one number — the larger of two fresh same-environment
-  measurements (2,755,059 production-flag, 2,755,007 default-off) plus the
+  measurements (2,756,053 production-flag, 2,755,997 default-off) plus the
   confirmed CI-vs-sandbox offset, provisional pending this exact commit's own
   CI confirmation. `v0.6.0`'s release PR run `31452174098` and exact-main run
   `31452570192` already passed the production-flag build and bundle guard
@@ -44,8 +44,8 @@ Threshold policy:
   re-measured fresh at each checkpoint now that further pilot work has
   landed on top. See `docs/TECH_EXCEPTIONS.md` for the full basis and
   evidence. The exception provides no additional growth headroom. Against
-  the unchanged clean-main baseline, aggregate output is 757,694 bytes
-  (37.93%) larger, while
+  the unchanged clean-main baseline, aggregate output is 758,688 bytes
+  (37.98%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
   remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
   splitting keeps the authenticated route bounded, and route-level
