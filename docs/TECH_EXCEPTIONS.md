@@ -61,16 +61,18 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: The exact-SHA CI build of commit
-  `d5dead033aba5376104ca7c176f1a97fbecffd4e` (before the automated-review
-  bugfix corrections) emitted 2,746,940 aggregate JavaScript bytes and a
-  391,596-byte largest chunk — the most recent exact-SHA CI-confirmed value.
-  The ceiling above (2,747,012) is that confirmed value plus the +72
-  contributor-sandbox delta measured for the bugfix commit that follows it
-  (2,746,713 local, up from 2,746,641 local for `d5dead0`), extrapolated
-  using the confirmed +299 CI-vs-sandbox offset rather than a fresh CI run,
-  since no CI run against the bugfix commit exists yet at record time; treat
-  it as provisional until that commit's own CI run confirms or corrects it
-  (prior contributor-sandbox checkpoints, all now superseded: 2,691,344
+  `20f69e7bc94fd8adaef5195e0bda0dde326bcb8b` (the automated-review bugfix
+  commit) emitted 2,747,012 aggregate JavaScript bytes and a 391,596-byte
+  largest chunk — confirmed by CI Quality run `31447641093`, whose
+  `lane:core` bundle guard log reports
+  `Current bundle metrics: { totalJsBytes: 2747012, largestJsChunkBytes: 391596 }`
+  against this exact ceiling and passed. This matches, byte for byte, the
+  figure extrapolated at record time from the prior exact-SHA CI-confirmed
+  value for commit `d5dead033aba5376104ca7c176f1a97fbecffd4e`
+  (2,746,940, from run `31447039723`) plus the +72 contributor-sandbox delta
+  measured for the bugfix commit (2,746,713 local, up from 2,746,641 local
+  for `d5dead0`) and the confirmed +299 CI-vs-sandbox offset; the
+  extrapolation is no longer provisional (prior contributor-sandbox checkpoints, all now superseded: 2,691,344
   converged; 2,700,437 with the NOW surface only; 2,705,981 before the
   guided-selling cards; 2,707,541 before the CREATE intake canvas; 2,719,059
   before the band pricing strip; 2,721,338 before the client-request panel;
@@ -107,10 +109,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   than a contributor sandbox to avoid repeating this gap. The ceiling was
   then extrapolated forward by the automated-review bugfix commit's own
   contributor-sandbox delta (+72 bytes) plus the confirmed +299 offset, in
-  lieu of a CI run against that exact commit at record time — an estimate,
-  not a second confirmed CI measurement; if that commit's own CI run reports
-  a different value, correct the ceiling to the literal value in a
-  follow-up commit rather than re-extrapolating. Earlier checkpoint figures
+  lieu of a CI run against that exact commit at record time. CI Quality run
+  `31447641093` on commit `20f69e7` (the bugfix commit) subsequently
+  confirmed this extrapolation exactly: its `lane:core` bundle guard log
+  reports `Current bundle metrics: { totalJsBytes: 2747012,
+  largestJsChunkBytes: 391596 }`, matching the ceiling to the byte, and the
+  full check run set for that commit (`lane:quick`, `lane:core`,
+  `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
+  `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
+  with `conclusion: success`. Earlier checkpoint figures
   in this record were sandbox-measured and are superseded by this
   correction. `npm run check:perf:bundle` must report this
   exact named exception, its absolute ceilings, and the unchanged normal limits

@@ -30,12 +30,10 @@ Threshold policy:
   the client-request panel with its structured-record boundary, the Event Room cascade panel, the Pilot command bar, and the fail-closed margin strip) is
   currently capped at
   2,747,012
-  aggregate JavaScript bytes and a 391,596-byte largest chunk. This ceiling
-  extrapolates the most recent exact-SHA CI-measured value (2,746,940 — not
-  a contributor-sandbox measurement) forward by a bugfix commit's own
-  sandbox delta plus the confirmed CI-vs-local offset; see
-  `docs/TECH_EXCEPTIONS.md` for the full basis and its provisional status
-  pending that commit's own CI confirmation. The
+  aggregate JavaScript bytes and a 391,596-byte largest chunk. CI Quality
+  run `31447641093` on the bugfix commit (`20f69e7`) confirmed this figure
+  exactly — see `docs/TECH_EXCEPTIONS.md` for the full basis and
+  confirmation evidence. The
   exception provides no additional growth headroom. Against the unchanged
   clean-main baseline, aggregate output is 749,647 bytes (37.53%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
