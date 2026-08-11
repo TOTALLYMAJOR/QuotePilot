@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: August 9, 2026
+Last updated: August 11, 2026
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -32,10 +32,11 @@ Threshold policy:
   2,747,044
   aggregate JavaScript bytes and a 391,596-byte largest chunk. CI Quality
   run `31447641093` on the bugfix commit (`20f69e7`) confirmed the default-off
-  2,747,012-byte figure exactly. The release candidate's production-flag build
-  is 32 bytes larger in a same-environment comparison, so the temporary ceiling carries that exact
-  configuration delta over the confirmed CI value; the release PR repeats the
-  production-flag build and bundle guard to confirm the extrapolation. See
+  2,747,012-byte figure exactly. The production-flag build is 32 bytes larger
+  in a same-environment comparison, so the temporary ceiling carries that exact
+  configuration delta over the confirmed CI value. Release PR run
+  `31452174098` and exact-main run `31452570192` both passed the repeated
+  production-flag build and bundle guard before `v0.6.0` deployment. See
   `docs/TECH_EXCEPTIONS.md` for the full basis. Against the unchanged
   clean-main baseline, aggregate output is 749,679 bytes (37.53%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and

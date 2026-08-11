@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 10, 2026
+Last updated: August 11, 2026
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -12,7 +12,9 @@ Only open work belongs here. Current operational truth lives in
   create and finish a quote, save, read back the exact revision, reopen from
   Quotes, export PDF, and verify the Event Workspace, Customer 360, Workflow,
   Schedule, Reporting, Messaging Station, Kitchen BEO, Decision Debt, and
-  Operations Audit role boundaries.
+  Operations Audit role boundaries. Include the deployed NOW, Event Room,
+  guided-selling, CREATE, staged-change, Pilot command, margin, and structured
+  change-request-record surfaces under their production flag combination.
 - Run a disposable second-tenant lifecycle: platform-admin plan/create,
   verified owner invitation and activation, neutral defaults, starter-pack
   review, pricing confirmation, trusted quote create/readback/version,
@@ -101,9 +103,10 @@ Only open work belongs here. Current operational truth lives in
   second identity, mutable customer-wide thread, or public customer account
   until recovery, revocation, multi-organization membership, and exact-token
   coexistence are specified.
-- Define first-class structured customer change requests as a callable-only
-  program linked to an authoritative resulting quote version. Keep the current
-  freeform request-changes path until that program is separately accepted.
+- Complete hosted acceptance for the deployed callable-only structured
+  change-request record, then specify any future link from its internal staging
+  receipt to an authoritative resulting quote version. Keep the current
+  freeform request-changes path and ordinary save authority intact.
 
 ## P1 - Customer-Flow Follow-through
 
