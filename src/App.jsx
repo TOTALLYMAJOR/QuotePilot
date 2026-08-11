@@ -723,6 +723,21 @@ export default function App({ tenantContext, authSession }) {
   const [dynamicMenuRetryToken, setDynamicMenuRetryToken] = useState(0);
   const [step, setStep] = useState(1);
   const [mobilePricingOpen, setMobilePricingOpen] = useState(false);
+  // Which surface a brand-new quote opens with: "create" (the paste-a-note
+  // canvas, full width, as the front door) or "manual" (the classic
+  // stepped form, reached by explicitly skipping or by applying a CREATE
+  // reading — applying is the natural moment to reveal the now-prefilled
+  // form). Only meaningful for new quotes with the CREATE gate on; editing
+  // an existing quote or the flag being off always shows the form, exactly
+  // as before this toggle existed. Reset to "create" wherever a fresh new
+  // quote session begins (see handleGetInstantQuote and the QUOTE_NEW
+  // route-reset effect).
+  const [createEntryMode, setCreateEntryMode] = useState("create");
+  // The operator's own CREATE note, lifted out of CreateIntake so it
+  // survives that component unmounting when "manual" mode reveals the
+  // wizard — otherwise "Back to your note" would reopen to a blank canvas
+  // instead of what was actually typed. Reset alongside createEntryMode.
+  const [createNoteText, setCreateNoteText] = useState("");
 
   const closeMobilePricing = () => {
     setMobilePricingOpen(false);
@@ -1295,6 +1310,14 @@ export default function App({ tenantContext, authSession }) {
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  // True only for a brand-new quote with the CREATE gate on — never for
+  // editing an existing quote, and never when the gate is off. Everywhere
+  // else the wizard renders exactly as it always has.
+  const createFirstFlowActive = PILOT_CREATE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
+    && !editingQuote.id;
+  const showCreateCanvas = createFirstFlowActive && createEntryMode === "create";
+  const showWizardPanel = !createFirstFlowActive || createEntryMode === "manual";
   const currentChangeImpactFormKey = JSON.stringify(form);
   const changeImpactPresentationError = changeImpactPreview.error || (
     changeImpactPreview.model
@@ -1712,7 +1735,13 @@ export default function App({ tenantContext, authSession }) {
     if (Object.prototype.hasOwnProperty.call(rest, "guests")) {
       setGuestBand(meta?.guestBand || null);
     }
-    if (eventTypeId || entries.length) setStep(1);
+    if (eventTypeId || entries.length) {
+      setStep(1);
+      // Applying anything from the CREATE canvas is the moment the
+      // operator has decided to proceed with these facts — reveal the
+      // now-prefilled form instead of leaving it hidden behind the canvas.
+      setCreateEntryMode("manual");
+    }
   };
 
   // Client-request staging: applies one parsed proposal to the draft form
@@ -2701,6 +2730,8 @@ export default function App({ tenantContext, authSession }) {
         setEditingQuote(EMPTY_EDITING_QUOTE);
         resetChangeImpactPreview();
         setQuoteDirty(true);
+        setCreateEntryMode("create");
+        setCreateNoteText("");
         setSubmitState((current) => ({
           ...current,
           saving: false,
@@ -2778,6 +2809,8 @@ export default function App({ tenantContext, authSession }) {
     directEditLoadRef.current = { key: "", generation: directEditLoadRef.current.generation + 1 };
     navigateWorkspace(WORKSPACE_PATHS.quoteNew);
     setEditingQuote(EMPTY_EDITING_QUOTE);
+    setCreateEntryMode("create");
+    setCreateNoteText("");
     resetChangeImpactPreview();
     setQuoteDirty(false);
     setForm({
@@ -3679,7 +3712,7 @@ export default function App({ tenantContext, authSession }) {
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
-        {PILOT_COMMAND_ENABLED && (
+        {PILOT_COMMAND_ENABLED && showWizardPanel && (
           <PilotCommandBar
             form={form}
             catalog={catalog}
@@ -3688,15 +3721,17 @@ export default function App({ tenantContext, authSession }) {
             onStageProposal={stageChangeRequestProposal}
           />
         )}
-        {PILOT_CREATE_ENABLED
-          && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
-          && !editingQuote.id && (
+        {showCreateCanvas && (
           <CreateIntake
             eventTypes={catalog.eventTypes || []}
             styles={Object.keys(STAFF_RULES)}
             onApplyDraft={applyIntentDraft}
             organizationId={authSession.organizationId}
             onModelParse={parseIntentDraftWithModel}
+            onSkipToManual={() => setCreateEntryMode("manual")}
+            initialText={createNoteText}
+            autoStructure={Boolean(createNoteText.trim())}
+            onTextChange={setCreateNoteText}
           />
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED
@@ -3737,7 +3772,16 @@ export default function App({ tenantContext, authSession }) {
             }
           />
         )}
-        <section className="panel wizard-panel">
+        <section className="panel wizard-panel" hidden={!showWizardPanel} aria-hidden={!showWizardPanel}>
+          {createFirstFlowActive && (
+            <button
+              type="button"
+              className="ghost compact create-intake-return"
+              onClick={() => setCreateEntryMode("create")}
+            >
+              ← Back to your note
+            </button>
+          )}
           <RebookQuoteReviewBanner
             quoteNumber={editingQuote.quoteNumber}
             organizationId={editingQuote.organizationId || authSession.organizationId}
@@ -4068,15 +4112,17 @@ export default function App({ tenantContext, authSession }) {
           {submitState.message && <p className="source-note">{submitState.message}</p>}
         </section>
 
-        <LiveBreakdown
-          form={form}
-          totals={totals}
-          settings={effectiveSettings}
-          catalog={catalog}
-          mobileExpanded={mobilePricingOpen}
-          onMobileClose={closeMobilePricing}
-          guestBand={guestBand}
-        />
+        {showWizardPanel && (
+          <LiveBreakdown
+            form={form}
+            totals={totals}
+            settings={effectiveSettings}
+            catalog={catalog}
+            mobileExpanded={mobilePricingOpen}
+            onMobileClose={closeMobilePricing}
+            guestBand={guestBand}
+          />
+        )}
       </main>
       )}
 

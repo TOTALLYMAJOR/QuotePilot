@@ -187,11 +187,19 @@ test.describe("customer-centered workspace", () => {
       "Corporate dinner for about 80 guests on September 12, 2027 at The Foundry, plated, 4 hours, pilot@example.test."
     );
     await intake.getByRole("button", { name: "Structure it" }).click();
-    await intake.getByRole("button", { name: /Apply \d+ facts? to the draft/ }).click();
+    await intake.getByRole("button", { name: /Apply \d+ facts? and open the form/ }).click();
 
     await expect(page.getByRole("spinbutton", { name: /Guests \(max 400\)/i })).toHaveValue("80");
     await expect(page.locator('[data-pricing-band="pricing-band-v1"]')).toBeVisible();
     await expect(page.getByText("Saving always prices the exact recorded count.", { exact: false })).toBeVisible();
+
+    // "Back to your note" must return the operator's own text, not a blank
+    // canvas — the note is lifted into App state precisely so this survives
+    // the CreateIntake component unmounting behind the revealed wizard.
+    await page.getByRole("button", { name: "← Back to your note" }).click();
+    await expect(intake.getByRole("textbox", { name: "Describe the event in your own words" }))
+      .toHaveValue(/Corporate dinner for about 80 guests/);
+    await expect(intake.getByText("Read from your note")).toBeVisible();
   });
 
   test("explicit New quote discard and browser-exit protection remain attached to a dirty routed draft", async ({ page }) => {

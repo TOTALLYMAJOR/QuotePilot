@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,776,849 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,777,549 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -191,7 +191,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   the CREATE Model assist section; 2,761,388 before the staff-count
   extraction; 2,762,786 before the four capture families; 2,765,589
   before event-shape memory; 2,770,495 before the reader's final four
-  queued families). Separately,
+  queued families; 2,776,849 before the CREATE-first redesign). Separately,
   from the
   2,747,012 anchor, the `v0.6.0` release checkout's own local
   production-flag build (all seven `VITE_PILOT_*` gates true) measured a
@@ -201,21 +201,23 @@ Use this log when a change intentionally departs from stable-first policy or req
   before `v0.6.0` deployed to both providers (see PROJECT_STATUS.md). Both
   configurations are re-measured fresh at every checkpoint since the
   reconciliation rather than projecting an old delta forward:
-  contributor-sandbox default-off is 2,776,494 bytes and the
-  same-environment production-flag build — now all nine gates true,
-  the memory gate newly bound by owner decision on 2026-08-11 — is
-  2,776,550
-  bytes, a 56-byte configuration delta (up from the prior checkpoint's
-  52-byte, eight-gate figure now that a ninth gate is bound). The ceiling
+  contributor-sandbox default-off is 2,777,194 bytes and the
+  same-environment production-flag build — still all nine gates true,
+  unchanged since the memory gate's binding — is
+  2,777,250
+  bytes, a 56-byte configuration delta (unchanged from the prior
+  checkpoint: the CREATE-first redesign added the same
+  `src/components/CreateIntake.jsx`/`src/App.jsx`/`src/styles.css` bytes to
+  both builds, since `CreateIntake` is an unconditional import gated only
+  at render time behind the existing `VITE_PILOT_CREATE_ENABLED` check, not
+  a new flag). The ceiling
   above
-  (2,776,849) is
-  the larger of the two, 2,776,550, plus the confirmed +299 CI-vs-sandbox
+  (2,777,549) is
+  the larger of the two, 2,777,250, plus the confirmed +299 CI-vs-sandbox
   offset, so one number safely covers both the default-off and
   production-flag CI bundle checks; no CI run against this exact commit
   exists yet, so treat it as provisional exactly like every prior
-  checkpoint until its own CI run confirms or corrects it. The other
-  largest emitted chunks were jsPDF at 385,630 bytes, `WorkspaceRoute` at
-  379,220 bytes, and the isolated quote store at 145,728 bytes. The
+  checkpoint until its own CI run confirms or corrects it. The
   Messaging Station itself remains a 30,941-byte lazy route chunk. These
   are local source-build measurements, not Core Web Vitals, hosted,
   production, or human-acceptance evidence.
@@ -253,17 +255,21 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This checkpoint's own ceiling (2,776,849)
-  is the same extrapolation applied an eighteenth time, against the larger
+  with `conclusion: success`. This checkpoint's own ceiling (2,777,549)
+  is the same extrapolation applied a nineteenth time, against the larger
   of the two build configurations — this commit's contributor-sandbox
-  nine-gate production-flag measurement (2,776,550) plus the confirmed
+  nine-gate production-flag measurement (2,777,250) plus the confirmed
   +299 offset —
   since it has no CI run of its own yet at record time; correct it to the
   literal exact-SHA CI value in a follow-up commit if either the default-off
   or production-flag CI run reports a different number, per the same
   commitment that already proved correct on every prior checkpoint. Earlier
   checkpoint figures in this record were sandbox-measured and are
-  superseded by this correction. CI Quality now additionally builds with
+  superseded by this correction. The other largest emitted chunks are now
+  jsPDF at 385,630 bytes (unchanged), `WorkspaceRoute` at 379,960 bytes (up
+  from 379,220, absorbing the CREATE-first redesign's App.jsx/CreateIntake.jsx
+  diff), and the isolated quote store at 145,728 bytes (unchanged). CI
+  Quality now additionally builds with
   all seven pilot gates enabled and runs the same bundle guard before its
   production-mode browser matrix on every push; `v0.6.0`'s release PR run
   `31452174098` and exact-main run `31452570192` were the first to pass it,

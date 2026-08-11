@@ -244,6 +244,24 @@ the owner asks for the merge.
   applying writes only staffing/hours to the draft. Venue/client/season
   memory stay later phases. Tenant-isolated, no cross-tenant learning,
   honest cold start below a minimum sample of 3.
+- CREATE-first redesign (owner-directed, 2026-08-11: "I need a win here, I
+  don't want to look at the same app"): CREATE is now the default surface
+  for a brand-new quote behind the existing `VITE_PILOT_CREATE_ENABLED`
+  gate — no new flag, only the default entry point changes. The wizard
+  reveals itself, prefilled, on apply (any of the three apply paths — full
+  draft, single confirmed fact, or memory apply, all funneled through
+  `applyIntentDraft`) or on an explicit "Start from a blank form instead."
+  A "← Back to your note" control round-trips to the canvas without losing
+  either side's state: the wizard is hidden via `hidden`/`aria-hidden`,
+  not unmounted, and the operator's note text is lifted into App state so
+  it and its read facts survive `CreateIntake` itself unmounting behind
+  the revealed wizard. Editing an existing quote is unaffected. Verified
+  against the running app with seeded local data across all four states
+  (landing, structured, applied, back-to-note, explicit skip), not just
+  the component test suite. Still open: this is additive UI sequencing,
+  not a fix for the deeper gap named in the "authenticated staff
+  acceptance" bullet above — no authenticated staff has used any pilot
+  surface, CREATE-first included, in the real hosted app yet.
 
 ## P1 - Performance and Accessibility
 

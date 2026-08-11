@@ -9880,11 +9880,24 @@ hr {
   margin-top: 0.2rem;
 }
 
-/* ===== Pilot CREATE intake canvas (flag-gated, deterministic extraction) ===== */
+/* ===== Pilot CREATE intake canvas (flag-gated, deterministic extraction) =====
+   Now the sole front door for a brand-new quote (see createEntryMode in
+   App.jsx) rather than a strip above the classic form, so it gets the
+   room and weight a primary entry surface deserves — centered, generous
+   padding, a larger heading — instead of the compact styling that made
+   sense when it shared the page with a full wizard below it. */
 
 .create-intake-panel {
   grid-column: 1 / -1;
-  margin-bottom: var(--space-4);
+  margin: var(--space-2) auto var(--space-4);
+  max-width: 46rem;
+  width: 100%;
+  padding: var(--space-4) var(--space-4);
+}
+
+.create-intake-panel #create-intake-title {
+  font-size: 1.6rem;
+  margin-top: 0.15rem;
 }
 
 .create-intake-sub {
@@ -9892,6 +9905,25 @@ hr {
   max-width: 40rem;
   margin: 0.35rem 0 0;
   font-size: 0.92rem;
+}
+
+.create-intake-skip,
+.create-intake-return {
+  border-color: transparent;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 0.15rem;
+  color: var(--tone-ink-2);
+}
+
+.create-intake-skip:hover,
+.create-intake-return:hover {
+  color: var(--tone-ink-1);
+  background: transparent;
+}
+
+.create-intake-return {
+  margin-bottom: 0.75rem;
 }
 
 .create-intake-input {

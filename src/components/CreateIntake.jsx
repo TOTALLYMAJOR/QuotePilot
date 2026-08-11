@@ -35,7 +35,9 @@ export default function CreateIntake({
   initialText = "",
   autoStructure = false,
   organizationId = "",
-  onModelParse = null
+  onModelParse = null,
+  onSkipToManual = null,
+  onTextChange = null
 }) {
   const [text, setText] = useState(initialText);
   // Model-assist read states (docs/INTENT_INTAKE_ADR.md): the lane is
@@ -159,18 +161,24 @@ export default function CreateIntake({
           <p className="create-intake-sub">
             Type or paste anything — an email, call notes, a text thread. QuotePilot
             structures what it can read and leaves the rest to you. Nothing is saved
-            or sent from here; the draft below stays yours to review.
+            or sent from here; applying opens the ordinary editable form, prefilled
+            and ready to review.
           </p>
         </div>
       </div>
 
       <textarea
         className="create-intake-input"
-        rows={4}
+        rows={6}
         value={text}
         placeholder={'"Corporate dinner for about 80 on September 12, upscale but relaxed, plated, budget around $12k."'}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          const value = event.target.value;
+          setText(value);
+          if (typeof onTextChange === "function") onTextChange(value);
+        }}
         aria-label="Describe the event in your own words"
+        autoFocus
       />
       <div className="create-intake-actions">
         <button type="button" className="cta" onClick={structure} disabled={!text.trim()}>
@@ -189,6 +197,11 @@ export default function CreateIntake({
             disabled={!text.trim() || modelParse.phase === "loading"}
           >
             {modelParse.phase === "loading" ? "Asking the model..." : "Model assist"}
+          </button>
+        )}
+        {typeof onSkipToManual === "function" && (
+          <button type="button" className="ghost create-intake-skip" onClick={onSkipToManual}>
+            Start from a blank form instead
           </button>
         )}
       </div>
@@ -363,17 +376,17 @@ export default function CreateIntake({
 
           {result.facts.length === 0 && result.needsConfirmation.length === 0 && (
             <p className="source-note">
-              Nothing structured could be read from that. The builder below is ready —
-              nothing was changed.
+              Nothing structured could be read from that. Start from a blank form
+              instead — nothing was changed.
             </p>
           )}
 
           {hasDraft && (
             <div className="create-intake-apply">
               <button type="button" className="cta" onClick={applyAll} disabled={appliedAt === "all"}>
-                {appliedAt === "all" ? "Applied — review below" : `Apply ${result.facts.length} fact${result.facts.length === 1 ? "" : "s"} to the draft`}
+                {appliedAt === "all" ? "Applied — opening the form" : `Apply ${result.facts.length} fact${result.facts.length === 1 ? "" : "s"} and open the form`}
               </button>
-              <small>Applying prefills the builder below. Every value stays editable, and saving re-prices on the server.</small>
+              <small>Applying opens the ordinary editable form, prefilled. Every value stays editable, and saving re-prices on the server.</small>
             </div>
           )}
         </div>

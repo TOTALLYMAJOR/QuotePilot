@@ -17,6 +17,26 @@ This changelog is backfilled from git history and will be maintained going forwa
   a 56-byte configuration delta over default-off); ceiling moves to
   2,776,849.
 
+- CREATE is now the default entry point for a brand-new quote
+  (`VITE_PILOT_CREATE_ENABLED`, unchanged flag, only its default surface
+  changes): landing on `/app/quotes/new` shows only the paste-a-note
+  canvas — no wizard fields, no pricing panel — instead of the canvas
+  stacked above an already-visible blank form. The classic stepped wizard
+  stays fully intact underneath and reveals itself, prefilled, at the
+  moment the operator applies a CREATE reading (full-apply, a single
+  confirmed fact, or a memory apply all funnel through the same
+  `applyIntentDraft`, so all three trigger the same reveal) or when they
+  explicitly choose "Start from a blank form instead." A new "← Back to
+  your note" control returns to the canvas without losing the wizard's
+  own in-progress edits — the wizard panel is hidden via the `hidden`/
+  `aria-hidden` attribute pair already used elsewhere for route-level
+  visibility, not unmounted, so nothing the operator typed into the form
+  itself is at risk. Editing an existing quote, or the flag being off,
+  shows the wizard immediately exactly as before this change — the new
+  mode only governs a brand-new quote's first paint. Verified visually
+  against the running app (landing, structured-and-applied, back-to-note,
+  and explicit-skip states) rather than by reasoning about the JSX alone.
+
 ### Fixed
 
 - Corrected two stale documentation claims about the margin/cost-entry
@@ -259,6 +279,21 @@ This changelog is backfilled from git history and will be maintained going forwa
   decidable options, nine named blocks including content that does not
   exist yet, activity counsel) remains open in DEV_TASKS.md — this slice
   deliberately tags only what already exists.
+
+- "← Back to your note" (new in the CREATE-first redesign above) silently
+  discarded the operator's own typed note, reopening the canvas to its
+  placeholder example text instead. Caught by screenshot, not by the
+  passing test suite: `CreateIntake` is conditionally rendered
+  (`{showCreateCanvas && <CreateIntake ... />}`), so it fully unmounts
+  when applying reveals the wizard, and its note text lived only in the
+  component's own `useState` — remounting on "back" started that state
+  over from `initialText`'s default of `""`. The note is now lifted into
+  App state (`createNoteText`, reported upward through a new
+  `onTextChange` prop) so it survives the unmount/remount cycle; returning
+  to the canvas also re-shows the same read facts automatically, so "back"
+  restores the exact screen the operator left, not just the raw text.
+  Reset alongside `createEntryMode` wherever a fresh new-quote session
+  begins, so a genuinely new quote never inherits a previous quote's note.
 
 ### Changed
 
