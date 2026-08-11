@@ -1690,7 +1690,7 @@ describe("portal decidable-option projection", () => {
     ]);
   });
 
-  test("the canonical snapshot carries an empty decidableOptions list when built without a catalog, and the projected list with one", () => {
+  test("the canonical snapshot re-projects the stored quote projection, bounded, and fails closed without one", () => {
     const quote = {
       organizationId: "org-1",
       portalKey: "portal_key_decidable_000000000001",
@@ -1701,8 +1701,18 @@ describe("portal decidable-option projection", () => {
     };
     const bare = buildCanonicalPortalSnapshot("quote-1", quote);
     expect(bare.decidableOptions).toEqual([]);
-    const offered = buildCanonicalPortalSnapshot("quote-1", quote, { catalog });
-    expect(offered.decidableOptions.map((option) => option.name))
-      .toEqual(["Coffee Station", "Linens", "Premium Bar"]);
+
+    const stored = buildCanonicalPortalSnapshot("quote-1", {
+      ...quote,
+      decidableOptionsProjection: [
+        { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" },
+        { itemType: "junk", name: "Not offerable", price: 1, pricingType: "per_event" },
+        { itemType: "rental", name: "Linens", price: 9, pricingType: "bogus_mode" }
+      ]
+    });
+    expect(stored.decidableOptions).toEqual([
+      { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" },
+      { itemType: "rental", name: "Linens", price: 9, pricingType: "per_item" }
+    ]);
   });
 });

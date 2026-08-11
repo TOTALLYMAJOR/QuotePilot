@@ -179,12 +179,16 @@ the owner asks for the merge.
     `buildPortalDecidableOptions` (bounded, name-and-price only, excludes
     already-included items by id and name), empty at every call site
     until the org catalog is threaded in (`private-customer-authority`
-    revision 2). Build next: thread the catalog into the draft-save and
-    send snapshot moments (and mirror the field in
-    src/lib/quoteStore.js's client `buildPortalSnapshot`, which needs a
-    quoteStore-owning contract bump), then the portal offer cards whose
-    tap pre-fills the existing Request Changes flow with a canonical
-    sentence the staff-side parser already reads.
+    revision 2). The projection now flows end-to-end server-side: the
+    authoritative pricing read returns the catalog collections, both
+    trusted quote builders store decidableOptionsProjection on the quote
+    (fresh at create/edit, carried forward re-bounded otherwise), and
+    every snapshot moment re-projects it. Build next: the portal offer
+    cards whose tap pre-fills the existing Request Changes flow with a
+    canonical sentence the staff-side parser already reads; and mirror
+    the field in src/lib/quoteStore.js's client `buildPortalSnapshot`
+    (local-fallback sync path only; needs a quoteStore-owning contract
+    bump).
   - Per-block questions (conservative subset built; decided: block tags
     stay message-body text, not a structured field — revisit only if
     staff-side threading is actually wanted later). The full nine-block

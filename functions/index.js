@@ -10871,6 +10871,7 @@ async function createTrustedQuoteDraftInternal({
     form: sanitized.form,
     pricing: pricingResult.pricing,
     catalogSource: pricingResult.catalogSource,
+    catalog: pricingResult.catalog,
     settings: {
       ...(settingsSnap.data() || {}),
       organizationName: normalizeText(organizationSnap.data()?.name)
@@ -11463,6 +11464,7 @@ async function updateTrustedQuoteDraftInternal({
       form: sanitized.form,
       pricing: pricingResult.pricing,
       catalogSource: pricingResult.catalogSource,
+      catalog: pricingResult.catalog,
       settings: {
         ...(transactionPricingSettingsSnapshot.data() || {}),
         organizationName: normalizeText(organizationSnap.data()?.name)

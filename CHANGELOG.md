@@ -8,6 +8,19 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Decidable-option projection is now live at the trusted draft-save
+  moments: `calculateQuotePricingAuthoritative` returns the exact
+  addons/rentals from the same authoritative catalog read pricing used
+  (whose normalizers now preserve the strictly-boolean `portalDecidable`
+  mark), and both trusted quote builders store a
+  `decidableOptionsProjection` on the quote document — computed fresh at
+  create/edit, carried forward re-bounded when a builder runs without a
+  catalog, and re-projected into the portal snapshot at every later
+  moment (send, delivery, rotation, reopen) like any other quote field.
+  Customer-facing rendering still does not exist; the portal offer cards
+  are the next slice (`commercial-change-impact-preview` contract
+  revision 2, `private-customer-authority` revision 2).
+
 - Decidable-option portal projection (server, dormant): the canonical
   portal snapshot (`functions/quoteCreation.js#buildCanonicalPortalSnapshot`)
   now carries `decidableOptions` — a bounded (max 12), name-and-price-only

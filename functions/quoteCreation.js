@@ -774,7 +774,28 @@ function buildPortalDecidableOptions(catalog, selection) {
     .slice(0, MAX_PORTAL_DECIDABLE_OPTIONS);
 }
 
-function buildCanonicalPortalSnapshot(quoteId, quote, { catalog = null } = {}) {
+// The projection is computed once, at the trusted draft-save moments that
+// hold the org catalog, and stored on the quote document
+// (decidableOptionsProjection). Every later snapshot moment — send,
+// delivery outcome, rotation, reopen, conversion — re-projects it from the
+// quote exactly like every other field, re-applying the same bounds. A
+// quote with no stored projection projects an empty list: fail closed.
+function sanitizeStoredDecidableOptions(value) {
+  return (Array.isArray(value) ? value : [])
+    .filter((item) => isRecord(item) && ["addon", "rental"].includes(text(item.itemType, 16)))
+    .map((item) => ({
+      itemType: text(item.itemType, 16),
+      name: text(item.name, 200),
+      price: numberInRange(item.price, 0, 0, 1_000_000_000),
+      pricingType: ["per_person", "per_item", "per_event"].includes(text(item.pricingType, 32))
+        ? text(item.pricingType, 32)
+        : item.itemType === "addon" ? "per_person" : "per_item"
+    }))
+    .filter((item) => Boolean(item.name))
+    .slice(0, MAX_PORTAL_DECIDABLE_OPTIONS);
+}
+
+function buildCanonicalPortalSnapshot(quoteId, quote) {
   const customer = isRecord(quote?.customer) ? quote.customer : {};
   const event = isRecord(quote?.event) ? quote.event : {};
   const totals = isRecord(quote?.totals) ? quote.totals : {};
@@ -855,7 +876,7 @@ function buildCanonicalPortalSnapshot(quoteId, quote, { catalog = null } = {}) {
   return {
     quoteId: sanitizeIdentifier(quoteId),
     organizationId: sanitizeIdentifier(quote?.organizationId),
-    decidableOptions: buildPortalDecidableOptions(catalog, selection),
+    decidableOptions: sanitizeStoredDecidableOptions(quote?.decidableOptionsProjection),
     portalKey,
     portalIssuedAtISO,
     portalExpiresAtISO,
@@ -1383,6 +1404,7 @@ function buildTrustedQuoteCreationDocuments({
   form,
   pricing,
   catalogSource,
+  catalog = null,
   settings,
   nowISO,
   creationReason = "initial_quote_create",
@@ -1618,6 +1640,7 @@ function buildTrustedQuoteCreationDocuments({
     latestVersionNumber: 1,
     versionMeta
   };
+  quote.decidableOptionsProjection = buildPortalDecidableOptions(catalog, quote.selection);
 
   const portal = buildCanonicalPortalSnapshot(id, quote);
   const version = {
@@ -1671,6 +1694,7 @@ function buildTrustedQuoteEditDocuments({
   form,
   pricing,
   catalogSource,
+  catalog = null,
   settings,
   nowISO
 } = {}) {
@@ -1823,6 +1847,13 @@ function buildTrustedQuoteEditDocuments({
     ...(rebooking ? { rebooking } : {}),
     updatedAtISO: editedAtISO
   };
+  // Fresh recompute when the caller holds the org catalog (the normal
+  // trusted-edit path); otherwise carry the stored projection forward,
+  // re-bounded — an edit without catalog access must never silently wipe
+  // offers the draft-save moment already computed.
+  editedQuote.decidableOptionsProjection = isRecord(catalog)
+    ? buildPortalDecidableOptions(catalog, editedQuote.selection)
+    : sanitizeStoredDecidableOptions(source.decidableOptionsProjection);
   const quotePatch = {
     quoteNumber,
     customer: editedQuote.customer,
@@ -1838,6 +1869,7 @@ function buildTrustedQuoteEditDocuments({
     portalExpiresAtISO: editedQuote.portalExpiresAtISO,
     event: editedQuote.event,
     selection: editedQuote.selection,
+    decidableOptionsProjection: editedQuote.decidableOptionsProjection,
     payment,
     booking,
     workflow,

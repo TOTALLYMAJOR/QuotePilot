@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 14,
+  "catalogVersion": 15,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -1721,7 +1721,7 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -1803,8 +1803,8 @@
           "locator": "## Quote Builder Details"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "The quote-edit entry point, server-authoritative repricing request, generation guard, exact before/proposed evidence, dependency classifications, proof boundary, retained stale result, and return-to-edit action were reviewed together.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "Revision 1 reviewed the quote-edit entry point, server-authoritative repricing request, generation guard, exact before/proposed evidence, and presentation states as changed. Revision 2 is a backend-only additive change to functions/pricingEngine.js with no UI, state, or export change: the addon/rental normalizers additionally preserve the strictly-boolean portalDecidable mark, and calculateQuotePricingAuthoritative additionally returns the exact addons/rentals collections from the same authoritative catalog read, so the trusted quote-write flows can compute the decision-room decidableOptionsProjection without a second, possibly-divergent catalog read. Pricing math reads none of the new fields — verified_existing.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -1876,7 +1876,7 @@
       "entryPointLocators": [
         {
           "path": "src/components/QuoteHistoryModal.jsx",
-          "locator": "Local BEO \u2014 no receipt"
+          "locator": "Local BEO — no receipt"
         }
       ],
       "testPaths": [
