@@ -233,11 +233,16 @@ the owner asks for the merge.
   multi-day mentions, and venue-name capitalization heuristics beyond
   the current "at X" pattern.
 - Memory defaults (design §4.10) — decided scope for the first slice:
-  event-shape memory (staffing/hours/rentals by event type and guest band,
-  aggregated deterministically from the tenant's own saved quotes),
-  surfaced as a provenance-labeled suggestion in CREATE with instant
-  override; venue/client/season memory stay later phases. Tenant-isolated,
-  no cross-tenant learning, honest cold start.
+  event-shape memory is built and tested (`src/lib/eventShapeMemory.js`,
+  contract `event-shape-memory`): staffing/hours by exact event type and
+  fixed guest band, median-aggregated from the tenant's own accepted/
+  booked quotes, plus any rental in a strict majority of matches shown as
+  a read-only mention. Wired into CREATE behind `VITE_PILOT_MEMORY_ENABLED`
+  (default off, deliberately not production-bound — a separate future
+  owner decision, same as the decision-room gate's initial posture);
+  applying writes only staffing/hours to the draft. Venue/client/season
+  memory stay later phases. Tenant-isolated, no cross-tenant learning,
+  honest cold start below a minimum sample of 3.
 
 ## P1 - Performance and Accessibility
 

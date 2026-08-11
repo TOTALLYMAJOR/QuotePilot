@@ -8,6 +8,25 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Event-shape memory (design §4.10, first memory slice, flag-gated behind
+  `VITE_PILOT_MEMORY_ENABLED`, off by default and not production-bound):
+  once Structure it reads both an event type and a guest count,
+  `loadEventShapeMemory` aggregates the tenant's own accepted/booked quote
+  history — same event type, same fixed guest band — into median
+  servers/chefs/bartenders and a half-hour-rounded duration, plus any
+  rental in a strict majority of matches, shown as a provenance-labeled
+  "From your own history" card. No AI, no cross-tenant signal —
+  `getQuoteHistory` is already tenant-scoped server-side; this module only
+  aggregates what it returns. Below a minimum sample of 3, the honest
+  reply is "not enough history yet," never a guess from one or two data
+  points. Applying is deliberately narrow: only staffing and hours are
+  written to the draft, never rentals, prices, or anything else, so an
+  existing rental selection is never silently overwritten. Six literal
+  `data-capability-state` markers (loading/empty/partial/success/error/
+  recovery — a second consecutive failure after a retry — with `stale`
+  excepted as impossible for an always-fresh, never-cached read) under the
+  new `event-shape-memory` contract.
+
 - Four more deterministic capture families in the CREATE reader, each
   through the same adversarial verification round: time ranges fill both
   start time and computed service hours ("6pm to 10pm" -> 18:00 + 4h,

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 18,
+  "catalogVersion": 19,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -3439,6 +3439,122 @@
         "stale": {
           "reasonCode": "separate_program",
           "justification": "The parse is stateless and computed fresh on every request; nothing is cached or persisted client- or server-side, so no stale variant of the surface can exist to present or test."
+        }
+      }
+    },
+    {
+      "id": "event-shape-memory",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Flag-gated CREATE memory assist (docs/POST_COMPETITIVE_DESIGN.md §4.10; owner-decided scope 2026-08-11): once structuring a note yields both an event type and a guest count, loadEventShapeMemory reads the tenant's own already-scoped booking history, keeps only accepted/booked quotes at the exact event type and a fixed guest band, and reports the median servers/chefs/bartenders and half-hour-rounded duration plus any rental in a strict majority of matches. No AI and no cross-tenant signal — getQuoteHistory is already tenant-scoped server-side, this module only aggregates what it returns. Below a minimum sample of 3, the honest outcome is 'not enough history yet', never a guess from one or two data points. Applying is narrow and explicit: only servers/chefs/bartenders/hours are written to the draft; rentals are informational text only, never auto-applied, so an existing rental selection is never silently overwritten.",
+      "backendPaths": [
+        "src/lib/eventShapeMemory.js",
+        "src/lib/quoteStore.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/CreateIntake.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CreateIntake.jsx",
+          "locator": "data-capability-id=\"event-shape-memory\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/eventShapeMemory.test.js",
+        "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+        "src/components/__tests__/createIntakeEventShapeMemory.flagOff.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/eventShapeMemory.test.js",
+          "locator": "below MIN_SAMPLE_SIZE reports insufficient with no staffing/hours suggestion, even with real matches"
+        },
+        {
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "fires automatically once structuring yields both event type and guests, with no separate button"
+        },
+        {
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOff.test.jsx",
+          "locator": "never fetches and never renders the memory section, even for a fully structured event"
+        }
+      ],
+      "documentationPaths": [
+        "docs/POST_COMPETITIVE_DESIGN.md",
+        "docs/FEATURE_MATRIX.md",
+        "README.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/POST_COMPETITIVE_DESIGN.md",
+          "locator": "4.10 Memory: the compounding moat"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Event-shape memory"
+        },
+        {
+          "path": "README.md",
+          "locator": "VITE_PILOT_MEMORY_ENABLED"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Memory assist in CREATE"
+        }
+      ],
+      "safeOutcome": "Disabled (the shipped default and not bound in any deployment workflow), CREATE is byte-identical to today. Enabled, staff only ever see a suggestion once real tenant history clears the minimum sample; applying touches only staffing and hours, rentals stay a read-only mention, and an unreachable history read offers retry before escalating to a clearly-labeled recovery state rather than blocking the deterministic reading above it.",
+      "affectedBackendExports": [],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "New surface. No backend export is added or changed — loadEventShapeMemory calls the existing getQuoteHistory read with an added eventTypeId filter it already supported, so there is nothing for affectedBackendExports to list. The pure aggregate (src/lib/eventShapeMemory.js) and its CREATE render block (loading/empty/partial/success/error/recovery, each with a literal data-capability-state marker) shipped together in one revision. stale is excepted: every fetch is a fresh read with nothing cached, matching the precedent already accepted for model-assisted-intent-parse.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "shows loading while the history read is in flight",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "reports the honest empty and partial cold-start states with no apply action",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "reports the honest empty and partial cold-start states with no apply action",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "reports success with the median staffing/hours and majority rentals as informational text",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "a failed read offers retry; a second failure escalates from error to recovery, both retryable",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "a failed read offers retry; a second failure escalates from error to recovery, both retryable",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {
+        "stale": {
+          "reasonCode": "separate_program",
+          "justification": "Every read calls getQuoteHistory fresh and nothing is cached client- or server-side, so no stale variant of the surface can exist to present or test."
         }
       }
     }

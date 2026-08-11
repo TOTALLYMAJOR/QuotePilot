@@ -298,6 +298,20 @@ local builds still default them to `false`, preserving a build-time rollback
 mode. CI validates both modes and runs a focused production-flag browser matrix
 before release; a successful build or deployment remains separate from
 authenticated staff and provider acceptance.
+- `VITE_PILOT_MEMORY_ENABLED` (default off, and deliberately not one of the
+  eight production-bound gates above — production-binding is a separate
+  future owner decision, mirroring the decision-room gate's own initial
+  posture before it was bound. Once a CREATE reading yields both an event
+  type and a guest count, reads the tenant's own accepted/booked quote
+  history (already tenant-scoped server-side) and, once at least 3
+  same-event-type-and-guest-band matches exist, offers the median
+  servers/chefs/bartenders and half-hour-rounded hours plus any rental in a
+  strict majority of matches as a provenance-labeled suggestion. No AI, no
+  cross-tenant learning; below the minimum sample the honest reply is "not
+  enough history yet," never a guess. Applying writes only staffing and
+  hours to the draft — rentals stay a read-only mention so an existing
+  selection is never silently overwritten. See
+  [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md) §4.10.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

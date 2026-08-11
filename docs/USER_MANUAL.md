@@ -1352,6 +1352,19 @@ Confirm before it touches the draft — the model never fills the form,
 never prices, and never saves. Anything the model could not read is
 quoted back for you to read yourself.
 
+## Memory assist in CREATE
+
+Once Structure it reads both an event type and a guest count, QuotePilot
+quietly checks your own past accepted and booked events of the same type
+and a similar size. With at least three real matches on file, a "From your
+own history" card offers the typical servers, chefs, and bartenders, the
+typical duration, and any rental most of those events included — each
+number sourced from your own bookings, never a guess or an industry
+average. Apply to draft sets only staffing and hours; any mentioned rental
+stays a plain note, so it never overwrites a rental you already selected.
+Fewer than three similar events on file is reported honestly as not enough
+history yet rather than a suggestion from one or two data points.
+
 ## Catalog cost entry and margin advisory
 
 With the pilot margin strip enabled (`VITE_PILOT_MARGINS_ENABLED`), Catalog
