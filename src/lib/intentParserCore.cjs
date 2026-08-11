@@ -24,7 +24,8 @@ const INTENT_PARSER_MAX_FACTS = 16;
 // intentExtraction.js) so the CREATE canvas consumes both lanes identically.
 const INTENT_PARSER_FACT_FIELDS = Object.freeze([
   "guests", "date", "time", "hours", "email", "phone", "style",
-  "eventTypeId", "venue", "name", "eventName"
+  "eventTypeId", "venue", "name", "eventName",
+  "servers", "chefs", "bartenders", "dietaryRestrictions"
 ]);
 
 function text(value, max) {

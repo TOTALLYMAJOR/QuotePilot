@@ -202,6 +202,80 @@ function extractPhone(text) {
   return { id: "phone", field: "phone", label: "Customer phone", value: clean(match[0]), displayValue: clean(match[0]), confidence: "high", source: excerpt(match) };
 }
 
+// Staff counts, the same only-what's-literally-there way as guests: a
+// count directly attached to a role noun. Adversarially hardened
+// (2026-08-11 verification round): the noun must not be possessive or an
+// equipment/tech/address sense ("chef's kiss", "server rack", "servers of
+// data", "4 Cooks Lane" extract nothing); a word-number must not be the
+// tail of a compound ("twenty-one servers" extracts nothing rather than
+// 1); digit ranges mirror extractGuests' midpoint with a transparent
+// display; and the articles "a"/"an" — literally one, but the top
+// false-positive source in prose — surface at LOW confidence so they
+// require human confirmation instead of auto-applying. Bare role
+// mentions with no count extract nothing — counting would be inventing.
+const STAFF_ROLES = Object.freeze([
+  { field: "servers", label: "Servers", noun: "(?:servers?|waiters?|waitstaff)" },
+  { field: "chefs", label: "Chefs", noun: "(?:chefs?|cooks?)" },
+  { field: "bartenders", label: "Bartenders", noun: "(?:bartenders?|barkeeps?)" }
+]);
+const STAFF_NUMBER_WORDS = Object.freeze({
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
+  seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12
+});
+// Rejects the possessive apostrophe and the non-staffing senses the
+// verification round actually produced from realistic prose.
+const STAFF_NOUN_GUARD = "(?!['’]|\\s+(?:of\\b|rooms?\\b|racks?\\b|lane\\b|ln\\b|streets?\\b|st\\b|avenues?\\b|ave\\b|way\\b|roads?\\b|rd\\b|drives?\\b|dr\\b|courts?\\b|ct\\b|blvd\\b))";
+const STAFF_MODIFIER = "(?:extra\\s+|additional\\s+|more\\s+)?";
+const COMPOUND_TENS_GUARD = "(?<!(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)[-\\s])";
+
+function extractStaffCounts(text) {
+  return STAFF_ROLES.map(({ field, label, noun }) => {
+    const range = text.match(new RegExp(
+      `\\b(\\d{1,2})\\s*(?:-|–|to)\\s*(\\d{1,2})\\s+${STAFF_MODIFIER}${noun}\\b${STAFF_NOUN_GUARD}`,
+      "i"
+    ));
+    if (range) {
+      const min = Number(range[1]);
+      const max = Number(range[2]);
+      if (min >= 1 && max > min && max <= 50) {
+        const value = Math.ceil((min + max) / 2);
+        return {
+          id: field,
+          field,
+          label,
+          value,
+          displayValue: `${min}–${max} ${label.toLowerCase()} → planning ${value}`,
+          kind: "range",
+          min,
+          max,
+          confidence: "high",
+          source: excerpt(range)
+        };
+      }
+    }
+    const match = text.match(new RegExp(
+      `${COMPOUND_TENS_GUARD}\\b(\\d{1,2}|${Object.keys(STAFF_NUMBER_WORDS).join("|")}|an?)\\s+${STAFF_MODIFIER}${noun}\\b${STAFF_NOUN_GUARD}`,
+      "i"
+    ));
+    if (!match) return null;
+    const token = match[1].toLowerCase();
+    const article = token === "a" || token === "an";
+    const value = /^\d+$/.test(token)
+      ? Number(token)
+      : article ? 1 : STAFF_NUMBER_WORDS[token];
+    if (!(value >= 1 && value <= 50)) return null;
+    return {
+      id: field,
+      field,
+      label,
+      value,
+      displayValue: `${value} ${label.toLowerCase()}`,
+      confidence: article ? "low" : "high",
+      source: excerpt(match)
+    };
+  }).filter(Boolean);
+}
+
 function extractStyle(text, styles) {
   const candidates = [
     { pattern: /\bplated\b/i, style: "Plated" },
@@ -317,6 +391,7 @@ export function extractIntentDraft(text, { eventTypes = [], styles = [], nowDate
     extractHours(trimmed),
     extractEmail(trimmed),
     extractPhone(trimmed),
+    ...extractStaffCounts(trimmed),
     extractStyle(trimmed, Array.isArray(styles) ? styles : []),
     extractEventType(trimmed, Array.isArray(eventTypes) ? eventTypes : []),
     extractEventName(trimmed),

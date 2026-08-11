@@ -8,6 +8,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Stronger deterministic intake reading: the CREATE reader now extracts
+  staff counts (servers/chefs/bartenders, with waiter/waitstaff/cook/
+  barkeep synonyms) from digits, small word-numbers, and ranges (midpoint
+  with a transparent 2–4 → 3 display, like guests). Hardened by an
+  adversarial verification round that executed the real code: possessives
+  ("a chef's kiss"), compound numbers ("twenty-one servers"), addresses
+  ("4 Cooks Lane"), and tech senses ("server racks", "servers of data")
+  extract nothing; the articles "a"/"an" surface only as confirm-required
+  suggestions, never auto-applied. Every verifier-confirmed false positive
+  is now a regression test. The model lane's fact allowlist gains the same
+  fields (both core-module copies, kept byte-identical).
+
 - Model assist in CREATE — the intake lane is now fully reachable and
   still fully dormant: the staff-only, same-organization
   `parseIntentDraft` callable (functions runtime twin of the core module;

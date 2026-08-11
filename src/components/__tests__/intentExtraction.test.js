@@ -106,4 +106,47 @@ describe("extractIntentDraft", () => {
     const result = run("Please plan for 2 vegan meals across the menu.");
     expect(result.draft.guests).toBeUndefined();
   });
+
+  test("reads digit staff counts for every role, with synonyms", () => {
+    const result = run("We need 3 servers, 2 bartenders, and 1 chef for the night.");
+    expect(result.draft.servers).toBe(3);
+    expect(result.draft.bartenders).toBe(2);
+    expect(result.draft.chefs).toBe(1);
+    const waiters = run("Please staff 4 waiters and one cook.");
+    expect(waiters.draft.servers).toBe(4);
+    expect(waiters.draft.chefs).toBe(1);
+  });
+
+  test("reads word-numbers at high confidence but articles only as confirm-required", () => {
+    const result = run("Add a bartender and two extra servers.");
+    expect(result.draft.servers).toBe(2);
+    expect(result.draft.bartenders).toBeUndefined();
+    const pending = result.needsConfirmation.find((fact) => fact.field === "bartenders");
+    expect(pending).toMatchObject({ value: 1, confidence: "low" });
+  });
+
+  test("reads a staff range as its midpoint with a transparent display, like guests", () => {
+    const result = run("Probably 2-4 servers for the night.");
+    expect(result.draft.servers).toBe(3);
+    expect(result.facts.find((fact) => fact.field === "servers").displayValue)
+      .toContain("2–4");
+  });
+
+  test("never invents a staff count from bare mentions, possessives, compounds, or non-staff senses", () => {
+    const cases = [
+      "We'll need bartenders for sure.",
+      "We want a chef's tasting menu for the reception.",
+      "Two chef's knives as a gift, please.",
+      "twenty-one servers of data live in the venue's server room.",
+      "3 server racks and 12 servers of data.",
+      "My address is 4 Cooks Lane.",
+    ];
+    for (const text of cases) {
+      const result = run(text);
+      expect(result.draft.servers, text).toBeUndefined();
+      expect(result.draft.chefs, text).toBeUndefined();
+      expect(result.draft.bartenders, text).toBeUndefined();
+      expect(result.needsConfirmation.filter((fact) => ["servers", "chefs", "bartenders"].includes(fact.field)), text).toEqual([]);
+    }
+  });
 });
