@@ -231,7 +231,7 @@ describe("capability surfacing delivery gate", () => {
   });
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
-    expect(parseFunctionExports(functionsEntrypointSource)).toHaveLength(76);
+    expect(parseFunctionExports(functionsEntrypointSource)).toHaveLength(77);
 
     const source = [
       "exports.first = onCall(async () => {",

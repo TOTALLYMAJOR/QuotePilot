@@ -1340,6 +1340,18 @@ a normal change request your quote editor parses into a one-tap stageable
 proposal. Nothing a customer taps ever changes the proposal by itself —
 your save remains the only authority.
 
+## Model assist in CREATE
+
+On New quote, next to Structure it, a Model assist button can ask a
+configured AI provider (OpenAI or Anthropic) to read the same note. This
+lane ships off: until your administrator enables it and configures a
+provider key, the button reports that the lane is off and typed
+structuring keeps working exactly the same. When it is on, model
+suggestions appear in their own list and every one requires your explicit
+Confirm before it touches the draft — the model never fills the form,
+never prices, and never saves. Anything the model could not read is
+quoted back for you to read yourself.
+
 ## Catalog cost entry and margin advisory
 
 With the pilot margin strip enabled (`VITE_PILOT_MARGINS_ENABLED`), Catalog

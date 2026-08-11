@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 17,
+  "catalogVersion": 18,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -3327,41 +3327,51 @@
     },
     {
       "id": "model-assisted-intent-parse",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
-      "deliveryType": "headless",
-      "capabilityKind": "developer_infrastructure",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Pure core module (src/lib/intentParserCore.cjs; functions/ runtime twin arrives with the integration slice, per the commercialDependencyGraphCore pattern) for the model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11 with OpenAI and Anthropic as selectable providers). Dormant by default and fail-closed three ways: INTENT_PARSER_ENABLED must be true, INTENT_PARSER_PROVIDER must be openai or anthropic, and that provider's key (INTENT_PARSER_OPENAI_KEY / INTENT_PARSER_ANTHROPIC_KEY, read from env until the Secret Manager secrets exist and are bound) must be present — otherwise every request returns a definitive failed-precondition and the deterministic browser extractor remains the availability floor. The model reply is treated as untrusted input: strict-JSON parse, fact-field allowlist mirroring the deterministic extractor, bounded values and counts, and every surviving fact forced to low confidence with a model source so the CREATE canvas requires human confirmation. Persists nothing; no UI reads it yet — headless until the CREATE integration slice, which will bring its own user-relevant review. The parseIntentDraft callable export deliberately does NOT ship in this revision: the surfacing gate correctly requires every callable to be user-reachable, so the export lands together with the CREATE canvas integration in the next slice.",
+      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it — INTENT_PARSER_ENABLED, a provider, and that provider's Secret Manager key must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
       "backendPaths": [
-        "src/lib/intentParserCore.cjs"
+        "functions/index.js",
+        "functions/intentParserCore.cjs",
+        "src/lib/intentParserCore.cjs",
+        "src/lib/intentParseClient.js"
       ],
-      "backendExports": [],
-      "frontendPaths": [],
-      "entryPointLocators": [],
+      "backendExports": [
+        "functions/index.js#parseIntentDraft"
+      ],
+      "frontendPaths": [
+        "src/components/CreateIntake.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CreateIntake.jsx",
+          "locator": "Model assist"
+        }
+      ],
       "testPaths": [
-        "src/lib/__tests__/intentParser.server.test.js"
+        "src/lib/__tests__/intentParser.server.test.js",
+        "src/components/__tests__/createIntakeModelAssist.test.jsx"
       ],
       "testLocators": [
-        {
-          "path": "src/lib/__tests__/intentParser.server.test.js",
-          "locator": "is disabled with provider none by default, and rejects unknown providers back to none"
-        },
         {
           "path": "src/lib/__tests__/intentParser.server.test.js",
           "locator": "forces every surviving fact to low confidence with a model source, allowlisting fields"
         },
         {
-          "path": "src/lib/__tests__/intentParser.server.test.js",
-          "locator": "unreadable model output extracts nothing rather than guessing"
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "renders no model affordance at all without an injected model lane"
         }
       ],
       "documentationPaths": [
         "docs/INTENT_INTAKE_ADR.md",
         "docs/FEATURE_MATRIX.md",
-        "README.md"
+        "README.md",
+        "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
         {
@@ -3370,15 +3380,67 @@
         },
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Model-assisted intent parse module"
+          "locator": "Model-assisted intent parse"
         },
         {
           "path": "README.md",
           "locator": "INTENT_PARSER_OPENAI_KEY"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Model assist in CREATE"
         }
       ],
-      "safeOutcome": "With the lane disabled (the shipped default) every call fails closed with a named precondition and nothing reaches any provider; enabled, the parse returns only bounded, allowlisted, low-confidence facts a human must confirm, persists nothing, and never becomes pricing or saving authority.",
-      "headlessReason": "Pure core module with no runtime reachability: it exports config/sanitize/prompt/validate helpers consumed only by unit tests until the CREATE canvas integration slice ships the parseIntentDraft callable together with its staff-facing entry point, states, and a user_relevant contract. Shipping the module first keeps the callable from ever existing without a user-reachable surface, which the surfacing gate correctly forbids; until then nothing can invoke a provider because no export, flag, or key exists."
+      "safeOutcome": "Disabled (the shipped default), the affordance reports the lane as off and typed structuring is untouched; enabled, staff see only bounded, allowlisted, low-confidence suggestions that each require explicit confirmation before touching the draft, and no provider ever becomes pricing or saving authority.",
+      "affectedBackendExports": [
+        "functions/index.js#parseIntentDraft"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Revision 1 shipped the pure core module only. Revision 2 ships the whole reachable surface together, as the gate requires: the functions/ runtime twin of the core module, the parseIntentDraft callable (staff-only, same-org, env-keyed until the Secret Manager secrets exist and are bound), the client boundary that distinguishes the designed dormant precondition from retryable unavailability, and the CREATE canvas Model assist section with literal data-capability-state markers for every required read state. stale is excepted: the parse is stateless and freshly computed per request, so no cached/stale variant can exist.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "shows loading while the model request is in flight",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports success with confirm-required model facts",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports partial when facts arrive alongside unparsed notes",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports empty when the model reads nothing usable",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports a retryable provider failure as error",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports the designed dormant outcome as recovery, keeping the deterministic floor",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {
+        "stale": {
+          "reasonCode": "separate_program",
+          "justification": "The parse is stateless and computed fresh on every request; nothing is cached or persisted client- or server-side, so no stale variant of the surface can exist to present or test."
+        }
+      }
     }
   ]
 }

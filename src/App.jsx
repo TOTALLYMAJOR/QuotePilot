@@ -12,6 +12,7 @@ import {
 } from "./components/RecoverableErrorBoundary";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import CreateIntake from "./components/CreateIntake";
+import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import PilotCommandBar from "./components/PilotCommandBar";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
@@ -3694,6 +3695,8 @@ export default function App({ tenantContext, authSession }) {
             eventTypes={catalog.eventTypes || []}
             styles={Object.keys(STAFF_RULES)}
             onApplyDraft={applyIntentDraft}
+            organizationId={authSession.organizationId}
+            onModelParse={parseIntentDraftWithModel}
           />
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED

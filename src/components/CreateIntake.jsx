@@ -22,9 +22,36 @@ export default function CreateIntake({
   onApplyDraft,
   nowDate = null,
   initialText = "",
-  autoStructure = false
+  autoStructure = false,
+  organizationId = "",
+  onModelParse = null
 }) {
   const [text, setText] = useState(initialText);
+  // Model-assist read states (docs/INTENT_INTAKE_ADR.md): the lane is
+  // dormant server-side by default, so "recovery" (lane off, deterministic
+  // extractor remains the floor) is an expected outcome, not an error.
+  const [modelParse, setModelParse] = useState({ phase: "ready" });
+
+  const runModelParse = async () => {
+    if (typeof onModelParse !== "function" || !text.trim()) return;
+    setModelParse({ phase: "loading" });
+    const outcome = await onModelParse({ organizationId, text: text.trim() });
+    if (!outcome?.ok) {
+      setModelParse(outcome?.disabled
+        ? { phase: "recovery", message: outcome.message }
+        : { phase: "error", message: outcome?.message || "The model parser is unreachable." });
+      return;
+    }
+    if (!outcome.facts.length && !outcome.notes.length) {
+      setModelParse({ phase: "empty" });
+      return;
+    }
+    setModelParse({
+      phase: outcome.notes.length ? "partial" : "success",
+      facts: outcome.facts,
+      notes: outcome.notes
+    });
+  };
   const [result, setResult] = useState(() => (
     autoStructure && initialText.trim()
       ? extractIntentDraft(initialText, { eventTypes, styles, nowDate: nowDate || new Date() })
@@ -89,7 +116,74 @@ export default function CreateIntake({
             Clear reading
           </button>
         )}
+        {typeof onModelParse === "function" && (
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => void runModelParse()}
+            disabled={!text.trim() || modelParse.phase === "loading"}
+          >
+            {modelParse.phase === "loading" ? "Asking the model..." : "Model assist"}
+          </button>
+        )}
       </div>
+
+      {typeof onModelParse === "function" && modelParse.phase !== "ready" && (
+        <div
+          className="create-intake-model"
+          data-capability-id="model-assisted-intent-parse"
+          data-capability-state={modelParse.phase}
+          aria-live="polite"
+        >
+          {modelParse.phase === "loading" && (
+            <p className="source-note" role="status">Asking the model to read your note...</p>
+          )}
+          {modelParse.phase === "empty" && (
+            <p className="source-note" role="status">
+              The model read nothing usable from this note. The deterministic
+              reading above is unchanged.
+            </p>
+          )}
+          {(modelParse.phase === "success" || modelParse.phase === "partial") && (
+            <>
+              <p className="create-intake-group-label">Model suggestions — confirm each before it touches the draft</p>
+              <ul className="create-intake-facts">
+                {modelParse.facts.map((fact) => (
+                  <li key={fact.id}>
+                    <span>{fact.field}</span>
+                    <strong>{fact.displayValue || fact.value}</strong>
+                    <button
+                      type="button"
+                      className="ghost compact"
+                      onClick={() => confirmFact(fact)}
+                      disabled={confirmedIds.includes(fact.id)}
+                    >
+                      {confirmedIds.includes(fact.id) ? "Confirmed" : "Confirm"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {modelParse.phase === "partial" && modelParse.notes.map((note) => (
+                <p key={note} className="source-note">“{note}” — left for you to read.</p>
+              ))}
+            </>
+          )}
+          {modelParse.phase === "error" && (
+            <>
+              <p className="error-note" role="alert">{modelParse.message}</p>
+              <button type="button" className="ghost compact" onClick={() => void runModelParse()}>
+                Retry model assist
+              </button>
+            </>
+          )}
+          {modelParse.phase === "recovery" && (
+            <p className="source-note" role="status">
+              {modelParse.message} Typed structuring above keeps working exactly
+              the same.
+            </p>
+          )}
+        </div>
+      )}
 
       {result && !result.empty && (
         <div className="create-intake-result" aria-live="polite">

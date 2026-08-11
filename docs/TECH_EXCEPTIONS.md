@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,758,958 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,761,743 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -43,8 +43,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The production-flag asset set is 761,294 bytes (38.12%) above
-  the clean-main aggregate baseline, of which 66,589 bytes are the default-off
+- Risk impact: The production-flag asset set is 764,079 bytes (38.25%) above
+  the clean-main aggregate baseline, of which 69,374 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
   cards, 13,797 for the CREATE intake canvas, deterministic extractor, and
@@ -65,7 +65,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   normalizer, write shapes, and Catalog Admin rows, and the portal
   offer cards that draft a canonical change request through the existing
   decision path, plus the assumptions block restating recorded facts and the tenant-authored per-tenant terms block, all behind the
-  `VITE_PILOT_DECISION_ROOM_ENABLED` gate) — this
+  `VITE_PILOT_DECISION_ROOM_ENABLED` gate), plus 2,785 for the CREATE
+  canvas Model assist section and its client boundary for the dormant
+  model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; renders its
+  states only when the lane is injected, and the lane is server-dormant
+  regardless) — this
   branch's own
   bugfix corrections (guest cap and staffing-labor gating in the margin
   strip; clause-index-anchored proposal/ambiguity ids in the change-request
@@ -91,18 +95,18 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: This checkpoint's contributor-sandbox `npm run build`
-  emitted 2,758,603 aggregate JavaScript bytes and a 391,596-byte largest
-  chunk (default-off configuration), adding two more decision-room portal
-  blocks: an assumptions block restating only recorded facts (guests,
-  date, hours of service, style — nothing invented, with an
-  ask-below-and-re-price note) and a terms block rendering the tenant's
-  own portalTermsText verbatim (a new bounded settings field authored in
-  Catalog Admin, carried through quoteMeta into the snapshot; empty means
-  no terms block renders). Both carry data-portal-block tags and Ask
-  about this buttons, and the offer-cards section is likewise tagged as
-  the options block. Prior checkpoints at this ceiling added the
-  ask-about affordance, the portalDecidable data model, the server
-  projection pipeline, and the portal offer cards; by owner decision (2026-08-11) the decision-room gate is
+  emitted 2,761,388 aggregate JavaScript bytes and a 391,596-byte largest
+  chunk (default-off configuration), adding the CREATE canvas Model assist
+  section and client boundary for the owner-approved model-assisted
+  intake lane: a staff-only parseIntentDraft callable (dormant three ways
+  — flag, provider, and Secret Manager key must all exist), a client that
+  distinguishes the designed dormant precondition from retryable
+  unavailability, and per-state UI (loading/success/partial/empty/error/
+  recovery) whose model suggestions each require explicit confirmation
+  before touching the draft. Prior checkpoints at this ceiling added the
+  decision-room portal pieces end to end (ask-about, decidable-option
+  marks, projection pipeline, offer cards, assumptions and per-tenant
+  terms blocks); by owner decision (2026-08-11) the decision-room gate is
   production-bound to true in both deployment workflows and both CI
   production-flag steps alongside the existing seven, taking effect at
   the next release from this branch. The
@@ -127,7 +131,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   reconciliation, before the ask-about affordance; 2,755,007 before the
   decidable-option marks; 2,755,997 before the offer cards, unchanged
   through the functions-only projection-pipeline checkpoint; 2,757,299
-  before the assumptions and per-tenant terms blocks). Separately,
+  before the assumptions and per-tenant terms blocks; 2,758,603 before
+  the CREATE Model assist section). Separately,
   from the
   2,747,012 anchor, the `v0.6.0` release checkout's own local
   production-flag build (all seven `VITE_PILOT_*` gates true) measured a
@@ -137,11 +142,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   before `v0.6.0` deployed to both providers (see PROJECT_STATUS.md). Both
   configurations are re-measured fresh at every checkpoint since the
   reconciliation rather than projecting an old delta forward:
-  contributor-sandbox default-off is 2,758,603 bytes and the
+  contributor-sandbox default-off is 2,761,388 bytes and the
   same-environment production-flag build — all eight gates true,
-  including the newly bound decision-room gate — is 2,758,659 bytes, a
-  56-byte configuration delta. The ceiling above (2,758,958) is
-  the larger of the two, 2,758,659, plus the confirmed +299 CI-vs-sandbox
+  including the newly bound decision-room gate — is 2,761,444 bytes, a
+  56-byte configuration delta. The ceiling above (2,761,743) is
+  the larger of the two, 2,761,444, plus the confirmed +299 CI-vs-sandbox
   offset, so one number safely covers both the default-off and
   production-flag CI bundle checks; no CI run against this exact commit
   exists yet, so treat it as provisional exactly like every prior
@@ -185,10 +190,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This checkpoint's own ceiling (2,758,958)
-  is the same extrapolation applied a twelfth time, against the larger
+  with `conclusion: success`. This checkpoint's own ceiling (2,761,743)
+  is the same extrapolation applied a thirteenth time, against the larger
   of the two build configurations — this commit's contributor-sandbox
-  eight-gate production-flag measurement (2,758,659) plus the confirmed
+  eight-gate production-flag measurement (2,761,444) plus the confirmed
   +299 offset —
   since it has no CI run of its own yet at record time; correct it to the
   literal exact-SHA CI value in a follow-up commit if either the default-off

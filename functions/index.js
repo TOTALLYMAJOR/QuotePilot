@@ -21624,3 +21624,101 @@ exports.stripeWebhook = functions
   res.json({ received: true });
 });
 
+
+// Model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved
+// 2026-08-11, OpenAI + Anthropic). Stateless, staff-only, same-org, and
+// dormant by default: INTENT_PARSER_ENABLED=true plus a provider plus that
+// provider's key must all exist before any provider call happens; until
+// then every request fails closed with a definitive precondition error.
+// Persists nothing and returns only low-confidence, human-review facts.
+// NOTE: keys are read from process.env so this deploys green before the
+// secrets exist; when the owner creates INTENT_PARSER_OPENAI_KEY /
+// INTENT_PARSER_ANTHROPIC_KEY in Secret Manager, add
+// .runWith({ secrets: [...] }) here to bind them.
+exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const {
+    INTENT_PARSER_OPENAI_KEY_NAME,
+    INTENT_PARSER_ANTHROPIC_KEY_NAME,
+    normalizeIntentParserConfig,
+    sanitizeIntentParseRequest,
+    buildIntentParserPrompt,
+    buildProviderRequest,
+    extractProviderText,
+    validateParsedFacts
+  } = require("./intentParserCore.cjs");
+
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  if (!organizationId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Intent parsing requires same-organization staff authority."
+    );
+  }
+
+  const config = normalizeIntentParserConfig(process.env);
+  if (!config.enabled || config.provider === "none") {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "The model-assisted intake lane is disabled. The deterministic extractor remains available."
+    );
+  }
+  const apiKey = String(
+    config.provider === "openai"
+      ? process.env[INTENT_PARSER_OPENAI_KEY_NAME] || ""
+      : process.env[INTENT_PARSER_ANTHROPIC_KEY_NAME] || ""
+  ).trim();
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "The intent parser provider key is not configured."
+    );
+  }
+
+  let request;
+  try {
+    request = sanitizeIntentParseRequest(data);
+  } catch (err) {
+    throw new functions.https.HttpsError(err.code || "invalid-argument", err.message);
+  }
+
+  const provider = buildProviderRequest({
+    provider: config.provider,
+    model: config.model,
+    prompt: buildIntentParserPrompt(request.text),
+    apiKey
+  });
+  let responseJson;
+  try {
+    const response = await fetch(provider.url, {
+      method: "POST",
+      headers: provider.headers,
+      body: JSON.stringify(provider.body)
+    });
+    if (!response.ok) {
+      throw new functions.https.HttpsError(
+        "unavailable",
+        `The intent parser provider declined the request (${response.status}). The deterministic extractor remains available.`
+      );
+    }
+    responseJson = await response.json();
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    throw new functions.https.HttpsError(
+      "unavailable",
+      "The intent parser provider is unreachable. The deterministic extractor remains available."
+    );
+  }
+
+  const validated = validateParsedFacts(extractProviderText(config.provider, responseJson));
+  return {
+    provider: config.provider,
+    model: config.model,
+    facts: validated.facts,
+    notes: validated.notes,
+    parsedAtISO: new Date().toISOString()
+  };
+});

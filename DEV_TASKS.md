@@ -211,11 +211,14 @@ the owner asks for the merge.
   module is built and tested (src/lib/intentParserCore.cjs, contract
   model-assisted-intent-parse): config gate, sanitization, strict-JSON
   prompt, provider request builders, untrusted-output validation forcing
-  low confidence. Next: the CREATE canvas integration slice ships the
-  functions/ runtime twin plus the parseIntentDraft callable (staff-only,
-  same-org, stateless; add .runWith secrets binding when the owner creates
-  INTENT_PARSER_OPENAI_KEY / INTENT_PARSER_ANTHROPIC_KEY) under a
-  user_relevant contract with full state evidence. Trusted
+  low confidence. The CREATE integration is built: functions/ runtime twin,
+  the parseIntentDraft callable (staff-only, same-org, stateless), the
+  client boundary, and the Model assist UI with full read-state evidence
+  (model-assisted-intent-parse rev 2). Remaining owner actions at enable
+  time: create INTENT_PARSER_OPENAI_KEY / INTENT_PARSER_ANTHROPIC_KEY in
+  Secret Manager, set INTENT_PARSER_ENABLED/PROVIDER on the function, and
+  have the .runWith secrets binding added; keep the src/lib and functions/
+  copies of intentParserCore.cjs in sync when either changes. Trusted
   `parseIntentDraft` callable behind `INTENT_PARSER_ENABLED=false` /
   provider `none` (defaults unchanged: off, deterministic lane remains the
   availability floor), Secret Manager-bound keys, full backend capability

@@ -8,6 +8,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Model assist in CREATE — the intake lane is now fully reachable and
+  still fully dormant: the staff-only, same-organization
+  `parseIntentDraft` callable (functions runtime twin of the core module;
+  keys read from env until the owner creates and binds
+  `INTENT_PARSER_OPENAI_KEY` / `INTENT_PARSER_ANTHROPIC_KEY`), a client
+  boundary that surfaces the designed off state distinctly from a
+  provider outage, and a Model assist button beside Structure it whose
+  suggestions render in their own list with per-fact Confirm required
+  before anything touches the draft. Seven literal
+  `data-capability-state` markers (loading/success/partial/empty/error/
+  recovery, stale excepted as impossible for a stateless parse) under the
+  `model-assisted-intent-parse` contract revision 2. Until an
+  administrator enables the lane, the button reports it off and typed
+  structuring is untouched.
+
 - Model-assisted intake core module (owner-approved lane, dormant): pure
   `src/lib/intentParserCore.cjs` implements the ADR's parsing lane with
   OpenAI and Anthropic as selectable providers — config gate (enabled
