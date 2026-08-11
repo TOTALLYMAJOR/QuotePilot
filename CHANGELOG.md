@@ -8,6 +8,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Added the hardened, deployment-owned owner-SMS rail with explicit `none`,
+  `twilio`, or `pingram` selection; a provider-neutral admin status and bounded
+  diagnostic surface; transactional private outbox and one-call claims;
+  organization-scoped destination HMACs; signed Pingram webhook inbox and
+  reconciliation; and separate request, delivery, failure, opt-out, and
+  recipient evidence. Production remains off until separately deployed and
+  provider-tested.
+- Recalibrated the named, graph-specific temporary bundle exception to the
+  measured Pingram candidate: 2,891,116 compatibility bytes and 3,817,075
+  Ambient bytes, with the largest chunk unchanged at 391,901. The ceilings add
+  only the already observed CI offsets and remain scheduled for optimization or
+  reviewed clean-main recalibration.
 - Added the independently gated, administrator-only Staff workspace at
   `/app/staff`. It keeps the existing bounded operational profile as assignment
   authority while storing sensitive contact/photo, role detail, qualification,

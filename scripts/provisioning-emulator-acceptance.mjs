@@ -1386,7 +1386,9 @@ await expectCallableError(
   "PERMISSION_DENIED"
 );
 await expectCallableError(
-  () => callFunction("sendIntegrationTestSms", tenantMember.idToken, {}),
+  () => callFunction("sendIntegrationTestSms", tenantMember.idToken, {
+    requestId: "sms_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }),
   "PERMISSION_DENIED"
 );
 await expectCallableError(

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildBuyerAccessRepairConfirmationToken,
+  createSmsTestRequestId,
   getIntegrationSetupStatus,
   repairBuyerAccessInvoice,
   getOperationsAuditSnapshot,
   sendIntegrationTestSms
 } from "../lib/commerceOps";
+import SmsProviderPanel, { isSmsProviderAttemptLocked } from "./SmsProviderPanel";
 import {
   archiveOrganizationWorkspace,
   deleteOrganizationWorkspace,
@@ -35,20 +37,23 @@ const DIRECTIONS = ["push", "pull"];
 const PROVISION_PLANS = ["starter", "growth", "enterprise"];
 const FUNCTIONS_ENV_SETUP_GUIDANCE = [
   "For local validation of the production deploy configuration only, keep non-secret configuration in the ignored functions/.env.tonicatering file (mode 0600):",
-  "NOTIFICATIONS_SMS_PROVIDER=twilio",
-  "TWILIO_ACCOUNT_SID=",
-  "TWILIO_MESSAGING_SERVICE_SID=",
+  "NOTIFICATIONS_SMS_PROVIDER=pingram",
+  "PINGRAM_API_ORIGIN=https://api.pingram.io",
+  "PINGRAM_FROM_NUMBER=",
+  "PINGRAM_CONFIGURATION_GENERATION=",
   "NOTIFICATIONS_OWNER_PHONE=",
-  "STRIPE_MODE=live",
+  "NOTIFICATIONS_OWNER_SMS_CONSENT=granted",
   "",
   "Validate the production dotenv payload without rewriting:",
   "FIREBASE_PROJECT_ID=tonicatering node --env-file=functions/.env.tonicatering scripts/materialize-functions-env.mjs --validate-only",
-  "The production materializer rejects Resend, Twilio, and Stripe secret values. Do not use it for emulator setup: disposable emulator configuration must use STRIPE_MODE=test, with expendable RESEND_API_KEY, TWILIO_AUTH_TOKEN, STRIPE_SECRET_KEY, and STRIPE_WEBHOOK_SECRET fixtures only in the separately ignored functions/.secret.local file.",
+  "The production materializer rejects Pingram, Resend, Twilio, and Stripe secret values. PINGRAM_API_KEY, PINGRAM_WEBHOOK_SECRET, and SMS_CONTACT_DIGEST_SECRET belong only in Firebase Secret Manager.",
+  "Do not use it for emulator setup: disposable emulator configuration must use STRIPE_MODE=test, with expendable fixtures only in the separately ignored functions/.secret.local file.",
+  "Do not combine Pingram and Twilio runtime fields. Provider selection is deployment-owned and credential presence never selects a provider.",
   "Never upload either file or use production credentials locally; production provider credentials belong only in Firebase Secret Manager bindings."
 ].join("\n");
 const SMS_DISABLE_GUIDANCE = [
   "Keep NOTIFICATIONS_SMS_PROVIDER=none in the trusted runtime configuration",
-  "until Twilio Messaging Service sender attachment, applicable A2P approval, and the governed backend promotion are complete."
+  "and leave every provider-specific field, owner destination, and consent field unset until sender registration, consent evidence, signed webhook verification, and governed backend promotion are complete."
 ].join(" ");
 const PREPARE_BACKEND_GUIDANCE = [
   "GitHub Actions -> Prepare Firebase Production Artifact",
@@ -188,14 +193,57 @@ function describeProvisionEmailStatus(email = {}) {
   return "not sent";
 }
 
-function describeSmsOutcome(sms) {
-  if (sms?.sent) return "Twilio accepted the test SMS request; delivery is not yet proven.";
-  const reason = String(sms?.reason || "").trim();
-  if (reason === "sms_not_configured") return "SMS is not configured in the current runtime. Production values require an authorized backend promotion through the trusted runtime channel.";
-  if (reason === "sms_disabled") return "SMS is intentionally disabled (NOTIFICATIONS_SMS_PROVIDER=none).";
-  if (reason === "sms_provider_unsupported") return "Configured SMS provider is unsupported in this build.";
-  if (reason === "sms_send_failed") return `SMS send failed${sms?.message ? `: ${sms.message}` : "."}`;
-  return "SMS test did not send.";
+export function applySmsSetupStatusRefresh(previousState = {}, status = null) {
+  const current = previousState.smsResult || null;
+  const latest = status?.sms?.latestEvidence || null;
+  const sameAttempt = latest?.attemptId
+    && current?.attemptId
+    && latest.attemptId === current.attemptId;
+  const nextSmsResult = !current || sameAttempt ? (latest || current) : current;
+  return {
+    ...previousState,
+    loading: false,
+    reconciling: false,
+    error: "",
+    status,
+    smsResult: nextSmsResult
+  };
+}
+
+export function applySmsTestMessageChange(previousState = {}, value = "") {
+  const status = previousState.status || null;
+  const smsResult = previousState.smsResult || status?.sms?.latestEvidence || null;
+  if (isSmsProviderAttemptLocked({
+    status,
+    testing: previousState.testing,
+    reconciling: previousState.reconciling,
+    statusError: previousState.error,
+    smsResult
+  })) {
+    return previousState;
+  }
+  return {
+    ...previousState,
+    testMessage: value,
+    testRequestId: "",
+    smsResult: null
+  };
+}
+
+export function resolveSmsDiagnosticRequestId({
+  currentRequestId = "",
+  smsResult = null,
+  createRequestId = createSmsTestRequestId
+} = {}) {
+  const state = String(smsResult?.state || smsResult?.outcome || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  const completed = ["delivered", "failed", "definite_failure", "rejected"]
+    .includes(state);
+  return completed || !String(currentRequestId || "").trim()
+    ? createRequestId()
+    : currentRequestId;
 }
 
 async function copyText(text) {
@@ -262,8 +310,10 @@ export function IntegrationOpsView({
   const [setupState, setSetupState] = useState({
     loading: false,
     testing: false,
+    reconciling: false,
     error: "",
-    resultMessage: "",
+    smsResult: null,
+    testRequestId: "",
     status: null,
     testMessage: ""
   });
@@ -348,20 +398,25 @@ export function IntegrationOpsView({
 
   const refreshSetupStatus = async () => {
     if (!canManageProviders) return;
-    setSetupState((prev) => ({ ...prev, loading: true, error: "" }));
+    const reconcile = setupState.smsResult?.requiresReconciliation === true
+      || ["uncertain", "reconciliation"].includes(
+        String(setupState.status?.sms?.mutationState || "").trim().toLowerCase()
+      );
+    setSetupState((prev) => ({
+      ...prev,
+      loading: !reconcile,
+      reconciling: reconcile,
+      error: ""
+    }));
     try {
       const result = await getIntegrationSetupStatus();
       const status = result?.status || null;
-      setSetupState((prev) => ({
-        ...prev,
-        loading: false,
-        error: "",
-        status
-      }));
+      setSetupState((prev) => applySmsSetupStatusRefresh(prev, status));
     } catch (err) {
       setSetupState((prev) => ({
         ...prev,
         loading: false,
+        reconciling: false,
         error: err?.message || "Failed to load integration setup status."
       }));
     }
@@ -384,14 +439,30 @@ export function IntegrationOpsView({
       }));
       return;
     }
+    if (isSmsProviderAttemptLocked({
+      status: setupState.status,
+      testing: setupState.testing,
+      reconciling: setupState.reconciling,
+      statusError: setupState.error,
+      smsResult: setupState.smsResult || setupState.status?.sms?.latestEvidence || null
+    })) {
+      return;
+    }
     setSetupState((prev) => ({
       ...prev,
       testing: true,
       error: "",
-      resultMessage: ""
+      smsResult: null
     }));
+    let requestId = setupState.testRequestId;
     try {
+      requestId = resolveSmsDiagnosticRequestId({
+        currentRequestId: setupState.testRequestId,
+        smsResult: setupState.smsResult || setupState.status?.sms?.latestEvidence || null
+      });
+      setSetupState((prev) => ({ ...prev, testRequestId: requestId }));
       const result = await sendIntegrationTestSms({
+        requestId,
         message: setupState.testMessage
       });
       const sms = result?.sms || {};
@@ -399,12 +470,13 @@ export function IntegrationOpsView({
         ...prev,
         testing: false,
         status: result?.status || prev.status,
-        resultMessage: describeSmsOutcome(sms)
+        smsResult: sms
       }));
     } catch (err) {
       setSetupState((prev) => ({
         ...prev,
         testing: false,
+        testRequestId: requestId || prev.testRequestId,
         error: err?.message || "Failed to send integration SMS test."
       }));
     }
@@ -896,9 +968,7 @@ export function IntegrationOpsView({
   );
 
   const integrationStatus = setupState.status || {};
-  const twilioStatus = integrationStatus.twilio || {};
   const stripeStatus = integrationStatus.stripe || {};
-  const twilioMissingFields = Array.isArray(twilioStatus.missingFields) ? twilioStatus.missingFields : [];
   const stripeMissingFields = Array.isArray(stripeStatus.missingFields) ? stripeStatus.missingFields : [];
   const canShowRecoveredProvisioningResult = !provisionState.loading && !provisionState.error;
   const provisioningResult = provisionState.result
@@ -1099,72 +1169,47 @@ export function IntegrationOpsView({
           </div>
         </section>}
 
+        {!provisioningOnly && canManageProviders && <SmsProviderPanel
+          status={integrationStatus}
+          loading={setupState.loading}
+          testing={setupState.testing}
+          reconciling={setupState.reconciling}
+          statusError={setupState.error}
+          smsResult={setupState.smsResult || integrationStatus.sms?.latestEvidence || null}
+          testMessage={setupState.testMessage}
+          onRefresh={refreshSetupStatus}
+          onTestMessageChange={(value) => setSetupState((prev) => (
+            applySmsTestMessageChange(prev, value)
+          ))}
+          onSendTest={handleSendTestSms}
+          onCopySetupGuidance={() => handleCopyValue(FUNCTIONS_ENV_SETUP_GUIDANCE, "Setup guidance")}
+          onCopyDisableGuidance={() => handleCopyValue(SMS_DISABLE_GUIDANCE, "SMS disable guidance")}
+          setupGuidance={FUNCTIONS_ENV_SETUP_GUIDANCE}
+          disableGuidance={SMS_DISABLE_GUIDANCE}
+        />}
+
         {!provisioningOnly && canManageProviders && <section className="admin-section">
           <div className="admin-section-head">
-            <h3>Buyer Setup Assistant (Optional Twilio)</h3>
+            <h3>Payment provider runtime</h3>
           </div>
           <p className="source-note">
-            Core quote + portal workflows continue without Twilio. SMS can be enabled only after the trusted backend
-            promotion path exists, the sender is registered and provider-accepted, and buyer-owned credentials are supplied through its runtime secret channel. Production promotion is currently blocked until that separately owned trusted deployer is implemented and qualified.
+            Stripe readiness remains separate from SMS provider choice. This cached runtime check does not alter payment routing or create provider objects.
           </p>
-          {setupState.error && <p className="error-note">{setupState.error}</p>}
-          {setupState.resultMessage && <p className="source-note">{setupState.resultMessage}</p>}
           <div className="status-strip">
-            <span>SMS provider: <strong>{integrationStatus.smsProvider || "unknown"}</strong></span>
-            <span>Twilio: <strong>{twilioStatus.configured ? "configured" : "not configured"}</strong></span>
-            <span>SMS test configured: <strong>{twilioStatus.canSend ? "yes" : "no"}</strong></span>
             <span>Stripe: <strong>{stripeStatus.configured ? "configured" : "not configured"}</strong></span>
+            <span>Mode: <strong>{stripeStatus.mode || "unknown"}</strong></span>
             <span>App base URL: <strong>{integrationStatus.appBaseUrlConfigured ? "configured" : "not configured"}</strong></span>
           </div>
-          {twilioMissingFields.length > 0 && (
-            <p className="warning-note">Twilio missing fields: {formatMissingFields(twilioMissingFields)}</p>
-          )}
           {stripeMissingFields.length > 0 && (
             <p className="warning-note">Stripe missing fields: {formatMissingFields(stripeMissingFields)}</p>
           )}
-          <div className="admin-grid-settings integration-form-grid">
-            <label className="integration-message-field">
-              Test SMS message (optional)
-              <input
-                type="text"
-                placeholder="Connectivity test for buyer setup"
-                value={setupState.testMessage}
-                onChange={(event) => setSetupState((prev) => ({ ...prev, testMessage: event.target.value }))}
-              />
-            </label>
-          </div>
-          <p className="source-note">
-            Provider secrets belong in the trusted deployment/runtime secret channel, never in this browser, local validation file, or release artifact. This status reflects the current runtime; editing a local file does not change production.
-          </p>
-          <p className="source-note">
-            The <code>tonicatering</code> value in these commands is the legacy Firebase project/site identifier. It remains infrastructure-only; the product name is QuotePilot by MBMApps.
-          </p>
-          <pre className="integration-command-block"><code>{FUNCTIONS_ENV_SETUP_GUIDANCE}</code></pre>
           <div className="right-actions">
-            <button type="button" className="ghost" onClick={() => handleCopyValue(FUNCTIONS_ENV_SETUP_GUIDANCE, "Setup guidance")}>
-              Copy Setup Guidance
-            </button>
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => handleCopyValue(SMS_DISABLE_GUIDANCE, "SMS disable guidance")}
-            >
-              Copy SMS Disable Guidance
-            </button>
             <button
               type="button"
               className="ghost"
               onClick={() => handleCopyValue(PREPARE_BACKEND_GUIDANCE, "Prepare instructions")}
             >
               Copy Prepare Instructions
-            </button>
-            <button
-              type="button"
-              className="cta"
-              onClick={handleSendTestSms}
-              disabled={setupState.testing || !twilioStatus.canSend}
-            >
-              {setupState.testing ? "Sending Test..." : "Send Test SMS"}
             </button>
           </div>
         </section>}

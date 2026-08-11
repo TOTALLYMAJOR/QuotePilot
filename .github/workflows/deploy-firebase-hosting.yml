@@ -1,5 +1,5 @@
 name: Deploy Firebase Production
-run-name: deploy/v1/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/firebase-${{ inputs.firebase_scope }}/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.rollback_sha }}
+run-name: deploy/v2/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/firebase-${{ inputs.firebase_scope }}/${{ inputs.release_sha }}/${{ inputs.ci_run_id }}/${{ inputs.rollback_sha }}/${{ inputs.sms_provider }}/${{ inputs.sms_configuration_generation }}
 
 on:
   workflow_dispatch:
@@ -25,6 +25,20 @@ on:
           - hosting
           - backend
           - all
+      sms_provider:
+        description: Exact deployment-owned owner-SMS provider for this release
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - twilio
+          - pingram
+      sms_configuration_generation:
+        description: Exact Pingram configuration generation, or not-applicable for none or Twilio
+        required: true
+        default: not-applicable
+        type: string
       confirmation:
         description: Exact DEPLOY tonicatering confirmation for the selected scope
         required: true
@@ -69,12 +83,16 @@ jobs:
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
           RELEASE_TARGET: firebase-${{ inputs.firebase_scope }}
+          SMS_PROVIDER: ${{ inputs.sms_provider }}
+          SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
         run: |
           node ./scripts/verify-direct-production-release.mjs \
             --release-sha "${RELEASE_SHA}" \
             --ci-run-id "${CI_RUN_ID}" \
             --rollback-sha "${ROLLBACK_SHA}" \
-            --target "${RELEASE_TARGET}"
+            --target "${RELEASE_TARGET}" \
+            --sms-provider "${SMS_PROVIDER}" \
+            --sms-configuration-generation "${SMS_CONFIGURATION_GENERATION}"
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -92,6 +110,22 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
+      - name: Validate deployment-owned SMS release profile
+        env:
+          EXPECTED_SMS_PROVIDER: ${{ inputs.sms_provider }}
+          EXPECTED_SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
+          CONFIGURED_SMS_PROVIDER: ${{ vars.NOTIFICATIONS_SMS_PROVIDER || 'none' }}
+          CONFIGURED_PINGRAM_CONFIGURATION_GENERATION: ${{ vars.PINGRAM_CONFIGURATION_GENERATION }}
+        run: |
+          set -euo pipefail
+          test "${EXPECTED_SMS_PROVIDER}" = "${CONFIGURED_SMS_PROVIDER}"
+          if test "${EXPECTED_SMS_PROVIDER}" = "pingram"; then
+            test -n "${CONFIGURED_PINGRAM_CONFIGURATION_GENERATION}"
+            test "${EXPECTED_SMS_CONFIGURATION_GENERATION}" = "${CONFIGURED_PINGRAM_CONFIGURATION_GENERATION}"
+          else
+            test "${EXPECTED_SMS_CONFIGURATION_GENERATION}" = "not-applicable"
+          fi
+
       - name: Materialize validated Functions runtime configuration
         if: inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'
         env:
@@ -103,6 +137,13 @@ jobs:
           EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
           EMAIL_FROM_EMAIL: ${{ vars.EMAIL_FROM_EMAIL }}
           NOTIFICATIONS_SMS_PROVIDER: ${{ vars.NOTIFICATIONS_SMS_PROVIDER || 'none' }}
+          NOTIFICATIONS_OWNER_PHONE: ${{ vars.NOTIFICATIONS_OWNER_PHONE }}
+          NOTIFICATIONS_OWNER_SMS_CONSENT: ${{ vars.NOTIFICATIONS_OWNER_SMS_CONSENT }}
+          TWILIO_ACCOUNT_SID: ${{ vars.TWILIO_ACCOUNT_SID }}
+          TWILIO_MESSAGING_SERVICE_SID: ${{ vars.TWILIO_MESSAGING_SERVICE_SID }}
+          PINGRAM_API_ORIGIN: ${{ vars.PINGRAM_API_ORIGIN }}
+          PINGRAM_FROM_NUMBER: ${{ vars.PINGRAM_FROM_NUMBER }}
+          PINGRAM_CONFIGURATION_GENERATION: ${{ vars.PINGRAM_CONFIGURATION_GENERATION }}
           STRIPE_MODE: ${{ vars.STRIPE_MODE }}
           COMMERCIAL_CHANGE_AUTHORITY_ENABLED: ${{ vars.COMMERCIAL_CHANGE_AUTHORITY_ENABLED || 'false' }}
           OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
@@ -123,6 +164,8 @@ jobs:
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}
           FIREBASE_SCOPE: ${{ inputs.firebase_scope }}
           DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
+          EXPECTED_SMS_PROVIDER: ${{ inputs.sms_provider }}
+          EXPECTED_SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
           VITE_APP_URL: ${{ vars.APP_BASE_URL }}
           VITE_APP_HOST: quotepilot.mbmapps.com
           VITE_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
@@ -161,4 +204,6 @@ jobs:
             echo "- Release SHA: ${{ inputs.release_sha }}"
             echo "- CI run: ${{ inputs.ci_run_id }}"
             echo "- Rollback SHA: ${{ inputs.rollback_sha }}"
+            echo "- Owner SMS provider: ${{ inputs.sms_provider }}"
+            echo "- Owner SMS configuration generation: ${{ inputs.sms_configuration_generation }}"
           } >> "${GITHUB_STEP_SUMMARY}"

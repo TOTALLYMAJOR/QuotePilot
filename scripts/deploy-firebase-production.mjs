@@ -131,6 +131,8 @@ const verify = (headSha) => verifyDirectProductionReleaseEvidence({
   ciRunId: readArg("--ci-run-id"),
   rollbackSha: readArg("--rollback-sha"),
   target: releaseTarget,
+  smsProvider: process.env.EXPECTED_SMS_PROVIDER,
+  smsConfigurationGeneration: process.env.EXPECTED_SMS_CONFIGURATION_GENERATION,
   headSha,
   deploymentRunId: process.env.GITHUB_RUN_ID,
   token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,

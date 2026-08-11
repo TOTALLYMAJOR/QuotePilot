@@ -51,6 +51,8 @@ const UAT_REVIEW_NODE_ID = "DR_quotepilot-uat-review-1";
 const PRODUCTION_REVIEW_NODE_ID = "DR_quotepilot-production-review-1";
 const PREPARATION_RUN_ID = 505;
 const OPERATOR_ID = 606;
+const SMS_PROVIDER = "none";
+const SMS_CONFIGURATION_GENERATION = "not-applicable";
 const DEPLOYMENT_PROFILES = [
   "firebase-hosting",
   "firebase-backend",
@@ -74,6 +76,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "staffing.authoritative-surface",
     "proposal.pdf",
     "integrations.status",
+    "sms.owner-alert-surface",
     "sms.disabled-nonblocking"
   ],
   "firebase-backend": [
@@ -100,6 +103,9 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "staffing.disabled-authority-boundary",
     "staffing.authoritative-plan",
     "integrations.status",
+    "sms.deployment-owned-provider",
+    "sms.pingram-signed-lifecycle",
+    "sms.twilio-controlled-lifecycle",
     "sms.disabled-nonblocking"
   ],
   "firebase-all": [
@@ -135,6 +141,10 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "staffing.authoritative-surface",
     "proposal.pdf",
     "integrations.status",
+    "sms.deployment-owned-provider",
+    "sms.owner-alert-surface",
+    "sms.pingram-signed-lifecycle",
+    "sms.twilio-controlled-lifecycle",
     "sms.disabled-nonblocking"
   ],
   vercel: [
@@ -153,6 +163,7 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "staffing.authoritative-surface",
     "proposal.pdf",
     "integrations.status",
+    "sms.owner-alert-surface",
     "sms.disabled-nonblocking"
   ]
 });
@@ -287,17 +298,31 @@ function makeDirectDeploymentTitle({
   profile = "vercel",
   releaseSha = RELEASE_SHA,
   ciRunId = CI_RUN_ID,
-  rollbackSha = ROLLBACK_SHA
+  rollbackSha = ROLLBACK_SHA,
+  smsProvider = SMS_PROVIDER,
+  smsConfigurationGeneration = SMS_CONFIGURATION_GENERATION
 } = {}) {
-  return [
-    "deploy",
-    "v1",
-    approvalMode,
-    profile,
-    releaseSha,
-    String(ciRunId),
-    rollbackSha
-  ].join("/");
+  return profile.startsWith("firebase-")
+    ? [
+      "deploy",
+      "v2",
+      approvalMode,
+      profile,
+      releaseSha,
+      String(ciRunId),
+      rollbackSha,
+      smsProvider,
+      smsConfigurationGeneration
+    ].join("/")
+    : [
+      "deploy",
+      "v1",
+      approvalMode,
+      profile,
+      releaseSha,
+      String(ciRunId),
+      rollbackSha
+    ].join("/");
 }
 
 function makeDirectDeploymentRun(profile = "vercel", overrides = {}) {
@@ -316,6 +341,10 @@ function makeDirectDeploymentOptions(target = "vercel", overrides = {}) {
     deploymentRunId: PREPARATION_RUN_ID,
     ciRunId: CI_RUN_ID,
     approvalMode: "solo-operator",
+    ...(target.startsWith("firebase-") ? {
+      smsProvider: SMS_PROVIDER,
+      smsConfigurationGeneration: SMS_CONFIGURATION_GENERATION
+    } : {}),
     ...overrides
   };
 }
@@ -324,16 +353,20 @@ function makeUatTitle({
   approvalMode = "independent-review",
   releaseSha = RELEASE_SHA,
   target = "vercel",
+  smsProvider = SMS_PROVIDER,
+  smsConfigurationGeneration = SMS_CONFIGURATION_GENERATION,
   rollbackSha = ROLLBACK_SHA,
   stagingId = "dpl_immutable-123",
   checklistDigest = checklist.digest
 } = {}) {
   return [
     "release-uat",
-    "v2",
+    "v3",
     approvalMode,
     releaseSha,
     target,
+    smsProvider,
+    smsConfigurationGeneration,
     rollbackSha,
     stagingId,
     checklistDigest
@@ -372,6 +405,8 @@ function makeUatOptions(overrides = {}) {
     releaseSha: RELEASE_SHA,
     rollbackSha: ROLLBACK_SHA,
     target: "vercel",
+    smsProvider: SMS_PROVIDER,
+    smsConfigurationGeneration: SMS_CONFIGURATION_GENERATION,
     uatRunId: UAT_RUN_ID,
     checklistDigest: checklist.digest,
     attesterIds: new Set([ATTESTER_ID]),
@@ -505,12 +540,17 @@ function makeGit({
 
 function makeReceiptArgs(overrides = {}) {
   const target = overrides.target || "vercel";
+  const smsProvider = overrides["sms-provider"] || SMS_PROVIDER;
   const checkedItemIds = Object.hasOwn(overrides, "checked-item-ids")
     ? overrides["checked-item-ids"]
-    : (checklist.itemIdsByTarget[target] || []).join(",");
+    : (checklist.itemIdsByTargetAndSmsProvider[target]?.[smsProvider] || []).join(",");
   return {
     "release-sha": RELEASE_SHA,
     target,
+    "sms-provider": smsProvider,
+    "sms-configuration-generation": smsProvider === "pingram"
+      ? "sandbox-2026-08-11-01"
+      : SMS_CONFIGURATION_GENERATION,
     "rollback-sha": ROLLBACK_SHA,
     "staging-id": "dpl_immutable-123",
     "checklist-digest": checklist.digest,
@@ -584,7 +624,9 @@ describe("production release evidence CLI parsing", () => {
     "--ci-run-id", String(CI_RUN_ID),
     "--uat-run-id", String(UAT_RUN_ID),
     "--rollback-sha", ROLLBACK_SHA,
-    "--target", "vercel"
+    "--target", "vercel",
+    "--sms-provider", SMS_PROVIDER,
+    "--sms-configuration-generation", SMS_CONFIGURATION_GENERATION
   ];
 
   test("parses the complete exact-evidence contract", () => {
@@ -593,7 +635,9 @@ describe("production release evidence CLI parsing", () => {
       "ci-run-id": String(CI_RUN_ID),
       "uat-run-id": String(UAT_RUN_ID),
       "rollback-sha": ROLLBACK_SHA,
-      target: "vercel"
+      target: "vercel",
+      "sms-provider": SMS_PROVIDER,
+      "sms-configuration-generation": SMS_CONFIGURATION_GENERATION
     });
   });
 
@@ -607,6 +651,8 @@ describe("production release evidence CLI parsing", () => {
       "uat-run-id": String(UAT_RUN_ID),
       "rollback-sha": ROLLBACK_SHA,
       target: "vercel",
+      "sms-provider": SMS_PROVIDER,
+      "sms-configuration-generation": SMS_CONFIGURATION_GENERATION,
       output: "artifacts/release/evidence.json"
     });
   });
@@ -615,7 +661,7 @@ describe("production release evidence CLI parsing", () => {
     [[...validArgs, "--unknown", "value"], /unknown argument --unknown/i],
     [[...validArgs, "--target", "firebase"], /duplicate argument --target/i],
     [["--release-sha", "--ci-run-id"], /--release-sha requires a value/i],
-    [validArgs.slice(0, -2), /--target is required/i]
+    [validArgs.slice(0, -2), /--sms-configuration-generation is required/i]
   ])("rejects malformed evidence argv %#", (argv, expected) => {
     expect(() => parseReleaseEvidenceCliArgs(argv)).toThrow(expected);
   });
@@ -678,6 +724,21 @@ describe("tracked UAT checklist", () => {
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
     expect(checklist.itemIdsByTarget).toEqual(EXPECTED_UAT_ITEM_IDS_BY_TARGET);
+    expect(
+      checklist.itemIdsByTargetAndSmsProvider["firebase-backend"].none
+    ).toContain("sms.disabled-nonblocking");
+    expect(
+      checklist.itemIdsByTargetAndSmsProvider["firebase-backend"].none
+    ).not.toContain("sms.pingram-signed-lifecycle");
+    expect(
+      checklist.itemIdsByTargetAndSmsProvider["firebase-backend"].pingram
+    ).toContain("sms.pingram-signed-lifecycle");
+    expect(
+      checklist.itemIdsByTargetAndSmsProvider["firebase-backend"].pingram
+    ).not.toContain("sms.disabled-nonblocking");
+    expect(
+      checklist.itemIdsByTargetAndSmsProvider["firebase-backend"].twilio
+    ).toContain("sms.twilio-controlled-lifecycle");
     expect(checklist.itemIds).not.toContain("portal.backfill-conflict-safety");
     for (const profile of DEPLOYMENT_PROFILES) {
       expect(checklist.itemIdsByTarget[profile]).not.toContain(
@@ -935,6 +996,8 @@ describe("attester and UAT title parsing", () => {
       approvalMode: "independent-review",
       releaseSha: RELEASE_SHA,
       target: "vercel",
+      smsProvider: SMS_PROVIDER,
+      smsConfigurationGeneration: SMS_CONFIGURATION_GENERATION,
       rollbackSha: ROLLBACK_SHA,
       stagingId: "dpl_immutable-123",
       checklistDigest: checklist.digest
@@ -942,10 +1005,12 @@ describe("attester and UAT title parsing", () => {
   });
 
   test.each([
-    ["release-uat/v2", /does not match the v2 evidence contract/i],
+    ["release-uat/v3", /does not match the v3 evidence contract/i],
     [makeUatTitle({ releaseSha: "abc" }), /UAT release SHA must be a full/i],
     [makeUatTitle({ target: "all" }), /target is not firebase-hosting, firebase-backend, firebase-all, or vercel/i],
     [makeUatTitle({ target: "firebase-functions" }), /target is not firebase-hosting, firebase-backend, firebase-all, or vercel/i],
+    [makeUatTitle({ smsProvider: "carrier" }), /SMS provider must be none, twilio, or pingram/i],
+    [makeUatTitle({ smsConfigurationGeneration: "sandbox-1" }), /must be not-applicable unless Pingram/i],
     [makeUatTitle({ stagingId: "x" }), /staging deployment id is invalid/i],
     [makeUatTitle({ checklistDigest: "abc" }), /checklist digest is invalid/i]
   ])("rejects malformed UAT title %#", (title, expected) => {
@@ -1074,6 +1139,20 @@ describe("direct deployment workflow validator", () => {
       )).toEqual({ operatorId: OPERATOR_ID });
     }
   );
+
+  test("binds Firebase deployment evidence to the exact SMS provider profile", () => {
+    expect(() => validateDirectDeploymentRun(
+      makeDirectDeploymentRun("firebase-backend"),
+      makeDirectDeploymentOptions("firebase-backend", { smsProvider: "pingram" })
+    )).toThrow(/configuration generation must be a 3-64 character/i);
+    expect(() => validateDirectDeploymentRun(
+      makeDirectDeploymentRun("firebase-backend"),
+      makeDirectDeploymentOptions("firebase-backend", {
+        smsProvider: "pingram",
+        smsConfigurationGeneration: "sandbox-2026-08-11-01"
+      })
+    )).toThrow(/title is not bound to the supplied evidence/i);
+  });
 
   test.each([
     [{ repository: { id: 1, full_name: "other/repo" } }, /different repository/i],
@@ -1273,7 +1352,9 @@ describe("UAT workflow evidence validators", () => {
         approvalMode: "independent-review",
         completedAt: UAT_COMPLETED_AT,
         stagingId: "dpl_immutable-123",
-        attestedTarget: profile
+        attestedTarget: profile,
+        smsProvider: SMS_PROVIDER,
+        smsConfigurationGeneration: SMS_CONFIGURATION_GENERATION
       });
     }
   );
@@ -1310,6 +1391,21 @@ describe("UAT workflow evidence validators", () => {
     [{ display_title: makeUatTitle({ releaseSha: OTHER_SHA }) }, {}, /different release or rollback SHA/i],
     [{ display_title: makeUatTitle({ rollbackSha: OTHER_SHA }) }, {}, /different release or rollback SHA/i],
     [{ display_title: makeUatTitle({ target: "firebase-hosting" }) }, {}, /does not cover this deployment target/i],
+    [{
+      display_title: makeUatTitle({
+        smsProvider: "pingram",
+        smsConfigurationGeneration: "sandbox-2026-08-11-01"
+      })
+    }, {}, /different SMS provider profile/i],
+    [{
+      display_title: makeUatTitle({
+        smsProvider: "pingram",
+        smsConfigurationGeneration: "sandbox-2026-08-11-01"
+      })
+    }, {
+      smsProvider: "pingram",
+      smsConfigurationGeneration: "sandbox-2026-08-11-02"
+    }, /different SMS configuration generation/i],
     [{ display_title: makeUatTitle({ checklistDigest: "d".repeat(64) }) }, {}, /different checklist digest/i],
     [{ run_started_at: "invalid" }, {}, /timestamps are invalid/i],
     [{ run_started_at: "2026-08-04T08:59:59.000Z" }, {}, /started before exact-SHA CI completed/i],
@@ -1487,6 +1583,8 @@ describe("full production release verifier", () => {
       uatRunId: String(UAT_RUN_ID),
       rollbackSha: ROLLBACK_SHA,
       target: "vercel",
+      smsProvider: SMS_PROVIDER,
+      smsConfigurationGeneration: SMS_CONFIGURATION_GENERATION,
       headSha: RELEASE_SHA,
       preparationRunId: String(PREPARATION_RUN_ID),
       token: "test-token",
@@ -1512,6 +1610,8 @@ describe("full production release verifier", () => {
       releaseTag: RELEASE_TAG,
       rollbackSha: ROLLBACK_SHA,
       target: "vercel",
+      smsProvider: SMS_PROVIDER,
+      smsConfigurationGeneration: SMS_CONFIGURATION_GENERATION,
       ciRunId: CI_RUN_ID,
       uatRunId: UAT_RUN_ID,
       preparationRunId: PREPARATION_RUN_ID,
@@ -1737,22 +1837,35 @@ describe("release UAT attestation validator", () => {
   const validArgv = [
     "--release-sha", RELEASE_SHA,
     "--target", "vercel",
+    "--sms-provider", SMS_PROVIDER,
+    "--sms-configuration-generation", SMS_CONFIGURATION_GENERATION,
     "--rollback-sha", ROLLBACK_SHA,
     "--staging-id", "dpl_immutable-123",
     "--checklist-digest", checklist.digest,
-    "--checked-item-ids", checklist.itemIdsByTarget.vercel.join(","),
+    "--checked-item-ids", checklist.itemIdsByTargetAndSmsProvider.vercel.none.join(","),
     "--confirmation", `ATTEST UAT ${RELEASE_SHA}`,
     "--output", "artifacts/release/uat-attestation.json"
   ];
 
   test("supports read-only checklist modes and parses a complete attestation", () => {
     expect(parseReleaseUatArgs(["--print-digest"])).toEqual({ printDigest: true });
-    expect(parseReleaseUatArgs(["--print-items", "--target", "firebase-backend"])).toEqual({
+    expect(parseReleaseUatArgs([
+      "--print-items",
+      "--target",
+      "firebase-backend",
+      "--sms-provider",
+      "pingram"
+    ])).toEqual({
       printItems: true,
-      target: "firebase-backend"
+      target: "firebase-backend",
+      smsProvider: "pingram"
     });
-    expect(getReleaseUatItemIdsForTarget("firebase-backend", process.cwd())).toEqual(
-      EXPECTED_UAT_ITEM_IDS_BY_TARGET["firebase-backend"]
+    expect(getReleaseUatItemIdsForTarget(
+      "firebase-backend",
+      "pingram",
+      process.cwd()
+    )).toEqual(
+      checklist.itemIdsByTargetAndSmsProvider["firebase-backend"].pingram
     );
     expect(parseReleaseUatArgs([
       "--print-plan",
@@ -1772,7 +1885,7 @@ describe("release UAT attestation validator", () => {
     [["--print-items", "--target", "vercel", "extra"], /requires --target/i],
     [["--print-plan", "--target", "vercel"], /requires --target and --candidate-profile/i],
     [["--print-plan", "--candidate-profile", "staging-safe-off", "--target", "vercel"], /requires --target and --candidate-profile/i],
-    [["--print-items", "--target", "all"], /--target must be firebase-hosting/i],
+    [["--print-items", "--target", "all", "--sms-provider", "none"], /--target must be firebase-hosting/i],
     [[...validArgv, "--target", "all"], /duplicate argument --target/i],
     [["--release-sha", "--target"], /--release-sha requires a value/i],
     [validArgv.slice(0, -2), /--output is required/i]
@@ -1782,7 +1895,9 @@ describe("release UAT attestation validator", () => {
 
   test("builds an immutable receipt only for an exact first-attempt main dispatch", () => {
     const receipt = buildReleaseUatReceipt(makeReceiptArgs({
-      "checked-item-ids": [...checklist.itemIdsByTarget.vercel].reverse().join(",")
+      "checked-item-ids": [
+        ...checklist.itemIdsByTargetAndSmsProvider.vercel.none
+      ].reverse().join(",")
     }), {
       env: makeReceiptEnv(),
       root: process.cwd(),
@@ -1790,17 +1905,19 @@ describe("release UAT attestation validator", () => {
     });
 
     expect(receipt).toEqual({
-      schema: "com.mbmapps.quotepilot.release-uat-attestation/v2",
+      schema: "com.mbmapps.quotepilot.release-uat-attestation/v3",
       approvalMode: "independent-review",
       releaseSha: RELEASE_SHA,
       target: "vercel",
+      smsProvider: SMS_PROVIDER,
+      smsConfigurationGeneration: SMS_CONFIGURATION_GENERATION,
       rollbackSha: ROLLBACK_SHA,
       stagingId: "dpl_immutable-123",
       checklist: {
         schema: checklist.checklist.schema,
         version: checklist.checklist.version,
         digest: checklist.digest,
-        checkedItemIds: checklist.itemIdsByTarget.vercel
+        checkedItemIds: checklist.itemIdsByTargetAndSmsProvider.vercel.none
       },
       github: {
         repository: RELEASE_EVIDENCE_POLICY.repository.fullName,
@@ -1867,7 +1984,7 @@ describe("release UAT attestation validator", () => {
 
       expect(receipt.target).toBe(profile);
       expect(receipt.checklist.checkedItemIds).toEqual(
-        checklist.itemIdsByTarget[profile]
+        checklist.itemIdsByTargetAndSmsProvider[profile].none
       );
       expect(receipt.github.attesterAllowlistDigest).toBe(ATTESTER_ALLOWLIST_DIGEST);
     }
@@ -1881,8 +1998,8 @@ describe("release UAT attestation validator", () => {
     [{ "staging-id": "x" }, {}, /--staging-id is invalid/i],
     [{ "checklist-digest": "d".repeat(64) }, {}, /does not match the tracked checklist/i],
     [{ confirmation: "ATTEST UAT wrong" }, {}, /--confirmation must equal/i],
-    [{ "checked-item-ids": checklist.itemIdsByTarget.vercel.slice(1).join(",") }, {}, /every vercel checklist item exactly once/i],
-    [{ "checked-item-ids": [...checklist.itemIdsByTarget.vercel, checklist.itemIdsByTarget.vercel[0]].join(",") }, {}, /every vercel checklist item exactly once/i],
+    [{ "checked-item-ids": checklist.itemIdsByTargetAndSmsProvider.vercel.none.slice(1).join(",") }, {}, /every vercel checklist item applicable to none exactly once/i],
+    [{ "checked-item-ids": [...checklist.itemIdsByTargetAndSmsProvider.vercel.none, checklist.itemIdsByTargetAndSmsProvider.vercel.none[0]].join(",") }, {}, /every vercel checklist item applicable to none exactly once/i],
     [{ "checked-item-ids": checklist.itemIds.join(",") }, {}, /no non-applicable items/i],
     [{}, { GITHUB_ACTIONS: "false" }, /manual dispatch on the exact main SHA/i],
     [{}, { GITHUB_EVENT_NAME: "push" }, /manual dispatch on the exact main SHA/i],

@@ -479,19 +479,49 @@ Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
 `test` or `live`, a secret/restricted key with the matching mode prefix, and a
 webhook secret. Event and Checkout Session `livemode` must also match. The
 tracked Functions template and materializer contain only `STRIPE_MODE`;
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, and
-`RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`, and
-`TWILIO_AUTH_TOKEN` are Firebase Secret Manager values bound only to Functions
-that consume them. The materializer rejects all six. The Revenue Autopilot
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`,
+`RESEND_WEBHOOK_SECRET`, `REVENUE_AUTOPILOT_TOKEN_SECRET`,
+`TWILIO_AUTH_TOKEN`, `PINGRAM_API_KEY`, `PINGRAM_WEBHOOK_SECRET`, and
+`SMS_CONTACT_DIGEST_SECRET` are Firebase Secret Manager values bound only to
+Functions that consume them. The materializer rejects all nine. The Revenue Autopilot
 Resend webhook binds only `RESEND_WEBHOOK_SECRET` and verifies raw requests with
 the repository-pinned `standardwebhooks@1.0.0`; it does not receive the Resend
 API key. `REVENUE_AUTOPILOT_TOKEN_SECRET` only signs/verifies opaque unsubscribe
-scope. Twilio's account SID,
-Messaging Service SID, and owner destination are non-secret runtime values;
-owner alerts route through the Messaging Service rather than a raw sender
-number. Use the credential-isolated runtime channel
+scope. Owner SMS selection is an explicit, deployment-owned
+`NOTIFICATIONS_SMS_PROVIDER=none|twilio|pingram` choice; credential presence
+never chooses or enables a provider, and the current production value remains
+`none`. Twilio's account and Messaging Service identifiers and Pingram's exact
+API origin, sender, and lowercase `PINGRAM_CONFIGURATION_GENERATION` are trusted
+non-secret runtime values. The server-owned
+owner destination must be E.164, and SMS may be enabled only with explicit
+`NOTIFICATIONS_OWNER_SMS_CONSENT=granted`. Use the credential-isolated runtime channel
 described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and never place real
 provider values in a browser environment, Functions dotenv, or committed file.
+The browser reports only non-secret runtime-field completeness and recorded
+provider evidence; it does not infer whether a bound credential exists. A
+locally complete profile merely permits the provider worker to attempt the
+controlled diagnostic, where missing secrets fail closed before a send.
+
+The Pingram source slice is limited to the existing one-way owner-alert path;
+it does not add customer SMS or a two-way inbox. It reserves quote/payment
+alerts transactionally, binds provider tracking identity privately, and records
+signed callbacks in a reprocessable inbox. Signed subscribe/inbound callbacks
+are quarantined; unsubscribe or exact inbound `STOP` creates an indefinite v1
+hold on all owner SMS sends across provider selection. There is no browser or
+callable clear path in this version. Recipient fingerprints are versioned,
+organization-scoped HMACs and never expose or link the same destination across
+tenant records. A Pingram
+send response proves only request acceptance. Only a verified signed webhook
+receipt may establish `delivered` or `failed`;
+an indeterminate or previously claimed request is not automatically resent.
+Automatic alerts require a signed delivered diagnostic for the exact current
+configuration generation. Only the exact Pingram
+API origins `https://api.pingram.io` (US), `https://api.ca.pingram.io` (CA),
+and `https://api.eu.pingram.io` (EU) are accepted by the release materializer.
+This source has not been deployed, has made no Pingram provider call, and has
+sent no live SMS. Promotion still requires Secret Manager credentials, an
+approved sender/A2P and consent record, signed endpoint registration, and a
+controlled hosted UAT.
 
 Commercial Change, operational staffing, and Revenue Autopilot use independent
 server-owned gates:
@@ -888,7 +918,7 @@ requires mandatory hosted payment UAT in Stripe test mode and separately
 authorized live-mode acceptance for each enabled rail.
 Refund initiation/status and dispute handling remain manual or unimplemented.
 See the
-[launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--twilio--resend-providers)
+[launch runbook](docs/LAUNCH_RUNBOOK.md#5-functions-runtime-configuration-optional-stripe--owner-sms-twilio-or-pingram--resend-providers)
 for configuration and proof requirements.
 
 ## Public $1 Invoice-First Buyer Access (`tonicatering`)

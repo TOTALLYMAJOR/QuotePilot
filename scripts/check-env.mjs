@@ -50,7 +50,14 @@ const RELEASE_CANDIDATE_DISABLED_FLAGS = Object.freeze([
 const BUYER_ACCESS_ROUTE_FLAG = "VITE_BUYER_ACCESS_ENABLED";
 const BUYER_ACCESS_CTA_FLAG = "VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED";
 const BUYER_ACCESS_TURNSTILE_SITE_KEY = "VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY";
-const BUYER_ACCESS_FORBIDDEN_BROWSER_SECRET = "VITE_BUYER_ACCESS_TURNSTILE_SECRET";
+const FORBIDDEN_BROWSER_PROVIDER_VALUES = Object.freeze([
+  "VITE_BUYER_ACCESS_TURNSTILE_SECRET",
+  "VITE_PINGRAM_API_KEY",
+  "VITE_PINGRAM_WEBHOOK_SECRET",
+  "VITE_SMS_CONTACT_DIGEST_SECRET",
+  "VITE_PINGRAM_FROM_NUMBER",
+  "VITE_NOTIFICATIONS_OWNER_PHONE"
+]);
 const APP_CHECK_ENABLED_FLAG = "VITE_FIREBASE_APP_CHECK_ENABLED";
 const APP_CHECK_SITE_KEY = "VITE_FIREBASE_APP_CHECK_RECAPTCHA_ENTERPRISE_SITE_KEY";
 
@@ -188,9 +195,12 @@ if (buyerAccessCtaEnabled && !buyerAccessRouteEnabled) {
   process.exit(1);
 }
 
-if (effectiveValue(BUYER_ACCESS_FORBIDDEN_BROWSER_SECRET)) {
+const exposedProviderValues = FORBIDDEN_BROWSER_PROVIDER_VALUES.filter(
+  (name) => effectiveValue(name)
+);
+if (exposedProviderValues.length) {
   console.error(
-    `${BUYER_ACCESS_FORBIDDEN_BROWSER_SECRET} is forbidden because VITE_ values are browser-visible; bind the secret to Firebase Functions instead.`
+    `${exposedProviderValues.join(", ")} is forbidden because VITE_ values are browser-visible; keep provider credentials and SMS phone configuration server-owned.`
   );
   process.exit(1);
 }

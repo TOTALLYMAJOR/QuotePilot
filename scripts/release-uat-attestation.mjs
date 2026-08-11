@@ -9,6 +9,8 @@ import {
   getReleaseUatProfilePlan,
   parseAttesterIds,
   parseReleaseApprovalMode,
+  parseReleaseSmsConfigurationGeneration,
+  parseReleaseSmsProvider,
   parseSoloOperatorIds,
   RELEASE_EVIDENCE_POLICY
 } from "./production-release-evidence.mjs";
@@ -37,9 +39,14 @@ function requireReleaseTarget(value) {
   return target;
 }
 
-export function getReleaseUatItemIdsForTarget(targetValue, root = ROOT) {
+export function getReleaseUatItemIdsForTarget(
+  targetValue,
+  smsProviderValue,
+  root = ROOT
+) {
   const target = requireReleaseTarget(targetValue);
-  return getReleaseUatChecklist(root).itemIdsByTarget[target];
+  const smsProvider = parseReleaseSmsProvider(smsProviderValue);
+  return getReleaseUatChecklist(root).itemIdsByTargetAndSmsProvider[target][smsProvider];
 }
 
 export function getReleaseUatPlanForTarget(
@@ -56,10 +63,22 @@ export function parseReleaseUatArgs(argv) {
     return { printDigest: true };
   }
   if (argv[0] === "--print-items") {
-    if (argv.length !== 3 || argv[1] !== "--target" || !argv[2]) {
-      throw attestationError("--print-items requires --target and one deployment target.");
+    if (
+      argv.length !== 5
+      || argv[1] !== "--target"
+      || !argv[2]
+      || argv[3] !== "--sms-provider"
+      || !argv[4]
+    ) {
+      throw attestationError(
+        "--print-items requires --target, one deployment target, --sms-provider, and one SMS provider."
+      );
     }
-    return { printItems: true, target: requireReleaseTarget(argv[2]) };
+    return {
+      printItems: true,
+      target: requireReleaseTarget(argv[2]),
+      smsProvider: parseReleaseSmsProvider(argv[4])
+    };
   }
   if (argv[0] === "--print-plan") {
     if (
@@ -82,6 +101,8 @@ export function parseReleaseUatArgs(argv) {
   const allowed = new Set([
     "--release-sha",
     "--target",
+    "--sms-provider",
+    "--sms-configuration-generation",
     "--rollback-sha",
     "--staging-id",
     "--checklist-digest",
@@ -117,6 +138,11 @@ export function buildReleaseUatReceipt(
     throw attestationError("the rollback SHA must differ from the release SHA.");
   }
   const target = requireReleaseTarget(args.target);
+  const smsProvider = parseReleaseSmsProvider(args["sms-provider"]);
+  const smsConfigurationGeneration = parseReleaseSmsConfigurationGeneration(
+    args["sms-configuration-generation"],
+    smsProvider
+  );
   const stagingId = String(args["staging-id"] || "");
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{2,79}$/.test(stagingId)) {
     throw attestationError("--staging-id is invalid.");
@@ -132,7 +158,7 @@ export function buildReleaseUatReceipt(
     .split(",")
     .map((itemId) => itemId.trim())
     .filter(Boolean);
-  const requiredItemIds = checklist.itemIdsByTarget[target];
+  const requiredItemIds = checklist.itemIdsByTargetAndSmsProvider[target][smsProvider];
   if (
     !Array.isArray(requiredItemIds)
     || requiredItemIds.length === 0
@@ -141,7 +167,7 @@ export function buildReleaseUatReceipt(
     || requiredItemIds.some((itemId) => !checkedItemIds.includes(itemId))
   ) {
     throw attestationError(
-      `--checked-item-ids must contain every ${target} checklist item exactly once and no non-applicable items.`
+      `--checked-item-ids must contain every ${target} checklist item applicable to ${smsProvider} exactly once and no non-applicable items.`
     );
   }
 
@@ -205,10 +231,12 @@ export function buildReleaseUatReceipt(
   }
 
   return Object.freeze({
-    schema: "com.mbmapps.quotepilot.release-uat-attestation/v2",
+    schema: "com.mbmapps.quotepilot.release-uat-attestation/v3",
     approvalMode,
     releaseSha,
     target,
+    smsProvider,
+    smsConfigurationGeneration,
     rollbackSha,
     stagingId,
     checklist: {
@@ -281,7 +309,9 @@ function main() {
     return;
   }
   if (args.printItems) {
-    process.stdout.write(`${getReleaseUatItemIdsForTarget(args.target, ROOT).join(",")}\n`);
+    process.stdout.write(
+      `${getReleaseUatItemIdsForTarget(args.target, args.smsProvider, ROOT).join(",")}\n`
+    );
     return;
   }
   if (args.printPlan) {

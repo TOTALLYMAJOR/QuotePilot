@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: August 9, 2026
+Last updated: August 11, 2026
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -92,6 +92,9 @@ git checkout -b feature/<scope>-<topic>
      - Firebase emulator lanes require Java 21 or newer. The package lane
        prepares and selects an isolated repository-local JRE before its first
        emulator command when the runner's system Java is older.
+     - `lane:firebase-auth-rules` runs Firestore rules, the disposable owner-SMS
+       transaction and signed-event acceptance matrix, and the Firebase browser
+       smoke as one indivisible CI path.
      - The CWV lane builds a fresh production bundle and explicitly selects the
        installed Playwright Chromium binary before Lighthouse starts.
    - `Docker Build Smoke`
@@ -103,7 +106,9 @@ git checkout -b feature/<scope>-<topic>
      protected-main review.
 4. Complete the pre-merge release-candidate UAT checklist from
    `docs/LAUNCH_RUNBOOK.md` for every intended production target and record the
-   immutable candidate deployment. Portal projection backfill is separate
+   immutable candidate deployment. Bind the attestation to the exact
+   deployment-owned SMS provider and configuration generation; use
+   `not-applicable` for `none` or Twilio. Portal projection backfill is separate
    source/data-operation acceptance, not deployment-target evidence.
    Use `npm run release:candidate:deploy` only from the clean, published
    `release/vX.Y.Z` head with its exact successful CI run. The command is fixed

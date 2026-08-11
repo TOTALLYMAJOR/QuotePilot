@@ -14,7 +14,7 @@ Usage: orchestration-lanes.sh <lane> [--with-cwv]
 Lanes:
   lane:quick               check:env + check:secrets + check:workflows
   lane:core                capability surfacing + test:unit + build + docs governance + bundle budget
-  lane:firebase-auth-rules test:rules:firestore + test:e2e:firebase
+  lane:firebase-auth-rules test:rules:firestore + test:owner-sms:emulator + test:e2e:firebase
   lane:authoritative-pricing
                            test:e2e:firebase:authoritative
   lane:release             lane:quick + lane:core (+ optional check:perf:cwv)
@@ -79,6 +79,7 @@ case "$lane" in
     echo "==> lane:firebase-auth-rules"
     prepare_firebase_java
     npm run test:rules:firestore
+    npm run test:owner-sms:emulator
     npm run test:e2e:firebase
     ;;
   lane:authoritative-pricing)

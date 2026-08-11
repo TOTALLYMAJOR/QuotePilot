@@ -21,10 +21,10 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Date: August 13, 2026 (supersedes the August 11 single-profile record)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
-  production-equivalent Ambient graphs. The owner/admin Team access authority
-  recalibrates compatibility to an absolute ceiling of 2,791,699 aggregate
+  production-equivalent Ambient graphs. The current Pingram source candidate
+  recalibrates compatibility to an absolute ceiling of 2,898,141 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient is
-  temporarily capped at 3,715,354 aggregate bytes and the same 391,901-byte
+  temporarily capped at 3,817,378 aggregate bytes and the same 391,901-byte
   largest-chunk ceiling.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
@@ -56,8 +56,14 @@ Use this log when a change intentionally departs from stable-first policy or req
   offset; Ambient retains its 303-byte offset. The enabled App Check provider
   graph is not production-bound and is excluded from these default-off
   measurements; its later promotion requires a new exact review.
-- Rollback plan: Revert Team access, its role/App Check adapters, and this exact
-  profile recalibration together. The two manual chunks, graph-aware checker,
+  The operational Staff/invitation release then established 2,880,654-byte
+  compatibility and 3,804,078-byte Ambient ceilings. The current Pingram
+  candidate measures 2,891,116 / 391,901 bytes for compatibility and 3,817,075
+  / 391,901 bytes for Ambient. Its ceilings retain only the same 7,025-byte and
+  303-byte runner offsets and add no general headroom.
+- Rollback plan: Revert the Pingram source slice and this exact profile
+  recalibration together, or revert Team access and its role/App Check adapters
+  with the earlier recalibration. The two manual chunks, graph-aware checker,
   CI matrix, prior compatibility ceiling, and clean-main baseline remain
   recoverable and unchanged.
 - Exit criteria: Optimize Ambient to the standard clean-main budget or obtain an
@@ -73,7 +79,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,776,849 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,789,740 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -95,7 +101,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The production-flag asset set is 779,181 bytes (39.01%) above
+- Risk impact: The aggregate asset ceiling is 792,375 bytes (39.67%) above
   the clean-main aggregate baseline, of which 84,480 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
@@ -162,14 +168,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   strip; clause-index-anchored proposal/ambiguity ids in the change-request
   parser — see CHANGELOG.md `### Fixed`) are folded into the feature figures
   they landed in rather than split out as a separate line, unlike the
-  now-superseded `v0.6.0` ceiling record this reconciles with) and 355 bytes
-  are non-feature deltas: 303 are the exact current-tree CI-vs-local
-  build-environment offset (see Verification evidence below) and 52 are this
-  tree's own
-  measured flag-off-to-production-flag build delta with all eight gates
-  bound, superseding the earlier 56-, 52-, and 48-byte figures and the
-  32-byte figure measured before this branch's post-`v0.6.0` work landed. A
-  small remainder of the pilot-candidate delta belongs to the always-loaded
+  now-superseded `v0.6.0` ceiling record this reconciles with). A
+  source-only owner-SMS provider panel, provider-evidence resolver, and
+  duplicate-send fencing add 12,759 bytes in both exact same-environment
+  comparisons against released `v0.7.0` main. The production-flag output is 14
+  bytes smaller than default-off in both trees. This direct comparison
+  supersedes the earlier +303 environment-offset and +52 flag-delta estimates.
+  They are not production-enabled: runtime selection remains `none`, and this
+  size record is not hosted or provider acceptance. A small remainder of the
+  pilot-candidate delta belongs to the always-loaded
   catalog normalizer (nullable cost-field parsing shared by every tenant,
   not itself flag-gated) rather than the named pilot surfaces; it is folded
   into the margin-strip figure above rather than claimed as a precise
@@ -183,8 +190,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: This checkpoint's contributor-sandbox `npm run build`
-  emitted 2,776,494 aggregate JavaScript bytes and a 391,596-byte largest
-  chunk (default-off configuration), closing out the CREATE reader's
+  with the protected non-secret Firebase build configuration emitted 2,789,740
+  aggregate JavaScript bytes and a 391,596-byte largest chunk (default-off
+  configuration), including the 12,759-byte owner-SMS source delta on top of
+  exact released `v0.7.0` main at 2,776,981 bytes. That released checkpoint closed
+  out the CREATE reader's
   build-out queue with its four remaining families: "noon"/"midnight"
   clock words (bare and in a range, guarded against reading a name as a
   time and against mislabeling a dangling range's unresolved end as its
@@ -251,18 +261,19 @@ Use this log when a change intentionally departs from stable-first policy or req
   before `v0.6.0` deployed to both providers (see PROJECT_STATUS.md). Both
   configurations are re-measured fresh at every checkpoint since the
   reconciliation rather than projecting an old delta forward:
-  contributor-sandbox default-off is 2,776,494 bytes and the
-  same-environment production-flag build — all eight gates true,
-  event-shape memory's own gate unbound and unchanged — is 2,776,546
-  bytes, a 52-byte configuration delta, matching the prior checkpoint's
-  figure exactly (no production-bound gate changed). The ceiling above
-  (2,776,849) is
-  the larger of the two, 2,776,546, plus the exact current-tree +303
-  CI-vs-sandbox offset, so one number safely covers both the default-off and
-  production-flag CI bundle checks. PR #57 run `31525358682` reported this
-  literal production-flag value before the ceiling was corrected. The other
+  contributor-sandbox default-off is 2,776,981 bytes before this slice and
+  2,789,740 bytes after it. The same-environment production-flag build — all
+  eight gates true, event-shape memory's own gate unbound and unchanged — is
+  2,776,967 bytes before this slice and 2,789,726 bytes after it. Exact-main CI
+  run `31528176575` measured the released tree at 2,776,793 bytes default-off
+  and 2,776,849 bytes production-flag; applying the exact 12,759-byte source
+  delta projects 2,789,552 and 2,789,608 bytes for the candidate runner. The
+  ceiling above (2,789,740) is the larger literal contributor measurement, so
+  one number covers both profiles and the projected CI environment without
+  discretionary growth headroom. An exact-SHA candidate CI run must confirm
+  the projection before release. The other
   largest emitted chunks were jsPDF at 385,630 bytes, `WorkspaceRoute` at
-  379,220 bytes, and the isolated quote store at 145,728 bytes. The
+  380,150 bytes, and the isolated quote store at 146,072 bytes. The
   Messaging Station itself remains a 30,941-byte lazy route chunk. These
   are local source-build measurements, not Core Web Vitals, hosted,
   production, or human-acceptance evidence.
@@ -302,9 +313,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
   with `conclusion: success`. This checkpoint's initial 2,776,845-byte
   extrapolation was four bytes low. PR #57 run `31525358682` on exact head
-  `34d990d` reported the production-flag bundle at 2,776,849 bytes, a
-  current-tree +303-byte CI-vs-sandbox offset, so this record and the named
-  exception now use that literal Actions value with no growth headroom.
+  `34d990d` reported the production-flag bundle at 2,776,849 bytes. The later
+  exact-main `v0.7.0` run `31528176575` reported 2,776,793 bytes default-off and
+  the same 2,776,849 bytes production-flag. Fresh identical-profile builds of
+  released main and this branch measured a 12,759-byte source delta in both
+  profiles, projecting candidate CI values of 2,789,552 and 2,789,608 bytes.
+  The named 2,789,740 ceiling is instead pinned to the larger literal current
+  contributor build, leaving no local growth headroom while covering both
+  projected CI profiles; exact-SHA candidate CI confirmation remains a release
+  gate.
   Earlier checkpoint figures in this record were sandbox-measured and are
   superseded by this correction. CI Quality now additionally builds with
   all eight pilot gates enabled and runs the same bundle guard before its

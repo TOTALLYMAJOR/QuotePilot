@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url";
 import { verifyDirectProductionReleaseEvidence } from "./production-release-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const allowed = new Set(["--release-sha", "--ci-run-id", "--rollback-sha", "--target"]);
+const required = new Set(["--release-sha", "--ci-run-id", "--rollback-sha", "--target"]);
+const allowed = new Set([
+  ...required,
+  "--sms-provider",
+  "--sms-configuration-generation"
+]);
 const values = new Map();
 const args = process.argv.slice(2);
 for (let index = 0; index < args.length; index += 2) {
@@ -17,8 +22,15 @@ for (let index = 0; index < args.length; index += 2) {
   if (!value || String(value).startsWith("--")) throw new Error(`${name} requires a value.`);
   values.set(name, String(value).trim());
 }
-for (const name of allowed) {
+for (const name of required) {
   if (!values.has(name)) throw new Error(`${name} is required.`);
+}
+const firebaseTarget = values.get("--target")?.startsWith("firebase-") === true;
+for (const name of ["--sms-provider", "--sms-configuration-generation"]) {
+  if (firebaseTarget && !values.has(name)) throw new Error(`${name} is required for Firebase.`);
+  if (!firebaseTarget && values.has(name)) {
+    throw new Error(`${name} is accepted only for Firebase deployment targets.`);
+  }
 }
 
 const headResult = spawnSync("git", ["rev-parse", "HEAD"], {
@@ -36,6 +48,8 @@ const evidence = await verifyDirectProductionReleaseEvidence({
   ciRunId: values.get("--ci-run-id"),
   rollbackSha: values.get("--rollback-sha"),
   target: values.get("--target"),
+  smsProvider: values.get("--sms-provider"),
+  smsConfigurationGeneration: values.get("--sms-configuration-generation"),
   headSha: String(headResult.stdout || "").trim(),
   deploymentRunId: process.env.GITHUB_RUN_ID,
   token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
