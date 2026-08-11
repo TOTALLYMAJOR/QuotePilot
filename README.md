@@ -11,6 +11,8 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Feature matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Event Messaging Station architecture: [docs/MESSAGING_STATION_ARCHITECTURE.md](docs/MESSAGING_STATION_ARCHITECTURE.md)
 - Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
+- Post-competitive destination design: [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md)
+- Intent intake ADR: [docs/INTENT_INTAKE_ADR.md](docs/INTENT_INTAKE_ADR.md)
 - Customer workspace backend handoff: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
 - Commercial Change Authority ADR: [docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md](docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md)
 - Commercial Change Authority design/UI/work plan: [design](docs/COMMERCIAL_CHANGE_AUTHORITY_DESIGN.md), [UI specification](docs/COMMERCIAL_CHANGE_AUTHORITY_UI_SPEC.md), [work plan](docs/COMMERCIAL_CHANGE_AUTHORITY_WORK_PLAN.md)
@@ -199,6 +201,74 @@ Optional:
   flag does not bypass staff authentication, existing role/feature gates, or
   exact-token portal precedence, and enabling it is not a deployment or
   production-acceptance decision.)
+- `VITE_PILOT_NOW_ENABLED` (default off; recognized only alongside the
+  customer-centered workspace flag. Renders the `/app` Home route as the
+  flag-gated NOW surface — interpreted decision cards over the same bounded
+  Command Center snapshot, with the existing Workflow/quote/Customer 360
+  resolution targets. Purely presentational: it adds no reads, writes, or
+  authority, and enabling it is not a deployment or acceptance decision.)
+- `VITE_PILOT_EVENT_ROOM_ENABLED` (default off. Dresses the Event Workspace
+  with the pilot readiness ring — the existing proposal-completeness score —
+  an advisory decide stack derived only from the selected quote's
+  recorded fields plus the static house staffing ratios, and, for accepted
+  or booked quotes, a cascade receipts panel in which every step reports
+  only its own recorded evidence: acceptance receipt, retained version,
+  contract, the separate deposit and final-balance provider rails, booking
+  confirmation, availability check, staff lead, and post-event review.
+  Advisory cards are
+  suppressed for accepted, booked, or terminal quotes, refuse labor
+  estimates the record cannot support, and route only to the existing
+  role-gated edit or administration surfaces. Purely presentational; not a
+  deployment or acceptance decision.)
+- `VITE_PILOT_GUIDED_SELLING_ENABLED` (default off. Renders the quote
+  builder's existing guided-selling recommendations as decision-grammar
+  cards — claim, basis, impact, Why? provenance, one-tap Take it — instead
+  of the plain recommendation list. The recommendation engine, tenant
+  guided-selling/AI-assist gates, apply behavior, and autopilot semantics
+  are unchanged. Purely presentational; not a deployment or acceptance
+  decision.)
+- `VITE_PILOT_CREATE_ENABLED` (default off. Renders the CREATE intake
+  canvas above the new-quote builder: free text is structured by a
+  deterministic browser-only extractor — no provider, no I/O, no invention;
+  every fact carries its source excerpt and confidence, low-confidence facts
+  require one-tap confirmation, and applying prefills the ordinary editable
+  draft form only. When the operator's own phrasing was uncertain (an
+  approximate or ranged guest count), the live pricing rail additionally
+  shows a draft-only estimated/deposit band priced at the range ends by the
+  same preview calculator; typing any different exact count resolves it, and
+  saving always prices the exact recorded count. Quote creation authority is
+  unchanged; see
+  [docs/INTENT_INTAKE_ADR.md](docs/INTENT_INTAKE_ADR.md). Not a deployment
+  or acceptance decision.)
+- `VITE_PILOT_CHANGE_REQUESTS_ENABLED` (default off. In the quote editor,
+  shows the stored customer change-request message verbatim and parses it
+  deterministically into stageable proposals — guest count, staffing,
+  hours, service style, and add/remove/swap of catalog items — each priced
+  as a preview delta by the same client calculator. Ambiguous references
+  become an explicit choice, never a guess; unreadable clauses stay the
+  customer's text. Staging edits the draft form only: the ordinary save
+  path remains the sole versioning and re-pricing authority, and nothing is
+  sent to the customer. Purely presentational; not a deployment or
+  acceptance decision.)
+- `VITE_PILOT_COMMAND_ENABLED` (default off. Adds the Pilot command bar to
+  the quote builder: plain-words commands are parsed by the same
+  deterministic change grammar as client requests and always preview with
+  a priced delta before anything can be applied to the draft; applying
+  stages ordinary editable draft edits, and saving still re-prices on the
+  server. Voice input appears only when the browser provides speech
+  recognition. Purely presentational; not a deployment or acceptance
+  decision.)
+- `VITE_PILOT_MARGINS_ENABLED` (default off. Adds a staff-only margin strip
+  to the live pricing rail, computed strictly from tenant-recorded costs:
+  `costPpp` on the selected package, `cost` on each selected add-on,
+  rental, and menu item (same pricing mode as its price), and
+  `serverCostRate`/`chefCostRate`/`bartenderCostRate` in settings when
+  staff are quoted, with an optional `targetMarginPct` policy. Costs can be
+  recorded today through the Catalog Admin advanced JSON configuration.
+  Anything missing makes margin explicitly unavailable with the missing
+  pieces named — nothing is estimated; travel and tax are excluded from
+  both sides, and costs never appear in any customer-facing projection.
+  Purely presentational; not a deployment or acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

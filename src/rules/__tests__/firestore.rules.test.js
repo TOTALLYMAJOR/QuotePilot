@@ -3317,4 +3317,35 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     }));
   });
 
+  describe("change request resolution records", () => {
+    test("browser principals can never write callable-owned change-request records", async () => {
+      const db = testEnv.authenticatedContext("admin-org-a", {
+        email: "admin-a@example.com",
+        email_verified: true
+      }).firestore();
+      const ref = doc(db, "organizations", "org-a", "quotes", "q1", "changeRequestResolutions", "crr_browser");
+      await assertFails(setDoc(ref, { schemaVersion: 1, stagedProposalIds: ["p1"] }));
+      await assertFails(updateDoc(ref, { stagedProposalIds: [] }));
+      await assertFails(deleteDoc(ref));
+    });
+
+    test("same-tenant staff read change-request records while foreign tenants stay denied", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(
+          doc(context.firestore(), "organizations", "org-a", "quotes", "q1", "changeRequestResolutions", "crr_seeded"),
+          { schemaVersion: 1, organizationId: "org-a", quoteId: "q1", stagedProposalIds: ["p1"] }
+        );
+      });
+      const staffDb = testEnv.authenticatedContext("sales-org-a", {
+        email: "sales-a@example.com",
+        email_verified: true
+      }).firestore();
+      await assertSucceeds(getDoc(
+        doc(staffDb, "organizations", "org-a", "quotes", "q1", "changeRequestResolutions", "crr_seeded")
+      ));
+      await assertFails(getDoc(
+        doc(staffDb, "organizations", "org-b", "quotes", "q1", "changeRequestResolutions", "crr_seeded")
+      ));
+    });
+  });
 });

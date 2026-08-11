@@ -11,6 +11,11 @@ import {
   RecoverableErrorBoundary
 } from "./components/RecoverableErrorBoundary";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
+import CreateIntake from "./components/CreateIntake";
+import ChangeRequestPanel from "./components/ChangeRequestPanel";
+import PilotCommandBar from "./components/PilotCommandBar";
+import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
+import { isDefinitiveRecordError, recordChangeRequestParse } from "./lib/changeRequestRecordClient";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
 import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
@@ -87,6 +92,10 @@ const AdminCatalogView = createRecoverableLazy(
 const CommandCenterHome = createRecoverableLazy(
   () => import("./components/CommandCenterHome"),
   "CommandCenterHome"
+);
+const NowView = createRecoverableLazy(
+  () => import("./components/NowView"),
+  "NowView"
 );
 const CommercialSearchPalette = createRecoverableLazy(
   () => import("./components/CommercialSearchPalette"),
@@ -170,6 +179,30 @@ const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
 );
 const CUSTOMER_CENTERED_WORKSPACE_ENABLED = !["0", "false", "no", "off"].includes(
   String(import.meta.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED || "").trim().toLowerCase()
+);
+// The NOW surface is an additional default-off presentation gate. Absent or
+// unrecognized values keep it off; it never widens data access or authority.
+const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+  && ["1", "true", "yes", "on"].includes(
+    String(import.meta.env.VITE_PILOT_NOW_ENABLED || "").trim().toLowerCase()
+  );
+// The CREATE intake canvas is an additional default-off presentation gate
+// (docs/INTENT_INTAKE_ADR.md). It prefills the ordinary editable draft form
+// only; quote creation authority is unchanged.
+const PILOT_CREATE_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_CREATE_ENABLED || "").trim().toLowerCase()
+);
+// The client-request panel is an additional default-off presentation gate.
+// It parses the stored change-request message into stageable draft edits
+// only; the ordinary save path remains the sole versioning authority.
+const PILOT_CHANGE_REQUESTS_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_CHANGE_REQUESTS_ENABLED || "").trim().toLowerCase()
+);
+// The Pilot command bar is an additional default-off presentation gate.
+// Commands preview before anything touches the draft; applying stages
+// draft edits only, and the save path remains the sole authority.
+const PILOT_COMMAND_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_COMMAND_ENABLED || "").trim().toLowerCase()
 );
 
 const INITIAL_FORM = {
@@ -1634,6 +1667,54 @@ export default function App({ tenantContext, authSession }) {
     setTemplateDefaultsNotice(null);
   };
 
+  // CREATE intake apply (docs/INTENT_INTAKE_ADR.md): the extracted event type
+  // runs through the canonical handleEventTypeChange first so template
+  // defaults cascade for untouched fields, then the operator's explicit
+  // extracted facts merge over that result and are marked touched — the same
+  // protection ordinary typing gets. Draft-form state only; the trusted
+  // create path remains the sole creation authority.
+  //
+  // guestBand holds the operator's own stated uncertainty for the preview
+  // band only (docs/POST_COMPETITIVE_DESIGN.md §4.2). It never persists and
+  // never reaches authoritative pricing; typing any different exact count
+  // resolves it.
+  const [guestBand, setGuestBand] = useState(null);
+  useEffect(() => {
+    if (!guestBand) return;
+    if (Number(form.guests) !== Number(guestBand.appliedValue)) setGuestBand(null);
+  }, [form.guests, guestBand]);
+
+  const applyIntentDraft = (draft = {}, meta = null) => {
+    const { eventTypeId, ...rest } = draft || {};
+    const entries = Object.entries(rest).filter(
+      ([, value]) => value !== undefined && value !== null && String(value) !== ""
+    );
+    if (eventTypeId) handleEventTypeChange(eventTypeId);
+    if (entries.length) {
+      setQuoteDirty(true);
+      markFieldsTouched(entries.map(([key]) => key));
+      setForm((prev) => {
+        const next = { ...prev };
+        for (const [key, value] of entries) next[key] = value;
+        return next;
+      });
+    }
+    if (Object.prototype.hasOwnProperty.call(rest, "guests")) {
+      setGuestBand(meta?.guestBand || null);
+    }
+    if (eventTypeId || entries.length) setStep(1);
+  };
+
+  // Client-request staging: applies one parsed proposal to the draft form
+  // with the same touched-field protection ordinary typing gets. Saving
+  // remains the approval — it re-prices authoritatively and versions.
+  const stageChangeRequestProposal = (proposal) => {
+    if (!proposal) return;
+    setQuoteDirty(true);
+    markFieldsTouched(proposalTouchedFields(proposal));
+    setForm((prev) => applyProposalToForm(prev, proposal));
+  };
+
   const applyRecommendation = (item, { userOriginated = true } = {}) => {
     if (!item) return;
     if (userOriginated || recommendationWouldChangeForm(form, item)) {
@@ -2508,6 +2589,13 @@ export default function App({ tenantContext, authSession }) {
       organizationId: quote.organizationId || authSession.organizationId || "",
       rebooking: quote.rebooking && typeof quote.rebooking === "object"
         ? quote.rebooking
+        : null,
+      // Presentation context only: the client-request panel needs the stored
+      // request to render beside the editor. Carrying the snapshot grants no
+      // authority — the panel stages draft edits and the trusted save path
+      // remains the sole versioning authority.
+      portalDecision: quote.portalDecision && typeof quote.portalDecision === "object"
+        ? quote.portalDecision
         : null
     });
     setQuoteDirty(false);
@@ -3289,20 +3377,37 @@ export default function App({ tenantContext, authSession }) {
       </section>
 
       {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.HOME && (
-        <WorkspaceLazyRoute surfaceName="Command Center" component={CommandCenterHome}>
-          <main className="container workspace-route-main">
-            <CommandCenterHome
-              snapshot={commercialSnapshot}
-              organizationName={organizationName}
-              organizationId={authSession.organizationId}
-              onRefresh={commercialSnapshot.refresh}
-              onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
-              onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
-              onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
-              onNewQuote={handleGetInstantQuote}
-            />
-          </main>
-        </WorkspaceLazyRoute>
+        PILOT_NOW_ENABLED ? (
+          <WorkspaceLazyRoute surfaceName="Now" component={NowView}>
+            <main className="container workspace-route-main">
+              <NowView
+                snapshot={commercialSnapshot}
+                organizationName={organizationName}
+                organizationId={authSession.organizationId}
+                onRefresh={commercialSnapshot.refresh}
+                onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+                onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+                onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+                onNewQuote={handleGetInstantQuote}
+              />
+            </main>
+          </WorkspaceLazyRoute>
+        ) : (
+          <WorkspaceLazyRoute surfaceName="Command Center" component={CommandCenterHome}>
+            <main className="container workspace-route-main">
+              <CommandCenterHome
+                snapshot={commercialSnapshot}
+                organizationName={organizationName}
+                organizationId={authSession.organizationId}
+                onRefresh={commercialSnapshot.refresh}
+                onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+                onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+                onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+                onNewQuote={handleGetInstantQuote}
+              />
+            </main>
+          </WorkspaceLazyRoute>
+        )
       )}
 
       {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CUSTOMER_LIST && (
@@ -3542,6 +3647,57 @@ export default function App({ tenantContext, authSession }) {
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
+        {PILOT_COMMAND_ENABLED && (
+          <PilotCommandBar
+            form={form}
+            catalog={catalog}
+            settings={effectiveSettings}
+            styles={Object.keys(STAFF_RULES)}
+            onStageProposal={stageChangeRequestProposal}
+          />
+        )}
+        {PILOT_CREATE_ENABLED
+          && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
+          && !editingQuote.id && (
+          <CreateIntake
+            eventTypes={catalog.eventTypes || []}
+            styles={Object.keys(STAFF_RULES)}
+            onApplyDraft={applyIntentDraft}
+          />
+        )}
+        {PILOT_CHANGE_REQUESTS_ENABLED
+          && isEditingQuote
+          && editingQuote?.portalDecision?.decision === "changes_requested"
+          && String(editingQuote?.portalDecision?.message || "").trim() && (
+          <ChangeRequestPanel
+            message={editingQuote.portalDecision.message}
+            submittedAtISO={editingQuote.portalDecision.submittedAtISO || ""}
+            requestId={editingQuote.portalDecision.requestId || ""}
+            form={form}
+            catalog={catalog}
+            settings={effectiveSettings}
+            styles={Object.keys(STAFF_RULES)}
+            onStageProposal={stageChangeRequestProposal}
+            onRecordParse={
+              String(catalog.source || "").trim().toLowerCase().startsWith("firebase")
+                ? async (payload) => {
+                    try {
+                      return await recordChangeRequestParse({
+                        organizationId: authSession.organizationId,
+                        quoteId: editingQuote.id,
+                        ...payload
+                      });
+                    } catch (error) {
+                      if (error && typeof error === "object") {
+                        error.definitive = isDefinitiveRecordError(error);
+                      }
+                      throw error;
+                    }
+                  }
+                : null
+            }
+          />
+        )}
         <section className="panel wizard-panel">
           <RebookQuoteReviewBanner
             quoteNumber={editingQuote.quoteNumber}
@@ -3880,6 +4036,7 @@ export default function App({ tenantContext, authSession }) {
           catalog={catalog}
           mobileExpanded={mobilePricingOpen}
           onMobileClose={closeMobilePricing}
+          guestBand={guestBand}
         />
       </main>
       )}

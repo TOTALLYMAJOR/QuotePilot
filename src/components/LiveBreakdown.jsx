@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import { detectBreakdownValueChanges } from "../lib/wizardUi";
+import { buildPricingBand } from "./pricingBand";
+import { buildMarginPresentation } from "./marginPresentation";
 import DigitRoll from "./DigitRoll";
+
+// Default-off gate for the staff-only margin strip; costs are tenant catalog
+// data and margin never renders in any customer-facing projection.
+const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
+);
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(() => {
@@ -86,9 +94,18 @@ export default function LiveBreakdown({
   settings,
   catalog,
   mobileExpanded = false,
-  onMobileClose
+  onMobileClose,
+  guestBand = null
 }) {
   const prefersReducedMotion = usePrefersReducedMotion();
+  const pricingBand = useMemo(
+    () => buildPricingBand({ form, catalog, settings, band: guestBand }),
+    [form, catalog, settings, guestBand]
+  );
+  const margin = useMemo(
+    () => (PILOT_MARGINS_ENABLED ? buildMarginPresentation({ form, totals, catalog, settings }) : null),
+    [form, totals, catalog, settings]
+  );
   const effectTimersRef = useRef([]);
   const animationFrameRef = useRef(0);
 
@@ -505,6 +522,37 @@ export default function LiveBreakdown({
             strong
           />
         </dl>
+        {pricingBand && (
+          <div className="pricing-band" data-pricing-band={pricingBand.modelId}>
+            <p className="pricing-band-figures">
+              <span className="pricing-band-label">Estimated range</span>
+              <strong>{money(pricingBand.lowTotal)} – {money(pricingBand.highTotal)}</strong>
+            </p>
+            <p className="pricing-band-figures">
+              <span className="pricing-band-label">Deposit range</span>
+              <strong>{money(pricingBand.lowDeposit)} – {money(pricingBand.highDeposit)}</strong>
+            </p>
+            <p className="pricing-band-note">
+              {pricingBand.note} Saving always prices the exact recorded count.
+            </p>
+          </div>
+        )}
+        {margin && (
+          <div className="margin-strip" data-margin={margin.modelId} data-margin-available={margin.available ? "true" : "false"}>
+            {margin.available ? (
+              <>
+                <p className="pricing-band-figures">
+                  <span className="pricing-band-label">Margin</span>
+                  <strong>{(margin.marginPct * 100).toFixed(1)}%</strong>
+                </p>
+                {margin.targetNote && <p className="pricing-band-note margin-target">{margin.targetNote}</p>}
+                <p className="pricing-band-note">{margin.note}</p>
+              </>
+            ) : (
+              <p className="pricing-band-note">{margin.note}</p>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="breakdown-selection-groups">

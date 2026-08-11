@@ -123,6 +123,35 @@ Only open work belongs here. Current operational truth lives in
   backend/data authority: discoverable role-safe UI, canonical state markers,
   executable state tests, Feature Matrix, User Manual, and capability manifest.
 
+## P1 - Post-Competitive Pilot Program (branch: claude/quotepilot-post-competitive-15hmny)
+
+The destination design (docs/POST_COMPETITIVE_DESIGN.md) has eight default-off
+pilot surfaces built as source-only candidates: NOW home, Event Room ring +
+decide stack + cascade receipts, guided-selling decide cards, CREATE intake
+with band pricing, the client-request panel with the structured record
+callable, and the Pilot command bar. Remaining program work:
+
+- Review and merge the pilot branch, then decide per-flag promotion; each
+  pilot surface has its own default-off `VITE_PILOT_*` build gate and adds
+  no authority while off. Bundle-exception exit (or reviewed recalibration)
+  is required per docs/PERFORMANCE_GUARDRAILS.md before flag promotion.
+- Phase 5 unit economics (high): tenant item/labor costs and a target-margin
+  policy in settings, margin computation in both pricing paths, and the
+  commercial advisor cards; margins must fail closed as "unavailable" until
+  a tenant records costs (design §4.5, §1.3).
+- Structured change-request version linking: extend the
+  `recordChangeRequestParse` contract so a resolution can bind the resulting
+  quote version after the trusted save, completing intent-to-version audit.
+- Proposal decision room: portal upgrade with staff-marked decidable
+  options, per-block questions through the existing conversation rail, and
+  interpreted (portal-visit-only) activity counsel (design §4.7).
+- Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md: trusted
+  `parseIntentDraft` callable behind `INTENT_PARSER_ENABLED=false` /
+  provider `none`, Secret Manager-bound key, deterministic lane remains the
+  availability floor; full backend capability contract required.
+- Memory defaults (design §4.10): venue/client/season defaults with
+  provenance and instant human override, tenant-isolated.
+
 ## P1 - Performance and Accessibility
 
 - Close the temporary no-headroom bundle exception through route/chunk

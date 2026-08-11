@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 9, 2026
+Last updated: August 10, 2026
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -18,11 +18,15 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 ## Active Exceptions
 
-- Date: August 9, 2026
+- Date: August 10, 2026 (supersedes the August 9 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,691,344 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,747,012 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
-  customer-centered workspace converges. The clean-main baseline remains
+  customer-centered workspace converges and the flag-gated pilot candidates
+  (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
+  `VITE_PILOT_GUIDED_SELLING_ENABLED`, `VITE_PILOT_CREATE_ENABLED`, and
+  `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, all
+  default off) are reviewed with it. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.
 - Exception type: `perf-threshold-temp`
@@ -34,8 +38,20 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 693,979 bytes (34.74%) above the
-  clean-main aggregate baseline. A targeted `quoteStore` manual chunk reduces
+- Risk impact: The emitted asset set is 749,647 bytes (37.53%) above the
+  clean-main aggregate baseline, of which 55,297 bytes are the default-off
+  pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
+  the Event Room ring and decide stack, 1,560 for the guided-selling decide
+  cards, 13,797 for the CREATE intake canvas, deterministic extractor, and
+  draft-only band pricing strip, 10,011 for the client-request panel
+  and parser, 3,615 for the structured-record boundary and client, 5,495 for
+  the cascade receipts panel, 2,993 for the Pilot command bar, and 3,189 for
+  the fail-closed margin strip) and 371 bytes are non-feature deltas: 299 are
+  the confirmed CI-vs-local build-environment offset (see Verification
+  evidence below) and 72 are automated-review bugfix corrections (guest cap
+  and staffing-labor gating in the margin strip; clause-index-anchored
+  proposal/ambiguity ids in the change-request parser — see CHANGELOG.md
+  `### Fixed`). A targeted `quoteStore` manual chunk reduces
   `WorkspaceRoute` from 448,190 to 317,008 bytes; Firebase is now the largest
   chunk at 391,596 bytes, 3,667 bytes (0.95%) above the clean-main largest-
   chunk baseline and 15,729 bytes below the normal 5% ceiling. Lazy route
@@ -44,9 +60,25 @@ Use this log when a change intentionally departs from stable-first policy or req
   routes can still incur added download, parse, and execution cost, especially
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
-- Performance impact: The August 10 merged-candidate build emitted 2,691,344
-  aggregate JavaScript bytes and a 391,596-byte largest
-  chunk. The other largest emitted chunks were jsPDF at 385,630 bytes,
+- Performance impact: The exact-SHA CI build of commit
+  `20f69e7bc94fd8adaef5195e0bda0dde326bcb8b` (the automated-review bugfix
+  commit) emitted 2,747,012 aggregate JavaScript bytes and a 391,596-byte
+  largest chunk — confirmed by CI Quality run `31447641093`, whose
+  `lane:core` bundle guard log reports
+  `Current bundle metrics: { totalJsBytes: 2747012, largestJsChunkBytes: 391596 }`
+  against this exact ceiling and passed. This matches, byte for byte, the
+  figure extrapolated at record time from the prior exact-SHA CI-confirmed
+  value for commit `d5dead033aba5376104ca7c176f1a97fbecffd4e`
+  (2,746,940, from run `31447039723`) plus the +72 contributor-sandbox delta
+  measured for the bugfix commit (2,746,713 local, up from 2,746,641 local
+  for `d5dead0`) and the confirmed +299 CI-vs-sandbox offset; the
+  extrapolation is no longer provisional (prior contributor-sandbox checkpoints, all now superseded: 2,691,344
+  converged; 2,700,437 with the NOW surface only; 2,705,981 before the
+  guided-selling cards; 2,707,541 before the CREATE intake canvas; 2,719,059
+  before the band pricing strip; 2,721,338 before the client-request panel;
+  2,731,349 before the structured-record boundary; 2,734,964 before the
+  cascade panel; 2,740,459 before the command bar; 2,743,452 before the
+  margin strip). The other largest emitted chunks were jsPDF at 385,630 bytes,
   `WorkspaceRoute` at 317,008 bytes, and the isolated quote store at 146,071
   bytes. The station itself remains a 30,908-byte lazy route chunk. These are
   local source-build measurements, not Core Web Vitals, hosted, production, or
@@ -64,8 +96,30 @@ Use this log when a change intentionally departs from stable-first policy or req
   with no active exception, local CWV, and focused default plus flagged staff
   route checks at desktop and mobile widths. Hosted signed-in acceptance, flag
   removal, and production promotion remain separate release gates.
-- Verification evidence: a fresh `npm run build` execution produced the
-  checkpoint measurements above. `npm run check:perf:bundle` must report this
+- Verification evidence: two exact-SHA `CI Quality` runs on PR #53
+  (`31446312573` on commit `f8dc86b`, `31446572599` on commit `d5dead0`) each
+  failed `lane:core`'s bundle guard by exactly 299 bytes against a ceiling set
+  from a contributor-sandbox `npm run build` (including a clean `npm ci`
+  reinstall, which reproduced the sandbox number exactly and ruled out local
+  dependency drift). The 299-byte gap was identical across both commits,
+  indicating a fixed CI-runner-vs-sandbox build-environment difference rather
+  than a source or dependency-resolution difference. The ceiling above is the
+  literal `totalJsBytes` CI reported for commit `d5dead0`; future ceiling
+  updates on this exception should be taken from an exact-SHA CI run rather
+  than a contributor sandbox to avoid repeating this gap. The ceiling was
+  then extrapolated forward by the automated-review bugfix commit's own
+  contributor-sandbox delta (+72 bytes) plus the confirmed +299 offset, in
+  lieu of a CI run against that exact commit at record time. CI Quality run
+  `31447641093` on commit `20f69e7` (the bugfix commit) subsequently
+  confirmed this extrapolation exactly: its `lane:core` bundle guard log
+  reports `Current bundle metrics: { totalJsBytes: 2747012,
+  largestJsChunkBytes: 391596 }`, matching the ceiling to the byte, and the
+  full check run set for that commit (`lane:quick`, `lane:core`,
+  `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
+  `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
+  with `conclusion: success`. Earlier checkpoint figures
+  in this record were sandbox-measured and are superseded by this
+  correction. `npm run check:perf:bundle` must report this
   exact named exception, its absolute ceilings, and the unchanged normal limits
   before the checkpoint is committed. The earlier converged-workspace
   `npm run check:perf:cwv` run passed locally on

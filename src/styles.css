@@ -9585,3 +9585,600 @@ hr {
 .workspace-data-details {
   margin: 0.3rem 0 0.6rem;
 }
+
+/* ===== Pilot NOW surface (flag-gated presentation over the Command Center snapshot) ===== */
+
+.now-surface .now-date {
+  margin: 0.25rem 0 0;
+  color: var(--tone-ink-3);
+  font-size: 0.88rem;
+}
+
+.now-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.now-stream {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.now-card {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  padding: 0.95rem 1.05rem;
+  background: var(--tone-cream-1);
+  border: 1px solid var(--tone-cream-3);
+  border-radius: 12px;
+}
+
+.now-card-signal {
+  flex: 0 0 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  margin-top: 0.45rem;
+  background: var(--tone-gold-2);
+}
+
+.now-card[data-signal="risk"] .now-card-signal {
+  background: var(--tone-danger);
+}
+
+.now-card[data-signal="quiet"] .now-card-signal {
+  background: var(--tone-success);
+}
+
+.now-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.now-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.now-card-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.98rem;
+}
+
+.now-card-meta {
+  margin: 0;
+  color: var(--tone-ink-3);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.now-card-sentence {
+  margin: 0.3rem 0 0.65rem;
+  color: var(--tone-ink-2);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.now-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.now-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.now-rail {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.now-rail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--tone-cream-3);
+}
+
+.now-rail-detail {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.now-rail-meta {
+  margin: 0.15rem 0 0;
+  color: var(--tone-ink-3);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 900px) {
+  .now-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== Pilot Event Room: readiness ring + advisory decide stack (flag-gated) ===== */
+
+.now-card-basis {
+  margin: 0 0 0.3rem;
+  color: var(--tone-ink-3);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.now-card-impact {
+  margin: 0 0 0.65rem;
+  color: var(--tone-gold-3);
+  font-size: 0.84rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.event-decide-stack {
+  margin-top: var(--space-5);
+}
+
+.event-decide-stack .event-section-heading p {
+  max-width: 26rem;
+}
+
+.readiness-ring {
+  position: relative;
+  width: 76px;
+  margin: 0.35rem 0;
+}
+
+.readiness-ring svg {
+  display: block;
+}
+
+.readiness-ring-track {
+  fill: none;
+  stroke: var(--tone-cream-3);
+  stroke-width: 6;
+}
+
+.readiness-ring-arc {
+  fill: none;
+  stroke: var(--tone-gold-2);
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--motion-reveal, 900ms) cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.readiness-ring[data-complete="true"] .readiness-ring-arc {
+  stroke: var(--tone-success);
+}
+
+.readiness-ring-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.readiness-ring-value strong {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.readiness-ring-value small {
+  font-size: 0.56rem;
+  color: var(--tone-ink-3);
+  max-width: 56px;
+  line-height: 1.25;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .readiness-ring-arc {
+    transition: none;
+  }
+}
+
+/* ===== Pilot guided-selling decide cards: Why? provenance disclosure ===== */
+
+.now-card-why {
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+}
+
+.now-card-why summary {
+  color: var(--tone-gold-3);
+  cursor: pointer;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.now-card-why ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--tone-ink-3);
+  line-height: 1.55;
+}
+
+.now-card-why li + li {
+  margin-top: 0.2rem;
+}
+
+/* ===== Pilot CREATE intake canvas (flag-gated, deterministic extraction) ===== */
+
+.create-intake-panel {
+  grid-column: 1 / -1;
+  margin-bottom: var(--space-4);
+}
+
+.create-intake-sub {
+  color: var(--tone-ink-2);
+  max-width: 40rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.92rem;
+}
+
+.create-intake-input {
+  width: 100%;
+  margin-top: 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--tone-cream-3);
+  border-radius: 10px;
+  background: var(--tone-cream-1);
+  color: var(--tone-ink-1);
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.create-intake-input:focus-visible {
+  outline: 2px solid var(--tone-gold-2);
+  outline-offset: 1px;
+}
+
+.create-intake-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.create-intake-result {
+  margin-top: 1rem;
+  border-top: 1px solid var(--tone-cream-3);
+  padding-top: 0.9rem;
+}
+
+.create-intake-group-label {
+  margin: 0.6rem 0 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tone-ink-3);
+}
+
+.create-intake-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.5rem;
+}
+
+.create-intake-fact {
+  border: 1px solid var(--tone-cream-3);
+  border-radius: 10px;
+  background: var(--tone-cream-1);
+  padding: 0.6rem 0.75rem;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.create-intake-fact-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tone-gold-3);
+}
+
+.create-intake-fact strong {
+  font-size: 0.92rem;
+}
+
+.create-intake-fact small {
+  color: var(--tone-ink-3);
+  font-size: 0.76rem;
+}
+
+.create-intake-fact.is-unconfirmed {
+  border-style: dashed;
+}
+
+.create-intake-fact.is-unconfirmed button {
+  justify-self: start;
+  margin-top: 0.35rem;
+}
+
+.create-intake-apply {
+  margin-top: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.create-intake-apply small {
+  color: var(--tone-ink-3);
+  max-width: 24rem;
+}
+
+/* ===== Pilot band pricing strip (draft preview only) ===== */
+
+.pricing-band {
+  margin-top: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px dashed var(--tone-gold-2);
+  border-radius: 10px;
+  background: var(--tone-cream-1);
+}
+
+.pricing-band-figures {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.8rem;
+  margin: 0 0 0.25rem;
+}
+
+.pricing-band-figures strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.pricing-band-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--tone-gold-3);
+}
+
+.pricing-band-note {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: var(--tone-ink-3);
+  line-height: 1.5;
+}
+
+/* ===== Pilot client-request panel (flag-gated, deterministic parse) ===== */
+
+.change-request-panel {
+  grid-column: 1 / -1;
+  margin-bottom: var(--space-4);
+}
+
+.change-request-message {
+  margin: 0.9rem 0 1rem;
+  padding: 0.85rem 1.05rem;
+  border-left: 3px solid var(--tone-gold-2);
+  border-radius: 0 10px 10px 0;
+  background: var(--tone-cream-2);
+}
+
+.change-request-message p {
+  margin: 0;
+  font-style: italic;
+  color: var(--tone-ink-2);
+  line-height: 1.6;
+}
+
+.change-request-message footer {
+  margin-top: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--tone-ink-3);
+}
+
+.change-request-ambiguity {
+  margin-top: 0.9rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px dashed var(--tone-cream-3);
+  border-radius: 10px;
+}
+
+.change-request-ambiguity-clause {
+  margin: 0 0 0.55rem;
+  font-style: italic;
+  color: var(--tone-ink-2);
+  font-size: 0.88rem;
+}
+
+.change-request-unparsed {
+  margin-top: 0.9rem;
+}
+
+/* ===== Structured change-request record boundary ===== */
+
+.change-request-record {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--tone-cream-3);
+  display: grid;
+  gap: 0.45rem;
+  justify-items: start;
+}
+
+.change-request-record small {
+  color: var(--tone-ink-3);
+  max-width: 34rem;
+  line-height: 1.5;
+}
+
+/* ===== Pilot Event Room: cascade receipts panel (flag-gated) ===== */
+
+.event-cascade-progress {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  color: var(--tone-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-cascade-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.event-cascade-steps li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.event-cascade-mark {
+  flex: 0 0 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-top: 0.1rem;
+  background: var(--tone-cream-3);
+  color: var(--tone-ink-3);
+}
+
+.event-cascade-steps li[data-cascade-state="done"] .event-cascade-mark {
+  background: var(--tone-success);
+  color: var(--tone-cream-1);
+}
+
+.event-cascade-steps li[data-cascade-state="blocked"] .event-cascade-mark {
+  background: var(--tone-danger);
+  color: var(--tone-cream-1);
+}
+
+.event-cascade-copy {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.event-cascade-copy strong {
+  font-size: 0.86rem;
+}
+
+.event-cascade-copy small {
+  color: var(--tone-ink-3);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+/* ===== Pilot command bar (flag-gated, preview-confirm) ===== */
+
+.pilot-command {
+  grid-column: 1 / -1;
+  margin-bottom: var(--space-4);
+  background: var(--tone-cream-1);
+  border: 1px solid var(--tone-cream-3);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+}
+
+.pilot-command-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pilot-command-input {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--tone-cream-3);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--tone-ink-1);
+  font: inherit;
+  min-width: 0;
+}
+
+.pilot-command-input:focus-visible {
+  outline: 2px solid var(--tone-gold-2);
+  outline-offset: 1px;
+}
+
+.pilot-command .is-listening {
+  border-color: var(--tone-gold-2);
+  color: var(--tone-gold-3);
+}
+
+.pilot-command-preview {
+  margin-top: 0.7rem;
+  border-top: 1px dashed var(--tone-cream-3);
+  padding-top: 0.65rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.pilot-command-proposal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.pilot-command-proposal strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.pilot-command-proposal small {
+  color: var(--tone-gold-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.pilot-command-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.pilot-command-actions small {
+  color: var(--tone-ink-3);
+}
+
+/* ===== Pilot margin strip (staff-only, fail-closed) ===== */
+
+.margin-strip {
+  margin-top: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--tone-cream-3);
+  border-radius: 10px;
+  background: var(--tone-cream-2);
+}
+
+.margin-strip[data-margin-available="true"] {
+  border-color: var(--tone-success);
+}
+
+.margin-strip .margin-target {
+  color: var(--tone-gold-3);
+  font-weight: 600;
+}

@@ -6,6 +6,234 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Fixed
+
+- Two correctness bugs in pilot source (`VITE_PILOT_MARGINS_ENABLED`,
+  `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, `VITE_PILOT_COMMAND_ENABLED`),
+  caught by automated PR review before merge:
+  - `buildMarginPresentation` now caps its guest basis at 400 and gates
+    labor cost behind `settings.staffingLaborEnabled`, exactly mirroring
+    `calculateQuote`. Previously an uncapped guest count could cost more
+    guests than the revenue side ever recognized once the calculator's own
+    capacity cap applied, and labor cost was charged (or demanded as a
+    missing rate) even in tenants where labor charging is disabled and
+    revenue never bills it — both understated margin or falsely reported
+    it unavailable.
+  - `change-request-parse-v1` proposal and ambiguity ids are now anchored
+    to each clause's fixed position in the original message instead of a
+    running per-parse counter. `ChangeRequestPanel` and the Pilot command
+    bar re-parse reactively as staging edits the draft form, and a clause
+    that becomes satisfied (`set_guests`/`set_hours`) stops producing an
+    artifact on the next parse; with counter-based ids this silently
+    shifted every later clause's id, orphaning an already-staged
+    proposal's tracked id and allowing its one-tap action to be triggered
+    again — double-applying it (e.g. adding a second bartender when only
+    one was requested). Five new regression tests cover both fixes,
+    including the exact re-parse sequence that reproduced the id shift.
+
+### Added
+
+- Flag-gated, fail-closed margin strip (`VITE_PILOT_MARGINS_ENABLED`,
+  default off; docs/POST_COMPETITIVE_DESIGN.md §4.5 and §1.3). The live
+  pricing rail gains a staff-only `margin-presentation-v1` strip that
+  computes margin ONLY when every selected revenue line has a
+  tenant-recorded cost counterpart — `costPpp` on the selected package,
+  `cost` on each selected add-on, rental, and menu item (mode defaults
+  mirror the pricing calculator), and role cost rates in settings when
+  staff are quoted. Any gap renders "Margins unavailable" naming the exact
+  missing pieces; nothing is ever estimated. Travel and tax are excluded
+  from both revenue and cost, the service charge counts as revenue, an
+  optional `targetMarginPct` policy adds a meets/below note, and costs
+  never reach any customer-facing projection. Purely presentational;
+  source-only candidate work — not deployed, flag-promoted, or
+  human-accepted.
+
+- Flag-gated Pilot command bar in the quote builder
+  (`VITE_PILOT_COMMAND_ENABLED`, default off). One input over the draft:
+  plain-words commands ("add another bartender", "switch to buffet",
+  "what if we are at 150 guests") are parsed by the same deterministic
+  `change-request-parse-v1` grammar used for client requests, and every
+  parsed proposal previews with its live fee-and-tax-cascade delta BEFORE
+  anything can be applied — the preview-confirm contract. Applying stages
+  ordinary editable draft edits through the existing touched-field-safe
+  handler; ambiguous references ask instead of guessing; unreadable
+  commands say so and change nothing; and saving remains the sole
+  re-pricing and versioning authority. Voice dictation appears only when
+  the browser itself provides speech recognition and degrades to typing
+  otherwise. Purely presentational; source-only candidate work — not
+  deployed, flag-promoted, or human-accepted.
+
+- Cascade receipts panel in the flag-gated pilot Event Room
+  (`VITE_PILOT_EVENT_ROOM_ENABLED`). For accepted or booked quotes, the
+  Event Workspace side rail renders the commercial afterlife as a receipt
+  chain from a new deterministic `cascade-receipts-v1` presentation
+  selector in which every step reports only its own recorded evidence on
+  the quote document: the electronic acceptance receipt, the retained
+  immutable version, contract conversion, the deposit rail with request and
+  provider-confirmed payment kept as separate truths, booking confirmation
+  (including a blocked cancelled state), the recorded availability check,
+  staff lead, and — for booked quotes — the final-balance rail (gated in
+  copy on the provider-confirmed deposit) and the governed post-event
+  review. Pending steps name the existing role-gated surface that owns the
+  action; no step infers across evidence, invents a timestamp, or claims
+  delivery, payment, or readiness beyond its recorded state, and the panel
+  carries that bounds note visibly. Purely presentational: no reads,
+  writes, or authority are added, and flag-off rendering is unchanged.
+  Source-only candidate work; not deployed, flag-promoted, or
+  human-accepted.
+
+- Structured change-request record (callable-only). A new
+  `recordChangeRequestParse` Firebase Function lets same-tenant staff, from
+  the flag-gated client-request panel after staging at least one parsed
+  proposal, create an internal audit record binding the exact stored
+  customer request (id, submission time, and server-computed message hash),
+  the validated parsed proposals (bounded kinds, counts, and text), the
+  staged subset, the acting verified staff identity, and the quote's active
+  version at record time. Validation and shaping live in a pure
+  `functions/changeRequestRecord.js` core; the record identity is
+  deterministic over the request and payload hash, so the create-only
+  transaction is replay-stable — repeating the same review returns the
+  existing record instead of duplicating it. New
+  `organizations/{org}/quotes/{quote}/changeRequestResolutions` documents
+  are readable by same-tenant staff and browser-write-denied by rules, with
+  new rules tests for both boundaries. The panel gains a full
+  ready/submitting/receipt/uncertain/reconciliation/recovery/error record
+  boundary: definitive server rejection is terminal with honest copy, an
+  ambiguous outcome reconciles safely via the replay-stable identity, and
+  every failure path states that the staged draft is unchanged. The record
+  never replies to the customer, never mutates the quote, portal, or
+  versions, and the ordinary save path remains the sole versioning
+  authority. Capability-surfacing contract
+  `structured-change-request-record` (catalog version 9) binds the
+  callable, entry point, states, Feature Matrix row 49, and the new
+  "Client Change Requests (Structured Record)" User Manual section.
+  The isolated Firestore rules lane passes locally (63/63 including the two
+  new record boundaries). Emulator/hosted execution of the callable itself
+  is not claimed: this is source evidence with always-on unit/component
+  coverage plus local rules-lane evidence; Functions deployment, rules
+  promotion, and hosted staff acceptance remain pending.
+
+- Flag-gated client-request panel in the quote editor
+  (`VITE_PILOT_CHANGE_REQUESTS_ENABLED`, default off). When staff edit a
+  quote whose portal decision is `changes_requested`, the stored customer
+  message renders verbatim and a new deterministic
+  `change-request-parse-v1` selector splits it into clauses and parses
+  explicit change language into stageable proposals: guest-count changes,
+  staff additions, hour extensions (builder-bounded), house service-style
+  switches, and add/remove/swap of items resolved only against the quote's
+  own selections and the tenant's active catalog, with a bounded
+  token-window fallback for natural filler phrasing. Each proposal card
+  carries a preview delta priced by the same client calculator (fee and tax
+  cascade included) and Why? provenance; an ambiguous item reference
+  becomes an explicit choice, never a guess; clauses that change nothing or
+  cannot be read are listed as the customer's own text with nothing staged.
+  Staging applies the proposal to the draft form with ordinary
+  touched-field protection; the ordinary save path remains the sole
+  versioning and re-pricing authority, and no customer-facing state
+  changes. The panel and parser add 10,011 aggregate JavaScript bytes,
+  recorded by raising the active temporary bundle ceiling to 2,731,349
+  bytes (largest-chunk ceiling and clean-main baseline unchanged).
+  Source-only candidate work; not deployed, flag-promoted, or
+  human-accepted.
+
+- Draft-only band pricing for uncertain guest counts. When the CREATE
+  intake canvas (`VITE_PILOT_CREATE_ENABLED`) applies a count the operator
+  stated as approximate (±10%) or as a range, the live pricing rail shows a
+  new deterministic `pricing-band-v1` strip: estimated-total and deposit
+  ranges priced at the band's exact ends by the same client preview
+  calculator the rail already uses — never a second pricing model — with
+  the note that saving always prices the exact recorded count. The band
+  lives only in draft session state: it never persists, never reaches the
+  authoritative pricing callable or any payment rail, and typing any
+  different exact guest count resolves it immediately. The strip adds 2,279
+  aggregate JavaScript bytes, recorded by raising the active temporary
+  bundle ceiling to 2,721,338 bytes (largest-chunk ceiling and clean-main
+  baseline unchanged). Source-only candidate work; not deployed,
+  flag-promoted, or human-accepted.
+
+- Flag-gated CREATE intake canvas (`VITE_PILOT_CREATE_ENABLED`, default
+  off) and the intent-intake architecture record
+  (`docs/INTENT_INTAKE_ADR.md`). On the new-quote surface, free text —
+  typed or pasted — is structured by a new deterministic, browser-only
+  `intent-extraction-v1` extractor into reviewable facts: guest counts with
+  the operator's own uncertainty phrasing (exact, approximate, or range
+  with a midpoint draft value and a preserved band note), dates with
+  forward year inference, times, builder-bounded durations, contact
+  details, service styles matched to the house list, tenant event types by
+  name or keyword, dietary clauses, and title-case event names. Every fact
+  carries its source excerpt and confidence tier; low-confidence venue and
+  address guesses require one-tap confirmation and are never auto-applied;
+  budget mentions surface as an honest note because the builder has no
+  budget field; unreadable text changes nothing and says so. Applying
+  prefills the ordinary editable draft form through the canonical
+  event-type template path (extracted facts are marked touched with the
+  same protection ordinary typing gets), and quote creation authority is
+  unchanged — the extractor performs no I/O and the trusted create path
+  remains the sole creation authority. The ADR also fixes the default-off
+  server posture (`INTENT_PARSER_ENABLED=false`, provider `none`) for the
+  future model-assisted lane. The canvas and extractor add 11,518 aggregate
+  JavaScript bytes, recorded by raising the active temporary bundle ceiling
+  to 2,719,059 bytes (largest-chunk ceiling and clean-main baseline
+  unchanged). Source-only candidate work; not deployed, flag-promoted, or
+  human-accepted.
+
+- Flag-gated pilot guided-selling decide cards
+  (`VITE_PILOT_GUIDED_SELLING_ENABLED`, default off). When enabled, the
+  quote builder's existing upsell recommendations render through a new
+  deterministic `guided-selling-cards-v1` presentation selector as
+  decision-grammar cards: the rule's own reason as the claim, an explicit
+  catalog-settings basis line, the existing live-preview impact label, a
+  Why? provenance disclosure (model id, rule reason, and the statement that
+  saving re-prices authoritatively on the server), and a one-tap Take it
+  action that calls the existing apply handler. Autopilot semantics are
+  preserved as a disabled Auto action. The shared `DecisionCard` gains the
+  optional Why? disclosure and disabled-action support. The recommendation
+  engine, tenant guided-selling/AI-assist gates, and flag-off rendering are
+  unchanged; the surface adds no reads, writes, evidence, or authority. The
+  cards add 1,560 aggregate JavaScript bytes, recorded by raising the active
+  `workspace-convergence-pilot-phase1-2026-08-10` ceiling to 2,707,541
+  bytes (largest-chunk ceiling and clean-main baseline unchanged).
+  Source-only candidate work; not deployed, flag-promoted, or
+  human-accepted.
+
+- Flag-gated pilot Event Room dressing (`VITE_PILOT_EVENT_ROOM_ENABLED`,
+  default off). When enabled, the Event Workspace renders the existing
+  `proposal-readiness-v1` score as an accessible readiness ring (completion
+  marked only at exactly 100, reduced-motion safe) and adds an advisory
+  decide stack from a new deterministic `decide-stack-v1` presentation
+  selector: a staffing card comparing quoted counts against the static house
+  staffing ratios — priced only from the quote's own recorded labor totals,
+  with an explicit not-derivable statement otherwise — plus up to two
+  heaviest proposal-completeness gap cards. Cards are advisory-labelled,
+  suppressed entirely for accepted/booked/terminal quotes, keep the
+  "not operational event readiness" scope language, and route only to the
+  existing role-gated edit or quote-administration surfaces. The shared
+  `DecisionCard` gains optional basis/impact lines. Flag-off rendering is
+  unchanged, and the surface adds no reads, writes, evidence, or authority.
+  The dressing adds 5,544 aggregate JavaScript bytes, recorded by
+  superseding the temporary bundle ceiling with
+  `workspace-convergence-pilot-phase1-2026-08-10` (2,705,981 bytes;
+  largest-chunk ceiling and clean-main baseline unchanged). Source-only
+  candidate work; not deployed, flag-promoted, or human-accepted.
+
+- Flag-gated NOW home surface candidate (`VITE_PILOT_NOW_ENABLED`, default
+  off, additive to the customer-centered workspace flag). When enabled, the
+  `/app` Home route renders the same bounded commercial workspace snapshot as
+  interpreted decision cards — one sentence of interpretation per tracked
+  attention item plus the exact existing Workflow/quote/Customer 360
+  resolution target — through a new deterministic
+  `now-presentation-v1` selector, a reusable `DecisionCard` presentation
+  component, and condensed Next-7-days and Money evidence rails. The surface
+  adds no reads, writes, evidence, or authority: it consumes the existing
+  Command Center snapshot, preserves the staff evidence rail, bounded
+  truncation language, and blocked-closeout copy verbatim, and the Command
+  Center remains the default and the flag-off rendering. The lazy NOW chunk
+  adds 9,093 aggregate JavaScript bytes, recorded by superseding the active
+  temporary bundle ceiling with `workspace-convergence-pilot-now-2026-08-10`
+  (2,700,437 bytes; largest-chunk ceiling and clean-main baseline unchanged)
+  in `docs/TECH_EXCEPTIONS.md` and `docs/performance/bundle-exception.json`.
+  This is source-only candidate work; it is not deployed, flag-promoted, or
+  human-accepted.
 ### Documentation
 
 - Reconciled canonical operational state after the `v0.5.0` coordinated
@@ -20,6 +248,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Corrected README and launch-runbook claims that still described merged
   `v0.5.0` payment, provisioning, Commercial Change, Revenue Autopilot, and
   Resend runtime state as undeployed or used obsolete activation prerequisites.
+
+### Fixed
+
+- The flag-gated client-request panel now actually receives the stored
+  customer request in the real edit flow: `handleEditQuote` carries the
+  quote's `portalDecision` snapshot into the editing context (presentation
+  context only — staging and the trusted save path are unchanged).
+  Previously the panel's mount condition could never be satisfied because
+  the editing context stored only identity fields; caught during a
+  full-app screenshot walkthrough rather than by the panel's prop-driven
+  unit tests.
 
 ## [0.5.0] - 2026-08-10
 

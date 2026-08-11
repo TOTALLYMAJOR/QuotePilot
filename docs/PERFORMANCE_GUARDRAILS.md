@@ -24,11 +24,18 @@ Threshold policy:
   for aggregate JavaScript and the largest chunk. The guard accepts it only
   when its ID is active and its pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The customer-centered workspace exception is currently capped at 2,691,344
-  aggregate JavaScript bytes and a 391,596-byte largest chunk. These are the
-  exact measurements from the August 10 merged-candidate build, so the
+- The workspace-convergence exception (now including the flag-gated pilot
+  candidates: NOW home surface, Event Room ring/decide stack, guided-selling
+  decide cards, the CREATE intake canvas with its band pricing strip, and
+  the client-request panel with its structured-record boundary, the Event Room cascade panel, the Pilot command bar, and the fail-closed margin strip) is
+  currently capped at
+  2,747,012
+  aggregate JavaScript bytes and a 391,596-byte largest chunk. CI Quality
+  run `31447641093` on the bugfix commit (`20f69e7`) confirmed this figure
+  exactly — see `docs/TECH_EXCEPTIONS.md` for the full basis and
+  confirmation evidence. The
   exception provides no additional growth headroom. Against the unchanged
-  clean-main baseline, aggregate output is 693,979 bytes (34.74%) larger, while
+  clean-main baseline, aggregate output is 749,647 bytes (37.53%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
   remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
   splitting keeps the authenticated route bounded, and route-level
