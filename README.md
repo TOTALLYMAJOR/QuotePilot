@@ -209,8 +209,13 @@ Optional:
   authority, and enabling it is not a deployment or acceptance decision.)
 - `VITE_PILOT_EVENT_ROOM_ENABLED` (default off. Dresses the Event Workspace
   with the pilot readiness ring — the existing proposal-completeness score —
-  and an advisory decide stack derived only from the selected quote's
-  recorded fields plus the static house staffing ratios. Advisory cards are
+  an advisory decide stack derived only from the selected quote's
+  recorded fields plus the static house staffing ratios, and, for accepted
+  or booked quotes, a cascade receipts panel in which every step reports
+  only its own recorded evidence: acceptance receipt, retained version,
+  contract, the separate deposit and final-balance provider rails, booking
+  confirmation, availability check, staff lead, and post-event review.
+  Advisory cards are
   suppressed for accepted, booked, or terminal quotes, refuse labor
   estimates the record cannot support, and route only to the existing
   role-gated edit or administration surfaces. Purely presentational; not a

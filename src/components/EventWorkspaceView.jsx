@@ -13,6 +13,7 @@ import {
   Armchair
 } from "@phosphor-icons/react";
 import { buildEventWorkspacePresentation } from "./eventWorkspacePresentation";
+import { buildCascadePresentation } from "./cascadePresentation";
 import { buildDecideStack } from "./decideStackPresentation";
 import { formatWorkspaceMoney } from "../lib/workspacePresentation";
 import DecisionCard from "./DecisionCard";
@@ -122,6 +123,7 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
   const decideStack = pilotEventRoom
     ? buildDecideStack(quote, { ordinaryEditAllowed })
     : null;
+  const cascade = pilotEventRoom ? buildCascadePresentation(quote) : null;
 
   const runDecideAction = (action) => {
     if (action?.kind === "edit") {
@@ -437,6 +439,36 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
             ))}
           </ol>
         </section>
+
+        {cascade?.applicable && (
+          <section
+            className="event-section event-cascade"
+            aria-labelledby="event-cascade-title"
+            data-cascade={cascade.modelId}
+          >
+            <div className="event-section-heading">
+              <div>
+                <p className="eyebrow">The cascade</p>
+                <h2 id="event-cascade-title">{cascade.headline}</h2>
+              </div>
+            </div>
+            <p className="event-cascade-progress">{cascade.progressLabel}</p>
+            <ol className="event-cascade-steps">
+              {cascade.steps.map((item) => (
+                <li key={item.id} data-cascade-state={item.state}>
+                  <span className="event-cascade-mark" aria-hidden="true">
+                    {item.state === "done" ? "✓" : item.state === "blocked" ? "✕" : "○"}
+                  </span>
+                  <span className="event-cascade-copy">
+                    <strong>{item.label}</strong>
+                    <small>{item.detail}{item.timeLabel ? ` · ${item.timeLabel}` : ""}</small>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <p className="source-note">{cascade.boundsNote}</p>
+          </section>
+        )}
       </aside>
       </div>
 

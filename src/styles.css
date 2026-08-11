@@ -10027,3 +10027,65 @@ hr {
   max-width: 34rem;
   line-height: 1.5;
 }
+
+/* ===== Pilot Event Room: cascade receipts panel (flag-gated) ===== */
+
+.event-cascade-progress {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  color: var(--tone-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-cascade-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.event-cascade-steps li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.event-cascade-mark {
+  flex: 0 0 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-top: 0.1rem;
+  background: var(--tone-cream-3);
+  color: var(--tone-ink-3);
+}
+
+.event-cascade-steps li[data-cascade-state="done"] .event-cascade-mark {
+  background: var(--tone-success);
+  color: var(--tone-cream-1);
+}
+
+.event-cascade-steps li[data-cascade-state="blocked"] .event-cascade-mark {
+  background: var(--tone-danger);
+  color: var(--tone-cream-1);
+}
+
+.event-cascade-copy {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.event-cascade-copy strong {
+  font-size: 0.86rem;
+}
+
+.event-cascade-copy small {
+  color: var(--tone-ink-3);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}

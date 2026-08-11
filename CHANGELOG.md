@@ -8,6 +8,25 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Cascade receipts panel in the flag-gated pilot Event Room
+  (`VITE_PILOT_EVENT_ROOM_ENABLED`). For accepted or booked quotes, the
+  Event Workspace side rail renders the commercial afterlife as a receipt
+  chain from a new deterministic `cascade-receipts-v1` presentation
+  selector in which every step reports only its own recorded evidence on
+  the quote document: the electronic acceptance receipt, the retained
+  immutable version, contract conversion, the deposit rail with request and
+  provider-confirmed payment kept as separate truths, booking confirmation
+  (including a blocked cancelled state), the recorded availability check,
+  staff lead, and — for booked quotes — the final-balance rail (gated in
+  copy on the provider-confirmed deposit) and the governed post-event
+  review. Pending steps name the existing role-gated surface that owns the
+  action; no step infers across evidence, invents a timestamp, or claims
+  delivery, payment, or readiness beyond its recorded state, and the panel
+  carries that bounds note visibly. Purely presentational: no reads,
+  writes, or authority are added, and flag-off rendering is unchanged.
+  Source-only candidate work; not deployed, flag-promoted, or
+  human-accepted.
+
 - Structured change-request record (callable-only). A new
   `recordChangeRequestParse` Firebase Function lets same-tenant staff, from
   the flag-gated client-request panel after staging at least one parsed
