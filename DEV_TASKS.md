@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 10, 2026
+Last updated: August 11, 2026
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -143,9 +143,32 @@ default off. Remaining program work:
   surface adds no authority while off. Bundle-exception exit (or reviewed
   recalibration) is required per docs/PERFORMANCE_GUARDRAILS.md before
   flag promotion.
-- Proposal decision room: portal upgrade with staff-marked decidable
-  options, per-block questions through the existing conversation rail, and
-  interpreted (portal-visit-only) activity counsel (design §4.7).
+- Proposal decision room (design §4.7), three pieces, each blocked on a
+  different decision — none is safe to freelance mid-implementation:
+  - Staff-marked decidable options that land as "a governed change with
+    receipt" on client acceptance: needs a decision on how a
+    customer-initiated change interacts with the existing governed
+    commercial-change authority (CWF-13) — immediate apply, or staff
+    approval first, and whether it rides the same `proposal-acceptance-v1`
+    signature ceremony or a separate one.
+  - Interpreted, portal-visit-only activity counsel: needs new view/
+    interaction telemetry infrastructure that doesn't exist today.
+  - Per-block questions ("Ask about this" threaded to a block): the
+    conversation rail itself (`QuoteConversationPanel.jsx`,
+    `functions/portalConversation.js`, both callables in
+    `functions/index.js`) is already callable-only and already accepts
+    customer-authored text from `accessMode: "portal"`, so a block-tag
+    field on the existing message shape is additive, not a new trust
+    boundary — the cheapest of the three once unblocked. But §4.7's "any
+    block" presupposes nine named portal blocks (cover, event summary,
+    menu, services, options, investment, assumptions with true-up rules,
+    deposit, terms, acceptance) that don't exist yet: `CustomerPortalView.jsx`
+    today renders exactly two coarse, hand-bundled sections, and "terms"
+    has no customer-facing content at all. Needs a portal information-
+    architecture decision (how to decompose the page into addressable
+    blocks, and what to put in the ones — investment, assumptions, terms —
+    that don't exist in any form today) before the additive wiring is
+    attachable to anything.
 - Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md: trusted
   `parseIntentDraft` callable behind `INTENT_PARSER_ENABLED=false` /
   provider `none`, Secret Manager-bound key, deterministic lane remains the
