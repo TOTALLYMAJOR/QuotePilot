@@ -221,6 +221,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Corrected the named temporary aggregate JavaScript ceiling from 2,776,845
+  to the literal 2,776,849-byte production-flag measurement reported by
+  exact-head PR #57 CI run `31525358682`; the largest-chunk ceiling remains
+  391,596 bytes and the exception retains zero growth headroom.
+
 - Bound `VITE_PILOT_DECISION_ROOM_ENABLED` to `true` in both production
   deployment workflows and both CI production-flag steps, by owner
   decision (2026-08-11) — the eighth pilot gate, joining the seven bound

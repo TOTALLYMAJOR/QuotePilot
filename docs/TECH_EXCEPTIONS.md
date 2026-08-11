@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,776,845 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,776,849 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -110,9 +110,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   strip; clause-index-anchored proposal/ambiguity ids in the change-request
   parser — see CHANGELOG.md `### Fixed`) are folded into the feature figures
   they landed in rather than split out as a separate line, unlike the
-  now-superseded `v0.6.0` ceiling record this reconciles with) and 351 bytes
-  are non-feature deltas: 299 are the confirmed CI-vs-local build-environment
-  offset (see Verification evidence below) and 52 are this tree's own
+  now-superseded `v0.6.0` ceiling record this reconciles with) and 355 bytes
+  are non-feature deltas: 303 are the exact current-tree CI-vs-local
+  build-environment offset (see Verification evidence below) and 52 are this
+  tree's own
   measured flag-off-to-production-flag build delta with all eight gates
   bound, superseding the earlier 56-, 52-, and 48-byte figures and the
   32-byte figure measured before this branch's post-`v0.6.0` work landed. A
@@ -203,12 +204,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   event-shape memory's own gate unbound and unchanged — is 2,776,546
   bytes, a 52-byte configuration delta, matching the prior checkpoint's
   figure exactly (no production-bound gate changed). The ceiling above
-  (2,776,845) is
-  the larger of the two, 2,776,546, plus the confirmed +299 CI-vs-sandbox
-  offset, so one number safely covers both the default-off and
-  production-flag CI bundle checks; no CI run against this exact commit
-  exists yet, so treat it as provisional exactly like every prior
-  checkpoint until its own CI run confirms or corrects it. The other
+  (2,776,849) is
+  the larger of the two, 2,776,546, plus the exact current-tree +303
+  CI-vs-sandbox offset, so one number safely covers both the default-off and
+  production-flag CI bundle checks. PR #57 run `31525358682` reported this
+  literal production-flag value before the ceiling was corrected. The other
   largest emitted chunks were jsPDF at 385,630 bytes, `WorkspaceRoute` at
   379,220 bytes, and the isolated quote store at 145,728 bytes. The
   Messaging Station itself remains a 30,941-byte lazy route chunk. These
@@ -248,18 +248,14 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This checkpoint's own ceiling (2,776,845)
-  is the same extrapolation applied a seventeenth time, against the larger
-  of the two build configurations — this commit's contributor-sandbox
-  eight-gate production-flag measurement (2,776,546) plus the confirmed
-  +299 offset —
-  since it has no CI run of its own yet at record time; correct it to the
-  literal exact-SHA CI value in a follow-up commit if either the default-off
-  or production-flag CI run reports a different number, per the same
-  commitment that already proved correct on every prior checkpoint. Earlier
-  checkpoint figures in this record were sandbox-measured and are
+  with `conclusion: success`. This checkpoint's initial 2,776,845-byte
+  extrapolation was four bytes low. PR #57 run `31525358682` on exact head
+  `34d990d` reported the production-flag bundle at 2,776,849 bytes, a
+  current-tree +303-byte CI-vs-sandbox offset, so this record and the named
+  exception now use that literal Actions value with no growth headroom.
+  Earlier checkpoint figures in this record were sandbox-measured and are
   superseded by this correction. CI Quality now additionally builds with
-  all seven pilot gates enabled and runs the same bundle guard before its
+  all eight pilot gates enabled and runs the same bundle guard before its
   production-mode browser matrix on every push; `v0.6.0`'s release PR run
   `31452174098` and exact-main run `31452570192` were the first to pass it,
   ahead of that tag's production deployment. `npm run check:perf:bundle`
