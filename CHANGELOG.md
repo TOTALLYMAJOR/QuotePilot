@@ -33,6 +33,24 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Structured change-request version linking (`functions/index.js#linkChangeRequestResolutionVersion`),
+  completing the intent-to-version audit trail for the flag-gated
+  client-request panel (`VITE_PILOT_CHANGE_REQUESTS_ENABLED`, still default
+  off): after a staff member records a review (`recordChangeRequestParse`)
+  and then saves the quote through the normal path, the resulting save is
+  already fully complete on its own — linking is a best-effort follow-up
+  call, fired right after, that binds the existing record to the version
+  that actually resulted. Server-verified: the target version must exist
+  for this exact quote and be numerically newer than the version on file
+  when the record was made; a resolution links to exactly one version ever
+  (idempotent replay of the same link, rejected relink to a different one).
+  It never mutates the quote, portal, message, or the original attestation,
+  never blocks the save it follows, and never surfaces its own failure to
+  the operator — a missed link only means the audit trail stays one step
+  short, not that anything was lost or corrupted. Browser writes remain
+  fully rules-denied; only the create-only record and this one bounded
+  update are permitted, both callable-only.
+
 - Unit-economics cost entry and a commercial advisor card for the
   flag-gated margin pilot (`VITE_PILOT_MARGINS_ENABLED`, still default off;
   docs/POST_COMPETITIVE_DESIGN.md §4.5 and §1.3), completing the data-entry

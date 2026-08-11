@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,751,540 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,752,377 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -39,13 +39,14 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 754,175 bytes (37.77%) above the
-  clean-main aggregate baseline, of which 59,825 bytes are the default-off
+- Risk impact: The emitted asset set is 755,012 bytes (37.80%) above the
+  clean-main aggregate baseline, of which 60,662 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
   cards, 13,797 for the CREATE intake canvas, deterministic extractor, and
   draft-only band pricing strip, 10,011 for the client-request panel
-  and parser, 3,615 for the structured-record boundary and client, 5,495 for
+  and parser, 4,452 for the structured-record boundary and client (now
+  including best-effort version linking after save), 5,495 for
   the cascade receipts panel, 2,993 for the Pilot command bar, and 7,717 for
   the fail-closed margin strip, its Catalog Admin cost-entry fields
   (package/add-on/rental cost, staff cost rates, target margin), its
@@ -67,33 +68,29 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: This checkpoint's contributor-sandbox `npm run build`
-  emitted 2,751,241 aggregate JavaScript bytes and a 391,596-byte largest
-  chunk for the unit-economics slice (catalog cost-entry fields in
-  AdminCatalogModal.jsx, the nullable cost normalizer in mockCatalog.js and
-  useCatalogData.js, the below-target commercial advisor card in
-  marginPresentation.js/LiveBreakdown.jsx, and the derived, literal
-  `data-capability-state` save-outcome marker required to honestly satisfy
-  `catalog-cost-and-pricing-data-entry`'s mutation-surface state evidence).
-  No CI run against this exact commit exists yet at record time, so the
-  ceiling above (2,751,540) is this local figure plus the confirmed +299
-  CI-vs-sandbox offset (see Verification evidence below) rather than a
-  fresh CI measurement; treat it as provisional until that commit's own CI
-  run confirms or corrects it, the same extrapolation method already
-  validated exactly (to the byte) for the prior checkpoint (2,750,912
-  local, before the capability-state markers). The checkpoint before that
-  (2,747,012) was itself an
-  exact-SHA CI-confirmed value: CI Quality run `31447641093` on commit
+  emitted 2,752,078 aggregate JavaScript bytes and a 391,596-byte largest
+  chunk, adding the best-effort structured change-request version-linking
+  trigger (App.jsx save-success wiring plus the new client wrapper; the
+  linking callable itself is server-only Functions code with zero bundle
+  impact). No CI run against this exact commit exists yet at record time,
+  so the ceiling above (2,752,377) is this local figure plus the confirmed
+  +299 CI-vs-sandbox offset (see Verification evidence below); treat it as
+  provisional until that commit's own CI run confirms or corrects it, the
+  same extrapolation method already validated exactly (to the byte) on the
+  first checkpoint it was ever applied to. The last exact-SHA CI-confirmed
+  value remains 2,747,012: CI Quality run `31447641093` on commit
   `20f69e7bc94fd8adaef5195e0bda0dde326bcb8b` reported
   `Current bundle metrics: { totalJsBytes: 2747012, largestJsChunkBytes: 391596 }`
-  against that ceiling and passed, matching its own extrapolation byte for
-  byte (prior contributor-sandbox checkpoints, all now superseded: 2,691,344
+  against that ceiling and passed (prior contributor-sandbox checkpoints,
+  all now superseded: 2,691,344
   converged; 2,700,437 with the NOW surface only; 2,705,981 before the
   guided-selling cards; 2,707,541 before the CREATE intake canvas; 2,719,059
   before the band pricing strip; 2,721,338 before the client-request panel;
   2,731,349 before the structured-record boundary; 2,734,964 before the
   cascade panel; 2,740,459 before the command bar; 2,743,452 before the
   margin strip; 2,746,713 before Catalog Admin cost entry and the advisor
-  card). The other largest emitted chunks were jsPDF at 385,630 bytes,
+  card; 2,750,912 before the capability-state markers; 2,751,241 before
+  version linking). The other largest emitted chunks were jsPDF at 385,630 bytes,
   `WorkspaceRoute` at 355,953 bytes, and the isolated quote store at 145,728
   bytes. The station itself remains a 30,908-byte lazy route chunk. These are
   local source-build measurements, not Core Web Vitals, hosted, production, or
@@ -132,13 +129,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This checkpoint's own ceiling (2,751,540) is
-  the same extrapolation applied a third time — this commit's
-  contributor-sandbox measurement (2,751,241) plus the confirmed +299
+  with `conclusion: success`. This checkpoint's own ceiling (2,752,377) is
+  the same extrapolation applied a fourth time — this commit's
+  contributor-sandbox measurement (2,752,078) plus the confirmed +299
   offset — since it has no CI run of its own yet at record time; correct it
   to the literal exact-SHA CI value in a follow-up commit if that run
   reports a different number, per the same commitment that already proved
-  correct on both prior checkpoints. Earlier checkpoint figures
+  correct on every prior checkpoint. Earlier checkpoint figures
   in this record were sandbox-measured and are superseded by this
   correction. `npm run check:perf:bundle` must report this
   exact named exception, its absolute ceilings, and the unchanged normal limits

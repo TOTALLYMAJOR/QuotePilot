@@ -12402,6 +12402,91 @@ exports.recordChangeRequestParse = functions.region(REGION).https.onCall(async (
   }
 });
 
+// Structured change-request version linking: one later bounded update that
+// binds an existing record to the quote version that resulted from actually
+// saving the staged edits, completing the intent-to-version audit trail. It
+// never re-derives or re-validates the original attestation, never touches
+// the quote, portal, or any customer-facing state, and never overwrites an
+// existing link to a different version — only idempotent replay of the same
+// one. Best-effort from the caller's side by design: a save already fully
+// succeeded before this is ever attempted.
+exports.linkChangeRequestResolutionVersion = functions.region(REGION).https.onCall(async (data, context) => {
+  const {
+    ChangeRequestRecordError,
+    normalizeChangeRequestVersionLinkRequest,
+    verifyChangeRequestVersionLink
+  } = require("./changeRequestRecord");
+
+  const toHttpsError = (err) => {
+    if (err instanceof functions.https.HttpsError) return err;
+    if (err instanceof ChangeRequestRecordError) {
+      return new functions.https.HttpsError(err.code, err.message);
+    }
+    return new functions.https.HttpsError("internal", "Failed to link the change-request record to a version.");
+  };
+
+  let normalized;
+  try {
+    normalized = normalizeChangeRequestVersionLinkRequest(data);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: normalized.organizationId
+  });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== normalized.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Linking a change-request record requires same-organization staff authority."
+    );
+  }
+
+  try {
+    const quoteRef = db
+      .collection("organizations").doc(normalized.organizationId)
+      .collection("quotes").doc(normalized.quoteId);
+    const resolutionRef = quoteRef.collection("changeRequestResolutions").doc(normalized.resolutionId);
+    const versionRef = quoteRef.collection("versions").doc(normalized.versionId);
+
+    return await db.runTransaction(async (tx) => {
+      const [resolutionSnap, versionSnap] = await Promise.all([
+        tx.get(resolutionRef),
+        tx.get(versionRef)
+      ]);
+      const resolution = resolutionSnap.exists ? resolutionSnap.data() : null;
+      const version = versionSnap.exists
+        ? { organizationId: normalized.organizationId, quoteId: normalized.quoteId, ...versionSnap.data() }
+        : null;
+      const verification = verifyChangeRequestVersionLink({ normalized, resolution, version });
+      if (verification.alreadyLinked) {
+        return {
+          resolutionId: normalized.resolutionId,
+          linkedVersionId: normalized.versionId,
+          linkedAtISO: normalizeText(resolution.linkedAtISO),
+          alreadyLinked: true
+        };
+      }
+      const linkedAtISO = new Date().toISOString();
+      tx.update(resolutionRef, {
+        linkedVersionId: normalized.versionId,
+        linkedVersionNumber: verification.versionNumber,
+        linkedAtISO,
+        linkedByUid: staff.uid,
+        linkedByEmail: normalizeEmail(staff.email)
+      });
+      return {
+        resolutionId: normalized.resolutionId,
+        linkedVersionId: normalized.versionId,
+        linkedAtISO,
+        alreadyLinked: false
+      };
+    });
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
 exports.requestQuoteApproval = functions.region(REGION).https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
   const staff = await assertStaff(context, {

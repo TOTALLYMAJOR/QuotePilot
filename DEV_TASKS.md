@@ -129,8 +129,10 @@ The destination design (docs/POST_COMPETITIVE_DESIGN.md) has nine default-off
 pilot surfaces built as source-only candidates: NOW home, Event Room ring +
 decide stack + cascade receipts, guided-selling decide cards, CREATE intake
 with band pricing, the client-request panel with the structured record
-callable, the Pilot command bar, and the fail-closed margin strip (now with
-Catalog Admin cost entry and a below-target commercial advisor card; see the
+callable (now including best-effort structured change-request version
+linking; see the `structured-change-request-record` capability contract),
+the Pilot command bar, and the fail-closed margin strip (now with Catalog
+Admin cost entry and a below-target commercial advisor card; see the
 `catalog-cost-and-pricing-data-entry` capability contract). PR #53 merged
 this program's first delivery to `main` on 2026-08-11; every flag remains
 default off. Remaining program work:
@@ -156,9 +158,6 @@ default off. Remaining program work:
   "Refresh latest catalog" recovery button silently never appears for that
   (likely the most common) conflict case — only for the rarer case where
   the post-error reload itself also fails.
-- Structured change-request version linking: extend the
-  `recordChangeRequestParse` contract so a resolution can bind the resulting
-  quote version after the trusted save, completing intent-to-version audit.
 - Proposal decision room: portal upgrade with staff-marked decidable
   options, per-block questions through the existing conversation rail, and
   interpreted (portal-visit-only) activity counsel (design §4.7).

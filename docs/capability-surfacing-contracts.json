@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 10,
+  "catalogVersion": 11,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -3025,14 +3025,14 @@
     },
     {
       "id": "structured-change-request-record",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "With the flag-gated client-request panel, staff record which deterministically parsed proposals were staged from one exact customer change request through a callable-only, create-only, replay-stable attestation that the server binds to the exact stored request identity and message hash, the acting staff member, and the quote revision at record time; the record never replies to the customer, mutates the quote, portal, or versions, and browser writes are rules-denied.",
+      "summary": "With the flag-gated client-request panel, staff record which deterministically parsed proposals were staged from one exact customer change request through a callable-only, create-only, replay-stable attestation that the server binds to the exact stored request identity and message hash, the acting staff member, and the quote revision at record time; the record never replies to the customer, mutates the quote, portal, or versions, and browser writes are rules-denied. A second, later callable performs the record's only permitted follow-up mutation: a bounded, write-once link from the record to the quote version that resulted from actually saving the staged edits, completing the intent-to-version audit trail. Linking is fired best-effort right after a save that already fully succeeded on its own; it never blocks, never surfaces its own failure, and never overwrites an existing link to a different version — only idempotent replay of the same one.",
       "backendPaths": [
         "firestore.rules",
         "functions/changeRequestRecord.js",
@@ -3040,10 +3040,12 @@
         "src/lib/changeRequestRecordClient.js"
       ],
       "backendExports": [
-        "functions/index.js#recordChangeRequestParse"
+        "functions/index.js#recordChangeRequestParse",
+        "functions/index.js#linkChangeRequestResolutionVersion"
       ],
       "affectedBackendExports": [
-        "functions/index.js#recordChangeRequestParse"
+        "functions/index.js#recordChangeRequestParse",
+        "functions/index.js#linkChangeRequestResolutionVersion"
       ],
       "frontendPaths": [
         "src/App.jsx",
@@ -3104,6 +3106,18 @@
         {
           "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
           "locator": "locks an ambiguous outcome to replay-stable reconciliation and recovers a transient failure"
+        },
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "links a newer version and reports the version number bound"
+        },
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "fails closed when the version is missing, foreign, or not newer than the recorded revision"
+        },
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "replays idempotently for the same linked version and rejects relinking to a different one"
         }
       ],
       "documentationPaths": [
@@ -3121,7 +3135,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The flag-gated client-request panel gains one explicit record boundary after staging: ready/submitting/receipt plus uncertain/reconciliation/recovery/error, with replay-stable reconciliation copy, terminal definitive-rejection copy, staged-draft-unchanged claims, and unavailability collapsing to the read-and-stage surface. The callable, pure validation core, create-only transaction, and rules denial were reviewed together.",
+      "surfaceReviewNote": "The flag-gated client-request panel gains one explicit record boundary after staging: ready/submitting/receipt plus uncertain/reconciliation/recovery/error, with replay-stable reconciliation copy, terminal definitive-rejection copy, staged-draft-unchanged claims, and unavailability collapsing to the read-and-stage surface. The callable, pure validation core, create-only transaction, and rules denial were reviewed together. This revision adds the version-linking callable, its ownership/newer-than/write-once validation, and its best-effort trigger from the existing quote-save success path; it introduces no new UI surface or state, so the prior seven states remain the complete evidenced set.",
       "stateEvidence": [
         {
           "state": "ready",

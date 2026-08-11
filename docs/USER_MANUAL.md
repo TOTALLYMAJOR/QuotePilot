@@ -1279,6 +1279,15 @@ through the normal path remains the only way changes become a new version.
 If recording fails, the staged draft is unchanged and the action can be
 retried.
 
+Once a record exists, saving the quote through the normal path — which
+already fully completes on its own — triggers one best-effort follow-up:
+the record links to the version that resulted, completing the audit trail
+from the customer's message through to the saved version. Linking is
+write-once (a record binds to exactly one version, ever), never blocks or
+delays the save, and never surfaces its own failure; if it does not
+succeed, the record simply stays one step short rather than pointing at
+the wrong version.
+
 ## Catalog cost entry and margin advisory
 
 With the pilot margin strip enabled (`VITE_PILOT_MARGINS_ENABLED`), Catalog
