@@ -176,6 +176,32 @@ jobs:
       - name: Run Playwright smoke suite
         run: npm run test:e2e
 
+      - name: Build production pilot bundle
+        run: npm run build && npm run check:perf:bundle
+        env:
+          VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
+          VITE_PILOT_NOW_ENABLED: "true"
+          VITE_PILOT_EVENT_ROOM_ENABLED: "true"
+          VITE_PILOT_GUIDED_SELLING_ENABLED: "true"
+          VITE_PILOT_CREATE_ENABLED: "true"
+          VITE_PILOT_CHANGE_REQUESTS_ENABLED: "true"
+          VITE_PILOT_COMMAND_ENABLED: "true"
+          VITE_PILOT_MARGINS_ENABLED: "true"
+
+      - name: Run production pilot flag matrix
+        run: >-
+          npm run test:e2e -- e2e/customer-centered-workspace.spec.js
+          --grep 'production pilot matrix|production CREATE intake'
+        env:
+          VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
+          VITE_PILOT_NOW_ENABLED: "true"
+          VITE_PILOT_EVENT_ROOM_ENABLED: "true"
+          VITE_PILOT_GUIDED_SELLING_ENABLED: "true"
+          VITE_PILOT_CREATE_ENABLED: "true"
+          VITE_PILOT_CHANGE_REQUESTS_ENABLED: "true"
+          VITE_PILOT_COMMAND_ENABLED: "true"
+          VITE_PILOT_MARGINS_ENABLED: "true"
+
       - name: Upload Playwright report (failure)
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

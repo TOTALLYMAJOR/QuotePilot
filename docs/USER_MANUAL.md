@@ -1279,6 +1279,36 @@ through the normal path remains the only way changes become a new version.
 If recording fails, the staged draft is unchanged and the action can be
 retried.
 
+## Pilot decision workspace
+
+The production pilot groups seven staff-only build gates into one operating
+experience:
+
+- `Home` becomes NOW: bounded attention, next-seven-days, money, and staff
+  evidence are restated as decision cards without adding new reads or outcomes.
+- A quote's Event Workspace adds the proposal-completeness ring, advisory
+  decide stack, and, for accepted/booked quotes, an evidence-bounded cascade
+  receipt chain. `Unavailable` and pending steps are expected when the record
+  does not support a stronger statement.
+- Guided-selling suggestions use `Take it` decision cards. Taking one edits the
+  draft only; saving remains the authoritative server reprice/version action.
+- On `New quote`, describe the event in CREATE, review extracted facts and
+  confidence, confirm low-confidence facts, then apply them to the editable
+  form. Approximate/ranged guest counts show a draft-only price band; saved
+  quotes always use the exact recorded guest count.
+- In an editable quote, the Pilot command bar previews a plain-language change
+  and its fee/tax cascade before `Apply` stages it. Browser speech recognition
+  may provide `Speak`; typed commands remain the availability floor.
+- The live pricing rail shows Margin only when every selected revenue line has
+  a tenant-recorded cost. `Margins unavailable` names missing inputs and is a
+  safety state, not an error or an estimate. Margin never appears in the
+  customer proposal.
+
+These surfaces do not make an unsaved draft authoritative, send a customer
+message, establish delivery/payment/booking, or replace the existing role
+gates. Use the ordinary save, Workflow, quote administration, and provider
+receipts for those actions and evidence.
+
 ## Troubleshooting
 - If catalog fails to load in non-dev environments, Firebase catalog access is required and the app blocks edits until resolved.
 - If you see `organizationId is required` errors, the signed-in account is missing tenant context (`userRoles/{uid}.organizationId`) and must be re-provisioned/invited into an organization.

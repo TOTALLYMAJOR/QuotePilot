@@ -3,6 +3,18 @@ import { expect, test } from "@playwright/test";
 const CUSTOMER_CENTERED_WORKSPACE_ENABLED = ["1", "true", "yes", "on"].includes(
   String(process.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED || "").trim().toLowerCase()
 );
+const PILOT_TRANSFORMATION_ENABLED = [
+  "VITE_PILOT_NOW_ENABLED",
+  "VITE_PILOT_EVENT_ROOM_ENABLED",
+  "VITE_PILOT_GUIDED_SELLING_ENABLED",
+  "VITE_PILOT_CREATE_ENABLED",
+  "VITE_PILOT_CHANGE_REQUESTS_ENABLED",
+  "VITE_PILOT_COMMAND_ENABLED",
+  "VITE_PILOT_MARGINS_ENABLED"
+].every((name) => ["1", "true", "yes", "on"].includes(
+  String(process.env[name] || "").trim().toLowerCase()
+));
+const HOME_HEADING = /What (?:needs|deserves) your attention/;
 
 async function fillRequiredQuoteFields(page) {
   const eventType = page.getByLabel(/Event type/i);
@@ -20,6 +32,64 @@ async function fillRequiredQuoteFields(page) {
   await page.getByRole("textbox", { name: /Email/i }).fill("context@example.test");
 }
 
+async function seedPilotQuote(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem("quoteWizard.quotes", JSON.stringify([{
+      id: "pilot-release-quote",
+      organizationId: "e2e-org",
+      quoteNumber: "Q-PILOT-6001",
+      status: "draft",
+      eventTypeId: "wedding",
+      activeVersionId: "v0001",
+      latestVersionNumber: 1,
+      createdAtISO: "2026-08-10T14:00:00.000Z",
+      updatedAtISO: "2026-08-10T15:00:00.000Z",
+      customer: {
+        name: "Pilot Customer",
+        email: "pilot@example.test",
+        phone: "205-555-0160"
+      },
+      event: {
+        name: "Pilot Release Dinner",
+        date: "2027-09-12",
+        time: "18:00",
+        hours: 4,
+        guests: 64,
+        venue: "Pilot Hall",
+        venueAddress: "600 Release Way",
+        style: "Plated",
+        servers: 4,
+        chefs: 2,
+        bartenders: 0
+      },
+      selection: {
+        eventTypeId: "wedding",
+        packageId: "premium",
+        packageName: "Premium",
+        menuItems: ["wedding__meats__roasted-chicken"],
+        menuItemNames: ["Roasted Chicken"],
+        addons: [],
+        rentals: [],
+        eventTemplateId: "custom"
+      },
+      totals: {
+        total: 5000,
+        deposit: 1500,
+        serverLabor: 800,
+        chefLabor: 600,
+        serviceFeePctApplied: 0.2,
+        taxRateApplied: 0.1
+      },
+      portalDecision: {
+        decision: "changes_requested",
+        message: "Change to 90 guests and add one server.",
+        submittedAtISO: "2026-08-10T15:00:00.000Z"
+      },
+      lifecycle: { draftAtISO: "2026-08-10T14:00:00.000Z" }
+    }]));
+  });
+}
+
 test.describe("customer-centered workspace", () => {
   test.skip(
     !CUSTOMER_CENTERED_WORKSPACE_ENABLED,
@@ -29,7 +99,7 @@ test.describe("customer-centered workspace", () => {
   test("/app is Home and a dirty quote draft survives routed Home, Back, and Forward navigation", async ({ page }) => {
     await page.goto("/app");
 
-    const homeHeading = page.getByRole("heading", { name: "What needs your attention" });
+    const homeHeading = page.getByRole("heading", { name: HOME_HEADING });
     await expect(homeHeading).toBeVisible();
     await expect(homeHeading).toBeFocused();
     const evidenceRail = page.getByRole("complementary", { name: "Staff read context" });
@@ -56,7 +126,7 @@ test.describe("customer-centered workspace", () => {
 
     await staffHeader.getByRole("button", { name: "Home", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/);
-    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(/\/app\/quotes\/new$/);
@@ -65,7 +135,7 @@ test.describe("customer-centered workspace", () => {
 
     await page.goForward();
     await expect(page).toHaveURL(/\/app$/);
-    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
     await page.goBack();
     await expect(eventName).toBeVisible();
@@ -76,7 +146,52 @@ test.describe("customer-centered workspace", () => {
     await page.goto("/app/home");
 
     await expect(page).toHaveURL(/\/app$/);
-    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
+  });
+
+  test("the production pilot matrix exposes NOW, Event Room, command, margins, and staged client changes", async ({ page }) => {
+    test.skip(!PILOT_TRANSFORMATION_ENABLED, "The production pilot matrix is not enabled.");
+    await seedPilotQuote(page);
+
+    await page.goto("/app");
+    await expect(page.getByRole("heading", { name: "What deserves your attention" })).toBeVisible();
+    await expect(page.locator(".now-surface")).toBeVisible();
+
+    await page.goto("/app/quotes/pilot-release-quote");
+    await expect(page.getByRole("heading", { name: "Pilot Release Dinner" })).toBeVisible();
+    await expect(page.locator('[data-decide-stack="decide-stack-v1"]')).toBeVisible();
+    await expect(page.getByRole("img", { name: /Proposal readiness:/ })).toBeVisible();
+
+    await page.goto("/app/quotes/pilot-release-quote/edit");
+    const changePanel = page.locator('[data-change-request="change-request-parse-v1"]');
+    await expect(changePanel).toContainText("Change to 90 guests and add one server.");
+    await changePanel.getByRole("button", { name: "Stage this" }).first().click();
+    const guests = page.getByRole("spinbutton", { name: /Guests \(max 400\)/i });
+    await expect(guests).toHaveValue("90");
+
+    const command = page.locator('[data-pilot-command="change-request-parse-v1"]');
+    await command.getByRole("textbox", { name: "Command for this draft" }).fill("Change to 100 guests");
+    await command.getByRole("button", { name: "Preview" }).click();
+    await command.getByRole("button", { name: "Apply" }).click();
+    await expect(guests).toHaveValue("100");
+    await expect(page.locator('[data-margin="margin-presentation-v1"]')).toBeVisible();
+  });
+
+  test("the production CREATE intake applies bounded facts and shows a draft-only pricing band", async ({ page }) => {
+    test.skip(!PILOT_TRANSFORMATION_ENABLED, "The production pilot matrix is not enabled.");
+    await page.goto("/app/quotes/new");
+
+    const intake = page.locator('[data-create-intake="intent-extraction-v1"]');
+    await expect(intake.getByRole("heading", { name: "What are you planning?" })).toBeVisible();
+    await intake.getByRole("textbox", { name: "Describe the event in your own words" }).fill(
+      "Corporate dinner for about 80 guests on September 12, 2027 at The Foundry, plated, 4 hours, pilot@example.test."
+    );
+    await intake.getByRole("button", { name: "Structure it" }).click();
+    await intake.getByRole("button", { name: /Apply \d+ facts? to the draft/ }).click();
+
+    await expect(page.getByRole("spinbutton", { name: /Guests \(max 400\)/i })).toHaveValue("80");
+    await expect(page.locator('[data-pricing-band="pricing-band-v1"]')).toBeVisible();
+    await expect(page.getByText("Saving always prices the exact recorded count.", { exact: false })).toBeVisible();
   });
 
   test("explicit New quote discard and browser-exit protection remain attached to a dirty routed draft", async ({ page }) => {
@@ -323,7 +438,7 @@ test.describe("customer-centered workspace", () => {
 
     await page.goBack();
     await expect(page).toHaveURL(/\/app$/);
-    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
     await page.goForward();
     await expect(page).toHaveURL(/\/app\/reporting$/);
@@ -365,7 +480,7 @@ test.describe("customer-centered workspace", () => {
 
     await recovery.getByRole("button", { name: "Back to QuotePilot" }).click();
     await expect(page).toHaveURL(/\/app$/);
-    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
   });
 
   test("sticky Quotes and Workflow failures stay route-scoped without losing the dirty quote draft", async ({ page }) => {
@@ -389,7 +504,7 @@ test.describe("customer-centered workspace", () => {
 
       await expect(page).toHaveURL(/\/app$/);
       await expect(page.getByRole("heading", { name: heading })).toHaveCount(0);
-      await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
       await page.goBack();
       await expect(page).toHaveURL(path);
@@ -486,7 +601,7 @@ test.describe("customer-centered workspace", () => {
     await expect(page).toHaveURL(/\/app\/customers\/home-attention-customer$/);
     await expect(page.getByRole("heading", { name: "Home Attention Customer", level: 1 })).toBeVisible();
     await page.goBack();
-    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
 
     await page.locator(".command-center-row").filter({ hasText: "Please revise the service timing." })
       .getByRole("button", { name: "Open in Workflow" }).click();
@@ -496,7 +611,7 @@ test.describe("customer-centered workspace", () => {
     await expect(focusedAttention).toBeFocused();
 
     await page.goBack();
-    await expect(page.getByRole("heading", { name: "What needs your attention" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: HOME_HEADING })).toBeVisible();
     const moneyRow = page.locator(".command-center-row").filter({ hasText: "Q-HOME-MONEY" });
     await moneyRow.getByRole("button", { name: "Open", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/quotes\/home-money-quote$/);
@@ -627,7 +742,7 @@ test.describe("customer-centered workspace", () => {
     await expect(page.getByRole("heading", { name: "Your proposal from Northstar Catering" })).toBeVisible();
     await expect(page.getByRole("heading", { name: /Portal Route Dinner on June 12, 2027/ })).toBeVisible();
     await expect(page.locator(".site-header")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "What needs your attention" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: HOME_HEADING })).toHaveCount(0);
   });
 
   test("Customer 360 keeps customer identity opaque and staff preview separate from portal evidence", async ({ page }) => {
