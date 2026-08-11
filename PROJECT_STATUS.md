@@ -1,25 +1,38 @@
 # Project Status
 
-Last updated: August 10, 2026
+Last updated: August 11, 2026
+
+## Current Production Release
+
+- PR #54 merged the governed post-competitive pilot release into `main` at
+  `4f4e00d3829eb29a1ee90d7d8402b786344dd158`; annotated tag `v0.6.0`
+  resolves to that exact commit.
+- Exact-main CI Quality run `31452570192` passed all eight required jobs,
+  including the default-off rollback suite and the exact seven-flag production
+  bundle/browser matrix.
+- Governed Firebase `all` run `31452927999` and governed Vercel run
+  `31452928296` both completed successfully from that tagged revision with
+  `v0.5.0` commit `3cca8cc4bb985de6ec08c9d62094cfe81b1d2a43`
+  recorded as the rollback target.
 
 ## Operational Health
 
-- Production runtime: `v0.5.0` is live from tagged `main` commit
-  `3cca8cc4bb985de6ec08c9d62094cfe81b1d2a43`.
-- Exact-main CI: run `31420931622` passed all eight required jobs.
-- Firebase: `all` deployment run `31421511861` updated Hosting, Firestore rules,
-  and all Functions, then verified `https://tonicatering.web.app`.
-- Vercel: deployment run `31422418387` promoted provider deployment
-  `dpl_ykXq9U7wt2aZDg4zUR4hc8CCNMKq`, reported `READY`, and rebound
+- Production runtime: `v0.6.0` is live from tagged `main` commit
+  `4f4e00d3829eb29a1ee90d7d8402b786344dd158`.
+- Exact-main CI: run `31452570192` passed all eight required jobs.
+- Firebase: `all` deployment run `31452927999` updated Hosting, Firestore rules,
+  indexes, and Functions, then verified `https://tonicatering.web.app`.
+- Vercel: deployment run `31452928296` promoted immutable deployment
+  `quoteflow-3q51ufo9y-mbmapps.vercel.app` and rebound
   `https://quotepilot.mbmapps.com`.
-- Public reachability: `/`, `/app`, `/app/messages`, and quote-detail deep links
-  returned HTTP 200 on the production edge; tested Firebase origin routes also
-  returned HTTP 200.
-- Runtime inventory: all 74 deployed Firebase Functions report `ACTIVE` on
-  Node.js 22 in `us-central1`.
-- Merged/deployed parity: the diff from `v0.5.0` to the pre-reconciliation
-  `origin/main` contained canonical documentation only. No merged runtime file
-  was waiting for deployment.
+- Public reachability: `/`, `/app`, and `/app/messages` returned HTTP 200 on
+  the production edge; `/` and `/app` also returned HTTP 200 on the Firebase
+  origin.
+- Runtime inventory: Firebase lists 75 Functions. The newly deployed callable
+  `recordChangeRequestParse` reports `ACTIVE` on Node.js 22 in `us-central1`.
+- Merged/deployed parity: both production workflows checked out the exact
+  tagged release SHA. This receipt-only documentation reconciliation does not
+  change the deployed runtime.
 - Credential health: local Firebase CLI access to `tonicatering` and the
   protected GitHub Firebase deployment credential were renewed and
   authenticated on August 10. No credential values are stored in tracked files.
@@ -82,10 +95,11 @@ route evidence are complete.
 
 ## Current Validation Evidence
 
-- The merged `v0.5.0` checkpoint passed 183 unit files with 2,279 tests, the
-  complete flag-on workspace suite, Firestore rules, default and Firebase
-  Playwright lanes, authoritative quote-write coverage, CWV, bundle, governance,
-  Docker, and all exact-main CI gates.
+- The `v0.6.0` checkpoint passed 202 unit files with 2,390 tests (plus the
+  documented skips), the full 59-test default browser suite, the exact
+  production-flag matrix, 63 Firestore rules tests, Firebase Auth/rules and
+  authoritative-pricing browser lanes, CWV, bundle, governance, Docker, and all
+  exact-main CI gates.
 - The August 10 customer-centered authority emulator acceptance passed against
   real Auth, Firestore, and Functions emulators with Commercial Change
   enforcement and Revenue Autopilot preparation enabled while outbound sends

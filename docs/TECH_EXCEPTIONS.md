@@ -20,7 +20,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,754,531 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,754,579 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
@@ -39,8 +39,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 757,166 bytes (37.91%) above the
-  clean-main aggregate baseline, of which 62,218 bytes are the default-off
+- Risk impact: The production-flag asset set is 757,214 bytes (37.91%) above
+  the clean-main aggregate baseline, of which 62,218 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
   cards, 13,797 for the CREATE intake canvas, deterministic extractor, and
@@ -54,16 +54,22 @@ Use this log when a change intentionally departs from stable-first policy or req
   `data-capability-state` markers, the CREATE intake band-pricing
   preview's margin range, Scenario Compare's margin figures and
   comparison row, and the change-request impact preview's margin delta in
-  the Pilot command bar and client-request panel) and 299 bytes are the
-  confirmed CI-vs-local build-environment offset extrapolated into this
-  checkpoint's ceiling (see Performance impact and Verification evidence
-  below). A small
-  remainder of the pilot-candidate delta belongs to the always-loaded
+  the Pilot command bar and client-request panel — this branch's own
+  bugfix corrections (guest cap and staffing-labor gating in the margin
+  strip; clause-index-anchored proposal/ambiguity ids in the change-request
+  parser — see CHANGELOG.md `### Fixed`) are folded into the feature figures
+  they landed in rather than split out as a separate line, unlike the
+  now-superseded `v0.6.0` ceiling record this reconciles with) and 347 bytes
+  are non-feature deltas: 299 are the confirmed CI-vs-local build-environment
+  offset (see Verification evidence below) and 48 are this reconciled tree's
+  own measured flag-off-to-production-flag build delta, superseding the
+  32-byte figure measured before this branch's post-`v0.6.0` work landed. A
+  small remainder of the pilot-candidate delta belongs to the always-loaded
   catalog normalizer (nullable cost-field parsing shared by every tenant,
   not itself flag-gated) rather than the named pilot surfaces; it is folded
   into the margin-strip figure above rather than claimed as a precise
   separate measurement. A targeted `quoteStore` manual chunk reduces
-  `WorkspaceRoute` from 448,190 to 355,953 bytes; Firebase is now the largest
+  `WorkspaceRoute` from 448,190 to 357,957 bytes; Firebase is now the largest
   chunk at 391,596 bytes, 3,667 bytes (0.95%) above the clean-main largest-
   chunk baseline and 15,729 bytes below the normal 5% ceiling. Lazy route
   boundaries keep the new staff route bodies out of the public entry chunk,
@@ -73,16 +79,16 @@ Use this log when a change intentionally departs from stable-first policy or req
   growth fails the guard.
 - Performance impact: This checkpoint's contributor-sandbox `npm run build`
   emitted 2,754,232 aggregate JavaScript bytes and a 391,596-byte largest
-  chunk, extending the same fail-closed margin computation into
-  `buildChangeImpact` (a `marginDelta` alongside its existing total and
-  deposit delta) and rendering it, flag-gated, in the impact line of both
-  the Pilot command bar and the client-request panel — the fourth and
-  fifth surfaces to reuse `buildMarginPresentation` without adding a new
-  computation path. No CI run against this exact commit exists yet at
-  record time, so the ceiling above (2,754,531) is this local figure plus
-  the confirmed +299 CI-vs-sandbox offset (see Verification evidence
-  below); treat it as provisional until that commit's own CI run confirms
-  or corrects it, the same extrapolation method already validated exactly
+  chunk (default-off configuration), extending the same fail-closed margin
+  computation into `buildChangeImpact` (a `marginDelta` alongside its
+  existing total and deposit delta) and rendering it, flag-gated, in the
+  impact line of both the Pilot command bar and the client-request panel —
+  the fourth and fifth surfaces to reuse `buildMarginPresentation` without
+  adding a new computation path — and reconciling this branch's whole
+  post-`v0.6.0` chain onto `main` after `v0.6.0` deployed all seven pilot
+  gates to production directly from a commit this branch never had (see
+  Rationale and Verification evidence below for the full basis). The
+  extrapolation method already validated exactly
   (to the byte) on the first checkpoint it was ever applied to. The last
   exact-SHA CI-confirmed value remains 2,747,012: CI Quality run
   `31447641093` on commit `20f69e7bc94fd8adaef5195e0bda0dde326bcb8b`
@@ -99,11 +105,30 @@ Use this log when a change intentionally departs from stable-first policy or req
   card; 2,750,912 before the capability-state markers; 2,751,241 before
   version linking; 2,752,078 before the band-pricing margin range; 2,752,617
   after the recovery-button bugfix; 2,753,614 before the command-bar and
-  change-request margin delta). The other largest emitted chunks were jsPDF
-  at 385,630 bytes, `WorkspaceRoute` at 355,953 bytes, and the isolated
-  quote store at 145,728 bytes. The station itself remains a 30,908-byte
-  lazy route chunk. These are local source-build measurements, not Core Web
-  Vitals, hosted, production, or human-acceptance evidence.
+  change-request margin delta). Separately, from that same 2,747,012
+  anchor, the `v0.6.0` release checkout's own local production-flag build
+  (all seven `VITE_PILOT_*` gates true) measured 2,747,156 bytes against a
+  2,747,124-byte same-environment default-off build — a 32-byte
+  configuration delta. Release PR CI run `31452174098` and exact-main CI
+  run `31452570192` both passed the exact production-flag `Build production
+  pilot bundle` check before `v0.6.0` deployed to both providers (see
+  PROJECT_STATUS.md). This reconciliation re-measures both configurations
+  fresh on the combined tree rather than projecting `v0.6.0`'s 32-byte
+  delta forward: contributor-sandbox default-off is 2,754,232 bytes,
+  matching the checkpoint figure above exactly, and the same-environment
+  production-flag build is 2,754,280 bytes — a 48-byte configuration delta,
+  superseding the pre-reconciliation 32-byte figure now that this branch's
+  post-`v0.6.0` work is folded in. The ceiling above (2,754,579) is the
+  larger of the two, 2,754,280, plus the confirmed +299 CI-vs-sandbox
+  offset, so one number safely covers both the default-off and
+  production-flag CI bundle checks; no CI run against this exact
+  reconciled commit exists yet, so treat it as provisional exactly like
+  every prior checkpoint until its own CI run confirms or corrects it. The
+  other largest emitted chunks were jsPDF at 385,630 bytes, `WorkspaceRoute`
+  at 357,957 bytes, and the isolated quote store at 145,728 bytes. The
+  Messaging Station itself remains a 30,941-byte lazy route chunk. These
+  are local source-build measurements, not Core Web Vitals, hosted,
+  production, or human-acceptance evidence.
 - Rollback plan: Delete `docs/performance/bundle-exception.json` and remove,
   defer, or split enough branch code to pass the unchanged standard ceilings of
   2,097,233 aggregate bytes and 407,325 bytes for the largest chunk. The
@@ -138,15 +163,21 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This checkpoint's own ceiling (2,754,531) is
-  the same extrapolation applied a seventh time — this commit's
-  contributor-sandbox measurement (2,754,232) plus the confirmed +299
-  offset — since it has no CI run of its own yet at record time; correct it
-  to the literal exact-SHA CI value in a follow-up commit if that run
-  reports a different number, per the same commitment that already proved
-  correct on every prior checkpoint. Earlier checkpoint figures
-  in this record were sandbox-measured and are superseded by this
-  correction. `npm run check:perf:bundle` must report this
+  with `conclusion: success`. This reconciliation's own ceiling (2,754,579)
+  is the same extrapolation applied an eighth time, now against the larger
+  of two configurations instead of one — this commit's contributor-sandbox
+  production-flag measurement (2,754,280) plus the confirmed +299 offset —
+  since it has no CI run of its own yet at record time; correct it to the
+  literal exact-SHA CI value in a follow-up commit if either the default-off
+  or production-flag CI run reports a different number, per the same
+  commitment that already proved correct on every prior checkpoint. Earlier
+  checkpoint figures in this record were sandbox-measured and are
+  superseded by this correction. CI Quality now additionally builds with
+  all seven pilot gates enabled and runs the same bundle guard before its
+  production-mode browser matrix on every push; `v0.6.0`'s release PR run
+  `31452174098` and exact-main run `31452570192` were the first to pass it,
+  ahead of that tag's production deployment. `npm run check:perf:bundle`
+  must report this
   exact named exception, its absolute ceilings, and the unchanged normal limits
   before the checkpoint is committed. The earlier converged-workspace
   `npm run check:perf:cwv` run passed locally on

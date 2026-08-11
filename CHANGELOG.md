@@ -6,6 +6,33 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Changed
+
+- Promoted `v0.6.0` to both production providers from exact tagged `main` commit
+  `4f4e00d3829eb29a1ee90d7d8402b786344dd158`. Exact-main CI Quality run
+  `31452570192` passed all eight jobs; Firebase `all` run `31452927999` and
+  Vercel run `31452928296` completed successfully. Public `/`, `/app`, and
+  `/app/messages` checks returned HTTP 200 on the Vercel edge, and Firebase
+  origin `/` plus `/app` returned HTTP 200. Firebase now lists 75 Functions,
+  including the new ACTIVE Node 22 `recordChangeRequestParse` callable.
+- Prepared the complete post-competitive pilot for the governed `v0.6.0`
+  production rollout. Both production deployment workflows now source-bind
+  all seven `VITE_PILOT_*` gates to `true`: NOW, Event Room (including the
+  cascade receipt chain), guided selling, CREATE with draft-only price bands,
+  staged client change requests, the Pilot command bar, and fail-closed staff
+  margins. Generic/local builds keep every gate default-off for rollback.
+- Added a separate production-flag browser and bundle matrix to CI. The
+  rollback-mode browser suite still runs first; the production matrix then
+  exercises NOW, Event Room, deterministic CREATE, draft-only band pricing,
+  staged customer changes, command preview/apply, and the margin rail under
+  the exact gate combination used by both production providers.
+- Raised the named temporary aggregate bundle ceiling only for the measured
+  32-byte flag-on configuration delta, from the exact CI-confirmed 2,747,012
+  default-off bytes to a provisional 2,747,044 production-flag ceiling. The
+  largest-chunk ceiling remains 391,596 bytes. PR run `31452174098` and
+  exact-main run `31452570192` both confirmed the production-flag build and
+  browser matrix before deployment.
+
 ### Fixed
 
 - Catalog Admin's "Refresh latest catalog" recovery button silently never

@@ -12,7 +12,9 @@ Only open work belongs here. Current operational truth lives in
   create and finish a quote, save, read back the exact revision, reopen from
   Quotes, export PDF, and verify the Event Workspace, Customer 360, Workflow,
   Schedule, Reporting, Messaging Station, Kitchen BEO, Decision Debt, and
-  Operations Audit role boundaries.
+  Operations Audit role boundaries. Include the deployed NOW, Event Room,
+  guided-selling, CREATE, staged-change, Pilot command, margin, and structured
+  change-request-record surfaces under their production flag combination.
 - Run a disposable second-tenant lifecycle: platform-admin plan/create,
   verified owner invitation and activation, neutral defaults, starter-pack
   review, pricing confirmation, trusted quote create/readback/version,
@@ -101,9 +103,10 @@ Only open work belongs here. Current operational truth lives in
   second identity, mutable customer-wide thread, or public customer account
   until recovery, revocation, multi-organization membership, and exact-token
   coexistence are specified.
-- Define first-class structured customer change requests as a callable-only
-  program linked to an authoritative resulting quote version. Keep the current
-  freeform request-changes path until that program is separately accepted.
+- Complete hosted acceptance for the deployed callable-only structured
+  change-request record, then specify any future link from its internal staging
+  receipt to an authoritative resulting quote version. Keep the current
+  freeform request-changes path and ordinary save authority intact.
 
 ## P1 - Customer-Flow Follow-through
 
@@ -123,26 +126,32 @@ Only open work belongs here. Current operational truth lives in
   backend/data authority: discoverable role-safe UI, canonical state markers,
   executable state tests, Feature Matrix, User Manual, and capability manifest.
 
-## P1 - Post-Competitive Pilot Program (branch: claude/quotepilot-post-competitive-15hmny)
+## P1 - Post-Competitive Pilot Program
 
-The destination design (docs/POST_COMPETITIVE_DESIGN.md) has nine default-off
-pilot surfaces built as source-only candidates: NOW home, Event Room ring +
+The destination design (docs/POST_COMPETITIVE_DESIGN.md) has nine source
+capabilities grouped behind seven build gates: NOW home, Event Room ring +
 decide stack + cascade receipts, guided-selling decide cards, CREATE intake
 with band pricing, the client-request panel with the structured record
-callable (now including best-effort structured change-request version
-linking; see the `structured-change-request-record` capability contract),
-the Pilot command bar, and the fail-closed margin strip (now with Catalog
-Admin cost entry, a below-target commercial advisor card, and a margin
-range in the CREATE intake band-pricing preview — both pricing paths now
-share the same fail-closed cost basis; see the
+callable (plus best-effort structured change-request version linking; see
+the `structured-change-request-record` capability contract), the Pilot
+command bar, and the fail-closed margin strip (plus Catalog Admin cost
+entry, a below-target commercial advisor card, a margin range in the CREATE
+intake band-pricing preview, and margin awareness in Scenario Compare and
+the change-request/command-bar impact preview; see the
 `catalog-cost-and-pricing-data-entry` capability contract). PR #53 merged
-this program's first delivery to `main` on 2026-08-11; every flag remains
-default off. Remaining program work:
+the original seven-gate source to `main`, and `v0.6.0` deployed all seven
+gates to both production providers (PROJECT_STATUS.md has the exact
+CI/deployment run evidence). Everything built after that promotion — cost
+entry, the advisor card, version linking, the two later margin-range
+extensions, and the catalog recovery-button bugfix — remains unmerged and
+undeployed. Remaining program work:
 
-- Decide per-flag promotion for each `VITE_PILOT_*` build gate; every
-  surface adds no authority while off. Bundle-exception exit (or reviewed
-  recalibration) is required per docs/PERFORMANCE_GUARDRAILS.md before
-  flag promotion.
+- Merge and promote the post-`v0.6.0` pilot work above, then run an
+  authenticated staff acceptance pass across all seven gates' production
+  flag combination, including what shipped after `v0.6.0`. Public route
+  reachability and provider acceptance do not substitute for that pass.
+- Exit the temporary bundle exception through optimization or a reviewed
+  clean-main baseline recalibration after production stabilization.
 - Proposal decision room (design §4.7), three pieces, each blocked on a
   different decision — none is safe to freelance mid-implementation:
   - Staff-marked decidable options that land as "a governed change with

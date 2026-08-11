@@ -1288,6 +1288,36 @@ delays the save, and never surfaces its own failure; if it does not
 succeed, the record simply stays one step short rather than pointing at
 the wrong version.
 
+## Pilot decision workspace
+
+The production pilot groups seven staff-only build gates into one operating
+experience:
+
+- `Home` becomes NOW: bounded attention, next-seven-days, money, and staff
+  evidence are restated as decision cards without adding new reads or outcomes.
+- A quote's Event Workspace adds the proposal-completeness ring, advisory
+  decide stack, and, for accepted/booked quotes, an evidence-bounded cascade
+  receipt chain. `Unavailable` and pending steps are expected when the record
+  does not support a stronger statement.
+- Guided-selling suggestions use `Take it` decision cards. Taking one edits the
+  draft only; saving remains the authoritative server reprice/version action.
+- On `New quote`, describe the event in CREATE, review extracted facts and
+  confidence, confirm low-confidence facts, then apply them to the editable
+  form. Approximate/ranged guest counts show a draft-only price band; saved
+  quotes always use the exact recorded guest count.
+- In an editable quote, the Pilot command bar previews a plain-language change
+  and its fee/tax cascade before `Apply` stages it. Browser speech recognition
+  may provide `Speak`; typed commands remain the availability floor.
+- The live pricing rail shows Margin only when every selected revenue line has
+  a tenant-recorded cost. `Margins unavailable` names missing inputs and is a
+  safety state, not an error or an estimate. Margin never appears in the
+  customer proposal.
+
+These surfaces do not make an unsaved draft authoritative, send a customer
+message, establish delivery/payment/booking, or replace the existing role
+gates. Use the ordinary save, Workflow, quote administration, and provider
+receipts for those actions and evidence.
+
 ## Catalog cost entry and margin advisory
 
 With the pilot margin strip enabled (`VITE_PILOT_MARGINS_ENABLED`), Catalog

@@ -30,14 +30,20 @@ Threshold policy:
   the client-request panel with its structured-record boundary, the Event Room cascade panel, the Pilot command bar, and the fail-closed margin strip
   with its Catalog Admin cost-entry fields and below-target advisor card) is
   currently capped at
-  2,754,531
-  aggregate JavaScript bytes and a 391,596-byte largest chunk. This figure
-  extrapolates the current contributor-sandbox measurement forward by the
-  confirmed CI-vs-sandbox offset and is provisional pending this exact
-  commit's own CI confirmation — see `docs/TECH_EXCEPTIONS.md` for the full
-  basis and evidence. The
-  exception provides no additional growth headroom. Against the unchanged
-  clean-main baseline, aggregate output is 757,166 bytes (37.91%) larger, while
+  2,754,579
+  aggregate JavaScript bytes and a 391,596-byte largest chunk, covering both
+  the default-off and production-flag (all seven `VITE_PILOT_*` gates true)
+  CI bundle checks with one number — the larger of two fresh same-environment
+  measurements (2,754,280 production-flag, 2,754,232 default-off) plus the
+  confirmed CI-vs-sandbox offset, provisional pending this exact commit's own
+  CI confirmation. `v0.6.0`'s release PR run `31452174098` and exact-main run
+  `31452570192` already passed the production-flag build and bundle guard
+  once, ahead of that tag's production deployment; this reconciliation
+  re-measures both configurations fresh now that further pilot work has
+  landed on top. See `docs/TECH_EXCEPTIONS.md` for the full basis and
+  evidence. The exception provides no additional growth headroom. Against
+  the unchanged clean-main baseline, aggregate output is 757,214 bytes
+  (37.91%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
   remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
   splitting keeps the authenticated route bounded, and route-level

@@ -44,7 +44,7 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   selected exact thread uses a best-effort near-real-time signal to reload canonical
   message bodies through the existing callable. `Live updates`, cache, and
   paused labels describe listener state only; they do not establish message
-  delivery, reading, typing, presence, or a latency SLA. The governed `v0.5.0`
+  delivery, reading, typing, presence, or a latency SLA. The governed `v0.6.0`
   production builds enable this route, and its public deep link is reachable on
   both production hosts. Authenticated hosted use and human acceptance remain
   separate evidence. Draft, expired, deleted, or provider-unaccepted portal
@@ -73,7 +73,7 @@ When `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`, the six operational paths
 above render as recoverably lazy embedded workspace regions and preserve their
 mounted state during ordinary staff navigation. Contextual Catalog entry points
 and the flag-off/legacy shell retain the existing focus-contained modal wrappers
-and close guards. The governed `v0.5.0` builds promote these routes with the
+and close guards. The governed `v0.6.0` builds promote these routes with the
 workspace flag enabled; public deep-link reachability is verified, while
 authenticated hosted and human acceptance remain separate. See the
 [customer-centered workspace plan](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
@@ -87,8 +87,9 @@ administration, with the five-step quote builder retained as one focused
 commercial capability. The exact-token customer decision center remains the
 sole customer-facing experience.
 
-The live `v0.5.0` release promotes the reviewed customer-centered workspace,
-CWF-16 Event Workspace, and Event Messaging Station. QuotePilot also includes dynamic
+The live `v0.6.0` release promotes the reviewed customer-centered workspace,
+CWF-16 Event Workspace, Event Messaging Station, and all seven production pilot
+surfaces. QuotePilot also includes dynamic
 event-type menus, authoritative pricing, proposal export and decisions,
 tenant-locked customer/catalog CSV imports, separate deposit and final-balance
 rails in current source, public invoice-first buyer onboarding on the existing
@@ -97,14 +98,14 @@ history, scheduling, reporting, and diagnostics. Source availability does not
 establish production deployment or provider acceptance; see `PROJECT_STATUS.md`
 for current operational truth.
 
-The live `v0.5.0` runtime also includes dormant Commercial Change Authority
+The live `v0.6.0` runtime also includes dormant Commercial Change Authority
 and Revenue Autopilot programs. Commercial changes can be simulated against
 authoritative pricing, authorized, atomically applied with dependency
 invalidations, reconciled by named dependency evidence, and surfaced through
 trusted Kitchen BEO freshness and deterministic Decision Debt. Revenue
 Autopilot includes tenant controls, scheduled email lanes, unread-reply
 Attention escalation, post-event review requests, customer unsubscribe, and
-provider-webhook reconciliation. These are source/local capabilities behind
+provider-webhook reconciliation. These are deployed capabilities behind
 default-off runtime gates. Their code and Functions are deployed, but neither
 global program is enabled, no observed tenant has opted in, and provider,
 production-data, hosted-role, and human acceptance remain separate. Commercial
@@ -269,6 +270,13 @@ Optional:
   pieces named — nothing is estimated; travel and tax are excluded from
   both sides, and costs never appear in any customer-facing projection.
   Purely presentational; not a deployment or acceptance decision.)
+
+The governed Firebase and Vercel production workflows source-bind all seven
+pilot gates above to `true` for the `v0.6.0` production artifact. Generic and
+local builds still default them to `false`, preserving a build-time rollback
+mode. CI validates both modes and runs a focused production-flag browser matrix
+before release; a successful build or deployment remains separate from
+authenticated staff and provider acceptance.
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human
@@ -666,7 +674,7 @@ Admin reconciliation re-reads the exact server-recorded Session for the
 selected rail when provider delivery needs review, without overriding settled
 payment truth or mutating the other rail.
 
-This behavior is deployed in `v0.5.0`, but deployment does not configure every
+This behavior is deployed in `v0.6.0`, but deployment does not configure every
 Stripe dependency or prove provider acceptance. Operational promotion still
 requires mandatory hosted payment UAT in Stripe test mode and separately
 authorized live-mode acceptance for each enabled rail.
@@ -772,7 +780,7 @@ Provision a customer organization, enforce order-based feature entitlements
 (unpaid modules locked off), and generate a copy-ready onboarding message.
 
 Release status: the hardened provisioning workflow is present in the current
-`v0.5.0` frontend, Functions, and rules deployment,
+`v0.6.0` frontend, Functions, and rules deployment,
 but authenticated disposable-tenant owner activation and hosted acceptance are
 still pending. Do not infer tenant usability from deployment or `/app`
 reachability. See
