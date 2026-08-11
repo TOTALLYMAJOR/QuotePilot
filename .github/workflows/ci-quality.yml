@@ -188,6 +188,7 @@ jobs:
           VITE_PILOT_COMMAND_ENABLED: "true"
           VITE_PILOT_MARGINS_ENABLED: "true"
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
+          VITE_PILOT_MEMORY_ENABLED: "true"
 
       - name: Run production pilot flag matrix
         run: >-
@@ -203,6 +204,7 @@ jobs:
           VITE_PILOT_COMMAND_ENABLED: "true"
           VITE_PILOT_MARGINS_ENABLED: "true"
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
+          VITE_PILOT_MEMORY_ENABLED: "true"
 
       - name: Upload Playwright report (failure)
         if: failure()

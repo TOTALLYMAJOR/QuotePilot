@@ -26,6 +26,7 @@ function buildWebServer(port, role) {
       VITE_PILOT_COMMAND_ENABLED: process.env.VITE_PILOT_COMMAND_ENABLED ?? "false",
       VITE_PILOT_MARGINS_ENABLED: process.env.VITE_PILOT_MARGINS_ENABLED ?? "false",
       VITE_PILOT_DECISION_ROOM_ENABLED: process.env.VITE_PILOT_DECISION_ROOM_ENABLED ?? "false",
+      VITE_PILOT_MEMORY_ENABLED: process.env.VITE_PILOT_MEMORY_ENABLED ?? "false",
       VITE_APP_URL: "https://quotepilot.mbmapps.com/app",
       VITE_APP_HOST: "quotepilot.mbmapps.com",
       VITE_FIREBASE_API_KEY: "",

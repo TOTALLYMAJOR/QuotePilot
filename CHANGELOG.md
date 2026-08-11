@@ -8,6 +8,34 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Event-shape memory production-bound (owner decision, 2026-08-11):
+  `VITE_PILOT_MEMORY_ENABLED` is now the ninth production-bound pilot
+  gate in both deployment workflows and both CI production-flag steps,
+  alongside the original seven and the decision-room gate, taking effect
+  at the next release from this branch. Bundle ceiling re-measured fresh
+  for the now-nine-gate production-flag configuration (2,776,550 bytes,
+  a 56-byte configuration delta over default-off); ceiling moves to
+  2,776,849.
+
+### Fixed
+
+- Corrected two stale documentation claims about the margin/cost-entry
+  feature that made it read as unfinished or JSON-only when it has
+  actually been a real, labeled Catalog Admin UI — live in production,
+  `VITE_PILOT_MARGINS_ENABLED` bound `true` in both deployment
+  workflows — since before this session began: README previously said
+  costs "can be recorded today through the Catalog Admin advanced JSON
+  configuration," which was never true of the cost fields (the JSON
+  editor only ever covered service-fee tiers, tax regions, event
+  templates, seasonal profiles, and brand crew); costs are entered
+  through ordinary labeled number inputs ("Cost Per Person" on packages,
+  "Cost" on add-ons/rentals, "Server/Chef/Bartender cost rate" and
+  "Target margin %" in Numeric Settings), gated by the same flag as the
+  margin strip itself. `docs/FEATURE_MATRIX.md` row 54 similarly read
+  "not yet deployed," which was true only in the narrow sense of "not
+  yet through its own tagged release" — the flag has been production-bound
+  the whole time.
+
 - Four more deterministic capture families closing out the CREATE reader's
   build-out queue, hardened by two adversarial-verification agents that
   wrote and ran real test cases against the real code rather than

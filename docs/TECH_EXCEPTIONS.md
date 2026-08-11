@@ -20,17 +20,19 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,776,845 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,776,849 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
   `VITE_PILOT_GUIDED_SELLING_ENABLED`, `VITE_PILOT_CREATE_ENABLED`,
   `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, `VITE_PILOT_COMMAND_ENABLED`,
-  `VITE_PILOT_MARGINS_ENABLED`, and `VITE_PILOT_DECISION_ROOM_ENABLED`, all
+  `VITE_PILOT_MARGINS_ENABLED`, `VITE_PILOT_DECISION_ROOM_ENABLED`, and
+  `VITE_PILOT_MEMORY_ENABLED`, all
   default off in generic/local builds; the first seven are production-bound
   to true by the deployment workflows since `v0.6.0`, and the decision-room
-  gate is production-bound the same way by owner decision on 2026-08-11,
-  taking effect at the next release from this branch) are reviewed with
+  and memory gates are production-bound the same way by owner decision on
+  2026-08-11, both taking effect at the next release from this branch) are
+  reviewed with
   it. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.
@@ -110,12 +112,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   strip; clause-index-anchored proposal/ambiguity ids in the change-request
   parser — see CHANGELOG.md `### Fixed`) are folded into the feature figures
   they landed in rather than split out as a separate line, unlike the
-  now-superseded `v0.6.0` ceiling record this reconciles with) and 351 bytes
+  now-superseded `v0.6.0` ceiling record this reconciles with) and 355 bytes
   are non-feature deltas: 299 are the confirmed CI-vs-local build-environment
-  offset (see Verification evidence below) and 52 are this tree's own
-  measured flag-off-to-production-flag build delta with all eight gates
-  bound, superseding the earlier 56-, 52-, and 48-byte figures and the
-  32-byte figure measured before this branch's post-`v0.6.0` work landed. A
+  offset (see Verification evidence below) and 56 are this tree's own
+  measured flag-off-to-production-flag build delta with all nine gates
+  bound — the memory gate now included, by owner decision on 2026-08-11 —
+  superseding the immediately prior 52-byte eight-gate figure (itself
+  superseding 56-, 48-, and 32-byte figures at earlier checkpoints). A
   small remainder of the pilot-candidate delta belongs to the always-loaded
   catalog normalizer (nullable cost-field parsing shared by every tenant,
   not itself flag-gated) rather than the named pilot surfaces; it is folded
@@ -199,12 +202,14 @@ Use this log when a change intentionally departs from stable-first policy or req
   configurations are re-measured fresh at every checkpoint since the
   reconciliation rather than projecting an old delta forward:
   contributor-sandbox default-off is 2,776,494 bytes and the
-  same-environment production-flag build — all eight gates true,
-  event-shape memory's own gate unbound and unchanged — is 2,776,546
-  bytes, a 52-byte configuration delta, matching the prior checkpoint's
-  figure exactly (no production-bound gate changed). The ceiling above
-  (2,776,845) is
-  the larger of the two, 2,776,546, plus the confirmed +299 CI-vs-sandbox
+  same-environment production-flag build — now all nine gates true,
+  the memory gate newly bound by owner decision on 2026-08-11 — is
+  2,776,550
+  bytes, a 56-byte configuration delta (up from the prior checkpoint's
+  52-byte, eight-gate figure now that a ninth gate is bound). The ceiling
+  above
+  (2,776,849) is
+  the larger of the two, 2,776,550, plus the confirmed +299 CI-vs-sandbox
   offset, so one number safely covers both the default-off and
   production-flag CI bundle checks; no CI run against this exact commit
   exists yet, so treat it as provisional exactly like every prior
@@ -248,10 +253,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   full check run set for that commit (`lane:quick`, `lane:core`,
   `lane:firebase-auth-rules`, `lane:authoritative-pricing`,
   `lane:playwright-smoke`, `lane:cwv-smoke`, Docker Build Smoke) completed
-  with `conclusion: success`. This checkpoint's own ceiling (2,776,845)
-  is the same extrapolation applied a seventeenth time, against the larger
+  with `conclusion: success`. This checkpoint's own ceiling (2,776,849)
+  is the same extrapolation applied an eighteenth time, against the larger
   of the two build configurations — this commit's contributor-sandbox
-  eight-gate production-flag measurement (2,776,546) plus the confirmed
+  nine-gate production-flag measurement (2,776,550) plus the confirmed
   +299 offset —
   since it has no CI run of its own yet at record time; correct it to the
   literal exact-SHA CI value in a follow-up commit if either the default-off

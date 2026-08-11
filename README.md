@@ -264,12 +264,17 @@ Optional:
   `costPpp` on the selected package, `cost` on each selected add-on,
   rental, and menu item (same pricing mode as its price), and
   `serverCostRate`/`chefCostRate`/`bartenderCostRate` in settings when
-  staff are quoted, with an optional `targetMarginPct` policy. Costs can be
-  recorded today through the Catalog Admin advanced JSON configuration.
-  Anything missing makes margin explicitly unavailable with the missing
-  pieces named — nothing is estimated; travel and tax are excluded from
-  both sides, and costs never appear in any customer-facing projection.
-  Purely presentational; not a deployment or acceptance decision.)
+  staff are quoted, with an optional `targetMarginPct` policy. Costs are
+  recorded through labeled Catalog Admin fields — a "Cost Per Person"
+  column on packages, a "Cost" column on add-ons and rentals, and
+  Server/Chef/Bartender cost rate plus Target margin % fields in Numeric
+  Settings — the same flag that gates the margin strip also gates these
+  entry fields, so both ship and light up together; no JSON editing is
+  needed. Anything missing makes margin explicitly unavailable with the
+  missing pieces named — nothing is estimated; travel and tax are
+  excluded from both sides, and costs never appear in any customer-facing
+  projection. Purely presentational; not a deployment or acceptance
+  decision.)
 - `VITE_PILOT_DECISION_ROOM_ENABLED` (default off in generic/local builds.
   Adds per-block "Ask about this" buttons to the customer portal's existing
   content sections (event details, package and menu, pricing) that open the
@@ -278,6 +283,18 @@ Optional:
   the customer's existing conversation authority. No new callable, message
   field, or trust boundary; a seeded draft never overwrites text the
   customer already typed or an unresolved send attempt.)
+- `VITE_PILOT_MEMORY_ENABLED` (default off in generic/local builds. Once a
+  CREATE reading yields both an event type and a guest count, reads the
+  tenant's own accepted/booked quote history (already tenant-scoped
+  server-side) and, once at least 3 same-event-type-and-guest-band matches
+  exist, offers the median servers/chefs/bartenders and half-hour-rounded
+  hours plus any rental in a strict majority of matches as a
+  provenance-labeled suggestion. No AI, no cross-tenant learning; below the
+  minimum sample the honest reply is "not enough history yet," never a
+  guess. Applying writes only staffing and hours to the draft — rentals
+  stay a read-only mention so an existing selection is never silently
+  overwritten. See
+  [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md) §4.10.)
 
 - `INTENT_PARSER_ENABLED` / `INTENT_PARSER_PROVIDER` / `INTENT_PARSER_MODEL`
   (server env, all dormant by default: `false` / `none` / per-provider
@@ -290,28 +307,15 @@ Optional:
   extractor remains the availability floor. See
   `docs/INTENT_INTAKE_ADR.md`.)
 
-The governed Firebase and Vercel production workflows source-bind all eight
+The governed Firebase and Vercel production workflows source-bind all nine
 pilot gates above to `true` — the first seven since the `v0.6.0`
 production artifact, the decision-room gate by owner decision on 2026-08-11,
-taking effect at the next release. Generic and
+and the memory gate by owner decision the same day, both taking effect at
+the next release. Generic and
 local builds still default them to `false`, preserving a build-time rollback
 mode. CI validates both modes and runs a focused production-flag browser matrix
 before release; a successful build or deployment remains separate from
 authenticated staff and provider acceptance.
-- `VITE_PILOT_MEMORY_ENABLED` (default off, and deliberately not one of the
-  eight production-bound gates above — production-binding is a separate
-  future owner decision, mirroring the decision-room gate's own initial
-  posture before it was bound. Once a CREATE reading yields both an event
-  type and a guest count, reads the tenant's own accepted/booked quote
-  history (already tenant-scoped server-side) and, once at least 3
-  same-event-type-and-guest-band matches exist, offers the median
-  servers/chefs/bartenders and half-hour-rounded hours plus any rental in a
-  strict majority of matches as a provenance-labeled suggestion. No AI, no
-  cross-tenant learning; below the minimum sample the honest reply is "not
-  enough history yet," never a guess. Applying writes only staffing and
-  hours to the draft — rentals stay a read-only mention so an existing
-  selection is never silently overwritten. See
-  [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md) §4.10.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

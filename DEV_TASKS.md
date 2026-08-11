@@ -238,9 +238,9 @@ the owner asks for the merge.
   contract `event-shape-memory`): staffing/hours by exact event type and
   fixed guest band, median-aggregated from the tenant's own accepted/
   booked quotes, plus any rental in a strict majority of matches shown as
-  a read-only mention. Wired into CREATE behind `VITE_PILOT_MEMORY_ENABLED`
-  (default off, deliberately not production-bound — a separate future
-  owner decision, same as the decision-room gate's initial posture);
+  a read-only mention. Wired into CREATE behind `VITE_PILOT_MEMORY_ENABLED`,
+  now production-bound as the ninth pilot gate by owner decision
+  (2026-08-11), taking effect at the next release;
   applying writes only staffing/hours to the draft. Venue/client/season
   memory stay later phases. Tenant-isolated, no cross-tenant learning,
   honest cold start below a minimum sample of 3.

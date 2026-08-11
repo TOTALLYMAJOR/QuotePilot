@@ -4,13 +4,11 @@ import { deriveGuestBand } from "./pricingBand";
 import DecisionCard from "./DecisionCard";
 import { loadEventShapeMemory } from "../lib/eventShapeMemory";
 
-// Decision-room-adjacent pilot gate for event-shape memory
-// (docs/POST_COMPETITIVE_DESIGN.md §4.10; owner-decided scope
-// 2026-08-11): distinct from the seven production-bound gates, so
-// merging this branch does not silently start reading a live tenant's
-// booking history in production. Not bound in any deployment workflow;
-// production-binding is a separate owner decision, same as the
-// decision-room gate's initial posture before it was explicitly bound.
+// Pilot gate for event-shape memory (docs/POST_COMPETITIVE_DESIGN.md
+// §4.10; owner-decided scope 2026-08-11, production-bound 2026-08-11):
+// the ninth production-bound gate, alongside the original seven and the
+// decision-room gate, taking effect at the next release from this
+// branch. Generic and local builds still default to off.
 const PILOT_MEMORY_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_MEMORY_ENABLED || "").trim().toLowerCase()
 );
