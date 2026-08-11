@@ -8,6 +8,19 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Portal offer cards complete the decidable-options loop
+  (`VITE_PILOT_DECISION_ROOM_ENABLED`): an unlocked portal now shows its
+  projected options ("Options you can ask to add") with honest
+  per-guest/per-item/per-event price labels, and a tap only drafts the
+  canonical "Please add X." sentence into the existing Request Changes
+  message — appended on its own line, never overwriting the customer's
+  words, deduplicated, capped at the message limit, and sent (or not) by
+  the customer through the unchanged decision path. Staff receive it as an
+  ordinary change request that the deterministic parser turns into a
+  one-tap stageable proposal; staff approval remains the only authority,
+  exactly per the owner-decided direction. Marks → projection → offer →
+  staged request is now built end to end.
+
 - Decidable-option projection is now live at the trusted draft-save
   moments: `calculateQuotePricingAuthoritative` returns the exact
   addons/rentals from the same authoritative catalog read pricing used

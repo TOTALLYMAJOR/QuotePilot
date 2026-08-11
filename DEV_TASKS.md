@@ -183,12 +183,15 @@ the owner asks for the merge.
     authoritative pricing read returns the catalog collections, both
     trusted quote builders store decidableOptionsProjection on the quote
     (fresh at create/edit, carried forward re-bounded otherwise), and
-    every snapshot moment re-projects it. Build next: the portal offer
-    cards whose tap pre-fills the existing Request Changes flow with a
-    canonical sentence the staff-side parser already reads; and mirror
-    the field in src/lib/quoteStore.js's client `buildPortalSnapshot`
-    (local-fallback sync path only; needs a quoteStore-owning contract
-    bump).
+    every snapshot moment re-projects it. The portal offer cards are
+    built: an unlocked portal renders its projected options and a tap
+    drafts the canonical "Please add X." sentence into the existing
+    Request Changes message (append-only, deduplicated, length-capped) —
+    the full marks → projection → offer → staged-request loop now exists.
+    Remaining for this piece: mirror the field in src/lib/quoteStore.js's
+    client `buildPortalSnapshot` (local-fallback sync path only; needs a
+    quoteStore-owning contract bump), and hosted staff acceptance of the
+    whole loop.
   - Per-block questions (conservative subset built; decided: block tags
     stay message-body text, not a structured field — revisit only if
     staff-side threading is actually wanted later). The full nine-block

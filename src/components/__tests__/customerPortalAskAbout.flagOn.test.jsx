@@ -46,7 +46,11 @@ function portalQuote() {
     total: 5000,
     deposit: 1500,
     portalIssuedAtISO: "2026-08-11T09:00:00.000Z",
-    deliveryEvidence: { revisionId: "v0004" }
+    deliveryEvidence: { revisionId: "v0004" },
+    decidableOptions: [
+      { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" },
+      { itemType: "rental", name: "Linens", price: 9, pricingType: "per_item" }
+    ]
   };
 }
 
@@ -113,6 +117,37 @@ describe("customer portal ask-about with the decision-room flag on", () => {
       text: "Question about the pricing: "
     });
     expect(stores.panelProps.current.prefill.id).toBeGreaterThan(0);
+  });
+
+  test("a decidable option drafts the canonical change request without overwriting typed words", async () => {
+    await renderPortal();
+
+    const cards = [...container.querySelectorAll(".portal-decidable-card")];
+    expect(cards.map((card) => card.textContent)).toEqual([
+      "Premium Bar$15.00 per guest",
+      "Linens$9.00 per item"
+    ]);
+
+    act(() => {
+      cards[0].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+    const message = container.querySelector(".portal-decision-panel textarea");
+    expect(message.value).toBe("Please add Premium Bar.");
+    const changesButton = [...container.querySelectorAll(".portal-decision-options button")]
+      .find((button) => button.textContent === "Request Changes");
+    expect(changesButton.getAttribute("aria-pressed")).toBe("true");
+
+    // Same card again: no duplicate sentence. Second card: appends a line.
+    act(() => {
+      cards[0].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.querySelector(".portal-decision-panel textarea").value)
+      .toBe("Please add Premium Bar.");
+    act(() => {
+      cards[1].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.querySelector(".portal-decision-panel textarea").value)
+      .toBe("Please add Premium Bar.\nPlease add Linens.");
   });
 
   test("asking about a second block issues a new prefill request id", async () => {

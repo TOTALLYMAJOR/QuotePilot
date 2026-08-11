@@ -5186,6 +5186,44 @@ hr {
   font-size: 0.84rem;
 }
 
+/* Flag-gated decision-room pilot: offerable options that draft a change
+   request through the ordinary decision path. */
+.portal-decidable-options {
+  margin-top: 0.9rem;
+}
+
+.portal-decidable-options h3 {
+  margin: 0 0 0.2rem;
+  color: #30443b;
+  font-size: 0.84rem;
+}
+
+.portal-decidable-sub {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
+.portal-decidable-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.portal-decidable-card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+}
+
+.portal-decidable-card span {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
 /* Flag-gated decision-room pilot: per-block "Ask about this" affordance,
    kept visually quiet next to its block heading. */
 .portal-ask-about {

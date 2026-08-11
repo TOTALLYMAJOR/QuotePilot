@@ -46,7 +46,10 @@ function portalQuote() {
     total: 5000,
     deposit: 1500,
     portalIssuedAtISO: "2026-08-11T09:00:00.000Z",
-    deliveryEvidence: { revisionId: "v0004" }
+    deliveryEvidence: { revisionId: "v0004" },
+    decidableOptions: [
+      { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" }
+    ]
   };
 }
 
@@ -87,6 +90,8 @@ describe("customer portal ask-about with the decision-room flag off (default)", 
     expect(container.textContent).toContain("Event details");
     expect(container.querySelector(".portal-ask-about")).toBeNull();
     expect(container.textContent).not.toContain("Ask about this");
+    expect(container.querySelector(".portal-decidable-options")).toBeNull();
+    expect(container.textContent).not.toContain("Premium Bar");
     expect(container.querySelector('[data-testid="conversation-panel"]')).toBeTruthy();
     expect(stores.panelProps.current?.prefill ?? null).toBeNull();
   });

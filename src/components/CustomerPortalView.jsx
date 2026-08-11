@@ -683,6 +683,35 @@ export default function CustomerPortalView({
     conversationAnchorRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   };
 
+  // A decidable-option tap only DRAFTS a change request through the
+  // existing Request Changes path — the identical sentence the customer
+  // could type, staged staff-side by the same deterministic parser, with
+  // staff approval remaining the only authority. Never overwrites their
+  // own words: the sentence appends on its own line, is skipped when
+  // already present, and is skipped when it would exceed the message cap.
+  const requestDecidableOption = (option) => {
+    const sentence = `Please add ${String(option?.name || "").trim()}.`;
+    if (sentence.length < 14) return;
+    setDecisionDraft("changes_requested");
+    decisionAttemptRef.current = null;
+    setDecisionMutation({ phase: "ready" });
+    setDecisionMessage((current) => {
+      const trimmed = String(current || "").trim();
+      if (trimmed.includes(sentence)) return current;
+      const next = trimmed ? `${trimmed}\n${sentence}` : sentence;
+      return next.length > 1200 ? current : next;
+    });
+    decisionPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    decisionPanelRef.current?.focus?.({ preventScroll: true });
+  };
+
+  const decidableOptionPriceLabel = (option) => {
+    const price = currency(Number(option?.price) || 0);
+    if (option?.pricingType === "per_person") return `${price} per guest`;
+    if (option?.pricingType === "per_item") return `${price} per item`;
+    return `${price} for the event`;
+  };
+
   const askAboutButton = (blockLabel) => (
     PILOT_DECISION_ROOM_ENABLED && portalConversationAvailable() ? (
       <button
@@ -1318,6 +1347,31 @@ export default function CustomerPortalView({
                 </p>
               </section>
             </div>
+
+            {PILOT_DECISION_ROOM_ENABLED && !decisionLocked
+              && Array.isArray(quote.decidableOptions) && quote.decidableOptions.length > 0 && (
+              <section className="portal-decidable-options" aria-labelledby="portal-decidable-title">
+                <h3 id="portal-decidable-title">Options you can ask to add</h3>
+                <p className="portal-decidable-sub">
+                  Choosing one drafts a change request below — your caterer reviews
+                  and confirms it before anything about this proposal changes.
+                </p>
+                <div className="portal-decidable-grid">
+                  {quote.decidableOptions.map((option) => (
+                    <button
+                      type="button"
+                      key={`${option.itemType}-${option.name}`}
+                      className="ghost portal-decidable-card"
+                      onClick={() => requestDecidableOption(option)}
+                      disabled={state.busy}
+                    >
+                      <strong>{option.name}</strong>
+                      <span>{decidableOptionPriceLabel(option)}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {!decisionLocked && (
               <section

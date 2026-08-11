@@ -1330,11 +1330,15 @@ already typed, and an unresolved message attempt always keeps its exact
 retry text.
 
 With the same gate enabled, Catalog Admin's add-on and rental rows gain a
-"Portal offer" checkbox. It is a mark only — off for every item unless you
-deliberately check it — and it does nothing customer-facing yet; upcoming
-slices will let the portal offer marked options, with every customer choice
-arriving as an ordinary change request for your review, never a
-self-applying change.
+"Portal offer" checkbox — off for every item unless you deliberately check
+it. Marked, active options the quote does not already include appear in
+the customer's portal as "Options you can ask to add", each with its
+price basis (per guest, per item, or for the event). Choosing one only
+drafts a "Please add ..." line into the ordinary Request Changes message,
+which the customer can edit, discard, or send; if sent, it reaches you as
+a normal change request your quote editor parses into a one-tap stageable
+proposal. Nothing a customer taps ever changes the proposal by itself —
+your save remains the only authority.
 
 ## Catalog cost entry and margin advisory
 
