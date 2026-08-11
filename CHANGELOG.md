@@ -8,6 +8,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Flag-gated, fail-closed margin strip (`VITE_PILOT_MARGINS_ENABLED`,
+  default off; docs/POST_COMPETITIVE_DESIGN.md §4.5 and §1.3). The live
+  pricing rail gains a staff-only `margin-presentation-v1` strip that
+  computes margin ONLY when every selected revenue line has a
+  tenant-recorded cost counterpart — `costPpp` on the selected package,
+  `cost` on each selected add-on, rental, and menu item (mode defaults
+  mirror the pricing calculator), and role cost rates in settings when
+  staff are quoted. Any gap renders "Margins unavailable" naming the exact
+  missing pieces; nothing is ever estimated. Travel and tax are excluded
+  from both revenue and cost, the service charge counts as revenue, an
+  optional `targetMarginPct` policy adds a meets/below note, and costs
+  never reach any customer-facing projection. Purely presentational;
+  source-only candidate work — not deployed, flag-promoted, or
+  human-accepted.
+
 - Flag-gated Pilot command bar in the quote builder
   (`VITE_PILOT_COMMAND_ENABLED`, default off). One input over the draft:
   plain-words commands ("add another bartender", "switch to buffet",

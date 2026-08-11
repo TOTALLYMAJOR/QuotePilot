@@ -258,6 +258,17 @@ Optional:
   server. Voice input appears only when the browser provides speech
   recognition. Purely presentational; not a deployment or acceptance
   decision.)
+- `VITE_PILOT_MARGINS_ENABLED` (default off. Adds a staff-only margin strip
+  to the live pricing rail, computed strictly from tenant-recorded costs:
+  `costPpp` on the selected package, `cost` on each selected add-on,
+  rental, and menu item (same pricing mode as its price), and
+  `serverCostRate`/`chefCostRate`/`bartenderCostRate` in settings when
+  staff are quoted, with an optional `targetMarginPct` policy. Costs can be
+  recorded today through the Catalog Admin advanced JSON configuration.
+  Anything missing makes margin explicitly unavailable with the missing
+  pieces named — nothing is estimated; travel and tax are excluded from
+  both sides, and costs never appear in any customer-facing projection.
+  Purely presentational; not a deployment or acceptance decision.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human
