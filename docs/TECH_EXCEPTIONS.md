@@ -80,14 +80,16 @@ Use this log when a change intentionally departs from stable-first policy or req
   before the band pricing strip; 2,721,338 before the client-request panel;
   2,731,349 before the structured-record boundary; 2,734,964 before the
   cascade panel; 2,740,459 before the command bar; 2,743,452 before the
-  margin strip). The release candidate's local production-flag build emitted
+  margin strip). The release checkout's local production-flag build emitted
   2,747,156 aggregate bytes with the same 391,596-byte largest chunk, exactly
   32 bytes above its 2,747,124-byte same-environment local default-off build.
   The temporary ceiling therefore carries that measured 32-byte configuration
   delta over the exact CI-confirmed default-off build
   (2,747,012 + 32 = 2,747,044).
-  This extrapolation remains provisional until the release PR's exact-SHA
-  `Build production pilot bundle` check reports its own metric. The other
+  Release PR CI run `31452174098` and exact-main CI run `31452570192` both
+  passed the exact production-flag `Build production pilot bundle` check with
+  this zero-headroom ceiling before the tagged `v0.6.0` production deployment;
+  the extrapolation is therefore confirmed rather than provisional. The other
   largest emitted chunks were jsPDF at 385,630 bytes,
   `WorkspaceRoute` at 317,008 bytes, and the isolated quote store at 146,071
   bytes. The station itself remains a 30,908-byte lazy route chunk. These are
