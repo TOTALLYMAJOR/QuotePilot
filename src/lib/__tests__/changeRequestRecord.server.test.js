@@ -6,7 +6,9 @@ const {
   ChangeRequestRecordError,
   buildChangeRequestRecord,
   normalizeChangeRequestRecordRequest,
-  verifyChangeRequestRecordAgainstQuote
+  normalizeChangeRequestVersionLinkRequest,
+  verifyChangeRequestRecordAgainstQuote,
+  verifyChangeRequestVersionLink
 } = require("../../../functions/changeRequestRecord.js");
 
 const validPayload = () => ({
@@ -125,5 +127,113 @@ describe("buildChangeRequestRecord", () => {
     expect(() => buildChangeRequestRecord({
       normalized, verification, actor: { uid: "" }, nowISO: "2026-08-10T12:00:00.000Z"
     })).toThrowError(/staff actor/);
+  });
+});
+
+const validLinkPayload = () => ({
+  organizationId: "org-a",
+  quoteId: "q1",
+  resolutionId: `crr_${"a".repeat(48)}`,
+  versionId: "v0005"
+});
+
+const unlinkedResolution = () => ({
+  organizationId: "org-a",
+  quoteId: "q1",
+  latestVersionNumberAtRecord: 4
+});
+
+const matchingVersion = () => ({
+  organizationId: "org-a",
+  quoteId: "q1",
+  versionNumber: 5
+});
+
+describe("normalizeChangeRequestVersionLinkRequest", () => {
+  test("accepts a well-formed link request", () => {
+    const normalized = normalizeChangeRequestVersionLinkRequest(validLinkPayload());
+    expect(normalized).toEqual(validLinkPayload());
+  });
+
+  test("rejects malformed resolution and version ids", () => {
+    expect(() => normalizeChangeRequestVersionLinkRequest({ ...validLinkPayload(), resolutionId: "not-a-record-id" }))
+      .toThrowError(/not a recognized structured-record id/);
+    expect(() => normalizeChangeRequestVersionLinkRequest({ ...validLinkPayload(), versionId: "not-a-version" }))
+      .toThrowError(/not a recognized quote version id/);
+  });
+});
+
+describe("verifyChangeRequestVersionLink", () => {
+  test("links a newer version and reports the version number bound", () => {
+    const normalized = normalizeChangeRequestVersionLinkRequest(validLinkPayload());
+    const result = verifyChangeRequestVersionLink({
+      normalized,
+      resolution: unlinkedResolution(),
+      version: matchingVersion()
+    });
+    expect(result).toEqual({ alreadyLinked: false, versionNumber: 5 });
+  });
+
+  test("fails closed when the record is missing or owned by a different quote", () => {
+    const normalized = normalizeChangeRequestVersionLinkRequest(validLinkPayload());
+    expect(() => verifyChangeRequestVersionLink({ normalized, resolution: null, version: matchingVersion() }))
+      .toThrowError(/record for this link was not found/);
+    expect(() => verifyChangeRequestVersionLink({
+      normalized,
+      resolution: { ...unlinkedResolution(), quoteId: "other-quote" },
+      version: matchingVersion()
+    })).toThrowError(/does not belong to this quote/);
+  });
+
+  test("fails closed when the version is missing, foreign, or not newer than the recorded revision", () => {
+    const normalized = normalizeChangeRequestVersionLinkRequest(validLinkPayload());
+    expect(() => verifyChangeRequestVersionLink({ normalized, resolution: unlinkedResolution(), version: null }))
+      .toThrowError(/version for this link was not found/);
+    expect(() => verifyChangeRequestVersionLink({
+      normalized,
+      resolution: unlinkedResolution(),
+      version: { ...matchingVersion(), quoteId: "other-quote" }
+    })).toThrowError(/version does not belong to this quote/);
+    expect(() => verifyChangeRequestVersionLink({
+      normalized,
+      resolution: unlinkedResolution(),
+      version: { ...matchingVersion(), versionNumber: 4 }
+    })).toThrowError(/must be newer than the version recorded/);
+    expect(() => verifyChangeRequestVersionLink({
+      normalized,
+      resolution: unlinkedResolution(),
+      version: { ...matchingVersion(), versionNumber: 2 }
+    })).toThrowError(/must be newer than the version recorded/);
+  });
+
+  test("replays idempotently for the same linked version and rejects relinking to a different one", () => {
+    const normalized = normalizeChangeRequestVersionLinkRequest(validLinkPayload());
+    const alreadyLinkedSame = {
+      ...unlinkedResolution(),
+      linkedVersionId: "v0005"
+    };
+    expect(verifyChangeRequestVersionLink({
+      normalized,
+      resolution: alreadyLinkedSame,
+      version: matchingVersion()
+    })).toEqual({ alreadyLinked: true });
+
+    // No version doc needed to detect a same-version replay — the check
+    // short-circuits on the resolution's own recorded link.
+    expect(verifyChangeRequestVersionLink({
+      normalized,
+      resolution: alreadyLinkedSame,
+      version: null
+    })).toEqual({ alreadyLinked: true });
+
+    const alreadyLinkedDifferent = {
+      ...unlinkedResolution(),
+      linkedVersionId: "v0009"
+    };
+    expect(() => verifyChangeRequestVersionLink({
+      normalized,
+      resolution: alreadyLinkedDifferent,
+      version: matchingVersion()
+    })).toThrowError(/already linked to a different quote version/);
   });
 });

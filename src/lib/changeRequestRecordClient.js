@@ -38,3 +38,30 @@ export async function recordChangeRequestParse(payload) {
     alreadyRecorded: data?.alreadyRecorded === true
   };
 }
+
+// Best-effort, called after a save that already fully succeeded on its own;
+// callers should not block on or surface failures from this beyond an
+// internal diagnostic. See DEV_TASKS "Structured change-request version
+// linking".
+export async function linkChangeRequestResolutionVersion(payload) {
+  if (!firebaseReady || !cloudFunctions) {
+    const error = new Error("Linking requires the Firebase workspace.");
+    error.code = "failed-precondition";
+    throw error;
+  }
+  const callable = httpsCallable(cloudFunctions, "linkChangeRequestResolutionVersion");
+  const { data } = await callable(payload);
+  const resolutionId = String(data?.resolutionId || "").trim();
+  const linkedVersionId = String(data?.linkedVersionId || "").trim();
+  if (!resolutionId || !linkedVersionId) {
+    const error = new Error("The link response was incomplete.");
+    error.code = "internal";
+    throw error;
+  }
+  return {
+    resolutionId,
+    linkedVersionId,
+    linkedAtISO: String(data?.linkedAtISO || "").trim(),
+    alreadyLinked: data?.alreadyLinked === true
+  };
+}

@@ -360,6 +360,10 @@ export const DEFAULT_SETTINGS = {
   quoteValidityDays: 30,
   serverRate: 22,
   chefRate: 28,
+  serverCostRate: null,
+  chefCostRate: null,
+  bartenderCostRate: null,
+  targetMarginPct: null,
   staffingChargeMode: "per_hour",
   staffingRateTypes: DEFAULT_STAFFING_RATE_TYPES,
   defaultStaffingRateType: "standard",
@@ -383,6 +387,7 @@ export const DEFAULT_SETTINGS = {
   businessAddress: "",
   businessTimeZone: "",
   acceptanceEmail: "",
+  portalTermsText: "",
   disposablesNote: "All disposables are included in this quote.",
   depositNotice: "30% deposit is required to lock in your date.",
   crmEnabled: false,
@@ -421,6 +426,24 @@ function toNumber(value, fallback = 0, min = Number.NEGATIVE_INFINITY, max = Num
   const n = Number(value);
   if (Number.isNaN(n)) return fallback;
   return Math.min(max, Math.max(min, n));
+}
+
+// Tenant cost fields are optional and staff-only: blank must mean "not
+// recorded" (margin stays unavailable), never a coerced 0, since a
+// deliberate $0 cost is a distinct, valid input from silence.
+function toNullableNumber(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+// fromMinorUnits() alone cannot represent "not recorded": Number(null) is 0,
+// a safe integer, so it silently returns 0/100 instead of the fallback.
+// Cost-minor fields need the null case caught before it ever reaches that
+// coercion.
+function fromNullableMinorUnits(value) {
+  if (value === null || value === undefined) return null;
+  return fromMinorUnits(value, null);
 }
 
 function fromMinorUnits(value, fallback = 0) {
@@ -847,6 +870,9 @@ export function normalizeCatalog(raw) {
     ppp: Object.prototype.hasOwnProperty.call(p || {}, "pppMinor")
       ? fromMinorUnits(p.pppMinor, 0)
       : Number(p.ppp || 0),
+    costPpp: Object.prototype.hasOwnProperty.call(p || {}, "costPppMinor")
+      ? fromNullableMinorUnits(p.costPppMinor)
+      : toNullableNumber(p.costPpp),
     includedMenuItemIds: normalizeStableIdList(p.includedMenuItemIds),
     includedAddonIds: normalizeStableIdList(p.includedAddonIds),
     includedRentalIds: normalizeStableIdList(p.includedRentalIds),
@@ -860,8 +886,15 @@ export function normalizeCatalog(raw) {
     price: Object.prototype.hasOwnProperty.call(a || {}, "priceMinor")
       ? fromMinorUnits(a.priceMinor, 0)
       : Number(a.price || 0),
+    cost: Object.prototype.hasOwnProperty.call(a || {}, "costMinor")
+      ? fromNullableMinorUnits(a.costMinor)
+      : toNullableNumber(a.cost),
     staffRole: inferAddonStaffRole(a),
-    active: a.active !== false
+    active: a.active !== false,
+    // Staff opt-in per option for the decision-room portal offer (design
+    // §4.7): strictly default-off so no option is ever customer-offered
+    // without a deliberate mark.
+    portalDecidable: a.portalDecidable === true
   }));
   const rentals = (raw.rentals || DEFAULT_RENTALS).map((r) =>
     normalizeRental({
@@ -870,10 +903,14 @@ export function normalizeCatalog(raw) {
       price: Object.prototype.hasOwnProperty.call(r || {}, "priceMinor")
         ? fromMinorUnits(r.priceMinor, 0)
         : Number(r.price || 0),
+      cost: Object.prototype.hasOwnProperty.call(r || {}, "costMinor")
+        ? fromNullableMinorUnits(r.costMinor)
+        : toNullableNumber(r.cost),
       qtyPerGuests: Number(r.qtyPerGuests || 1),
       pricingType: normalizePricingType(r.pricingType || r.type, "per_item"),
       type: normalizePricingType(r.pricingType || r.type, "per_item"),
-      active: r.active !== false
+      active: r.active !== false,
+      portalDecidable: r.portalDecidable === true
     })
   );
   const serviceFeeTiers = normalizeServiceFeeTiers(pricingValue(
@@ -1094,6 +1131,10 @@ export function normalizeCatalog(raw) {
       ),
       serverRate,
       chefRate,
+      serverCostRate: toNullableNumber(rawSettings.serverCostRate),
+      chefCostRate: toNullableNumber(rawSettings.chefCostRate),
+      bartenderCostRate: toNullableNumber(rawSettings.bartenderCostRate),
+      targetMarginPct: toNullableNumber(rawSettings.targetMarginPct),
       staffingChargeMode: normalizeStaffingChargeMode(
         rawSettings.staffingChargeMode,
         DEFAULT_SETTINGS.staffingChargeMode
@@ -1122,6 +1163,9 @@ export function normalizeCatalog(raw) {
         DEFAULT_SETTINGS.businessTimeZone
       ),
       acceptanceEmail: toTenantText(inputSettings, "acceptanceEmail", DEFAULT_SETTINGS.acceptanceEmail),
+      // Decision-room pilot: tenant-authored portal terms. Default empty —
+      // the portal renders no terms block until the tenant writes one.
+      portalTermsText: toTenantText(inputSettings, "portalTermsText", "").slice(0, 5000),
       disposablesNote: toTenantText(
         inputSettings,
         "disposablesNote",
@@ -1173,6 +1217,7 @@ export function toStorageCatalog(catalog) {
       id,
       name,
       ppp,
+      costPpp,
       includedMenuItemIds,
       includedAddonIds,
       includedRentalIds,
@@ -1181,28 +1226,33 @@ export function toStorageCatalog(catalog) {
       id,
       name,
       ppp,
+      costPpp: toNullableNumber(costPpp),
       includedMenuItemIds: normalizeStableIdList(includedMenuItemIds),
       includedAddonIds: normalizeStableIdList(includedAddonIds),
       includedRentalIds: normalizeStableIdList(includedRentalIds),
       active: active !== false
     })),
-    addons: catalog.addons.map(({ id, name, type, pricingType, price, staffRole, active }) => ({
+    addons: catalog.addons.map(({ id, name, type, pricingType, price, cost, staffRole, active, portalDecidable }) => ({
       id,
       name,
       type: normalizePricingType(pricingType || type, "per_person"),
       pricingType: normalizePricingType(pricingType || type, "per_person"),
       price,
+      cost: toNullableNumber(cost),
       staffRole: normalizeAddonStaffRole(staffRole),
-      active: active !== false
+      active: active !== false,
+      portalDecidable: portalDecidable === true
     })),
-    rentals: catalog.rentals.map(({ id, name, price, qtyPerGuests, type, pricingType, active }) => ({
+    rentals: catalog.rentals.map(({ id, name, price, cost, qtyPerGuests, type, pricingType, active, portalDecidable }) => ({
       id,
       name,
       price,
+      cost: toNullableNumber(cost),
       qtyPerGuests,
       type: normalizePricingType(pricingType || type, "per_item"),
       pricingType: normalizePricingType(pricingType || type, "per_item"),
-      active: active !== false
+      active: active !== false,
+      portalDecidable: portalDecidable === true
     })),
     settings: catalog.settings
   };

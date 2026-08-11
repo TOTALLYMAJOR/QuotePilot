@@ -9,6 +9,8 @@
 // both sides (pass-through and remittance, not margin); the service charge
 // counts as revenue. Costs are tenant catalog data, staff-only, and never
 // reach any customer-facing projection.
+import { currency } from "../lib/quoteCalculator";
+
 export const MARGIN_MODEL = "margin-presentation-v1";
 
 const MAX_MISSING_NAMED = 6;
@@ -118,7 +120,36 @@ export function buildMarginPresentation({ form, totals, catalog, settings } = {}
     revenue,
     cost,
     marginPct,
+    target,
     targetNote,
     note: "Margin on the catering scope from your recorded costs; travel and tax are excluded, and costs never appear to customers."
+  };
+}
+
+// Decision-grammar advisory (matches decideStackPresentation.js's card
+// shape) surfaced only when there is an actual decision-worthy signal: a
+// recorded target that this quote's recorded costs fall short of. Silent
+// otherwise — meeting or beating a target is confirmed inline by
+// targetNote above, not re-announced as a card, and an unavailable or
+// untargeted margin has nothing decidable to advise on.
+export function buildMarginAdvisorCard(margin) {
+  if (!margin?.available) return null;
+  if (margin.target === null || margin.target === undefined) return null;
+  if (margin.marginPct >= margin.target) return null;
+
+  const pct = (value) => (value * 100).toFixed(1);
+  const gapDollars = margin.revenue * (margin.target - margin.marginPct);
+
+  return {
+    id: "margin-below-target",
+    kind: "margin",
+    signal: "attend",
+    family: "info",
+    label: "Advisory",
+    title: "Below your margin target",
+    meta: `${pct(margin.marginPct)}% margin · ${Math.round(margin.target * 100)}% target`,
+    sentence: `This quote is at ${pct(margin.marginPct)}% margin, ${pct(margin.target - margin.marginPct)} points below your ${Math.round(margin.target * 100)}% target.`,
+    basis: "Recorded package, add-on, rental, and staffing costs against this quote's revenue lines; travel and tax excluded.",
+    impact: `≈ ${currency(gapDollars)} more margin needed to hit target at this price.`
   };
 }

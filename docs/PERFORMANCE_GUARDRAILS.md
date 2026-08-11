@@ -27,18 +27,31 @@ Threshold policy:
 - The workspace-convergence exception (now including the flag-gated pilot
   candidates: NOW home surface, Event Room ring/decide stack, guided-selling
   decide cards, the CREATE intake canvas with its band pricing strip, and
-  the client-request panel with its structured-record boundary, the Event Room cascade panel, the Pilot command bar, and the fail-closed margin strip) is
+  the client-request panel with its structured-record boundary, the Event Room cascade panel, the Pilot command bar, the fail-closed margin strip
+  with its Catalog Admin cost-entry fields and below-target advisor card,
+  the decision-room ask-about affordance in the customer portal, the
+  Model assist intake lane, three hardened rounds of the deterministic
+  CREATE reader (its queued family list now fully closed out, adversarially
+  verified by two independent agents), and
+  event-shape memory) is
   currently capped at
-  2,747,044
-  aggregate JavaScript bytes and a 391,596-byte largest chunk. CI Quality
-  run `31447641093` on the bugfix commit (`20f69e7`) confirmed the default-off
-  2,747,012-byte figure exactly. The production-flag build is 32 bytes larger
-  in a same-environment comparison, so the temporary ceiling carries that exact
-  configuration delta over the confirmed CI value. Release PR run
-  `31452174098` and exact-main run `31452570192` both passed the repeated
-  production-flag build and bundle guard before `v0.6.0` deployment. See
-  `docs/TECH_EXCEPTIONS.md` for the full basis. Against the unchanged
-  clean-main baseline, aggregate output is 749,679 bytes (37.53%) larger, while
+  2,776,849
+  aggregate JavaScript bytes and a 391,596-byte largest chunk, covering both
+  the default-off and production-flag (all eight `VITE_PILOT_*` gates true,
+  including the newly production-bound decision-room gate; event-shape
+  memory's own gate is deliberately not one of the eight and stays unbound)
+  CI bundle checks with one number — the larger of two fresh same-environment
+  measurements (2,776,546 production-flag, 2,776,494 default-off) plus the
+  exact current-tree CI-vs-sandbox offset. PR #57 run `31525358682` measured
+  the production-flag bundle at the literal 2,776,849-byte ceiling.
+  `v0.6.0`'s release PR run `31452174098` and exact-main run
+  `31452570192` already passed the production-flag build and bundle guard
+  once, ahead of that tag's production deployment; both configurations are
+  re-measured fresh at each checkpoint now that further pilot work has
+  landed on top. See `docs/TECH_EXCEPTIONS.md` for the full basis and
+  evidence. The exception provides no additional growth headroom. Against
+  the unchanged clean-main baseline, aggregate output is 779,181 bytes
+  (39.01%) larger, while
   the largest chunk is 3,667 bytes (0.95%) larger and
   remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
   splitting keeps the authenticated route bounded, and route-level

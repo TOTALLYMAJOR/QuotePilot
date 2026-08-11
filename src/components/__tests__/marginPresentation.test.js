@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { MARGIN_MODEL, buildMarginPresentation } from "../marginPresentation";
+import { MARGIN_MODEL, buildMarginAdvisorCard, buildMarginPresentation } from "../marginPresentation";
 
 const settings = {
   staffingChargeMode: "per_hour_per_staff",
@@ -145,5 +145,43 @@ describe("buildMarginPresentation", () => {
     const laborOffWithRates = { ...settings, staffingLaborEnabled: false };
     const withRates = buildMarginPresentation({ form, totals: disabledTotals, catalog, settings: laborOffWithRates });
     expect(withRates.cost).toBe(1680);
+  });
+});
+
+describe("buildMarginAdvisorCard", () => {
+  test("returns a decision card with the point and dollar gap when below target", () => {
+    const highTarget = { ...settings, targetMarginPct: 0.75 };
+    const margin = buildMarginPresentation({ form, totals, catalog, settings: highTarget });
+    const card = buildMarginAdvisorCard(margin);
+
+    expect(card).not.toBeNull();
+    expect(card.id).toBe("margin-below-target");
+    expect(card.signal).toBe("attend");
+    expect(card.family).toBe("info");
+    expect(card.title).toBe("Below your margin target");
+    expect(card.sentence).toContain("75% target");
+    // gap points: (0.75 - marginPct) * 100
+    const gapPoints = (0.75 - margin.marginPct) * 100;
+    expect(card.sentence).toContain(gapPoints.toFixed(1));
+    // gap dollars: revenue * (target - marginPct), formatted via currency()
+    const gapDollars = margin.revenue * (0.75 - margin.marginPct);
+    expect(card.impact).toContain(gapDollars.toFixed(2));
+  });
+
+  test("stays silent (no card) when the quote already meets or beats its target", () => {
+    const margin = buildMarginPresentation({ form, totals, catalog, settings });
+    expect(margin.targetNote).toContain("Meets");
+    expect(buildMarginAdvisorCard(margin)).toBeNull();
+  });
+
+  test("stays silent when no target is recorded", () => {
+    const noTarget = { ...settings, targetMarginPct: undefined };
+    const margin = buildMarginPresentation({ form, totals, catalog, settings: noTarget });
+    expect(buildMarginAdvisorCard(margin)).toBeNull();
+  });
+
+  test("stays silent when margin itself is unavailable or absent", () => {
+    expect(buildMarginAdvisorCard(null)).toBeNull();
+    expect(buildMarginAdvisorCard({ available: false })).toBeNull();
   });
 });

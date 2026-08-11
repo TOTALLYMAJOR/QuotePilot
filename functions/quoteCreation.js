@@ -708,6 +708,10 @@ function buildQuoteMeta(settings, form, pricing) {
     businessPhone: text(settings.businessPhone, 40),
     businessEmail: email(settings.businessEmail),
     businessAddress: text(settings.businessAddress, 500),
+    // Decision-room pilot (§4.7, per-tenant terms by owner decision):
+    // tenant-authored portal terms text, projected verbatim; absent means
+    // the portal simply renders no terms block — nothing is invented.
+    portalTermsText: text(settings.portalTermsText, 5_000),
     acceptanceEmail: email(settings.acceptanceEmail),
     includeDisposables: form.includeDisposables !== false,
     disposablesNote: text(settings.disposablesNote, 800),
@@ -728,6 +732,71 @@ function buildQuoteMeta(settings, form, pricing) {
     integrationRetryLimit: integerInRange(settings.integrationRetryLimit, 3, 1, 10),
     integrationAuditRetention: integerInRange(settings.integrationAuditRetention, 50, 10, 200)
   };
+}
+
+// Decision-room pilot (design §4.7, staged-requests direction): project the
+// staff-marked decidable options a portal may OFFER — never apply. Bounded,
+// name-and-price only (no catalog ids), active + explicitly marked items
+// only, and never an item the quote already includes. Callers that do not
+// have the org catalog in hand at snapshot-build time pass nothing and the
+// projection is an empty list — fail closed, no stale offers invented.
+const MAX_PORTAL_DECIDABLE_OPTIONS = 12;
+
+function buildPortalDecidableOptions(catalog, selection) {
+  if (!isRecord(catalog)) return [];
+  const selectedIds = new Set();
+  const selectedNames = new Set();
+  const noteSelected = (items) => (Array.isArray(items) ? items : []).forEach((item) => {
+    const id = sanitizeIdentifier(item?.id, 128);
+    const name = text(item?.name || item, 200).toLowerCase();
+    if (id) selectedIds.add(id);
+    if (name) selectedNames.add(name);
+  });
+  noteSelected(selection?.addonSnapshots);
+  noteSelected(selection?.rentalSnapshots);
+  noteSelected(selection?.addons);
+  noteSelected(selection?.rentals);
+
+  const offerable = (items, itemType) => (Array.isArray(items) ? items : [])
+    .filter((item) => isRecord(item)
+      && item.portalDecidable === true
+      && item.active !== false
+      && !selectedIds.has(sanitizeIdentifier(item.id, 128))
+      && !selectedNames.has(text(item.name, 200).toLowerCase()))
+    .map((item) => ({
+      itemType,
+      name: text(item.name, 200),
+      price: numberInRange(item.price, 0, 0, 1_000_000_000),
+      pricingType: ["per_person", "per_item", "per_event"].includes(text(item.pricingType || item.type, 32))
+        ? text(item.pricingType || item.type, 32)
+        : itemType === "addon" ? "per_person" : "per_item"
+    }))
+    .filter((item) => Boolean(item.name));
+
+  return [...offerable(catalog.addons, "addon"), ...offerable(catalog.rentals, "rental")]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, MAX_PORTAL_DECIDABLE_OPTIONS);
+}
+
+// The projection is computed once, at the trusted draft-save moments that
+// hold the org catalog, and stored on the quote document
+// (decidableOptionsProjection). Every later snapshot moment — send,
+// delivery outcome, rotation, reopen, conversion — re-projects it from the
+// quote exactly like every other field, re-applying the same bounds. A
+// quote with no stored projection projects an empty list: fail closed.
+function sanitizeStoredDecidableOptions(value) {
+  return (Array.isArray(value) ? value : [])
+    .filter((item) => isRecord(item) && ["addon", "rental"].includes(text(item.itemType, 16)))
+    .map((item) => ({
+      itemType: text(item.itemType, 16),
+      name: text(item.name, 200),
+      price: numberInRange(item.price, 0, 0, 1_000_000_000),
+      pricingType: ["per_person", "per_item", "per_event"].includes(text(item.pricingType, 32))
+        ? text(item.pricingType, 32)
+        : item.itemType === "addon" ? "per_person" : "per_item"
+    }))
+    .filter((item) => Boolean(item.name))
+    .slice(0, MAX_PORTAL_DECIDABLE_OPTIONS);
 }
 
 function buildCanonicalPortalSnapshot(quoteId, quote) {
@@ -811,6 +880,7 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
   return {
     quoteId: sanitizeIdentifier(quoteId),
     organizationId: sanitizeIdentifier(quote?.organizationId),
+    decidableOptions: sanitizeStoredDecidableOptions(quote?.decidableOptionsProjection),
     portalKey,
     portalIssuedAtISO,
     portalExpiresAtISO,
@@ -866,7 +936,8 @@ function buildCanonicalPortalSnapshot(quoteId, quote) {
       brandBackgroundMid: text(quoteMeta.brandBackgroundMid, 32),
       brandBackgroundEnd: text(quoteMeta.brandBackgroundEnd, 32),
       businessPhone: text(quoteMeta.businessPhone, 40),
-      businessEmail: email(quoteMeta.businessEmail)
+      businessEmail: email(quoteMeta.businessEmail),
+      portalTermsText: text(quoteMeta.portalTermsText, 5_000)
     },
     status: text(quote?.status, 32).toLowerCase() || "draft",
     expiresAtISO: normalizeISO(quote?.expiresAtISO, portalExpiresAtISO),
@@ -1338,6 +1409,7 @@ function buildTrustedQuoteCreationDocuments({
   form,
   pricing,
   catalogSource,
+  catalog = null,
   settings,
   nowISO,
   creationReason = "initial_quote_create",
@@ -1573,6 +1645,7 @@ function buildTrustedQuoteCreationDocuments({
     latestVersionNumber: 1,
     versionMeta
   };
+  quote.decidableOptionsProjection = buildPortalDecidableOptions(catalog, quote.selection);
 
   const portal = buildCanonicalPortalSnapshot(id, quote);
   const version = {
@@ -1626,6 +1699,7 @@ function buildTrustedQuoteEditDocuments({
   form,
   pricing,
   catalogSource,
+  catalog = null,
   settings,
   nowISO
 } = {}) {
@@ -1778,6 +1852,13 @@ function buildTrustedQuoteEditDocuments({
     ...(rebooking ? { rebooking } : {}),
     updatedAtISO: editedAtISO
   };
+  // Fresh recompute when the caller holds the org catalog (the normal
+  // trusted-edit path); otherwise carry the stored projection forward,
+  // re-bounded — an edit without catalog access must never silently wipe
+  // offers the draft-save moment already computed.
+  editedQuote.decidableOptionsProjection = isRecord(catalog)
+    ? buildPortalDecidableOptions(catalog, editedQuote.selection)
+    : sanitizeStoredDecidableOptions(source.decidableOptionsProjection);
   const quotePatch = {
     quoteNumber,
     customer: editedQuote.customer,
@@ -1793,6 +1874,7 @@ function buildTrustedQuoteEditDocuments({
     portalExpiresAtISO: editedQuote.portalExpiresAtISO,
     event: editedQuote.event,
     selection: editedQuote.selection,
+    decidableOptionsProjection: editedQuote.decidableOptionsProjection,
     payment,
     booking,
     workflow,
@@ -1868,6 +1950,7 @@ module.exports = {
   QUOTE_VERSION_ID,
   QuoteCreationError,
   buildCanonicalPortalSnapshot,
+  buildPortalDecidableOptions,
   buildCustomerEmailClaim,
   bindCustomerIdentityToQuoteDocuments,
   buildCustomerProjection,

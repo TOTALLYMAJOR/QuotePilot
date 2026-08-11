@@ -106,6 +106,7 @@ describe("catalog record save planning", () => {
         writeData: {
           name: "Package A Plus",
           pppMinor: 2900,
+          costPppMinor: null,
           includedMenuItemIds: [],
           includedAddonIds: [],
           includedRentalIds: [],
@@ -114,6 +115,63 @@ describe("catalog record save planning", () => {
         expectedFingerprint: "package-a-fingerprint"
       }
     ]);
+  });
+
+  test("writes a recorded cost as Minor-cents and an unset cost as null, never coerced to $0", () => {
+    const baseline = catalog({
+      packages: [{ id: "package-a", name: "Package A", ppp: 25 }],
+      addons: [{ id: "addon-a", name: "Dessert", price: 4, pricingType: "per_person", type: "per_person", staffRole: "", active: true }],
+      rentals: [{ id: "rental-a", name: "Linens", price: 9, cost: 5, qtyPerGuests: 8, pricingType: "per_item", type: "per_item", active: true }]
+    });
+    const next = catalog({
+      packages: [{ ...baseline.packages[0], costPpp: 8.5 }],
+      addons: [{ ...baseline.addons[0], cost: 0 }],
+      // Tenant clears a previously-recorded rental cost back to blank.
+      rentals: [{ ...baseline.rentals[0], cost: null }]
+    });
+
+    const changes = buildCatalogRecordChanges({
+      catalog: next,
+      baselineCatalog: baseline,
+      serverFingerprints: {
+        packages: { "package-a": "fp-package" },
+        addons: { "addon-a": "fp-addon" },
+        rentals: { "rental-a": "fp-rental" }
+      }
+    });
+
+    expect(changes.find((c) => c.id === "package-a").writeData.costPppMinor).toBe(850);
+    // A deliberate $0 cost must still round-trip as 0, distinct from unset.
+    expect(changes.find((c) => c.id === "addon-a").writeData.costMinor).toBe(0);
+    // Clearing a previously-recorded cost must write null, not fall back to $0.
+    expect(changes.find((c) => c.id === "rental-a").writeData.costMinor).toBeNull();
+  });
+
+  test("writes portalDecidable true only on an explicit staff mark, defaulting strictly false", () => {
+    const baseline = catalog({
+      addons: [{ id: "addon-a", name: "Dessert", price: 4, pricingType: "per_person", type: "per_person", staffRole: "", active: true }],
+      rentals: [{ id: "rental-a", name: "Linens", price: 9, qtyPerGuests: 8, pricingType: "per_item", type: "per_item", active: true }]
+    });
+    const next = catalog({
+      addons: [{ ...baseline.addons[0], portalDecidable: true }],
+      // Anything short of an explicit boolean true (including truthy junk
+      // from hand-edited JSON) must write false — no option is ever
+      // customer-offered without a deliberate mark.
+      rentals: [{ ...baseline.rentals[0], portalDecidable: "yes" }]
+    });
+
+    const changes = buildCatalogRecordChanges({
+      catalog: next,
+      baselineCatalog: baseline,
+      serverFingerprints: {
+        addons: { "addon-a": "fp-addon" },
+        rentals: { "rental-a": "fp-rental" }
+      }
+    });
+
+    expect(changes.find((c) => c.id === "addon-a").writeData.portalDecidable).toBe(true);
+    const rentalChange = changes.find((c) => c.id === "rental-a");
+    expect(rentalChange?.writeData.portalDecidable ?? false).toBe(false);
   });
 
   test("distinguishes a fingerprint-guarded delete from a collision-checked create", () => {

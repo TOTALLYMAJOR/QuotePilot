@@ -165,6 +165,44 @@ describe("buildChangeImpact", () => {
   test("returns null without the inputs it needs", () => {
     expect(buildChangeImpact({ proposal: { kind: "set_guests", value: 1 } })).toBeNull();
   });
+
+  test("stays fail-closed on marginDelta: null without recorded costs on both sides", () => {
+    const swap = parse("Could we do chicken instead of the salmon?").proposals[0];
+    const impact = buildChangeImpact({ form, catalog, settings, proposal: swap });
+    expect(impact.marginDelta).toBeNull();
+  });
+
+  test("prices a marginDelta once every selected line has a recorded cost on both sides of the change", () => {
+    const costedSettings = {
+      ...settings,
+      serverCostRate: 16,
+      chefCostRate: 20,
+      bartenderCostRate: 22,
+      menuSections: [{
+        id: "mains",
+        items: [
+          { id: "salmon", name: "Grilled Salmon", price: 6, pricingType: "per_person", cost: 2.5 },
+          { id: "chicken", name: "Herb Chicken", price: 4, pricingType: "per_person", cost: 1.5 }
+        ]
+      }]
+    };
+    const costedCatalog = {
+      packages: [{ id: "classic", name: "Classic", ppp: 20, costPpp: 8 }],
+      addons: [{ id: "premium-bar", name: "Premium Bar", type: "per_person", price: 15, cost: 6 }],
+      rentals: [{ id: "linens", name: "Linens", price: 9, qtyPerGuests: 8, cost: 3 }],
+      settings: costedSettings
+    };
+    const swap = parseChangeRequest("Could we do chicken instead of the salmon?", {
+      form, catalog: costedCatalog, styles: STYLES
+    }).proposals[0];
+    const impact = buildChangeImpact({ form, catalog: costedCatalog, settings: costedSettings, proposal: swap });
+    expect(impact.marginDelta).not.toBeNull();
+    expect(impact.marginDelta.beforePct).toBeGreaterThan(0);
+    expect(impact.marginDelta.afterPct).toBeGreaterThan(0);
+    // Swapping to the cheaper-to-both-sides chicken should not collapse
+    // margin to zero or below in this fixture.
+    expect(impact.marginDelta.afterPct).toBeLessThan(1);
+  });
 });
 
 describe("proposal id stability across re-parses", () => {

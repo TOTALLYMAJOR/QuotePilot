@@ -80,4 +80,22 @@ describe("LiveBreakdown band strip", () => {
     expect(markup).not.toContain("data-pricing-band");
     expect(markup).not.toContain("Estimated range");
   });
+
+  test("never shows a margin range while the margin pilot flag is off, even with recorded costs", () => {
+    const costedCatalog = {
+      ...catalog,
+      packages: [{ id: "classic", name: "Classic", ppp: 20, costPpp: 8 }]
+    };
+    const totals = calculateQuote(form, costedCatalog, settings);
+    const markup = renderToStaticMarkup(
+      <LiveBreakdown
+        form={form}
+        totals={totals}
+        settings={settings}
+        catalog={costedCatalog}
+        guestBand={{ kind: "range", min: 100, max: 130, appliedValue: 115, source: "100 to 130 guests" }}
+      />
+    );
+    expect(markup).not.toContain("Margin range");
+  });
 });

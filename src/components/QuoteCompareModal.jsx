@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { calculateQuote, currency } from "../lib/quoteCalculator";
 import { buildQuoteScenarios } from "../lib/quoteWorkflow";
+import { buildMarginPresentation } from "./marginPresentation";
 import { useModalDialog } from "../hooks/useModalDialog";
+
+// Same default-off gate as every other margin surface; costs are tenant
+// catalog data and margin never renders in any customer-facing projection.
+const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
+);
+
+function marginPct(presentation) {
+  return presentation?.available ? presentation.marginPct * 100 : null;
+}
 
 function cloneForm(form) {
   return {
@@ -27,6 +38,26 @@ function ComparisonRow({ label, current, scenario, money = true }) {
   );
 }
 
+// Margin is fail-closed and can be unavailable on either side (recorded
+// costs may not cover the scenario's selections even when they cover the
+// current draft's), so this never assumes both percentages exist the way
+// ComparisonRow's money/count rows can.
+function MarginComparisonRow({ current, scenario }) {
+  if (current === null && scenario === null) return null;
+  const fmt = (value) => (value === null ? "Unavailable" : `${value.toFixed(1)}%`);
+  const delta = current !== null && scenario !== null ? scenario - current : null;
+  const deltaLabel = delta === null ? "—" : `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} pts`;
+
+  return (
+    <tr>
+      <td>Margin</td>
+      <td>{fmt(current)}</td>
+      <td>{fmt(scenario)}</td>
+      <td className={delta > 0 ? "delta-up" : delta < 0 ? "delta-down" : ""}>{deltaLabel}</td>
+    </tr>
+  );
+}
+
 export default function QuoteCompareModal({
   open,
   onClose,
@@ -45,10 +76,16 @@ export default function QuoteCompareModal({
     [form, catalog]
   );
   const scenarioResults = useMemo(
-    () => scenarios.map((scenario) => ({
-      ...scenario,
-      totals: calculateQuote(scenario.form, catalog, settings)
-    })),
+    () => scenarios.map((scenario) => {
+      const scenarioTotals = calculateQuote(scenario.form, catalog, settings);
+      return {
+        ...scenario,
+        totals: scenarioTotals,
+        margin: PILOT_MARGINS_ENABLED
+          ? marginPct(buildMarginPresentation({ form: scenario.form, totals: scenarioTotals, catalog, settings }))
+          : null
+      };
+    }),
     [scenarios, catalog, settings]
   );
 
@@ -63,6 +100,18 @@ export default function QuoteCompareModal({
   const compareTotals = useMemo(
     () => calculateQuote(compareForm, catalog, settings),
     [compareForm, catalog, settings]
+  );
+  const primaryMargin = useMemo(
+    () => (PILOT_MARGINS_ENABLED
+      ? marginPct(buildMarginPresentation({ form, totals: primaryTotals, catalog, settings }))
+      : null),
+    [form, primaryTotals, catalog, settings]
+  );
+  const compareMargin = useMemo(
+    () => (PILOT_MARGINS_ENABLED
+      ? marginPct(buildMarginPresentation({ form: compareForm, totals: compareTotals, catalog, settings }))
+      : null),
+    [compareForm, compareTotals, catalog, settings]
   );
   const { dialogRef } = useModalDialog({
     open,
@@ -136,6 +185,9 @@ export default function QuoteCompareModal({
                 </div>
                 <p>{scenario.packageName}</p>
                 <small>{scenario.description}</small>
+                {PILOT_MARGINS_ENABLED && scenario.margin !== null && (
+                  <small className="scenario-preset-margin">{scenario.margin.toFixed(1)}% margin</small>
+                )}
                 <button type="button" className="ghost compact" onClick={() => selectScenario(scenario)}>
                   {scenarioId === scenario.id ? "Selected" : `Compare ${scenario.label}`}
                 </button>
@@ -298,6 +350,9 @@ export default function QuoteCompareModal({
                   <ComparisonRow label="Deposit" current={primaryTotals.deposit} scenario={compareTotals.deposit} />
                   <ComparisonRow label="Servers" current={primaryTotals.servers} scenario={compareTotals.servers} money={false} />
                   <ComparisonRow label="Chefs" current={primaryTotals.chefs} scenario={compareTotals.chefs} money={false} />
+                  {PILOT_MARGINS_ENABLED && (
+                    <MarginComparisonRow current={primaryMargin} scenario={compareMargin} />
+                  )}
                 </tbody>
               </table>
             </div>

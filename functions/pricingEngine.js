@@ -544,7 +544,8 @@ function normalizeCatalogAddon(item = {}) {
     pricingType,
     type: pricingType,
     staffRole: resolveAddonStaffRole(item),
-    active: item.active !== false
+    active: item.active !== false,
+    portalDecidable: item.portalDecidable === true
   };
 }
 
@@ -557,7 +558,8 @@ function normalizeCatalogRental(item = {}) {
     qtyPerGuests: Math.max(1, toNumber(item.qtyPerGuests, 1)),
     pricingType,
     type: pricingType,
-    active: item.active !== false
+    active: item.active !== false,
+    portalDecidable: item.portalDecidable === true
   };
 }
 
@@ -1772,7 +1774,14 @@ async function calculateQuotePricingAuthoritative({
     organizationId: catalogBundle.organizationId,
     catalogSource: catalogBundle.source,
     catalogAuthority,
-    pricing
+    pricing,
+    // The exact catalog collections the decidable-options projection needs,
+    // from the same authoritative read pricing itself used — so the trusted
+    // quote-write flows never do a second, possibly-divergent catalog read.
+    catalog: {
+      addons: catalogBundle.addons,
+      rentals: catalogBundle.rentals
+    }
   };
 }
 

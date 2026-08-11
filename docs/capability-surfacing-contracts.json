@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 9,
+  "catalogVersion": 19,
   "contracts": [
     {
       "id": "customer-directory-and-360",
@@ -856,14 +856,14 @@
     },
     {
       "id": "private-customer-authority",
-      "reviewRevision": 1,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
       "audiences": [
         "internal_security"
       ],
-      "summary": "Canonical quote authority and normalized-email ownership claims remain private while exact-token portal projection reads continue independently.",
+      "summary": "Canonical quote authority and normalized-email ownership claims remain private while exact-token portal projection reads continue independently. Revision 2: the canonical portal snapshot additionally projects decidableOptions — a bounded, name-and-price-only list of staff-marked (portalDecidable) active catalog options the quote does not already include, built by the exported pure buildPortalDecidableOptions and empty (fail-closed) at every call site until a later slice threads the org catalog in; no call-site behavior changes, no new Firebase Function export, and no portal UI reads the field yet. Revision 3: quoteMeta additionally carries the tenant-authored portalTermsText (bounded, verbatim) into the canonical snapshot's projected quoteMeta subset, so the portal can render a per-tenant terms block; absent text projects empty and the portal renders nothing.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -913,7 +913,8 @@
         }
       ],
       "headlessReason": "Private ownership claims and canonical staff-only records are security primitives whose browser exposure would reveal identity or weaken exact-token projection boundaries.",
-      "safeOutcome": "Staff receive collision-safe customer behavior and customers retain exact-token decision-center access without browser access to canonical records or private claims."
+      "safeOutcome": "Staff receive collision-safe customer behavior and customers retain exact-token decision-center access without browser access to canonical records or private claims.",
+      "surfaceReviewNote": ""
     },
     {
       "id": "legacy-customer-id-backfill",
@@ -1721,7 +1722,7 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -1803,8 +1804,8 @@
           "locator": "## Quote Builder Details"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "The quote-edit entry point, server-authoritative repricing request, generation guard, exact before/proposed evidence, dependency classifications, proof boundary, retained stale result, and return-to-edit action were reviewed together.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "Revision 1 reviewed the quote-edit entry point, server-authoritative repricing request, generation guard, exact before/proposed evidence, and presentation states as changed. Revision 2 is a backend-only additive change to functions/pricingEngine.js with no UI, state, or export change: the addon/rental normalizers additionally preserve the strictly-boolean portalDecidable mark, and calculateQuotePricingAuthoritative additionally returns the exact addons/rentals collections from the same authoritative catalog read, so the trusted quote-write flows can compute the decision-room decidableOptionsProjection without a second, possibly-divergent catalog read. Pricing math reads none of the new fields — verified_existing.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -1876,7 +1877,7 @@
       "entryPointLocators": [
         {
           "path": "src/components/QuoteHistoryModal.jsx",
-          "locator": "Local BEO \u2014 no receipt"
+          "locator": "Local BEO — no receipt"
         }
       ],
       "testPaths": [
@@ -3025,14 +3026,14 @@
     },
     {
       "id": "structured-change-request-record",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "With the flag-gated client-request panel, staff record which deterministically parsed proposals were staged from one exact customer change request through a callable-only, create-only, replay-stable attestation that the server binds to the exact stored request identity and message hash, the acting staff member, and the quote revision at record time; the record never replies to the customer, mutates the quote, portal, or versions, and browser writes are rules-denied.",
+      "summary": "With the flag-gated client-request panel, staff record which deterministically parsed proposals were staged from one exact customer change request through a callable-only, create-only, replay-stable attestation that the server binds to the exact stored request identity and message hash, the acting staff member, and the quote revision at record time; the record never replies to the customer, mutates the quote, portal, or versions, and browser writes are rules-denied. A second, later callable performs the record's only permitted follow-up mutation: a bounded, write-once link from the record to the quote version that resulted from actually saving the staged edits, completing the intent-to-version audit trail. Linking is fired best-effort right after a save that already fully succeeded on its own; it never blocks, never surfaces its own failure, and never overwrites an existing link to a different version — only idempotent replay of the same one.",
       "backendPaths": [
         "firestore.rules",
         "functions/changeRequestRecord.js",
@@ -3040,10 +3041,12 @@
         "src/lib/changeRequestRecordClient.js"
       ],
       "backendExports": [
-        "functions/index.js#recordChangeRequestParse"
+        "functions/index.js#recordChangeRequestParse",
+        "functions/index.js#linkChangeRequestResolutionVersion"
       ],
       "affectedBackendExports": [
-        "functions/index.js#recordChangeRequestParse"
+        "functions/index.js#recordChangeRequestParse",
+        "functions/index.js#linkChangeRequestResolutionVersion"
       ],
       "frontendPaths": [
         "src/App.jsx",
@@ -3104,6 +3107,18 @@
         {
           "path": "src/components/__tests__/changeRequestRecordAction.test.jsx",
           "locator": "locks an ambiguous outcome to replay-stable reconciliation and recovers a transient failure"
+        },
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "links a newer version and reports the version number bound"
+        },
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "fails closed when the version is missing, foreign, or not newer than the recorded revision"
+        },
+        {
+          "path": "src/lib/__tests__/changeRequestRecord.server.test.js",
+          "locator": "replays idempotently for the same linked version and rejects relinking to a different one"
         }
       ],
       "documentationPaths": [
@@ -3121,7 +3136,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The flag-gated client-request panel gains one explicit record boundary after staging: ready/submitting/receipt plus uncertain/reconciliation/recovery/error, with replay-stable reconciliation copy, terminal definitive-rejection copy, staged-draft-unchanged claims, and unavailability collapsing to the read-and-stage surface. The callable, pure validation core, create-only transaction, and rules denial were reviewed together.",
+      "surfaceReviewNote": "The flag-gated client-request panel gains one explicit record boundary after staging: ready/submitting/receipt plus uncertain/reconciliation/recovery/error, with replay-stable reconciliation copy, terminal definitive-rejection copy, staged-draft-unchanged claims, and unavailability collapsing to the read-and-stage surface. The callable, pure validation core, create-only transaction, and rules denial were reviewed together. This revision adds the version-linking callable, its ownership/newer-than/write-once validation, and its best-effort trigger from the existing quote-save success path; it introduces no new UI surface or state, so the prior seven states remain the complete evidenced set.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -3168,6 +3183,380 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "Staff can attest which parsed proposals they staged from one exact customer request and receive an internal, replay-stable audit receipt, while the customer request, quote, portal, versions, and every delivery, acceptance, booking, and payment truth remain exactly as they were; a failed or unavailable record leaves the staged draft untouched."
+    },
+    {
+      "id": "catalog-cost-and-pricing-data-entry",
+      "reviewRevision": 4,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, plus a strictly default-false per-option portalDecidable mark on add-ons and rentals (the decision-room pilot's staff opt-in for which options the customer portal may offer as staged requests), all using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable.",
+      "backendPaths": [
+        "src/data/mockCatalog.js",
+        "src/hooks/useCatalogData.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/LiveBreakdown.jsx",
+        "src/components/marginPresentation.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/AdminCatalogModal.jsx",
+          "locator": "Server cost rate"
+        },
+        {
+          "path": "src/components/LiveBreakdown.jsx",
+          "locator": "margin-advisor-stream"
+        },
+        {
+          "path": "src/components/marginPresentation.js",
+          "locator": "Below your margin target"
+        }
+      ],
+      "testPaths": [
+        "src/data/__tests__/mockCatalog.costFields.test.js",
+        "src/hooks/__tests__/useCatalogData.savePlan.test.js",
+        "src/components/__tests__/marginPresentation.test.js",
+        "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/data/__tests__/mockCatalog.costFields.test.js",
+          "locator": "a stored Minor-cents null survives as null, not 0 — the bug fromMinorUnits alone would reintroduce"
+        },
+        {
+          "path": "src/hooks/__tests__/useCatalogData.savePlan.test.js",
+          "locator": "writes a recorded cost as Minor-cents and an unset cost as null, never coerced to $0"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "starts ready with no unsaved changes and no message"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reflects submitting while the parent-owned saving prop is true"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "lands on receipt after a clean save"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a plain validation error as error, distinct from a conflict"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a reconciled concurrent-edit conflict as reconciliation"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a saved-but-unconfirmed revision as uncertain"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "offers recovery and its refresh action when reload itself failed"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Catalog cost entry and margin advisory"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Catalog cost entry and margin advisory"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "starts ready with no unsaved changes and no message",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reflects submitting while the parent-owned saving prop is true",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "lands on receipt after a clean save",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a plain validation error as error, distinct from a conflict",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a reconciled concurrent-edit conflict as reconciliation",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "reports a saved-but-unconfirmed revision as uncertain",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "offers recovery and its refresh action when reload itself failed",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Staff see recorded costs and a below-target margin advisory only when real tenant-recorded evidence supports them; costs never appear to customers, and every save outcome (success, conflict, unconfirmed revision, validation error, or reload-required recovery) is now visibly and distinctly marked instead of collapsing into one generic status line."
+    },
+    {
+      "id": "model-assisted-intent-parse",
+      "reviewRevision": 2,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it — INTENT_PARSER_ENABLED, a provider, and that provider's Secret Manager key must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
+      "backendPaths": [
+        "functions/index.js",
+        "functions/intentParserCore.cjs",
+        "src/lib/intentParserCore.cjs",
+        "src/lib/intentParseClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#parseIntentDraft"
+      ],
+      "frontendPaths": [
+        "src/components/CreateIntake.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CreateIntake.jsx",
+          "locator": "Model assist"
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/intentParser.server.test.js",
+        "src/components/__tests__/createIntakeModelAssist.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/intentParser.server.test.js",
+          "locator": "forces every surviving fact to low confidence with a model source, allowlisting fields"
+        },
+        {
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "renders no model affordance at all without an injected model lane"
+        }
+      ],
+      "documentationPaths": [
+        "docs/INTENT_INTAKE_ADR.md",
+        "docs/FEATURE_MATRIX.md",
+        "README.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/INTENT_INTAKE_ADR.md",
+          "locator": "Allows the trusted parse callable to run at all"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Model-assisted intent parse"
+        },
+        {
+          "path": "README.md",
+          "locator": "INTENT_PARSER_OPENAI_KEY"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Model assist in CREATE"
+        }
+      ],
+      "safeOutcome": "Disabled (the shipped default), the affordance reports the lane as off and typed structuring is untouched; enabled, staff see only bounded, allowlisted, low-confidence suggestions that each require explicit confirmation before touching the draft, and no provider ever becomes pricing or saving authority.",
+      "affectedBackendExports": [
+        "functions/index.js#parseIntentDraft"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Revision 1 shipped the pure core module only. Revision 2 ships the whole reachable surface together, as the gate requires: the functions/ runtime twin of the core module, the parseIntentDraft callable (staff-only, same-org, env-keyed until the Secret Manager secrets exist and are bound), the client boundary that distinguishes the designed dormant precondition from retryable unavailability, and the CREATE canvas Model assist section with literal data-capability-state markers for every required read state. stale is excepted: the parse is stateless and freshly computed per request, so no cached/stale variant can exist.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "shows loading while the model request is in flight",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports success with confirm-required model facts",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports partial when facts arrive alongside unparsed notes",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports empty when the model reads nothing usable",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports a retryable provider failure as error",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
+          "locator": "reports the designed dormant outcome as recovery, keeping the deterministic floor",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {
+        "stale": {
+          "reasonCode": "separate_program",
+          "justification": "The parse is stateless and computed fresh on every request; nothing is cached or persisted client- or server-side, so no stale variant of the surface can exist to present or test."
+        }
+      }
+    },
+    {
+      "id": "event-shape-memory",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "read_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Flag-gated CREATE memory assist (docs/POST_COMPETITIVE_DESIGN.md §4.10; owner-decided scope 2026-08-11): once structuring a note yields both an event type and a guest count, loadEventShapeMemory reads the tenant's own already-scoped booking history, keeps only accepted/booked quotes at the exact event type and a fixed guest band, and reports the median servers/chefs/bartenders and half-hour-rounded duration plus any rental in a strict majority of matches. No AI and no cross-tenant signal — getQuoteHistory is already tenant-scoped server-side, this module only aggregates what it returns. Below a minimum sample of 3, the honest outcome is 'not enough history yet', never a guess from one or two data points. Applying is narrow and explicit: only servers/chefs/bartenders/hours are written to the draft; rentals are informational text only, never auto-applied, so an existing rental selection is never silently overwritten.",
+      "backendPaths": [
+        "src/lib/eventShapeMemory.js",
+        "src/lib/quoteStore.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [
+        "src/components/CreateIntake.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/CreateIntake.jsx",
+          "locator": "data-capability-id=\"event-shape-memory\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/eventShapeMemory.test.js",
+        "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+        "src/components/__tests__/createIntakeEventShapeMemory.flagOff.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/eventShapeMemory.test.js",
+          "locator": "below MIN_SAMPLE_SIZE reports insufficient with no staffing/hours suggestion, even with real matches"
+        },
+        {
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "fires automatically once structuring yields both event type and guests, with no separate button"
+        },
+        {
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOff.test.jsx",
+          "locator": "never fetches and never renders the memory section, even for a fully structured event"
+        }
+      ],
+      "documentationPaths": [
+        "docs/POST_COMPETITIVE_DESIGN.md",
+        "docs/FEATURE_MATRIX.md",
+        "README.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/POST_COMPETITIVE_DESIGN.md",
+          "locator": "4.10 Memory: the compounding moat"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Event-shape memory"
+        },
+        {
+          "path": "README.md",
+          "locator": "VITE_PILOT_MEMORY_ENABLED"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Memory assist in CREATE"
+        }
+      ],
+      "safeOutcome": "Disabled (the shipped default and not bound in any deployment workflow), CREATE is byte-identical to today. Enabled, staff only ever see a suggestion once real tenant history clears the minimum sample; applying touches only staffing and hours, rentals stay a read-only mention, and an unreachable history read offers retry before escalating to a clearly-labeled recovery state rather than blocking the deterministic reading above it.",
+      "affectedBackendExports": [],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "New surface. No backend export is added or changed — loadEventShapeMemory calls the existing getQuoteHistory read with an added eventTypeId filter it already supported, so there is nothing for affectedBackendExports to list. The pure aggregate (src/lib/eventShapeMemory.js) and its CREATE render block (loading/empty/partial/success/error/recovery, each with a literal data-capability-state marker) shipped together in one revision. stale is excepted: every fetch is a fresh read with nothing cached, matching the precedent already accepted for model-assisted-intent-parse.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "shows loading while the history read is in flight",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "reports the honest empty and partial cold-start states with no apply action",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "reports the honest empty and partial cold-start states with no apply action",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "reports success with the median staffing/hours and majority rentals as informational text",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "a failed read offers retry; a second failure escalates from error to recovery, both retryable",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/createIntakeEventShapeMemory.flagOn.test.jsx",
+          "locator": "a failed read offers retry; a second failure escalates from error to recovery, both retryable",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {
+        "stale": {
+          "reasonCode": "separate_program",
+          "justification": "Every read calls getQuoteHistory fresh and nothing is cached client- or server-side, so no stale variant of the surface can exist to present or test."
+        }
+      }
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { calculateQuote } from "../lib/quoteCalculator";
 import { MAX_EVENT_HOURS, MIN_EVENT_HOURS } from "../lib/wizardUi";
+import { buildMarginPresentation } from "./marginPresentation";
 
 // Deterministic change-request parsing for the flag-gated client-request
 // panel (docs/POST_COMPETITIVE_DESIGN.md §4.8). The customer's stored
@@ -362,15 +363,26 @@ export function proposalTouchedFields(proposal) {
 
 export function buildChangeImpact({ form, catalog, settings, proposal } = {}) {
   if (!form || !catalog || !settings || !proposal) return null;
+  const nextForm = applyProposalToForm(form, proposal);
   const before = calculateQuote(form, catalog, settings);
-  const after = calculateQuote(applyProposalToForm(form, proposal), catalog, settings);
+  const after = calculateQuote(nextForm, catalog, settings);
   if (!before || !after) return null;
   const delta = Number(after.total || 0) - Number(before.total || 0);
   const depositDelta = Number(after.deposit || 0) - Number(before.deposit || 0);
+  // Fail-closed independently of the total/deposit delta above: a proposal
+  // can move a quote into or out of cost coverage (e.g. adding a bartender
+  // when no bartender cost rate is on file), so margin is only ever shown
+  // when both the current draft and the proposed one have it.
+  const beforeMargin = buildMarginPresentation({ form, totals: before, catalog, settings });
+  const afterMargin = buildMarginPresentation({ form: nextForm, totals: after, catalog, settings });
+  const marginDelta = beforeMargin?.available && afterMargin?.available
+    ? { beforePct: beforeMargin.marginPct, afterPct: afterMargin.marginPct }
+    : null;
   return {
     beforeTotal: Number(before.total || 0),
     afterTotal: Number(after.total || 0),
     delta,
-    depositDelta
+    depositDelta,
+    marginDelta
   };
 }

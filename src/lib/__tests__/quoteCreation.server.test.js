@@ -6,6 +6,7 @@ const {
   QuoteCreationError,
   bindCustomerIdentityToQuoteDocuments,
   buildCanonicalPortalSnapshot,
+  buildPortalDecidableOptions,
   buildCustomerEmailClaim,
   buildCustomerProjection,
   buildDuplicateQuoteForm,
@@ -1651,5 +1652,67 @@ describe("trusted server quote creation documents", () => {
         role: "customer"
       }
     })).toThrow(/staff role required/i);
+  });
+});
+
+describe("portal decidable-option projection", () => {
+  const catalog = {
+    addons: [
+      { id: "premium-bar", name: "Premium Bar", price: 15, pricingType: "per_person", active: true, portalDecidable: true },
+      { id: "coffee", name: "Coffee Station", price: 95, pricingType: "per_event", active: true, portalDecidable: true },
+      { id: "photo", name: "Photo Booth", price: 400, pricingType: "per_event", active: true, portalDecidable: false },
+      { id: "retired", name: "Retired Add-on", price: 10, pricingType: "per_person", active: false, portalDecidable: true }
+    ],
+    rentals: [
+      { id: "linens", name: "Linens", price: 9, pricingType: "per_item", active: true, portalDecidable: true }
+    ]
+  };
+
+  test("offers only active, explicitly marked options the quote does not already include", () => {
+    const options = buildPortalDecidableOptions(catalog, {
+      addonSnapshots: [{ id: "premium-bar", name: "Premium Bar" }]
+    });
+    expect(options).toEqual([
+      { itemType: "addon", name: "Coffee Station", price: 95, pricingType: "per_event" },
+      { itemType: "rental", name: "Linens", price: 9, pricingType: "per_item" }
+    ]);
+  });
+
+  test("fails closed to an empty list without a catalog, and excludes by name as well as id", () => {
+    expect(buildPortalDecidableOptions(null, {})).toEqual([]);
+    expect(buildPortalDecidableOptions(undefined, {})).toEqual([]);
+    const options = buildPortalDecidableOptions(catalog, {
+      rentals: ["Linens"],
+      addonSnapshots: [{ id: "coffee" }]
+    });
+    expect(options).toEqual([
+      { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" }
+    ]);
+  });
+
+  test("the canonical snapshot re-projects the stored quote projection, bounded, and fails closed without one", () => {
+    const quote = {
+      organizationId: "org-1",
+      portalKey: "portal_key_decidable_000000000001",
+      selection: { addonSnapshots: [] },
+      customer: { name: "Jordan" },
+      event: { guests: 80 },
+      totals: { total: 5000, deposit: 1500 }
+    };
+    const bare = buildCanonicalPortalSnapshot("quote-1", quote);
+    expect(bare.decidableOptions).toEqual([]);
+
+    const stored = buildCanonicalPortalSnapshot("quote-1", {
+      ...quote,
+      decidableOptionsProjection: [
+        { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" },
+        { itemType: "junk", name: "Not offerable", price: 1, pricingType: "per_event" },
+        { itemType: "rental", name: "Linens", price: 9, pricingType: "bogus_mode" }
+      ]
+    });
+    expect(stored.decidableOptions).toEqual([
+      { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" },
+      { itemType: "rental", name: "Linens", price: 9, pricingType: "per_item" }
+    ]);
   });
 });

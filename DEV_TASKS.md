@@ -118,9 +118,10 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
   until recovery, revocation, multi-organization membership, and exact-token
   coexistence are specified.
 - Complete hosted acceptance for the deployed callable-only structured
-  change-request record, then specify any future link from its internal staging
-  receipt to an authoritative resulting quote version. Keep the current
-  freeform request-changes path and ordinary save authority intact.
+  change-request record and the source-built, write-once
+  `linkChangeRequestResolutionVersion` follow-up that binds a recorded
+  resolution to the later saved quote version. Keep the current freeform
+  request-changes path and ordinary save authority intact.
 
 ## P1 - Customer-Flow Follow-through
 
@@ -142,34 +143,122 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
 
 ## P1 - Post-Competitive Pilot Program
 
-The destination design (docs/POST_COMPETITIVE_DESIGN.md) has nine source
-capabilities grouped behind seven build gates: NOW home, Event Room ring +
+The destination design (docs/POST_COMPETITIVE_DESIGN.md) has its source
+capabilities grouped behind eight build gates: NOW home, Event Room ring +
 decide stack + cascade receipts, guided-selling decide cards, CREATE intake
 with band pricing, the client-request panel with the structured record
-callable, the Pilot command bar, and fail-closed margin presentation. PR #53
-merged the source and the `v0.6.0` release branch binds all seven gates into the
-governed production workflows. Remaining program work:
+callable (plus best-effort structured change-request version linking; see
+the `structured-change-request-record` capability contract), the Pilot
+command bar, the fail-closed margin strip (plus Catalog Admin cost
+entry, a below-target commercial advisor card, a margin range in the CREATE
+intake band-pricing preview, and margin awareness in Scenario Compare and
+the change-request/command-bar impact preview; see the
+`catalog-cost-and-pricing-data-entry` capability contract), and the
+decision-room ask-about affordance in the customer portal. PR #53 merged
+the original seven-gate source to `main`, and `v0.6.0` deployed all seven
+gates to both production providers (PROJECT_STATUS.md has the exact
+CI/deployment run evidence). Everything built after that promotion — cost
+entry, the advisor card, version linking, the two later margin-range
+extensions, the catalog recovery-button bugfix, the ask-about affordance,
+and the production binding of its `VITE_PILOT_DECISION_ROOM_ENABLED` gate —
+remains unmerged and undeployed. Remaining program work:
 
-- Complete the governed `v0.6.0` merge/tag/deployment sequence, then run an
-  authenticated staff acceptance pass for each promoted surface. Public route
-  reachability and provider acceptance do not substitute for that pass.
-- Exit the temporary bundle exception through optimization or a reviewed
-  clean-main baseline recalibration after production stabilization.
-- Continue Phase 5 unit economics with authoritative tenant cost maintenance
-  and commercial advisor cards. The current presentation must continue to fail
-  closed as `Margins unavailable` when any required cost is absent.
-- Structured change-request version linking: extend the
-  `recordChangeRequestParse` contract so a resolution can bind the resulting
-  quote version after the trusted save, completing intent-to-version audit.
-- Proposal decision room: portal upgrade with staff-marked decidable
-  options, per-block questions through the existing conversation rail, and
-  interpreted (portal-visit-only) activity counsel (design §4.7).
-- Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md: trusted
+On 2026-08-11 the owner settled this program's open decisions in one round;
+each bullet below carries its decided direction. Owner-decided, not yet
+merged: no PR yet — work continues accumulating on the pilot branch until
+the owner asks for the merge.
+
+- Merge and promote the post-`v0.6.0` pilot work above (owner will say
+  when; no PR until then), then run an authenticated staff acceptance pass
+  across all eight gates' production flag combination, including what
+  shipped after `v0.6.0`. Public route reachability and provider
+  acceptance do not substitute for that pass.
+- Bundle-baseline recalibration: owner-approved (2026-08-11), contingent
+  on it benefiting the app — execute after the pilot branch merges, from a
+  clean `main` checkout per docs/PERFORMANCE_GUARDRAILS.md (regenerate
+  baseline, delete the exception, keep the 5% allowance). Until then the
+  zero-headroom exception continues to be re-measured per checkpoint.
+- Proposal decision room (design §4.7) — decided directions:
+  - Decidable options (decided: staged requests, no signature at the tap):
+    a customer's option choice in the portal lands as a staged change
+    request for staff approval, riding the existing change-request path —
+    it is a request, not an authoritative change, so the
+    `proposal-acceptance-v1` signature ceremony stays exactly where it is
+    (final proposal acceptance) and is not repeated per option. The
+    staff-side data model is built: `portalDecidable` marks on add-ons and
+    rentals (strictly default false, explicit-true only) with a flag-gated
+    Portal offer checkbox in Catalog Admin, covered by the
+    `catalog-cost-and-pricing-data-entry` contract revision 3. The
+    projection core is also built and dormant: the canonical snapshot
+    carries `decidableOptions` via the exported pure
+    `buildPortalDecidableOptions` (bounded, name-and-price only, excludes
+    already-included items by id and name), empty at every call site
+    until the org catalog is threaded in (`private-customer-authority`
+    revision 2). The projection now flows end-to-end server-side: the
+    authoritative pricing read returns the catalog collections, both
+    trusted quote builders store decidableOptionsProjection on the quote
+    (fresh at create/edit, carried forward re-bounded otherwise), and
+    every snapshot moment re-projects it. The portal offer cards are
+    built: an unlocked portal renders its projected options and a tap
+    drafts the canonical "Please add X." sentence into the existing
+    Request Changes message (append-only, deduplicated, length-capped) —
+    the full marks → projection → offer → staged-request loop now exists.
+    Remaining for this piece: mirror the field in src/lib/quoteStore.js's
+    client `buildPortalSnapshot` (local-fallback sync path only; needs a
+    quoteStore-owning contract bump), and hosted staff acceptance of the
+    whole loop.
+  - Per-block questions (conservative subset built; decided: block tags
+    stay message-body text, not a structured field — revisit only if
+    staff-side threading is actually wanted later). Terms and assumptions
+    are built: the tenant-authored portalTermsText setting flows Catalog
+    Admin -> settings -> quoteMeta -> snapshot -> a verbatim portal terms
+    block (absent while empty), and the assumptions block restates
+    recorded facts only; the options section is block-tagged too — six
+    addressable blocks plus the header. Remaining for full nine-block
+    parity: a dedicated investment breakdown block beyond the existing
+    pricing section, and cover/experience-narrative treatments
+    (presentational, no new data).
+  - Activity counsel: deferred by owner decision (2026-08-11) — no portal
+    view/interaction telemetry gets built for now; revisit post-pilot
+    with an explicit privacy-posture review if wanted.
+- Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md — decided: yes,
+  with BOTH OpenAI and Anthropic as selectable providers. The pure core
+  module is built and tested (src/lib/intentParserCore.cjs, contract
+  model-assisted-intent-parse): config gate, sanitization, strict-JSON
+  prompt, provider request builders, untrusted-output validation forcing
+  low confidence. The CREATE integration is built: functions/ runtime twin,
+  the parseIntentDraft callable (staff-only, same-org, stateless), the
+  client boundary, and the Model assist UI with full read-state evidence
+  (model-assisted-intent-parse rev 2). Remaining owner actions at enable
+  time: create INTENT_PARSER_OPENAI_KEY / INTENT_PARSER_ANTHROPIC_KEY in
+  Secret Manager, set INTENT_PARSER_ENABLED/PROVIDER on the function, and
+  have the .runWith secrets binding added; keep the src/lib and functions/
+  copies of intentParserCore.cjs in sync when either changes. Trusted
   `parseIntentDraft` callable behind `INTENT_PARSER_ENABLED=false` /
-  provider `none`, Secret Manager-bound key, deterministic lane remains the
-  availability floor; full backend capability contract required.
-- Memory defaults (design §4.10): venue/client/season defaults with
-  provenance and instant human override, tenant-isolated.
+  provider `none` (defaults unchanged: off, deterministic lane remains the
+  availability floor), Secret Manager-bound keys, full backend capability
+  contract required. Owner action needed at enable time: create the
+  Secret Manager secrets for the chosen provider key(s); the code ships
+  dormant without them.
+- Deterministic intake reader (owner-directed strongest-deterministic
+  goal): staff counts, time ranges, party-of-N, reversed dates,
+  confirm-only relative weekdays, "noon"/"midnight" clock words (bare and
+  in a range), written-out guest counts ("eighty guests", "two hundred
+  and fifty guests"), a multi-day-mention note (never the draft date),
+  and labeled venue names ("Venue: X", "the venue is X") beyond the
+  original "at X" pattern are all built. The queued family list from the
+  prior checkpoint is now fully closed out.
+- Memory defaults (design §4.10) — decided scope for the first slice:
+  event-shape memory is built and tested (`src/lib/eventShapeMemory.js`,
+  contract `event-shape-memory`): staffing/hours by exact event type and
+  fixed guest band, median-aggregated from the tenant's own accepted/
+  booked quotes, plus any rental in a strict majority of matches shown as
+  a read-only mention. Wired into CREATE behind `VITE_PILOT_MEMORY_ENABLED`
+  (default off, deliberately not production-bound — a separate future
+  owner decision, same as the decision-room gate's initial posture);
+  applying writes only staffing/hours to the draft. Venue/client/season
+  memory stay later phases. Tenant-isolated, no cross-tenant learning,
+  honest cold start below a minimum sample of 3.
 
 ## P1 - Performance and Accessibility
 

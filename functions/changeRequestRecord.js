@@ -225,10 +225,81 @@ function buildChangeRequestRecord({ normalized, verification, actor, nowISO }) {
   };
 }
 
+const RESOLUTION_ID_PATTERN = /^crr_[0-9a-f]{48}$/;
+const VERSION_ID_PATTERN = /^v\d{4,6}$/;
+
+// Structured change-request version linking (DEV_TASKS "Structured
+// change-request version linking"): after a record exists, one later
+// bounded update may bind it to the quote version that resulted from the
+// staged edits actually being saved — completing the intent-to-version
+// audit trail without ever re-deriving or re-validating the original
+// attestation. The link is write-once: once set, it may only be repeated
+// for the exact same version (idempotent replay), never overwritten to a
+// different one, since the resolution's tie to its resulting version is
+// itself part of the immutable audit fact.
+function normalizeChangeRequestVersionLinkRequest(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new ChangeRequestRecordError("invalid-argument", "A version-link request is required.");
+  }
+  const organizationId = bounded(payload.organizationId, "organizationId");
+  const quoteId = bounded(payload.quoteId, "quoteId");
+  const resolutionId = bounded(payload.resolutionId, "resolutionId");
+  const versionId = bounded(payload.versionId, "versionId");
+  if (!RESOLUTION_ID_PATTERN.test(resolutionId)) {
+    throw new ChangeRequestRecordError("invalid-argument", "resolutionId is not a recognized structured-record id.");
+  }
+  if (!VERSION_ID_PATTERN.test(versionId)) {
+    throw new ChangeRequestRecordError("invalid-argument", "versionId is not a recognized quote version id.");
+  }
+  return { organizationId, quoteId, resolutionId, versionId };
+}
+
+function verifyChangeRequestVersionLink({ normalized, resolution, version }) {
+  if (!resolution || typeof resolution !== "object") {
+    throw new ChangeRequestRecordError("not-found", "The change-request record for this link was not found.");
+  }
+  if (
+    text(resolution.organizationId) !== normalized.organizationId
+    || text(resolution.quoteId) !== normalized.quoteId
+  ) {
+    throw new ChangeRequestRecordError("permission-denied", "The record does not belong to this quote.");
+  }
+  const existingLink = text(resolution.linkedVersionId);
+  if (existingLink) {
+    if (existingLink !== normalized.versionId) {
+      throw new ChangeRequestRecordError(
+        "failed-precondition",
+        "This record is already linked to a different quote version."
+      );
+    }
+    return { alreadyLinked: true };
+  }
+  if (!version || typeof version !== "object") {
+    throw new ChangeRequestRecordError("not-found", "The quote version for this link was not found.");
+  }
+  if (
+    text(version.organizationId) !== normalized.organizationId
+    || text(version.quoteId) !== normalized.quoteId
+  ) {
+    throw new ChangeRequestRecordError("permission-denied", "The version does not belong to this quote.");
+  }
+  const versionNumber = Number(version.versionNumber);
+  const recordedVersionNumber = Number(resolution.latestVersionNumberAtRecord) || 0;
+  if (!Number.isInteger(versionNumber) || versionNumber <= recordedVersionNumber) {
+    throw new ChangeRequestRecordError(
+      "failed-precondition",
+      "The linked version must be newer than the version recorded at review time."
+    );
+  }
+  return { alreadyLinked: false, versionNumber };
+}
+
 module.exports = {
   CHANGE_REQUEST_RECORD_SCHEMA_VERSION,
   ChangeRequestRecordError,
   normalizeChangeRequestRecordRequest,
   verifyChangeRequestRecordAgainstQuote,
-  buildChangeRequestRecord
+  buildChangeRequestRecord,
+  normalizeChangeRequestVersionLinkRequest,
+  verifyChangeRequestVersionLink
 };

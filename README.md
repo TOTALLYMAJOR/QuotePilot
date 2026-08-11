@@ -270,13 +270,48 @@ Optional:
   pieces named — nothing is estimated; travel and tax are excluded from
   both sides, and costs never appear in any customer-facing projection.
   Purely presentational; not a deployment or acceptance decision.)
+- `VITE_PILOT_DECISION_ROOM_ENABLED` (default off in generic/local builds.
+  Adds per-block "Ask about this" buttons to the customer portal's existing
+  content sections (event details, package and menu, pricing) that open the
+  existing quote conversation pre-seeded with the block's name in the
+  ordinary message body — text the customer could already type, sent over
+  the customer's existing conversation authority. No new callable, message
+  field, or trust boundary; a seeded draft never overwrites text the
+  customer already typed or an unresolved send attempt.)
 
-The governed Firebase and Vercel production workflows source-bind all seven
-pilot gates above to `true` for the `v0.6.0` production artifact. Generic and
+- `INTENT_PARSER_ENABLED` / `INTENT_PARSER_PROVIDER` / `INTENT_PARSER_MODEL`
+  (server env, all dormant by default: `false` / `none` / per-provider
+  default. The owner-approved model-assisted intake lane; providers
+  `openai` and `anthropic`. Enabling later requires creating the
+  `INTENT_PARSER_OPENAI_KEY` and/or `INTENT_PARSER_ANTHROPIC_KEY` secrets
+  in Firebase Secret Manager and binding them to the parse callable when
+  it ships with the CREATE integration; until every piece exists, parsing
+  fails closed with a named precondition and the deterministic browser
+  extractor remains the availability floor. See
+  `docs/INTENT_INTAKE_ADR.md`.)
+
+The governed Firebase and Vercel production workflows source-bind all eight
+pilot gates above to `true` — the first seven since the `v0.6.0`
+production artifact, the decision-room gate by owner decision on 2026-08-11,
+taking effect at the next release. Generic and
 local builds still default them to `false`, preserving a build-time rollback
 mode. CI validates both modes and runs a focused production-flag browser matrix
 before release; a successful build or deployment remains separate from
 authenticated staff and provider acceptance.
+- `VITE_PILOT_MEMORY_ENABLED` (default off, and deliberately not one of the
+  eight production-bound gates above — production-binding is a separate
+  future owner decision, mirroring the decision-room gate's own initial
+  posture before it was bound. Once a CREATE reading yields both an event
+  type and a guest count, reads the tenant's own accepted/booked quote
+  history (already tenant-scoped server-side) and, once at least 3
+  same-event-type-and-guest-band matches exist, offers the median
+  servers/chefs/bartenders and half-hour-rounded hours plus any rental in a
+  strict majority of matches as a provenance-labeled suggestion. No AI, no
+  cross-tenant learning; below the minimum sample the honest reply is "not
+  enough history yet," never a guess. Applying writes only staffing and
+  hours to the draft — rentals stay a read-only mention so an existing
+  selection is never silently overwritten. See
+  [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md) §4.10.)
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human

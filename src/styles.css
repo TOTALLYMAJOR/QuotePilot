@@ -5186,6 +5186,69 @@ hr {
   font-size: 0.84rem;
 }
 
+/* Flag-gated decision-room pilot: assumptions + tenant-authored terms
+   blocks. Terms text preserves the tenant's own line breaks. */
+.portal-assumptions,
+.portal-terms {
+  border-top: 1px solid #d7d8d2;
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+}
+
+.portal-terms-text {
+  margin: 0;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+
+/* Flag-gated decision-room pilot: offerable options that draft a change
+   request through the ordinary decision path. */
+.portal-decidable-options {
+  margin-top: 0.9rem;
+}
+
+.portal-decidable-options h3 {
+  margin: 0 0 0.2rem;
+  color: #30443b;
+  font-size: 0.84rem;
+}
+
+.portal-decidable-sub {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
+.portal-decidable-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.portal-decidable-card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+}
+
+.portal-decidable-card span {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+/* Flag-gated decision-room pilot: per-block "Ask about this" affordance,
+   kept visually quiet next to its block heading. */
+.portal-ask-about {
+  margin-left: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .portal-detail-grid {
   margin: 0;
   display: grid;
@@ -9862,6 +9925,13 @@ hr {
   padding-top: 0.9rem;
 }
 
+.create-intake-model,
+.create-intake-memory {
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--tone-cream-3);
+  padding-top: 0.75rem;
+}
+
 .create-intake-group-label {
   margin: 0.6rem 0 0.45rem;
   font-size: 0.7rem;
@@ -10181,4 +10251,8 @@ hr {
 .margin-strip .margin-target {
   color: var(--tone-gold-3);
   font-weight: 600;
+}
+
+.margin-advisor-stream {
+  margin-top: 0.7rem;
 }

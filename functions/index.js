@@ -10871,6 +10871,7 @@ async function createTrustedQuoteDraftInternal({
     form: sanitized.form,
     pricing: pricingResult.pricing,
     catalogSource: pricingResult.catalogSource,
+    catalog: pricingResult.catalog,
     settings: {
       ...(settingsSnap.data() || {}),
       organizationName: normalizeText(organizationSnap.data()?.name)
@@ -11463,6 +11464,7 @@ async function updateTrustedQuoteDraftInternal({
       form: sanitized.form,
       pricing: pricingResult.pricing,
       catalogSource: pricingResult.catalogSource,
+      catalog: pricingResult.catalog,
       settings: {
         ...(transactionPricingSettingsSnapshot.data() || {}),
         organizationName: normalizeText(organizationSnap.data()?.name)
@@ -12395,6 +12397,91 @@ exports.recordChangeRequestParse = functions.region(REGION).https.onCall(async (
         recordedAtISO: built.record.recordedAtISO,
         activeVersionIdAtRecord: built.record.activeVersionIdAtRecord,
         alreadyRecorded: false
+      };
+    });
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+});
+
+// Structured change-request version linking: one later bounded update that
+// binds an existing record to the quote version that resulted from actually
+// saving the staged edits, completing the intent-to-version audit trail. It
+// never re-derives or re-validates the original attestation, never touches
+// the quote, portal, or any customer-facing state, and never overwrites an
+// existing link to a different version — only idempotent replay of the same
+// one. Best-effort from the caller's side by design: a save already fully
+// succeeded before this is ever attempted.
+exports.linkChangeRequestResolutionVersion = functions.region(REGION).https.onCall(async (data, context) => {
+  const {
+    ChangeRequestRecordError,
+    normalizeChangeRequestVersionLinkRequest,
+    verifyChangeRequestVersionLink
+  } = require("./changeRequestRecord");
+
+  const toHttpsError = (err) => {
+    if (err instanceof functions.https.HttpsError) return err;
+    if (err instanceof ChangeRequestRecordError) {
+      return new functions.https.HttpsError(err.code, err.message);
+    }
+    return new functions.https.HttpsError("internal", "Failed to link the change-request record to a version.");
+  };
+
+  let normalized;
+  try {
+    normalized = normalizeChangeRequestVersionLinkRequest(data);
+  } catch (err) {
+    throw toHttpsError(err);
+  }
+
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: normalized.organizationId
+  });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== normalized.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Linking a change-request record requires same-organization staff authority."
+    );
+  }
+
+  try {
+    const quoteRef = db
+      .collection("organizations").doc(normalized.organizationId)
+      .collection("quotes").doc(normalized.quoteId);
+    const resolutionRef = quoteRef.collection("changeRequestResolutions").doc(normalized.resolutionId);
+    const versionRef = quoteRef.collection("versions").doc(normalized.versionId);
+
+    return await db.runTransaction(async (tx) => {
+      const [resolutionSnap, versionSnap] = await Promise.all([
+        tx.get(resolutionRef),
+        tx.get(versionRef)
+      ]);
+      const resolution = resolutionSnap.exists ? resolutionSnap.data() : null;
+      const version = versionSnap.exists
+        ? { organizationId: normalized.organizationId, quoteId: normalized.quoteId, ...versionSnap.data() }
+        : null;
+      const verification = verifyChangeRequestVersionLink({ normalized, resolution, version });
+      if (verification.alreadyLinked) {
+        return {
+          resolutionId: normalized.resolutionId,
+          linkedVersionId: normalized.versionId,
+          linkedAtISO: normalizeText(resolution.linkedAtISO),
+          alreadyLinked: true
+        };
+      }
+      const linkedAtISO = new Date().toISOString();
+      tx.update(resolutionRef, {
+        linkedVersionId: normalized.versionId,
+        linkedVersionNumber: verification.versionNumber,
+        linkedAtISO,
+        linkedByUid: staff.uid,
+        linkedByEmail: normalizeEmail(staff.email)
+      });
+      return {
+        resolutionId: normalized.resolutionId,
+        linkedVersionId: normalized.versionId,
+        linkedAtISO,
+        alreadyLinked: false
       };
     });
   } catch (err) {
@@ -21535,4 +21622,103 @@ exports.stripeWebhook = functions
   }
 
   res.json({ received: true });
+});
+
+
+// Model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved
+// 2026-08-11, OpenAI + Anthropic). Stateless, staff-only, same-org, and
+// dormant by default: INTENT_PARSER_ENABLED=true plus a provider plus that
+// provider's key must all exist before any provider call happens; until
+// then every request fails closed with a definitive precondition error.
+// Persists nothing and returns only low-confidence, human-review facts.
+// NOTE: keys are read from process.env so this deploys green before the
+// secrets exist; when the owner creates INTENT_PARSER_OPENAI_KEY /
+// INTENT_PARSER_ANTHROPIC_KEY in Secret Manager, add
+// .runWith({ secrets: [...] }) here to bind them.
+exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  const {
+    INTENT_PARSER_OPENAI_KEY_NAME,
+    INTENT_PARSER_ANTHROPIC_KEY_NAME,
+    normalizeIntentParserConfig,
+    sanitizeIntentParseRequest,
+    buildIntentParserPrompt,
+    buildProviderRequest,
+    extractProviderText,
+    validateParsedFacts
+  } = require("./intentParserCore.cjs");
+
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  if (!organizationId) {
+    throw new functions.https.HttpsError("invalid-argument", "organizationId is required.");
+  }
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Intent parsing requires same-organization staff authority."
+    );
+  }
+
+  const config = normalizeIntentParserConfig(process.env);
+  if (!config.enabled || config.provider === "none") {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "The model-assisted intake lane is disabled. The deterministic extractor remains available."
+    );
+  }
+  const apiKey = String(
+    config.provider === "openai"
+      ? process.env[INTENT_PARSER_OPENAI_KEY_NAME] || ""
+      : process.env[INTENT_PARSER_ANTHROPIC_KEY_NAME] || ""
+  ).trim();
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "The intent parser provider key is not configured."
+    );
+  }
+
+  let request;
+  try {
+    request = sanitizeIntentParseRequest(data);
+  } catch (err) {
+    throw new functions.https.HttpsError(err.code || "invalid-argument", err.message);
+  }
+
+  const provider = buildProviderRequest({
+    provider: config.provider,
+    model: config.model,
+    prompt: buildIntentParserPrompt(request.text),
+    apiKey
+  });
+  let responseJson;
+  try {
+    const response = await fetch(provider.url, {
+      method: "POST",
+      headers: provider.headers,
+      body: JSON.stringify(provider.body)
+    });
+    if (!response.ok) {
+      throw new functions.https.HttpsError(
+        "unavailable",
+        `The intent parser provider declined the request (${response.status}). The deterministic extractor remains available.`
+      );
+    }
+    responseJson = await response.json();
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    throw new functions.https.HttpsError(
+      "unavailable",
+      "The intent parser provider is unreachable. The deterministic extractor remains available."
+    );
+  }
+
+  const validated = validateParsedFacts(extractProviderText(config.provider, responseJson));
+  return {
+    provider: config.provider,
+    model: config.model,
+    facts: validated.facts,
+    notes: validated.notes,
+    parsedAtISO: new Date().toISOString()
+  };
 });

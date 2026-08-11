@@ -6,7 +6,238 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Added
+
+- Four more deterministic capture families closing out the CREATE reader's
+  build-out queue, hardened by two adversarial-verification agents that
+  wrote and ran real test cases against the real code rather than
+  reasoning about it — six confirmed defects found and fixed, one of them
+  serious (an auto-applied, high-confidence guest count silently
+  multiplied to 2000):
+  - "noon"/"midnight" as clock words, standalone and in a time range
+    ("6pm to midnight" -> 18:00 + 6h), including "til"/"'til" as a
+    recognized separator alongside "to"/"until"/"till". Guarded against
+    reading a name as a time ("the Midnight Garden Estate", "the midnight
+    buffet" as a menu feature) and against mislabeling the unresolved END
+    of a dangling range as the start ("6 to midnight", "six til midnight"
+    extract neither time nor hours, since neither side states am/pm). A
+    "not followed by a Capitalized word" guard, meant to also catch a name
+    like "Midnight Masquerade" without a leading "the", was tried and then
+    dropped once adversarial verification showed it rejected far more real
+    sentences than it protected — "at midnight New Year's Eve", "at noon
+    Friday", "at noon Eastern time" all lost their time fact purely
+    because a capitalized word happened to follow. The "the "-guard alone
+    covers the dominant real-world case.
+  - Written-out guest counts ("eighty guests", "about a hundred people",
+    "two hundred and fifty guests") parsed against a real English-number
+    grammar — "and" is legal only directly after "hundred" — rather than a
+    generic bag of words, and a genuine word-form range ("eighty to a
+    hundred guests", "between twenty and a hundred guests") is read as a
+    range with a midpoint, exactly like the existing digit range. The
+    defect this closes: a looser first-draft grammar let "and" bridge two
+    independent numbers in a range, so "between twenty and a hundred
+    guests" was silently misread as 20 x 100 = 2000 — hitting this file's
+    own cap while looking like a confident, valid count with no
+    confirmation required.
+  - A multi-day mention (a month-anchored day range, or an explicit
+    digit-or-word "N-day event" phrase, "3-day"/"three-day") surfaced as
+    an informational note only — never the draft date, never a fact —
+    since the builder plans exactly one event date. Guarded against
+    reading setup/breakdown lead time as the event's own span ("2 days
+    before the wedding" is not a two-day wedding) and against firing on an
+    explicitly negated mention ("this is NOT a multi-day event").
+  - Venue names introduced by an explicit label ("Venue: X", "the venue is
+    X") alongside the existing "at X" pattern. A captured name now stops
+    at the next sentence instead of swallowing it ("Venue: The Grand
+    Ballroom. Please confirm by Friday." no longer captures "The Grand
+    Ballroom. Please"), while a real abbreviation period still survives
+    ("St. Mary's Hall"); and a placeholder or non-answer ("TBD", "N/A",
+    "not sure yet") is never offered as a one-tap-confirmable venue guess.
+
+- Event-shape memory (design §4.10, first memory slice, flag-gated behind
+  `VITE_PILOT_MEMORY_ENABLED`, off by default and not production-bound):
+  once Structure it reads both an event type and a guest count,
+  `loadEventShapeMemory` aggregates the tenant's own accepted/booked quote
+  history — same event type, same fixed guest band — into median
+  servers/chefs/bartenders and a half-hour-rounded duration, plus any
+  rental in a strict majority of matches, shown as a provenance-labeled
+  "From your own history" card. No AI, no cross-tenant signal —
+  `getQuoteHistory` is already tenant-scoped server-side; this module only
+  aggregates what it returns. Below a minimum sample of 3, the honest
+  reply is "not enough history yet," never a guess from one or two data
+  points. Applying is deliberately narrow: only staffing and hours are
+  written to the draft, never rentals, prices, or anything else, so an
+  existing rental selection is never silently overwritten. Six literal
+  `data-capability-state` markers (loading/empty/partial/success/error/
+  recovery — a second consecutive failure after a retry — with `stale`
+  excepted as impossible for an always-fresh, never-cached read) under the
+  new `event-shape-memory` contract.
+
+- Four more deterministic capture families in the CREATE reader, each
+  through the same adversarial verification round: time ranges fill both
+  start time and computed service hours ("6pm to 10pm" -> 18:00 + 4h,
+  cross-midnight "8pm to 1am" -> 5h, explicit "N hours" always wins);
+  "party of 50"/"headcount of 80" reversed guest phrasing; "the 12th of
+  September" reversed dates; and this/next-weekday relative dates,
+  computed but only ever confirm-required. The verification round's five
+  confirmed misfires are all fixed and locked in as regression tests:
+  contact-hours context ("call me 9am-5pm") extracts no event time,
+  a month's day digit is never stolen as a start time ("September 6
+  until 10pm"), an inherited meridiem that would wrap midnight flips to
+  the same-day reading ("10-9pm" -> 10:00, 11h) or extracts nothing,
+  month-prefix words ("decent", "maybe") no longer read as dates, and an
+  explicit numeric date always beats a relative-weekday mention.
+
+- Stronger deterministic intake reading: the CREATE reader now extracts
+  staff counts (servers/chefs/bartenders, with waiter/waitstaff/cook/
+  barkeep synonyms) from digits, small word-numbers, and ranges (midpoint
+  with a transparent 2–4 → 3 display, like guests). Hardened by an
+  adversarial verification round that executed the real code: possessives
+  ("a chef's kiss"), compound numbers ("twenty-one servers"), addresses
+  ("4 Cooks Lane"), and tech senses ("server racks", "servers of data")
+  extract nothing; the articles "a"/"an" surface only as confirm-required
+  suggestions, never auto-applied. Every verifier-confirmed false positive
+  is now a regression test. The model lane's fact allowlist gains the same
+  fields (both core-module copies, kept byte-identical).
+
+- Model assist in CREATE — the intake lane is now fully reachable and
+  still fully dormant: the staff-only, same-organization
+  `parseIntentDraft` callable (functions runtime twin of the core module;
+  keys read from env until the owner creates and binds
+  `INTENT_PARSER_OPENAI_KEY` / `INTENT_PARSER_ANTHROPIC_KEY`), a client
+  boundary that surfaces the designed off state distinctly from a
+  provider outage, and a Model assist button beside Structure it whose
+  suggestions render in their own list with per-fact Confirm required
+  before anything touches the draft. Seven literal
+  `data-capability-state` markers (loading/success/partial/empty/error/
+  recovery, stale excepted as impossible for a stateless parse) under the
+  `model-assisted-intent-parse` contract revision 2. Until an
+  administrator enables the lane, the button reports it off and typed
+  structuring is untouched.
+
+- Model-assisted intake core module (owner-approved lane, dormant): pure
+  `src/lib/intentParserCore.cjs` implements the ADR's parsing lane with
+  OpenAI and Anthropic as selectable providers — config gate (enabled
+  flag, provider allowlist, per-provider default models), bounded request
+  sanitization, a deterministic strict-JSON prompt, provider request
+  builders that never read the environment, and untrusted-output
+  validation that allowlists fact fields (mirroring the deterministic
+  extractor), bounds values, and forces every surviving fact to low
+  confidence with a model source so humans must confirm before anything
+  touches a draft. Deliberately module-only: the surfacing gate correctly
+  forbids callables without a user-reachable surface, so the
+  `parseIntentDraft` callable ships together with the CREATE canvas
+  integration. Dormant three ways until then — `INTENT_PARSER_ENABLED`,
+  provider selection, and the provider key (`INTENT_PARSER_OPENAI_KEY` /
+  `INTENT_PARSER_ANTHROPIC_KEY`, to be created in Secret Manager by the
+  owner) must all exist. New `model-assisted-intent-parse` contract;
+  README documents the env/secret names.
+
+- Assumptions and per-tenant terms blocks in the customer portal
+  (`VITE_PILOT_DECISION_ROOM_ENABLED`), continuing the decided §4.7 block
+  decomposition without inventing content: the assumptions block restates
+  only recorded facts (guest count, date, hours of service, style) with a
+  note that changes are asked below and re-priced by the caterer; the
+  terms block renders the tenant's own text verbatim from the new bounded
+  `portalTermsText` setting (authored in a flag-gated Catalog Admin
+  textarea, carried through quoteMeta into the canonical snapshot) and
+  renders nothing while the setting is empty. Both blocks — and the
+  offer-cards options section — are addressable `data-portal-block`
+  targets with their own "Ask about this" buttons, bringing the portal to
+  six addressable blocks plus the header.
+
+- Portal offer cards complete the decidable-options loop
+  (`VITE_PILOT_DECISION_ROOM_ENABLED`): an unlocked portal now shows its
+  projected options ("Options you can ask to add") with honest
+  per-guest/per-item/per-event price labels, and a tap only drafts the
+  canonical "Please add X." sentence into the existing Request Changes
+  message — appended on its own line, never overwriting the customer's
+  words, deduplicated, capped at the message limit, and sent (or not) by
+  the customer through the unchanged decision path. Staff receive it as an
+  ordinary change request that the deterministic parser turns into a
+  one-tap stageable proposal; staff approval remains the only authority,
+  exactly per the owner-decided direction. Marks → projection → offer →
+  staged request is now built end to end.
+
+- Decidable-option projection is now live at the trusted draft-save
+  moments: `calculateQuotePricingAuthoritative` returns the exact
+  addons/rentals from the same authoritative catalog read pricing used
+  (whose normalizers now preserve the strictly-boolean `portalDecidable`
+  mark), and both trusted quote builders store a
+  `decidableOptionsProjection` on the quote document — computed fresh at
+  create/edit, carried forward re-bounded when a builder runs without a
+  catalog, and re-projected into the portal snapshot at every later
+  moment (send, delivery, rotation, reopen) like any other quote field.
+  Customer-facing rendering still does not exist; the portal offer cards
+  are the next slice (`commercial-change-impact-preview` contract
+  revision 2, `private-customer-authority` revision 2).
+
+- Decidable-option portal projection (server, dormant): the canonical
+  portal snapshot (`functions/quoteCreation.js#buildCanonicalPortalSnapshot`)
+  now carries `decidableOptions` — a bounded (max 12), name-and-price-only
+  list of staff-marked, active catalog options the quote does not already
+  include (excluded by id and by name), built by the exported pure
+  `buildPortalDecidableOptions`. Fail-closed everywhere: every existing
+  call site builds without a catalog and projects an empty list, so no
+  offer can appear until a later slice deliberately threads the org
+  catalog into chosen snapshot moments. No new Firebase Function export,
+  no call-site behavior change, no portal UI reads the field yet
+  (`private-customer-authority` contract revision 2).
+
+- Decidable-option marks in Catalog Admin (`VITE_PILOT_DECISION_ROOM_ENABLED`;
+  first slice of the decided §4.7 direction): add-ons and rentals gain a
+  strictly default-false `portalDecidable` boolean — normalize, storage,
+  and both catalog write shapes accept only an explicit boolean `true`, so
+  truthy junk from hand-edited JSON can never silently offer an option to
+  customers — surfaced as a flag-gated "Portal offer" checkbox beside each
+  add-on and rental row's Active toggle. Data model and staff opt-in only:
+  the portal does not read these marks yet. The next slices project marked
+  options into the customer portal with their price effect and let a tap
+  pre-fill the existing Request Changes flow — every customer choice
+  arriving as a staged request for staff approval, never a self-applying
+  change, per the owner-decided direction recorded in DEV_TASKS.md.
+
+- Per-block "Ask about this" in the customer portal
+  (`VITE_PILOT_DECISION_ROOM_ENABLED`, default off in generic/local builds;
+  by owner decision the production workflows now bind it to `true`
+  alongside the other seven pilot gates, taking effect at the next
+  release) — the
+  conservative, invent-nothing subset of the design's decision room
+  (docs/POST_COMPETITIVE_DESIGN.md §4.7 "Questions in place"): the three
+  content sections the portal already renders (event details, package and
+  menu, pricing) become addressable blocks (`data-portal-block`), each
+  with a quiet "Ask about this" button that opens the existing quote
+  conversation pre-seeded with the block's name in the ordinary message
+  body. The block reference travels verbatim inside the message text the
+  customer could already type — no new callable, no new message field, no
+  new trust boundary, and nothing is sent until the customer sends it.
+  `QuoteConversationPanel` gains an additive `prefill` prop with hard
+  guards: a seeded draft never overwrites text the customer already typed
+  and never disturbs an unresolved send attempt awaiting its exact
+  reconciliation retry. The full §4.7 decision room (staff-marked
+  decidable options, nine named blocks including content that does not
+  exist yet, activity counsel) remains open in DEV_TASKS.md — this slice
+  deliberately tags only what already exists.
+
 ### Changed
+
+- Corrected the named temporary aggregate JavaScript ceiling from 2,776,845
+  to the literal 2,776,849-byte production-flag measurement reported by
+  exact-head PR #57 CI run `31525358682`; the largest-chunk ceiling remains
+  391,596 bytes and the exception retains zero growth headroom.
+
+- Bound `VITE_PILOT_DECISION_ROOM_ENABLED` to `true` in both production
+  deployment workflows and both CI production-flag steps, by owner
+  decision (2026-08-11) — the eighth pilot gate, joining the seven bound
+  since `v0.6.0`. Takes effect at the next release from this branch;
+  generic/local builds keep it default-off for build-time rollback. The
+  same decision round settled the remaining §4.7 scope (decidable options
+  land as staged requests for staff approval, with no signature at the
+  option tap; terms content becomes per-tenant; block tags stay
+  message-body text; activity counsel is deferred), approved the
+  AI-assisted intake lane with OpenAI and Anthropic providers behind the
+  existing default-off ADR gates, and approved a post-merge clean-main
+  bundle-baseline recalibration — all recorded in DEV_TASKS.md.
 
 - Promoted `v0.6.0` to both production providers from exact tagged `main` commit
   `4f4e00d3829eb29a1ee90d7d8402b786344dd158`. Exact-main CI Quality run
@@ -35,6 +266,19 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Fixed
 
+- Catalog Admin's "Refresh latest catalog" recovery button silently never
+  appeared for the most common save/starter-pack-apply conflict outcome —
+  a concurrent edit that the post-error reload successfully detected and
+  reported. `useCatalogData.js`'s `saveCatalog` and `stageStarterPack` both
+  returned `{ refreshed: true }` for that path, but `AdminCatalogModal.jsx`
+  checks `result?.refreshRequired`; the key-name mismatch meant only the
+  rarer case (the reload itself also failing) ever surfaced the button.
+  Found while instrumenting Catalog Admin's save flow with literal
+  `data-capability-state` markers for the `catalog-cost-and-pricing-data-entry`
+  capability contract, registered separately, and fixed on its own once
+  isolated. Not gated by any pilot flag — this is already-shipped,
+  always-active behavior.
+
 - Two correctness bugs in pilot source (`VITE_PILOT_MARGINS_ENABLED`,
   `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, `VITE_PILOT_COMMAND_ENABLED`),
   caught by automated PR review before merge:
@@ -59,6 +303,98 @@ This changelog is backfilled from git history and will be maintained going forwa
     including the exact re-parse sequence that reproduced the id shift.
 
 ### Added
+
+- Margin delta in the change-request impact preview (`VITE_PILOT_MARGINS_ENABLED`,
+  still default off), extending the same fail-closed computation to the two
+  surfaces that price a client-requested change before it's staged: the
+  Pilot command bar and the client-request panel. `buildChangeImpact`
+  (`changeRequestParse.js`) now also returns a `marginDelta` alongside its
+  existing total/deposit delta, reusing `buildMarginPresentation` a fourth
+  and fifth time — both surfaces already called `buildChangeImpact` for
+  their impact line, so the change is additive to an existing computation
+  rather than a new one. Fail-closed exactly like every other margin
+  surface: `marginDelta` stays `null`, and no margin note renders, unless
+  every selected line on both the before and after side of the proposed
+  change has a recorded cost.
+
+- Margin awareness in Scenario Compare (`VITE_PILOT_MARGINS_ENABLED`, still
+  default off), matching design §4.6's own what-if mock ("margin 30.5% →
+  31.2%"): each good/better/best preset card now shows its margin, and the
+  current-vs-scenario table gains a Margin row with a points delta. Reuses
+  `buildMarginPresentation` a third time against the exact `totals`
+  Scenario Compare already computes for each side — no new pricing model.
+  Fail-closed per side independently (a `MarginComparisonRow` renders
+  "Unavailable" for whichever side lacks recorded costs, "—" for the delta
+  only when both sides are unavailable, and nothing at all when neither
+  side has anything to show), since a scenario's package swap can put it
+  in cost-coverage a tenant's current draft never needed.
+
+- Margin range in the CREATE intake band-pricing preview
+  (`VITE_PILOT_MARGINS_ENABLED`, still default off), closing the Phase 5
+  gap between the app's two pricing paths: `buildPricingBand` now prices
+  margin at both band endpoints the exact same fail-closed way the applied-
+  count margin strip already does, and shows a range only when costs are
+  recorded at *both* ends — one end missing costs makes the whole range
+  unavailable rather than implying false precision. Displayed low/high are
+  sorted for display (margin % is not guaranteed to move the same
+  direction as guest count the way totals do, since fixed costs amortize
+  differently at different guest counts). `CreateIntake`/`pricingBand.js`
+  is a staff-only surface — same trust boundary as the main pricing rail,
+  not customer-facing — so this needed no different treatment than the
+  cost-entry delivery already gave the applied-count strip.
+
+- Structured change-request version linking (`functions/index.js#linkChangeRequestResolutionVersion`),
+  completing the intent-to-version audit trail for the flag-gated
+  client-request panel (`VITE_PILOT_CHANGE_REQUESTS_ENABLED`, still default
+  off): after a staff member records a review (`recordChangeRequestParse`)
+  and then saves the quote through the normal path, the resulting save is
+  already fully complete on its own — linking is a best-effort follow-up
+  call, fired right after, that binds the existing record to the version
+  that actually resulted. Server-verified: the target version must exist
+  for this exact quote and be numerically newer than the version on file
+  when the record was made; a resolution links to exactly one version ever
+  (idempotent replay of the same link, rejected relink to a different one).
+  It never mutates the quote, portal, message, or the original attestation,
+  never blocks the save it follows, and never surfaces its own failure to
+  the operator — a missed link only means the audit trail stays one step
+  short, not that anything was lost or corrupted. Browser writes remain
+  fully rules-denied; only the create-only record and this one bounded
+  update are permitted, both callable-only.
+
+- Unit-economics cost entry and a commercial advisor card for the
+  flag-gated margin pilot (`VITE_PILOT_MARGINS_ENABLED`, still default off;
+  docs/POST_COMPETITIVE_DESIGN.md §4.5 and §1.3), completing the data-entry
+  path the fail-closed margin strip needed to ever leave "unavailable" for
+  a real tenant:
+  - Catalog Admin gains cost fields alongside the existing price fields —
+    cost per person on packages, cost on add-ons and rentals — plus staff
+    cost rates (server/chef/bartender) and a target margin % policy in
+    Numeric Settings, all gated behind the same pilot flag. Blank always
+    means "not recorded" and stays `null` through normalize, save, and
+    reload; it is never coerced to $0, since an entered $0 cost and an
+    unrecorded one are different facts and margin must stay unavailable
+    for the latter. Item-level costs persist as nullable Minor-cents
+    (`costPppMinor`/`costMinor`), matching the existing `ppp`/`price`
+    convention; a `fromMinorUnits`-only read would have silently turned a
+    cleared cost back into $0 (`Number(null)` is a safe integer 0), so the
+    normalizer special-cases null before that conversion.
+  - `buildMarginAdvisorCard` turns a below-target margin into a
+    `decide-stack`-style decision card (claim, points-and-dollar gap,
+    basis) rendered inline in the live pricing rail. It stays silent for
+    on-target, no-target, and unavailable margins — restraint over
+    dashboard noise; meeting a target is already confirmed inline by the
+    existing strip text, not re-announced as a card.
+  - Catalog Admin's save flow now carries a literal, derived
+    `data-capability-state` marker (ready/submitting/receipt/error/
+    reconciliation/uncertain/recovery) on every save outcome, covered by
+    the new `catalog-cost-and-pricing-data-entry` capability contract
+    (catalog version 10). Every one of the seven states is a real,
+    pre-existing `useCatalogData.js` save outcome — a confirmed concurrent-
+    edit conflict, a saved-but-pricing-unconfirmed revision, a reload-
+    required recovery, and so on — now named instead of collapsing into
+    one generic status line.
+  - Source-only candidate work — not deployed, flag-promoted, or
+    human-accepted.
 
 - Flag-gated, fail-closed margin strip (`VITE_PILOT_MARGINS_ENABLED`,
   default off; docs/POST_COMPETITIVE_DESIGN.md §4.5 and §1.3). The live

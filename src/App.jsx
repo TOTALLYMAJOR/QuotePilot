@@ -12,10 +12,15 @@ import {
 } from "./components/RecoverableErrorBoundary";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import CreateIntake from "./components/CreateIntake";
+import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import PilotCommandBar from "./components/PilotCommandBar";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
-import { isDefinitiveRecordError, recordChangeRequestParse } from "./lib/changeRequestRecordClient";
+import {
+  isDefinitiveRecordError,
+  linkChangeRequestResolutionVersion,
+  recordChangeRequestParse
+} from "./lib/changeRequestRecordClient";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
 import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
@@ -992,6 +997,11 @@ export default function App({ tenantContext, authSession }) {
   const [availabilityNotice, setAvailabilityNotice] = useState("");
   const [availabilityBlock, setAvailabilityBlock] = useState(null);
   const [editingQuote, setEditingQuote] = useState(EMPTY_EDITING_QUOTE);
+  // A just-recorded structured change-request resolution awaiting a version
+  // to link to. Best-effort only: cleared unconditionally once a link is
+  // attempted, whether or not it succeeds (see DEV_TASKS "Structured
+  // change-request version linking").
+  const [pendingResolutionLink, setPendingResolutionLink] = useState(null);
   const [changeImpactPreview, setChangeImpactPreview] = useState(EMPTY_CHANGE_IMPACT_PREVIEW);
   const [quoteEditLoadState, setQuoteEditLoadState] = useState({
     quoteId: "",
@@ -2411,6 +2421,28 @@ export default function App({ tenantContext, authSession }) {
           message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`
         });
         pushToast(`Quote ${result.quoteNumber} updated.`, "success");
+        // Structured change-request version linking: this save already
+        // fully succeeded above, so linking is strictly best-effort — never
+        // block navigation or surface its own failure. Cleared either way
+        // so a later, unrelated save cannot attempt a stale link.
+        if (
+          result.storage === "firebase"
+          && pendingResolutionLink?.quoteId === editingQuote.id
+          && result.activeVersionId
+        ) {
+          void linkChangeRequestResolutionVersion({
+            organizationId: authSession.organizationId,
+            quoteId: editingQuote.id,
+            resolutionId: pendingResolutionLink.resolutionId,
+            versionId: result.activeVersionId
+          }).catch((error) => {
+            recordDiagnosticError(error, {
+              surface: "change-request-record",
+              action: "link-version"
+            });
+          });
+          setPendingResolutionLink(null);
+        }
         setHistoryTarget({ quoteId: result.id, reason: "updated" });
         navigateWorkspace(buildQuotePath(result.id));
         return result;
@@ -3663,6 +3695,8 @@ export default function App({ tenantContext, authSession }) {
             eventTypes={catalog.eventTypes || []}
             styles={Object.keys(STAFF_RULES)}
             onApplyDraft={applyIntentDraft}
+            organizationId={authSession.organizationId}
+            onModelParse={parseIntentDraftWithModel}
           />
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED
@@ -3682,11 +3716,16 @@ export default function App({ tenantContext, authSession }) {
               String(catalog.source || "").trim().toLowerCase().startsWith("firebase")
                 ? async (payload) => {
                     try {
-                      return await recordChangeRequestParse({
+                      const receipt = await recordChangeRequestParse({
                         organizationId: authSession.organizationId,
                         quoteId: editingQuote.id,
                         ...payload
                       });
+                      setPendingResolutionLink({
+                        quoteId: editingQuote.id,
+                        resolutionId: receipt.resolutionId
+                      });
+                      return receipt;
                     } catch (error) {
                       if (error && typeof error === "object") {
                         error.definitive = isDefinitiveRecordError(error);

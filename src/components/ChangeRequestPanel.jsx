@@ -13,6 +13,15 @@ import {
 // proposals, each priced as a preview delta by the same calculator the rail
 // uses. Staging edits the draft only; the operator's ordinary save remains
 // the approval that re-prices authoritatively and creates the next version.
+
+// Same default-off gate as every other margin surface; costs are tenant
+// catalog data and margin never renders in any customer-facing projection —
+// this panel is staff-only regardless, but the gate stays consistent with
+// every other site that reads buildChangeImpact's marginDelta.
+const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
+);
+
 export default function ChangeRequestPanel({
   message,
   submittedAtISO = "",
@@ -78,7 +87,10 @@ export default function ChangeRequestPanel({
     if (!impact) return "";
     const sign = impact.delta > 0 ? "+" : impact.delta < 0 ? "−" : "±";
     const depositSign = impact.depositDelta > 0 ? "+" : impact.depositDelta < 0 ? "−" : "±";
-    return `${sign}${currency(Math.abs(impact.delta))} total after the fee and tax cascade · deposit ${depositSign}${currency(Math.abs(impact.depositDelta))} (preview).`;
+    const marginNote = PILOT_MARGINS_ENABLED && impact.marginDelta
+      ? ` Margin ${(impact.marginDelta.beforePct * 100).toFixed(1)}% → ${(impact.marginDelta.afterPct * 100).toFixed(1)}% (preview, staff-only).`
+      : "";
+    return `${sign}${currency(Math.abs(impact.delta))} total after the fee and tax cascade · deposit ${depositSign}${currency(Math.abs(impact.depositDelta))} (preview).${marginNote}`;
   };
 
   const submittedLabel = submittedAtISO

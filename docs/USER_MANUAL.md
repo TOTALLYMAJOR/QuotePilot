@@ -1279,6 +1279,15 @@ through the normal path remains the only way changes become a new version.
 If recording fails, the staged draft is unchanged and the action can be
 retried.
 
+Once a record exists, saving the quote through the normal path — which
+already fully completes on its own — triggers one best-effort follow-up:
+the record links to the version that resulted, completing the audit trail
+from the customer's message through to the saved version. Linking is
+write-once (a record binds to exactly one version, ever), never blocks or
+delays the save, and never surfaces its own failure; if it does not
+succeed, the record simply stays one step short rather than pointing at
+the wrong version.
+
 ## Pilot decision workspace
 
 The production pilot groups seven staff-only build gates into one operating
@@ -1308,6 +1317,78 @@ These surfaces do not make an unsaved draft authoritative, send a customer
 message, establish delivery/payment/booking, or replace the existing role
 gates. Use the ordinary save, Workflow, quote administration, and provider
 receipts for those actions and evidence.
+
+An eighth gate, `VITE_PILOT_DECISION_ROOM_ENABLED`, joins the production
+gate set at the next release (currently deployed builds predate it). When
+enabled, each of the customer portal's existing content sections (event
+details, package and menu, pricing) shows a quiet "Ask about this" button
+that opens the existing quote conversation with the composer pre-filled to
+reference that section — for example "Question about the pricing: ". The
+pre-fill is ordinary message text the customer can edit or discard; nothing
+is sent until they send it, a pre-fill never overwrites something they
+already typed, and an unresolved message attempt always keeps its exact
+retry text.
+
+With the same gate enabled, Catalog Admin's add-on and rental rows gain a
+"Portal offer" checkbox — off for every item unless you deliberately check
+it. Marked, active options the quote does not already include appear in
+the customer's portal as "Options you can ask to add", each with its
+price basis (per guest, per item, or for the event). Choosing one only
+drafts a "Please add ..." line into the ordinary Request Changes message,
+which the customer can edit, discard, or send; if sent, it reaches you as
+a normal change request your quote editor parses into a one-tap stageable
+proposal. Nothing a customer taps ever changes the proposal by itself —
+your save remains the only authority.
+
+## Model assist in CREATE
+
+On New quote, next to Structure it, a Model assist button can ask a
+configured AI provider (OpenAI or Anthropic) to read the same note. This
+lane ships off: until your administrator enables it and configures a
+provider key, the button reports that the lane is off and typed
+structuring keeps working exactly the same. When it is on, model
+suggestions appear in their own list and every one requires your explicit
+Confirm before it touches the draft — the model never fills the form,
+never prices, and never saves. Anything the model could not read is
+quoted back for you to read yourself.
+
+## Memory assist in CREATE
+
+Once Structure it reads both an event type and a guest count, QuotePilot
+quietly checks your own past accepted and booked events of the same type
+and a similar size. With at least three real matches on file, a "From your
+own history" card offers the typical servers, chefs, and bartenders, the
+typical duration, and any rental most of those events included — each
+number sourced from your own bookings, never a guess or an industry
+average. Apply to draft sets only staffing and hours; any mentioned rental
+stays a plain note, so it never overwrites a rental you already selected.
+Fewer than three similar events on file is reported honestly as not enough
+history yet rather than a suggestion from one or two data points.
+
+## Catalog cost entry and margin advisory
+
+With the pilot margin strip enabled (`VITE_PILOT_MARGINS_ENABLED`), Catalog
+Admin gains cost fields beside the existing price fields — cost per person
+on packages, cost on add-ons and rentals — plus server, chef, and bartender
+cost rates and a target margin % policy in Numeric Settings. Blank always
+means the cost has not been recorded; it is never treated as $0, since an
+entered $0 and an unrecorded cost are different facts.
+
+The live pricing rail's margin strip computes margin only once every
+selected revenue line has a matching recorded cost. Any gap names the exact
+missing pieces instead of estimating. Once a target margin is recorded, a
+quote below it surfaces a below-target commercial advisor card with the
+point-and-dollar gap; meeting or beating the target stays a calm inline
+note, not a card — advisor cards appear only where there is something to
+decide. Costs are staff-only catalog data and never reach any
+customer-facing projection.
+
+Catalog Admin's save flow — ready, saving, a confirmed conflict
+(reconciliation), a saved-but-unconfirmed revision (uncertain), a clean
+success (receipt), a validation error, and a reload-required recovery when
+even reconciliation could not complete — is pre-existing behavior, now
+literally marked for automated coverage; recording a cost uses the exact
+same save path as every other catalog field.
 
 ## Troubleshooting
 - If catalog fails to load in non-dev environments, Firebase catalog access is required and the app blocks edits until resolved.
