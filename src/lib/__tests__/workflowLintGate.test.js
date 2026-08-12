@@ -1,4 +1,7 @@
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
 import { describe, expect, test } from "vitest";
 import {
   ACTIONLINT_ARGUMENTS,
@@ -19,6 +22,18 @@ const checkerSource = fs.readFileSync(
   new URL("../../../scripts/check-github-workflows.mjs", import.meta.url),
   "utf8"
 );
+const mainlineSafetyNetSource = fs.readFileSync(
+  new URL("../../../.github/workflows/mainline-safety-net.yml", import.meta.url),
+  "utf8"
+);
+
+function runGit(cwd, args) {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
 
 describe("reproducible GitHub workflow lint gate", () => {
   test("pins the official actionlint release and supported archive digests", () => {
@@ -66,5 +81,51 @@ describe("reproducible GitHub workflow lint gate", () => {
       laneSource.indexOf("  lane:core)")
     );
     expect(quickLane).toContain("npm run check:workflows");
+  });
+
+  test("checks the staged revert and opens a protected-main recovery PR", () => {
+    expect(mainlineSafetyNetSource).toContain('git revert --no-commit "${FAILED_SHA}"');
+    expect(mainlineSafetyNetSource).toContain(
+      "if git diff --quiet && git diff --cached --quiet; then"
+    );
+    expect(mainlineSafetyNetSource).toContain("git diff --cached --check");
+    expect(mainlineSafetyNetSource).toContain(
+      'git commit -m "chore(main-guard): auto-revert ${FAILED_SHA} after CI Quality failure"'
+    );
+    expect(mainlineSafetyNetSource).toContain("pull-requests: write");
+    expect(mainlineSafetyNetSource).toContain("actions: write");
+    expect(mainlineSafetyNetSource).toContain('git push origin "HEAD:refs/heads/${recovery_branch}"');
+    expect(mainlineSafetyNetSource).toContain("gh pr create");
+    expect(mainlineSafetyNetSource).toContain(
+      'gh workflow run ci-quality.yml --ref "${RECOVERY_BRANCH}"'
+    );
+    expect(mainlineSafetyNetSource).not.toContain("git push origin HEAD:main");
+  });
+
+  test("a no-commit revert is staged-only and remains detectable through the index", () => {
+    const repository = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-main-guard-"));
+
+    try {
+      runGit(repository, ["init", "--quiet"]);
+      runGit(repository, ["config", "user.name", "QuotePilot test"]);
+      runGit(repository, ["config", "user.email", "quotepilot-test@example.invalid"]);
+      fs.writeFileSync(path.join(repository, "guard.txt"), "healthy\n");
+      runGit(repository, ["add", "guard.txt"]);
+      runGit(repository, ["commit", "--quiet", "-m", "healthy baseline"]);
+
+      fs.writeFileSync(path.join(repository, "guard.txt"), "failing\n");
+      runGit(repository, ["add", "guard.txt"]);
+      runGit(repository, ["commit", "--quiet", "-m", "failing change"]);
+      runGit(repository, ["revert", "--no-commit", "HEAD"]);
+
+      const worktreeDiff = spawnSync("git", ["diff", "--quiet"], { cwd: repository });
+      const stagedDiff = spawnSync("git", ["diff", "--cached", "--quiet"], { cwd: repository });
+
+      expect(worktreeDiff.status).toBe(0);
+      expect(stagedDiff.status).toBe(1);
+      expect(runGit(repository, ["diff", "--cached", "--", "guard.txt"])).toContain("+healthy");
+    } finally {
+      fs.rmSync(repository, { recursive: true, force: true });
+    }
   });
 });

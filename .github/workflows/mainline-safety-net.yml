@@ -1,4 +1,4 @@
-name: Mainline Safety Net (Auto-Revert Failed Pushes)
+name: Mainline Safety Net (Recovery PR for Failed Pushes)
 
 on:
   workflow_run:
@@ -8,15 +8,17 @@ on:
       - completed
 
 permissions:
+  actions: write
   contents: write
+  pull-requests: write
 
 concurrency:
   group: mainline-safety-net-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
-  auto_revert_failed_main_push:
-    name: Auto-Revert Failed Main Push
+  open_recovery_pr_for_failed_main_push:
+    name: Open Recovery PR for Failed Main Push
     if: >
       github.event.workflow_run.name == 'CI Quality' &&
       github.event.workflow_run.event == 'push' &&
@@ -36,7 +38,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Revert failed main head commit (when still head)
+      - name: Prepare recovery branch (when failed commit is still main head)
+        id: recovery
         env:
           FAILED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
@@ -48,9 +51,13 @@ jobs:
           echo "Current main HEAD: ${current_head}"
 
           if [ "${current_head}" != "${FAILED_SHA}" ]; then
-            echo "main advanced after the failed run; skipping auto-revert."
+            echo "main advanced after the failed run; skipping recovery PR."
+            echo "created=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
+
+          recovery_branch="automation/main-guard-revert-${FAILED_SHA}"
+          git switch -c "${recovery_branch}"
 
           parent_count="$(git rev-list --parents -n 1 "${FAILED_SHA}" | wc -w | tr -d ' ')"
           if [ "${parent_count}" -gt 2 ]; then
@@ -59,13 +66,46 @@ jobs:
             git revert --no-commit "${FAILED_SHA}"
           fi
 
-          if git diff --quiet; then
+          if git diff --quiet && git diff --cached --quiet; then
             echo "No changes detected after revert; nothing to commit."
+            echo "created=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
+          git diff --cached --check
           git commit -m "chore(main-guard): auto-revert ${FAILED_SHA} after CI Quality failure"
-          git push origin HEAD:main
+          git push origin "HEAD:refs/heads/${recovery_branch}"
+          echo "created=true" >> "${GITHUB_OUTPUT}"
+          echo "recovery_branch=${recovery_branch}" >> "${GITHUB_OUTPUT}"
+
+      - name: Open recovery PR and dispatch its CI
+        id: pull_request
+        if: steps.recovery.outputs.created == 'true'
+        env:
+          FAILED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_BRANCH: ${{ steps.recovery.outputs.recovery_branch }}
+        run: |
+          set -euo pipefail
+
+          pr_url="$(gh pr list \
+            --state open \
+            --head "${RECOVERY_BRANCH}" \
+            --json url \
+            --jq '.[0].url // empty')"
+
+          if [ -z "${pr_url}" ]; then
+            pr_url="$(gh pr create \
+              --base main \
+              --head "${RECOVERY_BRANCH}" \
+              --title "chore(main-guard): recover failed main ${FAILED_SHA}" \
+              --body "CI Quality failed for current main commit ${FAILED_SHA}. This PR contains only the generated revert. Review and merge it after the dispatched CI Quality run passes; production promotion remains blocked independently.")"
+          fi
+
+          gh workflow run ci-quality.yml --ref "${RECOVERY_BRANCH}"
+          echo "pr_url=${pr_url}" >> "${GITHUB_OUTPUT}"
+          echo "Recovery PR: ${pr_url}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "CI Quality was dispatched against ${RECOVERY_BRANCH}." >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Emit summary
-        run: echo "Mainline safety net completed."
+        run: echo "Mainline recovery-PR safety net completed."
