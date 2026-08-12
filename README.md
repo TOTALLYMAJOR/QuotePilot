@@ -580,6 +580,11 @@ instruction if that browser is unavailable.
   - Proves the owner can choose a starter pack, see the populated menu, approve
     and save pricing, and reach `New Quote` only after the server records the
     exact current-revision confirmation receipt.
+- `npm run test:operational-staffing:emulator`
+  - Runs the operational-staffing authority matrix against disposable Auth,
+    Firestore, and Functions emulators only.
+  - Generates a fresh in-memory Auth credential for each run; no reusable test
+    password, provider credential, or production identity is stored in source.
 - `npm run test:proposal-acceptance:emulator`
   - Starts isolated Firestore and Functions emulators for the public proposal
     acceptance boundary.

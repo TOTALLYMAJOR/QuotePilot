@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 import { initializeApp as initializeClientApp, deleteApp } from "firebase/app";
 import {
@@ -59,7 +60,7 @@ const db = admin.getFirestore();
 const REGION = "us-central1";
 const ORG = "staffing-emulator-org";
 const OTHER_ORG = "staffing-emulator-other-org";
-const PASSWORD = "Staffing-Emulator-Only-2026!";
+const EMULATOR_PASSWORD = `Qp-${randomBytes(24).toString("base64url")}-Aa1!`;
 const ADMIN_EMAIL = "staffing-admin@local.test";
 const SALES_EMAIL = "staffing-sales@local.test";
 const CUSTOMER_EMAIL = "staffing-customer@local.test";
@@ -87,7 +88,7 @@ function comparable(value) {
 async function createPrincipal({ email, role, organizationId, platformAdmin = false }) {
   const user = await auth.createUser({
     email,
-    password: PASSWORD,
+    password: EMULATOR_PASSWORD,
     emailVerified: true
   });
   await Promise.all([
@@ -104,7 +105,7 @@ async function createPrincipal({ email, role, organizationId, platformAdmin = fa
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: PASSWORD, returnSecureToken: true })
+      body: JSON.stringify({ email, password: EMULATOR_PASSWORD, returnSecureToken: true })
     }
   );
   assert.equal(response.ok, true, `Auth emulator sign-in failed for ${email}`);
@@ -241,7 +242,7 @@ async function browserDbFor(principal, name) {
   const app = initializeClientApp({ apiKey: "demo-key", projectId }, name);
   const clientAuth = getClientAuth(app);
   connectAuthEmulator(clientAuth, `http://${authHost}`, { disableWarnings: true });
-  await signInWithEmailAndPassword(clientAuth, principal.email, PASSWORD);
+  await signInWithEmailAndPassword(clientAuth, principal.email, EMULATOR_PASSWORD);
   const browserDb = getClientFirestore(app);
   const [host, port] = firestoreHost.split(":");
   connectFirestoreEmulator(browserDb, host, Number(port));

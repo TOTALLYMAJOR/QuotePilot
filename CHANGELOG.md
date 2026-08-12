@@ -8,6 +8,11 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Replaced the operational-staffing emulator fixture's static test password
+  with a fresh cryptographically random per-run credential. The value exists
+  only in process memory, the disposable Auth emulator matrix still passes,
+  and no production identity or authentication behavior is involved.
+
 - Kept Ambient interaction-health reporting and first-intent-to-priced-draft
   observation dormant in the default-off workspace. The detailed Reporting
   measures and their duration helpers now load only behind the statically
