@@ -47,7 +47,7 @@ describe("Customer commercial timeline presentation", () => {
 
     expect(markup).toContain('data-capability-state="empty"');
     expect(markup).toContain("Firestore customer workspace");
-    expect(markup).toContain("No recorded commercial milestones");
+    expect(markup).toContain("No recorded quote, decision, booking, or payment activity");
     expect(markup).toContain("delivery and bounce milestones are not shown");
   });
 

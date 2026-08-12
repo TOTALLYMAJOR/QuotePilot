@@ -39,6 +39,11 @@ describe("Sales Workflow revenue autopilot integration", () => {
   test("resolves post-event, unread-reply, and Decision Debt route focus to their exact tabs and rows", () => {
     const attentionItems = [
       {
+        id: "follow-up:quote-follow-up",
+        quoteId: "quote-follow-up",
+        type: "follow_up"
+      },
+      {
         id: "post-event-closeout:quote-closeout:closeout-one",
         quoteId: "quote-closeout",
         type: "post_event_closeout"
@@ -55,10 +60,20 @@ describe("Sales Workflow revenue autopilot integration", () => {
     expect(resolveWorkflowFocusTarget({
       focusQuoteId: "quote-closeout",
       focusAttentionType: "post_event_closeout",
+      focusRequestId: "post-event-closeout:quote-closeout:closeout-one",
       attentionItems
     })).toEqual({
       tab: "attention",
       itemId: "post-event-closeout:quote-closeout:closeout-one"
+    });
+    expect(resolveWorkflowFocusTarget({
+      focusQuoteId: "quote-follow-up",
+      focusAttentionType: "follow_up",
+      focusRequestId: "follow-up:quote-follow-up",
+      attentionItems
+    })).toEqual({
+      tab: "attention",
+      itemId: "follow-up:quote-follow-up"
     });
     expect(resolveWorkflowFocusTarget({
       focusQuoteId: "quote-reply",
@@ -203,6 +218,9 @@ describe("Sales Workflow revenue autopilot integration", () => {
   });
 
   test("fails closed for browser-local quotes or missing tenant calendar authority", () => {
+    expect(() => buildWorkflowRevenueAutopilotInput()).toThrow(
+      "Follow-up automation requires a canonical Firestore quote snapshot."
+    );
     expect(buildWorkflowRevenueAutopilotRead({
       organizationId: "org-1",
       quote: quote(),

@@ -303,7 +303,7 @@ test("New quote confirms only real edits and resets the canonical quote fields",
   expect(dialogCount).toBe(1);
   await expect(page.getByRole("textbox", { name: /Event name/i })).toHaveValue("");
   await expect(page.getByRole("textbox", { name: /Your name/i })).toHaveValue("");
-  await expect(page.getByText("Ready for a new quote")).toBeVisible();
+  await expect(page.getByText("Ready to plan an event")).toBeVisible();
 });
 
 test("step 1 next stays actionable and explains missing required fields", async ({ page }) => {

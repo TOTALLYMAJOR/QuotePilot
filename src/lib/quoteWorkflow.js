@@ -356,6 +356,30 @@ function text(value) {
   return String(value || "").trim();
 }
 
+/**
+ * Returns the existing canonical identity that Workflow can use to focus one
+ * attention row. Follow-up and closeout projections are queue items rather
+ * than request records, so their stable attention-item id is the truthful
+ * focus token. This helper derives no new identity and grants no mutation
+ * authority.
+ */
+export function getWorkflowAttentionFocusId(item = {}) {
+  const type = text(item?.type);
+  const itemId = text(item?.id);
+  if (["follow_up", "post_event_closeout"].includes(type)) return itemId;
+  if (type === "approval") return text(item?.pendingRequests?.[0]?.id) || itemId;
+  if (type === "change_request") return text(item?.sourceRequestId) || itemId;
+  if (type === "unread_customer_reply") {
+    return text(item?.sourceRequestId || item?.attentionId || item?.messageId) || itemId;
+  }
+  return text(
+    item?.sourceRequestId
+    || item?.attentionId
+    || item?.messageId
+    || item?.closeoutId
+  ) || itemId;
+}
+
 function number(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;

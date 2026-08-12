@@ -45,7 +45,7 @@ const READ_COPY = Object.freeze({
   success: "The bounded operations snapshot is current for staff review.",
   stale: "The latest read did not complete. Retained records remain visible but may no longer reflect current server state.",
   partial: "Only a bounded or incomplete operations snapshot is visible. Missing records and outcomes remain unknown.",
-  error: "Revenue Autopilot operations could not be read, and no retained snapshot is available.",
+  error: "Follow-up automation could not be loaded, and no previous results are available.",
   recovery: "The operations read is recovering. Retained evidence, when present, must not be treated as current until the read completes."
 });
 
@@ -946,8 +946,8 @@ export default function RevenueAutopilotOperations({
     >
       <div className="workspace-route-head">
         <div>
-          <p className="eyebrow">Commercial recovery operations</p>
-          <h2 id="revenue-autopilot-operations-title">Revenue Autopilot</h2>
+          <p className="eyebrow">Follow-up and payment reminders</p>
+          <h2 id="revenue-autopilot-operations-title">Follow-up automation</h2>
           <p className="muted">Governed follow-ups, payment reminders, post-event review asks, and unread-reply escalation with explicit evidence boundaries.</p>
         </div>
         <StatusChip {...view.presentation} />
@@ -956,8 +956,8 @@ export default function RevenueAutopilotOperations({
       <div className="staff-evidence-rail staff-evidence-current" data-proof-boundary="commercial-evidence">
         <div className="staff-evidence-head">
           <div>
-            <p className="eyebrow">Truth before theater</p>
-            <h3>No implied sends or recovered revenue</h3>
+            <p className="eyebrow">Evidence limits</p>
+            <h3>What these records do not prove</h3>
           </div>
           <StatusChip family="confirmed" label="Evidence separated" />
         </div>

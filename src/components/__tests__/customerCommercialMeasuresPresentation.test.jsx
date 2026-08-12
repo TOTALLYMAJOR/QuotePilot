@@ -108,7 +108,7 @@ describe("Customer commercial measures presentation", () => {
 
     expect(markup).toContain('data-capability-id="cwf-13-customer-commercial-measures"');
     expect(markup).toContain('data-capability-state="success"');
-    expect(markup).toContain("Commercial measures");
+    expect(markup).toContain("Quotes, bookings, and payments");
     expect(markup).toContain("Source: Firestore customer workspace");
     expect(markup).toContain("3 customer-scoped quote records were evaluated");
     expect(markup).toContain("25-record bound");
@@ -126,8 +126,8 @@ describe("Customer commercial measures presentation", () => {
     expect(markup).toContain("1 repeat booking after the first recorded event");
     expect(markup).toContain("Recorded event-date span: 365 days");
     expect(markup).toContain("Provider-confirmed payment requires a Firebase-backed read");
-    expect(markup).toContain("provider-confirmed payments require Firebase-backed Customer 360");
-    expect(markup).toContain("do not treat these values as an accounting ledger");
+    expect(markup).toContain("Payment totals appear only when provider-confirmed");
+    expect(markup).toContain("Do not treat these values as an accounting ledger");
     expect(markup.toLowerCase()).not.toContain("lifetime");
     expect(markup).not.toContain("Open quote");
   });
@@ -246,7 +246,7 @@ describe("Customer commercial measures presentation", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(staleMarkup).toContain('data-capability-state="stale"');
     expect(staleMarkup).toContain('data-model-state="success"');
-    expect(staleMarkup).toContain("retained displayed-record measures may be stale");
+    expect(staleMarkup).toContain("These retained totals may be stale");
     expect(staleMarkup).toContain("$1,700.00");
   });
 
@@ -264,7 +264,7 @@ describe("Customer commercial measures presentation", () => {
     expect(markup).toContain('data-capability-state="loading"');
     expect(markup).toContain('data-model-state="partial"');
     expect(markup).toContain('data-read-state="refreshing"');
-    expect(markup).toContain("prior displayed measures remain visible");
+    expect(markup).toContain("previous recorded totals remain visible");
     expect(markup).toContain("$100.00");
   });
 
@@ -274,7 +274,7 @@ describe("Customer commercial measures presentation", () => {
     );
 
     expect(markup).toContain('data-capability-state="error"');
-    expect(markup).toContain("Commercial measures unavailable");
+    expect(markup).toContain("Recorded totals unavailable");
     expect(markup).not.toContain("opaque customerId");
   });
 });

@@ -63,6 +63,16 @@ function catalogPool(catalog) {
   ];
 }
 
+function packagePool(catalog) {
+  return (catalog?.packages || [])
+    .filter((item) => item && item.active !== false && clean(item.id) && clean(item.name))
+    .map((item) => ({
+      itemType: "packages",
+      itemId: clean(item.id),
+      itemName: clean(item.name)
+    }));
+}
+
 function selectedPool(form, catalog) {
   return catalogPool(catalog).filter((entry) => {
     const list = form?.[entry.itemType];
@@ -108,7 +118,12 @@ function proposalId(prefix, clauseIndex) {
   return `${prefix}-${clauseIndex}`;
 }
 
-function parseClause(clause, clauseIndex, { form, catalog, styles }) {
+function parseClause(clause, clauseIndex, {
+  form,
+  catalog,
+  styles,
+  allowPackageChanges = true
+}) {
   const lower = clause.toLowerCase();
 
   const guestSet = lower.match(/\b(?:to|at|now at|now)\s+(\d{1,4})\s*(?:guests|people|persons|ppl)\b/)
@@ -170,6 +185,50 @@ function parseClause(clause, clauseIndex, { form, catalog, styles }) {
       };
     }
     return { consumed: true };
+  }
+
+  // Package changes require the explicit word "package" and must resolve to
+  // exactly one active tenant-catalog record. This keeps ordinary service-
+  // style language ("switch to buffet") in its own grammar and makes a vague
+  // request such as "switch package to premium" fail closed when more than
+  // one package matches.
+  const packageSwitch = clause.match(
+    /\b(?:switch|change|move|upgrade|downgrade)(?:ing)?\s+(?:the\s+)?package\s+(?:to|into)\s+(?:the\s+)?(.+)$/i
+  ) || clause.match(
+    /\b(?:switch|change|move)(?:ing)?\s+to\s+(?:the\s+)?(.+?)\s+package\b/i
+  ) || clause.match(
+    /\b(?:use|choose|select)\s+(?:the\s+)?(.+?)\s+package\b/i
+  );
+  if (allowPackageChanges && packageSwitch) {
+    const query = packageSwitch[1];
+    const resolved = resolveReference(query, packagePool(catalog));
+    if (resolved.match) {
+      if (resolved.match.itemId === form?.pkg) return { consumed: true };
+      return {
+        proposal: {
+          id: proposalId("package", clauseIndex),
+          kind: "set_package",
+          value: resolved.match.itemId,
+          packageId: resolved.match.itemId,
+          packageName: resolved.match.itemName,
+          title: `Package → ${resolved.match.itemName}`,
+          meta: "Package",
+          clause
+        }
+      };
+    }
+    if (resolved.candidates.length > 1) {
+      return {
+        ambiguity: {
+          id: proposalId("choice", clauseIndex),
+          clause,
+          verb: "set package",
+          query,
+          candidates: resolved.candidates
+        }
+      };
+    }
+    return {};
   }
 
   const styleSwitch = lower.match(/\bswitch(?:ing)?\s+(?:\w+\s+)?to\s+(buffet|plated|stations|drop[- ]?off)\b/)
@@ -273,7 +332,12 @@ function parseClause(clause, clauseIndex, { form, catalog, styles }) {
   return {};
 }
 
-export function parseChangeRequest(message, { form = {}, catalog = {}, styles = [] } = {}) {
+export function parseChangeRequest(message, {
+  form = {},
+  catalog = {},
+  styles = [],
+  allowPackageChanges = true
+} = {}) {
   const trimmed = clean(message);
   const proposals = [];
   const ambiguities = [];
@@ -282,7 +346,12 @@ export function parseChangeRequest(message, { form = {}, catalog = {}, styles = 
   const clauses = splitClauses(trimmed);
   for (let clauseIndex = 0; clauseIndex < clauses.length; clauseIndex += 1) {
     const clause = clauses[clauseIndex];
-    const result = parseClause(clause, clauseIndex, { form, catalog, styles });
+    const result = parseClause(clause, clauseIndex, {
+      form,
+      catalog,
+      styles,
+      allowPackageChanges
+    });
     if (result.proposal) proposals.push(result.proposal);
     else if (result.ambiguity) ambiguities.push(result.ambiguity);
     else if (!result.consumed) unparsedClauses.push(clause);
@@ -314,6 +383,11 @@ export function applyProposalToForm(form, proposal) {
   }
   if (proposal.kind === "set_style") {
     next.style = proposal.value;
+    return next;
+  }
+  if (proposal.kind === "set_package") {
+    next.pkg = proposal.packageId || proposal.value;
+    next.eventTemplateId = "custom";
     return next;
   }
   const removeItem = (target) => {
@@ -354,6 +428,7 @@ export function proposalTouchedFields(proposal) {
   if (proposal.kind === "add_staff") return [proposal.field];
   if (proposal.kind === "set_hours") return ["hours"];
   if (proposal.kind === "set_style") return ["style"];
+  if (proposal.kind === "set_package") return ["pkg", "eventTemplateId"];
   if (proposal.kind === "remove_item" || proposal.kind === "add_item") return [proposal.itemType];
   if (proposal.kind === "swap_item") {
     return [...new Set([proposal.remove.itemType, proposal.add.itemType])];

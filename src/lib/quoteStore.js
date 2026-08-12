@@ -36,6 +36,7 @@ import {
   getApprovalActionEligibility,
   PRODUCTION_CHECKLIST_IDS
 } from "./quoteWorkflow";
+import { normalizeDecisionRoomOptions } from "./customerDecisionRoom";
 
 const LOCAL_QUOTES_KEY = "quoteWizard.quotes";
 const LOCAL_QUOTE_HISTORY_KEY = "quoteWizard.quoteHistory";
@@ -890,6 +891,8 @@ function buildPortalSnapshot(quoteId, quote) {
   return {
     quoteId,
     organizationId: String(quote.organizationId || "").trim(),
+    decidableOptions: normalizeDecisionRoomOptions(quote.decidableOptionsProjection)
+      .map(({ key: _key, ...option }) => option),
     portalKey: quote.portalKey || "",
     portalIssuedAtISO,
     portalExpiresAtISO,
@@ -956,7 +959,8 @@ function buildPortalSnapshot(quoteId, quote) {
       brandBackgroundMid: quote.quoteMeta?.brandBackgroundMid || "",
       brandBackgroundEnd: quote.quoteMeta?.brandBackgroundEnd || "",
       businessPhone: quote.quoteMeta?.businessPhone || "",
-      businessEmail: quote.quoteMeta?.businessEmail || ""
+      businessEmail: quote.quoteMeta?.businessEmail || "",
+      portalTermsText: String(quote.quoteMeta?.portalTermsText || "").slice(0, 5000)
     },
     status: normalizeStatus(quote.status),
     expiresAtISO: quote.expiresAtISO || addDaysISO(createdAtISO, DEFAULT_VALIDITY_DAYS),

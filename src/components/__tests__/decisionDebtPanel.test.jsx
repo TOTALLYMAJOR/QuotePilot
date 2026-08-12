@@ -154,7 +154,7 @@ describe("Decision Debt CWF-14 read states", () => {
 
   test.each([
     ["loading", { loading: true }, "Reading the current tenant-scoped"],
-    ["empty", {}, "No unresolved Decision Debt"],
+    ["empty", {}, "No unresolved quote decision"],
     ["success", { snapshot: snapshot() }, "server-derived snapshot is current"],
     ["stale", { snapshot: snapshot(), stale: true }, "retained snapshot remains visible"],
     ["partial", {
@@ -201,6 +201,7 @@ describe("Decision Debt CWF-14 read states", () => {
     );
 
     expect(loading).toContain('data-capability-state="loading"');
+    expect(loading).toContain("Loading decisions to review");
     expect(empty).toContain('data-capability-state="empty"');
     expect(success).toContain('data-capability-state="success"');
     expect(stale).toContain('data-capability-state="stale"');
@@ -226,7 +227,7 @@ describe("Decision Debt deterministic explanation", () => {
   test("shows every factor, source, equation, dependency, bound, and non-accounting exposure", () => {
     const markup = renderToStaticMarkup(<DecisionDebtPanel snapshot={snapshot()} />);
 
-    expect(markup).toContain("Decision Debt score");
+    expect(markup).toContain("Priority score");
     expect(markup).toContain("60 / 100");
     expect(markup).toContain("$25,000.01");
     expect(markup).toContain("Not accounting revenue or a receivable");
@@ -262,7 +263,7 @@ describe("Decision Debt deterministic explanation", () => {
       urgency: null
     });
     const markup = renderToStaticMarkup(<DecisionDebtPanel snapshot={snapshot([unknown])} />);
-    expect(markup).toContain("Commercial exposure unavailable—not zero");
+    expect(markup).toContain("Quote amount affected is unavailable—not zero");
     expect(markup).toContain("<strong>Unavailable</strong>");
     expect(markup).toContain("Priority unknown");
     expect(markup).toContain("no exposure factor, raw score, normalized score, or urgency has been guessed");
@@ -283,7 +284,7 @@ describe("Decision Debt deterministic explanation", () => {
 
 describe("Decision Debt admin policy mutation states", () => {
   test.each([
-    ["ready", "No Decision Debt policy change"],
+    ["ready", "No decision-priority policy change"],
     ["submitting", "exact policy request is in flight"],
     ["uncertain", "Reconcile the unchanged request"],
     ["reconciliation", "checking the same request identity"],

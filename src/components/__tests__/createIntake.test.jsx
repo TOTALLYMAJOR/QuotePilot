@@ -43,7 +43,7 @@ describe("CreateIntake", () => {
     expect(markup).toContain("Riverside Loft");
     expect(markup).toContain("Use as venue");
     expect(markup).toContain("no budget field");
-    expect(markup).toContain("Apply 4 facts to the draft");
+    expect(markup).toContain("Add 4 details to the draft");
     expect(markup).toContain("saving re-prices on the server");
   });
 

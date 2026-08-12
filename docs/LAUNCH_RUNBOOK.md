@@ -293,6 +293,44 @@ Rollback is to return both global and tenant gates to false. Preserve immutable
 receipts and artifacts for audit; do not delete or rewrite history to simulate a
 rollback. No step in this runbook authorizes production gate promotion.
 
+### Authoritative operational staffing activation gate
+
+Keep `VITE_OPERATIONAL_STAFFING_ENABLED=false`,
+`OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false`, and every trusted tenant setting
+`operationalStaffingAuthorityEnabled=false` through source qualification and a
+coordinated frontend/Functions/rules release. Browser principals cannot promote
+the server or tenant gate. Before any one-tenant activation:
+
+1. Prove same-tenant administrators can create and revise bounded staff
+   profiles and operator-recorded availability, while sales, customers,
+   unverified, cross-tenant, and unscoped principals cannot configure them.
+2. Prove same-tenant administrators and sales staff can read and apply exact
+   quote-revision plans, while every other principal is denied. Direct browser
+   Firestore access to profiles, plans, nested receipts, and schedule fences
+   must remain denied.
+3. Exercise invalid, missing, ambiguous, and nonexistent tenant-local event
+   times; stale or forged quote revisions, counts, staff revisions, and fence
+   revisions; truncated evidence; overlapping availability; and concurrent
+   overlapping assignments. All must fail closed without a partial record.
+4. Prove lost-response retry reuses the identical request and receipt, changed
+   payload replay is rejected, adjacent half-open assignments remain legal, a
+   moved revision clears only its old fence projections, and a transaction
+   failure leaves plans, receipts, and fences unchanged.
+5. Verify the Living Opportunity separates quoted requirements from
+   operator-confirmed assignments, keeps partial plans as visible gaps, exposes
+   stale/uncertain/reconciliation/recovery states, preserves focus and work on
+   dismissal, and labels disconnected fallback `local_draft` at 390, 768, and
+   1440px.
+6. Confirm no command changes quote pricing/version history, portal, proposal,
+   payment, contract, booking, Kitchen BEO, messaging, attendance, payroll, or
+   readiness evidence. A coverage-confirmed staffing plan proves only the exact
+   operator-recorded assignments and schedule-fence check in its receipt.
+
+Rollback disables the presentation and global server gates and returns the
+exact tenant setting to false. Preserve immutable records and receipts for a
+later exact read; never rewrite operational history to simulate rollback. See
+the [authority ADR](OPERATIONAL_STAFFING_AUTHORITY_ADR.md).
+
 ### Revenue Autopilot activation gate
 
 Revenue Autopilot evaluation and outbound sends are independent. Keep this
@@ -710,6 +748,56 @@ v2 target applicability in `docs/release-uat-checklist.json`; changes to that
 file change its SHA-256 digest and invalidate older attestations. The broader
 source-acceptance list below also includes the portal backfill tool, which is a
 separate data operation and is deliberately absent from deployment-target UAT.
+
+Deploy the exact clean, published `release/vX.Y.Z` head only after the canonical
+`CI Quality` run for that SHA has all eight required jobs green. The guarded
+command fixes provider scope to Firebase project/site
+`quotepilot-staging-20260804` or Vercel project `quoteflow` preview and requires
+a SHA-bound typed confirmation:
+
+```bash
+npm run release:candidate:deploy -- \
+  --target firebase-all \
+  --release-sha <full-release-branch-sha> \
+  --ci-run-id <exact-successful-ci-run-id> \
+  --confirm "DEPLOY CANDIDATE quotepilot-staging-20260804 <full-release-branch-sha>"
+
+npm run release:candidate:deploy -- \
+  --target vercel-preview \
+  --release-sha <full-release-branch-sha> \
+  --ci-run-id <exact-successful-ci-run-id> \
+  --confirm "DEPLOY CANDIDATE quoteflow PREVIEW <full-release-branch-sha>"
+```
+
+The Firebase candidate requires a git-ignored, mode-`0600`
+`functions/.env.quotepilot-staging-20260804` whose provider/send/buyer gates are
+off, `STRIPE_MODE=test`, and the staffing, Commercial Change, Revenue Autopilot
+preparation, and Revenue Autopilot send authority gates explicitly set to
+`false`. The file must be a real regular file, use the exact staging `/app`
+callbacks and approved inert identities, contain no plaintext secret or
+disabled-provider residue, and contain no unreviewed variables. Before any
+Firebase mutation, the command checks metadata only—never secret values—for an
+enabled version of every Secret Manager name bound by the tracked Functions.
+Missing metadata is a blocker and this command does not create placeholders.
+
+Both candidates compile Ambient UI and the staffing browser surface on; that is
+presentation evidence, not staffing or commercial write authority. The Vercel
+preview build uses an explicit exact-staging validation profile; ordinary
+`npm run check:env` remains production-only. Vercel also requires provider
+readback showing the coordinated staging Functions retain every fail-closed
+runtime value before it deploys the browser preview.
+
+Use an authenticated local CLI or the provider token environment variable. The
+command never uses a production target/alias. It exclusively reserves
+`artifacts/release/candidates/<sha>/<target>.json` before provider mutation.
+Build/preflight failures remain `failed`; an attempted provider mutation that
+cannot be completely verified remains `partial`, including any deployment URL
+or id already returned. A `verified` Firebase-all receipt binds the Hosting
+release/version, every active Functions revision and safe runtime-config
+readback, the Firestore release/ruleset and exact rules digest, and the hosted
+SHA/gate manifest. It does not claim secret-value readback. This receipt is
+candidate evidence, not deployment approval, production mutation,
+provider-business acceptance, or human UAT.
 
 For any release containing either Stripe collection rail, the applicable
 tracked `payment.*` items are mandatory, not optional spot checks. The exact

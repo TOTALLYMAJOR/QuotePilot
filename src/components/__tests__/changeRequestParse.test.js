@@ -75,6 +75,52 @@ function parse(message) {
 }
 
 describe("parseChangeRequest", () => {
+  test("changes packages only through an exact active-catalog match and fails ambiguous language closed", () => {
+    const packageCatalog = {
+      ...catalog,
+      packages: [
+        ...catalog.packages,
+        { id: "premium", name: "Premium", ppp: 28 },
+        { id: "premium-plus", name: "Premium Plus", ppp: 34 },
+        { id: "retired", name: "Retired Select", ppp: 40, active: false }
+      ]
+    };
+    const exact = parseChangeRequest("switch package to Premium Plus", {
+      form,
+      catalog: packageCatalog,
+      styles: STYLES
+    });
+    expect(exact.proposals).toEqual([expect.objectContaining({
+      kind: "set_package",
+      value: "premium-plus",
+      packageId: "premium-plus",
+      packageName: "Premium Plus",
+      title: "Package → Premium Plus"
+    })]);
+    expect(exact.ambiguities).toEqual([]);
+
+    const ambiguous = parseChangeRequest("upgrade package to premium", {
+      form,
+      catalog: packageCatalog,
+      styles: STYLES
+    });
+    expect(ambiguous.proposals).toEqual([]);
+    expect(ambiguous.ambiguities[0]).toMatchObject({
+      verb: "set package",
+      query: "premium"
+    });
+    expect(ambiguous.ambiguities[0].candidates.map((candidate) => candidate.itemId).sort())
+      .toEqual(["premium", "premium-plus"]);
+
+    const inactive = parseChangeRequest("switch package to Retired Select", {
+      form,
+      catalog: packageCatalog,
+      styles: STYLES
+    });
+    expect(inactive.proposals).toEqual([]);
+    expect(inactive.unparsedClauses).toEqual(["switch package to Retired Select"]);
+  });
+
   test("parses the canonical swap request into one resolved proposal", () => {
     const result = parse("Could we do chicken instead of the salmon?");
     expect(result.modelId).toBe(CHANGE_REQUEST_PARSE_MODEL);
@@ -146,6 +192,20 @@ describe("applyProposalToForm and proposalTouchedFields", () => {
     expect(applyProposalToForm(form, { kind: "set_guests", value: 135 }).guests).toBe(135);
     expect(applyProposalToForm(form, { kind: "set_hours", value: 7 }).hours).toBe(7);
     expect(applyProposalToForm(form, { kind: "set_style", value: "Buffet" }).style).toBe("Buffet");
+  });
+
+  test("package adoption breaks template ownership and reports both touched fields", () => {
+    const proposal = {
+      kind: "set_package",
+      value: "premium",
+      packageId: "premium",
+      packageName: "Premium"
+    };
+    const next = applyProposalToForm({ ...form, eventTemplateId: "wedding-template" }, proposal);
+    expect(next.pkg).toBe("premium");
+    expect(next.eventTemplateId).toBe("custom");
+    expect(proposalTouchedFields(proposal)).toEqual(["pkg", "eventTemplateId"]);
+    expect(form.pkg).toBe("classic");
   });
 });
 

@@ -193,8 +193,8 @@ items; source/local success cannot satisfy them.
 
 ## Progress
 
-- Source phases: implemented in the working-tree candidate.
-- Final local qualification: pending final convergence; no final test count is
-  recorded in this plan.
-- Deployment/provider/production data/gate promotion/human acceptance: not
-  performed or authorized.
+- Source phases: merged into the tagged `v0.7.0` source.
+- Release-level CI and coordinated Firebase/Vercel deployment receipts exist
+  for `v0.7.0`; they do not replace plan-specific hosted-role qualification.
+- Provider outcomes, production-data acceptance, global/tenant gate promotion,
+  and human acceptance remain open.

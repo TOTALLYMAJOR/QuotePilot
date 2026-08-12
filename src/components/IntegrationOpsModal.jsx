@@ -927,6 +927,7 @@ export function IntegrationOpsView({
     <div
       ref={embedded ? routeRef : dialogRef}
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      data-layout-overlap-allowed={embedded ? undefined : "true"}
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="integration-ops-title"

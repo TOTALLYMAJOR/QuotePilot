@@ -94,7 +94,7 @@ describe("EventRunOfShowPanel", () => {
     expect(markup).toContain("Operational readiness: Not established");
     expect(markup).toContain("Booked quote");
     expect(markup).toContain("Contract C-2026-0042.");
-    expect(markup).toContain("Acceptance and booking remain separate facts.");
+    expect(markup).toContain("Acceptance and booking are tracked separately.");
   });
 
   test("surfaces unknown inputs and duration-dependent timing gaps as a partial state", () => {
@@ -117,9 +117,9 @@ describe("EventRunOfShowPanel", () => {
 
     expect(markup).toContain('data-capability-state="partial"');
     expect(markup).toContain("Source: Browser-local workspace. Authority: Browser-local staff records.");
-    expect(markup).toContain("Unknown source facts: Event duration, Chef count, Staff lead.");
+    expect(markup).toContain("Missing source details: Event duration, Chef count, Staff lead.");
     expect(markup).toContain("Time unavailable until the event duration is recorded.");
-    expect(markup).toContain("Some event, staffing, or schedule facts are not recorded.");
+    expect(markup).toContain("Some event, staffing, or schedule details are not recorded.");
     expect(markup).not.toContain("0 chefs");
   });
 

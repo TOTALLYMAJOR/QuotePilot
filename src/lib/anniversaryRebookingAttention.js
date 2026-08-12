@@ -220,7 +220,7 @@ export function buildAnniversaryRebookingAttention(quotes = [], {
       },
       routeIntent: "verify_exact_version_in_customer_360",
       evidenceBoundary:
-        "This bounded booked-quote cue is not a lead, customer contact, accepted source verification, rebook draft, booking, payment, or revenue result. Customer 360 must verify the retained accepted immutable version before the trusted rebook action is available."
+        "This bounded booked-quote cue is not a lead, customer contact, accepted source verification, rebook draft, booking, payment, or revenue result. Open the client overview to verify the retained accepted immutable version before the trusted rebook action is available."
     });
   });
 

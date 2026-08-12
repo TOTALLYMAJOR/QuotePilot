@@ -48,10 +48,13 @@ export function buildMarginPresentation({ form, totals, catalog, settings } = {}
   let cost = 0;
 
   const pkg = (catalog.packages || []).find((item) => item?.id === form.pkg);
-  if (!pkg) return null;
-  const costPpp = num(pkg.costPpp);
-  if (costPpp === null) missing.push(`${pkg.name || "Package"} (costPpp)`);
-  else cost += costPpp * guests;
+  if (!pkg) {
+    missing.push(`Selected package ${String(form.pkg || "unknown")} (catalog item unavailable)`);
+  } else {
+    const costPpp = num(pkg.costPpp);
+    if (costPpp === null) missing.push(`${pkg.name || "Package"} (costPpp)`);
+    else cost += costPpp * guests;
+  }
 
   const pools = [
     { ids: form.addons, source: catalog.addons || [], quantities: form.addonQuantities || {}, defaultMode: "per_event" },
@@ -61,7 +64,10 @@ export function buildMarginPresentation({ form, totals, catalog, settings } = {}
   for (const pool of pools) {
     for (const id of Array.isArray(pool.ids) ? pool.ids : []) {
       const item = pool.source.find((entry) => entry?.id === id);
-      if (!item) continue;
+      if (!item) {
+        missing.push(`Selected item ${String(id || "unknown")} (catalog item unavailable)`);
+        continue;
+      }
       const qty = Number(pool.quantities[id])
         || (item.qtyPerGuests ? Math.ceil(guests / Number(item.qtyPerGuests)) : 1);
       const lineCost = itemCost(item, { guests, quantity: Math.max(1, qty), defaultMode: pool.defaultMode });

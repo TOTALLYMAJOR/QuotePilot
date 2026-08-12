@@ -154,7 +154,7 @@ test.describe("customer-centered workspace", () => {
     await seedPilotQuote(page);
 
     await page.goto("/app");
-    await expect(page.getByRole("heading", { name: "What deserves your attention" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What to review today" })).toBeVisible();
     await expect(page.locator(".now-surface")).toBeVisible();
 
     await page.goto("/app/quotes/pilot-release-quote");
@@ -170,10 +170,13 @@ test.describe("customer-centered workspace", () => {
     await expect(guests).toHaveValue("90");
 
     const command = page.locator('[data-pilot-command="change-request-parse-v1"]');
+    await expect(command).toHaveAttribute("data-pilot-expanded", "false");
     await command.getByRole("textbox", { name: "Command for this draft" }).fill("Change to 100 guests");
-    await command.getByRole("button", { name: "Preview" }).click();
-    await command.getByRole("button", { name: "Apply" }).click();
+    await command.getByRole("button", { name: "Preview", exact: true }).click();
+    await command.getByRole("button", { name: "Apply to draft" }).click();
     await expect(guests).toHaveValue("100");
+    await expect(command.locator("[data-pilot-query-kind]")).toHaveCount(0);
+    await expect(command.locator("[data-pilot-scenario-model]")).toHaveCount(0);
     await expect(page.locator('[data-margin="margin-presentation-v1"]')).toBeVisible();
   });
 
@@ -187,7 +190,7 @@ test.describe("customer-centered workspace", () => {
       "Corporate dinner for about 80 guests on September 12, 2027 at The Foundry, plated, 4 hours, pilot@example.test."
     );
     await intake.getByRole("button", { name: "Structure it" }).click();
-    await intake.getByRole("button", { name: /Apply \d+ facts? to the draft/ }).click();
+    await intake.getByRole("button", { name: /Add \d+ details? to the draft/ }).click();
 
     await expect(page.getByRole("spinbutton", { name: /Guests \(max 400\)/i })).toHaveValue("80");
     await expect(page.locator('[data-pricing-band="pricing-band-v1"]')).toBeVisible();
@@ -215,7 +218,7 @@ test.describe("customer-centered workspace", () => {
     page.once("dialog", async (dialog) => dialog.accept());
     await page.locator(".site-header").getByRole("button", { name: "New quote", exact: true }).click();
     await expect(eventName).toHaveValue("");
-    await expect(page.getByText("Ready for a new quote", { exact: true })).toBeVisible();
+    await expect(page.getByText("Ready to plan an event", { exact: true })).toBeVisible();
   });
 
   test("primary workspace navigation remains visible and overflow-safe at mobile width", async ({ page }) => {
@@ -873,7 +876,7 @@ test.describe("customer-centered workspace", () => {
     const commercialMeasures = page.locator('[data-capability-id="cwf-13-customer-commercial-measures"]');
     await expect(commercialMeasures).toBeVisible();
     await expect(commercialMeasures).toHaveAttribute("data-capability-state", "partial");
-    await expect(commercialMeasures).toContainText("Commercial measures");
+    await expect(commercialMeasures).toContainText("Quotes, bookings, and payments");
     await expect(commercialMeasures).toContainText("Quoted amount");
     await expect(commercialMeasures).toContainText("$6,500.00");
     const depositMeasure = commercialMeasures.locator('[data-measure-id="webhook_confirmed_deposit"]');
@@ -882,7 +885,7 @@ test.describe("customer-centered workspace", () => {
     await expect(commercialMeasures).toContainText("do not treat these values as an accounting ledger");
     const revenueOpportunities = page.locator('[data-capability-id="cwf-11-rebooking-radar"]');
     await expect(revenueOpportunities).toBeVisible();
-    await expect(revenueOpportunities).toContainText("Revenue opportunities");
+    await expect(revenueOpportunities).toContainText("Follow-ups worth revisiting");
 
     await quotesTab.click();
     const quotesPanel = page.locator("#customer-panel-quotes");

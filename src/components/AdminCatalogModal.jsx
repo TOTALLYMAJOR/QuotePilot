@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import { firebaseReady, storage } from "../lib/firebase";
 import { STARTER_CATALOG_PACKS } from "../data/starterCatalogPacks";
@@ -23,6 +23,14 @@ import {
 } from "../lib/menuService";
 import { useModalDialog } from "../hooks/useModalDialog";
 
+const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
+const EventTemplatesEditor = AMBIENT_UI_ENABLED
+  ? lazy(() => import("./EventTemplatesEditor"))
+  : null;
+
 // Same default-off gate as the staff-only margin strip in LiveBreakdown.jsx;
 // cost entry is only shown once a tenant has opted into the margin pilot,
 // since the fields do nothing on their own until that surface reads them.
@@ -38,6 +46,8 @@ const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
 const PILOT_DECISION_ROOM_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_DECISION_ROOM_ENABLED || "").trim().toLowerCase()
 );
+const AMBIENT_DECISION_ROOM_AUTHORING_ENABLED = PILOT_DECISION_ROOM_ENABLED
+  && AMBIENT_UI_ENABLED;
 
 const JSON_FIELD_META = [
   {
@@ -79,6 +89,7 @@ const ADMIN_TABS = [
   { id: "addons", label: "Addons" },
   { id: "rentals", label: "Rentals" },
   { id: "menu", label: "Menu" },
+  ...(AMBIENT_UI_ENABLED ? [{ id: "templates", label: "Templates" }] : []),
   { id: "pricing", label: "Pricing" }
 ];
 
@@ -91,7 +102,7 @@ const FEATURE_FLAG_META = [
   { id: "quoteCompare", label: "Quote Compare" },
   { id: "guidedSelling", label: "Guided Selling" },
   { id: "aiAssist", label: "AI Assist (Suggestions)" },
-  { id: "aiAutopilot", label: "AI Autopilot (Auto Apply)" }
+  { id: "aiAutopilot", label: "Apply suggestions automatically" }
 ];
 
 const PACKAGE_INCLUSION_FIELD_BY_COLLECTION = Object.freeze({
@@ -300,8 +311,13 @@ export function AdminCatalogView({
   onReload,
   saving,
   presentation = "embedded",
+  surfaceTitle = "Catalog Admin",
+  embeddedCloseLabel = "Back to Home",
   returnFocusRef = null,
   initialTab = "",
+  focusRequest = null,
+  onFocusResolution,
+  onInteractionStateChange,
   selectedEventType: selectedEventTypeProp = "",
   onEventTypeChange,
   onToast
@@ -346,6 +362,9 @@ export function AdminCatalogView({
   const [manualSetupEnabled, setManualSetupEnabled] = useState(false);
   const [confirmedMenuRecoveryAvailable, setConfirmedMenuRecoveryAvailable] = useState(false);
   const [confirmedMenuRecoveryChecked, setConfirmedMenuRecoveryChecked] = useState(false);
+  const handledFocusRequestRef = useRef("");
+  const pendingCatalogEvidenceRef = useRef(null);
+  const acceptedCatalogRevisionRef = useRef(null);
   const scopedOrganizationId = String(organizationId || "").trim();
   const catalogRevision = Math.max(0, Number(catalog?.settings?.catalogRevision || 0));
   const authoritativeVersion = Math.max(0, Number(catalog?.authoritativeVersion || 0));
@@ -356,6 +375,7 @@ export function AdminCatalogView({
   const viewScopeKey = JSON.stringify([
     scopedOrganizationId,
     String(initialTab || ""),
+    catalogRevision,
     authoritativeVersion,
     starterPackRevision
   ]);
@@ -381,11 +401,42 @@ export function AdminCatalogView({
     authoritativeVersion,
     starterPackRevision
   ]);
+  const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
+  const selectedEventTypeRecord = menuEventTypes.find((item) => item.id === selectedEventType);
+  const selectedCategoryRecord = menuCategories.find((item) => item.id === selectedCategory);
+  const newItemDraftDirty = Boolean(
+    String(newItemDraft.name || "").trim()
+    || Number(newItemDraft.price || 0) !== 0
+    || normalizePricingType(newItemDraft.pricingType, "per_event") !== "per_event"
+    || newItemDraft.active === false
+  );
+  const eventTypeRenameDirty = String(eventTypeEditName || "").trim()
+    !== String(selectedEventTypeRecord?.name || "").trim();
+  const categoryRenameDirty = String(categoryEditName || "").trim()
+    !== String(selectedCategoryRecord?.name || "").trim();
+  const hasPendingMenuEditorDraft = Boolean(
+    String(newEventTypeName || "").trim()
+    || String(newCategoryName || "").trim()
+    || newItemDraftDirty
+    || eventTypeRenameDirty
+    || categoryRenameDirty
+  );
+  const hasManagedMenuDraft = hasPendingMenuEditorDraft
+    || Object.values(menuItemDirty).some((dirty) => dirty === true);
+  const hasAnyUnsavedChanges = hasUnsavedChanges || hasManagedMenuDraft;
 
   const pushToast = (message, tone = "info") => {
     if (typeof onToast === "function") {
       onToast(message, tone);
     }
+  };
+  const blockForNewerCatalog = () => {
+    if (!pendingCatalogEvidenceRef.current) return false;
+    const message = "A newer Library version is ready. Your unsaved work is still here. Load the latest version before making another saved change.";
+    setCatalogRefreshRequired(true);
+    setStatus(message);
+    pushToast(message, "info");
+    return true;
   };
 
   const normalizeManagedMenuItem = (item) => {
@@ -424,7 +475,16 @@ export function AdminCatalogView({
 
   useEffect(() => {
     if (!shouldInitializeView) return;
+    const acceptedRevision = acceptedCatalogRevisionRef.current === catalogRevision;
+    if (!resetOnNextOpenRef.current && hasAnyUnsavedChanges && !acceptedRevision) {
+      pendingCatalogEvidenceRef.current = { catalog, viewScopeKey };
+      setCatalogRefreshRequired(true);
+      setStatus("A newer Library version is ready. Your unsaved work is still here. Load the latest version when you are ready to replace these changes.");
+      return;
+    }
     initializedViewScopeRef.current = viewScopeKey;
+    pendingCatalogEvidenceRef.current = null;
+    acceptedCatalogRevisionRef.current = null;
     resetOnNextOpenRef.current = false;
     const nextDraft = {
       ...catalog,
@@ -461,10 +521,11 @@ export function AdminCatalogView({
     setEventTypeEditName("");
     setCategoryEditName("");
     setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
-  }, [open, viewScopeKey]);
+  }, [open, viewScopeKey]); // Draft state is intentionally read inside this scope-change reconciliation effect.
 
   useEffect(() => {
     if (!open) return;
+    if (pendingCatalogEvidenceRef.current) return;
     if (!shouldInitializeView && eventTypesLoadScopeRef.current === eventTypesLoadScopeKey) return;
     eventTypesLoadScopeRef.current = eventTypesLoadScopeKey;
     let alive = true;
@@ -489,10 +550,11 @@ export function AdminCatalogView({
     return () => {
       alive = false;
     };
-  }, [open, eventTypesLoadScopeKey]);
+  }, [open, eventTypesLoadScopeKey, catalogRefreshRequired]);
 
   useEffect(() => {
     if (!open) return undefined;
+    if (pendingCatalogEvidenceRef.current) return undefined;
     if (
       !shouldInitializeView
       && confirmedInventoryLoadScopeRef.current === confirmedInventoryLoadScopeKey
@@ -536,10 +598,11 @@ export function AdminCatalogView({
     return () => {
       alive = false;
     };
-  }, [open, confirmedInventoryLoadScopeKey]);
+  }, [open, confirmedInventoryLoadScopeKey, catalogRefreshRequired]);
 
   useEffect(() => {
     if (!open) return;
+    if (pendingCatalogEvidenceRef.current) return;
     if (!shouldInitializeView && eventMenuLoadScopeRef.current === eventMenuLoadScopeKey) return;
     eventMenuLoadScopeRef.current = eventMenuLoadScopeKey;
     const eventTypeId = String(selectedEventType || "").trim();
@@ -579,43 +642,26 @@ export function AdminCatalogView({
     return () => {
       alive = false;
     };
-  }, [open, eventMenuLoadScopeKey]);
+  }, [open, eventMenuLoadScopeKey, catalogRefreshRequired]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || pendingCatalogEvidenceRef.current) return;
     const selected = menuEventTypes.find((eventType) => eventType.id === selectedEventType);
     setEventTypeEditName(selected?.name || "");
   }, [selectedEventType, menuEventTypes]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || pendingCatalogEvidenceRef.current) return;
     const selected = menuCategories.find((category) => category.id === selectedCategory);
     setCategoryEditName(selected?.name || "");
   }, [selectedCategory, menuCategories]);
 
-  const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
-  const hasPendingMenuEditorDraft = () => {
-    const selectedEventTypeRecord = menuEventTypes.find((item) => item.id === selectedEventType);
-    const selectedCategoryRecord = menuCategories.find((item) => item.id === selectedCategory);
-    return Boolean(
-      String(newEventTypeName || "").trim()
-      || String(newCategoryName || "").trim()
-      || String(newItemDraft.name || "").trim()
-      || Number(newItemDraft.price || 0) !== 0
-      || normalizePricingType(newItemDraft.pricingType, "per_event") !== "per_event"
-      || newItemDraft.active === false
-      || String(eventTypeEditName || "").trim()
-        !== String(selectedEventTypeRecord?.name || "").trim()
-      || String(categoryEditName || "").trim()
-        !== String(selectedCategoryRecord?.name || "").trim()
-    );
-  };
   const blockManagedMenuMutationForDraft = (action, targetItemId) => {
     if (!hasUnrelatedManagedMenuDraft({
       catalogDraftDirty: hasUnsavedChanges,
       menuItemDirty,
       targetItemId,
-      pendingMenuEditorDraft: hasPendingMenuEditorDraft()
+      pendingMenuEditorDraft: hasPendingMenuEditorDraft
     })) {
       return false;
     }
@@ -625,6 +671,22 @@ export function AdminCatalogView({
     pushToast(message, "error");
     return true;
   };
+  const blockForOtherDrafts = (ownDraft = "", targetItemId = "") => {
+    const blocked = hasUnsavedChanges
+      || (ownDraft !== "event-create" && Boolean(String(newEventTypeName || "").trim()))
+      || (ownDraft !== "category-create" && Boolean(String(newCategoryName || "").trim()))
+      || (ownDraft !== "item-create" && newItemDraftDirty)
+      || (ownDraft !== "event-rename" && eventTypeRenameDirty)
+      || (ownDraft !== "category-rename" && categoryRenameDirty)
+      || Object.entries(menuItemDirty).some(([itemId, dirty]) => (
+        dirty === true && !(ownDraft === "item-update" && itemId === targetItemId)
+      ));
+    if (!blocked) return false;
+    const message = "Finish or discard your other Library edits before making this saved change. Nothing changed.";
+    setStatus(message);
+    pushToast(message, "info");
+    return true;
+  };
   const closeBlocked = Boolean(
     saving
     || uploadingLogo
@@ -632,15 +694,23 @@ export function AdminCatalogView({
     || menuItemSavingId
     || packActionId
   );
+  useEffect(() => {
+    onInteractionStateChange?.({
+      dirty: hasAnyUnsavedChanges,
+      busy: closeBlocked
+    });
+  }, [closeBlocked, hasAnyUnsavedChanges, onInteractionStateChange]);
+
   const handleClose = () => {
     if (closeBlocked) {
       setStatus("Wait for the current catalog action to finish before closing.");
       return;
     }
-    if (hasUnsavedChanges && !window.confirm("Discard unsaved catalog and branding changes?")) {
+    if (hasAnyUnsavedChanges && !window.confirm("Discard unsaved catalog, menu, and branding changes?")) {
       return;
     }
     resetOnNextOpenRef.current = true;
+    onInteractionStateChange?.({ dirty: false, busy: false });
     onClose();
   };
   const { dialogRef } = useModalDialog({
@@ -659,6 +729,49 @@ export function AdminCatalogView({
     return () => window.cancelAnimationFrame(frame);
   }, [embedded, open]);
 
+  useEffect(() => {
+    if (!open || !embedded || typeof window === "undefined") return undefined;
+    const requestId = String(focusRequest?.requestId || focusRequest?.id || "").trim();
+    if (!requestId || handledFocusRequestRef.current === requestId) return undefined;
+    const sectionId = String(focusRequest?.sectionId || "").trim();
+    const supported = ADMIN_TABS.some((tab) => tab.id === sectionId);
+    if (!supported) {
+      handledFocusRequestRef.current = requestId;
+      onFocusResolution?.({
+        requestId,
+        status: "recovery",
+        result: "recovery",
+        object: { type: "library-section", id: sectionId || "unknown" },
+        reason: "The requested Library section is not available in this catalog editor.",
+        consequence: "No catalog field was changed and the current Library context remains available.",
+        nextResolutions: ["Return to Library and choose an available section"]
+      });
+      return undefined;
+    }
+
+    setActiveTab(sectionId);
+    if (sectionId === "templates" && String(focusRequest?.recordId || "").trim()) {
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const target = dialogRef.current?.querySelector(`[data-admin-tab-id="${sectionId}"]`)
+        || dialogRef.current;
+      target?.focus?.({ preventScroll: true });
+      target?.scrollIntoView?.({ block: "nearest", behavior: "auto" });
+      handledFocusRequestRef.current = requestId;
+      onFocusResolution?.({
+        requestId,
+        status: "focused",
+        result: "context",
+        object: { type: "library-section", id: sectionId },
+        reason: String(focusRequest?.reason || "The requested Library section is open."),
+        consequence: "Reviewing this section changes nothing until an administrator explicitly saves catalog changes.",
+        nextResolutions: ["Review this section", "Save catalog changes when ready"]
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [dialogRef, embedded, focusRequest, onFocusResolution, open]);
+
   if (!open) return null;
 
   const stagedPack = draft?.settings?.starterCatalogPack || {};
@@ -670,6 +783,8 @@ export function AdminCatalogView({
     && draft?.settings?.pricingSetupConfirmed !== true;
 
   const handleApplyStarterPack = async (pack) => {
+    if (blockForNewerCatalog()) return;
+    if (blockForOtherDrafts()) return;
     if (typeof onApplyStarterPack !== "function") {
       setStatus("Starter pack application is unavailable.");
       return;
@@ -954,6 +1069,45 @@ export function AdminCatalogView({
     setJsonDrafts((prev) => ({ ...prev, [field]: value }));
   };
 
+  const patchEventTemplates = (templates, meta = {}) => {
+    const nextTemplates = Array.isArray(templates) ? templates : [];
+    setDraft((prev) => ({
+      ...prev,
+      settings: {
+        ...(prev.settings || {}),
+        eventTemplates: nextTemplates
+      }
+    }));
+    setJsonDrafts((prev) => ({
+      ...prev,
+      eventTemplates: JSON.stringify(nextTemplates, null, 2)
+    }));
+    const templateName = nextTemplates.find((template) => template.id === meta.templateId)?.name
+      || meta.templateId
+      || "Template";
+    setStatus(meta.type === "remove"
+      ? "Template removed from this draft. Save catalog changes to persist."
+      : `${templateName} updated in this draft. Save catalog changes to persist.`);
+  };
+
+  const selectAdminTab = (tabId) => {
+    if (tabId !== "templates") {
+      setActiveTab(tabId);
+      return;
+    }
+    try {
+      const eventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);
+      setDraft((prev) => ({
+        ...prev,
+        settings: { ...(prev.settings || {}), eventTemplates }
+      }));
+      setActiveTab("templates");
+    } catch (error) {
+      setActiveTab("pricing");
+      setStatus(`Fix Event Templates JSON before opening the structured editor: ${error.message}`);
+    }
+  };
+
   const refreshEventTypes = async (preferredId = "") => {
     const items = await getEventTypes({ organizationId: scopedOrganizationId });
     setMenuEventTypes(items);
@@ -987,18 +1141,25 @@ export function AdminCatalogView({
   };
 
   const handleCreateEventType = async () => {
+    if (blockForNewerCatalog()) return;
     const name = String(newEventTypeName || "").trim();
     if (!name) {
       setStatus("Enter an event type name first.");
       return;
     }
+    if (blockForOtherDrafts("event-create")) return;
     setMenuActionLoading(true);
     try {
-      const created = await createEventType({ name, organizationId: scopedOrganizationId });
-      onCatalogMutation?.(created);
+      const created = await createEventType({
+        name,
+        organizationId: scopedOrganizationId,
+        expectedCatalogRevision: catalogRevision
+      });
       setNewEventTypeName("");
       await refreshEventTypes(created.id);
       await refreshEventMenuData(created.id);
+      acceptedCatalogRevisionRef.current = created.catalogRevision;
+      onCatalogMutation?.(created);
       const seededLabel = created?.seeded
         ? ` Seeded ${Number(created.seeded.categories || 0)} categories and ${Number(created.seeded.items || 0)} items.`
         : "";
@@ -1013,6 +1174,7 @@ export function AdminCatalogView({
   };
 
   const handleCreateCategory = async () => {
+    if (blockForNewerCatalog()) return;
     const name = String(newCategoryName || "").trim();
     if (!selectedEventType) {
       setStatus("Choose an event type before adding a category.");
@@ -1022,17 +1184,20 @@ export function AdminCatalogView({
       setStatus("Enter a category name first.");
       return;
     }
+    if (blockForOtherDrafts("category-create")) return;
     setMenuActionLoading(true);
     try {
       const created = await createCategory({
         eventTypeId: selectedEventType,
         name,
-        organizationId: scopedOrganizationId
+        organizationId: scopedOrganizationId,
+        expectedCatalogRevision: catalogRevision
       });
-      onCatalogMutation?.(created);
       setNewCategoryName("");
       await refreshEventMenuData(selectedEventType);
       setSelectedCategory(created.id);
+      acceptedCatalogRevisionRef.current = created.catalogRevision;
+      onCatalogMutation?.(created);
       setStatus(`Category "${created.name}" added.`);
       pushToast(`Category "${created.name}" added.`, "success");
     } catch (err) {
@@ -1044,6 +1209,7 @@ export function AdminCatalogView({
   };
 
   const handleUpdateEventType = async () => {
+    if (blockForNewerCatalog()) return;
     if (!selectedEventType) {
       setStatus("Choose an event type first.");
       return;
@@ -1053,12 +1219,18 @@ export function AdminCatalogView({
       setStatus("Event type name cannot be empty.");
       return;
     }
+    if (blockForOtherDrafts("event-rename")) return;
 
     setMenuActionLoading(true);
     try {
-      const updated = await updateEventType(selectedEventType, { name, organizationId: scopedOrganizationId });
-      onCatalogMutation?.(updated);
+      const updated = await updateEventType(selectedEventType, {
+        name,
+        organizationId: scopedOrganizationId,
+        expectedCatalogRevision: catalogRevision
+      });
       await refreshEventTypes(selectedEventType);
+      acceptedCatalogRevisionRef.current = updated.catalogRevision;
+      onCatalogMutation?.(updated);
       setStatus("Event type updated.");
       pushToast("Event type updated.", "success");
     } catch (err) {
@@ -1070,6 +1242,7 @@ export function AdminCatalogView({
   };
 
   const handleUpdateCategory = async () => {
+    if (blockForNewerCatalog()) return;
     if (!selectedEventType || !selectedCategory) {
       setStatus("Choose event type and category first.");
       return;
@@ -1079,16 +1252,19 @@ export function AdminCatalogView({
       setStatus("Category name cannot be empty.");
       return;
     }
+    if (blockForOtherDrafts("category-rename")) return;
 
     setMenuActionLoading(true);
     try {
       const updated = await updateCategory(selectedCategory, {
         name,
         eventTypeId: selectedEventType,
-        organizationId: scopedOrganizationId
+        organizationId: scopedOrganizationId,
+        expectedCatalogRevision: catalogRevision
       });
-      onCatalogMutation?.(updated);
       await refreshEventMenuData(selectedEventType);
+      acceptedCatalogRevisionRef.current = updated.catalogRevision;
+      onCatalogMutation?.(updated);
       setStatus("Category updated.");
       pushToast("Category updated.", "success");
     } catch (err) {
@@ -1100,6 +1276,7 @@ export function AdminCatalogView({
   };
 
   const handleCreateMenuItem = async () => {
+    if (blockForNewerCatalog()) return;
     const name = String(newItemDraft.name || "").trim();
     if (!selectedEventType || !selectedCategory) {
       setStatus("Choose event type and category before adding an item.");
@@ -1109,6 +1286,7 @@ export function AdminCatalogView({
       setStatus("Enter a menu item name first.");
       return;
     }
+    if (blockForOtherDrafts("item-create")) return;
     setMenuActionLoading(true);
     try {
       const created = await createMenuItem({
@@ -1118,11 +1296,13 @@ export function AdminCatalogView({
         price: Number(newItemDraft.price || 0),
         pricingType: normalizePricingType(newItemDraft.pricingType, "per_event"),
         active: newItemDraft.active !== false,
-        organizationId: scopedOrganizationId
+        organizationId: scopedOrganizationId,
+        expectedCatalogRevision: catalogRevision
       });
-      onCatalogMutation?.(created);
       setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
       await refreshEventMenuData(selectedEventType);
+      acceptedCatalogRevisionRef.current = created.catalogRevision;
+      onCatalogMutation?.(created);
       setStatus("Menu item added.");
       pushToast("Menu item added.", "success");
     } catch (err) {
@@ -1154,8 +1334,10 @@ export function AdminCatalogView({
   };
 
   const handleUpdateManagedMenuItem = async (item) => {
+    if (blockForNewerCatalog()) return;
     const itemId = String(item?.id || "").trim();
     if (!itemId || menuItemSaveInFlightRef.current.has(itemId)) return;
+    if (blockForOtherDrafts("item-update", itemId)) return;
     if (
       item?.active === false
       && blockManagedMenuMutationForDraft("deactivate", itemId)
@@ -1198,11 +1380,6 @@ export function AdminCatalogView({
         organizationId: scopedOrganizationId,
         expectedCatalogRevision: catalogRevision
       });
-      if (updated?.authoritativeMutation) {
-        onReload?.();
-      } else {
-        onCatalogMutation?.(updated);
-      }
       setMenuItems((prev) =>
         prev.map((entry) =>
           entry.id === itemId
@@ -1227,6 +1404,9 @@ export function AdminCatalogView({
         delete next[itemId];
         return next;
       });
+      acceptedCatalogRevisionRef.current = updated.catalogRevision;
+      if (updated?.authoritativeMutation) onReload?.({ background: true });
+      else onCatalogMutation?.(updated);
       const successMessage = updated?.authoritativeMutation
         ? "Menu item deactivated. Pricing review reopened for the new catalog revision."
         : "Menu item updated.";
@@ -1237,7 +1417,7 @@ export function AdminCatalogView({
       const errorMessage = revisionConflict
         ? `${err?.message || "Catalog revision changed."} Refreshing the latest catalog before retry.`
         : err?.message || "Failed to update menu item.";
-      if (revisionConflict) onReload?.();
+      if (revisionConflict) onReload?.({ background: true });
       setStatus(errorMessage);
       const baseline = menuItemBaselines[itemId];
       if (baseline) {
@@ -1268,6 +1448,8 @@ export function AdminCatalogView({
   };
 
   const handleDeleteManagedMenuItem = async (id) => {
+    if (blockForNewerCatalog()) return;
+    if (blockForOtherDrafts()) return;
     if (blockManagedMenuMutationForDraft("delete", id)) return;
     let draftEventTemplates;
     try {
@@ -1310,11 +1492,12 @@ export function AdminCatalogView({
     }
     setMenuActionLoading(true);
     try {
-      await deleteMenuItem(id, {
+      const deleted = await deleteMenuItem(id, {
         organizationId: scopedOrganizationId,
         expectedCatalogRevision: catalogRevision
       });
-      onReload?.();
+      acceptedCatalogRevisionRef.current = deleted.catalogRevision;
+      onReload?.({ background: true });
       setStatus("Menu item deleted. Pricing review reopened for the new catalog revision.");
       pushToast("Menu item deleted. Pricing review reopened for the new catalog revision.", "success");
     } catch (err) {
@@ -1322,7 +1505,7 @@ export function AdminCatalogView({
       const errorMessage = revisionConflict
         ? `${err?.message || "Catalog revision changed."} Refreshing the latest catalog before retry.`
         : err?.message || "Failed to delete menu item.";
-      if (revisionConflict) onReload?.();
+      if (revisionConflict) onReload?.({ background: true });
       setStatus(errorMessage);
       pushToast(errorMessage, "error");
     } finally {
@@ -1332,6 +1515,7 @@ export function AdminCatalogView({
 
   const handleLogoUpload = async (file) => {
     if (!file) return;
+    if (blockForNewerCatalog()) return;
     if (!String(file.type || "").startsWith("image/")) {
       setStatus("Logo upload failed: choose an image file.");
       return;
@@ -1372,6 +1556,11 @@ export function AdminCatalogView({
   };
 
   const handleSave = async () => {
+    if (blockForNewerCatalog()) return;
+    if (hasManagedMenuDraft) {
+      setStatus("Finish or discard the separate menu edits first, then save the rest of the Library. Nothing was saved yet.");
+      return;
+    }
     try {
       const serviceFeeTiers = parseJsonArray("serviceFeeTiers", "Service Fee Tiers JSON");
       const taxRegions = parseJsonArray("taxRegions", "Tax Regions JSON");
@@ -1473,17 +1662,56 @@ export function AdminCatalogView({
           || confirmedMissingMenuRecovery)
     );
   const handleReload = () => {
+    if (pendingCatalogEvidenceRef.current) {
+      if (!window.confirm("Discard unsaved Library changes and load the newer version?")) {
+        setStatus("Your unsaved Library changes are still here. Nothing was reloaded.");
+        return;
+      }
+      const pending = pendingCatalogEvidenceRef.current;
+      pendingCatalogEvidenceRef.current = null;
+      resetOnNextOpenRef.current = false;
+      initializedViewScopeRef.current = pending.viewScopeKey;
+      eventTypesLoadScopeRef.current = "";
+      confirmedInventoryLoadScopeRef.current = "";
+      eventMenuLoadScopeRef.current = "";
+      setDraft(pending.catalog);
+      const latestJsonDrafts = buildJsonDrafts(pending.catalog);
+      setJsonDrafts(latestJsonDrafts);
+      setSavedFingerprint(catalogDraftFingerprint(pending.catalog, latestJsonDrafts));
+      setSelectedEventType(String(selectedEventTypeProp || "").trim());
+      setSelectedCategory("");
+      setMenuEventTypes([]);
+      setMenuCategories([]);
+      setMenuItems([]);
+      setMenuItemBaselines({});
+      setMenuItemDirty({});
+      setMenuItemSavingId("");
+      menuItemSaveInFlightRef.current.clear();
+      setNewEventTypeName("");
+      setNewCategoryName("");
+      setEventTypeEditName("");
+      setCategoryEditName("");
+      setNewItemDraft({ name: "", price: 0, pricingType: "per_event", active: true });
+      setCatalogRefreshRequired(false);
+      setStatus("The latest Library version is loaded. Review it before making changes.");
+      onInteractionStateChange?.({ dirty: false, busy: false });
+      return;
+    }
     if (typeof onReload !== "function") {
       setStatus("Catalog refresh is unavailable. Close and reopen Catalog Admin.");
       return;
     }
     setStatus("Refreshing the latest catalog from the server...");
-    onReload();
+    onReload({ background: true });
   };
   return (
     <div
       ref={dialogRef}
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      data-layout-overlap-allowed={embedded ? undefined : "true"}
+      data-portal-option-authoring={PILOT_DECISION_ROOM_ENABLED
+        ? AMBIENT_DECISION_ROOM_AUTHORING_ENABLED ? "ambient" : "legacy-v0.7"
+        : "off"}
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="catalog-admin-title"
@@ -1491,13 +1719,18 @@ export function AdminCatalogView({
     >
       <div className={`modal-card admin-catalog-card${embedded ? " workspace-route-card" : ""}`}>
         <div className="modal-head">
-          <h2 id="catalog-admin-title">Catalog Admin</h2>
+          <h2 id="catalog-admin-title">{surfaceTitle}</h2>
           <div className="admin-save-actions">
-            <span className={hasUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
-              {saving ? "Saving…" : hasUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "No pending changes"}
+            <span className={hasAnyUnsavedChanges ? "admin-save-state unsaved" : "admin-save-state"}>
+              {saving ? "Saving…" : hasAnyUnsavedChanges ? "Unsaved changes" : status === "Catalog saved." ? "Saved" : "No pending changes"}
             </span>
             {!starterChoiceOnly && (
-              <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
+              <button
+                type="button"
+                className="cta"
+                onClick={handleSave}
+                disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
+              >
                 {saving ? "Saving..." : "Save catalog changes"}
               </button>
             )}
@@ -1508,7 +1741,7 @@ export function AdminCatalogView({
               onClick={handleClose}
               disabled={closeBlocked}
             >
-              {embedded ? "Back to Home" : "Close"}
+              {embedded ? embeddedCloseLabel : "Close"}
             </button>
           </div>
         </div>
@@ -1517,14 +1750,27 @@ export function AdminCatalogView({
           {visibleAdminTabs.map((tab) => (
             <button
               key={tab.id}
+              id={`catalog-admin-tab-${tab.id}`}
               type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`catalog-admin-panel-${tab.id}`}
+              tabIndex={activeTab === tab.id ? 0 : -1}
               className={`admin-tab ${activeTab === tab.id ? "active" : ""}`}
-              onClick={() => setActiveTab(tab.id)}
+              data-admin-tab-id={tab.id}
+              onClick={() => selectAdminTab(tab.id)}
             >
               {tab.label}
             </button>
           ))}
         </div>
+
+        <div
+          id={`catalog-admin-panel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`catalog-admin-tab-${activeTab}`}
+          tabIndex={0}
+        >
 
         {pricingReviewRequired && (
           <div className="starter-pack-review-banner" role="status">
@@ -1881,6 +2127,7 @@ export function AdminCatalogView({
                 <input
                   type="text"
                   placeholder="Edit selected event type"
+                  aria-label="Selected event type name"
                   value={eventTypeEditName}
                   onChange={(e) => setEventTypeEditName(e.target.value)}
                   disabled={!selectedEventType || menuLoading}
@@ -1898,6 +2145,7 @@ export function AdminCatalogView({
                 <input
                   type="text"
                   placeholder="New event type"
+                  aria-label="New event type name"
                   value={newEventTypeName}
                   onChange={(e) => setNewEventTypeName(e.target.value)}
                 />
@@ -1925,6 +2173,7 @@ export function AdminCatalogView({
                 <input
                   type="text"
                   placeholder="Edit selected category"
+                  aria-label="Selected category name"
                   value={categoryEditName}
                   onChange={(e) => setCategoryEditName(e.target.value)}
                   disabled={!selectedCategory}
@@ -1942,6 +2191,7 @@ export function AdminCatalogView({
                 <input
                   type="text"
                   placeholder="New category"
+                  aria-label="New category name"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   disabled={!selectedEventType}
@@ -1953,9 +2203,10 @@ export function AdminCatalogView({
             </div>
 
             <div className="admin-inline-actions admin-inline-actions-create-item">
-              <input
-                type="text"
-                placeholder="New item name"
+                <input
+                  type="text"
+                  placeholder="New item name"
+                  aria-label="New menu item name"
                 value={newItemDraft.name}
                 onChange={(e) => setNewItemDraft((prev) => ({ ...prev, name: e.target.value }))}
                 disabled={!selectedCategory}
@@ -1963,11 +2214,13 @@ export function AdminCatalogView({
               <input
                 type="number"
                 step="0.01"
+                aria-label="New menu item price"
                 value={Number(newItemDraft.price || 0)}
                 onChange={(e) => setNewItemDraft((prev) => ({ ...prev, price: Number(e.target.value) }))}
                 disabled={!selectedCategory}
               />
               <select
+                aria-label="New menu item pricing type"
                 value={newItemDraft.pricingType}
                 onChange={(e) =>
                   setNewItemDraft((prev) => ({
@@ -2002,15 +2255,17 @@ export function AdminCatalogView({
 
             {!menuLoading && selectedCategoryItems.map((item) => (
               <div className="admin-menu-row admin-menu-row-managed" key={item.id}>
-                <input value={item.id || ""} disabled />
+                <input aria-label={`${item.name || "Menu item"} ID`} value={item.id || ""} disabled />
                 <input
                   type="text"
+                  aria-label={`${item.name || "Menu item"} name`}
                   value={item.name || ""}
                   onChange={(e) => patchManagedMenuItem(item.id, "name", e.target.value)}
                   onBlur={() => handleManagedMenuItemBlur(item.id)}
                   onKeyDown={(e) => handleManagedMenuItemKeyDown(e, item.id)}
                 />
                 <select
+                  aria-label={`${item.name || "Menu item"} pricing type`}
                   value={item.pricingType || item.type || "per_event"}
                   onChange={(e) => patchManagedMenuItem(item.id, "pricingType", e.target.value)}
                   onBlur={() => handleManagedMenuItemBlur(item.id)}
@@ -2023,6 +2278,7 @@ export function AdminCatalogView({
                 <input
                   type="number"
                   step="0.01"
+                  aria-label={`${item.name || "Menu item"} price`}
                   value={Number(item.price || 0)}
                   onChange={(e) => patchManagedMenuItem(item.id, "price", e.target.value)}
                   onBlur={() => handleManagedMenuItemBlur(item.id)}
@@ -2052,6 +2308,33 @@ export function AdminCatalogView({
             ))}
           </div>
         </section>
+        )}
+
+        {AMBIENT_UI_ENABLED && EventTemplatesEditor && activeTab === "templates" && (
+          <Suspense fallback={<div className="admin-section" role="status">Opening event templates…</div>}>
+            <EventTemplatesEditor
+              templates={draft.settings?.eventTemplates || []}
+              eventTypes={menuEventTypes}
+              packages={draft.packages || []}
+              addons={draft.addons || []}
+              rentals={draft.rentals || []}
+              menuItems={menuItems}
+              menuSections={draft.settings?.menuSections || []}
+              menuInventoryComplete={false}
+              onChange={patchEventTemplates}
+              focusRequest={String(focusRequest?.sectionId || "").trim() === "templates"
+                && String(focusRequest?.recordId || "").trim()
+                ? {
+                    requestId: focusRequest.requestId || focusRequest.id,
+                    templateId: focusRequest.recordId,
+                    field: focusRequest.field || "summary",
+                    reason: focusRequest.reason
+                  }
+                : null}
+              onFocusResolution={onFocusResolution}
+              disabled={saving || closeBlocked}
+            />
+          </Suspense>
         )}
 
         {activeTab === "pricing" && (
@@ -2621,18 +2904,24 @@ export function AdminCatalogView({
             </section>
           </>
         )}
+        </div>
 
         <div className="modal-foot" data-capability-state={catalogSaveCapabilityState}>
-          <span className="source-note">
-            {status || (hasUnsavedChanges ? "Your changes are not saved yet." : "Settings are up to date.")}
+          <span className="source-note" role="status" aria-live="polite">
+            {status || (hasAnyUnsavedChanges ? "Your changes are not saved yet." : "Settings are up to date.")}
           </span>
           {catalogRefreshRequired && (
-            <button type="button" className="ghost" onClick={handleReload} disabled={saving}>
+            <button type="button" className="ghost" onClick={handleReload} disabled={closeBlocked}>
               Refresh latest catalog
             </button>
           )}
           {!starterChoiceOnly && (
-            <button type="button" className="cta" onClick={handleSave} disabled={saving || !hasUnsavedChanges}>
+            <button
+              type="button"
+              className="cta"
+              onClick={handleSave}
+              disabled={saving || !hasUnsavedChanges || Boolean(pendingCatalogEvidenceRef.current)}
+            >
               {saving ? "Saving..." : "Save catalog changes"}
             </button>
           )}

@@ -82,6 +82,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain("NOTIFICATIONS_SMS_PROVIDER=none");
     expect(output).toContain("STRIPE_MODE=live");
     expect(output).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false");
+    expect(output).toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false");
     expect(output).toContain("REVENUE_AUTOPILOT_ENABLED=false");
     expect(output).toContain("REVENUE_AUTOPILOT_SENDS_ENABLED=false");
     expect(output).toContain("BUYER_ACCESS_ENABLED=false");
@@ -130,6 +131,25 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     }).result;
     expect(invalid.status).not.toBe(0);
     expect(invalid.stderr).toMatch(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED must be true or false/i);
+  });
+
+  test("keeps operational staffing authority explicit and fail closed", () => {
+    const enabled = runMaterializer({
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+    });
+    expect(enabled.result.status).toBe(0);
+    expect(fs.readFileSync(
+      path.join(enabled.cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    )).toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true");
+
+    const invalid = runMaterializer({
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "enabled"
+    }).result;
+    expect(invalid.status).not.toBe(0);
+    expect(invalid.stderr).toMatch(
+      /OPERATIONAL_STAFFING_AUTHORITY_ENABLED must be true or false/i
+    );
   });
 
   test("keeps Revenue Autopilot activation and outbound sends independently fail closed", () => {

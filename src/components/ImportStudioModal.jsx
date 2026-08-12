@@ -543,6 +543,7 @@ export function ImportStudioView({
     <div
       ref={dialogRef}
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      data-layout-overlap-allowed={embedded ? undefined : "true"}
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="import-studio-title"
@@ -590,7 +591,7 @@ export function ImportStudioView({
           >
             <p className="import-drop-eyebrow">CSV intake</p>
             <h3>Drop a customer or catalog file here</h3>
-            <p>We will suggest the record type and field mapping before anything is written.</p>
+            <p>You’ll review a suggested record type and field mapping before anything is written.</p>
             <button type="button" className="cta" onClick={() => fileInputRef.current?.click()}>Choose CSV file</button>
             <input
               ref={fileInputRef}
@@ -624,7 +625,7 @@ export function ImportStudioView({
 
             <section className="import-type-strip" aria-label="Record type">
               <div>
-                <span>We think these are</span>
+                <span>Suggested record type</span>
                 <strong>{definition.label}</strong>
               </div>
               <label>

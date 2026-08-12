@@ -9,7 +9,7 @@ import {
 } from "../lib/workspacePresentation";
 
 const READ_PRESENTATION = Object.freeze({
-  loading: Object.freeze({ family: "pending", label: "Loading decision debt" }),
+  loading: Object.freeze({ family: "pending", label: "Loading decisions to review" }),
   empty: Object.freeze({ family: "info", label: "No current debt" }),
   success: Object.freeze({ family: "confirmed", label: "Snapshot current" }),
   stale: Object.freeze({ family: "action", label: "Retained snapshot" }),
@@ -19,11 +19,11 @@ const READ_PRESENTATION = Object.freeze({
 
 const READ_COPY = Object.freeze({
   loading: "Reading the current tenant-scoped decision snapshot. No task, payment, booking, or customer record is changed.",
-  empty: "No unresolved Decision Debt appears in this bounded server snapshot.",
+  empty: "No unresolved quote decision appears in this bounded server snapshot.",
   success: "The server-derived snapshot is current for its recorded tenant-calendar observation.",
   stale: "The latest read did not complete. The retained snapshot remains visible but may no longer reflect current decisions.",
   partial: "This snapshot reached a declared bound. Missing decisions remain unknown and must not be treated as resolved.",
-  error: "Decision Debt could not be read and no retained server snapshot is available."
+  error: "Quote decisions could not be loaded, and no retained server snapshot is available."
 });
 
 const MUTATION_PRESENTATION = Object.freeze({
@@ -37,7 +37,7 @@ const MUTATION_PRESENTATION = Object.freeze({
 });
 
 const MUTATION_COPY = Object.freeze({
-  ready: "No Decision Debt policy change is currently in flight.",
+  ready: "No decision-priority policy change is currently in progress.",
   submitting: "The exact policy request is in flight. Do not submit another policy change.",
   uncertain: "The outcome is unknown. Reconcile the unchanged request before making another policy change.",
   reconciliation: "QuotePilot is checking the same request identity; this does not create a second policy change.",
@@ -160,7 +160,7 @@ function factorDetail(factorId, factor) {
   if (factorId === "exposure") {
     return factor.known === true && Number.isFinite(factor.cents)
       ? `${formatWorkspaceMoney(Number(factor.cents) / 100)} recorded exposure`
-      : "Commercial exposure unavailable—not zero";
+      : "Quote amount affected is unavailable—not zero";
   }
   if (factorId === "reversibility") {
     return humanizeWorkspaceValue(factor.classification, { emptyLabel: "Classification unavailable" });
@@ -220,7 +220,7 @@ function DecisionDebtItem({ item, onOpenQuote }) {
     >
       <div className="workspace-route-head">
         <div>
-          <span className="customer-revenue-opportunity-type">Unresolved commercial decision</span>
+          <span className="customer-revenue-opportunity-type">Quote decision to review</span>
           <h3>{text(item?.label) || "Unnamed decision"}</h3>
           <p>
             Event {formatWorkspaceDate(item?.eventDate)} · lock {formatWorkspaceDate(item?.lockDate)} · {formatDaysUntilLock(item?.daysUntilLock)}
@@ -231,16 +231,16 @@ function DecisionDebtItem({ item, onOpenQuote }) {
 
       <div className="customer-revenue-metrics" aria-label={`${text(item?.label) || "Decision"} deterministic score`}>
         <article className="commercial-measure-card" data-decision-debt-score={item?.score}>
-          <span>Decision Debt score</span>
+          <span>Priority score</span>
           <strong>{scoreKnown ? `${formatWorkspaceInteger(item?.score)} / 100` : "Unavailable"}</strong>
           <small>
             {scoreKnown
               ? "Deterministic priority, not a prediction"
-              : "Authoritative commercial exposure is required before scoring"}
+              : "A verified quote amount is required before scoring"}
           </small>
         </article>
         <article className="commercial-measure-card">
-          <span>Commercial exposure</span>
+          <span>Quote amount affected</span>
           <strong>
             {Number.isFinite(item?.commercialExposureCents)
               ? formatWorkspaceMoney(Number(item.commercialExposureCents) / 100)
@@ -250,7 +250,7 @@ function DecisionDebtItem({ item, onOpenQuote }) {
         </article>
       </div>
 
-      <div className="customer-revenue-metrics" aria-label="Deterministic Decision Debt factors">
+      <div className="customer-revenue-metrics" aria-label="Deterministic decision-priority factors">
         <FactorCard factorId="dependency" label="Dependency weight" factor={factors.dependency} />
         <FactorCard factorId="proximity" label="Proximity" factor={factors.proximity} />
         <FactorCard factorId="exposure" label="Exposure" factor={factors.exposure} />
@@ -594,8 +594,8 @@ export default function DecisionDebtPanel({
     >
       <div className="workspace-route-head">
         <div>
-          <p className="eyebrow">Commercial dependency graph</p>
-          <h2 id="decision-debt-title">Decision Debt</h2>
+          <p className="eyebrow">Related quote decisions</p>
+          <h2 id="decision-debt-title">Decisions to review</h2>
           <p>{view.detail}</p>
         </div>
         <StatusChip {...view.presentation} />
@@ -612,7 +612,7 @@ export default function DecisionDebtPanel({
       )}
 
       {view.snapshotAvailable && (
-        <div className="staff-evidence-rail" aria-label="Decision Debt source and bounds">
+        <div className="staff-evidence-rail" aria-label="Decision review source and limits">
           <span>Observed {formatWorkspaceDateTime(view.snapshot.observedAtISO)}</span>
           <span>Tenant date {formatWorkspaceDate(view.snapshot.tenantLocalDate)}</span>
           <span>{formatWorkspaceInteger(bounds.returnedCount)} of {formatWorkspaceInteger(bounds.eligibleCount)} eligible</span>
@@ -641,7 +641,7 @@ export default function DecisionDebtPanel({
           data-capability-action="retry-decision-debt"
           onClick={() => onRetry()}
         >
-          Retry Decision Debt read
+          Retry decision review
         </button>
       )}
 
@@ -659,7 +659,7 @@ export default function DecisionDebtPanel({
 
       {view.state === "empty" && (
         <div className="empty-state" data-capability-state="empty">
-          <h3>No current unresolved Decision Debt</h3>
+          <h3>No quote decisions need review right now</h3>
           <p>A future refresh can surface a decision as its configured lock window approaches.</p>
         </div>
       )}

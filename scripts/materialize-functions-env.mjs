@@ -144,6 +144,14 @@ if (!["true", "false"].includes(commercialChangeAuthorityEnabled)) {
   throw new Error("COMMERCIAL_CHANGE_AUTHORITY_ENABLED must be true or false.");
 }
 
+const operationalStaffingAuthorityEnabled = optional(
+  "OPERATIONAL_STAFFING_AUTHORITY_ENABLED",
+  "false"
+).toLowerCase();
+if (!["true", "false"].includes(operationalStaffingAuthorityEnabled)) {
+  throw new Error("OPERATIONAL_STAFFING_AUTHORITY_ENABLED must be true or false.");
+}
+
 const revenueAutopilotEnabled = optional(
   "REVENUE_AUTOPILOT_ENABLED",
   "false"
@@ -235,6 +243,7 @@ const values = {
   } : {}),
   STRIPE_MODE: stripeMode,
   COMMERCIAL_CHANGE_AUTHORITY_ENABLED: commercialChangeAuthorityEnabled,
+  OPERATIONAL_STAFFING_AUTHORITY_ENABLED: operationalStaffingAuthorityEnabled,
   REVENUE_AUTOPILOT_ENABLED: revenueAutopilotEnabled,
   REVENUE_AUTOPILOT_SENDS_ENABLED: revenueAutopilotSendsEnabled,
   BUYER_ACCESS_ENABLED: buyerAccessEnabled,

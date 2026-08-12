@@ -135,10 +135,37 @@ describe("event workspace presentation", () => {
       target: {
         quoteId: quote.id,
         attentionType: "follow_up",
-        requestId: ""
+        requestId: `follow-up:${quote.id}`
       }
     });
     expect(model.evidenceNote).toContain("Browser-local workspace");
+  });
+
+  test("carries the canonical blocked-closeout queue identity as exact focus context", () => {
+    const bookedQuote = {
+      ...quote,
+      status: "booked",
+      workflow: {
+        postEventCloseout: {
+          closeoutId: "",
+          quoteId: quote.id,
+          state: "blocked_source",
+          eventDate: "2026-09-19",
+          dueDate: "2026-09-22",
+          policy: { state: "blocked_source" }
+        }
+      }
+    };
+    const model = buildEventWorkspacePresentation(bookedQuote, {
+      source: "firebase",
+      todayISO: "2026-09-23"
+    });
+
+    expect(model.nextAction.target).toEqual({
+      quoteId: quote.id,
+      attentionType: "post_event_closeout",
+      requestId: `post-event-closeout:${quote.id}:blocked-source`
+    });
   });
 
   test("does not turn an empty bounded queue into readiness or completion", () => {

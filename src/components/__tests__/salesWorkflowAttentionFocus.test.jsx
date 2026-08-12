@@ -213,6 +213,145 @@ describe("Sales Workflow central Attention focus", () => {
     });
   });
 
+  test("reports resolved only after the exact Ambient Workflow item is focused", async () => {
+    const onArrivalResolution = vi.fn();
+    const arrivalContext = {
+      surfaceId: "workflow",
+      focus: {
+        quoteId: "quote-reply",
+        attentionType: "unread_customer_reply",
+        requestId: "attention-one"
+      }
+    };
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="sales"
+          currentUserEmail="sales@example.test"
+          tenantTimeZone="America/Chicago"
+          focusQuoteId="quote-reply"
+          focusAttentionType="unread_customer_reply"
+          focusRequestId="attention-one"
+          arrivalContext={arrivalContext}
+          onArrivalResolution={onArrivalResolution}
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    const exactRow = container.querySelector('[data-attention-id="unread-reply:attention-one"]');
+    expect(document.activeElement).toBe(exactRow);
+    expect(onArrivalResolution).toHaveBeenCalledWith(expect.objectContaining({
+      status: "resolved",
+      itemId: "unread-reply:attention-one",
+      focus: arrivalContext.focus
+    }));
+  });
+
+  test("does not substitute another Workflow item when an Ambient target is stale", async () => {
+    const onArrivalResolution = vi.fn();
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="sales"
+          currentUserEmail="sales@example.test"
+          tenantTimeZone="America/Chicago"
+          focusQuoteId="quote-reply"
+          focusAttentionType="unread_customer_reply"
+          focusRequestId="attention-stale"
+          arrivalContext={{
+            surfaceId: "workflow",
+            focus: {
+              quoteId: "quote-reply",
+              attentionType: "unread_customer_reply",
+              requestId: "attention-stale"
+            }
+          }}
+          onArrivalResolution={onArrivalResolution}
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(onArrivalResolution).toHaveBeenCalledWith(expect.objectContaining({
+      status: "recovery",
+      consequence: expect.stringMatching(/No similar or first-listed item was substituted/i)
+    }));
+    expect(onArrivalResolution).not.toHaveBeenCalledWith(expect.objectContaining({
+      status: "resolved"
+    }));
+    expect(document.activeElement).not.toBe(
+      container.querySelector('[data-attention-id="unread-reply:attention-one"]')
+    );
+  });
+
+  test("recovers when an approval stops being pending before exact arrival consumption", async () => {
+    const resolvedQuote = {
+      ...quote(),
+      workflow: {
+        ...quote().workflow,
+        approvalRequests: [{
+          id: "approval-resolved",
+          state: "approved",
+          requestedAtISO: "2026-08-09T15:10:00.000Z",
+          resolvedAtISO: "2026-08-09T15:20:00.000Z"
+        }]
+      }
+    };
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [resolvedQuote],
+      truncated: false
+    });
+    const onArrivalResolution = vi.fn();
+    await act(async () => {
+      root.render(
+        <SalesWorkflowView
+          open
+          presentation="embedded"
+          organizationId="org-one"
+          currentUserRole="sales"
+          currentUserEmail="sales@example.test"
+          tenantTimeZone="America/Chicago"
+          focusQuoteId="quote-reply"
+          focusAttentionType="approval"
+          focusRequestId="approval-resolved"
+          arrivalContext={{
+            surfaceId: "workflow",
+            focus: {
+              quoteId: "quote-reply",
+              attentionType: "approval",
+              requestId: "approval-resolved"
+            }
+          }}
+          onArrivalResolution={onArrivalResolution}
+          onOpenQuoteHistory={() => {}}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    expect(onArrivalResolution).toHaveBeenCalledWith(expect.objectContaining({
+      status: "recovery",
+      reason: expect.stringMatching(/now approved/i),
+      consequence: expect.stringMatching(/No approval was focused as pending/i)
+    }));
+    expect(onArrivalResolution).not.toHaveBeenCalledWith(expect.objectContaining({
+      status: "resolved"
+    }));
+  });
+
   test("labels the primary customer-reply queue incomplete when attention exceeds its read bound", async () => {
     mocks.getRevenueAutopilotOperations.mockResolvedValue({
       ...operations(),
@@ -243,7 +382,7 @@ describe("Sales Workflow central Attention focus", () => {
     const warning = container.querySelector('[data-unread-attention-bound="truncated"]');
     expect(warning).toBeTruthy();
     expect(warning.textContent).toContain("This queue is incomplete");
-    expect(warning.textContent).toContain("Revenue autopilot tab");
+    expect(warning.textContent).toContain("Follow-up automation tab");
   });
 
   test("selects and focuses the exact Decision Debt item instead of searching primary Attention", async () => {

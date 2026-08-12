@@ -32,4 +32,88 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain("Choose at least one menu item before continuing.");
     expect(appSource).toContain('ref={menuSelectionValidationRef}');
   });
+
+  test("delegates saved-quote hydration and exact Ambient handoffs to the draft runtime", () => {
+    expect(appSource).toContain("hydrateSavedQuoteDraftBase");
+    expect(appSource).toContain("? hydrateSavedQuoteDraft({");
+    expect(appSource).toContain("draftPatch,");
+    expect(appSource).toContain("draftIntent,");
+    expect(appSource).toContain("ambientCatalogContext,");
+    expect(appSource).toContain("ambientEnabled: true");
+    expect(appSource).toContain(": hydrateSavedQuoteDraftBase(draftInput)");
+    expect(appSource).toContain("setForm(draftRuntime.form)");
+    expect(appSource).toContain("draftRuntime.ambientDraftIntent?.focusField");
+    expect(appSource).toContain("draftIntentFamily: draftRuntime.ambientDraftIntent?.family");
+    expect(appSource).toContain("querySelector(`[data-ambient-field=");
+    expect(appSource).not.toContain('const allowedSources = ["ambient-guest-scenario-v1"');
+  });
+
+  test("keeps Package and Menu handoffs in pending review until an exact draft outcome is chosen", () => {
+    expect(appSource).toContain("adoptAmbientPackageMenuDraftChange({");
+    expect(appSource).toContain("ambientDraftReviewResolution === \"pending_review\"");
+    expect(appSource).toContain("Resolve the pending Package or Menu review before saving");
+    expect(appSource).toContain("setForm(result.form)");
+    expect(appSource).toContain("markFieldsTouched(result.dirtyFields)");
+    expect(appSource).toContain("setAmbientDraftReviewResolution(\"applied\")");
+    expect(appSource).toContain("Save package change");
+    expect(appSource).toContain("Save menu replacement");
+    expect(appSource).toContain("Save menu order");
+    expect(appSource).toContain("onApply={handleApplyAmbientDraftIntent}");
+    expect(appSource).toContain("onKeep={handleKeepAmbientDraftIntent}");
+  });
+
+  test("routes Ambient Workflow and Conversation actions through validated arrival handoffs", () => {
+    const callbackStart = appSource.indexOf("{historyMounted && (");
+    const callbackEnd = appSource.indexOf("{salesWorkflowMounted && (", callbackStart);
+    const callbackSource = appSource.slice(callbackStart, callbackEnd);
+
+    expect(callbackStart).toBeGreaterThan(-1);
+    expect(callbackEnd).toBeGreaterThan(callbackStart);
+    expect(appSource).toContain(
+      "createWorkspaceArrivalHandoff(ambientWorkflowArrivalInput(target, options))"
+    );
+    expect(appSource).toContain(
+      "createWorkspaceArrivalHandoff(\n      ambientConversationArrivalInput(quoteId, options)\n    )"
+    );
+    expect(appSource).toContain("const openAmbientWorkflow = useCallback((target = {}, options = {}) => {");
+    expect(appSource).toContain("const result = navigateAmbientWorkflow(target, options);");
+    expect(appSource).toContain("const openAmbientConversation = useCallback((quoteId, options = {}) => {");
+    expect(appSource).toContain("const result = navigateAmbientConversation(quoteId, options);");
+    expect(callbackSource).toContain("? openAmbientWorkflow");
+    expect(callbackSource).toContain(
+      ": (target = {}) => navigateWorkspace(buildWorkflowPath(target))"
+    );
+    expect(callbackSource).toContain("? openAmbientConversation");
+    expect(callbackSource).toContain(
+      ": (quoteId) => navigateWorkspace(buildMessagingPath({ quoteId }))"
+    );
+    expect(callbackSource).not.toContain("ambientArrival");
+  });
+
+  test("routes Opportunities into the exact Living Opportunity arrival consumer", () => {
+    const callbackStart = appSource.indexOf("{historyMounted && (");
+    const callbackEnd = appSource.indexOf("{salesWorkflowMounted && (", callbackStart);
+    const callbackSource = appSource.slice(callbackStart, callbackEnd);
+
+    expect(appSource).toContain(
+      "createWorkspaceArrivalHandoff(ambientOpportunityArrivalInput(target))"
+    );
+    expect(appSource).toContain('destination: "opportunity"');
+    expect(appSource).toContain('? "review_proposal_gap"');
+    expect(callbackSource).toContain("const result = navigateAmbientOpportunity(target);");
+    expect(callbackSource).toContain('workspaceArrivalContext?.surfaceId === "living-opportunity"');
+    expect(callbackSource).toContain('fallbackSurfaceId="living-opportunity"');
+    expect(callbackSource).toContain("onArrivalResolution={setWorkspaceArrivalResolution}");
+    expect(callbackSource).not.toContain('reason: "opportunity_stream"');
+  });
+
+  test("wires exact Schedule arrival context and resets notices across object and intent changes", () => {
+    expect(appSource).toContain("workspaceArrivalContext.object?.type");
+    expect(appSource).toContain("workspaceArrivalContext.object?.id");
+    expect(appSource).toContain("workspaceArrivalContext.intentId");
+    expect(appSource).toContain("workspaceArrivalContext.focus?.reportSignal");
+    expect(appSource).toContain('arrivalContext: workspaceArrivalContext?.surfaceId === "schedule"');
+    expect(appSource).toContain("onArrivalResolution: setWorkspaceArrivalResolution");
+    expect(appSource).toContain('fallbackSurfaceId="schedule"');
+  });
 });

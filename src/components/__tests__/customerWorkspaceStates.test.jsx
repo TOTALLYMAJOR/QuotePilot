@@ -121,8 +121,8 @@ describe("customer workspace executable presentation states", () => {
 
     expect(markup).toContain('role="status"');
     expect(markup).toContain('data-capability-state="partial"');
-    expect(markup).toContain("partial view capped at 25 linked quotes");
-    expect(markup).toContain("counts and money below are not complete");
+    expect(markup).toContain("shows up to 25 linked quotes");
+    expect(markup).toContain("counts and amounts below may be incomplete");
     expect(markup).toContain("Open complete Quotes history");
     expect(completeMarkup).toBe("");
   });
@@ -256,7 +256,7 @@ describe("customer workspace executable presentation states", () => {
     );
 
     expect(loadingMarkup).toContain('data-capability-state="loading"');
-    expect(loadingMarkup).toContain("Customer 360 read context");
+    expect(loadingMarkup).toContain("Client overview details");
     expect(errorMarkup).toContain('data-capability-state="error"');
     expect(errorMarkup).toContain('data-capability-state="recovery"');
     expect(errorMarkup).toContain("Tenant read failed.");

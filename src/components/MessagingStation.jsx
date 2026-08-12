@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowSquareOut,
@@ -58,6 +58,60 @@ export function MessagingStationCapabilitySurface({ state, className = "", child
   );
 }
 
+export function resolveMessagingArrivalConsumption({
+  active = false,
+  quoteId = "",
+  inboxStatus = "idle",
+  inboxStale = false,
+  inboxError = "",
+  inboxBounded = false,
+  threads = [],
+  selectedQuoteId = ""
+} = {}) {
+  if (!active) return null;
+  if (["idle", "connecting", "recovering"].includes(inboxStatus)) {
+    return { status: "pending" };
+  }
+  if (inboxStatus === "error" && threads.length === 0) {
+    return {
+      status: "recovery",
+      reason: "The exact conversation could not be verified because the current bounded inbox failed to load.",
+      consequence: "No other conversation was selected and no message was sent or marked read.",
+      nextResolution: "Reconnect Messages, then reopen the exact conversation from its opportunity."
+    };
+  }
+  if (inboxStale || inboxError || inboxStatus === "stale") {
+    return {
+      status: "recovery",
+      reason: "The requested conversation appears only in retained or interrupted inbox evidence, so its current exact state cannot be verified.",
+      consequence: "No other message was substituted; no retained conversation was treated as current, and no message was sent or marked read.",
+      nextResolution: "Reconnect Messages and retry the exact conversation after the inbox is current."
+    };
+  }
+  const exactThread = threads.find((thread) => thread.quoteId === quoteId) || null;
+  if (!exactThread) {
+    return {
+      status: "recovery",
+      reason: inboxBounded
+        ? "The requested conversation is not present in the 50 most recently active conversations; it may be outside this bounded inbox or no longer available."
+        : "The requested conversation is no longer available in the current workspace evidence.",
+      consequence: "No first-listed or similar conversation was substituted; no message was sent or marked read.",
+      nextResolution: "Return to the originating opportunity and review its current proposal-delivery or conversation state."
+    };
+  }
+  if (!exactThread.conversationAvailable) {
+    return {
+      status: "recovery",
+      reason: exactThread.unavailableReason || "The requested conversation is not available for the current proposal delivery.",
+      consequence: "The opportunity remains selected, but no conversation was opened and no message state changed.",
+      nextResolution: "Open the opportunity and resolve its current portal-delivery requirement before returning to Messages."
+    };
+  }
+  return selectedQuoteId === quoteId
+    ? { status: "ready", thread: exactThread }
+    : { status: "pending" };
+}
+
 function ThreadRow({ thread, selected, onSelect, buttonRef }) {
   return (
     <li>
@@ -97,6 +151,9 @@ export default function MessagingStation({
   organizationId = "",
   seedQuotes = [],
   initialQuoteId = "",
+  arrivalContext = null,
+  arrivalAttempted = false,
+  onArrivalResolution = null,
   onSelectQuote = null,
   onOpenEvent = null,
   onOpenCustomer = null
@@ -106,13 +163,20 @@ export default function MessagingStation({
     () => inbox.threads.filter((thread) => thread.conversationAvailable || thread.messageCount > 0),
     [inbox.threads]
   );
+  const invalidArrivalAttempt = Boolean(arrivalAttempted && !arrivalContext);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
-  const [selectedQuoteId, setSelectedQuoteId] = useState(initialQuoteId);
-  const [mobileThreadOpen, setMobileThreadOpen] = useState(Boolean(initialQuoteId));
+  const [selectedQuoteId, setSelectedQuoteId] = useState(
+    invalidArrivalAttempt ? "" : initialQuoteId
+  );
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(
+    invalidArrivalAttempt ? false : Boolean(initialQuoteId)
+  );
+  const [conversationLoadResolution, setConversationLoadResolution] = useState(null);
   const threadHeadingRef = useRef(null);
   const threadRowRefs = useRef(new Map());
   const previousInitialQuoteIdRef = useRef("");
+  const arrivalReportRef = useRef("");
   const returnFocusQuoteIdRef = useRef("");
   const pendingThreadFocusRef = useRef(false);
   const routeHeadingRef = useWorkspaceRouteHeadingFocus(true);
@@ -129,12 +193,48 @@ export default function MessagingStation({
     threads: eligibleThreads
   });
   const sync = buildMessagingSyncPresentation(inbox);
+  const exactArrivalActive = Boolean(
+    arrivalContext?.surfaceId === "conversation"
+    && arrivalContext?.focus?.quoteId
+    && arrivalContext.focus.quoteId === initialQuoteId
+  );
+  const exactMessageArrivalActive = Boolean(
+    exactArrivalActive && arrivalContext?.focus?.messageId
+  );
+  const strictArrivalActive = exactArrivalActive || Boolean(arrivalAttempted);
+
+  const reportArrivalResolution = useCallback((resolution) => {
+    if (!exactArrivalActive || typeof onArrivalResolution !== "function") return;
+    const next = {
+      ...resolution,
+      focus: { ...arrivalContext?.focus, quoteId: initialQuoteId }
+    };
+    const signature = JSON.stringify(next);
+    if (arrivalReportRef.current === signature) return;
+    arrivalReportRef.current = signature;
+    onArrivalResolution(next);
+  }, [arrivalContext?.focus, exactArrivalActive, initialQuoteId, onArrivalResolution]);
 
   useEffect(() => {
+    if (exactArrivalActive) {
+      arrivalReportRef.current = "";
+    }
+  }, [exactArrivalActive, initialQuoteId]);
+
+  useEffect(() => {
+    if (invalidArrivalAttempt) {
+      setSelectedQuoteId("");
+      setMobileThreadOpen(false);
+      pendingThreadFocusRef.current = false;
+      previousInitialQuoteIdRef.current = initialQuoteId;
+      return;
+    }
     if (initialQuoteId && eligibleThreads.some((thread) => thread.quoteId === initialQuoteId)) {
       setSelectedQuoteId(initialQuoteId);
       setMobileThreadOpen(true);
-      if (previousInitialQuoteIdRef.current !== initialQuoteId) {
+      if (exactArrivalActive) {
+        pendingThreadFocusRef.current = false;
+      } else if (previousInitialQuoteIdRef.current !== initialQuoteId) {
         pendingThreadFocusRef.current = true;
       }
     } else if (!initialQuoteId && previousInitialQuoteIdRef.current) {
@@ -142,18 +242,84 @@ export default function MessagingStation({
       setMobileThreadOpen(false);
     }
     previousInitialQuoteIdRef.current = initialQuoteId;
-  }, [eligibleThreads, initialQuoteId]);
+  }, [eligibleThreads, exactArrivalActive, initialQuoteId, invalidArrivalAttempt]);
 
   useEffect(() => {
-    if (!selectedThread && eligibleThreads.length > 0) {
+    if (!selectedThread && eligibleThreads.length > 0 && !strictArrivalActive) {
       const firstAvailable = eligibleThreads.find((thread) => thread.conversationAvailable);
       setSelectedQuoteId((firstAvailable || eligibleThreads[0]).quoteId);
     }
-  }, [eligibleThreads, selectedThread]);
+  }, [eligibleThreads, selectedThread, strictArrivalActive]);
+
+  useEffect(() => {
+    if (!exactArrivalActive) return;
+    const consumption = resolveMessagingArrivalConsumption({
+      active: true,
+      quoteId: initialQuoteId,
+      inboxStatus: inbox.status,
+      inboxStale: inbox.stale,
+      inboxError: inbox.error,
+      inboxBounded: inbox.bounded,
+      threads: inbox.threads,
+      selectedQuoteId
+    });
+    if (consumption.status !== "ready") {
+      reportArrivalResolution(consumption);
+      return;
+    }
+    // Exact-message arrivals have a single focus and acknowledgement owner:
+    // QuoteConversationPanel verifies the canonical quote-scoped bodies and
+    // focuses the requested message. The station must not race it by focusing
+    // or resolving the surrounding thread heading.
+    if (exactMessageArrivalActive) return;
+    if (
+      conversationLoadResolution?.status === "recovery"
+      && conversationLoadResolution?.quoteId === initialQuoteId
+    ) {
+      reportArrivalResolution(conversationLoadResolution);
+      return;
+    }
+    if (
+      conversationLoadResolution?.status !== "ready"
+      || conversationLoadResolution?.quoteId !== initialQuoteId
+    ) {
+      reportArrivalResolution({ status: "pending" });
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      threadHeadingRef.current?.focus({ preventScroll: true });
+      if (document.activeElement === threadHeadingRef.current) {
+        reportArrivalResolution({ status: "resolved", itemId: initialQuoteId });
+      } else if (document.activeElement !== threadHeadingRef.current) {
+        reportArrivalResolution({
+          status: "recovery",
+          reason: "The exact conversation exists, but its focused thread state could not be opened.",
+          consequence: "No alternate conversation was focused and no message state changed.",
+          nextResolution: "Refresh Messages, or return to the opportunity and reopen this conversation."
+        });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    eligibleThreads,
+    exactArrivalActive,
+    inbox.bounded,
+    inbox.error,
+    inbox.status,
+    inbox.stale,
+    inbox.threads,
+    initialQuoteId,
+    reportArrivalResolution,
+    selectedQuoteId,
+    arrivalContext?.focus?.messageId,
+    conversationLoadResolution,
+    exactMessageArrivalActive
+  ]);
 
   useEffect(() => {
     if (mobileThreadOpen && pendingThreadFocusRef.current) {
       pendingThreadFocusRef.current = false;
+      if (exactArrivalActive) return undefined;
       const frame = window.requestAnimationFrame(() => threadHeadingRef.current?.focus({ preventScroll: true }));
       return () => window.cancelAnimationFrame(frame);
     }
@@ -164,7 +330,7 @@ export default function MessagingStation({
       return () => window.cancelAnimationFrame(frame);
     }
     return undefined;
-  }, [mobileThreadOpen]);
+  }, [exactArrivalActive, mobileThreadOpen]);
 
   const selectThread = (quoteId) => {
     setSelectedQuoteId(quoteId);
@@ -190,10 +356,16 @@ export default function MessagingStation({
       aria-labelledby="messaging-station-title"
     >
       <header className="messaging-station-heading">
-        <div>
-          <p className="eyebrow">Event communications</p>
-          <h1 id="messaging-station-title" ref={routeHeadingRef} tabIndex="-1">Messages</h1>
-          <p>Every conversation stays attached to one event and quote.</p>
+        <div className="messaging-station-heading-copy">
+          <h1
+            id="messaging-station-title"
+            ref={routeHeadingRef}
+            tabIndex="-1"
+            data-layout-audit-group="messaging-route-heading"
+          >Messages</h1>
+          <p data-layout-audit-group="messaging-route-heading">
+            Every conversation stays attached to one event and quote.
+          </p>
         </div>
         <span className={`messaging-sync-state is-${sync.tone}`} role="status">
           <Broadcast size={16} weight="bold" aria-hidden="true" />
@@ -212,7 +384,7 @@ export default function MessagingStation({
         <section className="messaging-station-placeholder" role="status">
           <ChatCircleDots size={30} aria-hidden="true" />
           <h2>Connecting event conversations</h2>
-          <p>Loading the bounded conversation index for this workspace.</p>
+          <p>Loading this workspace's recent conversations.</p>
         </section>
       )}
 
@@ -229,7 +401,7 @@ export default function MessagingStation({
         <section className="messaging-station-placeholder" role="status">
           <ChatCircleDots size={30} aria-hidden="true" />
           <h2>Reconnecting event conversations</h2>
-          <p>Requesting a fresh bounded conversation index for this workspace.</p>
+          <p>Refreshing this workspace's recent conversations.</p>
         </section>
       )}
 
@@ -332,6 +504,15 @@ export default function MessagingStation({
                     defaultOpen
                     presentation="station"
                     showCloseAction={false}
+                    onLoadResolution={exactArrivalActive && !exactMessageArrivalActive
+                      ? setConversationLoadResolution
+                      : null}
+                    focusMessageId={exactArrivalActive
+                      ? arrivalContext?.focus?.messageId || ""
+                      : ""}
+                    onFocusResolution={exactArrivalActive && arrivalContext?.focus?.messageId
+                      ? reportArrivalResolution
+                      : null}
                   />
                 ) : (
                   <section className="messaging-thread-unavailable" role="status">
@@ -344,7 +525,7 @@ export default function MessagingStation({
               <div className="messaging-thread-unselected">
                 <ChatCircleDots size={30} aria-hidden="true" />
                 <h2>Select an event conversation</h2>
-                <p>Choose one event to view its securely scoped message history.</p>
+                <p>Choose an event to view the messages attached to that event and quote.</p>
               </div>
             )}
           </section>
@@ -369,7 +550,7 @@ export default function MessagingStation({
                   </button>
                   {selectedThread.customerId && onOpenCustomer && (
                     <button type="button" className="ghost" onClick={() => onOpenCustomer(selectedThread.customerId)}>
-                      Customer 360
+                      Client overview
                     </button>
                   )}
                 </div>

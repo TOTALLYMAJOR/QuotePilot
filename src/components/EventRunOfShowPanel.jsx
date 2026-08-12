@@ -182,7 +182,7 @@ function RunOfShowEvent({ event, open = false }) {
             <dt>Commercial state</dt>
             <dd>
               {eventStatusLabel(event.quoteStatus)}
-              <small>Acceptance and booking remain separate facts.</small>
+              <small>Acceptance and booking are tracked separately.</small>
               <small>{commercialEvidence.acceptanceLine}</small>
               <small>{commercialEvidence.bookingLine}</small>
             </dd>
@@ -229,7 +229,7 @@ function RunOfShowEvent({ event, open = false }) {
 
       {unknowns.length > 0 && (
         <p className="warning-note" role="status">
-          Unknown source facts: {unknowns.join(", ")}.
+          Missing source details: {unknowns.join(", ")}.
         </p>
       )}
 
@@ -343,7 +343,7 @@ export function EventRunOfShowPanel({
       )}
       {hasUnknowns && events.length > 0 && (
         <p className="warning-note" role="status">
-          Some event, staffing, or schedule facts are not recorded. Expand an event to review the exact unknowns.
+          Some event, staffing, or schedule details are not recorded. Expand an event to review what is missing.
         </p>
       )}
       {state === "empty" && (

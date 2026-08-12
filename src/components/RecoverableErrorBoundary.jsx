@@ -192,6 +192,7 @@ function RecoverableSurfaceFailure({
     <div
       ref={dialogRef}
       className="modal-overlay ui-recovery-overlay"
+      data-layout-overlap-allowed="true"
       role="dialog"
       aria-modal="true"
       aria-labelledby={headingId}
@@ -215,6 +216,7 @@ export function LazySurfaceLoading({ surfaceName, onClose, returnFocusRef }) {
     <div
       ref={dialogRef}
       className="modal-overlay modal-loading-overlay"
+      data-layout-overlap-allowed="true"
       role="dialog"
       aria-modal="true"
       aria-labelledby={headingId}

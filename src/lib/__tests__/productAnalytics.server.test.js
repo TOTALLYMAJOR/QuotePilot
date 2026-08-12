@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 
 const require = createRequire(import.meta.url);
 const {
+  PRODUCT_ANALYTICS_ISSUE_CATEGORIES,
   ProductAnalyticsError,
   sanitizeAnalyticsBatch,
   sanitizeAnalyticsEvent,
@@ -49,6 +50,83 @@ describe("product analytics server contract", () => {
       .toThrow("duplicate");
   });
 
+  test("accepts only bounded identifier-free Ambient metric dimensions", () => {
+    const assessed = sanitizeAnalyticsEvent(event("ambient_primary_action_assessed", 8, {
+      primary: true,
+      deadlineMs: 250,
+      deadClick: false,
+      acknowledgementMs: 187,
+      resultKind: "receipt",
+      quoteId: "quote-private",
+      customerName: "Private Person",
+      reason: "free text must not persist"
+    }), context);
+    expect(assessed).toMatchObject({
+      eventName: "ambient_primary_action_assessed",
+      primary: true,
+      deadlineMs: 250,
+      deadClick: false,
+      acknowledgementMs: 187,
+      resultKind: "receipt"
+    });
+    expect(assessed).not.toHaveProperty("quoteId");
+    expect(assessed).not.toHaveProperty("customerName");
+    expect(assessed).not.toHaveProperty("reason");
+
+    expect(sanitizeAnalyticsEvent(event("priced_draft_receipt_observed", 9, {
+      durationMs: 4200,
+      pricingAuthority: "server_authoritative",
+      storage: "firebase"
+    }), context)).toMatchObject({
+      eventName: "priced_draft_receipt_observed",
+      durationMs: 4200,
+      pricingAuthority: "server_authoritative",
+      storage: "firebase"
+    });
+
+    expect(PRODUCT_ANALYTICS_ISSUE_CATEGORIES).toContain("proposal-gap-menu");
+    expect(sanitizeAnalyticsEvent(event("ambient_issue_resolved", 10, {
+      issueCategory: "proposal-gap-menu",
+      durationMs: 3100
+    }), context)).toMatchObject({
+      eventName: "ambient_issue_resolved",
+      issueCategory: "proposal-gap-menu",
+      durationMs: 3100
+    });
+  });
+
+  test("rejects fabricated authority, unbounded timing, free-form issue categories, and non-primary assessments", () => {
+    expect(() => sanitizeAnalyticsEvent(event("priced_draft_receipt_observed", 8, {
+      durationMs: 100,
+      pricingAuthority: "client_preview",
+      storage: "firebase"
+    }), context)).toThrow("evidence");
+    expect(() => sanitizeAnalyticsEvent(event("priced_draft_receipt_observed", 8, {
+      durationMs: 24 * 60 * 60 * 1000 + 1,
+      pricingAuthority: "server_authoritative",
+      storage: "firebase"
+    }), context)).toThrow("duration");
+    expect(() => sanitizeAnalyticsEvent(event("ambient_primary_action_assessed", 8, {
+      primary: false,
+      deadlineMs: 250,
+      deadClick: true
+    }), context)).toThrow("primary-action");
+    expect(() => sanitizeAnalyticsEvent(event("ambient_primary_action_assessed", 8, {
+      primary: true,
+      deadlineMs: 500,
+      deadClick: true
+    }), context)).toThrow("primary-action");
+    expect(() => sanitizeAnalyticsEvent(event("ambient_primary_action_assessed", 8, {
+      primary: true,
+      deadlineMs: 250,
+      deadClick: false,
+      acknowledgementMs: 60001
+    }), context)).toThrow("acknowledgement");
+    expect(() => sanitizeAnalyticsEvent(event("ambient_issue_surfaced", 8, {
+      issueCategory: "customer-private-free-text"
+    }), context)).toThrow("category");
+  });
+
   test("summarizes funnel reach, saved conversion, and add-on trends", () => {
     const events = [
       event("wizard_started", 1),
@@ -74,7 +152,178 @@ describe("product analytics server contract", () => {
       addons: [
         { addonId: "dessert", selected: 1, removed: 1 },
         { addonId: "staffing", selected: 1, removed: 0 }
+      ],
+      ambientInteractions: {
+        observationSource: "client",
+        deadlineMs: 250,
+        primaryActionsAssessed: 0,
+        deadClicks: 0,
+        deadClickRate: 0
+      },
+      intentToPricedDraft: {
+        observationSource: "client",
+        receiptAuthority: "server_authoritative",
+        storage: "firebase",
+        samples: 0,
+        medianMs: null,
+        p75Ms: null
+      },
+      issueResolution: {
+        observationSource: "client",
+        pairing: "same_session_exact_category",
+        samples: 0,
+        medianMs: null,
+        p75Ms: null,
+        byCategory: []
+      }
+    });
+  });
+
+  test("summarizes paired client-observed intent, dead-click, and exact-category resolution metrics", () => {
+    const sessionOne = [
+      event("wizard_started", 1),
+      event("first_intent_observed", 2),
+      event("priced_draft_receipt_observed", 3, {
+        durationMs: 1000,
+        pricingAuthority: "server_authoritative",
+        storage: "firebase"
+      }),
+      event("ambient_primary_action_assessed", 4, {
+        primary: true,
+        deadlineMs: 250,
+        deadClick: false,
+        acknowledgementMs: 120,
+        resultKind: "receipt"
+      }),
+      event("ambient_primary_action_assessed", 5, {
+        primary: true,
+        deadlineMs: 250,
+        deadClick: true,
+        resultKind: "recovery"
+      }),
+      event("ambient_issue_surfaced", 6, { issueCategory: "workflow-attention" }),
+      event("ambient_issue_resolved", 7, {
+        issueCategory: "staffing-guidance",
+        durationMs: 999
+      }),
+      event("ambient_issue_resolved", 8, {
+        issueCategory: "workflow-attention",
+        durationMs: 3000
+      }),
+      event("ambient_issue_surfaced", 9, { issueCategory: "proposal-gap-menu" }),
+      event("ambient_issue_resolved", 10, {
+        issueCategory: "proposal-gap-menu",
+        durationMs: 1000
+      })
+    ];
+    const sessionTwo = [
+      { ...event("wizard_started", 1), sessionId: "session-other-1234" },
+      { ...event("first_intent_observed", 2), sessionId: "session-other-1234" },
+      {
+        ...event("priced_draft_receipt_observed", 3, {
+          durationMs: 3000,
+          pricingAuthority: "server_authoritative",
+          storage: "firebase"
+        }),
+        sessionId: "session-other-1234"
+      },
+      {
+        ...event("ambient_primary_action_assessed", 4, {
+          primary: true,
+          deadlineMs: 250,
+          deadClick: false,
+          acknowledgementMs: 80,
+          resultKind: "context"
+        }),
+        sessionId: "session-other-1234"
+      },
+      {
+        ...event("ambient_issue_surfaced", 5, { issueCategory: "staffing-guidance" }),
+        sessionId: "session-other-1234"
+      },
+      {
+        ...event("ambient_issue_resolved", 6, {
+          issueCategory: "staffing-guidance",
+          durationMs: 5000
+        }),
+        sessionId: "session-other-1234"
+      }
+    ];
+
+    const summary = summarizeAnalyticsEvents([...sessionOne, ...sessionTwo]);
+    expect(summary.ambientInteractions).toEqual({
+      observationSource: "client",
+      deadlineMs: 250,
+      primaryActionsAssessed: 3,
+      deadClicks: 1,
+      deadClickRate: 1 / 3
+    });
+    expect(summary.intentToPricedDraft).toEqual({
+      observationSource: "client",
+      receiptAuthority: "server_authoritative",
+      storage: "firebase",
+      samples: 2,
+      medianMs: 2000,
+      p75Ms: 2500
+    });
+    expect(summary.issueResolution).toEqual({
+      observationSource: "client",
+      pairing: "same_session_exact_category",
+      samples: 3,
+      medianMs: 3000,
+      p75Ms: 4000,
+      byCategory: [
+        { issueCategory: "workflow-attention", samples: 1, medianMs: 3000, p75Ms: 3000 },
+        { issueCategory: "proposal-gap-menu", samples: 1, medianMs: 1000, p75Ms: 1000 },
+        { issueCategory: "staffing-guidance", samples: 1, medianMs: 5000, p75Ms: 5000 }
       ]
+    });
+  });
+
+  test("omits orphan receipts, mismatched issue resolutions, and events outside a started session", () => {
+    expect(summarizeAnalyticsEvents([
+      event("wizard_started", 1),
+      event("priced_draft_receipt_observed", 2, {
+        durationMs: 900,
+        pricingAuthority: "server_authoritative",
+        storage: "firebase"
+      }),
+      event("ambient_issue_resolved", 3, {
+        issueCategory: "workflow-attention",
+        durationMs: 600
+      }),
+      {
+        ...event("ambient_primary_action_assessed", 1, {
+          primary: true,
+          deadlineMs: 250,
+          deadClick: true
+        }),
+        sessionId: "session-without-start"
+      }
+    ])).toMatchObject({
+      ambientInteractions: {
+        observationSource: "client",
+        deadlineMs: 250,
+        primaryActionsAssessed: 0,
+        deadClicks: 0,
+        deadClickRate: 0
+      },
+      intentToPricedDraft: {
+        observationSource: "client",
+        receiptAuthority: "server_authoritative",
+        storage: "firebase",
+        samples: 0,
+        medianMs: null,
+        p75Ms: null
+      },
+      issueResolution: {
+        observationSource: "client",
+        pairing: "same_session_exact_category",
+        samples: 0,
+        medianMs: null,
+        p75Ms: null,
+        byCategory: []
+      }
     });
   });
 });

@@ -14,6 +14,14 @@ import ReportingDashboardModal, {
   buildReportingMetrics,
   ReportingDashboardView
 } from "../ReportingDashboardModal";
+import ReportingAmbientMetrics, {
+  formatReportingDuration
+} from "../AmbientReportingMetrics";
+
+const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
 
 describe("operational workspace presentations", () => {
   test.each([
@@ -163,7 +171,134 @@ describe("reporting commercial-state totals", () => {
     );
     expect(markup).toContain("Accepted / Booked Quote Value");
     expect(markup).toContain("Verified Paid-Deposit Total");
+    if (AMBIENT_UI_ENABLED) {
+      expect(markup).toContain("Ambient interaction health");
+      expect(markup).toContain("Primary dead-click rate");
+    } else {
+      expect(markup).not.toContain("Ambient interaction health");
+      expect(markup).not.toContain("Primary dead-click rate");
+    }
     expect(markup).toContain("not accounting revenue");
     expect(markup).not.toContain("Won Revenue");
+  });
+});
+
+describe("reporting Ambient interaction evidence", () => {
+  test("formats bounded durations without turning missing evidence into zero", () => {
+    expect(formatReportingDuration(null)).toBe("Not available");
+    expect(formatReportingDuration("bad")).toBe("Not available");
+    expect(formatReportingDuration(0)).toBe("0 ms");
+    expect(formatReportingDuration(850)).toBe("850 ms");
+    expect(formatReportingDuration(1500)).toBe("1.5 s");
+    expect(formatReportingDuration(60_000)).toBe("1 min");
+    expect(formatReportingDuration(90_000)).toBe("1 min 30 s");
+    expect(formatReportingDuration(3_599_999)).toBe("1 hr");
+  });
+
+  test("renders dead-click, priced-draft, and exact-category resolution samples with proof boundaries", () => {
+    const markup = renderToStaticMarkup(<ReportingAmbientMetrics analytics={{
+      source: "firebase",
+      days: 30,
+      sampledEvents: 64,
+      ambientInteractions: {
+        observationSource: "client",
+        deadlineMs: 250,
+        primaryActionsAssessed: 40,
+        deadClicks: 1,
+        deadClickRate: 0.025
+      },
+      intentToPricedDraft: {
+        observationSource: "client",
+        receiptAuthority: "server_authoritative",
+        storage: "firebase",
+        samples: 4,
+        medianMs: 1500,
+        p75Ms: 2400
+      },
+      issueResolution: {
+        observationSource: "client",
+        pairing: "same_session_exact_category",
+        samples: 3,
+        medianMs: 60_000,
+        p75Ms: 90_000,
+        byCategory: [{
+          issueCategory: "proposal-gap-guest-count",
+          samples: 2,
+          medianMs: 45_000,
+          p75Ms: 60_000
+        }]
+      }
+    }} />);
+
+    expect(markup).toContain('data-reporting-state="available"');
+    expect(markup).toContain("Primary dead-click rate");
+    expect(markup).toContain("2.5%");
+    expect(markup).toContain("1 dead click across 40 assessed primary actions");
+    expect(markup).toContain("250 ms acknowledgement contract");
+    expect(markup).toContain("First intent → priced draft");
+    expect(markup).toContain("1.5 s");
+    expect(markup).toContain("p75 2.4 s");
+    expect(markup).toContain("4 exact receipt samples");
+    expect(markup).toContain("Issue surfaced → resolved");
+    expect(markup).toContain("p75 1 min 30 s");
+    expect(markup).toContain("3 same-session exact-category pairs");
+    expect(markup).toContain("Proposal · guest count: 2 · median 45 s · p75 1 min");
+    expect(markup).toContain("64 bounded server-stored events");
+    expect(markup).toContain("not server timing telemetry");
+    expect(markup).toContain("Event payloads omit quote IDs, customer details,");
+    expect(markup).toContain("exact server-authoritative Firebase save receipt");
+  });
+
+  test("keeps local fallback and zero-sample summaries explicitly unavailable", () => {
+    const localMarkup = renderToStaticMarkup(<ReportingAmbientMetrics analytics={{
+      source: "local",
+      days: 30,
+      ambientInteractions: {
+        observationSource: "client",
+        deadlineMs: 250,
+        primaryActionsAssessed: 0,
+        deadClicks: 0,
+        deadClickRate: 0
+      },
+      intentToPricedDraft: { samples: 0, medianMs: null, p75Ms: null },
+      issueResolution: { samples: 0, medianMs: null, p75Ms: null, byCategory: [] }
+    }} />);
+    expect(localMarkup).toContain('data-reporting-state="unavailable"');
+    expect(localMarkup).toContain("server summary is unavailable in local fallback");
+    expect(localMarkup).toContain("No rate or duration is inferred");
+    expect(localMarkup).not.toContain("0.0%");
+
+    const emptyFirebaseMarkup = renderToStaticMarkup(<ReportingAmbientMetrics analytics={{
+      source: "firebase",
+      days: 30,
+      ambientInteractions: {
+        observationSource: "client",
+        deadlineMs: 250,
+        primaryActionsAssessed: 0,
+        deadClicks: 0,
+        deadClickRate: 0
+      },
+      intentToPricedDraft: {
+        observationSource: "client",
+        receiptAuthority: "server_authoritative",
+        storage: "firebase",
+        samples: 0,
+        medianMs: null,
+        p75Ms: null
+      },
+      issueResolution: {
+        observationSource: "client",
+        pairing: "same_session_exact_category",
+        samples: 0,
+        medianMs: null,
+        p75Ms: null,
+        byCategory: []
+      }
+    }} />);
+    expect(emptyFirebaseMarkup).toContain('data-reporting-state="available"');
+    expect(emptyFirebaseMarkup).toContain("No qualifying 250 ms primary-action assessments");
+    expect(emptyFirebaseMarkup).toContain("No client-observed exact server-authoritative Firebase priced-draft receipts");
+    expect(emptyFirebaseMarkup).toContain("No same-session exact-category issue-resolution pairs");
+    expect(emptyFirebaseMarkup).not.toContain("0.0%");
   });
 });

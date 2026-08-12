@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   getIntegrationSetupStatus,
   reconcileDepositCheckout,
@@ -48,6 +48,35 @@ import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
 import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
 import QuoteConversationPanel from "./QuoteConversationPanel";
 import StatusChip from "./StatusChip";
+
+const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
+const AmbientLivingOpportunityRoute = AMBIENT_UI_ENABLED
+  ? lazy(() => import("./AmbientLivingOpportunityRoute"))
+  : null;
+const AmbientOpportunitiesStream = AMBIENT_UI_ENABLED
+  ? lazy(() => import("./AmbientOpportunitiesStream"))
+  : null;
+
+function QuoteAdministrationBoundary({ ambient = false, children }) {
+  const [open, setOpen] = useState(false);
+  if (!ambient) return children();
+  return (
+    <details
+      className="ambient-opportunities-administration"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>Quote administration</summary>
+      <p className="source-note">
+        Open the full role-safe controls for lifecycle, delivery, payment, booking, artifacts, and recovery.
+      </p>
+      {open ? children() : null}
+    </details>
+  );
+}
 
 const RESUMABLE_PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_payment_request",
@@ -288,7 +317,7 @@ export function buildContractConversionMutationPresentation({
     return {
       state: "receipt",
       title: "Contract conversion receipt confirmed.",
-      detail: `The trusted result records contract ${contractNumber || "number unavailable"} and quote status ${status}.${versionNote} Deposit and final-balance settlement, customer confirmation, and operational readiness remain separate canonical facts.`,
+      detail: `The trusted result records contract ${contractNumber || "number unavailable"} and quote status ${status}.${versionNote} Deposit and final-balance settlement, customer confirmation, and operational readiness remain separate records.`,
       error: ""
     };
   }
@@ -740,16 +769,25 @@ export function QuoteHistoryView({
   focusQuoteId = "",
   focusAction = "",
   focusReason = "",
+  arrivalContext = null,
+  onArrivalResolution = null,
   onEditQuote,
+  ambientPricingCatalog = null,
+  ambientPricingSettings = null,
+  globalPilotRequest = null,
+  globalPilotReturnFocusRef = null,
+  onGlobalPilotResolution = null,
   onBackToQuotes,
   onOpenSchedule,
   scheduleAvailable = false,
   onOpenCustomer,
+  onOpenOpportunity,
   onOpenWorkflow,
   onOpenConversation,
   onOpenIntegrations,
   integrationsAvailable = true,
   canDeleteQuotes = false,
+  onStartOpportunity,
   onToast
 }) {
   const embedded = presentation === "embedded";
@@ -758,8 +796,13 @@ export function QuoteHistoryView({
     loading: false,
     source: "",
     error: "",
+    readError: "",
     feedback: "",
-    quotes: []
+    quotes: [],
+    truncated: false,
+    readComplete: false,
+    loadedAtISO: "",
+    organizationId: ""
   });
   const [emailSetup, setEmailSetup] = useState({
     loading: false,
@@ -979,7 +1022,22 @@ export function QuoteHistoryView({
     const targetingSavedQuote = Boolean(
       requestedFocusQuoteId && targetLoadPendingRef.current
     );
-    setState((prev) => ({ ...prev, loading: true, error: "", feedback: "" }));
+    setState((prev) => (
+      prev.organizationId === requestedOrganizationId
+        ? { ...prev, loading: true, error: "", readError: "", feedback: "" }
+        : {
+            loading: true,
+            source: "",
+            error: "",
+            readError: "",
+            feedback: "",
+            quotes: [],
+            truncated: false,
+            readComplete: false,
+            loadedAtISO: "",
+            organizationId: requestedOrganizationId
+          }
+    ));
     try {
       const result = await getQuoteHistory({
         organizationId: requestedOrganizationId,
@@ -999,9 +1057,14 @@ export function QuoteHistoryView({
           : result.expiryPersistenceFailures?.length
             ? `${result.expiryPersistenceFailures.length} expired quote${result.expiryPersistenceFailures.length === 1 ? "" : "s"} remain display-only because the matching portal lifecycle could not be updated. Repair the portal projection and reload before reopening.`
             : "",
+        readError: "",
         feedback: "",
         source: result.source,
-        quotes: result.quotes
+        quotes: result.quotes,
+        truncated: result.truncated === true,
+        readComplete: true,
+        loadedAtISO: new Date().toISOString(),
+        organizationId: requestedOrganizationId
       });
       return result;
     } catch (err) {
@@ -1012,6 +1075,7 @@ export function QuoteHistoryView({
         ...prev,
         loading: false,
         error: err?.message || "Failed to load quote history.",
+        readError: err?.message || "Failed to load quote history.",
         feedback: ""
       }));
       return null;
@@ -1130,6 +1194,23 @@ export function QuoteHistoryView({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [deliveryReview?.quoteId]);
+
+  const ambientOpportunityReadBoundary = useMemo(() => ({
+    complete: state.readComplete,
+    loading: state.loading,
+    partial: false,
+    stale: Boolean(state.readError && state.readComplete),
+    truncated: state.truncated,
+    truncationKnown: state.readComplete,
+    loadedAtISO: state.loadedAtISO,
+    error: state.readError
+  }), [
+    state.loadedAtISO,
+    state.loading,
+    state.readComplete,
+    state.readError,
+    state.truncated
+  ]);
 
   // Keep the child conversation mounted across a blocked route transition so
   // its in-memory request identity cannot be destroyed before /app/quotes is
@@ -1954,10 +2035,9 @@ export function QuoteHistoryView({
     }
   };
 
-  const handleEditQuote = (quote) => {
-    if (typeof onEditQuote !== "function") return;
-    onEditQuote(quote);
-  };
+  const handleEditQuote = AMBIENT_UI_ENABLED
+    ? (quote, options) => typeof onEditQuote === "function" && onEditQuote(quote, options)
+    : (quote) => typeof onEditQuote === "function" && onEditQuote(quote);
 
   const handleOpenIntegrations = () => {
     if (typeof onOpenIntegrations !== "function") return;
@@ -1984,7 +2064,6 @@ export function QuoteHistoryView({
       && portalConversationAvailable()
       && focusedQuoteCanUsePortal
     );
-
     return (
       <main
         className="container workspace-route-main embedded-workspace-route event-workspace-route"
@@ -2004,7 +2083,56 @@ export function QuoteHistoryView({
               <button type="button" className="ghost" onClick={onBackToQuotes}>Back to Quotes</button>
             </section>
           )}
-          {focusedQuote && (
+          {focusedQuote && AMBIENT_UI_ENABLED && AmbientLivingOpportunityRoute ? (
+            <Suspense fallback={(
+              <section
+                className="event-workspace-loading"
+                data-surface-purpose="reveal_context"
+                role="status"
+                aria-live="polite"
+              >
+                Opening {focusedQuote.event?.name || focusedQuote.quoteNumber || "the selected opportunity"}. The exact saved quote is loading; nothing is changed.
+              </section>
+            )}>
+              <AmbientLivingOpportunityRoute
+                ref={savedQuoteHandoffRef}
+                quote={focusedQuote}
+                source={state.source}
+                ordinaryEditAllowed={ordinaryEditAllowed}
+                conversationAvailable={conversationAvailable}
+                ambientPricingCatalog={ambientPricingCatalog}
+                ambientPricingSettings={ambientPricingSettings}
+                globalPilotRequest={globalPilotRequest}
+                globalPilotReturnFocusRef={globalPilotReturnFocusRef}
+                onGlobalPilotResolution={onGlobalPilotResolution}
+                arrivalContext={arrivalContext}
+                onArrivalResolution={onArrivalResolution}
+                ambientContext={{
+                  organizationId: String(organizationId || focusedQuote.organizationId || "local-fallback"),
+                  role: String(permissions.role || currentUserRole || "non_staff"),
+                  route: `/app/quotes/${encodeURIComponent(String(focusedQuote.id))}`,
+                  activeOpportunityId: String(focusedQuote.id),
+                  selectedObject: {
+                    id: String(focusedQuote.id),
+                    type: "opportunity",
+                    label: String(focusedQuote.event?.name || focusedQuote.quoteNumber || "Selected opportunity")
+                  },
+                  revision: focusedQuote.activeVersionId || focusedQuote.versionMeta?.versionId || null,
+                  sourceFreshness: {
+                    state: "unknown",
+                    reason: "Quote history does not expose a source observation timestamp."
+                  },
+                  pendingPreview: null
+                }}
+                onBackToQuotes={onBackToQuotes}
+                onEditQuote={handleEditQuote}
+                onOpenWorkflow={onOpenWorkflow}
+                onOpenConversation={(quoteId, options) => onOpenConversation
+                  ? onOpenConversation(quoteId, options)
+                  : setConversationQuote(focusedQuote)}
+              />
+            </Suspense>
+          ) : focusedQuote ? (
             <EventWorkspaceView
               ref={savedQuoteHandoffRef}
               quote={focusedQuote}
@@ -2031,7 +2159,7 @@ export function QuoteHistoryView({
                 ? onOpenConversation(focusedQuote.id)
                 : setConversationQuote(focusedQuote)}
             />
-          )}
+          ) : null}
           {focusedQuote
             && state.source === "firebase"
             && ["admin", "sales"].includes(permissions.role) && (
@@ -2087,6 +2215,7 @@ export function QuoteHistoryView({
   return (
     <div
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      data-layout-overlap-allowed={embedded ? undefined : "true"}
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="quote-history-title"
@@ -2099,12 +2228,14 @@ export function QuoteHistoryView({
             className={embedded ? "workspace-route-heading" : undefined}
             tabIndex={embedded ? -1 : undefined}
           >
-            Quotes
+            {AMBIENT_UI_ENABLED ? "Opportunities" : "Quotes"}
           </h2>
           <div className="right-actions">
-            <button type="button" className="ghost" onClick={load} disabled={state.loading}>
-              {state.loading ? "Refreshing..." : "Refresh"}
-            </button>
+            {!AMBIENT_UI_ENABLED && (
+              <button type="button" className="ghost" onClick={load} disabled={state.loading}>
+                {state.loading ? "Refreshing..." : "Refresh"}
+              </button>
+            )}
             <button
               type="button"
               className="ghost"
@@ -2112,7 +2243,7 @@ export function QuoteHistoryView({
               disabled={quoteHistoryCloseGuard.blocked}
               title={quoteHistoryCloseGuard.message}
             >
-              {embedded ? "Back to Home" : "Close"}
+              {embedded ? AMBIENT_UI_ENABLED ? "Back to Now" : "Back to Home" : "Close"}
             </button>
           </div>
         </div>
@@ -2348,6 +2479,37 @@ export function QuoteHistoryView({
             onOpenWorkflow={onOpenWorkflow}
           />
         )}
+        {AMBIENT_UI_ENABLED && AmbientOpportunitiesStream && (
+          <Suspense fallback={(
+            <section
+              className="ambient-opportunities-loading"
+              data-surface-purpose="reveal_context"
+              role="status"
+              aria-live="polite"
+            >
+              Gathering the current opportunity view. Completed quote records remain unchanged.
+            </section>
+          )}>
+            <AmbientOpportunitiesStream
+              quotes={state.quotes}
+              source={state.source}
+              readBoundary={ambientOpportunityReadBoundary}
+              currentUserRole={permissions.role}
+              nowISO={state.loadedAtISO}
+              canOpenOpportunity={["admin", "sales"].includes(permissions.role)}
+              canOpenWorkflow={["admin", "sales"].includes(permissions.role)}
+              canStartOpportunity={["admin", "sales"].includes(permissions.role)}
+              canRefresh={["admin", "sales"].includes(permissions.role)}
+              onOpenOpportunity={onOpenOpportunity}
+              onOpenWorkflow={onOpenWorkflow}
+              onStartOpportunity={onStartOpportunity}
+              onRefresh={load}
+            />
+          </Suspense>
+        )}
+        <QuoteAdministrationBoundary ambient={AMBIENT_UI_ENABLED}>
+          {() => (
+          <>
         <div className="history-controls">
           <input
             type="text"
@@ -2972,6 +3134,9 @@ export function QuoteHistoryView({
             </tbody>
           </table>
         </div>
+          </>
+          )}
+        </QuoteAdministrationBoundary>
 
         {pendingDeleteQuote && (
           <div className="confirm-modal">

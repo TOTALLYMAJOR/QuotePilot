@@ -3,7 +3,9 @@ import {
   beginCatalogReloadState,
   buildCatalogRecordChanges,
   isCatalogSaveReconciled,
-  isStarterPackApplyReconciled
+  isStarterPackApplyReconciled,
+  readLocalCatalogCache,
+  writeLocalCatalogCache
 } from "../useCatalogData";
 
 describe("catalog reload presentation", () => {
@@ -20,6 +22,40 @@ describe("catalog reload presentation", () => {
       packages: [{ id: "package-a" }]
     });
     expect(beginCatalogReloadState(current)).toMatchObject({ loading: true, error: "" });
+  });
+});
+
+describe("organization-scoped local catalog fallback", () => {
+  test("never reads another organization's scoped cache", () => {
+    const values = new Map([
+      ["quoteWizard.catalog.org-a", JSON.stringify({ packages: [{ id: "org-a-package" }] })]
+    ]);
+    const storage = {
+      getItem: (key) => values.get(key) || null,
+      setItem: (key, value) => values.set(key, value)
+    };
+
+    expect(readLocalCatalogCache(storage, "org-b")).toBeNull();
+    expect(readLocalCatalogCache(storage, "org-a")).toContain("org-a-package");
+  });
+
+  test("ignores the legacy unscoped cache and writes only into the active organization scope", () => {
+    const legacy = JSON.stringify({ packages: [{ id: "legacy-package" }] });
+    const values = new Map([["quoteWizard.catalog", legacy]]);
+    const storage = {
+      getItem: (key) => values.get(key) || null,
+      setItem: (key, value) => values.set(key, value)
+    };
+
+    expect(readLocalCatalogCache(storage, "org-a")).toBeNull();
+    expect(values.get("quoteWizard.catalog.org-a")).toBeUndefined();
+    writeLocalCatalogCache(storage, "org-b", {
+      packages: [{ id: "org-b-package", name: "Org B package", ppp: 20, active: true }],
+      addons: [],
+      rentals: [],
+      settings: {}
+    });
+    expect(values.get("quoteWizard.catalog.org-b")).toContain("org-b-package");
   });
 });
 

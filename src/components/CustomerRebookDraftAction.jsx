@@ -130,7 +130,7 @@ export function rebookDraftMutationPresentation(mutation = {}) {
     return {
       state: "error",
       title: "Rebook draft was not created.",
-      message: "The request was rejected before a trusted receipt. Refresh Customer 360, review the source evidence, then retry the deterministic action.",
+      message: "The request was rejected before a trusted receipt. Refresh the client overview, review the source evidence, then retry the deterministic action.",
       actionLabel: "Retry after review",
       action: "recover"
     };

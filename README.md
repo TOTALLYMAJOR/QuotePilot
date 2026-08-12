@@ -7,8 +7,10 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Firebase Hosting origin/fallback: https://tonicatering.web.app
 - Repository: https://github.com/TOTALLYMAJOR/quoteflow
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
+- Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
+  Firebase staging or Vercel preview only; see the launch runbook)
 - User manual: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
-- Feature matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Feature inventory and matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Event Messaging Station architecture: [docs/MESSAGING_STATION_ARCHITECTURE.md](docs/MESSAGING_STATION_ARCHITECTURE.md)
 - Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Post-competitive destination design: [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md)
@@ -18,6 +20,7 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Commercial Change Authority design/UI/work plan: [design](docs/COMMERCIAL_CHANGE_AUTHORITY_DESIGN.md), [UI specification](docs/COMMERCIAL_CHANGE_AUTHORITY_UI_SPEC.md), [work plan](docs/COMMERCIAL_CHANGE_AUTHORITY_WORK_PLAN.md)
 - Revenue Autopilot ADR: [docs/REVENUE_AUTOPILOT_ADR.md](docs/REVENUE_AUTOPILOT_ADR.md)
 - Revenue Autopilot design/UI/work plan: [design](docs/REVENUE_AUTOPILOT_DESIGN.md), [UI specification](docs/REVENUE_AUTOPILOT_UI_SPEC.md), [work plan](docs/REVENUE_AUTOPILOT_WORK_PLAN.md)
+- Authoritative operational staffing ADR: [docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md](docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md)
 - Orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
 - Orchestration runbook: [docs/ORCHESTRATION_RUNBOOK.md](docs/ORCHESTRATION_RUNBOOK.md)
 - Canonical doc system: [docs/DOC_SYSTEM.md](docs/DOC_SYSTEM.md)
@@ -29,14 +32,23 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   builder landing; builds with `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`
   use the Commercial Command Center as the default landing.
 - `/app/customers` and `/app/customers/:customerId`: temporary-flagged,
-  paginated staff customer directory and opaque-ID Internal Customer 360.
+  paginated staff customer directory and opaque-ID Internal Customer 360. A
+  default-off Ambient build presents these same bounded reads as **Clients**:
+  a lighter directory and relationship-first client view with an exact client
+  handoff, one supported next step, and the existing detailed history and
+  controls preserved under disclosure. This presentation adds no data or role
+  authority.
 - `/app/quotes`, `/app/quotes/new`, `/app/quotes/:quoteId`, and
   `/app/quotes/:quoteId/edit`: routed quote administration, sticky-mounted
   builder, event-first quote record, and trusted edit entry points. The event
   record composes existing quote/Workflow evidence plus the existing
   proposal-readiness selector through one deterministic presentation contract;
   it labels that result as proposal completeness and does not create an
-  event-wide readiness or data-authority contract.
+  event-wide readiness or data-authority contract. An independently default-off
+  Ambient build may expose tenant-isolated operational staffing inside the
+  selected quote's Staffing object. That authority has separate presentation,
+  server, and exact-tenant gates and does not change quoted labor, pricing,
+  booking, BEO, portal, payment, attendance, payroll, or readiness evidence.
 - `/app/messages`: temporary-flagged staff Event Messaging Station. Each
   conversation remains segregated by its canonical quote/event, the inbox
   watches up to 50 same-tenant quote documents ordered by their body-free
@@ -54,7 +66,12 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
   schedule and proof-safe commercial reporting workspaces.
 - `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
-  workspaces; the existing admin gate remains authoritative.
+  workspaces; the existing admin gate remains authoritative. A default-off
+  Ambient build presents `/app/catalog` as **Library**, separating catalog
+  choices from first-class event templates and opening each exact section or
+  template inside the existing guarded editor. It adds no catalog read, save,
+  pricing, revision, or role authority; browser-local evidence stays labeled as
+  local and the flag-off Catalog Admin remains the rollback path.
 - `/app/integrations` and `/app/diagnostics`: temporary-flagged embedded
   operational workspaces with their existing role and feature gates.
 - `/app/home`: compatibility path that replaces to `/app`.
@@ -73,7 +90,7 @@ When `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`, the six operational paths
 above render as recoverably lazy embedded workspace regions and preserve their
 mounted state during ordinary staff navigation. Contextual Catalog entry points
 and the flag-off/legacy shell retain the existing focus-contained modal wrappers
-and close guards. The governed `v0.6.0` builds promote these routes with the
+and close guards. The governed `v0.7.0` builds promote these routes with the
 workspace flag enabled; public deep-link reachability is verified, while
 authenticated hosted and human acceptance remain separate. See the
 [customer-centered workspace plan](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
@@ -87,8 +104,8 @@ administration, with the five-step quote builder retained as one focused
 commercial capability. The exact-token customer decision center remains the
 sole customer-facing experience.
 
-The live `v0.6.0` release promotes the reviewed customer-centered workspace,
-CWF-16 Event Workspace, Event Messaging Station, and all seven production pilot
+The live `v0.7.0` release promotes the reviewed customer-centered workspace,
+CWF-16 Event Workspace, Event Messaging Station, and all eight production pilot
 surfaces. QuotePilot also includes dynamic
 event-type menus, authoritative pricing, proposal export and decisions,
 tenant-locked customer/catalog CSV imports, separate deposit and final-balance
@@ -98,7 +115,7 @@ history, scheduling, reporting, and diagnostics. Source availability does not
 establish production deployment or provider acceptance; see `PROJECT_STATUS.md`
 for current operational truth.
 
-The live `v0.6.0` runtime also includes dormant Commercial Change Authority
+The live `v0.7.0` runtime also includes dormant Commercial Change Authority
 and Revenue Autopilot programs. Commercial changes can be simulated against
 authoritative pricing, authorized, atomically applied with dependency
 invalidations, reconciled by named dependency evidence, and surfaced through
@@ -221,6 +238,49 @@ Optional:
   estimates the record cannot support, and route only to the existing
   role-gated edit or administration surfaces. Purely presentational; not a
   deployment or acceptance decision.)
+- `VITE_AMBIENT_UI_ENABLED` (default off and deliberately absent from the
+  production deployment workflows. Activates the source-only Ambient
+  presentation for Now, Opportunities, Clients, administrator Library, and the
+  selected staff quote route. Clients reuses the existing bounded directory and relationship reads,
+  opens the exact opaque client identity with reason, consequence, and next
+  resolution, and preserves the legacy history and role-gated controls under
+  **More client history and controls**. It does not infer relationship health
+  from partial list data or add read, write, role, pricing, message, payment,
+  booking, or provider authority. Library reuses the existing organization
+  catalog snapshot, editor, admin gate, and revision-safe save path while
+  separating Catalog choices from first-class Event Templates and preserving
+  incomplete menu evidence as unavailable. The selected quote renders a Living
+  Opportunity top layer, deterministic
+  next action, three progressive evidence layers, four non-blended momentum
+  domains, a guest-count intelligent object, contextual inspectors, reversible
+  unsaved previews, embedded Pilot guidance, and preference-aware semantic
+  feedback. The selected opportunity also exposes fail-closed date, time,
+  duration, venue, staffing, and pricing objects. Pricing can produce a bounded
+  current-catalog calculation or use the existing governed Commercial Change
+  simulation when its authority is available; the UI labels those sources
+  separately, keeps margin unavailable without complete recorded costs, and
+  never treats a preview as a saved authoritative price. Event-logistics
+  objects expose exact evidence coverage and draft-only intent, but do not
+  claim availability, reserve capacity, schedule work, or save a value. Enabled
+  Alpha controls also use registered action/result contracts,
+  a 250ms acknowledgement watchdog, exact context and route-arrival checks,
+  visible recovery, and privacy-safe primary-action assessments. The existing
+  product-event rail accepts only that bounded assessment plus first-intent and
+  issue-timing observations; Reporting labels them as client observations and
+  never as server timing or comprehension evidence. A guest scenario can be staged into the existing quote
+  editor, but the saved-record surface never invents a commercial delta; the
+  existing live calculator previews it and the intentional trusted save still
+  re-prices and versions it. The flag adds no read, write, provider, portal,
+  or role authority. Enabling it is not deployment or human acceptance.)
+- `VITE_OPERATIONAL_STAFFING_ENABLED` (default off, deliberately absent from
+  production deployment workflows, and effective only inside the Ambient
+  Living Opportunity. It exposes the exact tenant-scoped roster, commercial
+  staffing requirements, operator-recorded availability, conflict-fenced
+  assignments, coverage gaps, and immutable receipts. The independent
+  Functions gate and trusted exact-tenant setting must also be enabled before
+  the connected surface can claim authority. Local fallback stays explicitly
+  `local_draft`; this flag grants no role, pricing, provider, portal, payment,
+  booking, attendance, payroll, acknowledgement, or readiness authority.)
 - `VITE_PILOT_GUIDED_SELLING_ENABLED` (default off. Renders the quote
   builder's existing guided-selling recommendations as decision-grammar
   cards — claim, basis, impact, Why? provenance, one-tap Take it — instead
@@ -257,8 +317,14 @@ Optional:
   a priced delta before anything can be applied to the draft; applying
   stages ordinary editable draft edits, and saving still re-prices on the
   server. Voice input appears only when the browser provides speech
-  recognition. Purely presentational; not a deployment or acceptance
-  decision.)
+  recognition. With the independently default-off Ambient presentation,
+  pointer or Space/Enter hold starts capture and release opens the same
+  deterministic preview; permission, device, service, network, no-speech,
+  cancellation, and timeout outcomes keep the prior command, preview, and
+  draft with a typed-input recovery. The flag-off Pilot retains its existing
+  click-to-toggle behavior. Speech is never persisted or staged automatically,
+  and real microphone/service behavior still needs hosted browser acceptance.
+  Purely presentational; not a deployment or acceptance decision.)
 - `VITE_PILOT_MARGINS_ENABLED` (default off. Adds a staff-only margin strip
   to the live pricing rail, computed strictly from tenant-recorded costs:
   `costPpp` on the selected package, `cost` on each selected add-on,
@@ -271,13 +337,19 @@ Optional:
   both sides, and costs never appear in any customer-facing projection.
   Purely presentational; not a deployment or acceptance decision.)
 - `VITE_PILOT_DECISION_ROOM_ENABLED` (default off in generic/local builds.
-  Adds per-block "Ask about this" buttons to the customer portal's existing
-  content sections (event details, package and menu, pricing) that open the
-  existing quote conversation pre-seeded with the block's name in the
-  ordinary message body — text the customer could already type, sent over
-  the customer's existing conversation authority. No new callable, message
-  field, or trust boundary; a seeded draft never overwrites text the
-  customer already typed or an unresolved send attempt.)
+  Preserves the released portal question, assumptions, terms, and option-request
+  subset when enabled alone. When `VITE_AMBIENT_UI_ENABLED` is also enabled, it
+  reorganizes the existing customer-safe projection into a content-first
+  decision room with Event, Menu and service, Pricing,
+  assumptions, tenant terms, optional additions, response, and questions.
+  **Ask a question** opens the one existing conversation composer and reports
+  whether its ordinary editable starter text was staged, an existing draft was
+  preserved, a send still needs reconciliation, or the thread is unavailable.
+  Staff-marked additions prepare reversible ordinary change-request lines; they
+  never change the proposal, totals, revision, payment, or booking. Browser-
+  local exact-token fallback mirrors the same bounded terms and option shape.
+  No new callable, message field, catalog exposure, direct quote mutation, or
+  trust boundary.)
 
 - `INTENT_PARSER_ENABLED` / `INTENT_PARSER_PROVIDER` / `INTENT_PARSER_MODEL`
   (server env, all dormant by default: `false` / `none` / per-provider
@@ -292,8 +364,7 @@ Optional:
 
 The governed Firebase and Vercel production workflows source-bind all eight
 pilot gates above to `true` — the first seven since the `v0.6.0`
-production artifact, the decision-room gate by owner decision on 2026-08-11,
-taking effect at the next release. Generic and
+production artifact and the decision-room gate since `v0.7.0`. Generic and
 local builds still default them to `false`, preserving a build-time rollback
 mode. CI validates both modes and runs a focused production-flag browser matrix
 before release; a successful build or deployment remains separate from
@@ -363,10 +434,12 @@ number. Use the credential-isolated runtime channel
 described in the [launch runbook](docs/LAUNCH_RUNBOOK.md) and never place real
 provider values in a browser environment, Functions dotenv, or committed file.
 
-Commercial Change and Revenue Autopilot use independent server-owned gates:
+Commercial Change, operational staffing, and Revenue Autopilot use independent
+server-owned gates:
 
 ```dotenv
 COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false
+OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false
 REVENUE_AUTOPILOT_ENABLED=false
 REVENUE_AUTOPILOT_SENDS_ENABLED=false
 NOTIFICATIONS_EMAIL_PROVIDER=none
@@ -374,6 +447,12 @@ NOTIFICATIONS_EMAIL_PROVIDER=none
 
 Commercial Change additionally requires the trusted tenant setting
 `commercialChangeAuthorityEnabled=true`; browser principals cannot enable it.
+Operational staffing independently requires the trusted tenant setting
+`operationalStaffingAuthorityEnabled=true`; administrators alone manage staff
+profiles and operator-recorded availability, while same-tenant administrators
+and sales staff may apply exact-revision assignment plans. Browser Firestore
+access to profiles, schedule fences, plans, and receipts remains denied. See
+the [authority ADR](docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md).
 Revenue Autopilot evaluation/job authority and outbound sends are separate, so
 keep both flags false and the provider `none` until an exact coordinated release
 and provider acceptance. The scheduler runs every 15 minutes in UTC but derives
@@ -413,6 +492,7 @@ npm run test:unit
 npm run test:rules:firestore
 npm run test:catalog-import:emulator
 npm run test:rebook-quote:emulator
+npm run test:operational-staffing:emulator
 npm run test:e2e
 npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
@@ -992,7 +1072,7 @@ the primary targets.
 - Agent governance: [docs/AGENT_GOVERNANCE.md](docs/AGENT_GOVERNANCE.md)
 - Skill index: [docs/SKILLS.md](docs/SKILLS.md)
 - Staff/admin operations guide: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
-- Feature checklist mapping: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Feature inventory and implementation chronology: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Customer-centered workspace architecture: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Customer identity/360 backend contract: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
 - Cloud/local orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)

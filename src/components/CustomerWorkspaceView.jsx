@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
 import { buildStaffProposalPreview, getCustomerWorkspace } from "../lib/customerWorkspace";
 import { classifyDepositStatus, classifyFinalBalanceDisplayStatus, classifyQuoteStatus } from "../lib/statusSemantics";
@@ -22,6 +22,16 @@ import {
   humanizeWorkspaceValue
 } from "../lib/workspacePresentation";
 
+const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
+const AmbientClientRelationshipHost = AMBIENT_UI_ENABLED
+  ? lazy(() => import("./AmbientClientsView").then((module) => ({
+      default: module.AmbientClientRelationshipHost
+    })))
+  : null;
+
 const TABS = [
   ["overview", "Overview"],
   ["quotes", "Quotes & Proposals"],
@@ -42,6 +52,16 @@ const EMPTY_WORKSPACE_STATE = {
   revenueRadar: null,
   revenueRadarError: ""
 };
+
+function ClientRecordDisclosure({ ambientMode = false, disclosureRef, children }) {
+  if (!ambientMode) return <>{children}</>;
+  return (
+    <details ref={disclosureRef} className="ambient-client-overview__record">
+      <summary>More client history and controls</summary>
+      <div className="ambient-client-overview__record-body">{children}</div>
+    </details>
+  );
+}
 
 function safeLogoUrl(value) {
   const normalized = String(value || "").trim();
@@ -81,22 +101,22 @@ export function CustomerWorkspaceReadState({
   const isLoading = state === "loading";
   const isError = state === "error";
   const title = isLoading
-    ? "Loading Customer 360"
+    ? "Loading client overview"
     : isError
-      ? "Customer 360 unavailable"
+      ? "Client overview unavailable"
       : "Customer not found";
   const outcome = isLoading
     ? "Waiting for the tenant-scoped customer and linked quote reads to complete."
     : isError
-      ? "The Customer 360 read did not complete; no retained customer record is being shown."
+      ? "The client overview did not finish loading; no previous client record is being shown."
       : "The bounded tenant-scoped read completed without a matching customer record.";
 
   return (
     <main className="container workspace-route-main" data-capability-state={state}>
       <section className="panel customer-workspace">
         <h1>{title}</h1>
-        {isLoading && <p role="status">Loading Customer 360...</p>}
-        {isError && <p role="alert" className="error-note">{errorMessage || "Customer 360 could not be loaded."}</p>}
+        {isLoading && <p role="status">Loading client overview...</p>}
+        {isError && <p role="alert" className="error-note">{errorMessage || "Client overview could not be loaded."}</p>}
         {state === "empty" && (
           <p className="muted">This customer ID is not available in the current organization.</p>
         )}
@@ -106,11 +126,11 @@ export function CustomerWorkspaceReadState({
           source={source}
           loadedAt={loadedAt}
           loading={isLoading}
-          error={isError ? "Customer 360 read failed." : ""}
+          error={isError ? "Client overview failed to load." : ""}
           truncationKnown={state === "empty"}
           readContract="Tenant-scoped customer record with bounded linked quote and retained-version reads"
           outcome={outcome}
-          title="Customer 360 read context"
+          title="Client overview details"
           titleId="customer-workspace-state-read-context-title"
           caveat="This staff read does not establish proposal delivery, customer viewing or acceptance, booking, payment, or operational completion."
         />
@@ -219,7 +239,7 @@ export function CustomerWorkspacePartialNotice({ quotePageInfo = {}, onOpenQuote
       data-capability-state="partial"
       role="status"
     >
-      <span>Customer 360 is a partial view capped at {quotePageInfo.limit} linked quotes; counts and money below are not complete.</span>
+      <span>This client overview shows up to {quotePageInfo.limit} linked quotes; counts and amounts below may be incomplete.</span>
       <button type="button" className="ghost compact" onClick={onOpenQuotes}>Open complete Quotes history</button>
     </div>
   );
@@ -242,7 +262,7 @@ export function CustomerRelationshipBriefing({
     >
       <div className="workspace-route-head">
         <div>
-          <p className="eyebrow">Relationship briefing</p>
+          <p className="eyebrow">Client summary</p>
           <h2 id="customer-relationship-briefing-title">What matters next</h2>
         </div>
         <span className="source-note">
@@ -308,6 +328,7 @@ export default function CustomerWorkspaceView({
   onBack,
   onOpenQuotes,
   onOpenQuote,
+  onOpenOpportunity,
   onOpenConversation,
   onOpenQuoteEdit,
   onCreateRebook,
@@ -315,7 +336,12 @@ export default function CustomerWorkspaceView({
   onOpenSchedule,
   scheduleAvailable = true,
   tenantTimeZone = "",
-  isAdmin = false
+  isAdmin = false,
+  currentUserRole = "staff",
+  ambientMode = false,
+  arrivalContext = null,
+  arrivalAttempted = false,
+  onArrivalResolution
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [previewQuoteId, setPreviewQuoteId] = useState("");
@@ -323,6 +349,7 @@ export default function CustomerWorkspaceView({
   const [state, setState] = useState(EMPTY_WORKSPACE_STATE);
   const generationRef = useRef(0);
   const tabRefs = useRef({});
+  const recordDisclosureRef = useRef(null);
   const previewTriggerRef = useRef(null);
   const requestedScopeKey = `${String(organizationId || "").trim()}\u0000${String(customerId || "").trim()}`;
   const workspaceForScope = state.scopeKey === requestedScopeKey ? state.workspace : null;
@@ -349,7 +376,7 @@ export default function CustomerWorkspaceView({
               tenantTimeZone
             });
           } catch (error) {
-            revenueRadarError = error?.message || "Revenue opportunities could not be evaluated.";
+            revenueRadarError = error?.message || "Follow-ups could not be checked.";
           }
         }
         setState({
@@ -369,7 +396,7 @@ export default function CustomerWorkspaceView({
           ...current,
           loading: false,
           stale: current.scopeKey === requestedScopeKey && Number(current.loadedAt) > 0,
-          error: error?.message || "Failed to load Customer 360.",
+          error: error?.message || "Failed to load client overview.",
           scopeKey: requestedScopeKey,
           workspace: current.scopeKey === requestedScopeKey ? current.workspace : null
         }));
@@ -383,6 +410,22 @@ export default function CustomerWorkspaceView({
     () => workspaceForScope?.quotes.find((quote) => quote.id === previewQuoteId) || null,
     [previewQuoteId, workspaceForScope?.quotes]
   );
+  const openClientRecord = useCallback(() => {
+    const disclosure = recordDisclosureRef.current;
+    if (!disclosure) {
+      return {
+        status: "recovery",
+        reason: "The additional client history is not available in this view.",
+        nextResolution: "Refresh this client overview, then try again."
+      };
+    }
+    disclosure.open = true;
+    window.requestAnimationFrame(() => {
+      disclosure.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      disclosure.querySelector?.("summary")?.focus({ preventScroll: true });
+    });
+    return { status: "resolved" };
+  }, []);
 
   const closePreview = useCallback(() => {
     setPreviewQuoteId("");
@@ -450,9 +493,9 @@ export default function CustomerWorkspaceView({
   const workspaceTruncated = workspace.quotePageInfo.truncated
     || workspace.versionPageInfo.truncatedQuoteIds.length > 0;
   const readOutcome = state.loading
-    ? "Refreshing Customer 360; the prior completed customer view remains visible."
+    ? "Refreshing client overview; the previous completed view remains visible."
     : state.error
-      ? "The latest Customer 360 read failed; the prior completed customer view remains visible."
+      ? "The latest client overview refresh failed; the previous completed view remains visible."
       : workspaceTruncated
         ? "The customer record read completed within its declared quote or version bounds."
         : "The customer record, linked quote page, and retained version reads completed within their declared bounds.";
@@ -463,17 +506,44 @@ export default function CustomerWorkspaceView({
       : workspaceTruncated
         ? "partial"
         : "success";
+  const ambientClientViewEnabled = ambientMode && Boolean(AmbientClientRelationshipHost);
   return (
     <main
       className="container workspace-route-main"
-      aria-labelledby="customer-workspace-title"
+      aria-labelledby={ambientClientViewEnabled ? "ambient-client-overview-title" : "customer-workspace-title"}
       data-capability-state={rootReadState}
     >
-      <section className="panel customer-workspace">
-        <div className="workspace-route-head">
+      <section className={`panel customer-workspace${ambientClientViewEnabled ? " ambient-client-host" : ""}`}>
+        {ambientClientViewEnabled ? (
+          <Suspense fallback={<div role="status">Loading client overview…</div>}>
+            <AmbientClientRelationshipHost
+              workspace={workspace}
+              source={workspace.source}
+              loadedAt={state.loadedAt}
+              stale={state.stale}
+              loading={state.loading}
+              error={state.error}
+              rebookingRadar={state.revenueRadar}
+              currentUserRole={currentUserRole}
+              tenantTimeZone={tenantTimeZone}
+              headingRef={headingRef}
+              onBack={onBack}
+              onRefresh={() => setRefreshToken((value) => value + 1)}
+              onOpenOpportunity={onOpenOpportunity}
+              onOpenConversation={onOpenConversation}
+              onOpenWorkflow={onOpenWorkflow}
+              onOpenClientRecord={openClientRecord}
+              arrivalContext={arrivalContext}
+              arrivalAttempted={arrivalAttempted}
+              onArrivalResolution={onArrivalResolution}
+            />
+          </Suspense>
+        ) : (
+          <>
+          <div className="workspace-route-head">
           <div>
             <button type="button" className="workspace-text-link" onClick={onBack}>Customers</button>
-            <p className="eyebrow">Internal Customer 360</p>
+            <p className="eyebrow">Client overview</p>
             <h1
               ref={headingRef}
               id="customer-workspace-title"
@@ -485,9 +555,9 @@ export default function CustomerWorkspaceView({
             <p className="muted">{[customer.company, customer.email, customer.phone].filter(Boolean).join(" · ") || "No contact details"}</p>
           </div>
           <button type="button" className="ghost" onClick={() => setRefreshToken((value) => value + 1)}>Refresh</button>
-        </div>
+          </div>
 
-        <StaffReadContextRail
+          <StaffReadContextRail
           organizationName={organizationName}
           organizationId={organizationId}
           source={workspace.source}
@@ -499,13 +569,13 @@ export default function CustomerWorkspaceView({
           truncationKnown
           readContract="Canonical customer record, up to 25 linked quotes, and up to 10 retained proposal versions per displayed quote"
           outcome={readOutcome}
-          boundsNote="Customer 360 is bounded to 25 linked quotes and 10 retained proposal versions per displayed quote; use Quotes for broader quote history."
-          title="Customer 360 read context"
+          boundsNote="This client overview shows up to 25 linked quotes and 10 saved proposal versions per displayed quote; open Quotes for broader history."
+          title="Client overview details"
           titleId="customer-workspace-read-context-title"
           caveat="Freshness describes these staff reads only. It does not establish proposal delivery, customer viewing or acceptance, booking, payment, or operational completion."
-        />
+          />
 
-        <CustomerRelationshipBriefing
+          <CustomerRelationshipBriefing
           briefing={workspace.briefing || {
             activeQuoteCount: workspace.activeQuotes.length,
             displayedQuoteCount: workspace.quotes.length,
@@ -517,8 +587,11 @@ export default function CustomerWorkspaceView({
           }}
           onOpenQuote={onOpenQuote}
           onOpenWorkflow={onOpenWorkflow}
-        />
+          />
+          </>
+        )}
 
+        <ClientRecordDisclosure ambientMode={ambientClientViewEnabled} disclosureRef={recordDisclosureRef}>
         <div className="customer-workspace-tabs" role="tablist" aria-label="Customer workspace sections">
           {TABS.map(([id, label]) => (
             <button
@@ -677,7 +750,7 @@ export default function CustomerWorkspaceView({
 
         <section id="customer-panel-conversations" role="tabpanel" aria-labelledby="customer-tab-conversations" tabIndex={0} hidden={activeTab !== "conversations"}>
           <h2>Conversations</h2>
-          <p className="source-note">Messages remain bound to each quote. Customer 360 links them without merging their histories.</p>
+          <p className="source-note">Messages remain bound to each quote. This overview links them without merging their histories.</p>
           {workspace.conversations.length === 0 && <p className="source-note">No quote conversations are linked to this customer.</p>}
           <div className="customer-card-list">
             {workspace.conversations.map((conversation) => (
@@ -710,6 +783,7 @@ export default function CustomerWorkspaceView({
             ))}
           </div>
         </section>
+        </ClientRecordDisclosure>
       </section>
     </main>
   );

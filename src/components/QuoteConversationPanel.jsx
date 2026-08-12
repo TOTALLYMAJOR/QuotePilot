@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   PORTAL_CONVERSATION_BODY_MAX_LENGTH,
   buildPortalConversationClientRequestId,
@@ -302,6 +302,113 @@ export function formatConversationTimestamp(value) {
   });
 }
 
+const MAX_FOCUS_MESSAGE_ID_LENGTH = 160;
+
+function safeFocusMessageId(value) {
+  const messageId = String(value || "").trim();
+  if (!messageId) return "";
+  if (
+    messageId.length > MAX_FOCUS_MESSAGE_ID_LENGTH
+    || messageId === "."
+    || messageId === ".."
+    || /^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(messageId)
+    || /^(?:(?:sk|rk)-|pk_live_|ghp_|github_pat_|xox[a-z]?-|eyJ)/iu.test(messageId)
+    || !/^[A-Za-z0-9][A-Za-z0-9._:()~-]*$/u.test(messageId)
+  ) return "";
+  return messageId;
+}
+
+function conversationMessageFocusRecovery({ code, quoteId, messageId, reason, nextResolution }) {
+  return Object.freeze({
+    status: "recovery",
+    kind: "recovery",
+    code,
+    quoteId,
+    messageId,
+    reason,
+    consequence: "No other message was substituted; nothing was sent and no read state changed.",
+    nextResolution
+  });
+}
+
+/**
+ * Resolves an exact customer-message focus only against the canonical bodies
+ * returned for the currently loaded quote thread. The result contains opaque
+ * identity and semantic context only—never the message body or customer data.
+ */
+export function buildConversationMessageFocusResolution({
+  expectedQuoteId = "",
+  loadedQuoteId = "",
+  focusMessageId = "",
+  messages = [],
+  loadState = "ready"
+} = {}) {
+  const quoteId = String(expectedQuoteId || "").trim();
+  const requestedMessageId = String(focusMessageId || "").trim();
+  const messageId = safeFocusMessageId(requestedMessageId);
+  if (!requestedMessageId) return null;
+  if (!messageId) {
+    return conversationMessageFocusRecovery({
+      code: "invalid_message_identity",
+      quoteId,
+      messageId: "",
+      reason: "The requested customer reply identity is not a safe opaque message identifier.",
+      nextResolution: "Return to the originating opportunity and open a current recorded reply."
+    });
+  }
+  if (loadState === "error") {
+    return conversationMessageFocusRecovery({
+      code: "exact_thread_unavailable",
+      quoteId,
+      messageId,
+      reason: "The exact quote-scoped conversation could not be loaded.",
+      nextResolution: "Retry the exact thread before reviewing or replying to this message."
+    });
+  }
+  if (!quoteId || String(loadedQuoteId || "").trim() !== quoteId) {
+    return conversationMessageFocusRecovery({
+      code: "thread_identity_mismatch",
+      quoteId,
+      messageId,
+      reason: "The loaded conversation does not match the requested quote-scoped thread.",
+      nextResolution: "Keep this arrival unresolved and reopen the exact opportunity conversation."
+    });
+  }
+
+  const exactMessage = (Array.isArray(messages) ? messages : [])
+    .find((message) => String(message?.messageId || "").trim() === messageId);
+  if (!exactMessage) {
+    return conversationMessageFocusRecovery({
+      code: "customer_message_not_found",
+      quoteId,
+      messageId,
+      reason: "The exact customer reply is not present in the loaded quote-scoped thread.",
+      nextResolution: "Refresh the exact thread or return to the originating opportunity; do not substitute another message."
+    });
+  }
+  if (String(exactMessage.actorType || "").trim() !== "customer") {
+    return conversationMessageFocusRecovery({
+      code: "message_is_not_customer_reply",
+      quoteId,
+      messageId,
+      reason: "The exact message exists, but it is not recorded as a customer reply.",
+      nextResolution: "Return to the originating opportunity and choose a recorded customer reply."
+    });
+  }
+
+  return Object.freeze({
+    status: "resolved",
+    kind: "resolved",
+    code: "customer_message_focused",
+    quoteId,
+    messageId,
+    actorType: "customer",
+    reason: "The exact customer reply is present in the loaded quote-scoped thread.",
+    consequence: "The message is focused for review; nothing was sent and no read state changed.",
+    nextResolution: "Review the focused reply and choose an available communication action."
+  });
+}
+
 export function buildConversationMutationPresentation({
   phase = "ready",
   pendingRequestId = "",
@@ -413,7 +520,11 @@ function QuoteConversationPanelInstance({
   onClose = null,
   presentation = "panel",
   showCloseAction = true,
-  prefill = null
+  prefill = null,
+  onPrefillResolution = null,
+  focusMessageId = "",
+  onFocusResolution = null,
+  onLoadResolution = null
 }) {
   const identity = useMemo(() => accessIdentity(access, authenticatedUid), [
     access?.accessMode,
@@ -423,11 +534,15 @@ function QuoteConversationPanelInstance({
     authenticatedUid
   ]);
   const initialPendingAttempt = readConversationPendingAttempt(identity);
-  const [open, setOpen] = useState(defaultOpen);
+  const normalizedFocusMessageId = String(focusMessageId || "").trim();
+  const initiallyOpen = defaultOpen || Boolean(normalizedFocusMessageId);
+  const [open, setOpen] = useState(initiallyOpen);
   const [phase, setPhase] = useState(
-    defaultOpen ? "loading" : initialPendingAttempt ? "send_error" : "closed"
+    initiallyOpen ? "loading" : initialPendingAttempt ? "send_error" : "closed"
   );
   const [messages, setMessages] = useState([]);
+  const [loadedQuoteId, setLoadedQuoteId] = useState("");
+  const [messageFocusOutcome, setMessageFocusOutcome] = useState(null);
   const [body, setBody] = useState(initialPendingAttempt?.body || "");
   const [pendingRequestId, setPendingRequestId] = useState(
     initialPendingAttempt?.clientRequestId || ""
@@ -439,6 +554,7 @@ function QuoteConversationPanelInstance({
   );
   const [error, setError] = useState(initialPendingAttempt?.error || "");
   const [status, setStatus] = useState("");
+  const [composerFocusRequest, setComposerFocusRequest] = useState(0);
   const [readOnly, setReadOnly] = useState(false);
   const [readOnlyReason, setReadOnlyReason] = useState("");
   const [syncState, setSyncState] = useState(defaultOpen ? "catching_up" : "paused");
@@ -447,6 +563,10 @@ function QuoteConversationPanelInstance({
   const loadInFlightRef = useRef(false);
   const latestLoadedSignalRef = useRef(buildConversationSignalBaseline([]));
   const queuedSignalRef = useRef(null);
+  const messageNodeRefs = useRef(new Map());
+  const composerRef = useRef(null);
+  const focusResolutionSignatureRef = useRef("");
+  const loadResolutionSignatureRef = useRef("");
   const identityRef = useRef(identity);
   identityRef.current = identity;
   const mutationPresentation = buildConversationMutationPresentation({
@@ -456,12 +576,34 @@ function QuoteConversationPanelInstance({
     error,
     status
   });
+
+  useEffect(() => {
+    if (!composerFocusRequest) return;
+    composerRef.current?.focus({ preventScroll: true });
+  }, [composerFocusRequest]);
   const closeGuard = buildConversationCloseGuard({ phase, pendingRequestId });
   const syncPresentation = buildConversationSyncPresentation({
     state: syncState,
     mutationPending: phase === "sending" || Boolean(pendingRequestId)
   });
   const normalizedPresentation = presentation === "station" ? "station" : "panel";
+
+  const publishLoadResolution = useCallback((resolution) => {
+    if (typeof onLoadResolution !== "function") return;
+    const nextResolution = {
+      ...resolution,
+      quoteId: String(access?.quoteId || "").trim()
+    };
+    const signature = JSON.stringify([
+      identity,
+      nextResolution.status,
+      nextResolution.code || "",
+      nextResolution.reason || ""
+    ]);
+    if (loadResolutionSignatureRef.current === signature) return;
+    loadResolutionSignatureRef.current = signature;
+    onLoadResolution(nextResolution);
+  }, [access?.quoteId, identity, onLoadResolution]);
 
   const beginRequestGeneration = () => {
     requestGenerationRef.current += 1;
@@ -487,6 +629,7 @@ function QuoteConversationPanelInstance({
   } = {}) => {
     const request = beginRequestGeneration();
     loadInFlightRef.current = true;
+    publishLoadResolution({ status: "pending" });
     const unresolvedAttempt = pendingAttempt || readConversationPendingAttempt(identity);
     const unresolvedRequestId = String(
       unresolvedAttempt?.clientRequestId || pendingRequestId || ""
@@ -498,8 +641,26 @@ function QuoteConversationPanelInstance({
     try {
       const result = await loadQuotePortalConversation(access);
       if (!requestGenerationIsCurrent(request)) return;
+      const expectedQuoteId = String(access?.quoteId || "").trim();
+      const returnedQuoteId = String(result?.quoteId || "").trim();
+      if (typeof onLoadResolution === "function" && returnedQuoteId !== expectedQuoteId) {
+        const mismatchError = "The loaded conversation does not match the requested quote-scoped thread.";
+        setMessages([]);
+        setLoadedQuoteId(returnedQuoteId);
+        setPhase("load_error");
+        setError(mismatchError);
+        publishLoadResolution({
+          status: "recovery",
+          code: "thread_identity_mismatch",
+          reason: mismatchError,
+          consequence: "No other conversation was substituted; nothing was sent and no read state changed.",
+          nextResolution: "Return to the originating opportunity and reopen its current conversation."
+        });
+        return;
+      }
       latestLoadedSignalRef.current = buildConversationSignalBaseline(result.messages);
       setMessages(result.messages);
+      setLoadedQuoteId(returnedQuoteId);
       setReadOnly(result.readOnly);
       setReadOnlyReason(result.readOnlyReason);
       if (reconcilingUnknownRequest) {
@@ -517,6 +678,7 @@ function QuoteConversationPanelInstance({
           setStatus(signalRefresh ? "Conversation updated." : "Conversation refreshed.");
         }
       }
+      publishLoadResolution({ status: "ready" });
     } catch (loadError) {
       if (!requestGenerationIsCurrent(request)) return;
       if (signalRefresh) setSyncState("stale");
@@ -525,7 +687,15 @@ function QuoteConversationPanelInstance({
         : refresh && messages.length
           ? "refresh_error"
           : "load_error");
-      setError(friendlyConversationError(loadError, "Unable to load this quote conversation."));
+      const nextError = friendlyConversationError(loadError, "Unable to load this quote conversation.");
+      setError(nextError);
+      publishLoadResolution({
+        status: "recovery",
+        code: "exact_thread_unavailable",
+        reason: nextError,
+        consequence: "No other conversation was substituted; nothing was sent and no read state changed.",
+        nextResolution: "Retry the exact conversation before reviewing or replying."
+      });
     } finally {
       if (requestGenerationIsCurrent(request)) loadInFlightRef.current = false;
     }
@@ -577,14 +747,63 @@ function QuoteConversationPanelInstance({
   useEffect(() => {
     const text = String(prefill?.text || "");
     if (!prefill?.id || !text) return;
-    if (!open) openConversation();
-    if (readConversationPendingAttempt(identity)) return;
-    if (body.trim()) return;
+    const unresolvedAttempt = readConversationPendingAttempt(identity);
+    if (!open) {
+      openConversation();
+      if (unresolvedAttempt) {
+        onPrefillResolution?.({
+          id: prefill.id,
+          status: "pending_attempt",
+          message: "Your earlier message is still awaiting a receipt. Reconcile it before starting another question."
+        });
+      }
+      return;
+    }
+    if (unresolvedAttempt) {
+      onPrefillResolution?.({
+        id: prefill.id,
+        status: "pending_attempt",
+        message: "Your earlier message is still awaiting a receipt. Reconcile it before starting another question."
+      });
+      return;
+    }
+    if (["loading", "refreshing", "closed"].includes(phase)) return;
+    if (phase === "load_error") {
+      onPrefillResolution?.({
+        id: prefill.id,
+        status: "unavailable",
+        message: "The conversation could not be opened. Use Retry conversation below before starting this question."
+      });
+      return;
+    }
+    if (readOnly) {
+      onPrefillResolution?.({
+        id: prefill.id,
+        status: "read_only",
+        message: readOnlyReason || "This conversation is currently read-only."
+      });
+      return;
+    }
+    if (body.trim()) {
+      window.requestAnimationFrame?.(() => composerRef.current?.focus({ preventScroll: true }));
+      onPrefillResolution?.({
+        id: prefill.id,
+        status: "preserved_draft",
+        message: "Your existing message is ready below. It was kept unchanged."
+      });
+      return;
+    }
     updateBody(text);
+    setComposerFocusRequest(prefill.id);
+    onPrefillResolution?.({
+      id: prefill.id,
+      status: "staged",
+      message: "Your question is started below. Add any detail, then choose Send message when ready."
+    });
     // Each distinct prefill request is identified by its id; the other
     // values are read once at request time, not re-run when they change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefill?.id]);
+  }, [prefill?.id, open, phase, readOnly, readOnlyReason]);
 
   const send = async () => {
     const normalizedBody = body.trim();
@@ -677,6 +896,10 @@ function QuoteConversationPanelInstance({
     loadInFlightRef.current = false;
     setSignalVersion(0);
     setMessages([]);
+    setLoadedQuoteId("");
+    setMessageFocusOutcome(null);
+    focusResolutionSignatureRef.current = "";
+    loadResolutionSignatureRef.current = "";
     setBody(pendingAttempt?.body || "");
     setPendingRequestId(pendingAttempt?.clientRequestId || "");
     setSendMode(
@@ -686,8 +909,9 @@ function QuoteConversationPanelInstance({
     setStatus("");
     setReadOnly(false);
     setReadOnlyReason("");
-    setSyncState(defaultOpen ? "catching_up" : "paused");
-    if (defaultOpen) {
+    const shouldOpen = defaultOpen || Boolean(normalizedFocusMessageId);
+    setSyncState(shouldOpen ? "catching_up" : "paused");
+    if (shouldOpen) {
       setOpen(true);
       void load({ pendingAttempt });
     } else {
@@ -700,6 +924,124 @@ function QuoteConversationPanelInstance({
     // The normalized access identity is the boundary that requires a reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity, defaultOpen]);
+
+  useEffect(() => {
+    focusResolutionSignatureRef.current = "";
+    setMessageFocusOutcome(null);
+    if (!normalizedFocusMessageId || open) return;
+    openConversation();
+    // Each message identity is consumed once against the current exact thread.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalizedFocusMessageId]);
+
+  useEffect(() => {
+    if (typeof onLoadResolution !== "function") return;
+    const expectedQuoteId = String(access?.quoteId || "").trim();
+    if (!open || ["closed", "loading", "refreshing"].includes(phase)) {
+      publishLoadResolution({ status: "pending" });
+      return;
+    }
+    if (!expectedQuoteId || (loadedQuoteId && loadedQuoteId !== expectedQuoteId)) {
+      publishLoadResolution({
+        status: "recovery",
+        code: "thread_identity_mismatch",
+        reason: "The loaded conversation does not match the requested quote-scoped thread.",
+        consequence: "No other conversation was substituted; nothing was sent and no read state changed.",
+        nextResolution: "Return to the originating opportunity and reopen its current conversation."
+      });
+      return;
+    }
+    if (phase === "load_error" || (!loadedQuoteId && error)) {
+      publishLoadResolution({
+        status: "recovery",
+        code: "exact_thread_unavailable",
+        reason: error || "The exact quote-scoped conversation could not be loaded.",
+        consequence: "No other conversation was substituted; nothing was sent and no read state changed.",
+        nextResolution: "Retry the exact conversation before reviewing or replying."
+      });
+      return;
+    }
+    if (!loadedQuoteId) {
+      publishLoadResolution({
+        status: "recovery",
+        code: "exact_thread_unavailable",
+        reason: "The exact quote-scoped conversation did not return a verifiable body-load receipt.",
+        consequence: "No other conversation was substituted; nothing was sent and no read state changed.",
+        nextResolution: "Retry the exact conversation before reviewing or replying."
+      });
+      return;
+    }
+    publishLoadResolution({ status: "ready" });
+  }, [access?.quoteId, error, loadedQuoteId, onLoadResolution, open, phase, publishLoadResolution]);
+
+  useEffect(() => {
+    if (!normalizedFocusMessageId || !open) return undefined;
+    if (["closed", "loading", "refreshing", "sending"].includes(phase)) return undefined;
+
+    const outcome = buildConversationMessageFocusResolution({
+      expectedQuoteId: access?.quoteId,
+      loadedQuoteId,
+      focusMessageId: normalizedFocusMessageId,
+      messages,
+      loadState: phase === "load_error" ? "error" : "ready"
+    });
+    if (!outcome) return undefined;
+
+    const publishOutcome = (nextOutcome) => {
+      const signature = JSON.stringify([
+        identity,
+        nextOutcome.messageId,
+        nextOutcome.status,
+        nextOutcome.code
+      ]);
+      if (focusResolutionSignatureRef.current === signature) return;
+      focusResolutionSignatureRef.current = signature;
+      setMessageFocusOutcome(nextOutcome);
+      if (typeof onFocusResolution === "function") onFocusResolution(nextOutcome);
+    };
+
+    if (outcome.status === "recovery") {
+      publishOutcome(outcome);
+      return undefined;
+    }
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      const target = messageNodeRefs.current.get(outcome.messageId);
+      if (!target) {
+        publishOutcome(conversationMessageFocusRecovery({
+          code: "message_focus_unavailable",
+          quoteId: outcome.quoteId,
+          messageId: outcome.messageId,
+          reason: "The exact customer reply loaded, but its review surface is unavailable.",
+          nextResolution: "Refresh the exact thread before continuing."
+        }));
+        return;
+      }
+      target.scrollIntoView?.({ block: "center", inline: "nearest" });
+      target.focus({ preventScroll: true });
+      if (document.activeElement !== target) {
+        publishOutcome(conversationMessageFocusRecovery({
+          code: "message_focus_unavailable",
+          quoteId: outcome.quoteId,
+          messageId: outcome.messageId,
+          reason: "The exact customer reply loaded, but keyboard focus could not reach it.",
+          nextResolution: "Refresh the exact thread or review it from the conversation list."
+        }));
+        return;
+      }
+      publishOutcome(outcome);
+    });
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [
+    access?.quoteId,
+    identity,
+    loadedQuoteId,
+    messages,
+    normalizedFocusMessageId,
+    onFocusResolution,
+    open,
+    phase
+  ]);
 
   useEffect(() => {
     if (!open || !identity) {
@@ -835,6 +1177,25 @@ function QuoteConversationPanelInstance({
         </div>
       )}
 
+      {messageFocusOutcome?.status === "recovery" && phase !== "load_error" && (
+        <div
+          className="quote-conversation-focus-recovery"
+          data-message-focus-state="recovery"
+          role="alert"
+        >
+          <p><strong>Exact customer reply unavailable.</strong> {messageFocusOutcome.reason}</p>
+          <p>{messageFocusOutcome.consequence}</p>
+          <p>{messageFocusOutcome.nextResolution}</p>
+          <button
+            type="button"
+            className="ghost compact"
+            onClick={() => void load({ refresh: messages.length > 0 })}
+          >
+            Refresh exact thread
+          </button>
+        </div>
+      )}
+
       {phase !== "loading" && phase !== "load_error" && (
         <>
           <div
@@ -850,6 +1211,20 @@ function QuoteConversationPanelInstance({
               <article
                 key={message.messageId}
                 className={`quote-conversation-message actor-${message.actorType}`}
+                ref={(node) => {
+                  if (node) messageNodeRefs.current.set(message.messageId, node);
+                  else messageNodeRefs.current.delete(message.messageId);
+                }}
+                tabIndex={
+                  message.messageId === normalizedFocusMessageId && message.actorType === "customer"
+                    ? -1
+                    : undefined
+                }
+                data-arrival-focus={
+                  message.messageId === normalizedFocusMessageId && message.actorType === "customer"
+                    ? messageFocusOutcome?.status === "resolved" ? "resolved" : "requested"
+                    : undefined
+                }
               >
                 <header>
                   <strong>{message.actorName}</strong>
@@ -872,6 +1247,8 @@ function QuoteConversationPanelInstance({
               <label className="field">
                 <span>Message</span>
                 <textarea
+                  ref={composerRef}
+                  autoFocus={Boolean(prefill?.id)}
                   rows="4"
                   maxLength={PORTAL_CONVERSATION_BODY_MAX_LENGTH}
                   value={body}

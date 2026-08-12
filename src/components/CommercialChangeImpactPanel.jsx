@@ -166,7 +166,7 @@ function exactFactValue(value) {
 
 function factLabel(nodeId) {
   return humanizeWorkspaceValue(text(nodeId).replace(/^fact\./, ""), {
-    emptyLabel: "Changed fact"
+    emptyLabel: "Changed detail"
   });
 }
 
@@ -192,7 +192,7 @@ function CommercialDelta({ model }) {
 
   return (
     <section className="workflow-form-section" aria-labelledby="commercial-change-impact-money-title">
-      <h4 id="commercial-change-impact-money-title">Commercial delta</h4>
+      <h4 id="commercial-change-impact-money-title">Price change</h4>
       <div className="workflow-metrics" aria-label="Authoritative commercial values before and after the proposed change">
         <div>
           <span>Total before</span>
@@ -226,9 +226,9 @@ function CommercialDelta({ model }) {
 function FactDiffs({ factDiffs }) {
   return (
     <section className="workflow-form-section" aria-labelledby="commercial-change-impact-facts-title">
-      <h4 id="commercial-change-impact-facts-title">Exact fact changes</h4>
+      <h4 id="commercial-change-impact-facts-title">Changes in this preview</h4>
       {factDiffs.length === 0 ? (
-        <p className="muted">No declared fact changed in this simulation.</p>
+        <p className="muted">No tracked input changed in this simulation.</p>
       ) : (
         <div className="quote-version-comparison-sections">
           <dl>
@@ -325,7 +325,7 @@ function SimulationEvidence({ model }) {
         </div>
         <div>
           <dt>Simulation bounds</dt>
-          <dd>{formatWorkspaceInteger(factDiffs.length)} of {formatWorkspaceInteger(bounds.changedFactLimit)} changed facts<small>{formatWorkspaceInteger(dependents.length)} of {formatWorkspaceInteger(bounds.dependentNodeLimit)} dependents · {formatWorkspaceInteger(bounds.declaredFactCount)} declared facts · {formatWorkspaceInteger(bounds.outputByteLimit)} byte output limit</small></dd>
+          <dd>{formatWorkspaceInteger(factDiffs.length)} of {formatWorkspaceInteger(bounds.changedFactLimit)} changed inputs<small>{formatWorkspaceInteger(dependents.length)} of {formatWorkspaceInteger(bounds.dependentNodeLimit)} dependents · {formatWorkspaceInteger(bounds.declaredFactCount)} tracked inputs · {formatWorkspaceInteger(bounds.outputByteLimit)} byte output limit</small></dd>
         </div>
       </dl>
 
@@ -333,7 +333,7 @@ function SimulationEvidence({ model }) {
       <FactDiffs factDiffs={factDiffs} />
 
       <section className="workflow-form-section" aria-labelledby="commercial-change-impact-dependents-title">
-        <h4 id="commercial-change-impact-dependents-title">Dependent decisions & artifacts</h4>
+        <h4 id="commercial-change-impact-dependents-title">Related items to review</h4>
         <p className="staff-evidence-bounds-note">
           {formatWorkspaceInteger(model.impact?.counts?.review)} REVIEW · {formatWorkspaceInteger(model.impact?.counts?.stale)} STALE · {formatWorkspaceInteger(model.impact?.counts?.total)} total dependent results
         </p>
@@ -629,7 +629,7 @@ export default function CommercialChangeImpactPanel({
       />
       <div className="staff-evidence-head">
         <div>
-          <p className="eyebrow">Commercial dependency graph · simulation only</p>
+          <p className="eyebrow">Related quote items · preview only</p>
           <h3 id={titleId}>Change Impact</h3>
         </div>
         <div className="right-actions">

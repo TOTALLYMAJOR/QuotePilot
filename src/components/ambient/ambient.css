@@ -1,0 +1,640 @@
+.ambient-inline-value {
+  --ambient-focus: var(--focus-ring, #356a9b);
+  display: inline-grid;
+  min-width: 0;
+}
+
+.ambient-inline-value__trigger {
+  appearance: none;
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.2rem 0.25rem;
+  border: 0;
+  border-radius: 0.45rem;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ambient-inline-value__trigger:not(:disabled):hover .ambient-inline-value__content,
+.ambient-inline-value__trigger:not(:disabled):focus-visible .ambient-inline-value__content {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.22em;
+}
+
+.ambient-inline-value__trigger:focus-visible,
+.ambient-inline-value__input:focus-visible,
+.ambient-inline-value button:focus-visible,
+.ambient-context-surface button:focus-visible,
+.ambient-undo-rail button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ambient-focus, #356a9b) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.ambient-inline-value__trigger:disabled {
+  cursor: default;
+}
+
+.ambient-inline-value__label {
+  color: var(--muted, #5d6670);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.ambient-inline-value__content {
+  min-width: 0;
+  color: var(--ink, #17202a);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.ambient-inline-value__editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.28rem;
+}
+
+.ambient-inline-value__input {
+  min-width: min(12rem, 100%);
+  min-height: 2.75rem;
+  padding: 0.56rem 0.68rem;
+  border: 1px solid var(--line, #cdd3d8);
+  border-radius: 0.6rem;
+  color: var(--ink, #17202a);
+  background: var(--surface, #fff);
+  font: inherit;
+}
+
+.ambient-inline-value__commit,
+.ambient-inline-value__cancel,
+.ambient-undo-rail button {
+  min-height: 2.75rem;
+  padding: 0.54rem 0.78rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ambient-inline-value__commit {
+  color: #fff;
+  background: #245f7d;
+}
+
+.ambient-inline-value__cancel,
+.ambient-undo-rail button {
+  border-color: var(--line, #cdd3d8);
+  color: var(--ink, #17202a);
+  background: transparent;
+}
+
+.ambient-inline-value button:disabled,
+.ambient-undo-rail button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.ambient-inline-value__error {
+  margin: 0.35rem 0 0;
+  color: #8f2f25;
+  font-size: 0.82rem;
+}
+
+.ambient-context-surface {
+  --ambient-focus: var(--focus-ring, #356a9b);
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: auto;
+}
+
+.ambient-context-surface__dialog {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  top: var(--ambient-context-anchor-top, 5rem);
+  width: min(27rem, calc(100vw - 2rem));
+  max-height: min(42rem, calc(100vh - var(--ambient-context-anchor-top, 5rem) - 1rem));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ink, #17202a) 16%, transparent);
+  border-radius: 1rem;
+  color: var(--ink, #17202a);
+  background: color-mix(in srgb, var(--surface, #fff) 97%, #f5f2ea);
+  box-shadow: 0 1.35rem 4rem rgb(25 34 43 / 18%);
+  animation: ambient-context-enter-end 240ms cubic-bezier(0.2, 0.72, 0.2, 1) both;
+  transform-origin: top right;
+}
+
+.ambient-context-surface--align-end .ambient-context-surface__dialog {
+  right: var(--ambient-context-anchor-right, 1.5rem);
+}
+
+.ambient-context-surface--align-start .ambient-context-surface__dialog {
+  left: var(--ambient-context-anchor-left, 1.5rem);
+  animation-name: ambient-context-enter-start;
+  transform-origin: top left;
+}
+
+.ambient-context-surface__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1rem 0.72rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink, #17202a) 10%, transparent);
+}
+
+.ambient-context-surface__header h2 {
+  margin: 0;
+  font-size: 1.08rem;
+  line-height: 1.35;
+}
+
+.ambient-context-surface__close {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  place-items: center;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.ambient-context-surface__close:hover {
+  background: color-mix(in srgb, var(--ink, #17202a) 7%, transparent);
+}
+
+.ambient-context-surface__arrival {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem 1rem;
+  color: var(--muted, #5d6670);
+  background: color-mix(in srgb, #dcebea 38%, transparent);
+}
+
+.ambient-context-surface__arrival p {
+  display: grid;
+  gap: 0.12rem;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.ambient-context-surface__arrival strong {
+  color: var(--ink, #17202a);
+  font-size: 0.69rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ambient-context-surface__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(29rem, 58vh);
+  margin: 3px;
+  padding: calc(1rem - 3px);
+  border-radius: 0.35rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.ambient-context-surface__body:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--ambient-focus, #356a9b) 62%, transparent);
+}
+
+.ambient-context-surface__footer {
+  padding: 0.78rem 1rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--ink, #17202a) 10%, transparent);
+}
+
+.ambient-undo-rail {
+  --ambient-focus: var(--focus-ring, #356a9b);
+  display: grid;
+  gap: 0.65rem;
+  width: min(100%, 36rem);
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--ink, #17202a) 12%, transparent);
+  border-radius: 0.9rem;
+  color: var(--ink, #17202a);
+  background: color-mix(in srgb, var(--surface, #fff) 96%, #f2eee5);
+}
+
+.ambient-undo-rail__header,
+.ambient-undo-rail__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ambient-undo-rail__header h2 {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ambient-undo-rail__header button {
+  min-height: 2.75rem;
+  padding-block: 0.32rem;
+  font-size: 0.75rem;
+}
+
+.ambient-undo-rail__list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ambient-undo-rail__item {
+  padding-top: 0.55rem;
+  border-top: 1px solid color-mix(in srgb, var(--ink, #17202a) 9%, transparent);
+}
+
+.ambient-undo-rail__item > div {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.ambient-undo-rail__item span {
+  color: var(--muted, #5d6670);
+  font-size: 0.79rem;
+  line-height: 1.35;
+}
+
+.ambient-undo-rail__item [role="alert"] {
+  color: #8f2f25;
+}
+
+.ambient-feedback-event {
+  --ambient-feedback-accent: #32638e;
+  --ambient-feedback-on-accent: #ffffff;
+  --ambient-feedback-surface: #eef5fb;
+  --ambient-feedback-on-surface: #243f5a;
+  --ambient-feedback-duration: 280ms;
+  position: relative;
+  isolation: isolate;
+}
+
+.ambient-feedback-event--gold {
+  --ambient-feedback-accent: #875c13;
+  --ambient-feedback-on-accent: #ffffff;
+  --ambient-feedback-surface: #fff7e5;
+  --ambient-feedback-on-surface: #4a3307;
+}
+
+.ambient-feedback-event--teal {
+  --ambient-feedback-accent: #0b706d;
+  --ambient-feedback-on-accent: #ffffff;
+  --ambient-feedback-surface: #e8f7f5;
+  --ambient-feedback-on-surface: #124b49;
+}
+
+.ambient-feedback-event--coral {
+  --ambient-feedback-accent: #a94438;
+  --ambient-feedback-on-accent: #ffffff;
+  --ambient-feedback-surface: #fff0ed;
+  --ambient-feedback-on-surface: #702b24;
+}
+
+.ambient-feedback-event--mint {
+  --ambient-feedback-accent: #27745b;
+  --ambient-feedback-on-accent: #ffffff;
+  --ambient-feedback-surface: #eaf7f1;
+  --ambient-feedback-on-surface: #174d3d;
+}
+
+.ambient-feedback-event--lavender {
+  --ambient-feedback-accent: #6f5198;
+  --ambient-feedback-on-accent: #ffffff;
+  --ambient-feedback-surface: #f5effc;
+  --ambient-feedback-on-surface: #493267;
+}
+
+.ambient-feedback-event--blue {
+  --ambient-feedback-accent: #32638e;
+  --ambient-feedback-on-accent: #ffffff;
+  --ambient-feedback-surface: #eef5fb;
+  --ambient-feedback-on-surface: #243f5a;
+}
+
+.ambient-feedback-event--failure {
+  --ambient-feedback-accent: #9c2f3b;
+  --ambient-feedback-on-accent: #ffffff;
+  --ambient-feedback-surface: #fff0f2;
+  --ambient-feedback-on-surface: #681d28;
+}
+
+.ambient-feedback-event::before,
+.ambient-feedback-event::after {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+}
+
+.ambient-feedback-event::after {
+  inset: 0;
+  border-radius: inherit;
+}
+
+.ambient-feedback-event--active::after,
+.ambient-feedback-event--origin-customer.ambient-feedback-event--active::before {
+  animation-duration: var(--ambient-feedback-duration);
+  animation-fill-mode: both;
+}
+
+.ambient-feedback-event--motion-settle.ambient-feedback-event--active::after {
+  animation-name: ambient-feedback-settle;
+  animation-timing-function: ease-out;
+}
+
+.ambient-feedback-event--motion-reasoning.ambient-feedback-event--active::after {
+  animation-name: ambient-feedback-reasoning;
+  animation-timing-function: ease-in-out;
+}
+
+.ambient-feedback-event--motion-recalculated.ambient-feedback-event--active::after {
+  animation-name: ambient-feedback-recalculated;
+  animation-timing-function: ease-out;
+}
+
+.ambient-feedback-event--motion-resolve.ambient-feedback-event--active::after,
+.ambient-feedback-event--motion-accepted.ambient-feedback-event--active::after {
+  animation-name: ambient-feedback-resolve;
+  animation-timing-function: cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+.ambient-feedback-event--motion-ready.ambient-feedback-event--active::after {
+  animation-name: ambient-feedback-ready;
+  animation-timing-function: ease-out;
+}
+
+.ambient-feedback-event--motion-sent.ambient-feedback-event--active::after {
+  animation-name: ambient-feedback-sent;
+  animation-timing-function: ease-in-out;
+}
+
+.ambient-feedback-event--motion-warning.ambient-feedback-event--active::after {
+  animation-name: ambient-feedback-warning;
+  animation-timing-function: ease-out;
+}
+
+.ambient-feedback-event--motion-failure.ambient-feedback-event--active::after {
+  animation-name: ambient-feedback-failure;
+  animation-timing-function: ease-out;
+}
+
+.ambient-feedback-event--motion-customer.ambient-feedback-event--active::after {
+  animation-name: ambient-feedback-customer-surface;
+  animation-timing-function: cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+.ambient-feedback-event--origin-customer::before {
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  border-radius: inherit;
+  background: var(--ambient-feedback-accent);
+  transform-origin: center;
+}
+
+.ambient-feedback-event--origin-customer.ambient-feedback-event--active::before {
+  animation-name: ambient-feedback-customer-arrival;
+  animation-timing-function: cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+.ambient-feedback-event--static::after {
+  background: color-mix(in srgb, var(--ambient-feedback-surface) 48%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ambient-feedback-accent) 54%, transparent);
+}
+
+.ambient-feedback-event--origin-customer.ambient-feedback-event--static::before {
+  transform: none;
+}
+
+.ambient-feedback-event__cause {
+  border-inline-start: 3px solid var(--ambient-feedback-accent);
+  color: var(--ambient-feedback-on-surface);
+  background: var(--ambient-feedback-surface);
+}
+
+.ambient-feedback-event--active :is(
+  [data-ambient-feedback-dependent],
+  .ambient-context-state,
+  .ambient-dependency-list li,
+  .ambient-momentum-dimension
+) {
+  animation: ambient-dependent-settle 200ms ease-out both;
+}
+
+.ambient-feedback-event--active :is(
+  [data-ambient-feedback-next-action],
+  .ambient-next-action
+) {
+  animation: ambient-next-action-replace 180ms ease-out both;
+}
+
+@keyframes ambient-context-enter-end {
+  0% { opacity: 0; transform: translateX(12px) scale(0.99); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes ambient-context-enter-start {
+  0% { opacity: 0; transform: translateX(-12px) scale(0.99); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes ambient-dependent-settle {
+  0% { opacity: 0.72; transform: translateY(3px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ambient-next-action-replace {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ambient-feedback-settle {
+  0% { background: color-mix(in srgb, var(--ambient-feedback-surface) 72%, transparent); opacity: 0; transform: scale(0.99); }
+  34% { opacity: 1; }
+  100% { background: transparent; opacity: 0; transform: scale(1); }
+}
+
+@keyframes ambient-feedback-reasoning {
+  0% { background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ambient-feedback-accent) 24%, transparent), transparent); background-position: -45vw 0; opacity: 0; }
+  22% { opacity: 1; }
+  100% { background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ambient-feedback-accent) 24%, transparent), transparent); background-position: 45vw 0; opacity: 0; }
+}
+
+@keyframes ambient-feedback-recalculated {
+  0% { background: var(--ambient-feedback-surface); box-shadow: inset 0 3px 0 var(--ambient-feedback-accent); opacity: 0; }
+  36% { opacity: 0.9; }
+  100% { background: transparent; box-shadow: inset 0 3px 0 transparent; opacity: 0; }
+}
+
+@keyframes ambient-feedback-resolve {
+  0% { background: var(--ambient-feedback-surface); clip-path: inset(0 100% 0 0); opacity: 0.75; }
+  72% { clip-path: inset(0); opacity: 0.5; }
+  100% { background: transparent; clip-path: inset(0); opacity: 0; }
+}
+
+@keyframes ambient-feedback-ready {
+  0% { box-shadow: inset 0 0 0 0 transparent; opacity: 0; }
+  45% { box-shadow: inset 0 0 0 2px var(--ambient-feedback-accent); opacity: 0.85; }
+  100% { box-shadow: inset 0 0 0 2px transparent; opacity: 0; }
+}
+
+@keyframes ambient-feedback-sent {
+  0% { background: linear-gradient(90deg, color-mix(in srgb, var(--ambient-feedback-accent) 24%, transparent), transparent 28%); background-position: -35vw 0; opacity: 0; }
+  35% { opacity: 0.8; }
+  100% { background: linear-gradient(90deg, color-mix(in srgb, var(--ambient-feedback-accent) 24%, transparent), transparent 28%); background-position: 35vw 0; opacity: 0; }
+}
+
+@keyframes ambient-feedback-warning {
+  0%, 100% { box-shadow: inset 0 0 0 0 transparent; }
+  42% { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--ambient-feedback-accent) 64%, transparent); }
+}
+
+@keyframes ambient-feedback-failure {
+  0%, 100% { background: transparent; box-shadow: inset 0 0 0 0 transparent; }
+  30% { background: color-mix(in srgb, var(--ambient-feedback-surface) 72%, transparent); box-shadow: inset 0 0 0 3px var(--ambient-feedback-accent); }
+  62% { background: transparent; box-shadow: inset 0 0 0 1px var(--ambient-feedback-accent); }
+}
+
+@keyframes ambient-feedback-customer-arrival {
+  0% { opacity: 0; transform: scaleY(0); }
+  46% { opacity: 1; transform: scaleY(1); }
+  100% { opacity: 0; transform: scaleY(1); }
+}
+
+@keyframes ambient-feedback-customer-surface {
+  0% { background: var(--ambient-feedback-surface); opacity: 0; }
+  48% { opacity: 0.72; }
+  100% { background: transparent; opacity: 0; }
+}
+
+@media (max-width: 720px) {
+  .ambient-context-surface {
+    background: rgb(12 18 24 / 28%);
+  }
+
+  .ambient-context-surface__dialog,
+  .ambient-context-surface--align-end .ambient-context-surface__dialog,
+  .ambient-context-surface--align-start .ambient-context-surface__dialog {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-height: min(86vh, 46rem);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 1.15rem 1.15rem 0 0;
+    animation-name: ambient-context-enter-mobile;
+    transform-origin: bottom center;
+  }
+
+  .ambient-context-surface__body {
+    max-height: 56vh;
+  }
+}
+
+@keyframes ambient-context-enter-mobile {
+  0% { opacity: 0; transform: translateY(18px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-feedback-event.ambient-feedback-event--active::after,
+  .ambient-feedback-event--origin-customer.ambient-feedback-event--active::before {
+    animation: none;
+    clip-path: none;
+    transform: none;
+  }
+
+  .ambient-feedback-event--active::after {
+    background: color-mix(in srgb, var(--ambient-feedback-surface) 48%, transparent);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ambient-feedback-accent) 54%, transparent);
+    opacity: 1;
+  }
+
+  .ambient-feedback-event--origin-customer.ambient-feedback-event--active::before {
+    background: var(--ambient-feedback-accent);
+    opacity: 1;
+  }
+
+  .ambient-context-surface__dialog,
+  .ambient-feedback-event--active :is(
+    [data-ambient-feedback-dependent],
+    .ambient-context-state,
+    .ambient-dependency-list li,
+    .ambient-momentum-dimension,
+    [data-ambient-feedback-next-action],
+    .ambient-next-action
+  ) {
+    animation: none;
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .ambient-inline-value__trigger,
+  .ambient-inline-value__input,
+  .ambient-inline-value__commit,
+  .ambient-inline-value__cancel,
+  .ambient-context-surface__dialog,
+  .ambient-context-surface__close,
+  .ambient-undo-rail,
+  .ambient-undo-rail button {
+    border: 1px solid ButtonText;
+    color: CanvasText;
+    background: Canvas;
+    forced-color-adjust: auto;
+  }
+
+  .ambient-inline-value__trigger:focus-visible,
+  .ambient-inline-value__input:focus-visible,
+  .ambient-inline-value button:focus-visible,
+  .ambient-context-surface button:focus-visible,
+  .ambient-undo-rail button:focus-visible {
+    outline: 3px solid Highlight;
+  }
+
+  .ambient-context-surface__body:focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: -3px;
+  }
+
+  .ambient-feedback-event::before,
+  .ambient-feedback-event::after,
+  .ambient-feedback-event__cause {
+    border-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+  }
+}

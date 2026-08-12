@@ -110,6 +110,68 @@ describe("direct production deployment safety", () => {
     expect(source.match(/VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY:/g)).toHaveLength(1);
   });
 
+  test.each([
+    ["Firebase", FIREBASE_WORKFLOW],
+    ["Vercel", VERCEL_WORKFLOW]
+  ])("keeps the %s Ambient UI proof slice out of production binding", (_provider, workflow) => {
+    const source = fs.readFileSync(workflow, "utf8");
+    const envExample = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
+    const quoteHistory = fs.readFileSync(
+      path.join(ROOT, "src", "components", "QuoteHistoryModal.jsx"),
+      "utf8"
+    );
+    const app = fs.readFileSync(path.join(ROOT, "src", "App.jsx"), "utf8");
+    const portal = fs.readFileSync(
+      path.join(ROOT, "src", "components", "CustomerPortalView.jsx"),
+      "utf8"
+    );
+
+    expect(source).not.toContain("VITE_AMBIENT_UI_ENABLED");
+    expect(source).not.toContain("VITE_OPERATIONAL_STAFFING_ENABLED");
+    expect(envExample).toMatch(/^VITE_AMBIENT_UI_ENABLED=false$/m);
+    expect(envExample).toMatch(/^VITE_OPERATIONAL_STAFFING_ENABLED=false$/m);
+    expect(envExample).toMatch(/^VITE_PILOT_DECISION_ROOM_ENABLED=false$/m);
+    expect(quoteHistory).toMatch(
+      /const AMBIENT_UI_ENABLED = import\.meta\.env\.VITE_AMBIENT_UI_ENABLED === "1"[\s\S]*const AmbientLivingOpportunityRoute = AMBIENT_UI_ENABLED[\s\S]*\? lazy/
+    );
+    expect(app).not.toMatch(/^import AmbientGlobalPilotSurface from/m);
+    expect(app).not.toMatch(/^import PilotCommandBar from/m);
+    expect(app).toMatch(
+      /const AmbientGlobalPilotSurface = AMBIENT_UI_ENABLED[\s\S]*import\("\.\/components\/AmbientGlobalPilotSurface"\)/
+    );
+    expect(app).toMatch(
+      /const loadAmbientGlobalPilotTarget = AMBIENT_UI_ENABLED[\s\S]*import\("\.\/lib\/ambientGlobalPilotTarget"\)/
+    );
+    expect(app).toMatch(
+      /const PilotCommandBar = PILOT_COMMAND_ENABLED[\s\S]*import\("\.\/components\/PilotCommandBar"\)/
+    );
+    expect(app).toMatch(
+      /const AMBIENT_PILOT_COMMANDS_ENABLED = AMBIENT_UI_ENABLED && PILOT_COMMAND_ENABLED/
+    );
+    expect(portal).toMatch(
+      /const AMBIENT_DECISION_ROOM_ENABLED = PILOT_DECISION_ROOM_ENABLED && AMBIENT_UI_ENABLED/
+    );
+    expect(app).toMatch(
+      /const AmbientNowView = AMBIENT_NOW_ENABLED[\s\S]*import\("\.\/components\/AmbientNowView"\)/
+    );
+    expect(app).toMatch(
+      /const NowView = LEGACY_NOW_ENABLED[\s\S]*import\("\.\/components\/NowView"\)/
+    );
+  });
+
+  test("keeps authoritative operational staffing dormant in tracked production configuration", () => {
+    const firebaseWorkflow = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
+    const vercelWorkflow = fs.readFileSync(VERCEL_WORKFLOW, "utf8");
+    const functionsExample = fs.readFileSync(
+      path.join(ROOT, "functions", ".env.example"),
+      "utf8"
+    );
+
+    expect(firebaseWorkflow).not.toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
+    expect(vercelWorkflow).not.toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
+    expect(functionsExample).toMatch(/^OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false$/m);
+  });
+
   test("does not persist checkout credentials in the UAT attestation job", () => {
     expect(fs.readFileSync(UAT_WORKFLOW, "utf8")).toMatch(/persist-credentials:\s*false/);
   });

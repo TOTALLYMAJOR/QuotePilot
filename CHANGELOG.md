@@ -6,7 +6,497 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Changed
+
+- Kept Ambient interaction-health reporting and first-intent-to-priced-draft
+  observation dormant in the default-off workspace. The detailed Reporting
+  measures and their duration helpers now load only behind the statically
+  foldable Ambient build gate, and the flag-off Reporting surface preserves
+  the existing v0.7 presentation without an Ambient placeholder or inferred
+  metrics. Flag-on lazy loading has an explicit non-inferential pending state,
+  while timing observation compiles to a no-op outside the Ambient gate and
+  cannot interrupt draft edits or successful save receipts. The default bundle now passes the existing temporary ceiling
+  without increasing it.
+
+- Route-heading focus now follows headings that mount through nested lazy
+  boundaries instead of making a single pre-mount attempt. The handoff keeps
+  the route trigger as focus owner, resolves when the exact heading attaches,
+  and cancels when the user or a recovery surface chooses another control.
+  Focused unit coverage and repeated three-width Clients browser proof lock the
+  hydration-race and no-focus-stealing contracts.
+
+- Made Ambient feedback motion follow the browser's semantic animation end,
+  with a bounded fallback only after the first paint, so a busy main thread
+  cannot consume the whole chromatic response before it becomes visible.
+  Browser coverage now measures Library acknowledgement from the in-page
+  activation event to its pending result and observes causal motion through
+  `animationstart`; cold lazy-route readiness remains distinct from the 250ms
+  interaction acknowledgement contract.
+
+- Corrected the mainline safety-net no-op check to inspect the staged index
+  produced by `git revert --no-commit`. A failed current `main` head can now
+  reach the guarded recovery commit instead of being mistaken for an empty
+  worktree change; the recovery diff is checked, published only to a dedicated
+  branch, opened as a recovery PR, and dispatched through exact-head CI. It no
+  longer attempts a direct push around protected `main`. Focused regression
+  coverage locks the staged-only revert and PR path. Protected `main` now
+  requires all eight named quality contexts. This remains recovery defense and
+  does not replace UAT or production approval.
+
+- Prepared the candidate to preserve `v0.7.0` production capability behavior
+  while keeping the new Ambient code dormant: deterministic Pilot answers and
+  bounded scenarios now require both Pilot Command and Ambient, and the
+  AIUI-46 decision-room layout
+  requires both Decision Room and Ambient. With Ambient absent from production
+  builds, the existing Pilot draft command and `v0.7.0` portal question/option
+  subset remain in place. Focused source, component, and production-matrix
+  checks prevent either replacement from activating through an older flag.
+  Browser-local proposal fallback now carries the same bounded terms and
+  option projection as the canonical snapshot, improving recovery parity
+  without adding a customer read or quote mutation.
+
+- Ambient Pilot now uses hold-to-capture voice only when the Ambient shell is
+  enabled: pointer or Space/Enter press receives immediate acknowledgement,
+  release opens the existing deterministic preview, and **Apply to draft**
+  remains the only staging action. The bounded runtime preserves the previous
+  command, preview, and draft across permission, device, speech-service,
+  network, no-speech, cancellation, focus-loss, timeout, and unmount paths; it
+  does not persist transcripts or widen pricing, save, role, Firebase, or
+  provider authority. The flag-off Pilot retains click-to-toggle dictation.
+  Focused unit proof covers press/release, release-before-permission, keyboard,
+  cancellation, recovery, cleanup, and preview-before-apply; local browser
+  proof covers 390, 768, and 1440px with 44px and no-overlap checks. Real
+  microphone/service behavior, deployment, and human acceptance remain open.
+  Once a command has a current preview, its command action becomes the quieter
+  **Refresh preview** while **Apply to draft** stays beside the exact proposal
+  as the primary next outcome; editing the command restores **Preview**.
+
+- Softened visible Ambient language across the customer decision room, Clients,
+  Now, Living Opportunity, Messaging, Pilot, follow-up automation, decisions,
+  operational staffing, pricing previews, and Package/Menu guidance.
+  Customer-facing labels now favor direct planning language such as **Pricing**,
+  **Optional**, and **Your response**, while internal terms such as bounded
+  reads, kernels, canonical evaluators, host surfaces, and reconciliation
+  outcomes remain in code-level contracts rather than primary interface copy.
+  Exact distinctions among draft, saved proposal, server-priced result,
+  acceptance, payment, booking, message, and provider evidence are preserved.
+  A source-level visible-language guard prevents **facts that move**, **move the
+  deal**, and **deal velocity** from returning to the primary Ambient surfaces
+  and keeps retired **AI Autopilot**, **Decision Debt**, **Customer 360**, and
+  **Revenue Autopilot** labels out of the covered staff-interface locations.
+
+- Hardened the global Pilot trigger against route-hydration races. A draft-
+  scoped click now acknowledges immediately and resolves only the visible
+  command field within a bounded window, stops if the user focuses another
+  control or recovery takes over, and retains the ordinary exact-context
+  request as the source of truth. A repeated browser stress pass and the
+  responsive object-verification lane lock the no-dead-click focus outcome.
+
 ### Added
+
+- Added a governed pre-merge candidate deployment command for the fixed
+  `quotepilot-staging-20260804` Firebase project/site and fixed `quoteflow`
+  Vercel preview project. It requires a clean published release-branch SHA, the
+  exact successful eight-job CI run, and a SHA-bound typed confirmation. The
+  candidate compiles Ambient UI and the operational staffing browser surface
+  on while requiring staffing, Commercial Change, Revenue Autopilot
+  preparation/send, provider, and buyer authority explicitly off. It never
+  promotes production aliases. The staging build profile is accepted only for
+  the exact fixed Firebase identity and flags, leaving the default production
+  environment check unchanged. Functions dotenv validation rejects symlinks,
+  plaintext secrets, production callbacks, disabled-provider residue, and
+  unreviewed variables; a metadata-only Secret Manager prerequisite check
+  blocks missing bindings without reading or creating values. The command
+  reserves its receipt before mutation, preserves failed/partial outcomes, and
+  verifies Hosting, Functions revisions and fail-closed runtime configuration,
+  the Firestore ruleset/release and rules digest, plus the hosted SHA manifest.
+  Deployment, production promotion, provider-business acceptance, and human UAT
+  remain separate.
+
+- Added the source-only AIUI-46 customer decision room behind the combined
+  `VITE_PILOT_DECISION_ROOM_ENABLED` and default-off
+  `VITE_AMBIENT_UI_ENABLED` gates. The exact-token portal
+  now presents the existing customer-safe projection in a calmer reading order
+  across Event, Menu and service, Pricing, assumptions, tenant terms, optional
+  additions, response, and questions. Contextual question actions reuse the
+  one existing conversation composer and acknowledge staged text, a preserved
+  draft, an unresolved send, a read-only thread, or unavailable conversation.
+  Staff-marked add-ons and rentals prepare reversible ordinary change-request
+  lines; only exact lines generated in the current browser session can be
+  removed by the same control, so identical customer-authored words remain
+  untouched. Changing the response to accept or decline discards any still-
+  generated addition lines with an in-flow acknowledgement while preserving
+  the customer's other words. Customer receipts now use calm proposal language
+  while keeping acceptance, payment, booking, and message evidence separate.
+  Browser-local exact-token fallback now mirrors the canonical
+  bounded terms and option shape. Dedicated local browser proof covers 390,
+  768, and 1440px for axe, 44px controls, overflow, clipping, collisions, and
+  proposal non-mutation. This adds no callable, customer read, catalog
+  exposure, direct quote mutation, pricing, acceptance, payment, booking, or
+  provider authority. Deployment, connected exact-token behavior,
+  production-data results, provider outcomes, and human acceptance remain
+  separate open gates.
+
+- Added the source-only AIUI-20 **Library** slice behind the existing default-
+  off Ambient gate. The administrator `/app/catalog` route now opens an
+  editorial, purpose-registered view of the caller-owned organization catalog:
+  Catalog choices and first-class Event Templates remain separate, source,
+  observation time, **Catalog version**, and pricing-review boundaries are
+  visible, and one deterministic next step is chosen from available evidence.
+  An incomplete
+  event-specific menu inventory remains unavailable rather than being called
+  empty or turning saved template references into invented failures. Every
+  section and exact template acknowledges activation before mounting the heavy
+  editor, then arrives with object, reason, consequence, and next resolution.
+  The structured template editor preserves stable IDs and saved linked-item
+  references and commits only through the existing guarded catalog save and
+  revision-reconciliation path. Catalog-setting and managed-menu drafts cannot
+  be mixed: the user must finish or explicitly discard one before advancing the
+  other. Each of the seven managed-menu operations—event-type create/rename,
+  category create/rename, and menu-item create/update/delete—now requires the
+  exact loaded `expectedCatalogRevision`.
+  Firebase transactions and local fallback commits validate it before any
+  record write; the fallback comparison uses the active organization's catalog
+  revision. Unsaved editor work remains mounted during ordinary workspace
+  navigation, unload, portal, and sign-out transitions are guarded, and newer
+  catalog evidence cannot silently replace a dirty draft.
+  Invalid exact arrivals visibly explain what was unavailable, what remained
+  unchanged, and what to do next. Development fallback catalog caches are now
+  organization-scoped, and incomplete menu references are described as
+  preserved pending current review rather than falsely claiming validation.
+  A customer-portal token remount occurs only after the App-level draft guard
+  accepts the transition. A direct initial portal token keeps precedence, and
+  switching from token A to token B still receives a distinct public scope.
+  Closing the editor routes through the unsaved-change guard and restores
+  Library orientation; sales-role access receives a contextual boundary.
+  Focused local tests pass 122 of 122 and cover the model, structured editor,
+  route, arrival contract, fallback
+  isolation, and existing Catalog Admin behavior. A dedicated 7-case
+  Chromium-admin lane passes at 390, 768, and 1440px with exact focus, 44px
+  pointer targets, sub-250ms acknowledgement, draft preservation, focus
+  restoration, axe, overflow, and collision checks, with four local proof
+  images. This adds no read, role, pricing, mutation, provider, deployment, or
+  new persistence authority. AIUI-20 is
+  material in local source, not formally closed; hosted roles, production-data
+  behavior, rollback-release evidence, and human acceptance remain open.
+  The browser now receives only the four frozen starter-pack chooser summaries;
+  full versioned pack manifests remain server-owned, with a synchronization
+  test preventing chooser labels, versions, or counts from drifting. This keeps
+  the default build inside its existing bundle ceiling without changing starter-
+  pack application authority.
+
+- Added the source-only AIUI-19 **Clients** slice behind the existing default-
+  off Ambient gate. The directory now presents the caller-owned, bounded,
+  already tenant-scoped client page in a lighter list with one direct **Review
+  client** outcome; it does not infer relationship health or rank clients from
+  incomplete list data. The selected client opens with identity, active
+  opportunities found in the completed read, recorded conversation context,
+  and one supported next step. Its exact arrival carries the opaque client
+  identity, reason, consequence, and next resolution and resolves only after
+  the matching client heading is focused; missing or mismatched context
+  recovers without substituting another record. Existing history, rebook,
+  communication, commercial, and role-gated controls remain available under
+  **More client history and controls**. Browser-local, stale, partial,
+  truncated, and unavailable states remain explicit, and the slice adds no
+  read, write, role, pricing, message, payment, booking, provider, or lifecycle
+  authority. Focused local proof passes 15 of 15 model tests and 8 of 8
+  component tests (23 of 23 combined), 18 of 18 legacy Customer Directory/
+  Customer 360 tests, 19 of 19 exact-arrival tests, and the production build.
+  A dedicated Chromium-admin lane passes 3 of 3 local cases at 390, 768, and
+  1440px with exact arrival, 44px controls, zero axe violations, and no audited
+  overflow or overlap; six local proof images cover the directory and selected
+  client. Deployment, hosted roles, production-data behavior, provider outcomes,
+  rollback-release evidence, and human acceptance remain open; AIUI-19 is
+  material in local source, not formally closed.
+
+- Added the source-only AIUI-18 **Opportunities** stream behind the existing
+  default-off Ambient gate. It projects the caller-owned, already tenant-scoped
+  bounded quote read into an editorial list with identity and four separate
+  proposal, commercial, customer, and operational momentum domains; only
+  proposal completeness may use a percentage. Quote lifecycle, booking
+  confirmation, deposit, and final balance remain distinct evidence, and each
+  row exposes one deterministically ranked next action. Opening an opportunity
+  now carries its exact opaque identity plus reason, consequence, and next
+  resolution into the canonical Living Opportunity, where resolution requires
+  exact focus. The complete legacy role-gated controls remain available under
+  **Quote administration**, and browser-local fallback is labeled as local
+  rather than server or provider confirmation. This presentation adds no data,
+  role, pricing, save, booking, payment, provider, or lifecycle authority. Full
+  legacy parity and retirement, universal ranking/freshness, deployment,
+  hosted behavior, production-data acceptance, and human acceptance remain
+  open; AIUI-18 is material in local source, not formally closed. Its visible
+  language now favors calm operator terms such as **Current opportunities**,
+  **Still to confirm**, **Booking and payment details**, and **Where this came
+  from**, with a neutral no-due-work state that cannot be mistaken for event
+  readiness or outside-service completion.
+
+- Replaced the default-off Ambient version of NOW with a lighter, purpose-
+  registered briefing while preserving the existing NOW implementation as the
+  flag-off rollback path. The new surface keeps the existing Workflow order,
+  shows at most three priorities from the bounded staff snapshot, gives each
+  one exact focused resolution, and never calls the user caught up when reads,
+  bounds, or recorded payment steps remain unresolved. **Recently completed** is
+  limited to timestamp-backed internal follow-up, request-handling, and
+  approval receipts and explicitly does not imply customer contact or provider
+  delivery. The staff evidence rail now has an opt-in compact, boxless
+  presentation that retains every stale, partial, unavailable, and truncated
+  warning. The lazy-loaded Pilot scenario review also owns its post-mount focus
+  handoff, closing a responsive dead-click regression at 390, 768, and 1440px.
+  All changes remain source-only behind the existing default-off Ambient and
+  NOW gates and add no read, write, provider, pricing, or role authority.
+
+- Softened the Ambient interface around the user's work: **What this affects**
+  replaces the generic **Consequence** heading, object controls use **Review**
+  outcome labels, and Pilot, pricing, staffing, and draft-review copy now favors
+  plain objects and next steps while retaining exact internal evidence and
+  authority contracts. A second pass replaces promotional or implementation
+  language with **Details affecting this quote**, **Status by area**, **Unsaved
+  preview**, **Evidence behind each status**, and task-centered recommendation
+  explanations. The approved **Living Opportunity** concept remains intact.
+  The default-off Now, Clients directory and relationship view, global Pilot,
+  draft Pilot, and Ambient review presentations are now conditionally loaded behind exact,
+  statically foldable flags; the ordinary flag-off build passes the existing
+  bundle ceiling without raising its temporary exception.
+  The continuing voice rule is human, calm, observational, and task-centered:
+  avoid sales-heavy metaphors, product anthropomorphism, and internal
+  architecture language in visible copy while retaining exact authority,
+  evidence, payment, delivery, and recovery terms where they protect meaning.
+
+- Ambient Intelligence Pilot Slice Alpha behind the new default-off,
+  non-production-bound `VITE_AMBIENT_UI_ENABLED` gate: immutable
+  `SurfacePurposeContract`, context, action/result, intelligent-object,
+  impact-preview, momentum, capability-manifest, and 250ms dead-click audit
+  foundations; accessible inline values, populated desktop/mobile context
+  surfaces, a bounded undo rail, and one preference-aware semantic feedback
+  router spanning color, motion, the existing sound cues, and opt-in haptics.
+  The selected staff quote route can now render a Living Opportunity whose
+  first viewport names identity, lifecycle state, bounded risk, and one ranked
+  next action without a blended readiness score. Guest count is the first
+  intelligent object: it exposes dependencies, why, consequence, do-nothing,
+  confidence, and provenance; recalculates only deterministic staffing
+  guidance in the saved view; and carries an explicitly staged scenario plus
+  object/reason/consequence/next-resolution context into the existing priced
+  editor. Exact commercial impact remains unavailable until that editor has
+  the current catalog, and trusted save remains the only authoritative write.
+  Cancelled editor handoffs now resolve as recovery rather than emitting false
+  ready feedback; focused Workflow navigation carries its exact arrival
+  context; conversation availability alone never ranks as customer evidence;
+  and a positive saved total no longer implies healthy pricing or margin.
+  The Living Opportunity now presents event, menu, staffing, and pricing under
+  the task-centered **Details affecting this quote** and **Connected details**
+  language before deeper margin, history, customer-update, and automation
+  context. Its visible **Status by area** view keeps four explicit domains
+  separate: proposal completeness, pricing and margin, customer state, and
+  operational evidence.
+  The sensory router now treats ready as gold, calculation/recalculation as
+  teal, warnings as coral, resolution/acceptance as mint, customer-originated
+  activity as lavender, addition/outbound movement as blue, and failure as its
+  own recovery state; every event carries causal text, bounded evidence and
+  receipt context, intensity, and allowed representations. Anchored inspectors,
+  dependent-value settling, and next-action replacement share that event
+  grammar, while reduced-motion and forced-colors modes preserve focus and
+  explicit meaning.
+  Arrival auditing now rejects unrelated reason, consequence, and next-action
+  receipts. Every enabled Living Opportunity Alpha button now declares its
+  action ID and runs through a monotonic interaction lifecycle. Context actions
+  prove a populated purpose-bearing destination; route handoffs remain
+  **Finding** until the destination proves that it loaded and focused the exact
+  requested item, then become **ready** or move to contextual recovery; inline
+  validation, no-op submissions, inspector dismissal, undo, history clearing, cancelled or
+  throwing navigation, and silence beyond the inclusive 250ms deadline all
+  produce visible resolution or recovery. A privacy-safe local observation
+  event exposes the primary-action dead-click numerator, denominator, and rate
+  without quote, customer, reason, consequence, destination, or payload data.
+  The existing product-event rail now accepts the same bounded primary-action
+  assessment and also pairs first intent only with an exact server-authoritative
+  Firebase saved-draft receipt, plus issue surfaced/resolved observations only
+  for the same bounded category in the same staff session. Reporting labels all
+  three as client observations, shows local/zero-sample results as unavailable,
+  and never presents them as server timing or comprehension evidence. The
+  runtime also
+  survives React development effect replay without disposing its live monitor,
+  and native numeric constraint handling is routed through the same contextual
+  validation path instead of terminating in a browser-only dead click.
+  The default-off Alpha module is removed from ordinary production
+  bundles and loaded only by an explicitly flag-enabled build.
+  The default-off CREATE, client-change-request, and Pilot command gates now
+  use statically foldable exact-string checks, preserving the documented
+  `1`, `true`, `yes`, and `on` enablement values while removing their feature
+  modules from an ordinary flag-off bundle.
+  The legacy Event Workspace remains the rollback path when the flag is off.
+  The capability-surfacing gate explicitly treats the three new Ambient
+  context/contract/audit modules as reviewed presentation-only sources while
+  retaining its fail-closed direct Firebase/provider/network authority scan.
+  A focused flag-enabled Playwright contract now exercises the Ambient surface
+  at 390, 768, and 1440px, including axe scans, 44px controls, first-viewport
+  comprehension fields, keyboard editing and focus restoration, populated
+  inspectors, reduced motion, persisted mute preference, forced colors, and
+  horizontal-overflow checks.
+
+- Added the next source-only Ambient shell and exact-arrival slice. Persistent
+  workspace navigation is reduced to lightweight **Now**, **Opportunities**,
+  **Clients**, and role-safe **Library** orientation while deep work continues
+  through context. One global **Pilot** trigger now carries the active Living
+  Opportunity into its populated explanation, focuses the existing draft Pilot
+  field without running it, or offers one nonempty opportunity choice when the
+  current view has no object context. Full interpreted-destination parity remains
+  open. At 390px the Living Opportunity now begins with an in-flow,
+  non-overlay mobile remote that answers identity, state, what matters, and the
+  next action before exposing exact Event, Menu, Pricing, and Proposal controls.
+  Workflow, Approval, Messages, supported Schedule event/conflict, and strict
+  Reporting handoffs now use a bounded semantic arrival contract carrying
+  object, reason, consequence, and next resolution. Their
+  destination consumers may say an item is **ready** only after exact focus; missing,
+  stale, truncated, or unavailable evidence recovers without substituting a
+  nearby item. Exact customer-reply identity stays in bounded same-app history
+  state while the URL identifies only its quote-scoped thread. Schedule focuses
+  only the exact accepted/booked event in its current tenant read and requires
+  complete evidence for conflict focus; it explicitly refuses to treat the
+  legacy staff-lead field as authoritative operational staffing. Reporting
+  supports only exact opportunity, bounded pipeline, and Ambient interaction-
+  health targets, and keeps its targeted opportunity read outside aggregate
+  denominators. Unsupported object types remain non-primary-ready.
+  [`docs/AMBIENT_WORKSPACE_ARRIVAL_ADR.md`](docs/AMBIENT_WORKSPACE_ARRIVAL_ADR.md)
+  records the decision. These changes add no authority, remain default-off and
+  source-only, and establish no deployment, hosted/provider outcome, production-
+  data acceptance, or human acceptance. They make AIUI-16, AIUI-40, and AIUI-41
+  materially implemented in source, not formally closed. The completed local
+  browser evidence now includes 40 of 40 Ambient object cases, 4 of 4 customer
+  decision-room cases, 80 of 80 no-unintended-overlap cases, and 11 of 11
+  accessibility cases.
+
+- Ambient replacement foundations beyond Alpha: a machine-readable AIUI-01
+  inventory now qualifies the current staff routes, shell controls, admin and
+  sales roles, reviewed flag profiles, browser-local fallback, and portal
+  precedence at 390, 768, and 1440px while retaining an explicit ledger of
+  unclosed legacy-control gaps. Routing, navigation, lazy mounting, shell
+  orientation, and surface boundaries are extracted from `App.jsx`, and saved
+  quote hydration now has an immutable runtime seam whose Ambient patches
+  require an exact matching revision, supported source, and bounded field
+  values before anything reaches the ordinary editor. A pure `AmbientSignal`
+  kernel normalizes NOW attention, proposal completeness, guided selling,
+  margin, Decision Debt, change requests, cascade receipts, and Commercial
+  Change dependencies without I/O or new authority; stale, partial, truncated,
+  unavailable, and do-nothing evidence remain explicit. The Pricing object now
+  uses the shared `ImpactPreview` contract for both bounded current-catalog
+  calculation and connected server simulation, labels their different bases,
+  invalidates stale scenarios, and fails staff margin counterfactuals closed
+  without recorded cost coverage. Date, time, duration, and venue are now
+  contextual evidence objects with explicit availability/seasonal/travel/
+  validity/scheduling slots and draft-only intent handoffs; missing or partial
+  saved values remain inspectable but cannot become stage actions. These are
+  source/local changes only and do not establish deployment, current provider
+  evidence, production-data acceptance, or human acceptance.
+
+- Added the source-only Package/Menu intelligent-object slice to the default-off
+  Living Opportunity. The populated inspectors preserve exact saved package,
+  inclusion, menu quantity, and menu order evidence; pair human-readable names
+  with stable IDs; explain dependencies, why, consequence, do-nothing outcome,
+  confidence, and provenance; and fail replacement/reorder actions closed when
+  tenant, revision, freshness, or catalog identity is not exact. Pointer drag
+  and visible keyboard reorder controls produce the same bounded draft intent.
+  Exact replacements and reorders carry their parent opportunity, reason,
+  consequence, and next resolution into a populated editor review that shows
+  saved versus proposed values and requires an explicit Apply or Keep outcome.
+  Apply changes only an isolated in-memory draft, preserves applicable menu
+  quantities and order, and marks the affected fields dirty; Keep leaves the
+  draft unchanged. Neither path saves, reprices, proves availability, or
+  reconciles package inclusions, and the trusted outcome-named save remains the
+  only persistence boundary. Focused unit/component proof is green. The last
+  completed full flag-enabled object-verification browser lane passes 40 of 40
+  cases, including responsive Event Logistics, Package/Menu, Selection, Money,
+  Proposal, Conversation, and global Pilot context at 390, 768, and 1440px; both Package/Menu
+  handoffs; draft-only Package adoption with its outcome-named save; and pending-
+  review save recovery, strict exact-arrival recovery, and the single-layer
+  mobile Event disclosure. This is source/local browser evidence only.
+
+- Added source-only Ambient selection, Money, and Pilot policy foundations.
+  Saved add-ons, rentals, bar, and services now appear in the default-off Living
+  Opportunity as dependency-aware objects with explicit why, consequence,
+  do-nothing, confidence, and provenance; visible controls and equivalent swipe
+  gestures adjust only reversible, unpriced, unsaved browser-memory scenarios.
+  A tested Money descriptor/context preserves deposit policy, deposit request,
+  provider-confirmed deposit, balance request, and final settlement as five
+  separate evidence domains, fails contradictory or browser-return evidence
+  closed, and is now mounted as a populated, registered Living Opportunity
+  inspector. Its inspect/dismiss actions carry exact arrival context, restore
+  focus, preserve the saved quote, and pass focused 390/768/1440 overflow proof.
+  Pilot now classifies eight command families and permits only navigation,
+  query, draft mutation, and simulation in v1; trusted mutation, communication,
+  bulk, destructive, malformed, and authority-mismatched commands fail closed.
+  These deterministic helpers add no Firebase, provider, pricing, role,
+  persistence, or mutation authority.
+
+- Added source-only Proposal and Conversation intelligent objects plus the next
+  deterministic Pilot slice. Proposal keeps the saved immutable revision,
+  authoritative-pricing evidence, customer projection, portal issuance, and
+  provider evidence separate; it names completeness gaps and descriptive
+  prepare/send/rotate/recover resolutions but performs none of those actions.
+  Conversation keeps sent, provider-reported delivery, portal view, latest
+  reply, and bounded inferred engagement as five distinct rails, retains change-
+  request and follow-up context, and offers no send or mark-read control. Both
+  populated inspectors carry object/reason/consequence/next-resolution context,
+  confidence, provenance, dependencies, and do-nothing behavior; both restore
+  focus and leave the saved quote unchanged. Pilot now answers proposal-blocker,
+  price-composition, authorized recorded-cost margin, and client-summary queries
+  deterministically and supports an exact active-catalog Package draft change.
+  It also generates bounded under-budget or improve-margin scenarios only from
+  fresh same-tenant catalog evidence and declared locks, distinguishing
+  available, already satisfied, no-match, and unavailable outcomes. Adoption
+  requires a populated immutable Apply/Keep draft review bound to the tenant,
+  catalog observation, proposal, and exact changed-field snapshot; Apply changes
+  only the isolated draft, drift fails closed, and trusted save retains
+  authoritative repricing, persistence, and versioning. These are local source
+  capabilities, not hosted, deployed, provider, production-data, or human-
+  acceptance evidence. They make AIUI-33, AIUI-34, AIUI-38, and AIUI-39
+  materially implemented in source, not formally closed.
+
+- Added the first reusable no-unintended-overlap interaction audit and removed
+  the redundant Messages eyebrow so the focused title and its supporting copy
+  retain a clear reading order without painting over one another. Shared staff
+  heading/surface vocabulary is now discoverable by the audit, intentional modal
+  and context layers declare
+  their overlap contract, and a source inventory covers `App.jsx` plus 22 staff
+  components. The expanded Chromium-admin browser gate passes 80 of 80 local
+  cases with 0 failed or skipped in 6.3 minutes across 390×844, 768×900, and
+  1440×1000: 45 exact-route cases; three Library template-editor cases; 27
+  header, search, context, and Pilot cases; two mobile Live Breakdown cases;
+  and three editor review/feedback cases. It
+  now includes Proposal and Conversation ContextSurfaces, deterministic Pilot
+  answers, and the explicit Pilot scenario review. The audit reserves focus
+  paint, rejects peer collisions and undeclared overlays, walks visible controls
+  through viewport/clipping/scroll/focus containment, and requires collisions,
+  overflow, escaped controls, escaped focus paint, and undeclared overlays to
+  remain empty with document overflow at most 1px. Messages additionally keeps
+  the focused title-to-subtitle clearance at least 8px. Sales-role geometry,
+  Firefox/WebKit, zoom/safe-area, connected portal-conversation/Ask states, maximum
+  search-result states, and hosted/provider/human acceptance remain open, so
+  this is material AIUI-49 source progress rather than completion.
+
+- Moved transient workspace toast/feedback messages into normal document flow
+  and enrolled the region in the layout-audit vocabulary. Flag-enabled browser
+  proof now verifies the visible feedback has static positioning, zero
+  horizontal overflow, and no collision with the Package/Menu draft review or
+  Live Breakdown. Feedback remains an explicit status acknowledgement rather
+  than an overlay that can obscure active work.
+
+- Tenant-isolated authoritative operational staffing as an independently
+  default-off extension of the Living Opportunity Staffing object. Three
+  callable commands now derive the exact immutable quote revision, tenant IANA
+  event window, and quoted role counts server-side; enforce same-tenant
+  admin/sales roles; record admin-managed profiles and operator-entered
+  availability; apply partial or complete `operator_confirmed` assignment plans
+  with revisioned schedule fences; and return immutable, digest-bound receipts.
+  Direct browser access to profiles, plans, receipts, and schedule fences is
+  denied. The UI keeps commercial requirements separate from operational
+  evidence, exposes explicit gaps and all read/mutation recovery states, replays
+  only an unchanged uncertain request, bounds unresolved command retention, and
+  labels local fallback `local_draft`. This source does not claim staff
+  acknowledgement, attendance, payroll, payment, booking, BEO freshness, or
+  event readiness, and its presentation, server, and tenant gates remain off.
+  Adversarial review additionally protected the tenant gate from direct browser
+  administrator create/update and made schedule-fence revision exhaustion fail
+  closed before an out-of-contract revision can be emitted.
 
 - Four more deterministic capture families closing out the CREATE reader's
   build-out queue, hardened by two adversarial-verification agents that

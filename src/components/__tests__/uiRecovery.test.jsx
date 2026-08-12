@@ -78,29 +78,25 @@ describe("recoverable lazy surfaces", () => {
   test("wires every public route and workspace tool through an independent boundary", () => {
     const mainSource = readSource("../../main.jsx");
     const appSource = readSource("../../App.jsx");
+    const workspaceBoundarySource = readSource("../WorkspaceSurfaceBoundary.jsx");
 
     expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(4);
     expect(mainSource).toContain("const RevenueAutopilotUnsubscribePage = createRecoverableLazy(");
     expect(mainSource).toContain('surfaceName="Email preferences"');
-    for (const name of [
-      "AdminCatalogModal",
-      "EventScheduleModal",
-      "IntegrationOpsModal",
-      "ImportStudioModal",
-      "DiagnosticsModal",
-      "QuoteCompareModal",
-      "ReportingDashboardModal"
-    ]) {
-      expect(appSource).toContain(`const ${name} = createRecoverableLazy(`);
-      expect(appSource).toContain(`component={${name}}`);
-    }
+    expect(appSource).toContain("const QuoteCompareModal = createRecoverableLazy(");
+    expect(appSource).toContain("component={QuoteCompareModal}");
     for (const name of [
       "CommandCenterHome",
       "CustomerDirectoryView",
       "CustomerWorkspaceView",
       "WorkspaceNotFound",
       "QuoteHistoryView",
-      "SalesWorkflowView",
+      "SalesWorkflowView"
+    ]) {
+      expect(appSource).toContain(`const ${name} = createRecoverableLazy(`);
+      expect(appSource).toContain(`component={${name}}`);
+    }
+    for (const name of [
       "AdminCatalogView",
       "EventScheduleView",
       "ReportingDashboardView",
@@ -109,9 +105,17 @@ describe("recoverable lazy surfaces", () => {
       "DiagnosticsView"
     ]) {
       expect(appSource).toContain(`const ${name} = createRecoverableLazy(`);
-      expect(appSource).toContain(`component={${name}}`);
+      expect(appSource).toContain(`component: ${name},`);
     }
+    expect(appSource).not.toContain("const AdminCatalogModal = createRecoverableLazy(");
     expect(appSource).not.toContain("WorkspaceModalFallback");
+    expect(appSource).toContain('from "./components/WorkspaceSurfaceBoundary"');
+    expect(appSource).not.toContain("function WorkspaceLazyTool(");
+    expect(workspaceBoundarySource).toContain("export function WorkspaceLazyTool(");
+    expect(workspaceBoundarySource).toContain("export function WorkspaceLazyRoute(");
+    expect(workspaceBoundarySource).toContain("export function WorkspaceToolSurface(");
+    expect(workspaceBoundarySource).toContain('presentation="modal"');
+    expect(workspaceBoundarySource).toContain("export function useStickyMount(");
     expect(appSource).not.toMatch(/setScheduleOpen\(resolvedWorkspaceRouteId/);
     expect(appSource).not.toMatch(/setAdminOpen\(resolvedWorkspaceRouteId/);
 
@@ -147,7 +151,7 @@ describe("recoverable lazy surfaces", () => {
   test("uses non-blocking catalog refresh for Import Studio receipts and conflicts", () => {
     const appSource = readSource("../../App.jsx");
     expect(appSource.match(/catalog\.reload\(\{ background: true \}\)/g)?.length || 0).toBeGreaterThanOrEqual(2);
-    expect(appSource).toContain("onReload={() => catalog.reload({ background: true })}");
+    expect(appSource).toContain("onReload: () => catalog.reload({ background: true })");
   });
 });
 
@@ -199,6 +203,6 @@ describe("shared modal dialog contract", () => {
     }
 
     expect(readSource("../AdminCatalogModal.jsx"))
-      .toContain("Discard unsaved catalog and branding changes?");
+      .toContain("Discard unsaved catalog, menu, and branding changes?");
   });
 });

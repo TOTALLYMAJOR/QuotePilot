@@ -44,7 +44,7 @@ describe("NowView", () => {
       <NowView snapshot={snapshotFixture({ loading: true, attentionSummary: null })} nowDate={NOW_DATE} />
     );
     expect(markup).toContain("Loading attention items...");
-    expect(markup).toContain("What deserves your attention");
+    expect(markup).toContain("What to review today");
   });
 
   test("renders the truthful quiet state when nothing needs the operator", () => {

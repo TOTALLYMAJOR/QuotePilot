@@ -1,22 +1,24 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 19,
+  "catalogVersion": 27,
   "contracts": [
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Bounded same-tenant customer directory and Customer 360 reads are exposed through opaque customer routes, surface-scoped read context, a relationship briefing, a recorded commercial timeline, advisory immutable-version comparison, and displayed-record commercial measures.",
+      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The default-off Ambient presentation reuses the same caller-owned evidence and authority.",
       "backendPaths": [
         "firestore.indexes.json",
         "firestore.rules",
         "src/lib/customerCommercialMeasures.js",
         "src/lib/customerCommercialTimeline.js",
+        "src/lib/ambientClients.js",
+        "src/lib/customerRebookingRadar.js",
         "src/lib/customerWorkspace.js",
         "src/lib/quoteStore.js",
         "src/lib/quoteVersionComparison.js"
@@ -28,6 +30,7 @@
         "src/components/CustomerCommercialTimeline.jsx",
         "src/components/CustomerDirectoryView.jsx",
         "src/components/CustomerWorkspaceView.jsx",
+        "src/components/AmbientClientsView.jsx",
         "src/components/QuoteVersionComparison.jsx",
         "src/components/StaffEvidenceRail.jsx"
       ],
@@ -38,15 +41,23 @@
         },
         {
           "path": "src/components/CustomerWorkspaceView.jsx",
-          "locator": "Internal Customer 360"
+          "locator": "<p className=\"eyebrow\">Client overview</p>"
+        },
+        {
+          "path": "src/components/AmbientClientsView.jsx",
+          "locator": "People you’re working with"
+        },
+        {
+          "path": "src/components/AmbientClientsView.jsx",
+          "locator": "Suggested next step"
         },
         {
           "path": "src/components/CustomerCommercialMeasures.jsx",
-          "locator": "id=\"customer-commercial-measures-title\">Commercial measures"
+          "locator": "id=\"customer-commercial-measures-title\">Quotes, bookings, and payments"
         },
         {
           "path": "src/components/CustomerCommercialTimeline.jsx",
-          "locator": "Commercial timeline"
+          "locator": "Quotes, decisions, and payments"
         },
         {
           "path": "src/components/QuoteVersionComparison.jsx",
@@ -55,17 +66,33 @@
       ],
       "testPaths": [
         "e2e/customer-centered-workspace.spec.js",
+        "e2e/ambient-clients.spec.js",
+        "e2e/workspace-no-unintended-overlap.spec.js",
+        "src/components/__tests__/ambientClientsView.test.jsx",
         "src/components/__tests__/customerCommercialMeasuresPresentation.test.jsx",
         "src/components/__tests__/customerCommercialTimelinePresentation.test.jsx",
         "src/components/__tests__/customerWorkspaceStates.test.jsx",
         "src/components/__tests__/quoteVersionComparisonPresentation.test.jsx",
         "src/lib/__tests__/customerCommercialTimeline.test.js",
         "src/lib/__tests__/customerCommercialMeasures.test.js",
+        "src/lib/__tests__/ambientClients.test.js",
         "src/lib/__tests__/customerWorkspace.test.js",
         "src/lib/__tests__/quoteVersionComparison.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
+        {
+          "path": "src/components/__tests__/ambientClientsView.test.jsx",
+          "locator": "makes relationship identity, state, risk, and the next action understandable at the top layer"
+        },
+        {
+          "path": "src/components/__tests__/ambientClientsView.test.jsx",
+          "locator": "recovers from a mismatched exact arrival without substituting the loaded client"
+        },
+        {
+          "path": "src/lib/__tests__/ambientClients.test.js",
+          "locator": "does not turn a latest-from-customer summary into unread or reply-needed work"
+        },
         {
           "path": "e2e/customer-centered-workspace.spec.js",
           "locator": "Customer 360 keeps customer identity opaque and staff preview separate from portal evidence"
@@ -110,7 +137,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The directory and Customer 360 routes, surface-scoped read context, bounded briefing and timeline, immutable-version comparison, displayed-record commercial measures, safe proposal preview, responsive containment, keyboard tabs, and recovery controls were reviewed together.",
+      "surfaceReviewNote": "The legacy directory and Customer 360 routes plus the default-off Ambient Clients directory and relationship top layer were reviewed together. Exact client arrival, one ranked next step, bounded source and freshness language, immutable-version comparison, separately labeled quote and payment totals, safe proposal preview, responsive containment, keyboard access, and recovery controls preserve the same role and evidence boundaries.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -160,7 +187,7 @@
     },
     {
       "id": "bounded-commercial-search",
-      "reviewRevision": 1,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -177,7 +204,8 @@
       "backendExports": [],
       "frontendPaths": [
         "src/App.jsx",
-        "src/components/CommercialSearchPalette.jsx"
+        "src/components/CommercialSearchPalette.jsx",
+        "src/components/WorkspaceShell.jsx"
       ],
       "entryPointLocators": [
         {
@@ -185,12 +213,13 @@
           "locator": "Find a customer or quote"
         },
         {
-          "path": "src/App.jsx",
-          "locator": "title=\"Search customers and quotes (Ctrl or Command K)\""
+          "path": "src/components/WorkspaceShell.jsx",
+          "locator": "data-ambient-utility=\"search\""
         }
       ],
       "testPaths": [
         "src/components/__tests__/commercialSearchPalette.test.jsx",
+        "src/components/__tests__/workspaceShell.test.jsx",
         "src/lib/__tests__/commercialSearch.test.js"
       ],
       "testLocators": [
@@ -205,6 +234,10 @@
         {
           "path": "src/components/__tests__/commercialSearchPalette.test.jsx",
           "locator": "uses the shared focus trap and explicit return-focus contract"
+        },
+        {
+          "path": "src/components/__tests__/workspaceShell.test.jsx",
+          "locator": "renders workspace orientation, identity, crew, theme, ambient class, and active Home state"
         }
       ],
       "documentationPaths": [
@@ -214,11 +247,11 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Bounded universal commercial search and keyboard command palette"
+          "locator": "Bounded universal Workspace search and keyboard command palette"
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "## Commercial Search"
+          "locator": "## Workspace Search"
         }
       ],
       "surfaceReview": "changed",
@@ -383,7 +416,7 @@
     },
     {
       "id": "quote-conversation-receipts",
-      "reviewRevision": 3,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -407,11 +440,12 @@
         "src/components/MessagingStation.jsx",
         "src/components/QuoteConversationPanel.jsx",
         "src/components/QuoteHistoryModal.jsx",
+        "src/components/WorkspaceShell.jsx",
         "src/lib/workspaceRoutes.js"
       ],
       "entryPointLocators": [
         {
-          "path": "src/App.jsx",
+          "path": "src/components/WorkspaceShell.jsx",
           "locator": "data-capability-entry=\"event-messaging-station\""
         },
         {
@@ -423,6 +457,7 @@
         "e2e/customer-centered-workspace.spec.js",
         "e2e/firebase-auth-rules.smoke.spec.js",
         "src/components/__tests__/quoteConversationPanel.test.jsx",
+        "src/components/__tests__/workspaceShell.test.jsx",
         "src/lib/__tests__/customerWorkspace.test.js",
         "src/lib/__tests__/portalConversation.server.test.js"
       ],
@@ -442,6 +477,10 @@
         {
           "path": "src/lib/__tests__/portalConversation.server.test.js",
           "locator": "new sends atomically project a body-free signal to the exact current portal after retry reconciliation"
+        },
+        {
+          "path": "src/components/__tests__/workspaceShell.test.jsx",
+          "locator": "renders workspace orientation, identity, crew, theme, ambient class, and active Home state"
         }
       ],
       "documentationPaths": [
@@ -509,7 +548,7 @@
     },
     {
       "id": "event-messaging-station-read",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -535,11 +574,12 @@
         "src/components/MessagingStation.jsx",
         "src/components/QuoteConversationPanel.jsx",
         "src/components/QuoteHistoryModal.jsx",
+        "src/components/WorkspaceShell.jsx",
         "src/lib/workspaceRoutes.js"
       ],
       "entryPointLocators": [
         {
-          "path": "src/App.jsx",
+          "path": "src/components/WorkspaceShell.jsx",
           "locator": "data-capability-entry=\"event-messaging-station\""
         },
         {
@@ -552,6 +592,7 @@
         "e2e/firebase-auth-rules.smoke.spec.js",
         "src/components/__tests__/messagingStation.test.jsx",
         "src/components/__tests__/quoteConversationPanelSignal.test.jsx",
+        "src/components/__tests__/workspaceShell.test.jsx",
         "src/hooks/__tests__/useConversationInbox.test.js",
         "src/lib/__tests__/conversationInboxSubscription.test.js",
         "src/lib/__tests__/conversationInbox.test.js",
@@ -602,6 +643,10 @@
         {
           "path": "src/lib/__tests__/portalConversation.server.test.js",
           "locator": "callables revalidate activation, transact messages, and never trust client actor/time/message ids"
+        },
+        {
+          "path": "src/components/__tests__/workspaceShell.test.jsx",
+          "locator": "renders workspace orientation, identity, crew, theme, ambient class, and active Home state"
         }
       ],
       "documentationPaths": [
@@ -785,7 +830,7 @@
     },
     {
       "id": "stable-customer-identity-projection",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -815,7 +860,7 @@
       "entryPointLocators": [
         {
           "path": "src/components/CustomerWorkspaceView.jsx",
-          "locator": "Internal Customer 360"
+          "locator": "<p className=\"eyebrow\">Client overview</p>"
         }
       ],
       "testPaths": [
@@ -856,14 +901,14 @@
     },
     {
       "id": "private-customer-authority",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "security_private",
       "audiences": [
         "internal_security"
       ],
-      "summary": "Canonical quote authority and normalized-email ownership claims remain private while exact-token portal projection reads continue independently. Revision 2: the canonical portal snapshot additionally projects decidableOptions — a bounded, name-and-price-only list of staff-marked (portalDecidable) active catalog options the quote does not already include, built by the exported pure buildPortalDecidableOptions and empty (fail-closed) at every call site until a later slice threads the org catalog in; no call-site behavior changes, no new Firebase Function export, and no portal UI reads the field yet. Revision 3: quoteMeta additionally carries the tenant-authored portalTermsText (bounded, verbatim) into the canonical snapshot's projected quoteMeta subset, so the portal can render a per-tenant terms block; absent text projects empty and the portal renders nothing.",
+      "summary": "Canonical quote authority and normalized-email ownership claims remain private while exact-token portal projection reads continue independently. Revision 2 added decidableOptions, a bounded name-and-price-only projection of active staff-marked options not already in the quote. Revision 3 added bounded tenant-authored portalTermsText to the customer-safe quoteMeta subset. Revision 4 records that the default-off customer decision room now reads those two existing projection fields, while the browser-local compatibility path mirrors the same bounded shape; neither path gains canonical quote access, catalog identifiers, cost data, direct quote mutation, or a new callable.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -1141,18 +1186,25 @@
     },
     {
       "id": "bounded-commercial-reporting",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "The routed Reporting workspace derives bounded displayed-record commercial measures with explicit denominators, source and freshness evidence, retained stale recovery, and Firebase-backed provider-confirmed deposit qualification.",
+      "summary": "The routed Reporting workspace derives bounded displayed-record commercial measures with explicit denominators, source and freshness evidence, retained stale recovery, and Firebase-backed provider-confirmed deposit qualification. Its product-event summary also presents privacy-bounded client-observed Ambient primary-action assessments, exact server-authoritative Firebase priced-draft save receipts, and same-session exact-category issue-resolution pairs without turning those observations into server timing telemetry.",
       "backendPaths": [
+        "functions/index.js",
+        "functions/productAnalytics.js",
+        "src/lib/productAnalytics.js",
         "src/lib/quoteStore.js"
       ],
       "backendExports": [],
+      "affectedBackendExports": [
+        "functions/index.js#recordProductAnalyticsEvents",
+        "functions/index.js#getProductAnalyticsSummary"
+      ],
       "frontendPaths": [
         "src/components/ReportingDashboardModal.jsx"
       ],
@@ -1164,7 +1216,9 @@
       ],
       "testPaths": [
         "src/components/__tests__/operationalWorkspaceViews.test.jsx",
-        "src/components/__tests__/reportingDashboardEvidence.test.jsx"
+        "src/components/__tests__/reportingDashboardEvidence.test.jsx",
+        "src/lib/__tests__/productAnalytics.client.test.js",
+        "src/lib/__tests__/productAnalytics.server.test.js"
       ],
       "testLocators": [
         {
@@ -1178,6 +1232,26 @@
         {
           "path": "src/components/__tests__/reportingDashboardEvidence.test.jsx",
           "locator": "excludes missing money from totals instead of coercing it to zero"
+        },
+        {
+          "path": "src/components/__tests__/operationalWorkspaceViews.test.jsx",
+          "locator": "renders dead-click, priced-draft, and exact-category resolution samples with proof boundaries"
+        },
+        {
+          "path": "src/lib/__tests__/productAnalytics.client.test.js",
+          "locator": "records first intent once and only accepts a server-authoritatively priced Firebase receipt"
+        },
+        {
+          "path": "src/lib/__tests__/productAnalytics.client.test.js",
+          "locator": "pairs issue timing by the exact closed category and can discard route-local observations"
+        },
+        {
+          "path": "src/lib/__tests__/productAnalytics.server.test.js",
+          "locator": "rejects fabricated authority, unbounded timing, free-form issue categories, and non-primary assessments"
+        },
+        {
+          "path": "src/lib/__tests__/productAnalytics.server.test.js",
+          "locator": "summarizes paired client-observed intent, dead-click, and exact-category resolution metrics"
         }
       ],
       "documentationPaths": [
@@ -1195,7 +1269,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The routed entry point, displayed-record scope, source and freshness rail, bounded denominators, missing-money handling, provider-payment evidence gate, stale retention, responsive presentation, and recovery control were reviewed together.",
+      "surfaceReviewNote": "The routed entry point, displayed-record scope, source and freshness rail, bounded denominators, missing-money handling, provider-payment evidence gate, stale retention, responsive presentation, and recovery control were reviewed together. Revision 2 adds three privacy-bounded client-observed Ambient measures to the existing product-event read: exact 250ms primary-action assessments; first intent paired only with a server-authoritative Firebase saved priced-draft receipt; and issue surfaced-to-resolved timing paired only by an exact bounded category in the same staff session. Raw quote/customer identifiers, message/proposal content, and free text remain rejected, local fallback infers no rate or duration, and the display labels the data as client observation rather than server timing telemetry.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -1241,11 +1315,11 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can inspect bounded quote-state measures and a separately evidence-qualified paid-deposit total without interpreting accepted or booked quote value as collected revenue, trusting browser-local payment claims, coercing missing values to zero, or mistaking a truncated snapshot for tenant-wide accounting."
+      "safeOutcome": "Staff can inspect bounded quote-state measures, a separately evidence-qualified paid-deposit total, and privacy-bounded Ambient interaction observations without interpreting accepted or booked quote value as collected revenue, trusting browser-local payment claims, coercing missing values to zero, mistaking a truncated snapshot for tenant-wide accounting, or treating client-observed durations as server timing or proof that a user understood the experience."
     },
     {
       "id": "workflow-timing-and-revenue-autopilot-preview",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -1272,7 +1346,7 @@
         },
         {
           "path": "src/components/RevenueAutopilotPreviewPanel.jsx",
-          "locator": "id=\"revenue-autopilot-preview-title\">Revenue autopilot"
+          "locator": "id=\"revenue-autopilot-preview-title\">Follow-up automation"
         },
         {
           "path": "src/components/AdminCatalogModal.jsx",
@@ -1307,7 +1381,7 @@
         },
         {
           "path": "src/lib/__tests__/catalogBusinessTimeZone.test.js",
-          "locator": "binds the setting to discoverable admin configuration plus revenue and rebook surfaces"
+          "locator": "binds the setting to discoverable admin configuration and every declared time-aware surface"
         },
         {
           "path": "src/lib/__tests__/revenueAutopilotPreview.test.js",
@@ -1391,14 +1465,14 @@
     },
     {
       "id": "exact-version-rebook-and-delivery-gate",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Home and Workflow surface bounded tenant-calendar anniversary cues that hand staff to Customer 360, where one deterministic draft can be requested from an exact booked and accepted immutable version, stable customer identity is preserved, current-catalog repricing is authoritative, and customer delivery remains blocked until staff saves a reviewed current-or-future event date.",
+      "summary": "Home and Workflow surface bounded tenant-calendar anniversary cues that hand staff to the exact client overview, where one deterministic draft can be requested from an exact booked and accepted immutable version, stable customer identity is preserved, current-catalog repricing is authoritative, and customer delivery remains blocked until staff saves a reviewed current-or-future event date.",
       "backendPaths": [
         "functions/index.js",
         "functions/quoteCreation.js",
@@ -1520,7 +1594,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The bounded Home and Workflow anniversary cues, tenant-calendar and truncation evidence, stable Customer 360 handoff, Customer 360 anniversary entry, exact immutable source labels, deterministic submission identity, uncertainty and reconciliation copy, new-draft handoff, staff review banner, and delivery gate were reviewed together.",
+      "surfaceReviewNote": "The bounded Home and Workflow anniversary cues, tenant-calendar and truncation evidence, stable client-overview handoff, anniversary entry, exact immutable source labels, deterministic submission identity, uncertainty and reconciliation copy, new-draft handoff, staff review banner, and delivery gate were reviewed together. Revision 3 changes user-facing destination language only; opaque identity, callable authority, and evidence boundaries are unchanged.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -1566,18 +1640,18 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can discover a bounded anniversary cue, open the stable Customer 360 record, create or reconcile exactly one review-required rebook draft, and open it for editing, while the cue itself verifies no accepted source and no message, lead, acceptance, booking, payment, or revenue outcome is inferred; outbound delivery remains blocked until trusted review evidence is saved."
+      "safeOutcome": "Staff can discover a bounded anniversary cue, open the stable client overview, create or reconcile exactly one review-required rebook draft, and open it for editing, while the cue itself verifies no accepted source and no message, lead, acceptance, booking, payment, or revenue outcome is inferred; outbound delivery remains blocked until trusted review evidence is saved."
     },
     {
       "id": "authoritative-post-event-closeout",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Governed booking creates one deterministic private post-event closeout bound to the exact accepted immutable proposal version and stable customer; Customer 360 and Workflow expose its bounded state and an exact callable-owned internal review/reopen receipt flow.",
+      "summary": "Governed booking creates one deterministic private post-event closeout bound to the exact accepted immutable proposal version and stable customer; the client overview and Workflow expose its bounded state and an exact callable-owned internal review/reopen receipt flow.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -1618,7 +1692,7 @@
         },
         {
           "path": "src/components/SalesWorkflowModal.jsx",
-          "locator": "Open Customer 360\" : \"Open quote\"} for post-event closeout"
+          "locator": "Open client overview\" : \"Open quote\"} for post-event closeout"
         }
       ],
       "testPaths": [
@@ -1672,7 +1746,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Governed booking, exact source binding, tenant-calendar configuration blocking, private receipt authority, Customer 360 and Workflow entry points, responsive review controls, and all mutation/reconciliation states were reviewed together.",
+      "surfaceReviewNote": "Governed booking, exact source binding, tenant-calendar configuration blocking, private receipt authority, client-overview and Workflow entry points, responsive review controls, and all mutation/reconciliation states were reviewed together. Revision 3 changes the visible destination label only; callable authority and receipts are unchanged.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -1937,7 +2011,7 @@
     },
     {
       "id": "commercial-change-authority",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -1945,7 +2019,7 @@
         "staff",
         "administrators"
       ],
-      "summary": "Receipt-bound commercial change simulation, approval handoff, authorization, atomic application, and exact transport-ambiguous outcome reconciliation are exposed inside the trusted quote-edit path; a proven absence is transactionally fenced against late commit.",
+      "summary": "Receipt-bound commercial change simulation, approval handoff, authorization, atomic application, and exact transport-ambiguous outcome reconciliation remain exposed inside the trusted quote-edit path. Living Opportunity adds a role-gated advisory guest-count simulation: local mode produces a deterministic ImpactPreview without a receipt, while the connected path may return an immutable simulation receipt; neither path saves, authorizes, or applies the scenario.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -1972,16 +2046,24 @@
       ],
       "frontendPaths": [
         "src/App.jsx",
-        "src/components/CommercialChangeImpactPanel.jsx"
+        "src/components/CommercialChangeImpactPanel.jsx",
+        "src/components/AmbientLivingOpportunityRoute.jsx",
+        "src/components/AmbientLivingOpportunity.jsx"
       ],
       "entryPointLocators": [
         {
           "path": "src/components/CommercialChangeImpactPanel.jsx",
           "locator": "data-capability-id=\"cwf-15c-commercial-change-authority\""
+        },
+        {
+          "path": "src/components/AmbientLivingOpportunity.jsx",
+          "locator": "data-capability-entry=\"aiui-10-pricing-impact-preview\""
         }
       ],
       "testPaths": [
         "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
+        "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
+        "src/components/__tests__/ambientPricingRouteHost.test.jsx",
         "src/lib/__tests__/commercialChangeAuthority.server.test.js",
         "src/lib/__tests__/commercialChangeAuthorityClient.test.js",
         "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js",
@@ -2004,6 +2086,34 @@
         {
           "path": "src/lib/__tests__/commercialChangeAuthorityClient.test.js",
           "locator": "reconciles the exact request as committed and validates its apply projection"
+        },
+        {
+          "path": "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
+          "locator": "acknowledges a counterfactual immediately, then renders a bounded client preview"
+        },
+        {
+          "path": "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
+          "locator": "renders the exact immutable receipt returned by a server simulation"
+        },
+        {
+          "path": "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
+          "locator": "reconciles a transport-uncertain simulation with the exact retained request identity"
+        },
+        {
+          "path": "src/components/__tests__/ambientPricingRouteHost.test.jsx",
+          "locator": "attaches staff-only saved margin evidence and a deterministic local preview host"
+        },
+        {
+          "path": "src/components/__tests__/ambientPricingRouteHost.test.jsx",
+          "locator": "fails closed when role context is omitted or non-staff"
+        },
+        {
+          "path": "src/components/__tests__/ambientPricingRouteHost.test.jsx",
+          "locator": "does not enable a scenario when the exact saved package is absent from the loaded catalog"
+        },
+        {
+          "path": "src/components/__tests__/ambientPricingRouteHost.test.jsx",
+          "locator": "injects the existing governed Commercial Change client only for the exact Firebase source"
         }
       ],
       "documentationPaths": [
@@ -2021,7 +2131,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The quote-edit simulation, staff approval handoff, administrator authorization, exact receipt application, request-identity lock, transport uncertainty, exact committed-receipt reconciliation, fenced not-committed recovery, changed-source handling, definitive rejection, and recovery controls were reviewed together.",
+      "surfaceReviewNote": "The existing quote-edit simulation, staff approval handoff, administrator authorization, exact receipt application, request-identity lock, transport uncertainty, exact committed-receipt reconciliation, fenced not-committed recovery, changed-source handling, definitive rejection, and recovery controls were reviewed together. The Living Opportunity host was additionally reviewed as an advisory, staff-role and ordinary-edit-gated guest-count counterfactual with visibly distinct deterministic local calculation and connected immutable-receipt sources.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -2064,10 +2174,40 @@
           "path": "src/components/__tests__/commercialChangeImpactPanel.test.jsx",
           "locator": "renders every literal canonical Commercial Change Authority mutation marker",
           "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
+          "locator": "opens a populated authoritative inspector with commercial, margin, dependency, and boundary evidence",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
+          "locator": "acknowledges a counterfactual immediately, then renders a bounded client preview",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
+          "locator": "reconciles a transport-uncertain simulation with the exact retained request identity",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
+          "locator": "renders the exact immutable receipt returned by a server simulation",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/ambientPricingIntelligentObject.test.jsx",
+          "locator": "shows contextual recovery after a failed counterfactual without changing the scenario or saved quote",
+          "assertionLocator": "data-capability-state=\"error\""
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can simulate and route an exact commercial change, while only an authorized administrator can issue the bound authorization receipt required for atomic application. An uncertain apply is never resubmitted: exact reconciliation proves the immutable commit or atomically fences the request as not committed before a fresh simulation."
+      "safeOutcome": "Staff can still use the trusted edit path to simulate and route an exact commercial change, while only an authorized administrator can issue the bound authorization receipt required for atomic application. In Living Opportunity, eligible staff may compare a staged guest-count scenario with the saved quote through either a local deterministic ImpactPreview or a connected immutable simulation receipt; this advisory surface cannot save, authorize, or apply the change. Any uncertain connected request retains the exact tenant, quote, base revision, and request identity for reconciliation before another simulation; the existing apply path separately proves immutable commit or atomically fences a proven absence before recovery."
     },
     {
       "id": "commercial-dependency-state-and-reconciliation",
@@ -3186,17 +3326,19 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 4,
+      "reviewRevision": 8,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, plus a strictly default-false per-option portalDecidable mark on add-ons and rentals (the decision-room pilot's staff opt-in for which options the customer portal may offer as staged requests), all using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable.",
+      "summary": "Catalog Admin lets staff record optional tenant item and labor costs and a target margin policy alongside existing prices, plus a strictly default-false per-option portalDecidable mark on add-ons and rentals (the decision-room pilot's staff opt-in for which options the customer portal may offer as staged requests), all using the catalog's existing save/reconciliation machinery, so the fail-closed margin strip and its below-target advisory card can compute instead of staying unavailable. Catalog-setting and managed-menu draft domains cannot advance together. Each of the seven managed-menu operations requires the exact loaded expectedCatalogRevision, which is compared inside the Firebase transaction or local commit before any record write; the development fallback compares the active organization's catalog revision and never reads the retired unscoped cache into another organization.",
       "backendPaths": [
         "src/data/mockCatalog.js",
-        "src/hooks/useCatalogData.js"
+        "src/data/starterCatalogPacks.js",
+        "src/hooks/useCatalogData.js",
+        "src/lib/menuService.js"
       ],
       "backendExports": [],
       "frontendPaths": [
@@ -3220,18 +3362,46 @@
       ],
       "testPaths": [
         "src/data/__tests__/mockCatalog.costFields.test.js",
+        "src/data/__tests__/starterCatalogPacks.test.js",
+        "src/hooks/__tests__/useCatalogData.observation.test.jsx",
         "src/hooks/__tests__/useCatalogData.savePlan.test.js",
+        "src/lib/__tests__/menuService.test.js",
+        "src/lib/__tests__/menuService.writeFallback.test.js",
         "src/components/__tests__/marginPresentation.test.js",
         "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx"
       ],
       "testLocators": [
         {
+          "path": "src/data/__tests__/starterCatalogPacks.test.js",
+          "locator": "stay synchronized with the latest server-owned manifests"
+        },
+        {
           "path": "src/data/__tests__/mockCatalog.costFields.test.js",
           "locator": "a stored Minor-cents null survives as null, not 0 — the bug fromMinorUnits alone would reintroduce"
         },
         {
+          "path": "src/hooks/__tests__/useCatalogData.observation.test.jsx",
+          "locator": "a foreground catalog reload makes a previously observed snapshot non-fresh"
+        },
+        {
           "path": "src/hooks/__tests__/useCatalogData.savePlan.test.js",
           "locator": "writes a recorded cost as Minor-cents and an unset cost as null, never coerced to $0"
+        },
+        {
+          "path": "src/hooks/__tests__/useCatalogData.savePlan.test.js",
+          "locator": "never reads another organization's scoped cache"
+        },
+        {
+          "path": "src/lib/__tests__/menuService.test.js",
+          "locator": "keeps local catalog revision updates inside the active organization key"
+        },
+        {
+          "path": "src/lib/__tests__/menuService.test.js",
+          "locator": "rejects a stale local menu mutation without changing the stored revision"
+        },
+        {
+          "path": "src/lib/__tests__/menuService.writeFallback.test.js",
+          "locator": "rejects a stale firebase menu mutation before any record write"
         },
         {
           "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
@@ -3277,7 +3447,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block.",
+      "surfaceReviewNote": "The cost-entry fields, their null-preservation through normalize/save/reload, the below-target advisory card, and Catalog Admin's existing save outcomes were reviewed together and given their first literal data-capability-state markers. Revision 2 fixed the refreshed/refreshRequired key mismatch with no surface change. Revision 3 adds the decision-room pilot's portalDecidable mark: a strictly default-false boolean on add-ons and rentals through normalizeCatalog, toStorageCatalog, and both write shapes (explicit boolean true only — truthy junk normalizes to false, so no option is ever customer-offered without a deliberate staff mark), surfaced as a flag-gated Portal offer checkbox in Catalog Admin's add-on and rental rows. Same save path, same seven covered save-outcome states, no new export; covered by new normalize round-trip and write-shape tests in the listed test paths. Revision 4 adds the tenant-authored portalTermsText setting (bounded text, default empty) through the same settings normalize/save machinery, surfaced as a flag-gated Portal terms textarea in Numeric Settings; empty means the customer portal renders no terms block. Revision 5 adds only an in-memory observation timestamp to successful existing catalog reads and structured mutation receipts, preserves the prior timestamp while an ordinary reload is pending, and clears it on unobserved fail-closed states. Revision 6 scopes development fallback catalog and managed-menu revisions to the active organization. Revision 7 prevents catalog-setting and managed-menu dirty domains from advancing together and makes all seven managed-menu operations validate the exact loaded revision inside the Firebase transaction or local commit before record writes; local comparison uses the active organization's catalog revision. Revision 8 keeps the full starter-pack manifests server-owned and ships only frozen chooser summaries to the browser, with an exact synchronization test against every latest manifest. These changes add no new read, role, pricing, provider, mutation, or persistence authority.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -3323,7 +3493,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff see recorded costs and a below-target margin advisory only when real tenant-recorded evidence supports them; costs never appear to customers, and every save outcome (success, conflict, unconfirmed revision, validation error, or reload-required recovery) is now visibly and distinctly marked instead of collapsing into one generic status line."
+      "safeOutcome": "Staff see recorded costs and a below-target margin advisory only when real tenant-recorded evidence supports them; costs never appear to customers. Catalog-setting and managed-menu drafts cannot overwrite each other, stale Firebase or organization-scoped local revisions fail before any managed-menu record write, and every save outcome remains visibly distinct instead of collapsing into one generic status line."
     },
     {
       "id": "model-assisted-intent-parse",
@@ -3557,6 +3727,659 @@
           "justification": "Every read calls getQuoteHistory fresh and nothing is cached client- or server-side, so no stale variant of the surface can exist to present or test."
         }
       }
+    },
+    {
+      "id": "ambient-object-and-pilot-policy-foundations",
+      "reviewRevision": 11,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "headless_operational",
+      "audiences": [
+        "staff",
+        "customers"
+      ],
+      "summary": "Pure deterministic Ambient NOW, Opportunities, Library, exact-arrival, selection, Money, Proposal, Conversation, global Pilot, voice-preview, and customer decision-room contracts prepare source-only interaction and intelligent-object presentation without adding Firebase, provider, communication, pricing, role, or mutation authority. The default-off Opportunities stream projects the caller-owned, already tenant-scoped bounded quote read into identity and four separate proposal, commercial, customer, and operational momentum domains; only proposal completeness may use a percentage. It keeps quote lifecycle, booking confirmation, deposit, and final balance independent, chooses one recommended next step, preserves local-fallback truth and the legacy controls under Quote administration, and hands the exact opaque opportunity plus its arrival context to the canonical Living Opportunity. The administrator-only Library projects the existing organization-scoped catalog snapshot into Catalog and first-class Event Templates, presents source, observation, Catalog version, pricing-review, and incomplete-menu boundaries in calm task-centered language, shows contextual recovery for unavailable exact arrivals, retains dirty drafts across ordinary workspace navigation, keeps catalog-setting and managed-menu draft domains from advancing together, prevents fresher evidence from silently replacing work, and opens exact objects only through the existing guarded editor and save authority. Its development fallback cache and revision comparison are organization-scoped and remain explicitly non-authoritative. A portal-token provider remount occurs only after the App-level draft guard accepts the transition; direct initial portal precedence remains intact and each distinct token receives a distinct public scope. The default-off Ambient NOW briefing narrows the existing bounded staff snapshot to at most three already-ranked Workflow priorities, withholds caught-up language whenever reads or bounds are incomplete, and shows only timestamp-backed internal workflow receipts as quiet progress. The default-off staff shell's global Pilot trigger resolves only the exact context already in view: it relays a matching Living Opportunity into its populated evidence explanation, focuses the existing deterministic draft command field without executing it when that independent gate is enabled, or presents a nonempty choose-an-opportunity recovery instead of generic chat. In Ambient mode, supported browser speech uses pointer or keyboard hold-to-capture, immediate contextual state, release-to-preview, bounded transcript handling, and exact recovery; the transcript is not persisted or staged, explicit Apply remains required, and the flag-off Pilot retains its existing click-to-toggle behavior. Exact arrivals carry only allowlisted semantics and opaque identifiers and remain pending until a supported destination proves exact focus without substitution. Schedule supports only exact accepted/booked events and complete-current-conflict evidence while refusing to conflate its legacy staff-lead field with authoritative operational staffing. Reporting supports only exact opportunity, bounded pipeline, and Ambient interaction-health targets and keeps its targeted opportunity read outside aggregate denominators. Selection scenarios remain local, reversible, unpriced, and unsaved; Money preserves five payment evidence domains; Proposal separates saved revision, authoritative pricing, customer projection, portal issuance, and provider acceptance; Conversation keeps sent, provider-delivered, portal-viewed, replied, and inferred engagement independent; higher-authority Pilot classes remain blocked. The separately gated customer decision room composes the existing exact-token projection into calm Event, Menu and service, Pricing, Planning assumptions, Terms, Possible additions, Response, and Questions sections. Staff-marked additions stage only reversible ordinary change-request lines, and contextual questions reuse one existing conversation composer with explicit staged, preserved-draft, pending-attempt, read-only, and unavailable acknowledgements.",
+      "backendPaths": [
+        "src/lib/ambientMoneyObject.js",
+        "src/lib/ambientProposalObject.js",
+        "src/lib/ambientConversationObject.js",
+        "src/lib/ambientSelectionObjects.js",
+        "src/lib/ambientGlobalPilot.js",
+        "src/lib/ambientGlobalPilotTarget.js",
+        "src/lib/ambientNowBriefing.js",
+        "src/lib/ambientOpportunityStream.js",
+        "src/lib/ambientLibrary.js",
+        "src/lib/customerDecisionRoom.js",
+        "src/lib/quoteStore.js",
+        "src/hooks/useCatalogData.js",
+        "src/lib/menuService.js",
+        "src/lib/pilotBoundedScenarios.js",
+        "src/lib/pilotScenarioDraftReview.js",
+        "src/lib/pilotCommandPolicy.js",
+        "src/lib/pilotDeterministicCommands.js",
+        "src/hooks/usePilotVoiceCapture.js",
+        "src/lib/quoteWorkflow.js",
+        "src/lib/workspaceArrivalContract.js",
+        "src/lib/workspaceScope.js"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "frontendPaths": [
+        "src/App.jsx",
+        "src/components/WorkspaceRoute.jsx",
+        "src/components/WorkspaceShell.jsx",
+        "src/components/QuoteHistoryModal.jsx",
+        "src/components/CustomerPortalView.jsx",
+        "src/components/AmbientGlobalPilotSurface.jsx",
+        "src/components/AmbientNowView.jsx",
+        "src/components/AmbientOpportunitiesStream.jsx",
+        "src/components/AmbientLibraryRoute.jsx",
+        "src/components/EventTemplatesEditor.jsx",
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/StaffEvidenceRail.jsx",
+        "src/components/AmbientLivingOpportunity.jsx",
+        "src/components/AmbientMoneyContext.jsx",
+        "src/components/AmbientProposalContext.jsx",
+        "src/components/AmbientConversationContext.jsx",
+        "src/components/AmbientPilotScenarioReview.jsx",
+        "src/components/PilotCommandBar.jsx",
+        "src/components/WorkspaceSurfaceBoundary.jsx",
+        "src/components/MessagingStation.jsx",
+        "src/components/QuoteConversationPanel.jsx",
+        "src/components/SalesWorkflowModal.jsx",
+        "src/components/EventScheduleModal.jsx",
+        "src/components/ReportingDashboardModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/WorkspaceShell.jsx",
+          "locator": "data-ambient-action-id=\"open-global-pilot-context\""
+        },
+        {
+          "path": "src/components/AmbientGlobalPilotSurface.jsx",
+          "locator": "data-ambient-global-pilot-surface=\"recovery\""
+        },
+        {
+          "path": "src/components/AmbientNowView.jsx",
+          "locator": "data-surface-contract-id={AMBIENT_NOW_SURFACE.id}"
+        },
+        {
+          "path": "src/components/AmbientOpportunitiesStream.jsx",
+          "locator": "data-surface-contract-id={stream.surfaceContract.id}"
+        },
+        {
+          "path": "src/components/AmbientLibraryRoute.jsx",
+          "locator": "data-surface-contract-id={model.surfaceContract.id}"
+        },
+        {
+          "path": "src/components/EventTemplatesEditor.jsx",
+          "locator": "data-ambient-surface=\"event-templates-editor\""
+        },
+        {
+          "path": "src/components/QuoteHistoryModal.jsx",
+          "locator": "<QuoteAdministrationBoundary ambient={AMBIENT_UI_ENABLED}>"
+        },
+        {
+          "path": "src/components/CustomerPortalView.jsx",
+          "locator": "portal-decision-room-shell"
+        },
+        {
+          "path": "src/components/AmbientLivingOpportunity.jsx",
+          "locator": "data-quote-id={model.identity.quoteId}"
+        },
+        {
+          "path": "src/components/AmbientLivingOpportunity.jsx",
+          "locator": "Add-ons, rentals, bar, and services"
+        },
+        {
+          "path": "src/components/AmbientMoneyContext.jsx",
+          "locator": "data-ambient-intelligent-object=\"money\""
+        },
+        {
+          "path": "src/components/AmbientProposalContext.jsx",
+          "locator": "data-ambient-intelligent-object=\"proposal\""
+        },
+        {
+          "path": "src/components/AmbientConversationContext.jsx",
+          "locator": "data-ambient-intelligent-object=\"conversation\""
+        },
+        {
+          "path": "src/components/PilotCommandBar.jsx",
+          "locator": "data-pilot-query-kind={query.kind}"
+        },
+        {
+          "path": "src/components/PilotCommandBar.jsx",
+          "locator": "data-pilot-voice-mode={holdVoiceEnabled ? \"hold\" : \"toggle\"}"
+        },
+        {
+          "path": "src/components/AmbientPilotScenarioReview.jsx",
+          "locator": "data-ambient-pilot-scenario-review"
+        },
+        {
+          "path": "src/components/WorkspaceSurfaceBoundary.jsx",
+          "locator": "data-arrival-state={presentation.status}"
+        },
+        {
+          "path": "src/components/EventScheduleModal.jsx",
+          "locator": "data-schedule-event-id={item.id}"
+        },
+        {
+          "path": "src/components/ReportingDashboardModal.jsx",
+          "locator": "data-report-signal"
+        }
+      ],
+      "testPaths": [
+        "e2e/ambient-opportunities-stream.spec.js",
+        "e2e/ambient-library.spec.js",
+        "e2e/ambient-intelligence-object-verification.spec.js",
+        "e2e/customer-decision-room.spec.js",
+        "e2e/pilot-voice-capture.spec.js",
+        "e2e/workspace-no-unintended-overlap.spec.js",
+        "src/components/__tests__/ambientGlobalPilotSurface.test.jsx",
+        "src/components/__tests__/ambientNowView.test.jsx",
+        "src/components/__tests__/ambientOpportunitiesStream.test.jsx",
+        "src/components/__tests__/ambientLibraryRoute.test.jsx",
+        "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+        "src/components/__tests__/eventTemplatesEditor.test.jsx",
+        "src/components/__tests__/eventTemplatesEditorModel.test.js",
+        "src/components/__tests__/staffEvidenceRail.test.jsx",
+        "src/components/__tests__/ambientLivingOpportunity.test.jsx",
+        "src/components/__tests__/ambientLivingOpportunityContracts.test.js",
+        "src/components/__tests__/ambientMoneyContext.test.jsx",
+        "src/components/__tests__/ambientProposalContext.test.jsx",
+        "src/components/__tests__/ambientConversationContext.test.jsx",
+        "src/components/__tests__/ambientPilotScenarioReview.test.jsx",
+        "src/components/__tests__/ambientSelectionObjects.test.jsx",
+        "src/components/__tests__/customerPortalAskAbout.flagOn.test.jsx",
+        "src/components/__tests__/quoteConversationPanelPrefill.test.jsx",
+        "src/components/__tests__/changeRequestParse.test.js",
+        "src/components/__tests__/pilotCommandBar.test.jsx",
+        "src/lib/__tests__/ambientVisibleLanguage.test.js",
+        "src/components/__tests__/workspaceArrivalNotice.test.jsx",
+        "src/components/__tests__/messagingStationArrival.test.jsx",
+        "src/components/__tests__/quoteConversationPanelFocus.test.jsx",
+        "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+        "src/components/__tests__/eventScheduleArrival.test.jsx",
+        "src/components/__tests__/reportingDashboardArrival.test.jsx",
+        "src/components/__tests__/workspaceShell.test.jsx",
+        "src/lib/__tests__/ambientGlobalPilot.test.js",
+        "src/lib/__tests__/ambientNowBriefing.test.js",
+        "src/lib/__tests__/ambientOpportunityStream.test.js",
+        "src/lib/__tests__/ambientOpportunityStreamIntegration.test.js",
+        "src/lib/__tests__/ambientLibrary.test.js",
+        "src/lib/__tests__/customerDecisionRoom.test.js",
+        "src/lib/__tests__/quoteStore.portal.test.js",
+        "src/hooks/__tests__/useCatalogData.savePlan.test.js",
+        "src/lib/__tests__/menuService.test.js",
+        "src/lib/__tests__/menuService.writeFallback.test.js",
+        "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+        "src/lib/__tests__/workspaceScope.test.js",
+        "src/lib/__tests__/ambientMoneyObject.test.js",
+        "src/lib/__tests__/ambientProposalObject.test.js",
+        "src/lib/__tests__/ambientConversationObject.test.js",
+        "src/lib/__tests__/ambientSelectionObjects.test.js",
+        "src/lib/__tests__/pilotBoundedScenarios.test.js",
+        "src/lib/__tests__/pilotScenarioDraftReview.test.js",
+        "src/lib/__tests__/pilotCommandPolicy.test.js",
+        "src/lib/__tests__/pilotDeterministicCommands.test.js",
+        "src/lib/__tests__/quoteWorkflow.test.js",
+        "src/lib/__tests__/workspaceArrivalContract.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "e2e/customer-decision-room.spec.js",
+          "locator": "is calm, complete, and overlap-safe at"
+        },
+        {
+          "path": "src/lib/__tests__/customerDecisionRoom.test.js",
+          "locator": "never treats an identical customer-authored sentence as reversible generated text"
+        },
+        {
+          "path": "src/components/__tests__/quoteConversationPanelPrefill.test.jsx",
+          "locator": "waits for conversation evidence and reports a read-only boundary instead of staging text"
+        },
+        {
+          "path": "src/lib/__tests__/quoteStore.portal.test.js",
+          "locator": "mirrors bounded decision-room terms and staff-marked options in local fallback"
+        },
+        {
+          "path": "src/lib/__tests__/ambientNowBriefing.test.js",
+          "locator": "allows caught up only for a complete current snapshot with known bounds"
+        },
+        {
+          "path": "src/components/__tests__/ambientNowView.test.jsx",
+          "locator": "shows at most three interpreted priorities with one exact resolution each"
+        },
+        {
+          "path": "src/lib/__tests__/ambientOpportunityStream.test.js",
+          "locator": "keeps four momentum dimensions and permits a percentage only for proposal completeness"
+        },
+        {
+          "path": "src/components/__tests__/ambientOpportunitiesStream.test.jsx",
+          "locator": "renders an editorial stream with one contextual primary action per row"
+        },
+        {
+          "path": "src/lib/__tests__/ambientOpportunityStreamIntegration.test.js",
+          "locator": "renders the Ambient stream in list mode and keeps legacy controls inside Quote administration"
+        },
+        {
+          "path": "e2e/ambient-opportunities-stream.spec.js",
+          "locator": "stays contextual, accessible, and exact at"
+        },
+        {
+          "path": "src/lib/__tests__/ambientLibrary.test.js",
+          "locator": "keeps menu counts unavailable and menu references unclassified without complete inventory evidence"
+        },
+        {
+          "path": "src/components/__tests__/ambientLibraryRoute.test.jsx",
+          "locator": "acknowledges a section action immediately and opens only its exact editor context"
+        },
+        {
+          "path": "src/components/__tests__/ambientLibraryRoute.test.jsx",
+          "locator": "keeps an open editor mounted while another route is active"
+        },
+        {
+          "path": "src/components/__tests__/adminCatalogSaveCapabilityState.test.jsx",
+          "locator": "preserves a dirty draft when newer catalog evidence arrives"
+        },
+        {
+          "path": "src/hooks/__tests__/useCatalogData.savePlan.test.js",
+          "locator": "never reads another organization's scoped cache"
+        },
+        {
+          "path": "src/lib/__tests__/menuService.test.js",
+          "locator": "keeps local catalog revision updates inside the active organization key"
+        },
+        {
+          "path": "src/lib/__tests__/menuService.writeFallback.test.js",
+          "locator": "rejects a stale firebase menu mutation before any record write"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+          "locator": "keeps the authenticated scope mounted until App accepts portal navigation"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+          "locator": "preserves direct portal-token precedence on the initial mount"
+        },
+        {
+          "path": "src/components/__tests__/workspaceRoutePortalGuard.test.jsx",
+          "locator": "requires a new commit before changing from one portal token to another"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceScope.test.js",
+          "locator": "uses a distinct public scope for each customer portal token"
+        },
+        {
+          "path": "src/components/__tests__/eventTemplatesEditor.test.jsx",
+          "locator": "focuses an exact requested field and emits contextual arrival"
+        },
+        {
+          "path": "e2e/ambient-library.spec.js",
+          "locator": "keeps Library contextual, accessible, and overlap-safe at"
+        },
+        {
+          "path": "src/components/__tests__/staffEvidenceRail.test.jsx",
+          "locator": "keeps compact stale evidence visibly bounded"
+        },
+        {
+          "path": "src/lib/__tests__/ambientGlobalPilot.test.js",
+          "locator": "grounds a Living Opportunity in the exact opaque opportunity id"
+        },
+        {
+          "path": "src/components/__tests__/workspaceShell.test.jsx",
+          "locator": "reduces ambient workspace navigation to exact orientation and utility actions"
+        },
+        {
+          "path": "src/components/__tests__/ambientGlobalPilotSurface.test.jsx",
+          "locator": "turns missing model data into a populated recovery instead of an empty dialog"
+        },
+        {
+          "path": "src/components/__tests__/ambientLivingOpportunity.test.jsx",
+          "locator": "relays a global Pilot request into the exact populated opportunity context and restores its trigger"
+        },
+        {
+          "path": "src/components/__tests__/pilotCommandBar.test.jsx",
+          "locator": "focuses the exact contextual draft on a global Pilot request without running anything"
+        },
+        {
+          "path": "src/components/__tests__/pilotCommandBar.test.jsx",
+          "locator": "holds to capture, releases to an automatic preview, and still requires explicit apply"
+        },
+        {
+          "path": "e2e/pilot-voice-capture.spec.js",
+          "locator": "holds, releases to preview, and remains explicit at"
+        },
+        {
+          "path": "e2e/ambient-intelligence-object-verification.spec.js",
+          "locator": "keeps global Pilot contextual outside an opportunity instead of opening generic chat"
+        },
+        {
+          "path": "e2e/workspace-no-unintended-overlap.spec.js",
+          "locator": "global Pilot context stays exact, contained, and focus-safe"
+        },
+        {
+          "path": "src/components/__tests__/ambientLivingOpportunity.test.jsx",
+          "locator": "opens populated five-domain Money evidence and restores its exact trigger"
+        },
+        {
+          "path": "src/components/__tests__/ambientLivingOpportunityContracts.test.js",
+          "locator": "acknowledges the populated Money inspector without collapsing payment evidence"
+        },
+        {
+          "path": "src/lib/__tests__/ambientSelectionObjects.test.js",
+          "locator": "turns canonical add-on and rental rails into four evidence-bounded intelligent groups"
+        },
+        {
+          "path": "src/components/__tests__/ambientSelectionObjects.test.jsx",
+          "locator": "renders populated judgment context and visible button alternatives"
+        },
+        {
+          "path": "src/lib/__tests__/ambientMoneyObject.test.js",
+          "locator": "keeps policy, requests, and settlement in five distinct evidence domains"
+        },
+        {
+          "path": "src/lib/__tests__/ambientMoneyObject.test.js",
+          "locator": "ignores browser-return-shaped fields as payment evidence and never mutates the quote"
+        },
+        {
+          "path": "src/lib/__tests__/ambientProposalObject.test.js",
+          "locator": "keeps provider acceptance separate from delivery, viewing, acceptance, payment, and booking"
+        },
+        {
+          "path": "src/components/__tests__/ambientProposalContext.test.jsx",
+          "locator": "renders a populated content-first proposal context with exact evidence boundaries"
+        },
+        {
+          "path": "src/lib/__tests__/ambientConversationObject.test.js",
+          "locator": "keeps five communication truths separate and does not upgrade provider acceptance"
+        },
+        {
+          "path": "src/components/__tests__/ambientConversationContext.test.jsx",
+          "locator": "renders a populated content-first context with five visibly separate evidence rails"
+        },
+        {
+          "path": "src/lib/__tests__/pilotCommandPolicy.test.js",
+          "locator": "defines all eight classes while limiting v1 execution to the four bounded classes"
+        },
+        {
+          "path": "src/lib/__tests__/pilotCommandPolicy.test.js",
+          "locator": "classifies only the deterministic parser's bounded proposal vocabulary"
+        },
+        {
+          "path": "src/lib/__tests__/pilotDeterministicCommands.test.js",
+          "locator": "keeps a draft mutation and read-only query distinct in one mixed request"
+        },
+        {
+          "path": "src/lib/__tests__/pilotBoundedScenarios.test.js",
+          "locator": "keeps customer and user data out of every result and leaves every input untouched"
+        },
+        {
+          "path": "src/lib/__tests__/pilotScenarioDraftReview.test.js",
+          "locator": "applies only the reviewed allowlisted patch to a new draft and never mutates an input"
+        },
+        {
+          "path": "src/components/__tests__/ambientPilotScenarioReview.test.jsx",
+          "locator": "shows exact before and after values, every compromise, judgment, confidence, and provenance"
+        },
+        {
+          "path": "src/components/__tests__/pilotCommandBar.test.jsx",
+          "locator": "answers deterministic price questions in place without staging anything"
+        },
+        {
+          "path": "src/components/__tests__/changeRequestParse.test.js",
+          "locator": "changes packages only through an exact active-catalog match and fails ambiguous language closed"
+        },
+        {
+          "path": "src/lib/__tests__/quoteWorkflow.test.js",
+          "locator": "uses recorded request identities where they exist and canonical queue identities for projected work"
+        },
+        {
+          "path": "src/lib/__tests__/workspaceArrivalContract.test.js",
+          "locator": "builds and parses a canonical exact Workflow handoff"
+        },
+        {
+          "path": "src/components/__tests__/workspaceArrivalNotice.test.jsx",
+          "locator": "never says ready while destination consumption remains pending"
+        },
+        {
+          "path": "src/components/__tests__/messagingStationArrival.test.jsx",
+          "locator": "gives exact-message focus and resolution exclusively to QuoteConversationPanel"
+        },
+        {
+          "path": "src/components/__tests__/quoteConversationPanelFocus.test.jsx",
+          "locator": "resolves only after the exact customer reply is loaded, scrolled, and focused"
+        },
+        {
+          "path": "src/components/__tests__/salesWorkflowAttentionFocus.test.jsx",
+          "locator": "reports resolved only after the exact Ambient Workflow item is focused"
+        },
+        {
+          "path": "src/components/__tests__/eventScheduleArrival.test.jsx",
+          "locator": "keeps arrival pending until the exact same-tenant event is selected and focused"
+        },
+        {
+          "path": "src/components/__tests__/reportingDashboardArrival.test.jsx",
+          "locator": "uses a targeted quote read, focuses its exact summary, and leaves the aggregate denominator unchanged"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Ambient orientation, NOW, Opportunities, Clients, Library, exact arrivals, Living Opportunity, intelligent objects, sensory feedback, deterministic Pilot, and customer decision-room foundations"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Ambient object and Pilot policy foundations (source only)"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Ambient orientation, mobile remote, and exact arrivals (source only)"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Customer decision room (source only)"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Customer decision room:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Admin Catalog Operations"
+        }
+      ],
+      "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
+      "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, and truthful local fallback without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, or blocked with a safe next resolution."
+    },
+    {
+      "id": "authoritative-operational-staffing",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "administrators"
+      ],
+      "summary": "Independently default-off authoritative operational staffing binds one exact same-tenant quote revision and event window to bounded admin-managed staff profiles, operator-recorded availability, admin-or-sales operator-confirmed assignments, explicit coverage gaps, cross-date schedule fences, and immutable replay-stable profile and plan receipts. The presentation preserves a local_draft fallback and never turns staffing records into attendance, payroll, acknowledgement, payment, booking, or readiness evidence.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/operationalStaffingAuthority.js",
+        "functions/operationalStaffingRuntime.js",
+        "scripts/operational-staffing-emulator-acceptance.mjs",
+        "src/lib/operationalStaffingClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getOperationalStaffingSnapshot",
+        "functions/index.js#configureOperationalStaffProfile",
+        "functions/index.js#applyOperationalStaffingPlan"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getOperationalStaffingSnapshot",
+        "functions/index.js#configureOperationalStaffProfile",
+        "functions/index.js#applyOperationalStaffingPlan"
+      ],
+      "frontendPaths": [
+        "src/components/AmbientLivingOpportunity.jsx",
+        "src/components/OperationalStaffingPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/AmbientLivingOpportunity.jsx",
+          "locator": "data-ambient-action-id={model.actions.inspectStaffing.id}"
+        },
+        {
+          "path": "src/components/OperationalStaffingPanel.jsx",
+          "locator": "Who is covering this event?"
+        }
+      ],
+      "testPaths": [
+        "scripts/operational-staffing-emulator-acceptance.mjs",
+        "src/components/__tests__/operationalStaffingPanel.test.jsx",
+        "src/lib/__tests__/deploymentSafety.test.js",
+        "src/lib/__tests__/functionsEnvMaterializer.test.js",
+        "src/lib/__tests__/operationalStaffingAuthority.server.test.js",
+        "src/lib/__tests__/operationalStaffingClient.test.js",
+        "src/lib/__tests__/operationalStaffingIntegration.server.test.js",
+        "src/lib/__tests__/operationalStaffingRuntime.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/operationalStaffingIntegration.server.test.js",
+          "locator": "exports exactly the three named role-safe callable surfaces"
+        },
+        {
+          "path": "src/lib/__tests__/operationalStaffingRuntime.server.test.js",
+          "locator": "requires both the global and exact tenant authority gates"
+        },
+        {
+          "path": "src/lib/__tests__/operationalStaffingAuthority.server.test.js",
+          "locator": "creates a bounded safe profile only under same-tenant admin authority"
+        },
+        {
+          "path": "src/lib/__tests__/operationalStaffingAuthority.server.test.js",
+          "locator": "builds one deterministic immutable command receipt and reconciles an exact replay"
+        },
+        {
+          "path": "src/lib/__tests__/operationalStaffingAuthority.server.test.js",
+          "locator": "exports a bounded safe snapshot with no PII, availability detail, or readiness claim"
+        },
+        {
+          "path": "src/lib/__tests__/operationalStaffingClient.test.js",
+          "locator": "keeps local fallback explicitly non-authoritative"
+        },
+        {
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "lets sales read and apply but withholds profile configuration"
+        },
+        {
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "lets admin add a bounded profile and sends the exact nested DTO"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "operational staffing authority cannot be promoted by a browser administrator"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Authoritative operational staffing:"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Authoritative operational staffing"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The independently gated Event Workspace staffing context, exact tenant/quote read, admin-only bounded profile authority, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundary, explicit gaps, schedule fences, local_draft fallback, immutable receipts, direct-browser denial, and all read and mutation states were reviewed together. The three callable exports remain source-only and default-off behind separate global, tenant, and presentation gates.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks loading, empty, success, stale, partial, error, and recovery literally",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks loading, empty, success, stale, partial, error, and recovery literally",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks loading, empty, success, stale, partial, error, and recovery literally",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks loading, empty, success, stale, partial, error, and recovery literally",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks loading, empty, success, stale, partial, error, and recovery literally",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks a definitive rejection as error and exposes an explicit recovery reset",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks a definitive rejection as error and exposes an explicit recovery reset",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+      {
+        "state": "ready",
+        "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+        "locator": "marks current mutation controls ready before a command",
+        "assertionLocator": "data-capability-state=\"ready\""
+      },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks submitting then preserves one request and exact DTO through uncertainty and reconciliation",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks submitting then preserves one request and exact DTO through uncertainty and reconciliation",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks submitting then preserves one request and exact DTO through uncertainty and reconciliation",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/operationalStaffingPanel.test.jsx",
+          "locator": "marks submitting then preserves one request and exact DTO through uncertainty and reconciliation",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Same-tenant admins can record bounded staff profiles and same-tenant admins or sales staff can read or apply one exact-revision operational staffing plan with immutable replay-stable receipts; local fallback remains explicitly local_draft, and operator-recorded availability, operator-confirmed assignment, or complete coverage never proves member acknowledgement, attendance, payroll, payment, booking, or event readiness."
     }
   ]
 }

@@ -613,7 +613,7 @@ describe("Customer 360 rebooking radar", () => {
     });
     expect(radar.evidenceCopy).toEqual(CUSTOMER_REBOOKING_RADAR_EVIDENCE_COPY);
     expect(radar.evidenceCopy.opportunity).toContain(
-      "not a lead, booking, delivery, payment, or revenue fact"
+      "does not create a lead, booking, delivery, payment, or revenue record"
     );
     expect(radar.evidenceCopy.closeout).toContain("No thank-you or review request was sent");
     expect(radar.evidenceCopy.rebook).toContain(

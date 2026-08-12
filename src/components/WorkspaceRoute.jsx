@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import App from "../App";
 import { EventTypeProvider } from "../context/EventTypeContext";
 import { OrganizationProvider } from "../context/OrganizationContext";
@@ -11,15 +11,25 @@ import { useTenantContext } from "../hooks/useTenantContext";
 import { WORKSPACE_PATHS } from "../lib/workspaceRoutes";
 import { buildWorkspaceRouteScopeKey } from "../lib/workspaceScope";
 
-function ScopedWorkspaceRoute({ tenantContext, authSession }) {
+export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   const { route, replace } = useWorkspaceNavigation();
   const previousAuthenticatedUidRef = useRef("");
   const authenticatedUid = String(authSession.user?.uid || "").trim();
+  const portalToken = String(route.portalToken || "").trim();
+  const [committedPortalToken, setCommittedPortalToken] = useState(() => (
+    route.surface === "portal" ? portalToken : ""
+  ));
+  const portalRouteAllowed = route.surface !== "portal"
+    ? !committedPortalToken
+    : committedPortalToken === portalToken;
   const workspaceScopeKey = buildWorkspaceRouteScopeKey({
-    publicPortal: route.surface === "portal",
+    publicPortalToken: committedPortalToken,
     tenantContext,
     authSession
   });
+  const commitPortalScope = useCallback((nextToken = "") => {
+    setCommittedPortalToken(String(nextToken || "").trim());
+  }, []);
 
   useEffect(() => {
     const previousAuthenticatedUid = previousAuthenticatedUidRef.current;
@@ -36,7 +46,13 @@ function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   return (
     <OrganizationProvider key={workspaceScopeKey}>
       <EventTypeProvider>
-        <App tenantContext={tenantContext} authSession={authSession} />
+        <App
+          tenantContext={tenantContext}
+          authSession={authSession}
+          portalRouteAllowed={portalRouteAllowed}
+          committedPortalToken={committedPortalToken}
+          onPortalScopeCommit={commitPortalScope}
+        />
       </EventTypeProvider>
     </OrganizationProvider>
   );

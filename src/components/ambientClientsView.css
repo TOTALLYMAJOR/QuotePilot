@@ -1,0 +1,520 @@
+.ambient-clients,
+.ambient-client-overview {
+  --ambient-client-line: color-mix(in srgb, var(--tone-ink-1, #262421) 14%, transparent);
+  display: grid;
+  gap: clamp(1.15rem, 2.7vw, 2.4rem);
+  min-width: 0;
+}
+
+.ambient-clients {
+  padding: clamp(0.75rem, 2vw, 1.8rem) 6px clamp(2.5rem, 5vw, 5rem);
+}
+
+.ambient-clients__masthead,
+.ambient-client-overview__identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: clamp(1rem, 4vw, 4rem);
+  align-items: start;
+  padding-bottom: clamp(1rem, 2vw, 1.6rem);
+  border-bottom: 1px solid var(--ambient-client-line);
+}
+
+.ambient-clients__masthead h1,
+.ambient-client-overview__identity h1 {
+  max-width: 18ch;
+  margin: 0.15rem 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 4.8vw, 4.25rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.ambient-clients__masthead p:last-child,
+.ambient-client-overview__identity p:last-child {
+  max-width: 44rem;
+  margin: 0.75rem 0 0;
+  color: var(--tone-ink-2, #514d47);
+  line-height: 1.5;
+}
+
+.ambient-clients__label,
+.ambient-client-overview__label {
+  margin: 0;
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ambient-clients__start,
+.ambient-clients__refresh,
+.ambient-client__primary,
+.ambient-client-overview__primary,
+.ambient-client-overview__secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0.68rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--ambient-teal, #237f78) 36%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ambient-teal, #237f78) 8%, transparent);
+  color: color-mix(in srgb, var(--ambient-teal, #237f78) 78%, #111);
+  font: inherit;
+  font-weight: 760;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ambient-clients__refresh,
+.ambient-client-overview__secondary {
+  border-color: transparent;
+  background: transparent;
+}
+
+.ambient-clients__start:hover,
+.ambient-clients__start:focus-visible,
+.ambient-clients__refresh:hover,
+.ambient-clients__refresh:focus-visible,
+.ambient-client__primary:hover,
+.ambient-client__primary:focus-visible,
+.ambient-client-overview__primary:hover,
+.ambient-client-overview__primary:focus-visible,
+.ambient-client-overview__secondary:hover,
+.ambient-client-overview__secondary:focus-visible {
+  color: color-mix(in srgb, var(--tone-gold-3, #9b661d) 84%, #111);
+  text-decoration: underline;
+  text-underline-offset: 0.22rem;
+}
+
+.ambient-clients__start:disabled,
+.ambient-clients__refresh:disabled,
+.ambient-client__primary:disabled,
+.ambient-client-overview__primary:disabled,
+.ambient-client-overview__secondary:disabled {
+  color: var(--tone-ink-3, #706b63);
+  cursor: not-allowed;
+  opacity: 0.68;
+  text-decoration: none;
+}
+
+.ambient-clients__toolbar {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) auto auto auto;
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.ambient-clients__toolbar label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--tone-ink-2, #514d47);
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.ambient-clients__toolbar input {
+  width: 100%;
+  min-height: 44px;
+}
+
+.ambient-clients__toolbar button {
+  min-height: 44px;
+}
+
+.ambient-clients__acknowledgement,
+.ambient-client-overview__acknowledgement {
+  display: flex;
+  gap: 0.65rem;
+  align-items: baseline;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--ambient-teal, #237f78);
+  background: color-mix(in srgb, var(--ambient-teal, #237f78) 8%, transparent);
+  color: var(--tone-ink-2, #514d47);
+}
+
+.ambient-clients__acknowledgement[data-result-kind="recovery"],
+.ambient-client-overview__acknowledgement[data-result-kind="recovery"] {
+  border-left-color: var(--tone-danger, #a63535);
+  background: color-mix(in srgb, var(--tone-danger, #a63535) 8%, transparent);
+}
+
+.ambient-clients__state {
+  display: grid;
+  gap: 0.65rem;
+  justify-items: start;
+  margin: 0;
+  padding: clamp(1.2rem, 3vw, 2rem) 0;
+  border-top: 1px solid var(--ambient-client-line);
+  border-bottom: 1px solid var(--ambient-client-line);
+}
+
+.ambient-clients__state h2,
+.ambient-client-overview__section h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.35rem, 3vw, 2.2rem);
+  font-weight: 500;
+}
+
+.ambient-clients__state p {
+  max-width: 45rem;
+  margin: 0;
+  color: var(--tone-ink-2, #514d47);
+  line-height: 1.5;
+}
+
+.ambient-clients__list,
+.ambient-client-overview__opportunities,
+.ambient-client-overview__conversations {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--ambient-client-line);
+  list-style: none;
+}
+
+.ambient-client {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.8fr) minmax(14rem, 1.1fr) minmax(12rem, 1fr) auto;
+  gap: clamp(0.8rem, 2vw, 1.5rem);
+  align-items: center;
+  min-width: 0;
+  padding: clamp(1rem, 2.4vw, 1.65rem) 0;
+  border-bottom: 1px solid var(--ambient-client-line);
+}
+
+.ambient-client > div {
+  min-width: 0;
+}
+
+.ambient-client h2,
+.ambient-client h3 {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.25rem, 2.3vw, 1.85rem);
+  font-weight: 500;
+}
+
+.ambient-client p,
+.ambient-client small {
+  display: block;
+  margin: 0.25rem 0 0;
+  color: var(--tone-ink-2, #514d47);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ambient-client small {
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.76rem;
+}
+
+.ambient-clients__pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.ambient-clients__boundary,
+.ambient-client-overview__boundary {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.45fr) minmax(0, 1.55fr);
+  gap: clamp(1rem, 4vw, 3rem);
+  padding: clamp(1rem, 2.5vw, 1.6rem);
+  background: color-mix(in srgb, var(--ambient-lavender, #8c79b7) 8%, transparent);
+}
+
+.ambient-clients__boundary h2,
+.ambient-client-overview__boundary h2 {
+  margin: 0.2rem 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.05rem, 2vw, 1.45rem);
+  font-weight: 500;
+}
+
+.ambient-clients__boundary p,
+.ambient-client-overview__boundary p,
+.ambient-clients__boundary ul,
+.ambient-client-overview__boundary ul {
+  margin: 0;
+  color: var(--tone-ink-2, #514d47);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.ambient-client-overview {
+  padding: 0 6px clamp(1.4rem, 3vw, 2.6rem);
+}
+
+.customer-workspace.ambient-client-host {
+  padding: clamp(0.75rem, 2vw, 1.8rem) 6px clamp(2.5rem, 5vw, 5rem);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ambient-client-overview__back {
+  justify-self: start;
+  min-height: 44px;
+  margin-bottom: -0.5rem;
+}
+
+.ambient-client-overview__identity-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.8rem;
+}
+
+.ambient-client-overview__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);
+  gap: clamp(1.25rem, 4vw, 3.5rem);
+  align-items: stretch;
+}
+
+.ambient-client-overview__signals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--ambient-client-line);
+  border-bottom: 1px solid var(--ambient-client-line);
+}
+
+.ambient-client-overview__signals > div {
+  min-width: 0;
+  padding: 1rem;
+}
+
+.ambient-client-overview__signals > div + div {
+  border-left: 1px solid var(--ambient-client-line);
+}
+
+.ambient-client-overview__signals dt {
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.7rem;
+  font-weight: 760;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.ambient-client-overview__signals dd {
+  margin: 0.35rem 0 0;
+  color: var(--tone-ink-1, #262421);
+  font-weight: 760;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.ambient-client-overview__next {
+  display: grid;
+  align-content: space-between;
+  gap: 1rem;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  border-left: 3px solid var(--ambient-coral, #c86e58);
+  background: color-mix(in srgb, var(--ambient-coral, #c86e58) 7%, transparent);
+}
+
+.ambient-client-overview__next[data-next-state="caught-up"] {
+  border-left-color: var(--ambient-mint, #65ad82);
+  background: color-mix(in srgb, var(--ambient-mint, #65ad82) 8%, transparent);
+}
+
+.ambient-client-overview__next h2 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+}
+
+.ambient-client-overview__next p:last-child {
+  margin: 0.4rem 0 0;
+  color: var(--tone-ink-2, #514d47);
+  line-height: 1.48;
+}
+
+.ambient-client-overview__section {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+  padding-top: clamp(0.4rem, 1vw, 0.8rem);
+}
+
+.ambient-client-overview__section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.ambient-client-overview__section-head p {
+  max-width: 36rem;
+  margin: 0;
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.ambient-client-overview__opportunities li,
+.ambient-client-overview__conversations li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  min-width: 0;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--ambient-client-line);
+}
+
+.ambient-client-overview__opportunities h3,
+.ambient-client-overview__conversations h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.ambient-client-overview__opportunities p,
+.ambient-client-overview__conversations p {
+  margin: 0.25rem 0 0;
+  color: var(--tone-ink-2, #514d47);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.ambient-client-overview .status-chip-pending {
+  color: #674b08;
+}
+
+.ambient-client-overview__record {
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--ambient-client-line);
+}
+
+.ambient-client-overview__record > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--tone-ink-2, #514d47);
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.ambient-client-overview__record[open] > summary {
+  color: color-mix(in srgb, var(--ambient-teal, #237f78) 78%, #111);
+}
+
+.ambient-client-overview__record-body {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 920px) {
+  .ambient-client {
+    grid-template-columns: minmax(12rem, 0.8fr) minmax(14rem, 1.2fr) auto;
+  }
+
+  .ambient-client__latest {
+    grid-column: 1 / -1;
+  }
+
+  .ambient-client-overview__summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .ambient-clients__masthead,
+  .ambient-client-overview__identity,
+  .ambient-client,
+  .ambient-clients__boundary,
+  .ambient-client-overview__boundary,
+  .ambient-client-overview__opportunities li,
+  .ambient-client-overview__conversations li {
+    grid-template-columns: 1fr;
+  }
+
+  .ambient-clients__masthead {
+    align-items: center;
+  }
+
+  .ambient-clients__masthead > .ambient-clients__start {
+    justify-self: start;
+  }
+
+  .ambient-clients__toolbar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ambient-clients__toolbar label {
+    grid-column: 1 / -1;
+  }
+
+  .ambient-client__latest {
+    grid-column: auto;
+  }
+
+  .ambient-client__primary,
+  .ambient-client-overview__primary,
+  .ambient-client-overview__secondary {
+    width: 100%;
+  }
+
+  .ambient-client-overview__signals {
+    grid-template-columns: 1fr;
+  }
+
+  .ambient-client-overview__signals > div + div {
+    border-top: 1px solid var(--ambient-client-line);
+    border-left: 0;
+  }
+
+  .ambient-client-overview__section-head {
+    display: grid;
+  }
+
+  .ambient-client-overview__section-head p {
+    text-align: left;
+  }
+}
+
+@media (max-width: 430px) {
+  .ambient-clients {
+    padding-top: 0.25rem;
+  }
+
+  .ambient-clients__masthead h1,
+  .ambient-client-overview__identity h1 {
+    font-size: clamp(1.6rem, 9vw, 2.15rem);
+  }
+
+  .ambient-clients__masthead p:last-child,
+  .ambient-client-overview__identity p:last-child {
+    display: none;
+  }
+
+  .ambient-clients__toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ambient-clients__toolbar button:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .ambient-clients__acknowledgement,
+  .ambient-client-overview__acknowledgement {
+    display: grid;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-clients *,
+  .ambient-client-overview * {
+    scroll-behavior: auto !important;
+  }
+}

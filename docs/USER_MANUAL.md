@@ -1,13 +1,14 @@
 # User Manual
 
-Last updated: August 9, 2026
+Last updated: August 12, 2026
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Access and Roles
 - Staff access (`sales` or `admin`) is required for the quote builder workspace.
-- Admin access is required for Catalog Admin configuration.
+- Admin access is required for Catalog Admin configuration and the default-off
+  Ambient Library that presents the same guarded catalog authority.
 - Email/password users who cannot sign in can enter their email and select
   `Forgot password?`. QuotePilot always shows the same confirmation whether or
   not Firebase returns an account-state error. Follow the Firebase
@@ -144,7 +145,43 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   derived staff presentation, and a fresh read never proves provider delivery,
   customer acceptance, booking, payment, or operational completion.
 
-## Commercial Search
+## Authoritative operational staffing
+
+- This source-only capability is independently default-off. It appears only
+  when the presentation gate `VITE_OPERATIONAL_STAFFING_ENABLED` is enabled,
+  and server reads or commands still fail closed unless both the global
+  `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` gate and the exact tenant's
+  `operationalStaffingAuthorityEnabled` setting are enabled. Turning on one
+  gate does not turn on either of the others, deploy the source, or establish
+  hosted, production-data, or human acceptance.
+- In the flagged Event Workspace, open the exact quote and select `Inspect
+  staffing`. The panel reads only that tenant and quote, binds commercial role
+  counts and the event window to the exact active immutable quote revision,
+  and keeps quoted requirements separate from operational fulfillment. A
+  cross-tenant identity, customer role, or unscoped request fails closed.
+- Admins may add or edit bounded staff profiles and record capability plus
+  `operator_recorded` availability windows. Sales staff may inspect those safe
+  profiles but cannot configure them. `operator_recorded` means an authorized
+  operator entered the window; it is not a staff member's acknowledgement.
+- Admin and sales staff may assign a person to an exact role slot and select
+  `Apply operator-confirmed assignments`. The server rechecks the quote
+  revision, profile revisions, complete availability coverage, and relevant
+  cross-date schedule-fence revisions before atomically writing the plan,
+  fences, and immutable receipt. Unfilled quoted roles remain explicit gaps.
+  An ambiguous result locks the exact unchanged request for `Reconcile exact
+  request`; do not start a different command until a matching receipt or a
+  definitive rejection resolves it.
+- `operator_confirmed` proves only that an authorized QuotePilot operator
+  recorded the assignment. It does not prove staff acknowledgement,
+  attendance, payroll, payment, booking, or event readiness. A coverage label
+  compares exact operator-recorded availability and assignments with the quoted
+  role counts; it does not establish any of those outcomes either.
+- Local or unauthorized contexts show only the `local_draft` boundary. Local
+  quoted staffing context may remain visible, but it cannot claim staff
+  availability, an operator-confirmed assignment, schedule-conflict clearance,
+  coverage, or a server receipt.
+
+## Workspace Search
 
 - In the flagged staff workspace, select `Search` or press `Ctrl+K` on Windows/
   Linux or `Command+K` on macOS. The shortcut does not open over the customer
@@ -183,7 +220,7 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   action from the bounded DTO. When older quotes exist, missing event/activity
   copy says that it is limited to the bounded view instead of implying a
   lifetime absence.
-- `Overview` starts with `Revenue opportunities`, a bounded, read-only view of
+- `Overview` starts with `Follow-ups worth revisiting`, a bounded, read-only view of
   one-week post-event closeout checks and same-week anniversary cues from
   recorded booked events. A cue is not a lead, booking, customer contact, or
   revenue result. When QuotePilot verifies the booked source, matching
@@ -218,7 +255,7 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   a revised request. These controls record internal staff review only. They do
   not send email, prove provider delivery or opening, record a customer reply,
   or establish a lead, booking, payment, or revenue result.
-- `Commercial measures` on `Overview` reports quoted, exact-state accepted and
+- `Quotes, bookings, and payments` on `Overview` reports quoted, exact-state accepted and
   booked amounts, source-bounded deposit and final-balance measures, and a
   recorded repeat-event signal. Deposit or final-balance value is labeled
   provider-confirmed only when Customer 360 reports an exclusively
@@ -232,7 +269,7 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   outside the calculation. These values are operational and read-only—not an
   accounting ledger, cash reconciliation, forecast, or recognized-revenue
   report.
-- `Overview` contains a source-labeled `Commercial timeline` of recorded quote,
+- `Overview` contains a source-labeled `Quotes, decisions, and payments` history of recorded quote,
   retained-version, provider-acceptance, recipient-view, decision, booking,
   verified-payment-time, and latest quote-conversation-summary milestones. Each
   row opens the authoritative quote. The timeline never exposes message bodies,
@@ -612,10 +649,36 @@ unchanged.
 
 ## Commercial Change Authority
 
+### Living Opportunity guest-count pricing preview (source only)
+
+- This Ambient host is present in source, not proven deployed or human-
+  accepted. It appears only for `admin` or `sales` staff who also have ordinary
+  quote-edit authority and whose selected quote has an exact package in the
+  loaded tenant catalog. Missing role, edit permission, package, catalog, or
+  pricing settings fails closed instead of offering a price action.
+- Stage a reversible guest-count scenario, open `Inspect pricing`, then select
+  `Price [guest count] guests`. A local-source quote receives a deterministic,
+  advisory client `ImpactPreview` with no server receipt. A Firebase-source
+  quote uses the existing governed Commercial Change simulation client and may
+  return an immutable server simulation receipt. QuotePilot labels those two
+  sources distinctly; neither one is authorization or evidence of a saved
+  quote.
+- The preview reads the staged guest-count change but does not mutate the saved
+  quote. `Stage scenario in editor` is an explicit handoff to the priced edit
+  flow, where the existing trusted save must reprice authoritatively and handle
+  revision conflicts. The Ambient preview itself cannot save, authorize, apply,
+  send, accept, book, charge, or pay.
+- If a connected response is transport-uncertain, keep the exact tenant,
+  quote, base revision, and retained request identity together. Use the same
+  pricing action to reconcile that exact request before starting another
+  simulation; local fallback rejects a pending server request. A definitive
+  error leaves the saved quote and reversible scenario unchanged and offers
+  contextual recovery without inventing a receipt.
+
 - In a trusted quote edit, select `Review Change Impact` after changing event,
   customer, selection, pricing-input, or other governed fields. QuotePilot
   reloads the exact active revision, reprices the proposed form on the server,
-  and shows before/proposed facts, total/deposit deltas, and affected graph
+  and shows before/proposed values, total/deposit deltas, and affected graph
   nodes. Simulation does not save the quote.
 - `Authority dormant` means source is present but ordinary trusted save remains
   authoritative because both the release-controlled server gate and trusted
@@ -802,6 +865,20 @@ unchanged.
 - `Add-on selection trends` counts selection and removal actions by the current
   catalog name. These analytics do not store customer names, emails, quote
   values, or proposal content.
+- `Ambient interaction health` is a source-only extension of the same bounded
+  server summary. It reports a primary-action dead-click rate only when the
+  client recorded an exact 250ms acknowledgement assessment. `First intent →
+  priced draft` pairs the first staff-session intent only with the first exact
+  server-authoritative Firebase saved-draft receipt; local previews and local
+  saves do not qualify. `Issue surfaced → resolved` pairs only the same bounded
+  issue category in the same staff session. These are client observations, not
+  server timing telemetry or proof that the user understood the experience.
+  Local fallback and zero-sample windows show `Not available` rather than a
+  manufactured zero.
+- Ambient metric events exclude quote and customer identifiers, message and
+  proposal content, and free text. The accepted issue labels are bounded
+  Workflow, Staffing, and proposal-gap categories; a dismissed, displaced,
+  unknown, or cross-session issue is not silently counted as resolved.
 - Analytics delivery is non-blocking. If its server summary is unavailable,
   quote creation continues and the dashboard still loads its quote metrics.
 
@@ -878,6 +955,34 @@ unchanged.
 ## Admin Catalog Operations
 - Open `Catalog` or `/app/catalog` (admin users only). Contextual catalog setup
   from the quote builder may still open the guarded dialog wrapper.
+- In a local build with `VITE_AMBIENT_UI_ENABLED=true`, `/app/catalog` opens as
+  **Library**. The first view shows the current catalog source, observation time,
+  **Catalog version**, pricing-review state, Catalog choices, and Event Templates.
+  It does not add a catalog read or save path. A sales user receives a role-
+  specific explanation and **Return to Now** instead of an empty or generic
+  destination.
+- Library recommends one next useful step from the evidence it has. If the
+  complete event-specific menu inventory was not part of that read, **Review
+  menu** means to inspect the existing menu records; it does not mean the menu
+  is empty or that a saved template reference is broken. Saved references are
+  preserved until an admin compares them with the current menu; the editor does
+  not claim that partial inventory was validated. Browser-local records are
+  isolated to the active organization, say **Catalog saved in this browser**,
+  and are not proof of the organization's server catalog, current pricing
+  authority, or operational availability.
+- Select a Catalog row or exact Event Template to open that object in the
+  existing editor. QuotePilot acknowledges the click before the editor mounts,
+  focuses the requested tab or template, and never substitutes another record.
+  Ordinary movement to Now, Opportunities, Clients, or another staff surface
+  keeps an unsaved Library draft mounted so returning restores the exact work.
+  Browser unload, customer-portal, and sign-out transitions remain guarded.
+  **Back to Library** asks before discarding a dirty draft and returns focus to
+  Library when the initiating control is no longer mounted. If newer catalog
+  evidence arrives, the editor preserves the draft and requires an explicit
+  refresh/reconciliation choice before saving. A customer-portal route does not
+  remount the workspace under that portal token until this draft guard accepts
+  the transition. Opening a portal link directly still takes precedence, and
+  changing from one portal token to another keeps the two public scopes separate.
 - A blank organization starts on one guided screen with four clearly described
   industry packs. Empty Packages, Addons, Rentals, Menu, and Pricing tabs stay
   hidden until a pack is populated or the admin explicitly chooses
@@ -888,18 +993,33 @@ unchanged.
   - Addons
   - Rentals
   - Menu
+  - Templates
   - Pricing
+- In `Templates`, add or update reusable event starting points. A template's
+  stable ID does not change after creation. Record its event type, service
+  style, hours, package, add-ons, rentals, and menu references. When the menu
+  inventory is not fully loaded, saved menu references remain preserved and
+  visibly awaiting catalog validation; they are not silently removed or
+  classified as missing. Template edits remain staged until **Save catalog
+  changes**, which uses the existing catalog revision and reconciliation path.
 - Menu management flow:
   1. Select Event Type
   2. Select Category
   3. Add/Edit/Delete items
   4. Inline edits auto-save on blur or Enter
-- Deactivating or deleting a menu item is a server-authorized catalog
-  operation. It uses the revision currently loaded in Catalog Admin, refuses
-  items still referenced by a package or event template, advances the catalog
-  revision, and reopens pricing review. If another session wins the revision,
-  QuotePilot reloads the latest catalog and asks you to retry instead of
-  overwriting it.
+- Finish or discard any unsaved Catalog settings before changing managed-menu
+  records, and finish or discard managed-menu work before saving Catalog
+  settings. QuotePilot does not combine these two draft areas into one save.
+- All seven managed-menu operations—create or rename an event type; create or
+  rename a category; and create, update (including deactivate), or delete a menu
+  item—use the catalog revision currently loaded in Catalog Admin. The Firebase
+  transaction and browser-local fallback both compare that revision before any
+  record is written; local fallback checks the active organization's catalog
+  revision. Deactivation or deletion also refuses items still referenced by a
+  package or event template. A successful change advances the revision and
+  reopens pricing review. If another session changes the catalog first,
+  QuotePilot keeps the current work, loads nothing over it silently, and asks
+  the user to refresh or retry instead of overwriting the newer catalog.
 - Menu item fields include:
   - Name
   - Price
@@ -1210,9 +1330,10 @@ Complete every item before calling the new tenant operational:
   create a duplicate. QuotePilot supplies the sender name and time from trusted
   server context rather than accepting them from the browser. Declined quotes
   expose history as read-only.
-- Portal decisions support `Accept`, `Request Changes`, and `Decline`; change requests require a customer note.
-- To accept, the customer selects `Accept`, types their full legal name, checks
-  the electronic-signature statement, and chooses `Sign and Accept Proposal`.
+- Portal responses support `Accept proposal`, `Ask for changes`, and `Decline proposal`; a change request requires a customer note.
+- To accept, the customer selects `Accept proposal`, types their full legal
+  name, checks the electronic-signature statement, and chooses
+  `Sign and accept proposal`.
   QuotePilot records the signer, server time, consent version, exact delivered
   proposal revision, receipt ID, and signed proposal hash. A stale or changed
   proposal must be reloaded before it can be signed.
@@ -1301,8 +1422,8 @@ experience:
   does not support a stronger statement.
 - Guided-selling suggestions use `Take it` decision cards. Taking one edits the
   draft only; saving remains the authoritative server reprice/version action.
-- On `New quote`, describe the event in CREATE, review extracted facts and
-  confidence, confirm low-confidence facts, then apply them to the editable
+- On `New quote`, describe the event in CREATE, review the details found and
+  their confidence, confirm uncertain details, then add them to the editable
   form. Approximate/ranged guest counts show a draft-only price band; saved
   quotes always use the exact recorded guest count.
 - In an editable quote, the Pilot command bar previews a plain-language change
@@ -1318,27 +1439,214 @@ message, establish delivery/payment/booking, or replace the existing role
 gates. Use the ordinary save, Workflow, quote administration, and provider
 receipts for those actions and evidence.
 
-An eighth gate, `VITE_PILOT_DECISION_ROOM_ENABLED`, joins the production
-gate set at the next release (currently deployed builds predate it). When
-enabled, each of the customer portal's existing content sections (event
-details, package and menu, pricing) shows a quiet "Ask about this" button
-that opens the existing quote conversation with the composer pre-filled to
-reference that section — for example "Question about the pricing: ". The
-pre-fill is ordinary message text the customer can edit or discard; nothing
-is sent until they send it, a pre-fill never overwrites something they
-already typed, and an unresolved message attempt always keeps its exact
-retry text.
+### Ambient orientation, mobile remote, and exact arrivals (source only)
 
-With the same gate enabled, Catalog Admin's add-on and rental rows gain a
-"Portal offer" checkbox — off for every item unless you deliberately check
-it. Marked, active options the quote does not already include appear in
-the customer's portal as "Options you can ask to add", each with its
-price basis (per guest, per item, or for the event). Choosing one only
-drafts a "Please add ..." line into the ordinary Request Changes message,
-which the customer can edit, discard, or send; if sent, it reaches you as
-a normal change request your quote editor parses into a one-tap stageable
-proposal. Nothing a customer taps ever changes the proposal by itself —
-your save remains the only authority.
+- With `VITE_AMBIENT_UI_ENABLED` explicitly enabled in a local build, use the
+  lightweight **Now**, **Opportunities**, **Clients**, and role-safe **Library**
+  entries to stay oriented. Search and New quote remain utilities. The same
+  default-off staff shell now has one **Pilot** trigger grounded in the context
+  already in view; it does not open a generic chat or appear in the customer
+  decision room.
+- When both `VITE_AMBIENT_UI_ENABLED` and `VITE_PILOT_NOW_ENABLED` are enabled,
+  **Now** becomes an open briefing with no more than three priorities from the
+  current bounded Workflow snapshot. The order comes from the existing
+  deterministic Workflow evidence; NOW does not invent a blended score or
+  re-rank it with a model. Each row opens its exact Workflow item and first
+  acknowledges what is opening and what remains unchanged.
+- **You are caught up** appears only when all expected staff reads completed,
+  bounds are known and not truncated, the snapshot is current, and no recorded
+  payment step remains in the same view. **Recently completed** names only recorded
+  internal follow-up completion, request handling, or approval decisions. It
+  does not mean a customer was contacted, a provider delivered anything, or a
+  payment was collected. Expand **Read details** whenever the compact freshness
+  line reports stale, partial, unavailable, unknown, or bounded evidence.
+- Open **Opportunities** to use the default-off editorial stream over the
+  existing tenant-scoped bounded quote read. Each opportunity shows identity
+  and four separate views of where things stand: proposal completeness,
+  pricing and margin, customer state, and event planning. Only proposal
+  completeness may appear as a percentage; QuotePilot does not blend the four
+  views into an event-readiness score.
+- Quote lifecycle, booking confirmation, deposit, and final balance remain
+  separate recorded details in each row. Select the single primary action to
+  open that exact opportunity or its existing role-safe Workflow item. An
+  opportunity handoff carries the exact opaque opportunity, reason for opening,
+  what the navigation changes, and the next resolution into the canonical
+  Living Opportunity; it changes no quote, price, booking, payment, or provider
+  record. When the source is browser-local, the stream says so and does not
+  present it as server or provider confirmation.
+- Expand **Quote administration** when the full legacy controls are needed.
+  Those existing role-gated controls remain the compatibility and rollback
+  path; the editorial stream does not grant a new control or role. A stale,
+  incomplete, truncated, unavailable, or failed read withholds empty and
+  caught-up conclusions and offers recovery instead of substituting evidence.
+- Open **Clients** to use the lighter default-off view over the existing
+  bounded client directory. Each row shows recorded identity, contact details,
+  its most recent linked quote or event, and one **Review client** action. It
+  does not infer relationship value, unread activity, engagement, or lifetime
+  totals from the bounded page.
+- **Review client** opens that exact opaque client and focuses a relationship
+  overview with identity, active work shown, items needing review, the next
+  dated event, and one supported next step. A mismatched or missing arrival
+  recovers without selecting another client. Quote-scoped conversations stay
+  separate; opening one sends nothing and marks nothing read. Expand **More
+  client history and controls** for the existing Customer 360 tabs, immutable
+  versions, payment distinctions, and role-gated actions. The Ambient view adds
+  no client, quote, message, payment, booking, provider, or rebooking authority.
+- From a Living Opportunity, **Pilot** opens that exact opportunity's existing
+  populated explanation only after its identifier matches the object in view.
+  Missing or stale identity produces recovery instead of substituted guidance,
+  and closing restores focus to the global trigger.
+- From a new or editable quote, **Pilot** focuses the existing deterministic
+  command field only when the independent `VITE_PILOT_COMMAND_ENABLED` gate is
+  also enabled. Focus alone does not preview, stage, price, save, or send
+  anything. When commands are disabled, or no opportunity is active, Pilot
+  presents a nonempty unchanged-state explanation and either **Continue
+  editing** or **Choose an opportunity** rather than inferring context.
+- When that command bar and the default-off Ambient presentation are both
+  enabled in a browser with speech recognition, hold **Hold to speak** while
+  speaking and release to open a deterministic preview. Space or Enter provides
+  the same press-and-release interaction. **Waiting for microphone**,
+  **Listening**, and **Preparing your preview** acknowledge the action in place.
+  The transcript is bounded to the current browser capture, is not persisted,
+  and does not stage a draft change. Review the result, then choose **Apply to
+  draft** if it is correct; normal save and server repricing remain separate.
+  While that preview still matches the command, the command action reads
+  **Refresh preview** and stays visually secondary to **Apply to draft**. If
+  you edit the command, it returns to **Preview** so the displayed result is
+  never presented as current without recalculation.
+  Permission denial, unavailable speech service, missing microphone, network
+  failure, no speech, cancellation, lost focus, timeout, or route exit retains
+  the previous command, preview, and draft and points back to voice retry or
+  typed input. The ordinary flag-off Pilot keeps its click-to-toggle **Speak**
+  control. Real microphone permission and speech-service behavior remain a
+  hosted/manual acceptance step.
+- On a 390px Living Opportunity, the first in-flow section identifies the
+  opportunity, its state, what matters, and the next action. It does not float
+  over or cover later content. Use its Event, Menu, Pricing, and Proposal
+  controls to open exact populated context. The desktop summary is intentionally
+  not repeated in this mobile first layer.
+- A focused Workflow, Approval, Messages, supported Schedule event/conflict, or
+  supported Reporting action first shows **Finding** while
+  QuotePilot locates the exact requested item. It may show **ready** only after
+  the destination has loaded and focused that item. If the item is absent,
+  stale, truncated, or unavailable, QuotePilot keeps the originating work intact
+  and explains recovery instead of selecting another item.
+- An exact customer reply keeps its message identifier in bounded same-app
+  history state while the URL names only the quote-scoped conversation. This
+  focus neither sends a message nor marks one read. Schedule focuses only an
+  exact accepted/booked opportunity that is present in the current bounded
+  tenant read; a missing item in a truncated read remains unknown, and conflict
+  focus requires a complete current conflict view. Reporting accepts only an
+  exact opportunity summary, bounded pipeline summary, or Ambient interaction-
+  health target. Its targeted opportunity read stays outside aggregate
+  denominators. Schedule does not use its legacy staff-lead field as proof of
+  authoritative operational staffing, so that staffing arrival remains
+  explicitly unavailable rather than focusing a substitute.
+- These source behaviors add no role, read, mutation, workflow, message,
+  pricing, provider, or payment authority. Full legacy Opportunities parity and
+  retirement, universal cross-domain ranking/freshness, hosted behavior, and
+  human acceptance remain open. These changes remain default-off; source text
+  alone does not establish deployment or activation.
+
+### Ambient object and Pilot policy foundations (source only)
+
+- In the default-off Living Opportunity, saved add-ons, rentals, bar, and
+  services become dependency-aware objects. Visible buttons and the equivalent
+  horizontal swipe may adjust only a reversible browser-memory scenario. The
+  scenario is not priced, saved, reserved, communicated, or treated as
+  availability evidence; `Keep current selection` restores the saved selection.
+- The tested Money object keeps five kinds of evidence separate: deposit
+  policy, deposit request, provider-confirmed deposit, balance request, and
+  final settlement. A request never becomes payment. A browser return never becomes provider
+  evidence. Local settlement-shaped data stays `Local record only`. Select
+  `Review payments` in the default-off Living Opportunity to open all five domains
+  with why they are shown, what they affect, the unchanged outcome, confidence, sources,
+  and next safe resolution. Closing restores focus and changes no money state.
+- Select `Review proposal` to review proposal completeness, the saved quote
+  version, current-pricing status, exactly what the customer sees,
+  portal issuance, and provider evidence without collapsing one into another.
+  The inspector describes prepare, send, rotate, and recovery paths, but performs
+  none of them. Continue only through the populated quote editor or existing
+  governed proposal controls. A provider acceptance is not delivery, a portal
+  issuance is not a view, and neither is proposal acceptance, booking, or
+  payment.
+- Select `Review conversation` to review what QuotePilot currently knows about
+  the conversation: sent, provider-reported delivery, portal view, latest reply,
+  and bounded inferred engagement remain separate. The same context also
+  explains exact change-request and follow-up evidence. It contains no send or
+  mark-read control; use its focused Messaging or Workflow handoff when
+  available. Closing or pressing `Escape`
+  restores focus to `Review conversation` and changes no conversation or
+  workflow state.
+- Pilot classifies navigation, query, draft mutation, simulation, trusted
+  mutation, communication, bulk action, and destructive action separately. V1
+  permits only the first four categories through already-existing handlers.
+  Draft mutations still require their exact preview and explicit outcome;
+  trusted, communication, bulk, destructive, unclassified, or mismatched-
+  authority commands fail closed and direct staff to the governed workflow.
+- Ask Pilot to show proposal blockers, explain the price, explain recorded-cost
+  margin, or prepare a client-safe summary. These are deterministic read-only
+  answers with consequence, do-nothing, confidence, provenance, and authority
+  language. Margin remains unavailable unless the signed-in staff role is
+  authorized and every covered cost is recorded. An exact command such as
+  `change package to Classic` may preview and stage the ordinary editable draft;
+  ambiguity or an unknown package fails closed.
+- For a Pilot option, state an explicit outcome such as
+  `get this under $9,000` or `improve margin`, then review the current price,
+  proposed changes, price difference, protected choices, confidence, and
+  sources. `Already within goal`, `No option fits safely`, and `Unavailable` are
+  complete outcomes and offer no adoption button. An available result requires
+  `Adopt in draft review`, which opens a populated review with saved
+  and proposed values plus **Apply scenario to draft** and **Keep current
+  draft**. Nothing changes before Apply. Apply changes only the listed fields in
+  the isolated editor draft; Keep changes nothing. If the organization, catalog
+  source/revision/freshness, selected scenario, or affected draft fields drift,
+  QuotePilot refuses adoption and asks for a fresh scenario. The outcome-named
+  trusted save still reprices and versions the quote.
+- These Ambient surfaces and deterministic helpers add no Firebase or provider
+  authority, grant no role, and cannot themselves save, authoritatively reprice,
+  send, mark read, accept a proposal, book, or confirm payment. They are local
+  source foundations, not deployment, hosted behavior, production-data
+  acceptance, provider-outcome, or human-acceptance evidence.
+
+### Customer decision room (source only)
+
+`VITE_PILOT_DECISION_ROOM_ENABLED` preserves the released portal subset when
+enabled alone. The AIUI-46 layout additionally requires default-off
+`VITE_AMBIENT_UI_ENABLED`. When both are enabled in a local
+build, the exact-token customer portal arranges the existing customer-safe
+proposal into a calm reading order: **Your event**, **Menu and service**,
+**Pricing**, **Planning assumptions**, tenant-authored **Terms**, **Possible
+additions**, **Your response**, and **Questions for your catering team**. This
+is a presentation change, not a broader customer read. Production builds keep
+this AIUI-46 replacement dormant while the Ambient gate is omitted.
+
+Each supported section offers **Ask a question**. It opens the one existing
+quote conversation and prepares ordinary editable starter text. The room
+immediately reports whether that text is ready, an existing draft was kept, an
+earlier send still needs reconciliation, or the conversation is read-only or
+unavailable. Nothing is sent until the customer chooses **Send message**.
+
+Catalog Admin's existing **Portal offer** checkbox remains off unless staff
+deliberately enable it for an add-on or rental. An active marked option that is
+not already in the proposal may appear under **Possible additions**, with its
+unit basis shown as per guest, per item, or for the event. Choosing it prepares
+one `Please add ...` line in the ordinary **Ask for changes** note. Choosing it
+again removes only the exact line the room generated during that browser
+session. Choosing **Accept proposal** or **Decline proposal** also removes any
+still-generated addition lines and acknowledges that cleanup before the
+customer continues. If the customer already wrote the same sentence, their
+words are kept and are never treated as reversible generated text. The
+customer can review, edit, remove, or send the note.
+
+Preparing an addition never changes the selected package, items, totals,
+deposit, revision, payment, booking, or provider evidence. The displayed unit
+price is not a promise of the final total effect. Staff review the request and
+the normal trusted save remains the only pricing and version authority. The
+browser-local exact-token path mirrors the same bounded terms and option shape;
+it does not gain canonical Firebase access. Hosted exact-token behavior,
+production data, provider outcomes, and human acceptance remain separate open
+gates.
 
 ## Model assist in CREATE
 
@@ -1408,5 +1716,6 @@ same save path as every other catalog field.
 
 ## Related Docs
 - Product setup and commands: `README.md`
+- Feature inventory and implementation chronology: `docs/FEATURE_MATRIX.md`
 - Launch operations: `docs/LAUNCH_RUNBOOK.md`
 - Release and governance policy: `docs/VERSION_CONTROL.md` and `docs/DOC_SYSTEM.md`

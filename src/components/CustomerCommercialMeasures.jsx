@@ -68,7 +68,7 @@ function MeasureCard({ measure }) {
       data-measure-id={measure?.id || "unknown"}
       data-measure-state={modelState(measure)}
     >
-      <span>{measure?.label || "Commercial amount"}</span>
+      <span>{measure?.label || "Recorded amount"}</span>
       <strong>{measureAmountLabel(measure)}</strong>
       <small>{measureCoverageLabel(measure)}</small>
       {evidenceMissing > 0 && (
@@ -197,9 +197,9 @@ export function CustomerCommercialMeasuresPresentation({
     >
       <div className="workspace-route-head">
         <div>
-          <p className="eyebrow">Customer record evidence</p>
-          <h2 id="customer-commercial-measures-title">Commercial measures</h2>
-          <p className="muted">Quote and booking measures; provider-confirmed payments require Firebase-backed Customer 360.</p>
+          <p className="eyebrow">Client record</p>
+          <h2 id="customer-commercial-measures-title">Quotes, bookings, and payments</h2>
+          <p className="muted">Recorded quote and booking amounts. Payment totals appear only when provider-confirmed.</p>
         </div>
         <span className="source-note">
           Source: {measures?.sourceLabel || "Customer workspace source not confirmed"}
@@ -209,7 +209,7 @@ export function CustomerCommercialMeasuresPresentation({
       {fatalError ? (
         <div className="reporting-evidence-rail reporting-evidence-error" role="alert">
           <div className="reporting-evidence-copy">
-            <h3>Commercial measures unavailable</h3>
+            <h3>Recorded totals unavailable</h3>
             <p>The customer read could not be evaluated. No amount or repeat-event result is being shown.</p>
           </div>
           {typeof onRetry === "function" && (
@@ -221,17 +221,17 @@ export function CustomerCommercialMeasuresPresentation({
       ) : initialLoading ? (
         <p className="source-note" role="status">Evaluating customer-scoped quote and payment evidence.</p>
       ) : !measures ? (
-        <p className="source-note" role="status">No completed customer read is available for commercial measures.</p>
+        <p className="source-note" role="status">No completed client read is available for recorded totals.</p>
       ) : (
         <>
           {loading && (
             <p className="source-note" role="status">
-              Refreshing Customer 360; the prior displayed measures remain visible.
+              Refreshing the client overview; the previous recorded totals remain visible.
             </p>
           )}
           {(stale || (text(error) && measures)) && (
             <p className="warning-note" role="alert">
-              The latest Customer 360 refresh did not complete. These retained displayed-record measures may be stale.
+              The latest client overview refresh did not complete. These retained totals may be stale.
             </p>
           )}
           <p className="source-note" data-commercial-measures-scope={measures?.scope?.kind || "unknown"}>
@@ -241,7 +241,7 @@ export function CustomerCommercialMeasuresPresentation({
             {measures.evidenceBoundary || "Derived from customer-scoped canonical quote records only."}
           </p>
           <p className="warning-note">
-            Operational commercial measures only; do not treat these values as an accounting ledger, cash reconciliation, or recognized-revenue report.
+            Operational quote and payment totals only. Do not treat these values as an accounting ledger, cash reconciliation, or recognized-revenue report.
           </p>
           {underlyingState === "partial" && (
             <p className="warning-note" role="status" data-capability-state="partial">
@@ -253,7 +253,7 @@ export function CustomerCommercialMeasuresPresentation({
               No eligible customer-linked quote records are available in this completed read.
             </p>
           ) : (
-            <div className="dashboard-grid" aria-label="Commercial measures from displayed customer quote records">
+            <div className="dashboard-grid" aria-label="Recorded quote, booking, and payment totals">
               {measureList.map((measure) => (
                 <MeasureCard key={measure.id} measure={measure} />
               ))}
@@ -279,7 +279,7 @@ export default function CustomerCommercialMeasures({
     try {
       measures = buildCustomerCommercialMeasures(workspace);
     } catch {
-      derivationError = "Commercial measures could not be derived from this customer read.";
+      derivationError = "Recorded totals could not be derived from this client read.";
     }
   }
 

@@ -801,7 +801,7 @@ export default function KitchenBeoArtifactPanel({
       />
 
       <aside className="source-note" data-beo-proof-boundary="generation-freshness-use">
-        <strong>Proof boundary:</strong> server generation, freshness, kitchen review, publication, and operational completion are separate facts. Generating or downloading this PDF changes no proposal acceptance, booking, payment, portal, or customer-message state.
+        <strong>Evidence boundary:</strong> server generation, freshness, kitchen review, publication, and operational completion are tracked separately. Generating or downloading this PDF changes no proposal acceptance, booking, payment, portal, or customer-message state.
       </aside>
     </div>
   );
@@ -817,6 +817,7 @@ export default function KitchenBeoArtifactPanel({
     <div
       ref={dialogRef}
       className="modal-overlay"
+      data-layout-overlap-allowed="true"
       role="dialog"
       aria-modal="true"
       aria-labelledby={panelHeadingId}

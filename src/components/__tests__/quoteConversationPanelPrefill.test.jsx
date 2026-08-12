@@ -102,33 +102,49 @@ afterEach(() => {
 
 describe("QuoteConversationPanel prefill", () => {
   test("a prefill request opens the closed panel and seeds the empty composer", async () => {
+    const onPrefillResolution = vi.fn();
     await renderPanel();
     expect(container.querySelector(".quote-conversation-launch")).toBeTruthy();
     expect(container.querySelector("textarea")).toBeNull();
 
-    await renderPanel({ prefill: { id: 1, text: "Question about the pricing: " } });
+    await renderPanel({
+      prefill: { id: 1, text: "Question about the pricing: " },
+      onPrefillResolution
+    });
 
     const textarea = container.querySelector("textarea");
     expect(textarea).toBeTruthy();
     expect(textarea.value).toBe("Question about the pricing: ");
+    expect(textarea).toBe(document.activeElement);
+    expect(onPrefillResolution).toHaveBeenCalledWith(expect.objectContaining({
+      id: 1,
+      status: "staged"
+    }));
     expect(clients.load).toHaveBeenCalledTimes(1);
   });
 
   test("a prefill request never overwrites a draft the user already typed", async () => {
+    const onPrefillResolution = vi.fn();
     await renderPanel({ defaultOpen: true });
     const textarea = container.querySelector("textarea");
     act(() => enterTextareaValue(textarea, "My own carefully typed question."));
 
     await renderPanel({
       defaultOpen: true,
-      prefill: { id: 2, text: "Question about the event details: " }
+      prefill: { id: 2, text: "Question about the event details: " },
+      onPrefillResolution
     });
 
     expect(container.querySelector("textarea").value)
       .toBe("My own carefully typed question.");
+    expect(onPrefillResolution).toHaveBeenCalledWith(expect.objectContaining({
+      id: 2,
+      status: "preserved_draft"
+    }));
   });
 
   test("a prefill request never disturbs an unresolved send attempt", async () => {
+    const onPrefillResolution = vi.fn();
     const attempt = beginConversationPendingAttempt({
       identity: IDENTITY,
       body: "Unresolved message awaiting exact reconciliation.",
@@ -143,13 +159,18 @@ describe("QuoteConversationPanel prefill", () => {
     try {
       await renderPanel({
         defaultOpen: true,
-        prefill: { id: 3, text: "Question about the pricing: " }
+        prefill: { id: 3, text: "Question about the pricing: " },
+        onPrefillResolution
       });
 
       const textarea = container.querySelector("textarea");
       expect(textarea.value).toBe("Unresolved message awaiting exact reconciliation.");
       expect(textarea.disabled).toBe(true);
       expect(container.textContent).toContain("Reconcile message");
+      expect(onPrefillResolution).toHaveBeenCalledWith(expect.objectContaining({
+        id: 3,
+        status: "pending_attempt"
+      }));
     } finally {
       clearConversationPendingAttempt({
         identity: IDENTITY,
@@ -157,5 +178,27 @@ describe("QuoteConversationPanel prefill", () => {
         resolution: "safe_reset"
       });
     }
+  });
+
+  test("waits for conversation evidence and reports a read-only boundary instead of staging text", async () => {
+    const onPrefillResolution = vi.fn();
+    clients.load.mockResolvedValue({
+      ...emptyResult(),
+      readOnly: true,
+      readOnlyReason: "This proposal conversation is closed."
+    });
+
+    await renderPanel({
+      defaultOpen: true,
+      prefill: { id: 4, text: "Question about the terms: " },
+      onPrefillResolution
+    });
+
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(onPrefillResolution).toHaveBeenCalledWith({
+      id: 4,
+      status: "read_only",
+      message: "This proposal conversation is closed."
+    });
   });
 });

@@ -25,13 +25,33 @@ import {
   confirmCatalogPricing
 } from "../lib/catalogStarterPackService";
 
-const LOCAL_KEY = "quoteWizard.catalog";
+const LEGACY_LOCAL_KEY = "quoteWizard.catalog";
 const EDITABLE_SETTINGS_KEYS = Object.freeze(Object.keys(DEFAULT_SETTINGS));
 const ALLOW_LOCAL_CATALOG_FALLBACK =
   import.meta.env.DEV
   && ["1", "true", "yes", "on"].includes(
     String(import.meta.env.VITE_ALLOW_LOCAL_CATALOG_FALLBACK || "").trim().toLowerCase()
   );
+
+function localCatalogStorageKey(organizationId = "") {
+  const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
+  return resolvedOrganizationId
+    ? `${LEGACY_LOCAL_KEY}.${encodeURIComponent(resolvedOrganizationId)}`
+    : "";
+}
+
+export function readLocalCatalogCache(storage, organizationId = "") {
+  const key = localCatalogStorageKey(organizationId);
+  if (!key || !storage?.getItem) return null;
+  return storage.getItem(key);
+}
+
+export function writeLocalCatalogCache(storage, organizationId = "", catalog = null) {
+  const key = localCatalogStorageKey(organizationId);
+  if (!key || !storage?.setItem) return false;
+  storage.setItem(key, JSON.stringify(toStorageCatalog(catalog)));
+  return true;
+}
 
 function reflectCurrentPricingConfirmation(catalog) {
   if (
@@ -514,6 +534,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     saving: false,
     source: enabled ? (firebaseReady ? "firebase" : ALLOW_LOCAL_CATALOG_FALLBACK ? "local-defaults" : "firebase-required") : "auth-required",
     error: "",
+    observedAtISO: "",
     requiresFirebase: enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK,
     serverFingerprints: null,
     authoritativeVersion: 0,
@@ -536,6 +557,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         saving: false,
         source: "auth-required",
         error: "",
+        observedAtISO: "",
         requiresFirebase: false,
         serverFingerprints: null,
         eventTypes: [],
@@ -561,6 +583,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
                 loading: false,
                 source: `${source}-empty`,
                 error: "",
+                observedAtISO: new Date().toISOString(),
                 requiresFirebase: false,
                 serverFingerprints,
                 authoritativeVersion: prev.authoritativeVersion + 1,
@@ -570,12 +593,13 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
             }
             return;
           }
-          localStorage.setItem(LOCAL_KEY, JSON.stringify(toStorageCatalog(catalog)));
+          writeLocalCatalogCache(localStorage, organizationId, catalog);
           setState((prev) => ({
             ...prev,
             loading: false,
             source,
             error: "",
+            observedAtISO: new Date().toISOString(),
             requiresFirebase: false,
             serverFingerprints,
             authoritativeVersion: prev.authoritativeVersion + 1,
@@ -592,6 +616,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
             ...prev,
             loading: false,
             source: "firebase-required",
+            observedAtISO: "",
             requiresFirebase: true,
             serverFingerprints: null,
             error: "Firebase catalog is required in this environment. Configure Firebase to continue.",
@@ -601,7 +626,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           return;
         }
 
-        const cached = localStorage.getItem(LOCAL_KEY);
+        const cached = readLocalCatalogCache(localStorage, organizationId);
         const catalog = cached
           ? reflectCurrentPricingConfirmation(normalizeCatalog(JSON.parse(cached)))
           : defaultCatalog();
@@ -611,6 +636,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           loading: false,
           source: cached ? "local-cache" : "local-defaults",
           error: "",
+          observedAtISO: new Date().toISOString(),
           requiresFirebase: false,
           serverFingerprints: null,
           eventTypes: deriveEventTypesFromSettings(catalog.settings),
@@ -636,6 +662,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           ...prev,
           loading: false,
           source: shouldUseLocalFallback ? "fallback-defaults" : "firebase-required",
+          observedAtISO: "",
           requiresFirebase: !shouldUseLocalFallback,
           serverFingerprints: null,
           error: shouldUseLocalFallback
@@ -674,6 +701,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
       const reflected = reflectCurrentPricingConfirmation(normalized);
       return {
         ...prev,
+        observedAtISO: new Date().toISOString(),
         settings: reflected.settings,
         serverFingerprints: prev.serverFingerprints
           ? {
@@ -780,12 +808,13 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
       }
 
       if (ALLOW_LOCAL_CATALOG_FALLBACK) {
-        localStorage.setItem(LOCAL_KEY, JSON.stringify(toStorageCatalog(persistedCatalog)));
+        writeLocalCatalogCache(localStorage, organizationId, persistedCatalog);
       }
       setState((prev) => ({
         ...prev,
         saving: false,
         source: persistedSource,
+        observedAtISO: new Date().toISOString(),
         requiresFirebase: false,
         serverFingerprints: persistedFingerprints,
         authoritativeVersion: firebaseReady
@@ -832,6 +861,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
             ...prev,
             saving: false,
             source: reloaded.source,
+            observedAtISO: new Date().toISOString(),
             requiresFirebase: false,
             serverFingerprints: reloaded.serverFingerprints,
             authoritativeVersion: prev.authoritativeVersion + 1,
@@ -914,6 +944,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         ...prev,
         saving: false,
         source: reloaded.source,
+        observedAtISO: new Date().toISOString(),
         requiresFirebase: false,
         serverFingerprints: reloaded.serverFingerprints,
         authoritativeVersion: prev.authoritativeVersion + 1,
@@ -951,6 +982,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           ...prev,
           saving: false,
           source: reloaded.source,
+          observedAtISO: new Date().toISOString(),
           requiresFirebase: false,
           serverFingerprints: reloaded.serverFingerprints,
           authoritativeVersion: prev.authoritativeVersion + 1,

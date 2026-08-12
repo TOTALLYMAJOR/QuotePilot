@@ -10,7 +10,7 @@ function timelineBoundsSummary(pageInfo = {}) {
     notes.push(`Showing the latest ${pageInfo.returned} of ${pageInfo.candidateCount} recorded milestones.`);
   }
   if (pageInfo.quoteReadTruncated) {
-    notes.push(`The Customer 360 quote read reached its ${pageInfo.quoteReadLimit}-quote bound.`);
+    notes.push(`The client quote read reached its ${pageInfo.quoteReadLimit}-quote bound.`);
   }
   if (pageInfo.versionReadTruncated) {
     notes.push(
@@ -33,22 +33,22 @@ export function CustomerCommercialTimelinePresentation({ timeline, onOpenQuote }
     >
       <div className="workspace-route-head">
         <div>
-          <p className="eyebrow">Recorded relationship history</p>
-          <h2 id="customer-commercial-timeline-title">Commercial timeline</h2>
+          <p className="eyebrow">Client history</p>
+          <h2 id="customer-commercial-timeline-title">Quotes, decisions, and payments</h2>
         </div>
         <span className="source-note">Source: {timeline?.sourceLabel || "Customer workspace source not confirmed"}</span>
       </div>
       <p className="source-note">{timeline?.evidenceBoundary || "Recorded milestones only."}</p>
       <p className="source-note">
-        Provider-reported delivery and bounce milestones are not shown because the bounded Customer 360 read does not currently expose those receipts.
+        Provider-reported delivery and bounce milestones are not shown because this bounded client read does not include those receipts.
       </p>
       {state === "partial" && (
         <p className="warning-note" role="status" data-capability-state="partial">
-          {boundsSummary || "This timeline is derived from a bounded Customer 360 read."}
+          {boundsSummary || "This history is derived from a bounded client read."}
         </p>
       )}
       {items.length === 0 ? (
-        <p className="source-note">No recorded commercial milestones are available in this bounded customer view.</p>
+        <p className="source-note">No recorded quote, decision, booking, or payment activity is available in this bounded client view.</p>
       ) : (
         <ol className="customer-timeline-list">
           {items.map((item) => (

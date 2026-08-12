@@ -1,4 +1,5 @@
 import { classifyAttentionItem } from "../lib/statusSemantics";
+import { getWorkflowAttentionFocusId } from "../lib/quoteWorkflow";
 import { formatWorkspaceText } from "../lib/workspacePresentation";
 
 // Deterministic presentation contract for the flag-gated NOW surface. It
@@ -41,7 +42,7 @@ export function buildNowCard(item, quotes = []) {
     surface: "workflow",
     quoteId: item.quoteId,
     attentionType: item.type,
-    requestId: item.sourceRequestId || item.pendingRequests?.[0]?.id || ""
+    requestId: getWorkflowAttentionFocusId(item)
   };
 
   let sentence;
@@ -87,7 +88,7 @@ export function buildNowCard(item, quotes = []) {
   } else if (item.type === "anniversary_rebooking") {
     const eventName = formatWorkspaceText(item.eventName, { emptyLabel: "Prior event" });
     const boundWarning = item.sourceBound?.truncated
-      ? " The latest quote-history scan is incomplete; Customer 360 must check for older or matching records."
+      ? " The latest quote-history scan is incomplete; check the client overview for older or matching records."
       : "";
     const calendarWarning = item.calendarContext?.source === "tenant"
       ? ""

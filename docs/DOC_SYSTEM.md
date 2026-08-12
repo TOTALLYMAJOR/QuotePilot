@@ -70,6 +70,7 @@ as separate claims.
 | Current delivery health and risk posture | `PROJECT_STATUS.md` | Includes what is working now and current blockers. |
 | Priority backlog and sequencing | `DEV_TASKS.md` | Open items only; no progress narrative. |
 | Historical shipped changes | `CHANGELOG.md` | Immutable history by date/version/merge period. |
+| Feature inventory, function served, and implementation cohorts | `docs/FEATURE_MATRIX.md` | Current source mapping plus a Git-grounded chronology index. Detailed change history remains in `CHANGELOG.md`; operational/deployment truth remains in `PROJECT_STATUS.md`. |
 | Release workflow/process policy | `docs/VERSION_CONTROL.md` | References this doc for ownership rules. |
 | Agent policy and skill governance | `docs/AGENT_GOVERNANCE.md` | `docs/SKILLS.md` remains index-only. |
 | Cloud/local orchestration policy and lane contracts | `docs/ORCHESTRATION_BLUEPRINT.md` | Operational commands and scenarios live in `docs/ORCHESTRATION_RUNBOOK.md`. |

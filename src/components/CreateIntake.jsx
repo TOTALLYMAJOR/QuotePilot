@@ -373,7 +373,7 @@ export default function CreateIntake({
           {hasDraft && (
             <div className="create-intake-apply">
               <button type="button" className="cta" onClick={applyAll} disabled={appliedAt === "all"}>
-                {appliedAt === "all" ? "Applied — review below" : `Apply ${result.facts.length} fact${result.facts.length === 1 ? "" : "s"} to the draft`}
+                {appliedAt === "all" ? "Added - review below" : `Add ${result.facts.length} detail${result.facts.length === 1 ? "" : "s"} to the draft`}
               </button>
               <small>Applying prefills the builder below. Every value stays editable, and saving re-prices on the server.</small>
             </div>

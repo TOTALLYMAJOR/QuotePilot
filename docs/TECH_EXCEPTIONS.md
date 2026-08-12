@@ -29,8 +29,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   `VITE_PILOT_MARGINS_ENABLED`, and `VITE_PILOT_DECISION_ROOM_ENABLED`, all
   default off in generic/local builds; the first seven are production-bound
   to true by the deployment workflows since `v0.6.0`, and the decision-room
-  gate is production-bound the same way by owner decision on 2026-08-11,
-  taking effect at the next release from this branch) are reviewed with
+  gate is production-bound the same way since `v0.7.0`) are reviewed with
   it. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.

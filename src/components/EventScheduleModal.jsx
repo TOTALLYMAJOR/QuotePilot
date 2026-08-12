@@ -386,17 +386,21 @@ export function EventScheduleView({
   staffLeads = [],
   capacityLimit = 400,
   currentUserEmail = "",
+  arrivalContext = null,
+  onArrivalResolution = null,
   returnFocusRef = null
 }) {
   const embedded = presentation === "embedded";
   const todayIso = toIsoDate(new Date());
   const routeHeadingRef = useRef(null);
   const loadGenerationRef = useRef(0);
+  const arrivalReportRef = useRef("");
   const [state, setState] = useState({
     loading: true,
     error: "",
     source: "",
     quotes: [],
+    stale: false,
     truncated: false,
     organizationId: ""
   });
@@ -410,6 +414,54 @@ export function EventScheduleView({
   const [dropLaneKey, setDropLaneKey] = useState("");
   const [dropFeedback, setDropFeedback] = useState(null);
   const dropRunRef = useRef(0);
+  const arrivalFocus = arrivalContext?.focus || {};
+  const exactArrivalActive = Boolean(
+    open
+    && arrivalContext?.surfaceId === "schedule"
+    && arrivalContext?.destination === "schedule"
+    && arrivalContext?.focusConsumerState === "supported"
+    && ["review_event_schedule", "review_schedule_conflict"].includes(arrivalContext?.intentId)
+    && String(arrivalFocus.quoteId || "").trim()
+  );
+  const unsupportedScheduleArrival = Boolean(
+    open
+    && arrivalContext?.surfaceId === "schedule"
+    && !exactArrivalActive
+  );
+  const exactArrivalKey = arrivalContext?.surfaceId === "schedule"
+    ? [
+        arrivalContext.intentId,
+        arrivalContext.object?.type,
+        arrivalContext.object?.id,
+        arrivalFocus.quoteId
+      ].filter(Boolean).join(":")
+    : "";
+
+  const reportArrivalResolution = (resolution) => {
+    if (
+      arrivalContext?.surfaceId !== "schedule"
+      || typeof onArrivalResolution !== "function"
+    ) return;
+    const next = {
+      ...resolution,
+      focus: { quoteId: String(arrivalFocus.quoteId || "").trim() },
+      object: {
+        id: String(arrivalContext.object?.id || "").trim(),
+        type: String(arrivalContext.object?.type || "").trim()
+      }
+    };
+    const signature = JSON.stringify(next);
+    if (arrivalReportRef.current === signature) return;
+    arrivalReportRef.current = signature;
+    onArrivalResolution(next);
+  };
+
+  useEffect(() => {
+    arrivalReportRef.current = "";
+    if (exactArrivalActive || unsupportedScheduleArrival) {
+      reportArrivalResolution({ status: "pending" });
+    }
+  }, [exactArrivalActive, exactArrivalKey, unsupportedScheduleArrival]);
 
   const load = async () => {
     const readOrganizationId = String(organizationId || "").trim();
@@ -423,6 +475,7 @@ export function EventScheduleView({
           error: "",
           source: "",
           quotes: [],
+          stale: false,
           truncated: false,
           organizationId: readOrganizationId
         }
@@ -438,6 +491,7 @@ export function EventScheduleView({
         error: "",
         source: result.source,
         quotes: result.quotes,
+        stale: result.stale === true,
         truncated: result.truncated === true,
         organizationId: readOrganizationId
       });
@@ -493,6 +547,166 @@ export function EventScheduleView({
     () => buildConflictInsights(scheduledEvents, capacityLimit),
     [scheduledEvents, capacityLimit]
   );
+
+  useEffect(() => {
+    if (!unsupportedScheduleArrival) return;
+    if (arrivalContext?.intentId === "review_staffing_schedule") {
+      reportArrivalResolution({
+        status: "recovery",
+        code: "authoritative_staffing_consumer_unavailable",
+        reason: "Schedule has no exact consumer for the authoritative operational-staffing object.",
+        consequence: "No event or legacy booking.staffLead value was substituted, and no staffing assignment changed.",
+        nextResolution: "Return to the opportunity and keep the Staffing object open until its operational-staffing evidence is available."
+      });
+      return;
+    }
+    reportArrivalResolution({
+      status: "recovery",
+      code: "schedule_object_consumer_unavailable",
+      reason: "This exact object type does not have a supported Schedule focus target.",
+      consequence: "No nearby event or default schedule item was selected, and no schedule detail changed.",
+      nextResolution: "Return to the originating object and choose an action with an exact Schedule consumer."
+    });
+  }, [exactArrivalKey, unsupportedScheduleArrival]);
+
+  useEffect(() => {
+    if (!exactArrivalActive) return undefined;
+    const quoteId = String(arrivalFocus.quoteId || "").trim();
+    if (state.loading || state.organizationId !== String(organizationId || "").trim()) {
+      reportArrivalResolution({ status: "pending" });
+      return undefined;
+    }
+    if (state.error) {
+      reportArrivalResolution({
+        status: "recovery",
+        code: "schedule_evidence_unavailable",
+        reason: "The exact schedule opportunity could not be verified because the current tenant schedule read failed.",
+        consequence: "No alternate event was selected, and no schedule or assignment state changed.",
+        nextResolution: "Refresh Schedule, then reopen the exact opportunity action if the read still fails."
+      });
+      return undefined;
+    }
+    if (state.stale) {
+      reportArrivalResolution({
+        status: "recovery",
+        code: "schedule_evidence_stale",
+        reason: "The exact opportunity appears only in stale Schedule evidence, so its current operational state cannot be verified.",
+        consequence: "No event was presented as current, no alternate event was focused, and no schedule detail changed.",
+        nextResolution: "Reconnect or refresh Schedule before reopening the exact opportunity action."
+      });
+      return undefined;
+    }
+
+    const quote = state.quotes.find((item) => String(item?.id || "") === quoteId) || null;
+    if (!quote) {
+      reportArrivalResolution({
+        status: "recovery",
+        code: state.truncated ? "schedule_snapshot_incomplete" : "schedule_opportunity_missing",
+        reason: state.truncated
+          ? "The exact opportunity is not present in this bounded Schedule snapshot, so its current schedule state cannot be verified."
+          : "The exact opportunity is not present in the current tenant Schedule evidence.",
+        consequence: "No nearby, first-listed, or same-day event was substituted, and no schedule detail changed.",
+        nextResolution: "Refresh Schedule, or return to the originating opportunity and choose its current next action."
+      });
+      return undefined;
+    }
+    const scopedOrganizationId = String(organizationId || "").trim();
+    if (!scopedOrganizationId || String(quote.organizationId || "").trim() !== scopedOrganizationId) {
+      reportArrivalResolution({
+        status: "recovery",
+        code: "schedule_tenant_mismatch",
+        reason: "The exact opportunity could not be matched to the active tenant Schedule scope.",
+        consequence: "No cross-tenant or unscoped event was focused, and no schedule detail changed.",
+        nextResolution: "Return to the active tenant opportunity and reopen its exact Schedule action."
+      });
+      return undefined;
+    }
+    if (!STATUS_SET.has(String(quote.status || ""))) {
+      reportArrivalResolution({
+        status: "recovery",
+        code: "schedule_lifecycle_changed",
+        reason: "The exact opportunity is no longer accepted or booked, so it is not part of the current operational Schedule.",
+        consequence: "No other accepted or booked event was substituted, and navigation changed no lifecycle state.",
+        nextResolution: "Return to the opportunity and review its current lifecycle and ranked next action."
+      });
+      return undefined;
+    }
+    const exactEvent = scheduledEvents.find((item) => item.id === quoteId) || null;
+    if (!exactEvent || !parseIsoDate(exactEvent.date)) {
+      reportArrivalResolution({
+        status: "recovery",
+        code: "schedule_date_unavailable",
+        reason: "The exact accepted or booked opportunity has no valid event date to focus in Schedule.",
+        consequence: "No same-day or neighboring event was substituted, and no event date changed.",
+        nextResolution: "Return to the opportunity and record or correct its event date before reopening Schedule."
+      });
+      return undefined;
+    }
+    if (arrivalContext.intentId === "review_schedule_conflict") {
+      if (state.truncated) {
+        reportArrivalResolution({
+          status: "recovery",
+          code: "schedule_conflict_evidence_incomplete",
+          reason: "The bounded Schedule snapshot is truncated, so the exact opportunity's conflict state may be incomplete.",
+          consequence: "No conflict was presented as current and no alternate event was focused.",
+          nextResolution: "Refresh a complete Schedule snapshot before reviewing this exact conflict."
+        });
+        return undefined;
+      }
+      if ((reasonsById.get(quoteId)?.size || 0) === 0) {
+        reportArrivalResolution({
+          status: "recovery",
+          code: "schedule_conflict_stale",
+          reason: "Current complete Schedule evidence no longer records a conflict for the exact opportunity.",
+          consequence: "No different conflict or event was substituted, and the earlier signal was not treated as current.",
+          nextResolution: "Return to the opportunity and review its newly ranked next action."
+        });
+        return undefined;
+      }
+    }
+    if (selectedIso !== exactEvent.date) {
+      setSelectedIso(exactEvent.date);
+      setAnchorIso(exactEvent.date);
+      reportArrivalResolution({ status: "pending" });
+      return undefined;
+    }
+
+    const target = Array.from(
+      dialogRef.current?.querySelectorAll("[data-schedule-event-id]") || []
+    ).find((element) => element.dataset.scheduleEventId === quoteId);
+    target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    target?.focus({ preventScroll: true });
+    if (target && document.activeElement === target) {
+      reportArrivalResolution({
+        status: "resolved",
+        itemId: quoteId,
+        eventDate: exactEvent.date
+      });
+    } else {
+      reportArrivalResolution({
+        status: "recovery",
+        code: "schedule_focus_failed",
+        reason: "The exact opportunity was loaded, but its Schedule detail could not receive focus.",
+        consequence: "No alternate event was focused, and no schedule or assignment state changed.",
+        nextResolution: "Refresh Schedule, then reopen the exact opportunity action."
+      });
+    }
+    return undefined;
+  }, [
+    arrivalContext?.intentId,
+    arrivalFocus.quoteId,
+    exactArrivalActive,
+    organizationId,
+    reasonsById,
+    scheduledEvents,
+    selectedIso,
+    state.error,
+    state.loading,
+    state.organizationId,
+    state.quotes,
+    state.stale,
+    state.truncated
+  ]);
 
   const selectedEvents = useMemo(
     () =>
@@ -877,18 +1091,19 @@ export function EventScheduleView({
   });
 
   useEffect(() => {
-    if (!open || !embedded || typeof window === "undefined") return undefined;
+    if (!open || !embedded || exactArrivalActive || typeof window === "undefined") return undefined;
     const frame = window.requestAnimationFrame(() => {
       routeHeadingRef.current?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [embedded, open]);
+  }, [embedded, exactArrivalActive, open]);
 
   if (!open) return null;
 
   return (
     <div
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      data-layout-overlap-allowed={embedded ? undefined : "true"}
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="event-schedule-title"
@@ -1079,6 +1294,7 @@ export function EventScheduleView({
                       <article
                         key={item.id}
                         id={scheduleEventDetailId(item.id)}
+                        data-schedule-event-id={item.id}
                         tabIndex={-1}
                         className={[
                           "schedule-event-card",

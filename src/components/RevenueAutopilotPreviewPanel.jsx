@@ -275,9 +275,9 @@ export default function RevenueAutopilotPreviewPanel({
     >
       <div className="workspace-route-head">
         <div>
-          <p className="eyebrow">Commercial recovery · preview only</p>
-          <h2 id="revenue-autopilot-preview-title">Revenue autopilot</h2>
-          <p className="muted">Deterministic follow-up and payment-reminder eligibility for one authoritative quote.</p>
+          <p className="eyebrow">Follow-up and payment reminders · preview only</p>
+          <h2 id="revenue-autopilot-preview-title">Follow-up automation</h2>
+          <p className="muted">Shows whether this quote meets the recorded rules for follow-ups and payment reminders.</p>
         </div>
         <div className="right-actions">
           <StatusChip {...view.presentation} />

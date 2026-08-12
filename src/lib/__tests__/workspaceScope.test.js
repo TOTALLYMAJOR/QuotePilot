@@ -53,11 +53,11 @@ describe("authenticated workspace scope key", () => {
 
   test("keeps a direct customer portal mounted while auth resolution changes", () => {
     const resolving = buildWorkspaceRouteScopeKey({
-      publicPortal: true,
+      publicPortalToken: "portal-a",
       authSession: { loading: true, user: null }
     });
     const authenticated = buildWorkspaceRouteScopeKey({
-      publicPortal: true,
+      publicPortalToken: "portal-a",
       authSession: {
         loading: false,
         user: { uid: "owner-a" },
@@ -67,5 +67,10 @@ describe("authenticated workspace scope key", () => {
     });
 
     expect(authenticated).toBe(resolving);
+  });
+
+  test("uses a distinct public scope for each customer portal token", () => {
+    expect(buildWorkspaceRouteScopeKey({ publicPortalToken: "portal-a" }))
+      .not.toBe(buildWorkspaceRouteScopeKey({ publicPortalToken: "portal-b" }));
   });
 });

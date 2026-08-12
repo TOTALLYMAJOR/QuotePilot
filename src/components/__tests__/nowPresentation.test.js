@@ -61,6 +61,7 @@ describe("buildNowCard", () => {
     );
     expect(due.sentence).toBe("This proposal's follow-up is due today.");
     expect(due.action.label).toBe("Follow up");
+    expect(due.action.target.requestId).toBe("a-5");
   });
 
   test("counts pending approvals and falls back to the first pending request id", () => {
@@ -91,6 +92,7 @@ describe("buildNowCard", () => {
       "This booked legacy record needs accepted-source review before authoritative closeout actions are available."
     );
     expect(blockedSource.signal).toBe("risk");
+    expect(blockedSource.action.target.requestId).toBe("a-8");
     const blockedConfig = buildNowCard(
       { id: "a-9", type: "post_event_closeout", state: "blocked_configuration", quoteId: "q-1" },
       [quoteFixture]

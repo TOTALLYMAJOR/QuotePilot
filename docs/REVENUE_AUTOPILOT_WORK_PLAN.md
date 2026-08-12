@@ -187,7 +187,7 @@ flowchart TD
 
 Source implementation is complete only after final local QA and the
 requirement audit pass. Production delivery additionally requires every release
-gate above. Source phases are implemented in the working-tree candidate; final
-qualification is pending convergence and therefore this plan intentionally
-records no final test count. No provider, deployment, production-data, flag, or
-human-acceptance action has been performed by this plan.
+gate above. Source phases are merged into the tagged `v0.7.0` source, whose
+release-level CI and coordinated Firebase/Vercel deployment receipts do not
+establish this plan's provider outcomes, production-data acceptance, runtime or
+send-gate promotion, or human acceptance. Those gates remain open.

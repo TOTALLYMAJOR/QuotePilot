@@ -29,7 +29,7 @@ export default function QuoteDecisionDebtPanel({
       setRead({
         loading: false,
         result: null,
-        error: "Decision Debt requires a connected same-tenant quote record.",
+        error: "Decisions to review require a connected quote from this workspace.",
         stale: false
       });
       return;
@@ -53,7 +53,7 @@ export default function QuoteDecisionDebtPanel({
       setRead((current) => ({
         loading: false,
         result: current.result,
-        error: error?.message || "Decision Debt is unavailable for this quote.",
+        error: error?.message || "Decisions to review are unavailable for this quote.",
         stale: Boolean(current.result)
       }));
     }

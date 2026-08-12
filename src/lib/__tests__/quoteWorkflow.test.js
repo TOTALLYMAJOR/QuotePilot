@@ -10,6 +10,7 @@ import {
   getApprovalActionEligibility,
   getApprovalRequestExecutionEligibility,
   getRequestableApprovalActions,
+  getWorkflowAttentionFocusId,
   mergeUnreadReplyAttention
 } from "../quoteWorkflow";
 
@@ -35,6 +36,28 @@ function completeForm() {
 }
 
 describe("quote workflow helpers", () => {
+  test("uses recorded request identities where they exist and canonical queue identities for projected work", () => {
+    expect(getWorkflowAttentionFocusId({
+      id: "change-request:quote-1:2026-08-12T10:00:00.000Z",
+      type: "change_request",
+      sourceRequestId: "customer-request-1"
+    })).toBe("customer-request-1");
+    expect(getWorkflowAttentionFocusId({
+      id: "approval:quote-1",
+      type: "approval",
+      pendingRequests: [{ id: "approval-request-1" }]
+    })).toBe("approval-request-1");
+    expect(getWorkflowAttentionFocusId({
+      id: "follow-up:quote-1",
+      type: "follow_up"
+    })).toBe("follow-up:quote-1");
+    expect(getWorkflowAttentionFocusId({
+      id: "post-event-closeout:quote-1:blocked-source",
+      type: "post_event_closeout",
+      closeoutId: ""
+    })).toBe("post-event-closeout:quote-1:blocked-source");
+  });
+
   test("registers final-balance approval without changing the legacy default payment action", () => {
     expect(APPROVAL_ACTIONS[0]).toEqual({
       id: "send_payment_request",

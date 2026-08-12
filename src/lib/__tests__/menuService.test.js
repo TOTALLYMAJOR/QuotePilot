@@ -29,6 +29,18 @@ describe("menuService fallback behavior", () => {
     });
   });
 
+  test("keeps local catalog revision updates inside the active organization key", async () => {
+    await createEventType({
+      name: "Organization A dinner",
+      organizationId: "org-a",
+      expectedCatalogRevision: 0
+    });
+
+    expect(localStorage.getItem("quoteWizard.catalog.org-a")).toContain('"catalogRevision":1');
+    expect(localStorage.getItem("quoteWizard.catalog.org-b")).toBeNull();
+    expect(localStorage.getItem("quoteWizard.catalog")).toBeNull();
+  });
+
   test("returns persisted canonical menu fallbacks when firebase is unavailable", async () => {
     await expect(getEventTypes()).resolves.toEqual(
       expect.arrayContaining([
@@ -42,23 +54,42 @@ describe("menuService fallback behavior", () => {
   });
 
   test("executes local event, category, and menu CRUD when firebase is unavailable", async () => {
-    const eventType = await createEventType({ name: "Community Supper", organizationId: "org-a" });
+    const eventType = await createEventType({
+      name: "Community Supper",
+      organizationId: "org-a",
+      expectedCatalogRevision: 0
+    });
     const category = await createCategory({
       eventTypeId: eventType.id,
       name: "Mains",
-      organizationId: "org-a"
+      organizationId: "org-a",
+      expectedCatalogRevision: 1
     });
     const item = await createMenuItem({
       eventTypeId: eventType.id,
       categoryId: category.id,
       name: "Ribs",
       price: 6.25,
-      organizationId: "org-a"
+      organizationId: "org-a",
+      expectedCatalogRevision: 2
     });
 
-    await updateEventType(eventType.id, { name: "Updated Supper", organizationId: "org-a" });
-    await updateCategory(category.id, { name: "Entrees", organizationId: "org-a" });
-    await updateMenuItem(item.id, { name: "Smoked Ribs", price: 7.5, organizationId: "org-a" });
+    await updateEventType(eventType.id, {
+      name: "Updated Supper",
+      organizationId: "org-a",
+      expectedCatalogRevision: 3
+    });
+    await updateCategory(category.id, {
+      name: "Entrees",
+      organizationId: "org-a",
+      expectedCatalogRevision: 4
+    });
+    await updateMenuItem(item.id, {
+      name: "Smoked Ribs",
+      price: 7.5,
+      organizationId: "org-a",
+      expectedCatalogRevision: 5
+    });
 
     await expect(getEventTypes({ organizationId: "org-a" })).resolves.toContainEqual(
       expect.objectContaining({ id: eventType.id, name: "Updated Supper" })
@@ -70,7 +101,23 @@ describe("menuService fallback behavior", () => {
       expect.objectContaining({ id: item.id, name: "Smoked Ribs", price: 7.5 })
     );
 
-    await deleteMenuItem(item.id, { organizationId: "org-a" });
+    await deleteMenuItem(item.id, { organizationId: "org-a", expectedCatalogRevision: 6 });
     await expect(getMenuItems(eventType.id, { organizationId: "org-a" })).resolves.toEqual([]);
+  });
+
+  test("rejects a stale local menu mutation without changing the stored revision", async () => {
+    await createEventType({
+      name: "Current event",
+      organizationId: "org-a",
+      expectedCatalogRevision: 0
+    });
+
+    await expect(createEventType({
+      name: "Stale event",
+      organizationId: "org-a",
+      expectedCatalogRevision: 0
+    })).rejects.toMatchObject({ code: "aborted" });
+
+    expect(localStorage.getItem("quoteWizard.catalog.org-a")).toContain('"catalogRevision":1');
   });
 });

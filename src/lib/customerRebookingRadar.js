@@ -5,7 +5,7 @@ export const POST_EVENT_CLOSEOUT_WINDOW_DAYS = 7;
 
 export const CUSTOMER_REBOOKING_RADAR_EVIDENCE_COPY = Object.freeze({
   opportunity:
-    "This is a read-only opportunity, not a lead, booking, delivery, payment, or revenue fact.",
+    "This suggestion is read-only. It does not create a lead, booking, delivery, payment, or revenue record.",
   closeout:
     "No thank-you or review request was sent. Consent, suppression, idempotency, tenant calendar policy, and provider evidence remain required before outbound contact.",
   rebook:
@@ -31,8 +31,8 @@ const REBOOK_REVIEW_STATES = new Set([
 ]);
 const CLOSEOUT_REVIEW_ITEMS = Object.freeze([
   Object.freeze({ code: "internal_closeout", label: "Review the internal event closeout" }),
-  Object.freeze({ code: "thank_you", label: "Review a tenant-branded thank-you opportunity" }),
-  Object.freeze({ code: "review_request", label: "Review a consent- and suppression-gated review request" }),
+  Object.freeze({ code: "thank_you", label: "Review a branded thank-you message" }),
+  Object.freeze({ code: "review_request", label: "Review a customer-feedback request" }),
   Object.freeze({ code: "operational_follow_up", label: "Review unresolved operational follow-up" })
 ]);
 

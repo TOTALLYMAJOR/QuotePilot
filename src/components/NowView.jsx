@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import DecisionCard from "./DecisionCard";
 import StatusChip from "./StatusChip";
 import StaffEvidenceRail from "./StaffEvidenceRail";
@@ -8,7 +8,11 @@ import {
   selectUpcomingEvents,
   summarizeMoneyRows
 } from "./CommandCenterHome";
-import { buildNowCards, describeNowEmptyState } from "./nowPresentation";
+import {
+  NOW_CARD_LIMIT,
+  buildNowCards,
+  describeNowEmptyState
+} from "./nowPresentation";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
 import {
   formatWorkspaceDate,
@@ -31,7 +35,8 @@ export default function NowView({
   onOpenQuote,
   onOpenCustomer,
   onNewQuote,
-  nowDate = null
+  nowDate = null,
+  ambientMode = false
 }) {
   const state = snapshot || {
     loading: true,
@@ -41,9 +46,14 @@ export default function NowView({
     truncated: false
   };
   const attentionItems = state.attentionSummary?.items || [];
+  const [additionalAttentionVisible, setAdditionalAttentionVisible] = useState(false);
+  const hiddenAttentionCount = Math.max(0, attentionItems.length - NOW_CARD_LIMIT);
+  const cardLimit = ambientMode && additionalAttentionVisible
+    ? attentionItems.length
+    : NOW_CARD_LIMIT;
   const { cards, overflowCount } = useMemo(
-    () => buildNowCards({ items: attentionItems, quotes: state.quotes }),
-    [attentionItems, state.quotes]
+    () => buildNowCards({ items: attentionItems, quotes: state.quotes, limit: cardLimit }),
+    [attentionItems, cardLimit, state.quotes]
   );
 
   const today = nowDate instanceof Date ? nowDate : new Date();
@@ -86,7 +96,7 @@ export default function NowView({
             className="workspace-route-heading"
             tabIndex={-1}
           >
-            What deserves your attention
+            What to review today
           </h2>
           <p className="now-date">{dayLabel} · {dateLabel}</p>
         </div>
@@ -120,7 +130,7 @@ export default function NowView({
       {state.error && <p className="error-note" role="alert">{state.error}</p>}
 
       <div className="now-grid">
-        <div className="now-stream">
+        <div className="now-stream" id="now-attention-items">
           {state.loading && !state.attentionSummary && (
             <p className="source-note">Loading attention items...</p>
           )}
@@ -140,13 +150,21 @@ export default function NowView({
               onAction={runAction}
             />
           ))}
-          {overflowCount > 0 && (
+          {(ambientMode ? hiddenAttentionCount > 0 : overflowCount > 0) && (
             <button
               type="button"
               className="ghost command-center-more"
-              onClick={() => onOpenWorkflow?.({})}
+              aria-controls={ambientMode ? "now-attention-items" : undefined}
+              aria-expanded={ambientMode ? additionalAttentionVisible : undefined}
+              onClick={ambientMode
+                ? () => setAdditionalAttentionVisible((visible) => !visible)
+                : () => onOpenWorkflow?.({})}
             >
-              View {overflowCount} more in Workflow
+              {ambientMode
+                ? additionalAttentionVisible
+                  ? "Show fewer attention items"
+                  : `Show ${hiddenAttentionCount} more here`
+                : `View ${overflowCount} more in Workflow`}
             </button>
           )}
         </div>

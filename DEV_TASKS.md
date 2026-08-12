@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 11, 2026
+Last updated: August 12, 2026
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -59,6 +59,14 @@ Only open work belongs here. Current operational truth lives in
 
 ## P0 - Runtime-Gate Promotion
 
+- Qualify authoritative operational staffing as one coordinated
+  frontend/Functions/rules release. Keep `VITE_OPERATIONAL_STAFFING_ENABLED`
+  and `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` off until exact hosted admin
+  profile/availability, admin-and-sales assignment/reconciliation, customer and
+  cross-tenant denial, responsive accessibility, conflict, immutable receipt,
+  and rollback checks pass. Promote only one explicitly approved tenant setting
+  `operationalStaffingAuthorityEnabled=true`; never bulk-enable tenants or infer
+  acknowledgement, attendance, payroll, payment, booking, BEO, or readiness.
 - Complete authenticated hosted admin acceptance for Revenue Autopilot policy,
   customer controls, materialization, operations projection, and unread-reply
   acknowledgement. Then promote `REVENUE_AUTOPILOT_ENABLED=true` with
@@ -94,14 +102,31 @@ Only open work belongs here. Current operational truth lives in
   without mutating production.
 - Migrate remaining `functions.config()` compatibility before March 2027.
 
+## P1 - Ambient Intelligence Interface Program
+
+- Execute the 50-item [Ambient Intelligence work plan](docs/AMBIENT_INTELLIGENCE_WORK_PLAN.md)
+  under its AIUI-00 Experience Constitution, beginning with Pilot Slice Alpha
+  as the vertical proof before broader replacement. Keep the ambient shell
+  default-off until its compatibility, authority, interaction, accessibility,
+  sensory-preference, and rollback gates pass; source completion, deployment,
+  provider evidence, production-data acceptance, and human acceptance remain
+  separate milestones.
+- Finish the six items that do not yet have a material end-to-end slice:
+  AIUI-04 (quote-history/controller split and lifecycle parity), AIUI-12
+  (app-wide lighter visual grammar), AIUI-35 (accepted/booked operational
+  receipts), AIUI-42 (complete mobile gesture and equivalent-control system),
+  AIUI-48 (legacy retirement after parity and rollback evidence), and AIUI-50
+  (permanent zero-dead-click release gate and accepted rollout). The other 44
+  remain partial until their complete acceptance contracts close.
+
 ## P1 - Workspace Design Follow-ups
 
 Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
 
-- Promote Catalog from the Operations menu into primary sidebar navigation,
-  keeping the admin role gate.
-- Add a first-class Templates surface for event-type presets, default terms,
-  and reusable scope blocks (today editable only inside Catalog Admin).
+- Validate the materially implemented Ambient Library and first-class Event
+  Templates surfaces on the immutable candidate with authenticated admin and
+  sales roles, revision-conflict recovery, responsive layout, and rollback
+  evidence before describing AIUI-20 as complete.
 - Add inline editing on the event workspace quote page: editable fields with
   simulate-pricing round trips and Commercial Change Authority integration for
   committed quotes; saving stays intentional and versioned.
@@ -157,70 +182,36 @@ the change-request/command-bar impact preview; see the
 decision-room ask-about affordance in the customer portal. PR #53 merged
 the original seven-gate source to `main`, and `v0.6.0` deployed all seven
 gates to both production providers (PROJECT_STATUS.md has the exact
-CI/deployment run evidence). Everything built after that promotion — cost
-entry, the advisor card, version linking, the two later margin-range
-extensions, the catalog recovery-button bugfix, the ask-about affordance,
-and the production binding of its `VITE_PILOT_DECISION_ROOM_ENABLED` gate —
-remains unmerged and undeployed. Remaining program work:
+CI/deployment run evidence). PR #57 then merged the post-`v0.6.0` follow-up
+source to `main` at
+`fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`, now tagged and deployed as
+`v0.7.0` through governed Firebase and Vercel runs recorded in
+`PROJECT_STATUS.md`. Those receipts do not establish authenticated hosted or
+human acceptance. Remaining program work:
 
 On 2026-08-11 the owner settled this program's open decisions in one round;
-each bullet below carries its decided direction. Owner-decided, not yet
-merged: no PR yet — work continues accumulating on the pilot branch until
-the owner asks for the merge.
+each bullet below carries its decided direction. The source completed by PR
+#57 is merged and tagged; open production, provider, hosted-role, human-
+acceptance, and explicitly deferred product work remains listed here.
 
-- Merge and promote the post-`v0.6.0` pilot work above (owner will say
-  when; no PR until then), then run an authenticated staff acceptance pass
-  across all eight gates' production flag combination, including what
-  shipped after `v0.6.0`. Public route reachability and provider
+- Run an authenticated staff acceptance pass across the exact production
+  `v0.7.0` eight-gate combination. Public route reachability and provider
   acceptance do not substitute for that pass.
 - Bundle-baseline recalibration: owner-approved (2026-08-11), contingent
-  on it benefiting the app — execute after the pilot branch merges, from a
-  clean `main` checkout per docs/PERFORMANCE_GUARDRAILS.md (regenerate
-  baseline, delete the exception, keep the 5% allowance). Until then the
+  on it benefiting the app — execute from a clean `main` checkout per
+  docs/PERFORMANCE_GUARDRAILS.md (regenerate baseline, delete the exception,
+  keep the 5% allowance). Until then the
   zero-headroom exception continues to be re-measured per checkpoint.
-- Proposal decision room (design §4.7) — decided directions:
-  - Decidable options (decided: staged requests, no signature at the tap):
-    a customer's option choice in the portal lands as a staged change
-    request for staff approval, riding the existing change-request path —
-    it is a request, not an authoritative change, so the
-    `proposal-acceptance-v1` signature ceremony stays exactly where it is
-    (final proposal acceptance) and is not repeated per option. The
-    staff-side data model is built: `portalDecidable` marks on add-ons and
-    rentals (strictly default false, explicit-true only) with a flag-gated
-    Portal offer checkbox in Catalog Admin, covered by the
-    `catalog-cost-and-pricing-data-entry` contract revision 3. The
-    projection core is also built and dormant: the canonical snapshot
-    carries `decidableOptions` via the exported pure
-    `buildPortalDecidableOptions` (bounded, name-and-price only, excludes
-    already-included items by id and name), empty at every call site
-    until the org catalog is threaded in (`private-customer-authority`
-    revision 2). The projection now flows end-to-end server-side: the
-    authoritative pricing read returns the catalog collections, both
-    trusted quote builders store decidableOptionsProjection on the quote
-    (fresh at create/edit, carried forward re-bounded otherwise), and
-    every snapshot moment re-projects it. The portal offer cards are
-    built: an unlocked portal renders its projected options and a tap
-    drafts the canonical "Please add X." sentence into the existing
-    Request Changes message (append-only, deduplicated, length-capped) —
-    the full marks → projection → offer → staged-request loop now exists.
-    Remaining for this piece: mirror the field in src/lib/quoteStore.js's
-    client `buildPortalSnapshot` (local-fallback sync path only; needs a
-    quoteStore-owning contract bump), and hosted staff acceptance of the
-    whole loop.
-  - Per-block questions (conservative subset built; decided: block tags
-    stay message-body text, not a structured field — revisit only if
-    staff-side threading is actually wanted later). Terms and assumptions
-    are built: the tenant-authored portalTermsText setting flows Catalog
-    Admin -> settings -> quoteMeta -> snapshot -> a verbatim portal terms
-    block (absent while empty), and the assumptions block restates
-    recorded facts only; the options section is block-tagged too — six
-    addressable blocks plus the header. Remaining for full nine-block
-    parity: a dedicated investment breakdown block beyond the existing
-    pricing section, and cover/experience-narrative treatments
-    (presentational, no new data).
-  - Activity counsel: deferred by owner decision (2026-08-11) — no portal
-    view/interaction telemetry gets built for now; revisit post-pilot
-    with an explicit privacy-posture review if wanted.
+- Proposal decision room (design §4.7): the default-off source/local slice now
+  includes the calm content-first room, pricing section, recorded assumptions,
+  tenant terms, contextual question acknowledgement, reversible staff-marked
+  addition notes, local exact-token fallback parity, and three-width
+  accessibility/overlap proof. Remaining work is a governed connected exact-
+  token pass of the full staff mark → canonical projection → customer note →
+  staff review path, authenticated hosted review at 390/768/1440px, and human
+  acceptance. Preserve exact proposal-acceptance, pricing, payment, booking,
+  conversation, and provider boundaries. Activity counsel remains deferred by
+  owner decision (2026-08-11); revisit only with a separate privacy review.
 - Model-assisted intake lane per docs/INTENT_INTAKE_ADR.md — decided: yes,
   with BOTH OpenAI and Anthropic as selectable providers. The pure core
   module is built and tested (src/lib/intentParserCore.cjs, contract

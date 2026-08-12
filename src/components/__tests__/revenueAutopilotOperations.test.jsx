@@ -284,7 +284,7 @@ describe("RevenueAutopilotOperations", () => {
     ["success", operationsSnapshot(), true, "operations snapshot is current"],
     ["stale", operationsSnapshot({ readState: "stale" }), true, "Retained records remain visible"],
     ["partial", operationsSnapshot({ readState: "partial" }), true, "Missing records and outcomes remain unknown"],
-    ["error", null, false, "no retained snapshot is available"],
+    ["error", null, false, "no previous results are available"],
     ["recovery", operationsSnapshot({ readState: "recovery" }), true, "operations read is recovering"]
   ])("renders the complete %s read state", (state, snapshot, available, expectedCopy) => {
     const markup = renderToStaticMarkup(
@@ -294,7 +294,7 @@ describe("RevenueAutopilotOperations", () => {
     expect(markup).toContain(`data-capability-id="cwf-12-revenue-autopilot-operations"`);
     expect(markup).toContain(`data-capability-state="${state}"`);
     expect(markup).toContain(expectedCopy);
-    expect(markup).toContain("No implied sends or recovered revenue");
+    expect(markup).toContain("What these records do not prove");
   });
 
   test("renders every literal canonical Revenue Autopilot operations read marker", () => {

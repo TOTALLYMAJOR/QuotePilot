@@ -255,7 +255,7 @@ describe("KitchenBeoArtifactPanel", () => {
         : stateName === "UNKNOWN" ? "partial" : "success";
       expect(container.querySelector(`[data-capability-state="${expectedReadState}"]`)).not.toBeNull();
       expect(container.querySelector(`[data-beo-freshness-state="${stateName}"]`)).not.toBeNull();
-      expect(container.textContent).toContain("server generation, freshness, kitchen review, publication, and operational completion are separate facts");
+      expect(container.textContent).toContain("server generation, freshness, kitchen review, publication, and operational completion are tracked separately");
       expect(container.textContent).toContain("changes no proposal acceptance, booking, payment, portal, or customer-message state");
     }
   );

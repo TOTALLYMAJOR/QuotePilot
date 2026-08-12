@@ -163,4 +163,81 @@ describe("StaffEvidenceRail", () => {
     expect(partialMarkup).toContain("unread customer-reply Attention did not complete.");
     expect(partialMarkup).toContain('data-capability-state="partial"');
   });
+
+  test("keeps the standard presentation as the default", () => {
+    const markup = renderToStaticMarkup(
+      <StaffEvidenceRail
+        source="firebase"
+        loadedAt={1}
+        reads={{ attention: { status: "success" }, history: { status: "success" } }}
+      />
+    );
+
+    expect(markup).toContain('data-staff-evidence-presentation="standard"');
+    expect(markup).not.toContain("staff-evidence-rail--compact");
+  });
+
+  test.each([
+    {
+      label: "stale",
+      props: { error: "Refresh failed.", loadedAt: 1, stale: true },
+      state: "stale",
+      warning: "The latest refresh did not complete. Visible retained data comes from the last complete read."
+    },
+    {
+      label: "partial",
+      props: { error: "Quote history failed.", partial: true },
+      state: "partial",
+      warning: "Some workspace sources refreshed, and at least one did not. A complete refresh was not recorded."
+    },
+    {
+      label: "unavailable",
+      props: { error: "Staff read failed." },
+      state: "unavailable",
+      warning: "No complete staff snapshot is available yet."
+    },
+    {
+      label: "truncated",
+      props: { loadedAt: 1, truncated: true, truncationKnown: true },
+      state: "truncated",
+      warning: "The tenant-scoped staff snapshot completed within a bounded quote-history window."
+    }
+  ])("keeps the $label warning and source boundaries in compact mode", ({ props, state, warning }) => {
+    const markup = renderToStaticMarkup(
+      <StaffEvidenceRail
+        {...props}
+        presentation="compact"
+        organizationName="Northstar Catering"
+        organizationId="org-northstar"
+        source="firebase"
+        reads={{ attention: { status: "success" }, history: { status: "error" } }}
+      />
+    );
+
+    expect(markup).toContain("staff-evidence-rail--compact");
+    expect(markup).toContain('data-staff-evidence-presentation="compact"');
+    expect(markup).toContain(`data-capability-state="${state}"`);
+    expect(markup).toContain(warning);
+    expect(markup).toContain("Read details");
+    expect(markup).toContain("Tenant key: org-northstar");
+    expect(markup).toContain("does not prove provider delivery, customer acceptance, booking, payment, or operational completion");
+  });
+
+  test("keeps compact stale evidence visibly bounded", () => {
+    const markup = renderToStaticMarkup(
+      <StaffEvidenceRail
+        presentation="compact"
+        error="Refresh failed."
+        loadedAt={1}
+        stale
+        source="firebase"
+        reads={{ attention: { status: "success" }, history: { status: "error" } }}
+      />
+    );
+
+    expect(markup).toContain('data-staff-evidence-presentation="compact"');
+    expect(markup).toContain('data-capability-state="stale"');
+    expect(markup).toContain("last complete read");
+    expect(markup).toContain("does not prove provider delivery");
+  });
 });
