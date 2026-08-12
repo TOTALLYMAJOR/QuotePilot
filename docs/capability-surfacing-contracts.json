@@ -1,7 +1,48 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 27,
+  "catalogVersion": 28,
   "contracts": [
+    {
+      "id": "firebase-email-action-return-policy",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "security_private",
+      "audiences": [
+        "release operators",
+        "security reviewers"
+      ],
+      "summary": "Firebase verification and password-reset continue URLs are restricted to the canonical QuotePilot production /app URL, the one fixed isolated staging /app URL used for governed candidate acceptance, or loopback development.",
+      "backendPaths": [
+        "src/lib/authClient.js"
+      ],
+      "backendExports": [],
+      "frontendPaths": [],
+      "testPaths": [
+        "src/lib/__tests__/authClient.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/authClient.test.js",
+          "locator": "accepts the fixed isolated QuotePilot staging /app continue URL"
+        },
+        {
+          "path": "src/lib/__tests__/authClient.test.js",
+          "locator": "rejects lookalike QuotePilot staging hosts"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "fixed isolated staging return host"
+        }
+      ],
+      "headlessReason": "The exact-host allowlist is a private security boundary for the existing authentication surface. It neither exposes a new control nor grants tenant, role, Firestore, pricing, staffing, provider, or production authority.",
+      "safeOutcome": "Email actions can return only to an exact reviewed QuotePilot /app origin, while arbitrary previews, lookalike domains, credentials, alternate paths, queries, and fragments fail closed."
+    },
     {
       "id": "customer-directory-and-360",
       "reviewRevision": 3,

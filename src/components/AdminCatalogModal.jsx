@@ -1337,7 +1337,6 @@ export function AdminCatalogView({
     if (blockForNewerCatalog()) return;
     const itemId = String(item?.id || "").trim();
     if (!itemId || menuItemSaveInFlightRef.current.has(itemId)) return;
-    if (blockForOtherDrafts("item-update", itemId)) return;
     if (
       item?.active === false
       && blockManagedMenuMutationForDraft("deactivate", itemId)
@@ -1363,6 +1362,7 @@ export function AdminCatalogView({
       }
       return;
     }
+    if (blockForOtherDrafts("item-update", itemId)) return;
     menuItemSaveInFlightRef.current.add(itemId);
     setMenuItemSavingId(itemId);
     try {
@@ -1449,8 +1449,8 @@ export function AdminCatalogView({
 
   const handleDeleteManagedMenuItem = async (id) => {
     if (blockForNewerCatalog()) return;
-    if (blockForOtherDrafts()) return;
     if (blockManagedMenuMutationForDraft("delete", id)) return;
+    if (blockForOtherDrafts()) return;
     let draftEventTemplates;
     try {
       draftEventTemplates = parseEventTemplateDrafts(jsonDrafts.eventTemplates);

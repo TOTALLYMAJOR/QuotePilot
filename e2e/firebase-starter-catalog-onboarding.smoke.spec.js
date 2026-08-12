@@ -57,7 +57,7 @@ test("blank owner stages a starter pack, reviews pricing, and unlocks quoting", 
     { timeout: 45_000 }
   ).toBeGreaterThan(0);
 
-  await catalogDialog.getByRole("button", { name: "Pricing", exact: true }).click();
+  await catalogDialog.getByRole("tab", { name: "Pricing", exact: true }).click();
   const pricingApproval = catalogDialog.getByLabel("Pricing setup reviewed and approved");
   await expect(pricingApproval).not.toBeChecked();
   await pricingApproval.check();

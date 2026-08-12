@@ -8,6 +8,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Made the desktop sidebar menus participate in layout so an open Operations
+  menu cannot cover Account or another orientation control. Updated the
+  Catalog Admin browser contract to follow its accessible tab semantics and
+  exact combobox names; a deactivation blocked by other unsaved Catalog work
+  now restores the saved active value before explaining the safe resolution.
+  Email verification and password-reset return URLs now
+  accept only the canonical production host, the fixed isolated QuotePilot
+  staging host, or loopback development; lookalike hosts and arbitrary preview
+  domains remain rejected. This unblocks exact-candidate authentication UAT
+  without widening production data or mutation authority.
+
 - Replaced the operational-staffing emulator fixture's static test password
   with a fresh cryptographically random per-run credential. The value exists
   only in process memory, the disposable Auth emulator matrix still passes,
