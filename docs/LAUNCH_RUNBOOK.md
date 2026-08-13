@@ -93,9 +93,9 @@ Set repository or environment variables used by the deploy workflows:
 - `AUTH_PLATFORM_ADMIN_EMAILS`: GitHub secret used only to materialize the
   ignored Functions runtime configuration during an authorized backend deploy
 
-Stripe, Twilio, Resend, Turnstile, and rate-limit secrets stay in Firebase
-Secret Manager and must never enter GitHub variables, dotenv artifacts, or
-logs.
+Stripe, Twilio, Pingram, SMS contact-digest, Resend, Turnstile, and rate-limit
+secrets stay in Firebase Secret Manager and must never enter GitHub variables,
+dotenv artifacts, or logs.
 
 Configure the external release controls before the first promotion:
 
@@ -129,7 +129,9 @@ values in the approved GitHub variable and Firebase Secret Manager channels:
     evidence still require an exact controlled attempt
   - `EMAIL_FROM_NAME=QuotePilot by MBMApps`
   - `EMAIL_FROM_EMAIL=quotepilot@leaguepilot.us`
-  - `NOTIFICATIONS_SMS_PROVIDER=none` until Twilio is approved
+  - `NOTIFICATIONS_SMS_PROVIDER=none` until one owner-SMS provider is
+    explicitly promoted; the only valid choices are `none`, `twilio`, and
+    `pingram`, and current production remains `none`
   - `STRIPE_MODE=live` for an authorized production runtime; use `test` only in
     an isolated hosted acceptance environment
   - `BUYER_ACCESS_ENABLED=false` outside an explicitly approved acceptance or
@@ -159,19 +161,24 @@ values in the approved GitHub variable and Firebase Secret Manager channels:
   - `REVENUE_AUTOPILOT_TOKEN_SECRET` in Firebase Secret Manager only for signed
     unsubscribe-token issue/verification; never reuse a provider, Stripe,
     Turnstile, or rate-limit secret
-  - `TWILIO_AUTH_TOKEN` in Firebase Secret Manager before any SMS-capable
-    Function is deployed; keep the account SID, Messaging Service SID, and
-    owner destination in trusted non-secret runtime configuration
+  - `TWILIO_AUTH_TOKEN` and the shared `SMS_CONTACT_DIGEST_SECRET` in Firebase
+    Secret Manager before any Twilio SMS-capable Function is deployed; keep the
+    account SID, Messaging Service SID, and owner destination in trusted
+    non-secret runtime configuration
+  - `PINGRAM_API_KEY`, `PINGRAM_WEBHOOK_SECRET`, and the shared
+    `SMS_CONTACT_DIGEST_SECRET` in Firebase Secret Manager before any
+    Pingram-capable Function is deployed. Keep the public Pingram ingress
+    isolated with only its webhook signing secret and no sending credential.
 - Select `firebase_scope=backend` or `firebase_scope=all` only for an explicitly
   authorized backend window (requires Blaze plan). Both scopes deploy Firestore
   rules and Functions together.
 - The workflow-generated `functions/.env.tonicatering` is ignored, mode `0600`,
   validated immediately before deployment, and never uploaded as an artifact.
 
-## 5) Functions Runtime Configuration (Optional Stripe + Twilio + Resend Providers)
+## 5) Functions Runtime Configuration (Optional Stripe + Owner SMS (Twilio or Pingram) + Resend Providers)
 These values are server-only Firebase Functions configuration. The repository
 root `.env.example` is a browser-safe `VITE_*` template and must not contain
-Stripe, Twilio, or Resend credentials.
+Stripe, Twilio, Pingram, SMS contact-digest, or Resend credentials.
 
 Use [`functions/.env.example`](../functions/.env.example) as the Functions
 placeholder inventory for local/emulator validation only:
@@ -426,31 +433,97 @@ presence, local tests, Secret Manager entries, scheduler configuration, or a
 webhook 2xx alone is not deployment, provider, production-data, or human
 acceptance evidence.
 
-Buyer setup assistance is also available in-app:
-- `Integrations Ops` -> `Buyer Setup Assistant (Optional Twilio)` to check status and send SMS test.
+Owner SMS setup assistance is available to organization admins in
+`Integrations Ops` under `SMS provider choice & delivery evidence`. The browser
+may inspect safe configuration booleans and request one bounded test; it cannot
+select a provider, see credentials or full phone numbers, or read the private
+outbox, attempt, provider-binding, rate-limit, or webhook-receipt records.
 
-### Twilio activation gate
+### Owner SMS provider activation gate
 
-QuotePilot sends owner alerts through a Twilio Messaging Service, not directly
-from a raw phone number. Keep `NOTIFICATIONS_SMS_PROVIDER=none` until the
-Messaging Service has an attached sender, the applicable US A2P registration is
-approved, and the exact Functions release is ready for a controlled live test.
+This rail is only for the existing one-way notifications to the configured
+organization owner. It is not customer SMS, inbound messaging, or a two-way
+conversation feature. Provider choice is owned by the reviewed deployment:
 
-Store `TWILIO_AUTH_TOKEN` only in Firebase Secret Manager. Set the trusted
-non-secret runtime configuration to:
+```dotenv
+NOTIFICATIONS_SMS_PROVIDER=none
+```
+
+Keep that exact value in production until one provider completes the gate
+below. Enabling either provider requires a server-owned E.164
+`NOTIFICATIONS_OWNER_PHONE`, explicit
+`NOTIFICATIONS_OWNER_SMS_CONSENT=granted`, an approved sender and applicable
+A2P/compliance state, and the provider's exact signed endpoint registration.
+The owner destination and consent must be unset while the provider is `none`.
+
+For Pingram, choose exactly one reviewed regional origin; the materializer
+rejects every other URL:
+
+- US: `https://api.pingram.io`
+- CA: `https://api.ca.pingram.io`
+- EU: `https://api.eu.pingram.io`
+
+Set only the trusted non-secret runtime values through the governed deployment
+channel:
+
+```dotenv
+NOTIFICATIONS_SMS_PROVIDER=pingram
+PINGRAM_API_ORIGIN=https://api.pingram.io
+PINGRAM_FROM_NUMBER=<e164-approved-pingram-sender>
+PINGRAM_CONFIGURATION_GENERATION=<new-lowercase-generation>
+NOTIFICATIONS_OWNER_PHONE=<e164-owner-destination>
+NOTIFICATIONS_OWNER_SMS_CONSENT=granted
+```
+
+Create `PINGRAM_API_KEY`, `PINGRAM_WEBHOOK_SECRET`, and
+`SMS_CONTACT_DIGEST_SECRET` in Firebase Secret Manager only. Do not put them in
+the Functions dotenv, GitHub variables, logs, UAT receipts, or browser. The
+public `pingramSmsWebhook` ingress receives only its webhook secret and no API
+key or contact-digest secret. Increment the configuration generation whenever
+the endpoint, key, sender, destination, or consent basis changes. Register that
+exact HTTPS endpoint with Pingram before any send window.
+
+Twilio remains an alternative deployment-owned choice, not a simultaneous
+fallback. It continues to require an approved Messaging Service sender and the
+applicable US A2P registration:
 
 ```dotenv
 NOTIFICATIONS_SMS_PROVIDER=twilio
 TWILIO_ACCOUNT_SID=<twilio-account-sid>
 TWILIO_MESSAGING_SERVICE_SID=<twilio-messaging-service-sid>
-NOTIFICATIONS_OWNER_PHONE=<e164-owner-phone>
+NOTIFICATIONS_OWNER_PHONE=<e164-owner-destination>
+NOTIFICATIONS_OWNER_SMS_CONSENT=granted
 ```
 
-The Functions dotenv materializer rejects `TWILIO_AUTH_TOKEN`; local emulator
-fixtures belong only in the ignored `functions/.secret.local` file. After the
-governed release, send one controlled integration test and confirm Twilio
-accepted it and the destination device received it before treating SMS as
-operational. Configuration presence alone is not delivery proof.
+Store `TWILIO_AUTH_TOKEN` and the independently generated shared
+`SMS_CONTACT_DIGEST_SECRET` only in Firebase Secret Manager. The Functions
+dotenv materializer rejects every SMS secret; local emulator fixtures belong
+only in the ignored `functions/.secret.local` file.
+
+The source reserves quote/payment alerts in a transactional private outbox,
+then creates an immutable attempt with a frozen payload before dispatch. It
+permits one provider claim, never resends a claimed attempt, indexes any safe
+known tracking identity privately, and stores deduplicated signed callbacks in
+a durable inbox. A callback that arrives before binding remains pending and is
+reprocessed when the binding appears or by the bounded reconciler.
+Provider request acceptance is not carrier delivery. For Pingram, only a
+verified signed webhook receipt may move accepted evidence to `delivered` or
+`failed`; reconciliation reloads that original evidence and never invents
+delivery. A timeout
+or ambiguous network result remains indeterminate and is not automatically
+retried; reconcile the original request instead. Pingram automatic alerts stay
+blocked until one controlled diagnostic for the current configuration
+generation reaches a signed `SMS_DELIVERED` receipt. A signed unsubscribe or
+exact inbound `STOP` signal creates an indefinite v1 fail-closed hold on all
+owner SMS sends across provider selection. Subscribe, operator review, and
+renewed-consent evidence do not clear it, and this version has no browser or
+callable clear path.
+
+No Pingram Functions deployment, provider request, endpoint registration, or
+live SMS has been performed for this source slice. Promotion requires the exact
+credentials, sender/A2P and owner-consent records, registered endpoint, a
+governed deployment, and the controlled UAT below before SMS may be called
+operational.
 
 ### Stripe activation gate
 
@@ -869,13 +942,20 @@ target item set covers deposit dispatch, final-balance dispatch,
 signed-webhook/reconciliation behavior, cross-rail isolation, customer-safe
 projection, and customer/staff payment surfaces as applicable. For each
 selected release target, run
-`npm run release:uat:items -- --target <profile>` and complete all and only the
+`npm run release:uat:items -- --target <target> --sms-provider <none|twilio|pingram>`
+and complete all and only the
 printed ids against the exact coordinated hosted candidate. Local unit, rules,
 or emulator success is source evidence;
 it does not satisfy hosted payment UAT or establish Stripe test/live provider
 acceptance. A target attestation also does not prove the SHA or identity of an
 unbound frontend/backend dependency, so retain a separate provider acceptance
 record tying the coordinated frontend, Functions, and rules revision together.
+When recording that evidence through `Release UAT Attestation`, select the same
+exact `sms_provider` profile and bind `sms_configuration_generation` to the
+current lowercase Pingram generation. Use exact `not-applicable` for `none` or
+Twilio. The workflow rejects a provider/generation pair that differs from the
+current trusted GitHub runtime variables, so mutable activation configuration
+cannot be silently substituted under the same candidate SHA.
 
 For any release containing public buyer onboarding, every applicable `buyer.*`
 item is also mandatory. Browser-target items cover public Turnstile entry,
@@ -994,9 +1074,17 @@ does not satisfy these hosted items.
    - customer portal view and accept/decline paths update their owned state,
    - PDF export succeeds and omits any portal link without current issuance
      evidence,
-   - Integrations Ops setup assistant loads and reports status,
+   - Integrations Ops loads the deployment-owned owner SMS provider choice and
+     reports only safe configuration/evidence fields,
    - SMS test path returns disabled/not configured when
-     `NOTIFICATIONS_SMS_PROVIDER=none` without blocking core flow.
+     `NOTIFICATIONS_SMS_PROVIDER=none` without blocking core flow,
+   - when Pingram is in the release scope, the controlled owner-only test
+     keeps provider acceptance separate from signed delivery/failure, proves
+     readiness only after signed delivery for the exact generation, reprocesses
+     callback-before-binding, creates the indefinite cross-provider opt-out hold
+     with no browser or callable clear path, refuses an automatic
+     resend after a claim or indeterminate outcome, and exposes no secret,
+     full phone number, private provider identity, or private journal record.
    - for public buyer onboarding, a fresh server-verified Turnstile challenge
      may create only one idempotent fixed $1 USD Stripe test invoice and true
      Hosted Invoice Page while rate-limit, replay, wrong-host/action, and
@@ -1051,13 +1139,19 @@ After the reviewed PR merges:
    - `ci_run_id`: the exact successful main-push CI run id,
    - `rollback_sha`: the full target-specific last-known-good ancestor,
    - `firebase_scope`: `hosting`, `backend`, or `all` when applicable,
+   - `sms_provider`: the exact deployment-owned `none`, `twilio`, or `pingram`
+     profile for the release,
+   - `sms_configuration_generation`: the exact Pingram generation, or
+     `not-applicable` for `none` and Twilio,
    - `confirmation`: the exact target-specific `DEPLOY ...` phrase displayed by
      the workflow.
 6. The workflow must fail before dependency execution if the tag, remote main,
    CI jobs, workflow identity, human actor, protected environment, allowlist,
-   rollback, or confirmation is wrong. It repeats the evidence check after the
-   build and immediately before provider mutation. Reruns are rejected; start a
-   fresh dispatch instead.
+   rollback, SMS provider/generation profile, or confirmation is wrong. The
+   Firebase workflow also fails if that immutable profile differs from the
+   mutable runtime variables. It repeats the evidence check after the build and
+   immediately before provider mutation. Reruns are rejected; start a fresh
+   dispatch instead.
 7. Record the provider deployment id and accepted/READY state, but retain the
    existing target-specific last-known-good receipt.
 8. Complete the post-launch verification in section 7. Only after every check

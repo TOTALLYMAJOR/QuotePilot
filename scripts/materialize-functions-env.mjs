@@ -33,6 +33,13 @@ const required = (name) => {
 };
 
 const optional = (name, fallback = "") => String(process.env[name] || fallback).trim();
+const E164_PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
+const SMS_CONFIGURATION_GENERATION_PATTERN = /^[a-z0-9][a-z0-9._-]{2,63}$/;
+const PINGRAM_API_ORIGINS = new Set([
+  "https://api.pingram.io",
+  "https://api.ca.pingram.io",
+  "https://api.eu.pingram.io"
+]);
 const assertSingleLine = (name, value) => {
   if (/[\r\n]/.test(value)) {
     throw new Error(`${name} must be a single-line value.`);
@@ -107,27 +114,80 @@ if (emailFromEmail !== "quotepilot@leaguepilot.us") {
 }
 
 const smsProvider = optional("NOTIFICATIONS_SMS_PROVIDER", "none").toLowerCase();
-if (!["none", "twilio"].includes(smsProvider)) {
-  throw new Error("NOTIFICATIONS_SMS_PROVIDER must be none or twilio.");
+if (!["none", "twilio", "pingram"].includes(smsProvider)) {
+  throw new Error("NOTIFICATIONS_SMS_PROVIDER must be none, twilio, or pingram.");
 }
 
 const twilioAccountSid = optional("TWILIO_ACCOUNT_SID");
 const twilioMessagingServiceSid = optional("TWILIO_MESSAGING_SERVICE_SID");
+const pingramApiOrigin = optional("PINGRAM_API_ORIGIN");
+const pingramFromNumber = optional("PINGRAM_FROM_NUMBER");
+const pingramConfigurationGeneration = optional(
+  "PINGRAM_CONFIGURATION_GENERATION"
+).toLowerCase();
 const ownerPhone = optional("NOTIFICATIONS_OWNER_PHONE");
+const ownerSmsConsent = optional("NOTIFICATIONS_OWNER_SMS_CONSENT").toLowerCase();
+if (ownerPhone && !E164_PHONE_PATTERN.test(ownerPhone)) {
+  throw new Error("NOTIFICATIONS_OWNER_PHONE must use E.164 format.");
+}
+if (pingramFromNumber && !E164_PHONE_PATTERN.test(pingramFromNumber)) {
+  throw new Error("PINGRAM_FROM_NUMBER must use E.164 format.");
+}
+if (pingramApiOrigin && !PINGRAM_API_ORIGINS.has(pingramApiOrigin)) {
+  throw new Error(
+    "PINGRAM_API_ORIGIN must be an exact approved Pingram HTTPS API origin."
+  );
+}
+if (
+  pingramConfigurationGeneration
+  && !SMS_CONFIGURATION_GENERATION_PATTERN.test(pingramConfigurationGeneration)
+) {
+  throw new Error(
+    "PINGRAM_CONFIGURATION_GENERATION must be a 3-64 character lowercase deployment generation."
+  );
+}
+if (smsProvider !== "none" && ownerSmsConsent !== "granted") {
+  throw new Error(
+    "NOTIFICATIONS_OWNER_SMS_CONSENT=granted is required before SMS can be enabled."
+  );
+}
 if (
   smsProvider === "twilio"
   && (!twilioAccountSid || !twilioMessagingServiceSid || !ownerPhone)
 ) {
   throw new Error(
-    "TWILIO_ACCOUNT_SID, TWILIO_MESSAGING_SERVICE_SID, and NOTIFICATIONS_OWNER_PHONE are required when Twilio is enabled. Store TWILIO_AUTH_TOKEN in Firebase Secret Manager."
+    "TWILIO_ACCOUNT_SID, TWILIO_MESSAGING_SERVICE_SID, and NOTIFICATIONS_OWNER_PHONE are required when Twilio is enabled. Store TWILIO_AUTH_TOKEN and SMS_CONTACT_DIGEST_SECRET in Firebase Secret Manager."
   );
 }
 if (
-  smsProvider === "none"
-  && (twilioAccountSid || twilioMessagingServiceSid || ownerPhone)
+  smsProvider === "pingram"
+  && (
+    !pingramApiOrigin
+    || !pingramFromNumber
+    || !pingramConfigurationGeneration
+    || !ownerPhone
+  )
 ) {
   throw new Error(
-    "Twilio credentials and owner phone must be unset while NOTIFICATIONS_SMS_PROVIDER is none."
+    "PINGRAM_API_ORIGIN, PINGRAM_FROM_NUMBER, PINGRAM_CONFIGURATION_GENERATION, and NOTIFICATIONS_OWNER_PHONE are required when Pingram is enabled. Store PINGRAM_API_KEY, PINGRAM_WEBHOOK_SECRET, and SMS_CONTACT_DIGEST_SECRET in Firebase Secret Manager."
+  );
+}
+if (smsProvider !== "twilio" && (twilioAccountSid || twilioMessagingServiceSid)) {
+  throw new Error(
+    "Twilio configuration must be unset unless NOTIFICATIONS_SMS_PROVIDER is twilio."
+  );
+}
+if (
+  smsProvider !== "pingram"
+  && (pingramApiOrigin || pingramFromNumber || pingramConfigurationGeneration)
+) {
+  throw new Error(
+    "Pingram configuration must be unset unless NOTIFICATIONS_SMS_PROVIDER is pingram."
+  );
+}
+if (smsProvider === "none" && (ownerPhone || ownerSmsConsent)) {
+  throw new Error(
+    "Owner SMS destination and consent must be unset while NOTIFICATIONS_SMS_PROVIDER is none."
   );
 }
 
@@ -210,6 +270,9 @@ for (const secretName of [
   "RESEND_API_KEY",
   "RESEND_WEBHOOK_SECRET",
   "TWILIO_AUTH_TOKEN",
+  "PINGRAM_API_KEY",
+  "PINGRAM_WEBHOOK_SECRET",
+  "SMS_CONTACT_DIGEST_SECRET",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
   "REVENUE_AUTOPILOT_TOKEN_SECRET",
@@ -240,7 +303,15 @@ const values = {
   ...(smsProvider === "twilio" ? {
     TWILIO_ACCOUNT_SID: twilioAccountSid,
     TWILIO_MESSAGING_SERVICE_SID: twilioMessagingServiceSid,
-    NOTIFICATIONS_OWNER_PHONE: ownerPhone
+    NOTIFICATIONS_OWNER_PHONE: ownerPhone,
+    NOTIFICATIONS_OWNER_SMS_CONSENT: ownerSmsConsent
+  } : {}),
+  ...(smsProvider === "pingram" ? {
+    PINGRAM_API_ORIGIN: pingramApiOrigin,
+    PINGRAM_FROM_NUMBER: pingramFromNumber,
+    PINGRAM_CONFIGURATION_GENERATION: pingramConfigurationGeneration,
+    NOTIFICATIONS_OWNER_PHONE: ownerPhone,
+    NOTIFICATIONS_OWNER_SMS_CONSENT: ownerSmsConsent
   } : {}),
   STRIPE_MODE: stripeMode,
   COMMERCIAL_CHANGE_AUTHORITY_ENABLED: commercialChangeAuthorityEnabled,

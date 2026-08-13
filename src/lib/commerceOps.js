@@ -160,13 +160,35 @@ export async function getOperationsAuditSnapshot({ organizationId = "" } = {}) {
   return result.data || {};
 }
 
-export async function sendIntegrationTestSms({ message = "" } = {}) {
+export function createSmsTestRequestId(cryptoSource = globalThis.crypto) {
+  const uuid = String(cryptoSource?.randomUUID?.() || "")
+    .replaceAll("-", "")
+    .toLowerCase();
+  if (/^[a-f0-9]{32}$/.test(uuid)) return `sms_test_${uuid}`;
+  if (typeof cryptoSource?.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    cryptoSource.getRandomValues(bytes);
+    return `sms_test_${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
+  }
+  throw new Error("A secure SMS test request ID could not be created.");
+}
+
+export async function sendIntegrationTestSms({ requestId = "", message = "" } = {}) {
   ensureFunctionsReady();
+  const normalizedRequestId = String(requestId || "").trim().toLowerCase()
+    || createSmsTestRequestId();
+  if (!/^sms_test_[a-f0-9]{32}$/.test(normalizedRequestId)) {
+    throw new Error("SMS test request ID is invalid.");
+  }
   const call = httpsCallable(cloudFunctions, "sendIntegrationTestSms");
   const result = await call({
+    requestId: normalizedRequestId,
     message
   });
-  return result.data || {};
+  return {
+    ...(result.data || {}),
+    requestId: normalizedRequestId
+  };
 }
 
 export async function calculateQuotePricing({

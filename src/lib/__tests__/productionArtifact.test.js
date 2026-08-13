@@ -266,7 +266,7 @@ describe("artifact enumeration", () => {
     writeArtifact(
       artifactRoot,
       "config.json",
-      "-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END PRIVATE KEY-----\n"
+      ["-----BEGIN", "PRIVATE KEY-----\nnot-a-real-key\n-----END PRIVATE KEY-----\n"].join(" ")
     );
     expect(() => enumerateArtifactFiles(artifactRoot)).toThrow(/private key material/i);
   });

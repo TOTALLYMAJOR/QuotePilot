@@ -410,6 +410,27 @@ Authenticated hosted use and human acceptance remain separate for the listed
 staff capabilities even where source, local/emulator, CI, deployment, and public
 route evidence are complete.
 
+### Implemented in source, not deployed
+
+- The owner-SMS rail now has a deployment-owned
+  `NOTIFICATIONS_SMS_PROVIDER=none|twilio|pingram` choice, a provider-neutral
+  admin status/test surface, a transactional private outbox, single-call
+  attempt, provider binding, durable signed-callback inbox, and
+  reconciliation-safe outcomes. It remains one-way for existing owner alerts
+  only; it does not add customer SMS or a two-way inbox. Signed unsubscribe or
+  exact inbound STOP creates an indefinite v1 hold on all owner SMS sends across
+  provider selection, with no browser or callable clear path; provider
+  acceptance is not delivery, and claimed or indeterminate attempts are not
+  automatically resent.
+- No Pingram Functions deployment, endpoint registration, provider call, or
+  live SMS has occurred. Production remains
+  `NOTIFICATIONS_SMS_PROVIDER=none`. Promotion requires `PINGRAM_API_KEY`,
+  `PINGRAM_WEBHOOK_SECRET`, and `SMS_CONTACT_DIGEST_SECRET` in Firebase Secret
+  Manager, one exact approved US/CA/EU Pingram origin, a new lowercase
+  `PINGRAM_CONFIGURATION_GENERATION`, a server-owned E.164
+  owner destination, explicit consent, sender/A2P approval, exact
+  signed-webhook registration, and controlled hosted/provider UAT.
+
 ### Deployed but intentionally dormant
 
 | Capability | Current gate | Reason it remains off |
@@ -418,7 +439,7 @@ route evidence are complete.
 | Commercial Change enforcement | global `false`; all five observed tenant gates off | Simulation and evidence review remain usable. Enforcement requires authenticated admin-role acceptance and a separately authorized exact tenant gate. |
 | Revenue Autopilot preparation | `REVENUE_AUTOPILOT_ENABLED=false`; no observed tenant policies | The complete local authority matrix passes, but an authenticated hosted admin acceptance is still required before the global preparation-only gate is promoted. |
 | Revenue Autopilot outbound sends | `REVENUE_AUTOPILOT_SENDS_ENABLED=false` | The restricted Resend key can send but cannot independently verify webhook registration. Signed provider webhook, delivery/bounce/complaint, and recipient evidence remain open. |
-| SMS | `NOTIFICATIONS_SMS_PROVIDER=none` | The Twilio Messaging Service has no approved US A2P registration. Repeated carrier-rejected tests are prohibited until approval. |
+| SMS | `NOTIFICATIONS_SMS_PROVIDER=none` | Current production is off. Twilio still lacks approved US A2P registration, and the Pingram source slice has not been deployed or provider-tested. No provider may be selected until its sender/compliance, consent, secret, endpoint, and controlled-UAT gates pass. |
 | CRM synchronization | disabled | No reviewed server-authorized connector with provider acceptance is deployed. |
 
 ## Current Validation Evidence
@@ -442,13 +463,13 @@ route evidence are complete.
   3,518-test unit lane, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. After the owner-provisioning recovery and owner/admin Team access
-  authority, fresh local production-flag builds measure 2,784,674 / 391,901
-  bytes for compatibility and 3,715,051 / 391,901 for Ambient. The exact
-  temporary ceilings are 2,791,699 and 3,715,354 aggregate bytes respectively,
-  retaining only the previously observed per-profile CI offsets; both use the
-  391,901-byte largest-chunk ceiling. App Check provider code is excluded while
-  its browser flag is off. This remains an explicit temporary exception
+  build steps. After the operational Staff/invitation release, the current
+  Pingram source candidate measures 2,891,116 / 391,901 bytes for compatibility
+  and 3,817,075 / 391,901 for Ambient. The exact temporary ceilings are
+  2,898,141 and 3,817,378 aggregate bytes respectively, retaining only the
+  previously observed per-profile CI offsets; both use the 391,901-byte
+  largest-chunk ceiling. App Check provider code is excluded while its browser
+  flag is off. This remains an explicit temporary exception
   requiring optimization or reviewed recalibration and is source/local evidence;
   preview deployment, hosted roles and portal behavior, production timing,
   human acceptance, and rollback evidence remain open.
@@ -551,17 +572,22 @@ route evidence are complete.
    until role-specific hosted acceptance and exact tenant authorization close.
 5. Revenue Autopilot outbound sends lack independently verified provider webhook
    registration and hosted scheduler/provider acceptance. Keep sends off.
-6. Twilio SMS lacks A2P approval. Keep SMS off and avoid additional carrier-
-   rejected tests.
+6. Owner SMS remains off. Twilio lacks A2P approval; Pingram still lacks a
+   deployed credential/sender/consent/webhook/UAT receipt. Do not run another
+   provider attempt or automatically retry an indeterminate send before one
+   complete governed promotion path is approved.
 7. A disposable second-tenant create/activate/isolation/cleanup acceptance is
    still required. Existing organization documents do not substitute for that
    exact lifecycle proof.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. The customer-centered convergence bundle still uses the named temporary
-   no-headroom exception. Optimization or reviewed clean-main recalibration is
-   required before removing it.
+9. The workspace plus owner-SMS bundle uses named per-graph temporary ceilings:
+   2,898,141 bytes for compatibility and 3,817,378 bytes for Ambient, each
+   retaining only its previously observed runner offset above the measured
+   candidate. Exact-SHA CI confirmation is still required before merge, and
+   optimization or reviewed clean-main recalibration is required before the
+   exception can close.
 10. `functions.config()` compatibility remains in source and must migrate before
     Firebase removes the legacy API in March 2027.
 11. The repository still lacks an independent human reviewer for stronger
@@ -588,9 +614,13 @@ route evidence are complete.
    separate provider-delivery acceptance.
 4. Capture one controlled Resend quote-delivery attempt with provider accepted,
    delivered/bounced reconciliation, and recipient-inbox evidence kept distinct.
-5. Run the disposable second-tenant lifecycle and hosted cross-tenant/portal
+5. Prepare, but do not yet execute, the Pingram owner-SMS promotion record:
+   Secret Manager bindings, exact regional origin, new configuration generation,
+   sender/A2P and owner-consent evidence, registered signed endpoint, rollback,
+   opt-out-hold proof, and one controlled UAT plan.
+6. Run the disposable second-tenant lifecycle and hosted cross-tenant/portal
    denial matrix.
-6. Complete the bundle-exception closure path and continue `functions.config()`
+7. Complete the bundle-exception closure path and continue `functions.config()`
    migration planning.
 7. Define and review an exact-SHA non-production acceptance profile for the
    currently blocked provider and authoritative-staffing UAT items before any

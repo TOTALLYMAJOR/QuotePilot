@@ -103,11 +103,6 @@ describe("buyer access Invoice endpoint isolation", () => {
         "STRIPE_WEBHOOK_SECRET_NAME",
         "RESEND_API_KEY_SECRET_NAME"
       ],
-      sendIntegrationTestSms: [
-        "STRIPE_SECRET_NAME",
-        "STRIPE_WEBHOOK_SECRET_NAME",
-        "RESEND_API_KEY_SECRET_NAME"
-      ],
       reconcileDepositCheckout: ["STRIPE_SECRET_NAME"],
       reconcileFinalBalanceCheckout: ["STRIPE_SECRET_NAME"],
       stripeWebhook: ["STRIPE_WEBHOOK_SECRET_NAME"]
@@ -127,6 +122,18 @@ describe("buyer access Invoice endpoint isolation", () => {
           expect(source, `${exportName}:${secretName}`).not.toContain(secretName);
         }
       }
+    }
+
+    const smsTest = exportedFunctionSource("sendIntegrationTestSms");
+    expect(smsTest).not.toContain(".runWith({");
+    for (const secretName of [
+      ...genericNames,
+      "TWILIO_AUTH_TOKEN_SECRET_NAME",
+      "PINGRAM_API_KEY_SECRET_NAME",
+      "PINGRAM_WEBHOOK_SECRET_NAME",
+      "SMS_CONTACT_DIGEST_SECRET_NAME"
+    ]) {
+      expect(smsTest, `sendIntegrationTestSms:${secretName}`).not.toContain(secretName);
     }
 
     expect(FUNCTIONS_INDEX_SOURCE).not.toContain('readConfig("stripe.secret_key")');
@@ -460,7 +467,7 @@ describe("buyer access Invoice endpoint isolation", () => {
     const durableEmailFinalizer = sourceBetween(
       FUNCTIONS_INDEX_SOURCE,
       "async function finalizeProvisioningOrder",
-      "async function sendOwnerSms"
+      "function ownerSmsDocumentHash"
     );
     expect(durableEmailFinalizer).toContain(
       'const failedAtISO = dispatchLease?.state === "acquired"'
