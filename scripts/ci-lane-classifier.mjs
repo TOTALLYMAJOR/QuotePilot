@@ -16,6 +16,9 @@ const HIGH_RISK_EXACT = new Set([
   "src/hooks/useAuthSession.js",
   "firestore.rules",
   "firestore.indexes.json",
+  "firestore.connect-control.rules",
+  "firestore.connect-control.indexes.json",
+  "firebase.connect.staging.json",
   "scripts/migrate-to-multi-tenant.mjs",
   "scripts/ci-lane-classifier.mjs",
   "scripts/orchestration-lanes.sh",
@@ -41,7 +44,8 @@ const HIGH_RISK_EXACT = new Set([
 const HIGH_RISK_PREFIXES = [
   "functions/",
   "functions-connect/",
-  "config/stripe-connect/"
+  "config/stripe-connect/",
+  "infra/stripe-connect/"
 ];
 
 const AUTH_RULES_PATHS = new Set([
@@ -49,7 +53,9 @@ const AUTH_RULES_PATHS = new Set([
   "src/lib/authClient.js",
   "src/hooks/useAuthSession.js",
   "firestore.rules",
-  "firestore.indexes.json"
+  "firestore.indexes.json",
+  "firestore.connect-control.rules",
+  "firestore.connect-control.indexes.json"
 ]);
 
 const TENANT_WRITE_HINTS = [

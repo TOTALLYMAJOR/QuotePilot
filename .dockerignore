@@ -4,6 +4,11 @@
 .firebase
 .vercel
 node_modules
+.terraform
+*.tfstate
+*.tfstate.*
+*.tfplan
+gha-creds-*.json
 dist
 coverage
 playwright-report

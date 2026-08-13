@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 33,
+  "catalogVersion": 34,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -4247,7 +4247,7 @@
     },
     {
       "id": "stripe-connect-runtime-foundation",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "developer_infrastructure",
@@ -4255,7 +4255,7 @@
         "release_operators",
         "security_reviewers"
       ],
-      "summary": "A separately pinned, deploy-empty Stripe Connect Functions codebase and secret-free staging foundation manifest establish deployment and dependency isolation without adding a callable, provider credential, connected account, or Stripe request. The strict manifest now also records a five-minute recent-auth boundary plus App Check monitoring, disabled replay enforcement, and an unbound environment-specific public key; it rejects premature enforcement or key binding. Existing production and candidate workflows select only the legacy default codebase.",
+      "summary": "A separately pinned, deploy-empty Stripe Connect Functions codebase, secret-free staging manifest, and apply-disabled staging Terraform foundation establish runtime, data, identity, network, state, and deployment isolation without adding a callable, provider credential, connected account, cloud resource, or Stripe request. The strict manifest records a five-minute recent-auth boundary plus App Check monitoring, disabled replay enforcement, and an unbound environment-specific public key; it rejects premature enforcement or key binding. Existing production and candidate workflows select only the legacy default codebase, while the credential-free infrastructure workflow permits format/init/validate only.",
       "backendPaths": [
         "firebase.json",
         "functions-connect/index.js",
@@ -4263,9 +4263,21 @@
         "functions-connect/package.json",
         "functions-connect/package-lock.json",
         "config/stripe-connect/staging-foundation.json",
+        "firebase.connect.staging.json",
+        "firestore.connect-control.rules",
+        "firestore.connect-control.indexes.json",
+        "infra/stripe-connect/bootstrap/staging/main.tf",
+        "infra/stripe-connect/environments/staging/main.tf",
+        "infra/stripe-connect/modules/foundation/main.tf",
+        "infra/stripe-connect/modules/foundation/iam.tf",
+        "infra/stripe-connect/modules/foundation/network.tf",
+        "infra/stripe-connect/modules/foundation/secrets.tf",
         "scripts/ci-lane-classifier.mjs",
         "scripts/check-secret-assets.mjs",
         "scripts/check-stripe-connect-foundation.mjs",
+        "scripts/check-stripe-connect-infra.mjs",
+        ".github/dependabot.yml",
+        ".github/workflows/stripe-connect-infra-validation.yml",
         "scripts/deploy-firebase-production.mjs",
         "scripts/deploy-release-candidate.mjs",
         "scripts/prepare-production-artifact.mjs"
@@ -4276,6 +4288,7 @@
       "entryPointLocators": [],
       "testPaths": [
         "src/lib/__tests__/stripeConnectFoundation.test.js",
+        "src/lib/__tests__/stripeConnectInfrastructure.test.js",
         "src/lib/__tests__/deploymentSafety.test.js",
         "src/lib/__tests__/productionArtifact.test.js"
       ],
@@ -4287,6 +4300,14 @@
         {
           "path": "src/lib/__tests__/stripeConnectFoundation.test.js",
           "locator": "rejects undeclared manifest fields"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectInfrastructure.test.js",
+          "locator": "passes the exact secret-free and apply-disabled infrastructure policy"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectInfrastructure.test.js",
+          "locator": "keeps browser clients denied and isolates the Firebase deployment selector"
         },
         {
           "path": "src/lib/__tests__/deploymentSafety.test.js",
@@ -4313,10 +4334,18 @@
         {
           "path": "docs/STRIPE_CONNECT_PROGRAM.md",
           "locator": "## Isolation contract"
+        },
+        {
+          "path": "README.md",
+          "locator": "The source-only staging infrastructure lives under"
+        },
+        {
+          "path": "docs/VERSION_CONTROL.md",
+          "locator": "Stripe Connect staging infrastructure:"
         }
       ],
-      "headlessReason": "The checkpoint changes dependency, manifest, and deployment boundaries only. Revision 2 records the reviewed recent-auth and App Check monitor-then-enforce policy while keeping the provider key unbound and enforcement disabled. It intentionally exposes no Connect user surface or callable until isolated infrastructure and hosted Sandbox evidence are available.",
-      "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-bound, and separately reviewable."
+      "headlessReason": "The checkpoint changes dependency, manifest, infrastructure, and deployment boundaries only. Revision 3 adds staging-only Terraform, named-database client denial, exact-database IAM, isolated identities/secrets/network/egress, protected state, and exact GitHub OIDC source while keeping App Check registration, provider calls, plan, apply, deployment, and production absent. It intentionally exposes no Connect user surface or callable until applied isolated infrastructure and hosted Sandbox evidence are available.",
+      "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-bound, production-absent, client-denied, apply-disabled, and separately reviewable."
     },
     {
       "id": "organization-owner-authority",

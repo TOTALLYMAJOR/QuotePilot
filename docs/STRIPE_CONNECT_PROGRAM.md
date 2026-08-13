@@ -88,7 +88,14 @@ and human acceptance are distinct claims.
 - `config/stripe-connect/staging-foundation.json` is provider-disabled and
   intentionally incomplete; its empty infrastructure bindings are blockers,
   not placeholders to infer as ready.
+- A pinned staging-only Terraform module/root now defines the future named
+  database, conditional IAM, five service identities, empty secret containers,
+  private serverless network, fixed NAT egress, protected state bootstrap, and
+  exact GitHub OIDC admission. Its validation workflow has no credentials,
+  OIDC token permission, plan, or apply. App Check creation is forced off and
+  production infrastructure is absent. Pinned-provider local format/init/
+  validate is source evidence only; no cloud plan or resource exists.
 
-No connected account, App Check enforcement, Terraform resource, credential,
+No connected account, App Check enforcement, applied Terraform resource, credential,
 Stripe call, webhook destination, provider evidence, Connect deployment, hosted
 UAT, production enablement, or human acceptance is claimed.

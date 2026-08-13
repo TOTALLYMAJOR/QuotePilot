@@ -53,6 +53,7 @@ describe("Stripe Connect foundation policy", () => {
     );
     expect(source).toContain('"functions-connect/"');
     expect(source).toContain('"config/stripe-connect/"');
+    expect(source).toContain('"infra/stripe-connect/"');
   });
 
   test("keeps Connect runtime and manifest paths in the tracked secret scan", () => {
@@ -62,6 +63,7 @@ describe("Stripe Connect foundation policy", () => {
     );
     expect(source).toContain('"functions-connect/"');
     expect(source).toContain('"config/stripe-connect/"');
+    expect(source).toContain('"infra/stripe-connect/"');
   });
 
   test("build-selects App Check so the provider stays out of default-off graphs", () => {

@@ -438,6 +438,15 @@ dependencies only when validating that codebase with
 `functions:default` release selector with the generic `functions` selector.
 See [`docs/STRIPE_CONNECT_PROGRAM.md`](docs/STRIPE_CONNECT_PROGRAM.md).
 
+The source-only staging infrastructure lives under
+[`infra/stripe-connect/`](infra/stripe-connect/README.md). Run
+`npm run check:stripe-connect:infra` plus the pinned Terraform format/init/
+validate commands documented there. The tracked infrastructure workflow uses
+no Google credential or OIDC permission and contains no plan/apply step. A
+validated configuration is not a cloud plan, applied resource, App Check
+registration, Stripe binding, deployment, or hosted acceptance; each remains a
+separately authorized evidence gate.
+
 Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
 `test` or `live`, a secret/restricted key with the matching mode prefix, and a
 webhook secret. Event and Checkout Session `livemode` must also match. The

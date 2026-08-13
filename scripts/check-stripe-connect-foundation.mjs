@@ -68,12 +68,20 @@ for (const relativePath of [
 }
 
 const laneClassifier = fs.readFileSync(path.join(ROOT, "scripts", "ci-lane-classifier.mjs"), "utf8");
-if (!laneClassifier.includes('"functions-connect/"') || !laneClassifier.includes('"config/stripe-connect/"')) {
-  fail("Connect runtime and manifest changes must remain high-risk CI inputs.");
+if (
+  !laneClassifier.includes('"functions-connect/"')
+  || !laneClassifier.includes('"config/stripe-connect/"')
+  || !laneClassifier.includes('"infra/stripe-connect/"')
+) {
+  fail("Connect runtime, manifest, and infrastructure changes must remain high-risk CI inputs.");
 }
 const secretScanner = fs.readFileSync(path.join(ROOT, "scripts", "check-secret-assets.mjs"), "utf8");
-if (!secretScanner.includes('"functions-connect/"') || !secretScanner.includes('"config/stripe-connect/"')) {
-  fail("Connect runtime and manifest files must remain in the tracked secret scan.");
+if (
+  !secretScanner.includes('"functions-connect/"')
+  || !secretScanner.includes('"config/stripe-connect/"')
+  || !secretScanner.includes('"infra/stripe-connect/"')
+) {
+  fail("Connect runtime, manifest, and infrastructure files must remain in the tracked secret scan.");
 }
 
 console.log("Stripe Connect foundation is isolated, deploy-empty, exactly pinned, and provider-disabled.");

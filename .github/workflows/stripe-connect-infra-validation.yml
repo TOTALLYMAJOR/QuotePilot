@@ -1,0 +1,53 @@
+name: Stripe Connect Infrastructure Validation
+
+on:
+  pull_request:
+    paths:
+      - "infra/stripe-connect/**"
+      - "firebase.connect.staging.json"
+      - "firestore.connect-control.rules"
+      - "firestore.connect-control.indexes.json"
+      - "scripts/check-stripe-connect-infra.mjs"
+      - "scripts/check-secret-assets.mjs"
+      - "scripts/ci-lane-classifier.mjs"
+      - "package.json"
+      - ".github/workflows/stripe-connect-infra-validation.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/stripe-connect/**"
+      - "firebase.connect.staging.json"
+      - "firestore.connect-control.rules"
+      - "firestore.connect-control.indexes.json"
+      - "scripts/check-stripe-connect-infra.mjs"
+      - "scripts/check-secret-assets.mjs"
+      - "scripts/ci-lane-classifier.mjs"
+      - "package.json"
+      - ".github/workflows/stripe-connect-infra-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Staging source only (no credentials, plan, or apply)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+      - run: npm ci
+      - run: npm run check:stripe-connect:infra
+      - run: terraform fmt -check -recursive infra/stripe-connect
+      - run: terraform -chdir=infra/stripe-connect/bootstrap/staging init -backend=false
+      - run: terraform -chdir=infra/stripe-connect/bootstrap/staging validate
+      - run: terraform -chdir=infra/stripe-connect/environments/staging init -backend=false
+      - run: terraform -chdir=infra/stripe-connect/environments/staging validate
