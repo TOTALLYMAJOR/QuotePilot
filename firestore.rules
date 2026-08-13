@@ -835,6 +835,10 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    match /organizationRoleAuthorityReceipts/{requestId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /organizations/{orgId} {
       allow read: if isOrgStaff(orgId);
       allow create, update, delete: if false;

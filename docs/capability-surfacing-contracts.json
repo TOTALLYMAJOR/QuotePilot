@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 32,
+  "catalogVersion": 33,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -4247,7 +4247,7 @@
     },
     {
       "id": "stripe-connect-runtime-foundation",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "developer_infrastructure",
@@ -4255,7 +4255,7 @@
         "release_operators",
         "security_reviewers"
       ],
-      "summary": "A separately pinned, deploy-empty Stripe Connect Functions codebase and secret-free staging foundation manifest establish deployment and dependency isolation without adding a callable, provider credential, connected account, or Stripe request. Existing production and candidate workflows select only the legacy default codebase.",
+      "summary": "A separately pinned, deploy-empty Stripe Connect Functions codebase and secret-free staging foundation manifest establish deployment and dependency isolation without adding a callable, provider credential, connected account, or Stripe request. The strict manifest now also records a five-minute recent-auth boundary plus App Check monitoring, disabled replay enforcement, and an unbound environment-specific public key; it rejects premature enforcement or key binding. Existing production and candidate workflows select only the legacy default codebase.",
       "backendPaths": [
         "firebase.json",
         "functions-connect/index.js",
@@ -4315,7 +4315,7 @@
           "locator": "## Isolation contract"
         }
       ],
-      "headlessReason": "The checkpoint changes dependency, manifest, and deployment boundaries only. It intentionally exposes no user surface or callable until owner authority, App Check, isolated infrastructure, recent authentication, and hosted Sandbox evidence are available.",
+      "headlessReason": "The checkpoint changes dependency, manifest, and deployment boundaries only. Revision 2 records the reviewed recent-auth and App Check monitor-then-enforce policy while keeping the provider key unbound and enforcement disabled. It intentionally exposes no Connect user surface or callable until isolated infrastructure and hosted Sandbox evidence are available.",
       "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-bound, and separately reviewable."
     },
     {
@@ -4453,6 +4453,146 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "A platform administrator sees whether the exact owner-provisioning request is ready, pending, uncertain, reconciling, rejected, or receipted. An ambiguous request preserves one order identity and can only reconcile that unchanged order. A newly provisioned owner gains admin access only after exact invited-email verification, and that same transaction binds the organization to the principal once. Older generic staff invitations remain role-only; browser code cannot mint roles or read private binding receipts."
+    },
+    {
+      "id": "organization-role-authority",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "organization_owners",
+        "organization_administrators"
+      ],
+      "summary": "The in-flow Team access surface lists the signed-in organization's exact role records and lets the canonical owner manage admin or sales authority while non-owner admins may manage sales authority only. Every change binds an exact verified email, expected current role, request ID, same-tenant actor, five-minute authentication proof, App Check policy state, immutable private receipt, and post-commit custom-claim synchronization. Ambiguous transport keeps the same request for idempotent reconciliation; direct browser role and receipt writes remain denied.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/organizationRoleAuthority.js",
+        "scripts/customer-centered-authority-emulator-acceptance.mjs",
+        "scripts/run-customer-centered-authority-emulator.mjs",
+        "src/lib/authClient.js",
+        "src/lib/firebase.js",
+        "src/lib/firebaseAppCheckDisabled.js",
+        "src/lib/firebaseAppCheckEnabled.js",
+        "src/lib/organizationService.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getOrganizationRoleRoster",
+        "functions/index.js#mutateOrganizationRole"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getOrganizationRoleRoster",
+        "functions/index.js#mutateOrganizationRole"
+      ],
+      "frontendPaths": [
+        "src/components/IntegrationOpsModal.jsx",
+        "src/components/OrganizationRoleAuthorityPanel.jsx",
+        "src/lib/authClient.js",
+        "src/lib/firebase.js",
+        "src/lib/organizationService.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/IntegrationOpsModal.jsx",
+          "locator": "<OrganizationRoleAuthorityPanel />"
+        },
+        {
+          "path": "src/components/OrganizationRoleAuthorityPanel.jsx",
+          "locator": "Keep the right people close to the work"
+        }
+      ],
+      "testPaths": [
+        "scripts/customer-centered-authority-emulator-acceptance.mjs",
+        "src/components/__tests__/organizationRoleAuthorityPanel.test.jsx",
+        "src/lib/__tests__/authClient.test.js",
+        "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+          "locator": "lets the canonical owner promote a same-tenant verified sales user to admin"
+        },
+        {
+          "path": "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+          "locator": "lets an admin manage sales but not admin authority"
+        },
+        {
+          "path": "src/lib/__tests__/organizationRoleAuthority.server.test.js",
+          "locator": "distinguishes App Check monitoring, enforcement, and replay rejection"
+        },
+        {
+          "path": "src/lib/__tests__/authClient.test.js",
+          "locator": "reauthenticates password accounts and refreshes the five-minute proof"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "organization role authority receipts are private and immutable in browsers"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Owner/admin team role authority"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Team access authority"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The existing administrator operations surface now includes one purpose-bearing Team access section rather than an overlay or generic settings route. The exact inferred role, authority source, why, consequence, do-nothing outcome, confidence/provenance, recent-auth boundary, App Check state, pending/reconciliation acknowledgement, receipt, and recovery remain visible in context. Owner rows and admin authority are fail-closed for non-owners, and all browser writes remain blocked.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/organizationRoleAuthorityPanel.test.jsx",
+          "locator": "infers the exact current role, previews consequence and do-nothing state, then applies with a receipt",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/organizationRoleAuthorityPanel.test.jsx",
+          "locator": "marks submitting while the exact authority request is in flight",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/organizationRoleAuthorityPanel.test.jsx",
+          "locator": "preserves an uncertain request and marks reconciliation before its replay receipt",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/organizationRoleAuthorityPanel.test.jsx",
+          "locator": "preserves an uncertain request and marks reconciliation before its replay receipt",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/organizationRoleAuthorityPanel.test.jsx",
+          "locator": "infers the exact current role, previews consequence and do-nothing state, then applies with a receipt",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/organizationRoleAuthorityPanel.test.jsx",
+          "locator": "marks a definitive error and keeps the prepared change in recovery",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/organizationRoleAuthorityPanel.test.jsx",
+          "locator": "marks a definitive error and keeps the prepared change in recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "An organization owner can deliberately grant or remove admin or sales access, and a same-organization non-owner admin can grant or remove sales access only. The exact current role and consequences are reviewed before recent identity confirmation and one replay-stable callable request. A denial, stale role, unverified identity, unavailable App Check proof, ambiguous transport, or claims-sync failure immediately exposes the exact boundary and next safe resolution without expanding authority."
     },
     {
       "id": "authoritative-operational-staffing",

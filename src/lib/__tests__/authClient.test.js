@@ -3,15 +3,28 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const authMocks = vi.hoisted(() => ({
   auth: { name: "test-auth", currentUser: null },
   createUserWithEmailAndPassword: vi.fn(),
+  reauthenticateWithCredential: vi.fn(),
+  reauthenticateWithPopup: vi.fn(),
   sendEmailVerification: vi.fn(),
   sendPasswordResetEmail: vi.fn()
 }));
 
 vi.mock("firebase/auth", () => ({
-  GoogleAuthProvider: class GoogleAuthProvider {},
+  EmailAuthProvider: class EmailAuthProvider {
+    static credential(email, password) {
+      return { email, password, providerId: "password" };
+    }
+  },
+  GoogleAuthProvider: class GoogleAuthProvider {
+    setCustomParameters(parameters) {
+      this.parameters = parameters;
+    }
+  },
   createUserWithEmailAndPassword: authMocks.createUserWithEmailAndPassword,
   sendEmailVerification: authMocks.sendEmailVerification,
   sendPasswordResetEmail: authMocks.sendPasswordResetEmail,
+  reauthenticateWithCredential: authMocks.reauthenticateWithCredential,
+  reauthenticateWithPopup: authMocks.reauthenticateWithPopup,
   signInWithEmailAndPassword: vi.fn(),
   signInWithPopup: vi.fn(),
   signOut: vi.fn()
@@ -23,6 +36,9 @@ vi.mock("../firebase", () => ({
 }));
 
 import {
+  getCurrentUserReauthenticationMethods,
+  getCurrentUserRecentAuthState,
+  reauthenticateCurrentUser,
   refreshCurrentUserAccess,
   registerWithEmail,
   requestPasswordReset,
@@ -35,6 +51,8 @@ describe("Firebase email actions", () => {
     authMocks.createUserWithEmailAndPassword.mockReset();
     authMocks.sendEmailVerification.mockReset();
     authMocks.sendPasswordResetEmail.mockReset();
+    authMocks.reauthenticateWithCredential.mockReset();
+    authMocks.reauthenticateWithPopup.mockReset();
     vi.stubGlobal("window", {
       location: { origin: "http://127.0.0.1:4174" }
     });
@@ -103,6 +121,52 @@ describe("Firebase email actions", () => {
 
   test("requires a signed-in user before refreshing workspace access", async () => {
     await expect(refreshCurrentUserAccess()).rejects.toThrow(/sign in/i);
+  });
+
+  test("reauthenticates password accounts and refreshes the five-minute proof", async () => {
+    const authTime = new Date(Date.now() - 2_000).toISOString();
+    const user = {
+      email: "owner@example.com",
+      providerData: [{ providerId: "password" }],
+      getIdToken: vi.fn().mockResolvedValue("fresh-token"),
+      getIdTokenResult: vi.fn().mockResolvedValue({ authTime })
+    };
+    authMocks.auth.currentUser = user;
+
+    await expect(reauthenticateCurrentUser({
+      method: "password",
+      password: "correct horse battery staple"
+    })).resolves.toMatchObject({ recent: true, maxAgeSeconds: 300 });
+
+    expect(authMocks.reauthenticateWithCredential).toHaveBeenCalledWith(user, {
+      email: "owner@example.com",
+      password: "correct horse battery staple",
+      providerId: "password"
+    });
+    expect(user.getIdToken).toHaveBeenCalledWith(true);
+    expect(user.getIdTokenResult).toHaveBeenCalledWith(true);
+  });
+
+  test("fails closed for unsupported reauthentication providers", async () => {
+    authMocks.auth.currentUser = {
+      email: "owner@example.com",
+      providerData: [{ providerId: "github.com" }]
+    };
+    expect(getCurrentUserReauthenticationMethods()).toEqual([]);
+    await expect(reauthenticateCurrentUser({ method: "github" }))
+      .rejects.toThrow(/cannot confirm/i);
+  });
+
+  test("reports stale token authentication without treating it as recent", async () => {
+    authMocks.auth.currentUser = {
+      getIdTokenResult: vi.fn().mockResolvedValue({
+        authTime: new Date(Date.now() - 301_000).toISOString()
+      })
+    };
+    await expect(getCurrentUserRecentAuthState()).resolves.toMatchObject({
+      recent: false,
+      maxAgeSeconds: 300
+    });
   });
 
   test("rejects an unsafe verification return before creating an account or sending email", async () => {

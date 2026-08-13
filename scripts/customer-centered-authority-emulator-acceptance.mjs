@@ -48,6 +48,9 @@ const ORGANIZATION_ID = "customer-centered-authority-org";
 const OTHER_ORGANIZATION_ID = "customer-centered-authority-other-org";
 const ADMIN_EMAIL = "authority-admin@local.test";
 const OTHER_ADMIN_EMAIL = "authority-other-admin@local.test";
+const TEAM_ADMIN_EMAIL = "authority-team-admin@local.test";
+const ROLE_TARGET_EMAIL = "authority-role-target@local.test";
+const NEW_SALES_EMAIL = "authority-new-sales@local.test";
 const STAFF_PASSWORD = "Authority-Emulator-Only-2026!";
 const PACKAGE_ID = "authority-package";
 const MENU_ITEM_ID = "authority-menu-item";
@@ -187,17 +190,35 @@ const otherAdmin = await createPrincipal({
   email: OTHER_ADMIN_EMAIL,
   organizationId: OTHER_ORGANIZATION_ID
 });
+const teamAdmin = await createPrincipal({
+  email: TEAM_ADMIN_EMAIL,
+  organizationId: ORGANIZATION_ID
+});
+const roleTarget = await auth.createUser({
+  email: ROLE_TARGET_EMAIL,
+  password: STAFF_PASSWORD,
+  emailVerified: true
+});
+const newSalesTarget = await auth.createUser({
+  email: NEW_SALES_EMAIL,
+  password: STAFF_PASSWORD,
+  emailVerified: true
+});
 const confirmationAtISO = new Date().toISOString();
 
 await Promise.all([
   db.collection("organizations").doc(ORGANIZATION_ID).set({
     name: "Customer-Centered Authority Emulator",
+    ownerUid: primaryAdmin.uid,
+    ownerEmail: ADMIN_EMAIL,
     active: true,
     archived: false,
     status: "active"
   }),
   db.collection("organizations").doc(OTHER_ORGANIZATION_ID).set({
     name: "Other Authority Emulator",
+    ownerUid: otherAdmin.uid,
+    ownerEmail: OTHER_ADMIN_EMAIL,
     active: true,
     archived: false,
     status: "active"
@@ -228,6 +249,13 @@ await Promise.all([
       quoteValidityDays: 30,
       updatedAtISO: confirmationAtISO
     }),
+  db.collection("userRoles").doc(roleTarget.uid).set({
+    role: "sales",
+    organizationId: ORGANIZATION_ID,
+    email: ROLE_TARGET_EMAIL,
+    createdAt: admin.FieldValue.serverTimestamp(),
+    updatedAt: admin.FieldValue.serverTimestamp()
+  }),
   db.collection("organizations").doc(ORGANIZATION_ID)
     .collection("catalogPackages").doc(PACKAGE_ID).set({
       name: "Authority Package",
@@ -1045,6 +1073,81 @@ assert.equal(
   "engagement_event_never_establishes_portal_view"
 );
 
+const initialRoleRoster = await callFunction(
+  "getOrganizationRoleRoster",
+  primaryAdmin.idToken,
+  {}
+);
+assert.equal(initialRoleRoster.ok, true);
+assert.equal(initialRoleRoster.authority, "owner");
+assert.equal(initialRoleRoster.appCheck, "monitoring");
+assert.equal(initialRoleRoster.roles.find((row) => row.uid === primaryAdmin.uid)?.owner, true);
+
+const ownerPromotionRequest = {
+  requestId: "role-authority-emulator-0001",
+  targetEmail: ROLE_TARGET_EMAIL,
+  expectedCurrentRole: "sales",
+  nextRole: "admin"
+};
+const ownerPromotion = await callFunction(
+  "mutateOrganizationRole",
+  primaryAdmin.idToken,
+  ownerPromotionRequest
+);
+assert.equal(ownerPromotion.ok, true);
+assert.equal(ownerPromotion.replayed, false);
+assert.equal(ownerPromotion.claimsSync.succeeded, true);
+assert.equal((await db.collection("userRoles").doc(roleTarget.uid).get()).data()?.role, "admin");
+assert.equal((await auth.getUser(roleTarget.uid)).customClaims?.role, "admin");
+
+const replayedPromotion = await callFunction(
+  "mutateOrganizationRole",
+  primaryAdmin.idToken,
+  ownerPromotionRequest
+);
+assert.equal(replayedPromotion.ok, true);
+assert.equal(replayedPromotion.replayed, true);
+
+await expectCallableError(
+  () => callFunction("mutateOrganizationRole", teamAdmin.idToken, {
+    requestId: "role-authority-emulator-0002",
+    targetEmail: ROLE_TARGET_EMAIL,
+    expectedCurrentRole: "admin",
+    nextRole: "sales"
+  }),
+  "PERMISSION_DENIED"
+);
+await expectCallableError(
+  () => callFunction("mutateOrganizationRole", primaryAdmin.idToken, {
+    requestId: "role-authority-emulator-0003",
+    targetEmail: ADMIN_EMAIL,
+    expectedCurrentRole: "admin",
+    nextRole: "sales"
+  }),
+  "FAILED_PRECONDITION"
+);
+
+const adminSalesGrant = await callFunction(
+  "mutateOrganizationRole",
+  teamAdmin.idToken,
+  {
+    requestId: "role-authority-emulator-0004",
+    targetEmail: NEW_SALES_EMAIL,
+    expectedCurrentRole: "none",
+    nextRole: "sales"
+  }
+);
+assert.equal(adminSalesGrant.ok, true);
+assert.equal(adminSalesGrant.nextRole, "sales");
+assert.equal((await db.collection("userRoles").doc(newSalesTarget.uid).get()).data()?.role, "sales");
+assert.equal((await auth.getUser(newSalesTarget.uid)).customClaims?.role, "sales");
+const roleReceipt = await db.collection("organizationRoleAuthorityReceipts")
+  .doc(ownerPromotionRequest.requestId)
+  .get();
+assert.equal(roleReceipt.exists, true);
+assert.equal(roleReceipt.data()?.actorWasOwner, true);
+assert.equal(roleReceipt.data()?.appCheckState, "unavailable");
+
 console.log("Customer-centered authority emulator acceptance passed.");
 console.log("- real callables created, authorized, applied, and partially reconciled one governed quote change");
 console.log("- immutable Kitchen BEO receipts moved through NOT_GENERATED, CURRENT, STALE, and CURRENT");
@@ -1052,3 +1155,4 @@ console.log("- Decision Debt derived only from exact unresolved persisted depend
 console.log("- Revenue Autopilot policy and controls persisted while the independent outbound-send gate stayed off");
 console.log("- a customer portal reply opened exact Attention and staff acknowledgement resolved it");
 console.log("- a signed mock Resend webhook recorded delivery; tampering failed and open did not establish portal view");
+console.log("- canonical owner/admin role authority passed promotion, sales grant, replay, cross-authority denial, and owner-demotion denial");

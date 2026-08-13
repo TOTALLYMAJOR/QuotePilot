@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 12, 2026
+Last updated: August 13, 2026
 
 ## Current Production Release
 
@@ -39,6 +39,20 @@ Last updated: August 12, 2026
   transactionally revalidates Firestore evidence before binding the organization,
   provisioning order, and immutable receipt. No production dry-run or apply has
   been performed.
+- A fourth source-only checkpoint adds canonical owner/admin Team access
+  authority. The same administrator operations surface now exposes an in-flow,
+  exact-email role review with current role, consequence, do-nothing outcome,
+  provenance, recent identity confirmation, replay-stable reconciliation, and
+  a receipt. Owners alone may change admin authority; same-organization admins
+  may manage sales access. The trusted Functions transaction revalidates the
+  actor, target, organization, and expected role, writes a browser-private
+  immutable receipt, then synchronizes custom claims. Disposable
+  Auth/Functions/Firestore emulator acceptance passed promotion, sales grant,
+  replay, owner-demotion denial, cross-authority denial, and claims sync. App
+  Check remains in monitoring mode: no reCAPTCHA Enterprise provider/site key
+  was registered or bound, no limited-use token was consumed in a hosted
+  environment, and no deployment, production role mutation, or human
+  acceptance is claimed.
 
 - Current `main` is tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient
@@ -321,26 +335,24 @@ route evidence are complete.
   operational staffing explicitly disabled. A fail-closed `lane:quick` policy
   check protects the command, flags, workflow bindings, enabled-control mapping,
   and zero-rate assertion. Local proof passes 24 focused monitor/runtime/policy
-  tests, the 1-of-1 Chromium-admin release-gate case, the full 294-file / 3,455-
-  test unit lane, compatibility production build, capability-surfacing check,
+  tests, the 1-of-1 Chromium-admin release-gate case, the current 301-file /
+  3,518-test unit lane, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. Fresh local builds measure 2,769,824 / 391,596 bytes for the
-  compatibility graph and 3,700,202 / 391,596 for Ambient. Manual opportunity-
-  model and quote-builder chunks eliminate the former 436,188-byte Ambient
-  largest-chunk violation without widening that ceiling. The named Ambient
-  owner-provisioning recovery states add 2,651 bytes after reconciliation-path
-  deduplication. The aggregate ceiling is 3,703,156 bytes—only the resulting
-  3,702,853-byte local graph plus the previously confirmed 303-byte CI
-  offset—and remains an explicit temporary
-  exception requiring optimization or reviewed recalibration. This is
-  source/local evidence;
+  build steps. After the owner-provisioning recovery and owner/admin Team access
+  authority, fresh local production-flag builds measure 2,784,668 / 391,901
+  bytes for compatibility and 3,715,045 / 391,901 for Ambient. The exact
+  temporary ceilings are 2,791,693 and 3,715,348 aggregate bytes respectively,
+  retaining only the previously observed per-profile CI offsets; both use the
+  391,901-byte largest-chunk ceiling. App Check provider code is excluded while
+  its browser flag is off. This remains an explicit temporary exception
+  requiring optimization or reviewed recalibration and is source/local evidence;
   preview deployment, hosted roles and portal behavior, production timing,
   human acceptance, and rollback evidence remain open.
 
 - The authoritative operational staffing source passes 77 focused
   server/runtime/client tests and 19 focused panel tests (96 focused tests
-  combined), the 68-test Firestore
+  combined), the now 70-test Firestore
   rules lane, and a disposable Auth/Firestore/Functions emulator matrix. The
   emulator proves global and exact-tenant gates, role and cross-tenant denial,
   immutable-revision derivation, DST/time/count validation, idempotent replay,

@@ -1,6 +1,6 @@
 # Dev Tasks
 
-Last updated: August 12, 2026
+Last updated: August 13, 2026
 
 Only open work belongs here. Current operational truth lives in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md); shipped history lives in
@@ -53,15 +53,18 @@ Only open work belongs here. Current operational truth lives in
   projection, and negative paths. Keep provider evidence distinct from local
   emulator coverage.
 - Continue the separately gated Stripe Connect program from its source-only
-  owner-authority and deploy-empty `functions-connect` foundations. Next add
-  owner/admin role-management authority, password/Google recent
-  reauthentication, and App Check monitor-
-  then-enforce contracts with consumed limited-use tokens for high-risk calls.
+  owner-authority and deploy-empty `functions-connect` foundations. The
+  owner/admin Team access surface, password/Google recent reauthentication,
+  exact-role mutation receipts, claim synchronization, and App Check
+  monitor-then-enforce source contracts are complete locally. Next register the
+  isolated staging reCAPTCHA Enterprise application/site key, observe App Check
+  monitoring without enforcement, and promote enforcement plus consumed
+  limited-use tokens only after hosted negative/replay evidence.
   The exact consumed-invite owner backfill is source-complete but still needs
   governed production dry-run review and separately confirmed apply evidence;
   zero, multiple, unverified, or conflicting candidates remain
   `ownership_required`.
-  Then provision isolated staging IAM/database/network/OIDC resources and
+  In parallel, provision isolated staging IAM/database/network/OIDC resources and
   implement sandbox-only Accounts v2 merchant
   onboarding with direct charges, full Stripe Dashboard access, Stripe fee and
   negative-balance responsibility, zero platform application fee, and strict
@@ -146,10 +149,10 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
   sales roles, revision-conflict recovery, responsive layout, and rollback
   evidence before describing AIUI-20 as complete.
 - Continue reducing the production-equivalent Ambient aggregate from the
-  measured 3,702,853 JavaScript bytes toward the standard clean-main budget.
-  The largest chunk is now restored to the unchanged 391,596-byte ceiling, and
+  measured 3,715,045 JavaScript bytes toward the standard clean-main budget.
+  The largest chunk is now 391,901 bytes, and
   CI independently enforces detected compatibility and Ambient graph profiles;
-  the temporary 3,703,156 Ambient aggregate ceiling has no growth headroom.
+  the temporary 3,715,348 Ambient aggregate ceiling has no growth headroom.
   Close the exception through optimization or an explicit reviewed clean-main
   recalibration before AIUI-48 retirement or Ambient production promotion.
 - Add inline editing on the event workspace quote page: editable fields with

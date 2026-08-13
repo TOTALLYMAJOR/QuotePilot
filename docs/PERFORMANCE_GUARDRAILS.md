@@ -25,17 +25,24 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph retains its prior 2,776,849-byte aggregate
-  and 391,596-byte largest-chunk ceilings. The production-equivalent Ambient
-  graph has a separate temporary 3,703,156-byte aggregate ceiling and the same
-  unchanged 391,596-byte largest-chunk ceiling. The pre-authority local
+- The current compatibility graph has an exact temporary 2,791,693-byte
+  aggregate and 391,901-byte largest-chunk ceiling. The production-equivalent
+  Ambient graph has a separate temporary 3,715,348-byte aggregate ceiling and
+  the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
   states add 2,651 Ambient aggregate bytes, for a reviewed 3,702,853-byte local
   graph. The Ambient aggregate ceiling adds only the previously observed
   303-byte CI-versus-local offset; it is not general growth headroom.
+  The owner/admin Team access authority then measures 2,784,668 / 391,901
+  locally for compatibility and 3,715,045 / 391,901 for Ambient. Its exact
+  recalibration retains only the previously observed per-profile CI offsets
+  (7,025 and 303 bytes respectively). The App Check provider module remains
+  build-excluded while its explicit browser flag is false; later provider
+  promotion requires its own exact bundle review.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
-  the Ambient largest chunk from 436,188 bytes to 391,596 bytes. The remaining
+  the Ambient largest chunk from 436,188 bytes before Team access; the current
+  largest chunk is 391,901 bytes. The remaining
   aggregate cost must still be optimized or replaced by an explicitly reviewed
   clean-main baseline decision before legacy retirement or Ambient promotion.
   See `docs/TECH_EXCEPTIONS.md` for rationale and exit evidence.

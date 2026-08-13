@@ -8,6 +8,26 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Added canonical owner/admin Team access authority as the next Stripe Connect
+  prerequisite. The in-flow administrator surface shows exact current role,
+  why, consequence, do-nothing outcome, and confidence/provenance before an
+  outcome-named mutation. The trusted callable requires an exact verified
+  email, expected role, same-organization authority, authentication within five
+  minutes, an idempotent request ID, a browser-private immutable receipt, and
+  post-commit custom-claim synchronization. Canonical owners alone may change
+  admin authority; non-owner admins may manage sales access. Exact emulator
+  acceptance proves promotion, sales grant, replay, claim sync, owner-demotion
+  denial, and cross-authority denial. The client App Check integration and
+  staging manifest now encode reCAPTCHA Enterprise monitoring plus a later
+  limited-use-token enforcement gate, but no provider key was bound, no
+  enforcement was enabled, and no deployment or production role mutation was
+  performed.
+  Build-graph selection excludes the App Check provider module while its flag
+  is off. The exact Team access/recovery slice recalibrates the named temporary
+  ceilings to 2,791,693 / 391,901 bytes for compatibility and 3,715,348 /
+  391,901 for Ambient, preserving only the already observed profile-specific CI
+  offsets and no general growth headroom; the clean-main baseline is unchanged.
+
 - Preserved the exact provisioning payload and recovery action when a transient
   preflight failure occurs during reconciliation. Definitive denials still
   clear the retained payload; ambiguous transport outcomes no longer become a

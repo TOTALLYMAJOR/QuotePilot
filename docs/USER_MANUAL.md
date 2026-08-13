@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: August 12, 2026
+Last updated: August 13, 2026
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1232,6 +1232,46 @@ Backend source of truth:
 - This source foundation does not create a Stripe connected account, complete
   hosted onboarding, enable charges or payouts, or prove production owner
   activation.
+
+### Team access authority
+
+Source/local status only: no hosted role change or production-data acceptance
+is implied.
+
+1. Sign in with a verified administrator account and open **Integrations Ops**.
+2. In **Team access**, select an existing person or enter the exact verified
+   email. QuotePilot shows the authoritative current role rather than guessing
+   from the address.
+3. Choose an outcome. The canonical organization owner may grant or remove
+   Admin and Sales access. A non-owner admin may grant or remove Sales access
+   only; owner rows and admin authority remain unavailable.
+4. Select **Review this access change**. Before anything changes, review why
+   the outcome is available, its consequence, what happens if you do nothing,
+   and the exact-email/role-record confidence source.
+5. If the current sign-in is older than five minutes, confirm identity with the
+   account's password or Google sign-in. Unsupported providers fail closed;
+   sign out and return through a supported provider rather than bypassing the
+   proof.
+6. Apply the outcome-named action. QuotePilot acknowledges the exact request
+   immediately and returns its authoritative receipt. If transport is
+   uncertain, use **Check exact change**: it replays the same request ID instead
+   of creating a second mutation.
+
+The callable rechecks the signed-in organization, actor authority, exact
+verified target email, expected current role, and recent authentication before
+writing. The immutable receipt is browser-private. The authoritative role is
+committed before Firebase custom claims are synchronized; if that secondary
+sync is interrupted, server access follows the role record and the exact
+request can safely retry claim repair. Direct browser role and receipt writes
+remain denied.
+
+App verification is currently a source-wired monitor contract. The browser
+integration is opt-in and uses an environment-specific public reCAPTCHA
+Enterprise site key. Enforcement and consumed limited-use-token replay
+protection must remain off until the staging application is registered,
+monitoring evidence is reviewed, and the separate promotion is approved.
+Neither this surface nor its receipt creates a Stripe connected account,
+completes onboarding, or enables payment routing.
 
 ### Operator Runbook
 1. Sign in at `/app` as an authorized platform admin on the canonical

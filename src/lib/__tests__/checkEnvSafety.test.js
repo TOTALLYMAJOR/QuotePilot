@@ -69,6 +69,37 @@ describe("Firebase browser environment safety", { timeout: 30_000 }, () => {
     expect(runCheck().status).toBe(0);
   });
 
+  test("accepts opt-in App Check only with an environment-specific public site key", () => {
+    expect(runCheck({
+      envProductionLocal: {
+        VITE_FIREBASE_APP_CHECK_ENABLED: "true",
+        VITE_FIREBASE_APP_CHECK_RECAPTCHA_ENTERPRISE_SITE_KEY: "staging_public_site_key_123"
+      }
+    }).status).toBe(0);
+  });
+
+  test.each(["", "replace_me", "invalid key!"])(
+    "rejects enabled App Check with an unusable public site key: %s",
+    (siteKey) => {
+      const result = runCheck({
+        envProductionLocal: {
+          VITE_FIREBASE_APP_CHECK_ENABLED: "true",
+          VITE_FIREBASE_APP_CHECK_RECAPTCHA_ENTERPRISE_SITE_KEY: siteKey
+        }
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("VITE_FIREBASE_APP_CHECK_RECAPTCHA_ENTERPRISE_SITE_KEY");
+    }
+  );
+
+  test("rejects ambiguous App Check flag aliases", () => {
+    const result = runCheck({
+      envProductionLocal: { VITE_FIREBASE_APP_CHECK_ENABLED: "yes" }
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/exact value true or false/i);
+  });
+
   test("allows a public buyer artifact with coherent non-placeholder Turnstile syntax", () => {
     expect(runCheck({
       envProductionLocal: {

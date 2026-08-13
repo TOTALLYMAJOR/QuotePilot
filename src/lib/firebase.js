@@ -3,12 +3,17 @@ import { connectAuthEmulator, getAuth } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
+import { initializeConfiguredAppCheck } from "quotepilot-active-firebase-app-check";
 import { buildFirebaseConfig } from "./firebaseConfig";
 
 const firebaseConfig = buildFirebaseConfig(import.meta.env);
 
 const hasConfig = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 const functionsRegion = String(import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || "us-central1").trim() || "us-central1";
+const appCheckEnabled = import.meta.env.VITE_FIREBASE_APP_CHECK_ENABLED === "true";
+const appCheckSiteKey = String(
+  import.meta.env.VITE_FIREBASE_APP_CHECK_RECAPTCHA_ENTERPRISE_SITE_KEY || ""
+).trim();
 const shouldUseEmulators = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_USE_FIREBASE_EMULATORS || "").trim().toLowerCase()
 );
@@ -18,6 +23,15 @@ const firestoreEmulatorPort = Number(import.meta.env.VITE_FIRESTORE_EMULATOR_POR
 const functionsEmulatorPort = Number(import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_PORT || 5001);
 
 export const app = hasConfig ? initializeApp(firebaseConfig) : null;
+export const appCheckReady = Boolean(app && appCheckEnabled && appCheckSiteKey);
+export const appCheckInitialization = appCheckReady
+  ? initializeConfiguredAppCheck(app, appCheckSiteKey)
+  : Promise.resolve(null);
+export const appCheckConfigurationState = !appCheckEnabled
+  ? "disabled"
+  : appCheckReady
+    ? "enabled"
+    : "misconfigured";
 export const db = app ? getFirestore(app) : null;
 export const auth = app ? getAuth(app) : null;
 export const storage = app ? getStorage(app) : null;

@@ -27,6 +27,7 @@ import {
 } from "../lib/quoteStore";
 import { useModalDialog } from "../hooks/useModalDialog";
 import CustomerProvisioningAuthorityState from "./CustomerProvisioningAuthorityState";
+import OrganizationRoleAuthorityPanel from "./OrganizationRoleAuthorityPanel";
 
 const PROVIDERS = ["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"];
 const STATES = ["queued", "success", "error", "retrying", "skipped"];
@@ -1027,6 +1028,8 @@ export function IntegrationOpsView({
         {!provisioningOnly && <p className="source-note">Source: {state.source || "-"}</p>}
         {state.error && <p className="error-note">{state.error}</p>}
         {feedback && <p className="source-note">{feedback}</p>}
+
+        {!provisioningOnly && canManageProviders && <OrganizationRoleAuthorityPanel />}
 
         {!provisioningOnly && canManageProviders && <section className="admin-section operations-audit-panel">
           <div className="admin-section-head">

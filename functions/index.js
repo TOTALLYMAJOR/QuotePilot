@@ -14,6 +14,13 @@ const {
   planOrganizationOwnerBinding
 } = require("./organizationAuthority");
 const {
+  OrganizationRoleAuthorityError,
+  assertRecentAuthentication,
+  assertRoleAuthorityAppCheck,
+  normalizeOrganizationRoleMutationRequest,
+  planOrganizationRoleMutation
+} = require("./organizationRoleAuthority");
+const {
   PricingEngineError,
   assertPricingCatalogAuthorityCurrent,
   buildPricingCatalogAuthority,
@@ -329,6 +336,7 @@ const STAFF_ROLES = new Set(["admin", "sales"]);
 const ROLE_VALUES = new Set(["admin", "sales", "customer"]);
 const INVITES_COLLECTION = "organizationInvites";
 const ORGANIZATION_OWNER_BINDING_RECEIPTS_COLLECTION = "organizationOwnerBindingReceipts";
+const ORGANIZATION_ROLE_AUTHORITY_RECEIPTS_COLLECTION = "organizationRoleAuthorityReceipts";
 const ORGANIZATION_TOMBSTONES_COLLECTION = "organizationTombstones";
 const SMS_PROVIDERS = new Set(["twilio", "none"]);
 const EMAIL_PROVIDERS = new Set(["resend", "none"]);
@@ -653,6 +661,31 @@ function normalizeRole(value) {
   const role = normalizeText(value).toLowerCase();
   return ROLE_VALUES.has(role) ? role : "customer";
 }
+
+function organizationRoleAppCheckPolicy() {
+  const mode = normalizeText(process.env.ORGANIZATION_ROLE_APP_CHECK_MODE || "monitor").toLowerCase();
+  const replay = normalizeText(
+    process.env.ORGANIZATION_ROLE_APP_CHECK_REPLAY_PROTECTION || "disabled"
+  ).toLowerCase();
+  if (!["monitor", "enforce"].includes(mode)) {
+    throw new Error("ORGANIZATION_ROLE_APP_CHECK_MODE must be monitor or enforce.");
+  }
+  if (!["disabled", "enforce"].includes(replay)) {
+    throw new Error(
+      "ORGANIZATION_ROLE_APP_CHECK_REPLAY_PROTECTION must be disabled or enforce."
+    );
+  }
+  if (replay === "enforce" && mode !== "enforce") {
+    throw new Error("App Check replay protection requires App Check enforcement.");
+  }
+  return Object.freeze({
+    mode,
+    enforceAppCheck: mode === "enforce",
+    consumeAppCheckToken: replay === "enforce"
+  });
+}
+
+const ORGANIZATION_ROLE_APP_CHECK_POLICY = organizationRoleAppCheckPolicy();
 
 function normalizeOrganizationId(value) {
   const raw = normalizeText(value).toLowerCase();
@@ -3283,6 +3316,91 @@ async function getUserRole(uid) {
     organizationId,
     email: normalizeEmail(roleSnap.data()?.email)
   };
+}
+
+function throwOrganizationRoleAuthorityHttpsError(error) {
+  if (error instanceof OrganizationRoleAuthorityError) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  throw error;
+}
+
+function assertEmptyCallablePayload(data, label) {
+  if (data == null) return;
+  if (typeof data !== "object" || Array.isArray(data) || Object.keys(data).length > 0) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      `${label} does not accept request fields.`
+    );
+  }
+}
+
+function assertRoleAuthorityReceiptMatches({ receipt = {}, request = {}, staff = {} } = {}) {
+  if (
+    normalizeText(receipt.requestId) !== request.requestId
+    || normalizeOrganizationId(receipt.organizationId) !== normalizeOrganizationId(staff.organizationId)
+    || normalizeText(receipt.actorUid) !== normalizeText(staff.uid)
+    || normalizeEmail(receipt.targetEmail) !== request.targetEmail
+    || normalizeText(receipt.previousRole).toLowerCase() !== request.expectedCurrentRole
+    || normalizeText(receipt.nextRole).toLowerCase() !== request.nextRole
+  ) {
+    throw new functions.https.HttpsError(
+      "already-exists",
+      "requestId is already bound to a different role change."
+    );
+  }
+  return receipt;
+}
+
+async function syncOrganizationRoleClaims({
+  organizationId = "",
+  targetEmail = "",
+  targetUid = "",
+  nextRole = "none"
+} = {}) {
+  const targetUser = await auth.getUser(normalizeText(targetUid));
+  if (
+    targetUser.disabled === true
+    || targetUser.emailVerified !== true
+    || normalizeEmail(targetUser.email) !== normalizeEmail(targetEmail)
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "The target account changed before access claims could synchronize."
+    );
+  }
+  const normalizedNextRole = normalizeText(nextRole).toLowerCase();
+  await syncPrincipalClaims({
+    uid: targetUser.uid,
+    role: normalizedNextRole === "none" ? "customer" : normalizedNextRole,
+    organizationId: normalizedNextRole === "none" ? "" : organizationId,
+    platformAdmin: isPlatformAdminEmail(targetUser.email)
+  });
+  return Object.freeze({ succeeded: true, state: "succeeded" });
+}
+
+async function completeOrganizationRoleMutationClaims(receipt = {}) {
+  try {
+    return await syncOrganizationRoleClaims({
+      organizationId: receipt.organizationId,
+      targetEmail: receipt.targetEmail,
+      targetUid: receipt.targetUid,
+      nextRole: receipt.nextRole
+    });
+  } catch (error) {
+    functions.logger.error("Organization role claims synchronization requires recovery", {
+      organizationId: normalizeOrganizationId(receipt.organizationId),
+      requestId: normalizeText(receipt.requestId),
+      targetUid: normalizeText(receipt.targetUid),
+      nextRole: normalizeText(receipt.nextRole),
+      error: normalizeText(error?.message).slice(0, 180)
+    });
+    return Object.freeze({
+      succeeded: false,
+      state: "role_saved_claims_pending",
+      message: "Access was saved, but sign-in claims still need synchronization. Retry this exact action."
+    });
+  }
 }
 
 function getRuntimeRoleOrgFromClaims(context) {
@@ -5936,6 +6054,223 @@ exports.resolveTenantByHost = functions.region(REGION).https.onCall(async (data,
     resolvedAtISO: new Date().toISOString()
   };
 });
+
+exports.getOrganizationRoleRoster = functions
+  .runWith({
+    enforceAppCheck: ORGANIZATION_ROLE_APP_CHECK_POLICY.enforceAppCheck
+  })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    assertEmptyCallablePayload(data, "Organization role roster");
+    const staff = await assertStaff(context);
+    if (staff.role !== "admin" || !staff.organizationId) {
+      throw new functions.https.HttpsError("permission-denied", "Admin role required.");
+    }
+    let appCheck;
+    try {
+      appCheck = assertRoleAuthorityAppCheck({
+        app: context.app,
+        enforced: ORGANIZATION_ROLE_APP_CHECK_POLICY.enforceAppCheck,
+        consumeToken: false
+      });
+    } catch (error) {
+      throwOrganizationRoleAuthorityHttpsError(error);
+    }
+
+    const [organizationSnap, rolesSnap] = await Promise.all([
+      db.collection(ORGANIZATIONS_COLLECTION).doc(staff.organizationId).get(),
+      db.collection(ROLES_COLLECTION)
+        .where("organizationId", "==", staff.organizationId)
+        .limit(200)
+        .get()
+    ]);
+    if (!organizationSnap.exists || !isOrganizationRecordActive(organizationSnap.data())) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Organization is unavailable for role management."
+      );
+    }
+    const ownerUid = normalizeText(organizationSnap.data()?.ownerUid);
+    if (!ownerUid) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Organization ownership must be repaired before role management."
+      );
+    }
+    const roles = rolesSnap.docs
+      .map((roleSnap) => {
+        const row = roleSnap.data() || {};
+        return {
+          uid: roleSnap.id,
+          email: normalizeEmail(row.email),
+          role: normalizeRole(row.role),
+          owner: roleSnap.id === ownerUid
+        };
+      })
+      .filter((row) => STAFF_ROLES.has(row.role) && row.email)
+      .sort((left, right) => (
+        Number(right.owner) - Number(left.owner)
+        || left.role.localeCompare(right.role)
+        || left.email.localeCompare(right.email)
+      ));
+
+    return {
+      ok: true,
+      authority: staff.uid === ownerUid ? "owner" : "admin",
+      appCheck: appCheck.state === "verified" ? "verified" : "monitoring",
+      organizationId: staff.organizationId,
+      roles,
+      truncated: rolesSnap.size >= 200
+    };
+  });
+
+exports.mutateOrganizationRole = functions
+  .runWith({
+    enforceAppCheck: ORGANIZATION_ROLE_APP_CHECK_POLICY.enforceAppCheck,
+    consumeAppCheckToken: ORGANIZATION_ROLE_APP_CHECK_POLICY.consumeAppCheckToken
+  })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    let request;
+    try {
+      request = normalizeOrganizationRoleMutationRequest(data);
+    } catch (error) {
+      throwOrganizationRoleAuthorityHttpsError(error);
+    }
+    const staff = await assertStaff(context);
+    if (staff.role !== "admin" || !staff.organizationId) {
+      throw new functions.https.HttpsError("permission-denied", "Admin role required.");
+    }
+    let recentAuth;
+    let appCheck;
+    try {
+      recentAuth = assertRecentAuthentication({
+        authTimeSeconds: context.auth?.token?.auth_time,
+        nowMs: Date.now()
+      });
+      appCheck = assertRoleAuthorityAppCheck({
+        app: context.app,
+        enforced: ORGANIZATION_ROLE_APP_CHECK_POLICY.enforceAppCheck,
+        consumeToken: ORGANIZATION_ROLE_APP_CHECK_POLICY.consumeAppCheckToken
+      });
+    } catch (error) {
+      throwOrganizationRoleAuthorityHttpsError(error);
+    }
+
+    const receiptRef = db.collection(ORGANIZATION_ROLE_AUTHORITY_RECEIPTS_COLLECTION)
+      .doc(request.requestId);
+    const priorReceiptSnap = await receiptRef.get();
+    if (priorReceiptSnap.exists) {
+      const priorReceipt = assertRoleAuthorityReceiptMatches({
+        receipt: priorReceiptSnap.data() || {},
+        request,
+        staff
+      });
+      const claimsSync = await completeOrganizationRoleMutationClaims(priorReceipt);
+      return {
+        ok: true,
+        replayed: true,
+        requestId: request.requestId,
+        targetEmail: priorReceipt.targetEmail,
+        previousRole: priorReceipt.previousRole,
+        nextRole: priorReceipt.nextRole,
+        claimsSync
+      };
+    }
+
+    let targetUser;
+    try {
+      targetUser = await auth.getUserByEmail(request.targetEmail);
+    } catch (error) {
+      if (error?.code === "auth/user-not-found") {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "The exact verified account does not exist yet. Ask this person to create and verify their account first."
+        );
+      }
+      throw error;
+    }
+
+    const nowISO = new Date().toISOString();
+    let committedReceipt;
+    try {
+      committedReceipt = await db.runTransaction(async (tx) => {
+        const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(staff.organizationId);
+        const actorRoleRef = db.collection(ROLES_COLLECTION).doc(staff.uid);
+        const targetRoleRef = db.collection(ROLES_COLLECTION).doc(targetUser.uid);
+        const [organizationSnap, actorRoleSnap, targetRoleSnap, receiptSnap] = await Promise.all([
+          tx.get(organizationRef),
+          tx.get(actorRoleRef),
+          tx.get(targetRoleRef),
+          tx.get(receiptRef)
+        ]);
+        if (receiptSnap.exists) {
+          return assertRoleAuthorityReceiptMatches({
+            receipt: receiptSnap.data() || {},
+            request,
+            staff
+          });
+        }
+        const actorRole = actorRoleSnap.data() || {};
+        const targetRole = targetRoleSnap.data() || {};
+        const plan = planOrganizationRoleMutation({
+          actor: {
+            uid: staff.uid,
+            email: staff.email,
+            role: actorRole.role,
+            organizationId: actorRole.organizationId
+          },
+          organization: organizationSnap.data() || {},
+          organizationId: staff.organizationId,
+          request,
+          target: {
+            uid: targetUser.uid,
+            email: targetUser.email,
+            emailVerified: targetUser.emailVerified,
+            disabled: targetUser.disabled,
+            role: targetRoleSnap.exists ? targetRole.role : "none",
+            organizationId: targetRoleSnap.exists ? targetRole.organizationId : ""
+          },
+          nowISO
+        });
+        const receipt = {
+          ...plan.receipt,
+          authenticatedAtISO: recentAuth.authenticatedAtISO,
+          appCheckState: appCheck.state,
+          appCheckAppId: appCheck.appId,
+          replayProtection: appCheck.replayProtection,
+          createdAt: FieldValue.serverTimestamp()
+        };
+        tx.create(receiptRef, receipt);
+        if (plan.nextRoleDocument) {
+          tx.set(targetRoleRef, {
+            ...plan.nextRoleDocument,
+            source: "organization_role_authority",
+            authorityRequestId: plan.requestId,
+            updatedAtISO: nowISO,
+            updatedAt: FieldValue.serverTimestamp(),
+            ...(!targetRoleSnap.exists ? { createdAt: FieldValue.serverTimestamp() } : {})
+          }, { merge: true });
+        } else {
+          tx.delete(targetRoleRef);
+        }
+        return receipt;
+      });
+    } catch (error) {
+      throwOrganizationRoleAuthorityHttpsError(error);
+    }
+
+    const claimsSync = await completeOrganizationRoleMutationClaims(committedReceipt);
+    return {
+      ok: true,
+      replayed: false,
+      requestId: request.requestId,
+      targetEmail: committedReceipt.targetEmail,
+      previousRole: committedReceipt.previousRole,
+      nextRole: committedReceipt.nextRole,
+      claimsSync
+    };
+  });
 
 exports.syncUserClaimsFromRole = functions.region(REGION).https.onCall(async (data, context) => {
   const staff = await assertStaff(context);

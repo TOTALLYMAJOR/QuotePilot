@@ -184,6 +184,16 @@ If a topic changes, only update the owning doc and cross-link from others.
     <organization> <uid>` confirmation. A production dry run, reviewed
     candidate evidence, and separately authorized apply are distinct gates;
     source or local test evidence never proves a binding occurred.
+- Organization role and App Check promotion:
+  - Team access authority ships through the existing `functions:default`
+    surface and must be rolled back with its matching Functions/rules/frontend
+    artifact; never leave the UI enabled against missing callables or receipts.
+  - `VITE_FIREBASE_APP_CHECK_ENABLED` remains off until the exact environment's
+    reCAPTCHA Enterprise registration is reviewed. Callable monitoring precedes
+    enforcement, and replay protection is promoted last with hosted
+    limited-use-token evidence. Rollback disables callable enforcement first,
+    then the browser flag; it never weakens role, tenant, recent-auth, or direct-
+    browser-write denials.
 - Production frontend flag: `VITE_AMBIENT_UI_ENABLED`
   - Both production deploy workflows bind exactly one `"true"` value into the
     frontend build environment, and the deployment-safety test enforces that
