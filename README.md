@@ -447,6 +447,15 @@ validated configuration is not a cloud plan, applied resource, App Check
 registration, Stripe binding, deployment, or hosted acceptance; each remains a
 separately authorized evidence gate.
 
+Dormant Connect status/onboarding contracts can be checked with
+`npm run check:stripe-connect:onboarding`. They intentionally use injected
+repository, limiter, and provider adapters and are not imported by the
+deploy-empty Connect entry point. The one-use browser destination is an
+internal QuotePilot POST handoff whose token stays out of the URL/referrer,
+never a Stripe Account Link. Passing this check is
+source evidence only; it does not establish a callable, HTTP endpoint,
+connected account, provider request, deployment, or hosted acceptance.
+
 Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
 `test` or `live`, a secret/restricted key with the matching mode prefix, and a
 webhook secret. Event and Checkout Session `livemode` must also match. The

@@ -1,0 +1,37 @@
+name: Stripe Connect Onboarding Source Validation
+
+on:
+  pull_request:
+    paths:
+      - "functions-connect/**"
+      - "scripts/check-stripe-connect-onboarding.mjs"
+      - "src/lib/__tests__/stripeConnectOnboardingContracts.test.js"
+      - "package.json"
+      - ".github/workflows/stripe-connect-onboarding-validation.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "functions-connect/**"
+      - "scripts/check-stripe-connect-onboarding.mjs"
+      - "src/lib/__tests__/stripeConnectOnboardingContracts.test.js"
+      - "package.json"
+      - ".github/workflows/stripe-connect-onboarding-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Dormant contracts only (no credentials, export, provider call, or deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check:stripe-connect:onboarding
+      - run: npx vitest run src/lib/__tests__/stripeConnectOnboardingContracts.test.js src/lib/__tests__/stripeConnectFoundation.test.js

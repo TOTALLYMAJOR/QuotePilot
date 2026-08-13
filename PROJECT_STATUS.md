@@ -67,6 +67,21 @@ Last updated: August 13, 2026
   This is source/local evidence only: no cloud-authenticated plan, apply, GCP
   resource, App Check key, Stripe binding, deployment, hosted verification, or
   human acceptance exists.
+- A sixth source-only checkpoint defines—but does not export—the strict
+  Connect status/onboarding and one-use same-tab handoff contracts. Browser
+  payloads cannot name an organization; verified admin claims supply tenant
+  scope, cached status is redacted, limiter storage accepts only a separately
+  HMAC-hashed principal digest, and owner onboarding requires exact
+  revision/generation/digest evidence, recent authentication, and an unused App
+  Check token. Provider access remains behind injected, unbound adapters. The
+  internal POST handoff keeps its token out of the URL/referrer, stores only an
+  HMAC token digest, consumes before Account Link creation, never returns the
+  Stripe URL to application JavaScript, and
+  records only bounded expiry/attempt evidence. `functions-connect` still
+  exports nothing. Focused local tests and a credential-free source policy
+  pass; no named-database repository, durable limiter, Stripe adapter, callable,
+  HTTP handoff export, provider request, deployment, hosted result, or human
+  acceptance exists.
 
 - Current `main` is tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient

@@ -186,7 +186,20 @@ If a topic changes, only update the owning doc and cross-link from others.
     later approvals; an apply approval must name the exact plan digest.
   - Future keyless deployment must use the immutable repository and owner IDs,
     `main`, and protected `stripe-connect-staging` environment encoded in the
-    Terraform WIF condition. It may not create or use a service-account key.
+  Terraform WIF condition. It may not create or use a service-account key.
+- Stripe Connect onboarding source:
+  - `.github/workflows/stripe-connect-onboarding-validation.yml` is
+    credential-free and proves only the dormant strict request/status/receipt
+    contracts and one-use internal handoff. It must not gain provider secrets,
+    OIDC permission, a function deployment, or a Stripe call.
+  - `functions-connect/index.js` remains deploy-empty until the reviewed
+    staging infrastructure bindings, App Check enforcement/replay evidence,
+    named-database repository, fail-closed limiter, provider adapter, exact
+    manifest inventory, and rollback artifact are approved together.
+  - A future export must preserve same-tab navigation through the internal
+    one-use POST handoff, keep its token out of URLs/referrers, and reject GET;
+    application JavaScript may never receive, persist, log,
+    copy, email, or analyze a Stripe Account Link URL.
 - Project-scoped Functions environment: `NOTIFICATIONS_SMS_PROVIDER`
   - Default trusted runtime value: `none` unless buyer-approved SMS enablement
     is validated; local ignored Functions files are validation-only.
