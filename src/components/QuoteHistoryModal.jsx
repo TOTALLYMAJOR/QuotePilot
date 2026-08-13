@@ -46,7 +46,7 @@ import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";
 import EventWorkspaceView from "./EventWorkspaceView";
 import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
 import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
-import QuoteConversationPanel from "./QuoteConversationPanel";
+import QuoteConversationPanel from "quotepilot-active-conversation-panel";
 import StatusChip from "./StatusChip";
 
 const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"

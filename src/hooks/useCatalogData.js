@@ -33,21 +33,27 @@ const ALLOW_LOCAL_CATALOG_FALLBACK =
     String(import.meta.env.VITE_ALLOW_LOCAL_CATALOG_FALLBACK || "").trim().toLowerCase()
   );
 
-function localCatalogStorageKey(organizationId = "") {
+function localCatalogStorageKey(organizationId = "", { allowLocalDeviceScope = false } = {}) {
   const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
-  return resolvedOrganizationId
-    ? `${LEGACY_LOCAL_KEY}.${encodeURIComponent(resolvedOrganizationId)}`
-    : "";
+  if (resolvedOrganizationId) {
+    return `${LEGACY_LOCAL_KEY}.${encodeURIComponent(resolvedOrganizationId)}`;
+  }
+  // The explicit development fallback has no authenticated tenant identity.
+  // Give it a named browser-only scope instead of reviving the legacy global
+  // key; callers connected to Firebase must continue to fail closed.
+  // `resolveOrganizationId` can produce only word characters and hyphens, so
+  // the `::device` namespace cannot collide with any tenant-scoped cache key.
+  return allowLocalDeviceScope ? `${LEGACY_LOCAL_KEY}::device` : "";
 }
 
-export function readLocalCatalogCache(storage, organizationId = "") {
-  const key = localCatalogStorageKey(organizationId);
+export function readLocalCatalogCache(storage, organizationId = "", options = {}) {
+  const key = localCatalogStorageKey(organizationId, options);
   if (!key || !storage?.getItem) return null;
   return storage.getItem(key);
 }
 
-export function writeLocalCatalogCache(storage, organizationId = "", catalog = null) {
-  const key = localCatalogStorageKey(organizationId);
+export function writeLocalCatalogCache(storage, organizationId = "", catalog = null, options = {}) {
+  const key = localCatalogStorageKey(organizationId, options);
   if (!key || !storage?.setItem) return false;
   storage.setItem(key, JSON.stringify(toStorageCatalog(catalog)));
   return true;
@@ -626,7 +632,9 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           return;
         }
 
-        const cached = readLocalCatalogCache(localStorage, organizationId);
+        const cached = readLocalCatalogCache(localStorage, organizationId, {
+          allowLocalDeviceScope: true
+        });
         const catalog = cached
           ? reflectCurrentPricingConfirmation(normalizeCatalog(JSON.parse(cached)))
           : defaultCatalog();
@@ -808,7 +816,9 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
       }
 
       if (ALLOW_LOCAL_CATALOG_FALLBACK) {
-        writeLocalCatalogCache(localStorage, organizationId, persistedCatalog);
+        writeLocalCatalogCache(localStorage, organizationId, persistedCatalog, {
+          allowLocalDeviceScope: !firebaseReady
+        });
       }
       setState((prev) => ({
         ...prev,

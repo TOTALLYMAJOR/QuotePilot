@@ -16,6 +16,10 @@ const QUOTE_DRAFT_RUNTIME_SOURCE = readFileSync(
   fileURLToPath(new URL("../../lib/quoteDraftRuntime.js", import.meta.url)),
   "utf8"
 );
+const QUOTE_DRAFT_RUNTIME_BASE_SOURCE = readFileSync(
+  fileURLToPath(new URL("../../lib/quoteDraftRuntimeBase.js", import.meta.url)),
+  "utf8"
+);
 const FUNCTIONS_SOURCE = readFileSync(
   fileURLToPath(new URL("../../../functions/index.js", import.meta.url)),
   "utf8"
@@ -431,13 +435,22 @@ describe("CommercialChangeImpactPanel", () => {
     expect(APP_SOURCE).toContain('data-capability-id="cwf-15b-commercial-change-impact-preview"');
     expect(APP_SOURCE).toContain("handlePreviewChangeImpact");
     expect(APP_SOURCE).toContain("expectedActiveVersionId: editingQuote.activeVersionId");
-    expect(APP_SOURCE).toContain("? hydrateSavedQuoteDraft({");
+    expect(APP_SOURCE).toContain("const loadAmbientQuoteDraftRuntime = AMBIENT_UI_ENABLED");
+    expect(APP_SOURCE).toContain('? () => import("./lib/quoteDraftRuntime")');
+    expect(APP_SOURCE).toContain("const runtimeModule = await loadAmbientQuoteDraftRuntime();");
+    expect(APP_SOURCE).toContain("draftRuntime = runtimeModule.hydrateSavedQuoteDraft({");
     expect(APP_SOURCE).toContain("...draftInput,");
     expect(APP_SOURCE).toContain("draftPatch,");
     expect(APP_SOURCE).toContain("draftIntent,");
     expect(APP_SOURCE).toContain("ambientCatalogContext,");
     expect(APP_SOURCE).toContain("ambientEnabled: true");
+    expect(APP_SOURCE).toContain("draftRuntime = hydrateSavedQuoteDraftBase(draftInput);");
+    expect(QUOTE_DRAFT_RUNTIME_SOURCE).toContain("normalizeAmbientQuoteDraftPatch({");
+    expect(QUOTE_DRAFT_RUNTIME_SOURCE).toContain("normalizeAmbientDraftIntent({");
     expect(QUOTE_DRAFT_RUNTIME_SOURCE).toContain(
+      "return hydrateSavedQuoteDraftBase({ ...input, normalizedPatch, normalizedDraftIntent });"
+    );
+    expect(QUOTE_DRAFT_RUNTIME_BASE_SOURCE).toContain(
       "activeVersionId: text(quote.activeVersionId || quote.versionMeta?.versionId)"
     );
     expect(APP_SOURCE).toContain("simulateCommercialQuoteChange({");

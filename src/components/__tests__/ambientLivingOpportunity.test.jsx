@@ -1184,7 +1184,7 @@ describe("AmbientLivingOpportunity", () => {
     expect(button("Stage staffing in editor")).toBeUndefined();
   });
 
-  test("replaces a cancelled editor handoff with truthful recovery instead of ready feedback", () => {
+  test("replaces a cancelled editor handoff with truthful recovery instead of ready feedback", async () => {
     const onEditQuote = vi.fn(() => ({
       status: "cancelled",
       reason: "Unsaved quote work was preserved.",
@@ -1193,7 +1193,10 @@ describe("AmbientLivingOpportunity", () => {
     }));
     mount({ onEditQuote });
 
-    act(() => button("Review draft").click());
+    await act(async () => {
+      button("Review draft").click();
+      await Promise.resolve();
+    });
 
     expect(onEditQuote).toHaveBeenCalledOnce();
     expect(container.textContent).toContain("Priced editor was not opened");

@@ -86,6 +86,7 @@ const CLIENT_PRESENTATION_PREFIXES = Object.freeze([
 ]);
 const CLIENT_PRESENTATION_EXCLUSIONS = new Set([
   "src/App.jsx",
+  "src/LegacyApp.jsx",
   "src/main.jsx",
   "src/context/AmbientContext.jsx",
   "src/context/WorkspaceNavigationContext.jsx",
@@ -104,6 +105,7 @@ const CLIENT_PRESENTATION_EXCLUSIONS = new Set([
   "src/lib/ambientSignals.js",
   "src/lib/impactPreviewAdapter.js",
   "src/lib/quoteDraftRuntime.js",
+  "src/lib/quoteDraftRuntimeBase.js",
   "src/lib/statusSemantics.js",
   "src/lib/workspacePresentation.js",
   "src/lib/workspaceRoutes.js",

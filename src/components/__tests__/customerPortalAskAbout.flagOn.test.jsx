@@ -24,7 +24,7 @@ vi.mock("../../lib/portalRecoveryClient", () => ({
   getPortalRecoveryContact: vi.fn().mockResolvedValue({})
 }));
 
-vi.mock("../QuoteConversationPanel", () => ({
+vi.mock("quotepilot-active-conversation-panel", () => ({
   default: (props) => {
     stores.panelProps.current = props;
     return <div data-testid="conversation-panel" />;

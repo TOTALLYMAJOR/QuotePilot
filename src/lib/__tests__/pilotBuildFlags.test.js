@@ -2,6 +2,11 @@ import fs from "node:fs";
 import { describe, expect, test } from "vitest";
 
 const APP_SOURCE = fs.readFileSync(new URL("../../App.jsx", import.meta.url), "utf8");
+const VITE_CONFIG_SOURCE = fs.readFileSync(new URL("../../../vite.config.js", import.meta.url), "utf8");
+const WORKSPACE_ROUTE_SOURCE = fs.readFileSync(
+  new URL("../../components/WorkspaceRoute.jsx", import.meta.url),
+  "utf8"
+);
 const TRUE_VALUES = ["1", "true", "yes", "on"];
 const GATES = [
   ["PILOT_NOW_REQUESTED", "VITE_PILOT_NOW_ENABLED"],
@@ -37,6 +42,20 @@ function extractAcceptedValues(expression, envName) {
 }
 
 describe("statically foldable Pilot build flags", () => {
+  test("selects the Ambient or compatibility App at build time through one exact alias", () => {
+    expect(VITE_CONFIG_SOURCE).toContain('import { defineConfig, loadEnv } from "vite";');
+    expect(VITE_CONFIG_SOURCE).toContain('...loadEnv(mode, process.cwd(), "")');
+    expect(VITE_CONFIG_SOURCE).toContain("...process.env");
+    expect(VITE_CONFIG_SOURCE).toContain(
+      "const activeApp = ambientGraphEnabled"
+    );
+    expect(VITE_CONFIG_SOURCE).toContain('new URL("./src/App.jsx", import.meta.url)');
+    expect(VITE_CONFIG_SOURCE).toContain('new URL("./src/LegacyApp.jsx", import.meta.url)');
+    expect(VITE_CONFIG_SOURCE).toContain('"quotepilot-active-app": activeApp');
+    expect(WORKSPACE_ROUTE_SOURCE).toContain('import ActiveApp from "quotepilot-active-app";');
+    expect(WORKSPACE_ROUTE_SOURCE).not.toMatch(/import\s+\w+\s+from\s+["']\.\.\/App["']/);
+  });
+
   test.each(GATES)("%s uses only exact direct comparisons", (constantName, envName) => {
     const expression = extractGateExpression(constantName).replace(/\s+/g, " ");
     const token = `import.meta.env.${envName}`;

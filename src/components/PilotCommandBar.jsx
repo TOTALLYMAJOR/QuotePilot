@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Microphone } from "@phosphor-icons/react";
 import { currency } from "../lib/quoteCalculator";
 import {
@@ -15,6 +15,7 @@ import {
   generatePilotBoundedScenarios,
   parsePilotBoundedScenarioIntent
 } from "../lib/pilotBoundedScenarios";
+import { buildAmbientPackageMenuCatalogEvidence } from "../lib/ambientPackageMenuCatalogEvidence";
 import {
   AMBIENT_FEEDBACK_TYPES,
   routeAmbientFeedback
@@ -108,6 +109,7 @@ export default function PilotCommandBar({
   onStageProposal,
   scenarioOrganizationId = "",
   scenarioCatalogEvidence = null,
+  scenarioCatalogContext = null,
   scenarioStaffingEvidence = null,
   scenarioLockedScope = [],
   onHandoffScenarioToDraftReview,
@@ -131,6 +133,11 @@ export default function PilotCommandBar({
   const focusResolutionRef = useRef(onFocusRequestResolution);
   const expandedCommandsEnabled = ambientEnabled === true;
   const holdVoiceEnabled = expandedCommandsEnabled && voiceCaptureMode === "hold";
+  const resolvedScenarioCatalogEvidence = useMemo(() => {
+    if (scenarioCatalogEvidence) return scenarioCatalogEvidence;
+    if (!expandedCommandsEnabled || !scenarioCatalogContext) return null;
+    return buildAmbientPackageMenuCatalogEvidence(scenarioCatalogContext);
+  }, [expandedCommandsEnabled, scenarioCatalogContext, scenarioCatalogEvidence]);
 
   useEffect(() => {
     focusResolutionRef.current = onFocusRequestResolution;
@@ -196,7 +203,7 @@ export default function PilotCommandBar({
           intent: scenarioIntent,
           organizationId: scenarioOrganizationId,
           form,
-          catalogEvidence: scenarioCatalogEvidence,
+          catalogEvidence: resolvedScenarioCatalogEvidence,
           settings,
           staffingEvidence: scenarioStaffingEvidence,
           lockedScope: scenarioLockedScope,

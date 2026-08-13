@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { describe, expect, test } from "vitest";
 import {
   RELEASE_CANDIDATE_POLICY,
+  RELEASE_CANDIDATE_UAT_PROFILE,
   CANDIDATE_REQUIRED_SECRET_METADATA,
   CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED,
   candidateConfirmation,
@@ -58,6 +59,24 @@ function functionsEnvironment(overrides = {}) {
   };
 }
 
+function reserveVercelCandidateReceipt(root) {
+  return reserveCandidateReceipt({
+    root,
+    target: "vercel-preview",
+    releaseSha: SHA,
+    ci: { runId: 123, releaseSha: SHA },
+    provider: {
+      name: "vercel",
+      ...RELEASE_CANDIDATE_POLICY.vercel,
+      target: "preview"
+    }
+  });
+}
+
+function readCandidateReceipt(reservation) {
+  return JSON.parse(fs.readFileSync(reservation.receiptPath, "utf8"));
+}
+
 describe("governed release candidate deployment", () => {
   test("accepts only exact successful release-branch CI evidence", () => {
     const fixture = ciFixture();
@@ -80,6 +99,7 @@ describe("governed release candidate deployment", () => {
     expect(RELEASE_CANDIDATE_POLICY.vercel.projectName).toBe("quoteflow");
     expect(candidateConfirmation("firebase-all", SHA)).toContain(`quotepilot-staging-20260804 ${SHA}`);
     expect(candidateConfirmation("vercel-preview", SHA)).toContain(`quoteflow PREVIEW ${SHA}`);
+    expect(RELEASE_CANDIDATE_UAT_PROFILE).toBe("staging-safe-off");
   });
 
   test("checks every bound staging secret by metadata without reading or creating values", () => {
@@ -160,18 +180,17 @@ describe("governed release candidate deployment", () => {
     expect(rules.sourceSha256).toBe(rules.providerSourceSha256);
   });
 
-  test("reserves the receipt before mutation and preserves journal outcomes", () => {
+  test("reserves the receipt before mutation and rejects fields outside the update contract", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-candidate-receipt-"));
     try {
-      const reservation = reserveCandidateReceipt({
-        root,
-        target: "vercel-preview",
-        releaseSha: SHA,
-        ci: { runId: 123, releaseSha: SHA },
-        provider: { name: "vercel", projectName: "quoteflow", target: "preview" }
+      const reservation = reserveVercelCandidateReceipt(root);
+      const reservedReceipt = readCandidateReceipt(reservation);
+      expect(reservedReceipt).toMatchObject({
+        schema: "com.mbmapps.quotepilot.release-candidate-receipt/v3",
+        status: "reserved",
+        uatProfile: "staging-safe-off",
+        providerMutationAttempted: false
       });
-      expect(JSON.parse(fs.readFileSync(reservation.receiptPath, "utf8")))
-        .toMatchObject({ status: "reserved", providerMutationAttempted: false });
       expect(() => reserveCandidateReceipt({
         root,
         target: "vercel-preview",
@@ -179,17 +198,122 @@ describe("governed release candidate deployment", () => {
         ci: { runId: 123 },
         provider: { name: "vercel" }
       })).toThrow(/EEXIST/i);
+      expect(() => updateCandidateReceipt(reservation, { unexpected: true }))
+        .toThrow(/unknown field unexpected/i);
+      for (const field of [
+        "schema",
+        "reservationId",
+        "target",
+        "uatProfile",
+        "sourceSha",
+        "ci",
+        "createdAt"
+      ]) {
+        expect(() => updateCandidateReceipt(reservation, { [field]: "forged" }))
+          .toThrow(new RegExp(`${field} is immutable`, "i"));
+      }
+      expect(readCandidateReceipt(reservation)).toEqual(reservedReceipt);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("enforces forward-only receipt lifecycle and mutation-attempt state", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-candidate-lifecycle-"));
+    try {
+      const reservation = reserveVercelCandidateReceipt(root);
+      expect(() => updateCandidateReceipt(reservation, { status: "verified" }))
+        .toThrow(/cannot transition from reserved to verified/i);
+      updateCandidateReceipt(reservation, { status: "preparing" });
+      updateCandidateReceipt(reservation, { status: "preparing" });
       updateCandidateReceipt(reservation, {
-        status: "partial",
+        status: "deploying",
         providerMutationAttempted: true,
-        failure: { name: "Error", message: "provider verification failed" }
+        providerMutationAttemptedAt: "2026-08-12T00:00:00.000Z"
       });
-      expect(JSON.parse(fs.readFileSync(reservation.receiptPath, "utf8")))
-        .toMatchObject({
-          status: "partial",
-          providerMutationAttempted: true,
-          failure: { message: "provider verification failed" }
-        });
+      expect(() => updateCandidateReceipt(reservation, {
+        status: "deploying",
+        providerMutationAttempted: false
+      })).toThrow(/cannot regress from true to false/i);
+      expect(() => updateCandidateReceipt(reservation, { status: "preparing" }))
+        .toThrow(/cannot transition from deploying to preparing/i);
+      expect(readCandidateReceipt(reservation)).toMatchObject({
+        status: "deploying",
+        providerMutationAttempted: true
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("allows two-step provider enrichment without replacing provider evidence", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "quotepilot-candidate-provider-"));
+    try {
+      const reservation = reserveVercelCandidateReceipt(root);
+      updateCandidateReceipt(reservation, { status: "preparing" });
+      updateCandidateReceipt(reservation, {
+        status: "deploying",
+        providerMutationAttempted: true
+      });
+      updateCandidateReceipt(reservation, {
+        status: "provider_succeeded_unverified",
+        provider: {
+          name: "vercel",
+          ...RELEASE_CANDIDATE_POLICY.vercel,
+          target: "preview",
+          deploymentUrl: "https://quoteflow-candidate-mbmapps.vercel.app"
+        }
+      });
+      updateCandidateReceipt(reservation, {
+        status: "provider_succeeded_unverified",
+        provider: {
+          name: "vercel",
+          ...RELEASE_CANDIDATE_POLICY.vercel,
+          target: "preview",
+          deploymentId: "dpl_candidate123",
+          deploymentUrl: "https://quoteflow-candidate-mbmapps.vercel.app"
+        }
+      });
+      const enrichedReceipt = readCandidateReceipt(reservation);
+      expect(enrichedReceipt.provider).toEqual({
+        name: "vercel",
+        projectId: RELEASE_CANDIDATE_POLICY.vercel.projectId,
+        orgId: RELEASE_CANDIDATE_POLICY.vercel.orgId,
+        projectName: "quoteflow",
+        target: "preview",
+        deploymentId: "dpl_candidate123",
+        deploymentUrl: "https://quoteflow-candidate-mbmapps.vercel.app"
+      });
+      expect(() => updateCandidateReceipt(reservation, {
+        status: "provider_succeeded_unverified",
+        provider: { deploymentId: "dpl_conflicting" }
+      })).toThrow(/deploymentId conflicts with existing evidence/i);
+      expect(() => updateCandidateReceipt(reservation, {
+        status: "provider_succeeded_unverified",
+        provider: { deploymentUrl: "https://quoteflow-other-mbmapps.vercel.app" }
+      })).toThrow(/deploymentUrl conflicts with existing evidence/i);
+      expect(() => updateCandidateReceipt(reservation, {
+        status: "provider_succeeded_unverified",
+        provider: { name: "firebase" }
+      })).toThrow(/provider identity field name is immutable/i);
+      expect(() => updateCandidateReceipt(reservation, {
+        status: "provider_succeeded_unverified",
+        provider: { region: "us-central1" }
+      })).toThrow(/provider patch contains unknown field region/i);
+      expect(readCandidateReceipt(reservation)).toEqual(enrichedReceipt);
+
+      const verified = updateCandidateReceipt(reservation, {
+        status: "verified",
+        providerMutationCompleted: true,
+        verifiedAt: "2026-08-12T00:05:00.000Z"
+      });
+      expect(verified).toMatchObject({
+        status: "verified",
+        providerMutationAttempted: true,
+        providerMutationCompleted: true
+      });
+      expect(() => updateCandidateReceipt(reservation, { status: "partial" }))
+        .toThrow(/cannot transition from verified to partial/i);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -277,6 +401,8 @@ describe("governed release candidate deployment", () => {
     expect(source).not.toContain('PROJECT_ID = "tonicatering"');
     expect(source).toContain('VITE_AMBIENT_UI_ENABLED: "true"');
     expect(source).toContain('VITE_OPERATIONAL_STAFFING_ENABLED: "true"');
+    expect(source).toContain('uatProfile: RELEASE_CANDIDATE_UAT_PROFILE');
+    expect(source).toContain('com.mbmapps.quotepilot.release-candidate/v2');
     expect(source).not.toMatch(/"--token",\s*\.\.\.tokenArgs/);
     for (const flag of [
       "VITE_PILOT_NOW_ENABLED",

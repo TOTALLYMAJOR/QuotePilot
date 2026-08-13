@@ -1,10 +1,10 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "./components/AuthGate";
-import CustomerPortalView from "./components/CustomerPortalView";
+import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProductBrandLockup from "./components/ProductBrandLockup";
-import WorkspaceShell from "./components/WorkspaceShell";
+import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
   createRecoverableLazy,
   RecoverableErrorBoundary
@@ -18,13 +18,8 @@ import {
 } from "./components/WorkspaceSurfaceBoundary";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import CreateIntake from "./components/CreateIntake";
-import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
-import { buildAmbientPackageMenuCatalogEvidence } from "./lib/ambientPackageMenuCatalogEvidence";
-import {
-  applyPilotScenarioDraftReview,
-  createPilotScenarioDraftReview
-} from "./lib/pilotScenarioDraftReview";
+import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
 import {
   isDefinitiveRecordError,
@@ -56,10 +51,8 @@ import {
 } from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness } from "./lib/quoteWorkflow";
 import {
-  hydrateSavedQuoteDraft,
   hydrateSavedQuoteDraftBase
-} from "./lib/quoteDraftRuntime";
-import { adoptAmbientPackageMenuDraftChange } from "./lib/ambientPackageMenuDraftAdoption";
+} from "./lib/quoteDraftRuntimeBase";
 import { recommendationWouldChangeForm } from "./lib/recommendationState";
 import {
   applyEventTypeTemplateDefaults,
@@ -101,11 +94,13 @@ import { createRebookQuoteDraft } from "./lib/rebookQuoteClient";
 import { clearTenantContextCache } from "./lib/tenantDomainService";
 import {
   beginWizardAnalyticsSession,
-  recordProductAnalyticsEvent,
-  recordProductAnalyticsFirstIntent,
-  recordProductAnalyticsPricedDraftReceipt
-} from "./lib/productAnalytics";
+  recordProductAnalyticsEvent
+} from "quotepilot-active-product-analytics";
 
+const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
 const AdminCatalogView = createRecoverableLazy(
   () => import("./components/AdminCatalogModal").then((module) => ({ default: module.AdminCatalogView })),
   "AdminCatalogView"
@@ -127,11 +122,13 @@ const CustomerDirectoryView = createRecoverableLazy(
   "CustomerDirectoryView"
 );
 const CustomerWorkspaceView = createRecoverableLazy(
-  () => import("./components/CustomerWorkspaceView"),
+  () => import("quotepilot-active-customer-workspace"),
   "CustomerWorkspaceView"
 );
 const MessagingStation = createRecoverableLazy(
-  () => import("./components/MessagingStation"),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/MessagingStation")
+    : () => import("./components/LegacyMessagingStation"),
   "MessagingStation"
 );
 const WorkspaceNotFound = createRecoverableLazy(
@@ -139,7 +136,9 @@ const WorkspaceNotFound = createRecoverableLazy(
   "WorkspaceNotFound"
 );
 const EventScheduleView = createRecoverableLazy(
-  () => import("./components/EventScheduleModal").then((module) => ({ default: module.EventScheduleView })),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/EventScheduleRoute")
+    : () => import("./components/LegacyEventScheduleRoute"),
   "EventScheduleView"
 );
 const IntegrationOpsView = createRecoverableLazy(
@@ -159,15 +158,21 @@ const QuoteCompareModal = createRecoverableLazy(
   "QuoteCompareModal"
 );
 const QuoteHistoryView = createRecoverableLazy(
-  () => import("./components/QuoteHistoryModal").then((module) => ({ default: module.QuoteHistoryView })),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/QuoteHistoryRoute")
+    : () => import("./components/LegacyQuoteHistoryRoute"),
   "QuoteHistoryView"
 );
 const ReportingDashboardView = createRecoverableLazy(
-  () => import("./components/ReportingDashboardModal").then((module) => ({ default: module.ReportingDashboardView })),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/ReportingDashboardRoute")
+    : () => import("./components/LegacyReportingDashboardRoute"),
   "ReportingDashboardView"
 );
 const SalesWorkflowView = createRecoverableLazy(
-  () => import("./components/SalesWorkflowModal").then((module) => ({ default: module.SalesWorkflowView })),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/SalesWorkflowRoute")
+    : () => import("./components/LegacySalesWorkflowRoute"),
   "SalesWorkflowView"
 );
 
@@ -208,10 +213,6 @@ const PILOT_COMMAND_ENABLED = import.meta.env.VITE_PILOT_COMMAND_ENABLED === "1"
 // Default-off presentation replacement for Pilot Slice Alpha. This class is
 // used only to remove duplicate mobile chrome around the selected opportunity;
 // authority remains in the existing quote callbacks and save path.
-const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
 const AMBIENT_NOW_ENABLED = AMBIENT_UI_ENABLED && PILOT_NOW_ENABLED;
 // Keep the v0.7 command surface available under its existing gate while the
 // expanded query/scenario contract stays coupled to the separately default-off
@@ -239,9 +240,26 @@ const NowView = LEGACY_NOW_ENABLED
   : null;
 const PilotCommandBar = PILOT_COMMAND_ENABLED
   ? createRecoverableLazy(
-      () => import("./components/PilotCommandBar"),
+      AMBIENT_UI_ENABLED
+        ? () => import("./components/PilotCommandBar")
+        : () => import("./components/LegacyPilotCommandBar"),
       "PilotCommandBar"
     )
+  : null;
+const loadAmbientPackageMenuCatalogEvidence = AMBIENT_PILOT_COMMANDS_ENABLED
+  ? () => import("./lib/ambientPackageMenuCatalogEvidence")
+  : null;
+const loadPilotScenarioDraftReview = AMBIENT_PILOT_COMMANDS_ENABLED
+  ? () => import("./lib/pilotScenarioDraftReview")
+  : null;
+const loadAmbientPackageMenuDraftAdoption = AMBIENT_UI_ENABLED
+  ? () => import("./lib/ambientPackageMenuDraftAdoption")
+  : null;
+const loadAmbientQuoteDraftRuntime = AMBIENT_UI_ENABLED
+  ? () => import("./lib/quoteDraftRuntime")
+  : null;
+const loadAmbientProductAnalytics = AMBIENT_UI_ENABLED
+  ? () => import("./lib/productAnalyticsAmbient")
   : null;
 const loadAmbientGlobalPilotTarget = AMBIENT_UI_ENABLED
   ? () => import("./lib/ambientGlobalPilotTarget")
@@ -1491,7 +1509,12 @@ export default function App({
   const markFieldsTouched = (fields = []) => {
     const unique = Array.from(new Set(fields.filter(Boolean)));
     if (!unique.length) return;
-    if (AMBIENT_UI_ENABLED) recordProductAnalyticsFirstIntent();
+    if (typeof loadAmbientProductAnalytics === "function") {
+      const observedAtMs = Date.now();
+      void loadAmbientProductAnalytics()
+        .then((analytics) => analytics.recordProductAnalyticsFirstIntent({ observedAtMs }))
+        .catch(() => {});
+    }
     setTouchedFields((prev) => {
       const next = { ...prev };
       let changed = false;
@@ -1617,15 +1640,15 @@ export default function App({
       guidedSellingEnabled: (catalog.settings?.guidedSellingEnabled !== false) && featureFlags.guidedSelling
     };
   }, [catalog.settings, effectiveMenuSections, organization?.name]);
-  const pilotScenarioCatalogEvidence = useMemo(() => {
-    if (!PILOT_COMMAND_ENABLED) return null;
-    return buildAmbientPackageMenuCatalogEvidence({
+  const pilotScenarioCatalogContext = useMemo(() => {
+    if (!AMBIENT_PILOT_COMMANDS_ENABLED) return null;
+    return {
       organizationId: authSession.organizationId,
       catalog: {
         ...catalog,
         settings: effectiveSettings
       }
-    });
+    };
   }, [
     authSession.organizationId,
     catalog.addons,
@@ -1672,7 +1695,19 @@ export default function App({
   useEffect(() => {
     const organizationId = String(authSession.organizationId || "").trim();
     if (!organizationId || !authSession.isStaff || catalog.loading) return;
-    beginWizardAnalyticsSession({ organizationId, mode: editingQuote.id ? "edit" : "create" });
+    let cancelled = false;
+    const beginSession = () => {
+      if (cancelled) return;
+      beginWizardAnalyticsSession({ organizationId, mode: editingQuote.id ? "edit" : "create" });
+    };
+    if (typeof loadAmbientProductAnalytics === "function") {
+      void loadAmbientProductAnalytics().then(beginSession).catch(beginSession);
+    } else {
+      beginSession();
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [authSession.isStaff, authSession.organizationId, catalog.loading, editingQuote.id]);
 
   useEffect(() => {
@@ -2158,6 +2193,26 @@ export default function App({
     setForm((prev) => applyProposalToForm(prev, proposal));
   };
 
+  const loadCurrentPilotScenarioRuntime = async () => {
+    if (
+      typeof loadAmbientPackageMenuCatalogEvidence !== "function"
+      || typeof loadPilotScenarioDraftReview !== "function"
+      || !pilotScenarioCatalogContext
+    ) {
+      throw new Error("Pilot scenario review is unavailable outside the Ambient workspace.");
+    }
+    const [catalogEvidenceModule, reviewModule] = await Promise.all([
+      loadAmbientPackageMenuCatalogEvidence(),
+      loadPilotScenarioDraftReview()
+    ]);
+    return {
+      catalogEvidence: catalogEvidenceModule.buildAmbientPackageMenuCatalogEvidence(
+        pilotScenarioCatalogContext
+      ),
+      reviewModule
+    };
+  };
+
   const handoffPilotScenarioToDraftReview = async (proposal) => {
     if (
       ambientDraftIntentReview
@@ -2185,12 +2240,25 @@ export default function App({
         }
       };
     }
-    const created = await createPilotScenarioDraftReview({
-      proposal,
-      organizationId: authSession.organizationId,
-      catalogEvidence: pilotScenarioCatalogEvidence,
-      form
-    });
+    let created;
+    try {
+      const { catalogEvidence, reviewModule } = await loadCurrentPilotScenarioRuntime();
+      created = await reviewModule.createPilotScenarioDraftReview({
+        proposal,
+        organizationId: authSession.organizationId,
+        catalogEvidence,
+        form
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        acknowledgement: {
+          reason: String(error?.message || "Pilot scenario review could not be prepared.").trim(),
+          consequence: "The current draft is unchanged.",
+          nextResolutions: ["Keep working from this draft, then retry the scenario review."]
+        }
+      };
+    }
     if (!created.ok) {
       setSubmitState((current) => ({
         ...current,
@@ -2228,14 +2296,27 @@ export default function App({
         }
       };
     }
-    const result = await applyPilotScenarioDraftReview({
-      review,
-      currentProposal: pilotScenarioDraftProposal,
-      organizationId: authSession.organizationId,
-      catalogEvidence: pilotScenarioCatalogEvidence,
-      form,
-      confirmed: true
-    });
+    let result;
+    try {
+      const { catalogEvidence, reviewModule } = await loadCurrentPilotScenarioRuntime();
+      result = await reviewModule.applyPilotScenarioDraftReview({
+        review,
+        currentProposal: pilotScenarioDraftProposal,
+        organizationId: authSession.organizationId,
+        catalogEvidence,
+        form,
+        confirmed: true
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        acknowledgement: {
+          reason: String(error?.message || "Pilot scenario review could not be applied.").trim(),
+          consequence: "The current draft is unchanged.",
+          nextResolutions: ["Keep the current draft or retry from the latest opportunity state."]
+        }
+      };
+    }
     if (!result.ok) return result;
     resetChangeImpactPreview();
     setForm(result.form);
@@ -2771,7 +2852,7 @@ export default function App({
     }
   };
 
-  const handleApplyAmbientDraftIntent = (intent) => {
+  const handleApplyAmbientDraftIntent = async (intent) => {
     if (
       !ambientDraftIntentReview
       || intent !== ambientDraftIntentReview
@@ -2782,11 +2863,23 @@ export default function App({
         reason: "This Package or Menu review is no longer the current editor handoff. Return to the Living Opportunity and choose the exact outcome again."
       };
     }
-    const result = adoptAmbientPackageMenuDraftChange({
-      ambientDraftIntent: intent,
-      form,
-      catalogContext: ambientDraftCatalogContext
-    });
+    let result;
+    try {
+      if (typeof loadAmbientPackageMenuDraftAdoption !== "function") {
+        throw new Error("Package and Menu draft review is unavailable outside the Ambient workspace.");
+      }
+      const adoptionModule = await loadAmbientPackageMenuDraftAdoption();
+      result = adoptionModule.adoptAmbientPackageMenuDraftChange({
+        ambientDraftIntent: intent,
+        form,
+        catalogContext: ambientDraftCatalogContext
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        reason: `${String(error?.message || "This change could not be added to the draft.").trim()} The draft is unchanged; retry from the current Living Opportunity.`
+      };
+    }
     if (!result.ok) {
       return {
         ok: false,
@@ -3076,11 +3169,15 @@ export default function App({
         setAmbientDraftReviewResolution("");
         clearPilotScenarioDraftReview();
         recordProductAnalyticsEvent("quote_saved");
-        if (AMBIENT_UI_ENABLED) {
-          recordProductAnalyticsPricedDraftReceipt({
-            pricingAuthority: pricingSnapshot?.authority,
-            storage: result.storage
-          });
+        if (typeof loadAmbientProductAnalytics === "function") {
+          const observedAtMs = Date.now();
+          void loadAmbientProductAnalytics()
+            .then((analytics) => analytics.recordProductAnalyticsPricedDraftReceipt({
+              pricingAuthority: pricingSnapshot?.authority,
+              storage: result.storage,
+              observedAtMs
+            }))
+            .catch(() => {});
         }
         setSubmitState({
           saving: false,
@@ -3121,11 +3218,15 @@ export default function App({
       setAmbientDraftReviewResolution("");
       clearPilotScenarioDraftReview();
       recordProductAnalyticsEvent("quote_saved");
-      if (AMBIENT_UI_ENABLED) {
-        recordProductAnalyticsPricedDraftReceipt({
-          pricingAuthority: pricingSnapshot?.authority,
-          storage: result.storage
-        });
+      if (typeof loadAmbientProductAnalytics === "function") {
+        const observedAtMs = Date.now();
+        void loadAmbientProductAnalytics()
+          .then((analytics) => analytics.recordProductAnalyticsPricedDraftReceipt({
+            pricingAuthority: pricingSnapshot?.authority,
+            storage: result.storage,
+            observedAtMs
+          }))
+          .catch(() => {});
       }
       setSubmitState({
         saving: false,
@@ -3188,7 +3289,7 @@ export default function App({
     }
   };
 
-  const handleEditQuote = (
+  const handleEditQuote = async (
     quote,
     {
       navigateToRoute = true,
@@ -3240,15 +3341,31 @@ export default function App({
       catalogPackages: catalog.packages,
       organizationId: authSession.organizationId
     };
-    const draftRuntime = AMBIENT_UI_ENABLED
-      ? hydrateSavedQuoteDraft({
+    let draftRuntime;
+    if (AMBIENT_UI_ENABLED) {
+      try {
+        if (typeof loadAmbientQuoteDraftRuntime !== "function") {
+          throw new Error("Ambient draft context is not available in this build.");
+        }
+        const runtimeModule = await loadAmbientQuoteDraftRuntime();
+        draftRuntime = runtimeModule.hydrateSavedQuoteDraft({
           ...draftInput,
           draftPatch,
           draftIntent,
           ambientCatalogContext,
           ambientEnabled: true
-        })
-      : hydrateSavedQuoteDraftBase(draftInput);
+        });
+      } catch (error) {
+        return {
+          status: "recovery",
+          reason: String(error?.message || "The Ambient draft context could not be prepared.").trim(),
+          consequence: "No editor route opened and the current work remains unchanged.",
+          nextResolution: "Return to the opportunity and retry the exact edit outcome."
+        };
+      }
+    } else {
+      draftRuntime = hydrateSavedQuoteDraftBase(draftInput);
+    }
     if (!draftRuntime.ok) {
       return {
         status: "recovery",
@@ -3383,9 +3500,13 @@ export default function App({
     setQuoteEditLoadState({ quoteId, loading: true, error: "" });
     setSubmitState((current) => ({ ...current, message: "Loading the saved quote for editing..." }));
     getQuoteById(quoteId)
-      .then((quote) => {
+      .then(async (quote) => {
         if (directEditLoadRef.current.generation !== generation) return;
-        handleEditQuote(quote, { navigateToRoute: false });
+        const editResult = await handleEditQuote(quote, { navigateToRoute: false });
+        if (directEditLoadRef.current.generation !== generation) return;
+        if (editResult?.status === "recovery") {
+          throw new Error(editResult.reason || "Unable to prepare this saved quote for editing.");
+        }
         setQuoteEditLoadState({ quoteId, loading: false, error: "" });
       })
       .catch((error) => {
@@ -3983,7 +4104,7 @@ export default function App({
   });
 
   return (
-    <WorkspaceShell
+    <ActiveWorkspaceShell
       model={workspaceShellModel}
       identity={{
         workspaceName,
@@ -4392,7 +4513,7 @@ export default function App({
                 styles={Object.keys(STAFF_RULES)}
                 canViewStaffMargin={authSession.isStaff}
                 scenarioOrganizationId={authSession.organizationId}
-                scenarioCatalogEvidence={pilotScenarioCatalogEvidence}
+                scenarioCatalogContext={pilotScenarioCatalogContext}
                 scenarioLockedScope={[]}
                 onStageProposal={stageChangeRequestProposal}
                 onHandoffScenarioToDraftReview={AMBIENT_PILOT_COMMANDS_ENABLED
@@ -4408,7 +4529,7 @@ export default function App({
             </Suspense>
           </RecoverableErrorBoundary>
         )}
-        {PILOT_CREATE_ENABLED
+        {PILOT_CREATE_ENABLED && CreateIntake
           && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
           && !editingQuote.id && (
           <CreateIntake
@@ -4419,42 +4540,42 @@ export default function App({
             onModelParse={parseIntentDraftWithModel}
           />
         )}
-        {PILOT_CHANGE_REQUESTS_ENABLED
+        {PILOT_CHANGE_REQUESTS_ENABLED && ChangeRequestPanel
           && isEditingQuote
           && editingQuote?.portalDecision?.decision === "changes_requested"
           && String(editingQuote?.portalDecision?.message || "").trim() && (
           <ChangeRequestPanel
-            message={editingQuote.portalDecision.message}
-            submittedAtISO={editingQuote.portalDecision.submittedAtISO || ""}
-            requestId={editingQuote.portalDecision.requestId || ""}
-            form={form}
-            catalog={catalog}
-            settings={effectiveSettings}
-            styles={Object.keys(STAFF_RULES)}
-            onStageProposal={stageChangeRequestProposal}
-            onRecordParse={
-              String(catalog.source || "").trim().toLowerCase().startsWith("firebase")
-                ? async (payload) => {
-                    try {
-                      const receipt = await recordChangeRequestParse({
-                        organizationId: authSession.organizationId,
-                        quoteId: editingQuote.id,
-                        ...payload
-                      });
-                      setPendingResolutionLink({
-                        quoteId: editingQuote.id,
-                        resolutionId: receipt.resolutionId
-                      });
-                      return receipt;
-                    } catch (error) {
-                      if (error && typeof error === "object") {
-                        error.definitive = isDefinitiveRecordError(error);
+                message={editingQuote.portalDecision.message}
+                submittedAtISO={editingQuote.portalDecision.submittedAtISO || ""}
+                requestId={editingQuote.portalDecision.requestId || ""}
+                form={form}
+                catalog={catalog}
+                settings={effectiveSettings}
+                styles={Object.keys(STAFF_RULES)}
+                onStageProposal={stageChangeRequestProposal}
+                onRecordParse={
+                  String(catalog.source || "").trim().toLowerCase().startsWith("firebase")
+                    ? async (payload) => {
+                        try {
+                          const receipt = await recordChangeRequestParse({
+                            organizationId: authSession.organizationId,
+                            quoteId: editingQuote.id,
+                            ...payload
+                          });
+                          setPendingResolutionLink({
+                            quoteId: editingQuote.id,
+                            resolutionId: receipt.resolutionId
+                          });
+                          return receipt;
+                        } catch (error) {
+                          if (error && typeof error === "object") {
+                            error.definitive = isDefinitiveRecordError(error);
+                          }
+                          throw error;
+                        }
                       }
-                      throw error;
-                    }
-                  }
-                : null
-            }
+                    : null
+                }
           />
         )}
         <section className="panel wizard-panel">
@@ -5030,6 +5151,6 @@ export default function App({
       )}
 
       {renderWorkspaceTools("modal", [reportingTool])}
-    </WorkspaceShell>
+    </ActiveWorkspaceShell>
   );
 }

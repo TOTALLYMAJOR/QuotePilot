@@ -994,6 +994,10 @@ platform-admin workflow.
 
 Primary production deployment is manual-workflow-only:
 
+- `npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`
+  prints the fixed candidate's applicable and blocked checks. Applicable is not
+  passed, and blocked checks cannot be waived or supplied to the exact-main
+  all-positive attestation.
 - `Deploy Firebase Production` deploys the explicitly selected `hosting`,
   `backend`, or `all` surface to the fixed `tonicatering` project.
 - `Deploy Vercel Production` builds and promotes the exact release to the fixed

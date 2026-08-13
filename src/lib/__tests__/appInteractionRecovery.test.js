@@ -35,12 +35,19 @@ describe("workspace interaction recovery wiring", () => {
 
   test("delegates saved-quote hydration and exact Ambient handoffs to the draft runtime", () => {
     expect(appSource).toContain("hydrateSavedQuoteDraftBase");
-    expect(appSource).toContain("? hydrateSavedQuoteDraft({");
+    expect(appSource).toContain("const loadAmbientQuoteDraftRuntime = AMBIENT_UI_ENABLED");
+    expect(appSource).toContain('? () => import("./lib/quoteDraftRuntime")');
+    expect(appSource).not.toMatch(/from\s+["']\.\/lib\/quoteDraftRuntime["']/);
+    expect(appSource).toContain("if (AMBIENT_UI_ENABLED) {");
+    expect(appSource).toContain('typeof loadAmbientQuoteDraftRuntime !== "function"');
+    expect(appSource).toContain("const runtimeModule = await loadAmbientQuoteDraftRuntime()");
+    expect(appSource).toContain("draftRuntime = runtimeModule.hydrateSavedQuoteDraft({");
     expect(appSource).toContain("draftPatch,");
     expect(appSource).toContain("draftIntent,");
     expect(appSource).toContain("ambientCatalogContext,");
     expect(appSource).toContain("ambientEnabled: true");
-    expect(appSource).toContain(": hydrateSavedQuoteDraftBase(draftInput)");
+    expect(appSource).toContain("draftRuntime = hydrateSavedQuoteDraftBase(draftInput)");
+    expect(appSource).toContain('consequence: "No editor route opened and the current work remains unchanged."');
     expect(appSource).toContain("setForm(draftRuntime.form)");
     expect(appSource).toContain("draftRuntime.ambientDraftIntent?.focusField");
     expect(appSource).toContain("draftIntentFamily: draftRuntime.ambientDraftIntent?.family");

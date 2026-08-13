@@ -42,7 +42,7 @@ import {
   recordProductAnalyticsIssueResolved,
   recordProductAnalyticsIssueSurfaced,
   resetProductAnalyticsIssueObservationState
-} from "../lib/productAnalytics";
+} from "../lib/productAnalyticsAmbient";
 import {
   AmbientSelectionObjects,
   AmbientUndoRail,
@@ -935,7 +935,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     };
   };
 
-  const openEditor = ({ guestCount = null, staffing = null, requestedAction = null } = {}) => {
+  const openEditor = async ({ guestCount = null, staffing = null, requestedAction = null } = {}) => {
     const hasGuestScenario = Number.isFinite(guestCount) && guestCount !== recordedGuestCount;
     const hasStaffingScenario = staffing && ["servers", "chefs", "bartenders"].every((field) => (
       Number.isInteger(Number(staffing[field]))
@@ -1034,7 +1034,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
     let navigationResult;
     try {
-      navigationResult = onEditQuote(quote, { arrivalContext, draftPatch });
+      navigationResult = await onEditQuote(quote, { arrivalContext, draftPatch });
     } catch (error) {
       navigationResult = {
         status: "recovery",
@@ -1060,7 +1060,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     emitFeedback("ready");
   };
 
-  const continueEventLogisticsInEditor = (kind) => {
+  const continueEventLogisticsInEditor = async (kind) => {
     if (!EVENT_LOGISTICS_KINDS.includes(kind)) return;
     const descriptor = model.eventLogisticsObjects[kind];
     const action = model.actions[EVENT_LOGISTICS_UI[kind].stage];
@@ -1148,7 +1148,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
     let navigationResult;
     try {
-      navigationResult = onEditQuote(quote, { arrivalContext, draftIntent });
+      navigationResult = await onEditQuote(quote, { arrivalContext, draftIntent });
     } catch (error) {
       navigationResult = {
         status: "recovery",
@@ -1174,7 +1174,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     emitFeedback("ready");
   };
 
-  const continuePackageMenuInEditor = ({
+  const continuePackageMenuInEditor = async ({
     action,
     intent,
     label,
@@ -1235,7 +1235,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
     let navigationResult;
     try {
-      navigationResult = onEditQuote(quote, {
+      navigationResult = await onEditQuote(quote, {
         arrivalContext,
         draftIntent: intent,
         ambientCatalogContext: model.packageMenuCatalogContext

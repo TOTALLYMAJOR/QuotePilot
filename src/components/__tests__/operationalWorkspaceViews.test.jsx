@@ -18,11 +18,6 @@ import ReportingAmbientMetrics, {
   formatReportingDuration
 } from "../AmbientReportingMetrics";
 
-const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
-
 describe("operational workspace presentations", () => {
   test.each([
     ["schedule", EventScheduleView, EventScheduleModal, "event-schedule-title"],
@@ -171,13 +166,8 @@ describe("reporting commercial-state totals", () => {
     );
     expect(markup).toContain("Accepted / Booked Quote Value");
     expect(markup).toContain("Verified Paid-Deposit Total");
-    if (AMBIENT_UI_ENABLED) {
-      expect(markup).toContain("Ambient interaction health");
-      expect(markup).toContain("Primary dead-click rate");
-    } else {
-      expect(markup).not.toContain("Ambient interaction health");
-      expect(markup).not.toContain("Primary dead-click rate");
-    }
+    expect(markup).toContain("Ambient interaction health");
+    expect(markup).toContain("Primary dead-click rate");
     expect(markup).toContain("not accounting revenue");
     expect(markup).not.toContain("Won Revenue");
   });

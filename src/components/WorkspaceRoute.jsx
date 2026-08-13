@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import App from "../App";
+import ActiveApp from "quotepilot-active-app";
 import { EventTypeProvider } from "../context/EventTypeContext";
 import { OrganizationProvider } from "../context/OrganizationContext";
 import {
@@ -46,7 +46,7 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
   return (
     <OrganizationProvider key={workspaceScopeKey}>
       <EventTypeProvider>
-        <App
+        <ActiveApp
           tenantContext={tenantContext}
           authSession={authSession}
           portalRouteAllowed={portalRouteAllowed}

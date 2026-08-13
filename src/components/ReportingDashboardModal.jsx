@@ -2,22 +2,12 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useModalDialog } from "../hooks/useModalDialog";
 import { currency } from "../lib/quoteCalculator";
 import { getQuoteById, getQuoteHistory } from "../lib/quoteStore";
-import { getProductAnalyticsSummary } from "../lib/productAnalytics";
+import { getProductAnalyticsSummary } from "../lib/productAnalyticsAmbient";
 
 export const REPORTING_QUOTE_LIMIT = 500;
 const REPORTING_MONTH_COUNT = 6;
 const QUOTE_STATUSES = new Set(["draft", "sent", "viewed", "accepted", "booked", "declined", "expired"]);
-const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
-
-// Keep Ambient-only evidence presentation out of the standard workspace bundle.
-// Direct import.meta.env comparisons allow Vite to remove the import entirely
-// when the default-off Ambient build gate is not enabled.
-const ReportingAmbientMetrics = AMBIENT_UI_ENABLED
-  ? lazy(() => import("./AmbientReportingMetrics"))
-  : null;
+const ReportingAmbientMetrics = lazy(() => import("./AmbientReportingMetrics"));
 
 export const REPORTING_ARRIVAL_SIGNAL_BY_SCOPE = Object.freeze({
   opportunity: "opportunity-summary",
@@ -1002,17 +992,15 @@ export function ReportingDashboardView({
           {metrics.paymentUnknown > 0 && <span>Deposit state unavailable: {metrics.paymentUnknown}</span>}
         </div>
 
-        {ReportingAmbientMetrics && (
-          <div
-            id="reporting-ambient-interaction-health"
-            ref={interactionHealthRef}
-            {...arrivalTargetAttributes("ambient-interaction-health")}
-          >
-            <Suspense fallback={<ReportingAmbientMetricsFallback loading />}>
-              <ReportingAmbientMetrics analytics={state.analytics} loading={state.loading} />
-            </Suspense>
-          </div>
-        )}
+        <div
+          id="reporting-ambient-interaction-health"
+          ref={interactionHealthRef}
+          {...arrivalTargetAttributes("ambient-interaction-health")}
+        >
+          <Suspense fallback={<ReportingAmbientMetricsFallback loading />}>
+            <ReportingAmbientMetrics analytics={state.analytics} loading={state.loading} />
+          </Suspense>
+        </div>
 
         <section className="dashboard-section" aria-labelledby="wizard-funnel-heading">
           <div className="dashboard-section-head">

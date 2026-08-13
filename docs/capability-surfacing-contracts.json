@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 28,
+  "catalogVersion": 29,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -1227,7 +1227,7 @@
     },
     {
       "id": "bounded-commercial-reporting",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -1239,6 +1239,9 @@
         "functions/index.js",
         "functions/productAnalytics.js",
         "src/lib/productAnalytics.js",
+        "src/lib/productAnalyticsAmbient.js",
+        "src/lib/productAnalyticsCore.js",
+        "src/lib/productAnalyticsLegacy.js",
         "src/lib/quoteStore.js"
       ],
       "backendExports": [],
@@ -1259,6 +1262,7 @@
         "src/components/__tests__/operationalWorkspaceViews.test.jsx",
         "src/components/__tests__/reportingDashboardEvidence.test.jsx",
         "src/lib/__tests__/productAnalytics.client.test.js",
+        "src/lib/__tests__/productAnalytics.core.test.js",
         "src/lib/__tests__/productAnalytics.server.test.js"
       ],
       "testLocators": [
@@ -1287,6 +1291,10 @@
           "locator": "pairs issue timing by the exact closed category and can discard route-local observations"
         },
         {
+          "path": "src/lib/__tests__/productAnalytics.core.test.js",
+          "locator": "keeps legacy queue and session behavior without initializing Ambient state"
+        },
+        {
           "path": "src/lib/__tests__/productAnalytics.server.test.js",
           "locator": "rejects fabricated authority, unbounded timing, free-form issue categories, and non-primary assessments"
         },
@@ -1310,7 +1318,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The routed entry point, displayed-record scope, source and freshness rail, bounded denominators, missing-money handling, provider-payment evidence gate, stale retention, responsive presentation, and recovery control were reviewed together. Revision 2 adds three privacy-bounded client-observed Ambient measures to the existing product-event read: exact 250ms primary-action assessments; first intent paired only with a server-authoritative Firebase saved priced-draft receipt; and issue surfaced-to-resolved timing paired only by an exact bounded category in the same staff session. Raw quote/customer identifiers, message/proposal content, and free text remain rejected, local fallback infers no rate or duration, and the display labels the data as client observation rather than server timing telemetry.",
+      "surfaceReviewNote": "The routed entry point, displayed-record scope, source and freshness rail, bounded denominators, missing-money handling, provider-payment evidence gate, stale retention, responsive presentation, and recovery control were reviewed together. Revision 2 adds three privacy-bounded client-observed Ambient measures to the existing product-event read: exact 250ms primary-action assessments; first intent paired only with a server-authoritative Firebase saved priced-draft receipt; and issue surfaced-to-resolved timing paired only by an exact bounded category in the same staff session. Revision 3 records the build-time decomposition of that same analytics client into compatibility facade, shared transport, Ambient extension, and flag-off legacy implementation; the split preserves the callable names, queue keys, fail-closed sanitization, local fallback, and existing read authority. Raw quote/customer identifiers, message/proposal content, and free text remain rejected, local fallback infers no rate or duration, and the display labels the data as client observation rather than server timing telemetry.",
       "stateEvidence": [
         {
           "state": "loading",

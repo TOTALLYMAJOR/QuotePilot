@@ -30,7 +30,7 @@ on:
         required: true
         type: string
       checked_item_ids:
-        description: Comma-separated checklist ids applicable to the selected target
+        description: Every target-required checklist id positively passed; blocked, N/A, and partial evidence are rejected
         required: true
         type: string
       confirmation:

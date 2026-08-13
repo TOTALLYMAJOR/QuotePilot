@@ -18,6 +18,9 @@ vi.mock("../../lib/quoteStore", () => ({
 vi.mock("../../lib/productAnalytics", () => ({
   getProductAnalyticsSummary: mocks.getProductAnalyticsSummary
 }));
+vi.mock("../../lib/productAnalyticsAmbient", () => ({
+  getProductAnalyticsSummary: mocks.getProductAnalyticsSummary
+}));
 
 import {
   ReportingDashboardView,
@@ -28,10 +31,6 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const ORGANIZATION_ID = "org-reporting";
 const QUOTE_ID = "quote-reporting";
-const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
-  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
 const OPPORTUNITY_CONTEXT = Object.freeze({
   destination: "reporting",
   surfaceId: "reporting",
@@ -268,18 +267,16 @@ describe("ReportingDashboardView exact arrival", () => {
       "#reporting-pipeline-summary",
       "pipeline-summary"
     ],
-    ...(AMBIENT_UI_ENABLED
-      ? [[
-          "operations",
-          {
-            reportScope: "operations",
-            quoteId: "",
-            reportSignal: "ambient-interaction-health"
-          },
-          "#reporting-ambient-interaction-health",
-          "ambient-interaction-health"
-        ]]
-      : [])
+    [
+      "operations",
+      {
+        reportScope: "operations",
+        quoteId: "",
+        reportSignal: "ambient-interaction-health"
+      },
+      "#reporting-ambient-interaction-health",
+      "ambient-interaction-health"
+    ]
   ])("focuses the exact %s report signal without a targeted quote read", async (
     _scope,
     focus,

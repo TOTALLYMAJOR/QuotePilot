@@ -114,7 +114,7 @@ export const RELEASE_APPROVAL_MODES = Object.freeze([
 ]);
 
 const RELEASE_UAT_CHECKLIST_SCHEMA =
-  "com.mbmapps.quotepilot.release-uat-checklist/v2";
+  "com.mbmapps.quotepilot.release-uat-checklist/v3";
 const RELEASE_UAT_TARGETS = Object.freeze([
   "firebase-hosting",
   "firebase-backend",
@@ -122,12 +122,20 @@ const RELEASE_UAT_TARGETS = Object.freeze([
   "vercel"
 ]);
 const RELEASE_UAT_CHECKLIST_KEYS = Object.freeze([
+  "candidateProfiles",
   "items",
   "maximumAttestationAgeHours",
   "schema",
   "version"
 ]);
 const RELEASE_UAT_ITEM_KEYS = Object.freeze(["id", "label", "targets"]);
+const RELEASE_UAT_PROFILE_KEYS = Object.freeze(["id", "itemStates", "label"]);
+const RELEASE_UAT_PROFILE_STATE_KEYS = Object.freeze({
+  applicable: Object.freeze(["state"]),
+  blocked: Object.freeze(["reason", "state"])
+});
+const RELEASE_UAT_PROFILE_PLAN_SCHEMA =
+  "com.mbmapps.quotepilot.release-uat-profile-plan/v1";
 
 function evidenceError(message) {
   return new Error(`Release evidence rejected: ${message}`);
@@ -178,7 +186,7 @@ function readChecklist(root = ROOT) {
     || JSON.stringify(Object.keys(checklist).sort())
       !== JSON.stringify(RELEASE_UAT_CHECKLIST_KEYS)
   ) {
-    throw evidenceError("the release UAT checklist fields do not match the v2 contract.");
+    throw evidenceError("the release UAT checklist fields do not match the v3 contract.");
   }
   if (
     typeof checklist.version !== "string"
@@ -201,7 +209,7 @@ function readChecklist(root = ROOT) {
       || Array.isArray(item)
       || JSON.stringify(Object.keys(item).sort()) !== JSON.stringify(RELEASE_UAT_ITEM_KEYS)
     ) {
-      throw evidenceError("a release UAT checklist item does not match the v2 contract.");
+      throw evidenceError("a release UAT checklist item does not match the v3 contract.");
     }
     const itemId = typeof item.id === "string" ? item.id : "";
     const label = typeof item.label === "string" ? item.label : "";
@@ -245,6 +253,83 @@ function readChecklist(root = ROOT) {
   if (RELEASE_UAT_TARGETS.some((target) => itemIdsByTarget[target].length === 0)) {
     throw evidenceError("the release UAT checklist leaves a deployment target without required items.");
   }
+  if (!Array.isArray(checklist.candidateProfiles) || checklist.candidateProfiles.length === 0) {
+    throw evidenceError("the release UAT checklist has no candidate profiles.");
+  }
+  const candidateProfiles = new Map();
+  for (const profile of checklist.candidateProfiles) {
+    if (
+      !profile
+      || typeof profile !== "object"
+      || Array.isArray(profile)
+      || JSON.stringify(Object.keys(profile).sort()) !== JSON.stringify(RELEASE_UAT_PROFILE_KEYS)
+    ) {
+      throw evidenceError("a release UAT candidate profile does not match the v3 contract.");
+    }
+    const profileId = typeof profile.id === "string" ? profile.id : "";
+    const label = typeof profile.label === "string" ? profile.label : "";
+    if (
+      profileId !== profileId.trim()
+      || !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(profileId)
+      || candidateProfiles.has(profileId)
+    ) {
+      throw evidenceError("the release UAT checklist contains an invalid or duplicate candidate profile id.");
+    }
+    if (!label || label !== label.trim() || label.length > 500) {
+      throw evidenceError(`release UAT candidate profile ${profileId} has an invalid label.`);
+    }
+    if (
+      !profile.itemStates
+      || typeof profile.itemStates !== "object"
+      || Array.isArray(profile.itemStates)
+      || JSON.stringify(Object.keys(profile.itemStates).sort())
+        !== JSON.stringify([...itemIds].sort())
+    ) {
+      throw evidenceError(
+        `release UAT candidate profile ${profileId} must classify every checklist item exactly once.`
+      );
+    }
+    const itemStates = {};
+    for (const itemId of itemIds) {
+      const itemState = profile.itemStates[itemId];
+      const state = typeof itemState?.state === "string" ? itemState.state : "";
+      const expectedKeys = RELEASE_UAT_PROFILE_STATE_KEYS[state];
+      if (
+        !itemState
+        || typeof itemState !== "object"
+        || Array.isArray(itemState)
+        || !expectedKeys
+      ) {
+        throw evidenceError(
+          `release UAT candidate profile ${profileId} has an invalid state for ${itemId}.`
+        );
+      }
+      if (
+        state === "blocked"
+        && (
+          typeof itemState.reason !== "string"
+          || itemState.reason !== itemState.reason.trim()
+          || !itemState.reason
+          || itemState.reason.length > 1_000
+        )
+      ) {
+        throw evidenceError(
+          `release UAT candidate profile ${profileId} must explain why ${itemId} is blocked.`
+        );
+      }
+      if (JSON.stringify(Object.keys(itemState).sort()) !== JSON.stringify(expectedKeys)) {
+        throw evidenceError(
+          `release UAT candidate profile ${profileId} has an invalid state for ${itemId}.`
+        );
+      }
+      itemStates[itemId] = Object.freeze({ ...itemState });
+    }
+    candidateProfiles.set(profileId, Object.freeze({
+      id: profileId,
+      label,
+      itemStates: Object.freeze(itemStates)
+    }));
+  }
   const maximumAttestationAgeHours = checklist.maximumAttestationAgeHours;
   if (
     typeof maximumAttestationAgeHours !== "number"
@@ -265,6 +350,7 @@ function readChecklist(root = ROOT) {
         Object.freeze([...itemIdsByTarget[target]])
       ])
     )),
+    candidateProfiles,
     digest: crypto.createHash("sha256").update(raw).digest("hex"),
     maximumAttestationAgeHours
   };
@@ -272,6 +358,48 @@ function readChecklist(root = ROOT) {
 
 export function getReleaseUatChecklist(root = ROOT) {
   return readChecklist(root);
+}
+
+export function getReleaseUatProfilePlan(targetValue, candidateProfileValue, root = ROOT) {
+  const target = String(targetValue || "").trim();
+  if (!RELEASE_UAT_TARGETS.includes(target)) {
+    throw evidenceError(
+      "the UAT profile-plan target must be firebase-hosting, firebase-backend, firebase-all, or vercel."
+    );
+  }
+  const candidateProfileId = String(candidateProfileValue || "").trim();
+  const checklist = readChecklist(root);
+  const candidateProfile = checklist.candidateProfiles.get(candidateProfileId);
+  if (!candidateProfile) {
+    throw evidenceError(`the UAT candidate profile ${candidateProfileId || "<blank>"} is not tracked.`);
+  }
+  const requiredItemIds = checklist.itemIdsByTarget[target];
+  const applicableItemIds = [];
+  const blockedItems = [];
+  for (const itemId of requiredItemIds) {
+    const itemState = candidateProfile.itemStates[itemId];
+    if (itemState.state === "applicable") {
+      applicableItemIds.push(itemId);
+    } else {
+      blockedItems.push(Object.freeze({ id: itemId, reason: itemState.reason }));
+    }
+  }
+  return Object.freeze({
+    schema: RELEASE_UAT_PROFILE_PLAN_SCHEMA,
+    checklist: Object.freeze({
+      schema: checklist.checklist.schema,
+      version: checklist.checklist.version,
+      digest: checklist.digest
+    }),
+    target,
+    candidateProfile: Object.freeze({
+      id: candidateProfile.id,
+      label: candidateProfile.label
+    }),
+    qualification: blockedItems.length ? "blocked" : "eligible_for_attestation",
+    applicableItemIds: Object.freeze(applicableItemIds),
+    blockedItems: Object.freeze(blockedItems)
+  });
 }
 
 export function parseAttesterIds(value) {

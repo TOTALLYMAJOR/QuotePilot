@@ -17,7 +17,7 @@ import {
   formatWorkspaceMoney,
   formatWorkspaceText
 } from "../lib/workspacePresentation";
-import QuoteConversationPanel from "./QuoteConversationPanel";
+import QuoteConversationPanel from "quotepilot-active-conversation-panel";
 
 function titleCase(value) {
   return String(value || "")

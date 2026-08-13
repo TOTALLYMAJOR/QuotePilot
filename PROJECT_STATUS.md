@@ -24,6 +24,24 @@ Last updated: August 12, 2026
   complete Functions graph. No value was recorded, no production secret was
   changed, and the associated webhook and Revenue Autopilot authority gates
   remain explicitly disabled.
+- The tracked v3 UAT checklist now binds the fixed candidate to the
+  `staging-safe-off` profile and classifies every target item as applicable or
+  blocked with an explicit reason. For the current checklist, Firebase-all is
+  14 applicable / 19 blocked, each browser-only target is 9 / 7, and the narrow
+  Firebase backend target is 10 / 14. These counts are profile classification,
+  not passed UAT. Positive buyer, delivery, payment, contract-conversion, and
+  authoritative-staffing paths remain blocked by the fixed fail-closed gates;
+  the all-positive exact-main attestation still requires every target item.
+  No candidate deployment, hosted pass, attestation, production promotion, or
+  human acceptance is implied.
+- The ordinary Ambient-off production-flag build now selects a dedicated
+  v0.7-compatible workspace graph at build time while Ambient candidates select
+  the replacement graph. Local mode-specific `.env` flags and explicit release
+  shell overrides resolve consistently. The compatibility boundary retains
+  portal-token isolation, unsaved quote/Catalog recovery, and privacy-bounded
+  analytics, and passes the existing bundle ceiling without increasing it.
+  This is local source/build qualification only; no hosted candidate or
+  production runtime changed.
 - The `v0.7.0` deployment receipts do not establish authenticated hosted-role
   behavior, production-data correctness, downstream provider acceptance,
   recipient evidence, or human acceptance.
@@ -384,6 +402,11 @@ route evidence are complete.
     bind or promote its presentation, server, or tenant gates until exact hosted
     admin/sales/customer denial, responsive accessibility, rollback, and one
     explicitly approved tenant acceptance are recorded.
+13. The fixed `staging-safe-off` candidate cannot by itself satisfy the
+    all-positive release checklist. Provider-backed buyer, delivery, payment,
+    contract-conversion, and authoritative-staffing items need a separately
+    reviewed immutable non-production acceptance window; blocked profile items
+    cannot be omitted or attested as passed.
 
 ## Current Focus
 
@@ -401,6 +424,9 @@ route evidence are complete.
    denial matrix.
 6. Complete the bundle-exception closure path and continue `functions.config()`
    migration planning.
+7. Define and review an exact-SHA non-production acceptance profile for the
+   currently blocked provider and authoritative-staffing UAT items before any
+   all-positive attestation or production-intent merge.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).
 Historical shipped changes live in [`CHANGELOG.md`](CHANGELOG.md).

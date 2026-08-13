@@ -57,6 +57,65 @@ describe("organization-scoped local catalog fallback", () => {
     });
     expect(values.get("quoteWizard.catalog.org-b")).toContain("org-b-package");
   });
+
+  test("persists the explicit no-organization development fallback in a named local scope", () => {
+    const legacy = JSON.stringify({ packages: [{ id: "legacy-package" }] });
+    const values = new Map([["quoteWizard.catalog", legacy]]);
+    const storage = {
+      getItem: (key) => values.get(key) || null,
+      setItem: (key, value) => values.set(key, value)
+    };
+    const localCatalog = {
+      packages: [{ id: "local-package", name: "Local package", ppp: 20, active: true }],
+      addons: [],
+      rentals: [],
+      settings: {}
+    };
+
+    expect(writeLocalCatalogCache(storage, "", localCatalog)).toBe(false);
+    expect(readLocalCatalogCache(storage, "")).toBeNull();
+
+    expect(writeLocalCatalogCache(storage, "", localCatalog, {
+      allowLocalDeviceScope: true
+    })).toBe(true);
+    expect(readLocalCatalogCache(storage, "", {
+      allowLocalDeviceScope: true
+    })).toContain("local-package");
+    expect(values.get("quoteWizard.catalog")).toBe(legacy);
+    expect(readLocalCatalogCache(storage, "org-a")).toBeNull();
+  });
+
+  test("keeps the device fallback isolated from a tenant whose id is local", () => {
+    const values = new Map();
+    const storage = {
+      getItem: (key) => values.get(key) || null,
+      setItem: (key, value) => values.set(key, value)
+    };
+    const tenantCatalog = {
+      packages: [{ id: "tenant-package", name: "Tenant package", ppp: 25, active: true }],
+      addons: [],
+      rentals: [],
+      settings: {}
+    };
+    const deviceCatalog = {
+      packages: [{ id: "device-package", name: "Device package", ppp: 20, active: true }],
+      addons: [],
+      rentals: [],
+      settings: {}
+    };
+
+    expect(writeLocalCatalogCache(storage, "local", tenantCatalog)).toBe(true);
+    expect(writeLocalCatalogCache(storage, "", deviceCatalog, {
+      allowLocalDeviceScope: true
+    })).toBe(true);
+
+    expect(values.get("quoteWizard.catalog.local")).toContain("tenant-package");
+    expect(values.get("quoteWizard.catalog::device")).toContain("device-package");
+    expect(readLocalCatalogCache(storage, "local")).toContain("tenant-package");
+    expect(readLocalCatalogCache(storage, "", {
+      allowLocalDeviceScope: true
+    })).toContain("device-package");
+  });
 });
 
 function catalog(overrides = {}) {

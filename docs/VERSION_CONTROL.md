@@ -115,6 +115,15 @@ git checkout -b feature/<scope>-<topic>
    and the exact Firestore release/ruleset; Vercel requires the coordinated
    staging-Functions readback. It cannot promote an alias or enable operational
    staffing authority.
+   Each candidate manifest and receipt binds the tracked `staging-safe-off`
+   UAT profile. Run
+   `npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`
+   to obtain the machine-readable applicable/blocked plan. Every target item is
+   classified exactly once and every blocked item carries a reason. Applicable
+   is not passed; blocked is not N/A and prevents production qualification.
+   `npm run release:uat:items -- --target <profile>` remains the all-positive
+   target contract. The exact-main attestation accepts only that complete set
+   and never accepts a profile plan, blocked item, waiver, or partial result.
 5. Set/confirm rollback target:
    - Preserve the current target-specific signed provider receipt, including
      deployment id, source SHA, artifact/configuration digests, and health
@@ -126,6 +135,8 @@ git checkout -b feature/<scope>-<topic>
 8. Exercise the exact main SHA on an immutable non-production deployment when
    the release risk calls for it. `Release UAT Attestation` remains available
    for separately recorded human acceptance but is not a normal deploy input.
+   It runs only from exact `main` after exact-main CI and is distinct from the
+   pre-merge candidate assessment.
 9. Tag the same semantic version SHA:
 ```bash
 git tag v<major>.<minor>.<patch>

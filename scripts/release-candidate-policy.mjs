@@ -24,6 +24,8 @@ export const RELEASE_CANDIDATE_POLICY = Object.freeze({
   targets: Object.freeze(["firebase-all", "vercel-preview"])
 });
 
+export const RELEASE_CANDIDATE_UAT_PROFILE = "staging-safe-off";
+
 export const CANDIDATE_FUNCTIONS_RUNTIME_EXPECTED = Object.freeze({
   APP_BASE_URL: `${RELEASE_CANDIDATE_POLICY.firebase.hostingUrl}/app`,
   APP_BASE_DOMAIN: "mbmapps.com",
@@ -444,6 +446,132 @@ function atomicWriteReservedReceipt(receiptPath, receipt) {
   }
 }
 
+const CANDIDATE_RECEIPT_IMMUTABLE_FIELDS = Object.freeze([
+  "schema",
+  "reservationId",
+  "target",
+  "uatProfile",
+  "sourceSha",
+  "ci",
+  "createdAt"
+]);
+
+const CANDIDATE_RECEIPT_PATCH_FIELDS = new Set([
+  "status",
+  "provider",
+  "providerMutationAttempted",
+  "providerMutationAttemptedAt",
+  "providerMutationCompleted",
+  "verifiedAt",
+  "sourceShaEvidenceUrl",
+  "sourceBindings",
+  "providerSurfaces",
+  "secretPrerequisites",
+  "browserFlags",
+  "serverGates",
+  "dependencies",
+  "failedAt",
+  "failure"
+]);
+
+const CANDIDATE_RECEIPT_STATUS_TRANSITIONS = Object.freeze({
+  reserved: new Set(["reserved", "preparing", "failed"]),
+  preparing: new Set(["preparing", "deploying", "failed", "partial"]),
+  deploying: new Set(["deploying", "provider_succeeded_unverified", "partial"]),
+  provider_succeeded_unverified: new Set([
+    "provider_succeeded_unverified",
+    "verified",
+    "partial"
+  ]),
+  verified: new Set(["verified"]),
+  partial: new Set(["partial"]),
+  failed: new Set(["failed"])
+});
+
+const CANDIDATE_PROVIDER_EVIDENCE_FIELDS = Object.freeze([
+  "deploymentId",
+  "deploymentUrl"
+]);
+
+function isCandidateReceiptRecord(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function requireCandidateReceiptPatch(patch) {
+  if (!isCandidateReceiptRecord(patch)) {
+    reject("candidate receipt patch must be a plain object.");
+  }
+  for (const field of Reflect.ownKeys(patch)) {
+    if (typeof field !== "string") {
+      reject("candidate receipt patch contains an unknown symbol field.");
+    }
+    if (CANDIDATE_RECEIPT_IMMUTABLE_FIELDS.includes(field)) {
+      reject(`candidate receipt field ${field} is immutable.`);
+    }
+    if (!CANDIDATE_RECEIPT_PATCH_FIELDS.has(field)) {
+      reject(`candidate receipt patch contains unknown field ${field}.`);
+    }
+  }
+  return patch;
+}
+
+function requireCandidateReceiptStatusTransition(currentStatus, requestedStatus) {
+  const allowed = CANDIDATE_RECEIPT_STATUS_TRANSITIONS[currentStatus];
+  if (!allowed) reject(`candidate receipt has unknown lifecycle status ${String(currentStatus)}.`);
+  const nextStatus = requestedStatus === undefined ? currentStatus : requestedStatus;
+  if (typeof nextStatus !== "string" || !allowed.has(nextStatus)) {
+    reject(`candidate receipt status cannot transition from ${currentStatus} to ${String(nextStatus)}.`);
+  }
+  return nextStatus;
+}
+
+function isBlankCandidateProviderEvidence(value) {
+  return value === undefined || value === null || (typeof value === "string" && value.trim() === "");
+}
+
+function mergeCandidateProvider(currentProvider, patchProvider) {
+  if (!isCandidateReceiptRecord(currentProvider)) {
+    reject("candidate receipt provider identity is invalid.");
+  }
+  if (!isCandidateReceiptRecord(patchProvider)) {
+    reject("candidate receipt provider patch must be a plain object.");
+  }
+  const current = currentProvider;
+  const patch = patchProvider;
+  const next = { ...current };
+  for (const field of Reflect.ownKeys(patch)) {
+    if (typeof field !== "string") {
+      reject("candidate receipt provider patch contains an unknown symbol field.");
+    }
+    if (CANDIDATE_PROVIDER_EVIDENCE_FIELDS.includes(field)) {
+      const patchValue = patch[field];
+      if (isBlankCandidateProviderEvidence(patchValue)) continue;
+      if (typeof patchValue !== "string") {
+        reject(`candidate receipt provider ${field} must be a non-empty string.`);
+      }
+      const normalizedPatchValue = patchValue.trim();
+      const currentValue = current[field];
+      if (!isBlankCandidateProviderEvidence(currentValue)) {
+        if (typeof currentValue !== "string" || currentValue.trim() !== normalizedPatchValue) {
+          reject(`candidate receipt provider ${field} conflicts with existing evidence.`);
+        }
+        continue;
+      }
+      next[field] = normalizedPatchValue;
+      continue;
+    }
+    if (!Object.hasOwn(current, field)) {
+      reject(`candidate receipt provider patch contains unknown field ${field}.`);
+    }
+    if (!Object.is(patch[field], current[field])) {
+      reject(`candidate receipt provider identity field ${field} is immutable.`);
+    }
+  }
+  return next;
+}
+
 export function reserveCandidateReceipt({ root, target, releaseSha, ci, provider }) {
   const normalizedTarget = requireCandidateTarget(target);
   const sha = requireFullSha(releaseSha);
@@ -452,10 +580,11 @@ export function reserveCandidateReceipt({ root, target, releaseSha, ci, provider
   const reservationId = crypto.randomUUID();
   const now = new Date().toISOString();
   const receipt = {
-    schema: "com.mbmapps.quotepilot.release-candidate-receipt/v2",
+    schema: "com.mbmapps.quotepilot.release-candidate-receipt/v3",
     reservationId,
     status: "reserved",
     target: normalizedTarget,
+    uatProfile: RELEASE_CANDIDATE_UAT_PROFILE,
     sourceSha: sha,
     ci,
     provider,
@@ -474,12 +603,35 @@ export function reserveCandidateReceipt({ root, target, releaseSha, ci, provider
 
 export function updateCandidateReceipt(reservation, patch = {}) {
   const current = assertReservedReceipt(reservation.receiptPath, reservation.reservationId);
+  const validatedPatch = requireCandidateReceiptPatch(patch);
+  const status = requireCandidateReceiptStatusTransition(current.status, validatedPatch.status);
+  if (typeof current.providerMutationAttempted !== "boolean") {
+    reject("candidate receipt providerMutationAttempted state is invalid.");
+  }
+  if (
+    Object.hasOwn(validatedPatch, "providerMutationAttempted")
+    && typeof validatedPatch.providerMutationAttempted !== "boolean"
+  ) {
+    reject("candidate receipt providerMutationAttempted must be boolean.");
+  }
+  if (current.providerMutationAttempted && validatedPatch.providerMutationAttempted === false) {
+    reject("candidate receipt providerMutationAttempted cannot regress from true to false.");
+  }
   const next = {
     ...current,
-    ...patch,
-    reservationId: current.reservationId,
+    ...validatedPatch,
+    status,
+    provider: Object.hasOwn(validatedPatch, "provider")
+      ? mergeCandidateProvider(current.provider, validatedPatch.provider)
+      : current.provider,
+    providerMutationAttempted: current.providerMutationAttempted
+      ? true
+      : validatedPatch.providerMutationAttempted ?? false,
     updatedAt: new Date().toISOString()
   };
+  for (const field of CANDIDATE_RECEIPT_IMMUTABLE_FIELDS) {
+    next[field] = current[field];
+  }
   atomicWriteReservedReceipt(reservation.receiptPath, next);
   return next;
 }

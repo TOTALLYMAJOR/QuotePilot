@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-import React from "react";
+import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -9,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   navigation: null
 }));
 
-vi.mock("../../App", () => ({
+vi.mock("quotepilot-active-app", () => ({
   default: (props) => {
     mocks.appProps = props;
     return <div data-testid="workspace-app" />;

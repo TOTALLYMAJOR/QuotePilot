@@ -531,6 +531,12 @@ Keep `BUYER_ACCESS_ENABLED=false` until the exact
 candidate passes review and the merged-main, semantic-tag, target-specific UAT,
 prepare-artifact, and separately owned trusted-deployer controls in section 6.
 
+The following is the separately authorized production-project buyer activation
+window. It is not the fixed pre-merge candidate profile and cannot be cited as
+pre-merge candidate evidence for an unmerged release SHA. Until an immutable
+exact-SHA non-production buyer-acceptance profile exists, the corresponding v3
+candidate-plan items remain blocked.
+
 For an approved hosted test-mode acceptance window:
 
 1. Use only Firebase project `tonicatering`. Confirm Email/Password Auth,
@@ -744,10 +750,30 @@ Session.
 
 Pass all checks before merging a release-intent PR to `main`. For every
 production target intended by the release, use the stable item ids, labels, and
-v2 target applicability in `docs/release-uat-checklist.json`; changes to that
+v3 target applicability in `docs/release-uat-checklist.json`; changes to that
 file change its SHA-256 digest and invalidate older attestations. The broader
 source-acceptance list below also includes the portal backfill tool, which is a
 separate data operation and is deliberately absent from deployment-target UAT.
+
+Candidate assessment and exact-main attestation are distinct evidence stages.
+The fixed candidate declares the machine-enforced `staging-safe-off` UAT
+profile in both its hosted manifest and provider receipt. Print its exact plan
+for a production target with:
+
+```bash
+npm run release:uat:plan -- \
+  --target <firebase-hosting|firebase-backend|firebase-all|vercel> \
+  --candidate-profile staging-safe-off
+```
+
+The JSON plan classifies every target-required item exactly once as
+`applicable` or `blocked`, gives every blocked item a reason, and reports the
+whole profile as `blocked` while any such item remains. `Applicable` means only
+that the profile exposes the prerequisites for the check; it is not a pass.
+`Blocked` is truthful pre-merge evidence of an unmet qualification gate, never
+an omission, waiver, not-applicable result, or successful UAT. A safe-off
+candidate may therefore prove its compatible UI, core authority, and disabled
+boundaries without being misrepresented as production-qualified.
 
 Deploy the exact clean, published `release/vX.Y.Z` head only after the canonical
 `CI Quality` run for that SHA has all eight required jobs green. The guarded
@@ -799,6 +825,16 @@ SHA/gate manifest. It does not claim secret-value readback. This receipt is
 candidate evidence, not deployment approval, production mutation,
 provider-business acceptance, or human UAT.
 
+The tracked all-positive item list remains available with
+`npm run release:uat:items -- --target <profile>`. Production qualification
+still requires every printed target item to pass exactly once. The exact-main
+`Release UAT Attestation` accepts only that complete positive set; it accepts no
+candidate profile, blocked item, N/A marker, or partial plan. If the safe-off
+plan blocks a required path, use a separately reviewed immutable acceptance
+deployment whose authority and provider scope can exercise that path, or stop
+the release. Do not enable a gate on the fixed safe-off candidate or edit a
+blocked result into a pass.
+
 For any release containing either Stripe collection rail, the applicable
 tracked `payment.*` items are mandatory, not optional spot checks. The exact
 target item set covers deposit dispatch, final-balance dispatch,
@@ -839,6 +875,17 @@ Prove the action changes the designated password and returns to the canonical
 protection is enabled and the continue domain is authorized. The same rendered
 confirmation alone is not network-level enumeration protection, and public
 registration remains a separate abuse-control boundary.
+
+For any release containing authoritative operational staffing, all applicable
+`staffing.*` items are mandatory. The fixed safe-off candidate can prove only
+the disabled-authority boundary. Positive hosted acceptance requires a
+separately authorized non-production window with the global server gate, exact
+disposable tenant gate, and matching presentation gate deliberately enabled;
+it must cover same-tenant roles, profile and availability recording, exact-
+revision partial and complete plans, conflict and replay behavior, immutable
+receipts, responsive accessible recovery, cross-tenant denial, non-mutation of
+commercial/customer evidence, and three-gate rollback. Local emulator success
+does not satisfy these hosted items.
 
 1. CI is fully green:
    - `Classify Changes + Lane Plan`
@@ -964,6 +1011,10 @@ After the reviewed PR merges:
 2. Exercise an immutable exact-SHA preview when the release risk warrants it.
    The optional `Release UAT Attestation` workflow can record human acceptance,
    but the normal solo deployment does not depend on that separate ceremony.
+   This workflow runs only from the exact `main` SHA after exact-main CI and
+   records only the complete all-positive target checklist. It is not the
+   pre-merge candidate assessment and cannot convert a blocked profile plan
+   into acceptance.
 3. Create and publish the semantic version tag on that same SHA.
 4. Confirm the target-specific last-known-good rollback SHA remains an ancestor
    of the release SHA.

@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import {
   RELEASE_CANDIDATE_POLICY,
+  RELEASE_CANDIDATE_UAT_PROFILE,
   CANDIDATE_REQUIRED_SECRET_METADATA,
   candidateReceiptRelativePath,
   candidateConfirmation,
@@ -251,9 +252,10 @@ function validateFunctionsEnvironmentFile() {
 function writeCandidateManifest(outputDirectory, releaseSha, ciRunId) {
   fs.mkdirSync(outputDirectory, { recursive: true });
   const manifest = {
-    schema: "com.mbmapps.quotepilot.release-candidate/v1",
+    schema: "com.mbmapps.quotepilot.release-candidate/v2",
     sourceSha: releaseSha,
     ciRunId: Number(ciRunId),
+    uatProfile: RELEASE_CANDIDATE_UAT_PROFILE,
     ambientUiEnabled: true,
     operationalStaffingBrowserEnabled: true,
     operationalStaffingAuthorityEnabled: false

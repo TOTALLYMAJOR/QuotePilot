@@ -8,6 +8,38 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Advanced the tracked release-UAT checklist to a fail-closed v3 candidate-
+  profile contract. The fixed isolated candidate now binds
+  `staging-safe-off` in its hosted manifest and provider receipt, and
+  `npm run release:uat:plan` classifies every target-required item exactly once
+  as applicable or blocked with a reason. Applicable is not treated as passed;
+  blocked is neither N/A nor a waiver. Added explicit operational-staffing UAT
+  coverage for the disabled boundary, authoritative plan/receipt behavior, and
+  responsive role/isolation/rollback behavior. The exact-main attestation
+  protocol remains all-positive-only and still requires every target item;
+  profile plans, blocked items, and partial evidence cannot satisfy it. This is
+  source/process qualification work only: it does not deploy a candidate,
+  enable a provider or staffing gate, attest UAT, or promote production.
+  Candidate receipt updates now preserve their reserved schema, target,
+  profile, source SHA, CI identity, creation time, and provider identity while
+  allowing only deployment evidence and lifecycle outcomes to advance.
+
+- Split the default-off Ambient workspace and the v0.7-compatible workspace
+  into build-selected graphs so production-flag builds do not ship dormant
+  replacement surfaces. Mode-specific `.env` flags and explicit release-shell
+  overrides now select the same App, shell, portal, analytics, and route graph
+  that the compiled feature flags describe. The compatibility graph preserves
+  exact portal-token remounting, unsaved quote and Catalog guards, tenant-safe
+  analytics sanitation, canonical URLs, and the current route-focus behavior;
+  the production bundle passes the existing ceiling without raising it. This
+  is source and local-build evidence, not a hosted or production deployment.
+
+- Restored catalog persistence across reloads for the explicit Firebase-free
+  development fallback by giving it a collision-proof named device
+  browser scope. Organization caches remain isolated by organization ID,
+  Firebase-connected calls without an organization still fail closed, and the
+  legacy unscoped catalog key remains unread and unwritten.
+
 - Made the desktop sidebar menus participate in layout so an open Operations
   menu cannot cover Account or another orientation control. Updated the
   Catalog Admin browser contract to follow its accessible tab semantics and

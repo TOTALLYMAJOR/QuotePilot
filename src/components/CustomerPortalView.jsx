@@ -17,7 +17,7 @@ import {
   toggleDecisionRoomOption
 } from "../lib/customerDecisionRoom";
 import ProductBrandLockup from "./ProductBrandLockup";
-import QuoteConversationPanel from "./QuoteConversationPanel";
+import QuoteConversationPanel from "quotepilot-active-conversation-panel";
 import ShimmerReveal from "./ShimmerReveal";
 import { playCue } from "./soundKit";
 import "./portalCeremony.css";
@@ -56,12 +56,14 @@ const ACCEPTED_PORTAL_STATUSES = new Set(["accepted", "booked"]);
 // changes the proposal, price, revision, payment, booking, or authority model.
 // Generic and local builds remain default-off until a governed release enables
 // the presentation explicitly.
-const PILOT_DECISION_ROOM_ENABLED = ["1", "true", "yes", "on"].includes(
-  String(import.meta.env.VITE_PILOT_DECISION_ROOM_ENABLED || "").trim().toLowerCase()
-);
-const AMBIENT_UI_ENABLED = ["1", "true", "yes", "on"].includes(
-  String(import.meta.env.VITE_AMBIENT_UI_ENABLED || "").trim().toLowerCase()
-);
+const PILOT_DECISION_ROOM_ENABLED = import.meta.env.VITE_PILOT_DECISION_ROOM_ENABLED === "1"
+  || import.meta.env.VITE_PILOT_DECISION_ROOM_ENABLED === "true"
+  || import.meta.env.VITE_PILOT_DECISION_ROOM_ENABLED === "yes"
+  || import.meta.env.VITE_PILOT_DECISION_ROOM_ENABLED === "on";
+const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
 // The production v0.7 decision-room subset remains available under its
 // existing gate. AIUI-46's replacement layout, acknowledgement model, and
 // reversible option controls require both gates so an Ambient-off production

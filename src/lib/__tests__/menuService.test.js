@@ -17,9 +17,11 @@ import {
   updateEventType,
   updateMenuItem
 } from "../menuService";
+import { setActiveOrganizationId } from "../organizationService";
 
 describe("menuService fallback behavior", () => {
   beforeEach(() => {
+    setActiveOrganizationId("");
     const values = new Map();
     vi.stubGlobal("localStorage", {
       getItem: vi.fn((key) => values.get(key) || null),
@@ -39,6 +41,36 @@ describe("menuService fallback behavior", () => {
     expect(localStorage.getItem("quoteWizard.catalog.org-a")).toContain('"catalogRevision":1');
     expect(localStorage.getItem("quoteWizard.catalog.org-b")).toBeNull();
     expect(localStorage.getItem("quoteWizard.catalog")).toBeNull();
+  });
+
+  test("keeps the no-organization device fallback isolated from a tenant named local", async () => {
+    const deviceEvent = await createEventType({
+      name: "Device-only dinner",
+      expectedCatalogRevision: 0
+    });
+    const tenantEvent = await createEventType({
+      name: "Local tenant dinner",
+      organizationId: "local",
+      expectedCatalogRevision: 0
+    });
+
+    await expect(getEventTypes()).resolves.toContainEqual(
+      expect.objectContaining({ id: deviceEvent.id, name: "Device-only dinner" })
+    );
+    await expect(getEventTypes()).resolves.not.toContainEqual(
+      expect.objectContaining({ id: tenantEvent.id })
+    );
+    await expect(getEventTypes({ organizationId: "local" })).resolves.toContainEqual(
+      expect.objectContaining({ id: tenantEvent.id, name: "Local tenant dinner" })
+    );
+    await expect(getEventTypes({ organizationId: "local" })).resolves.not.toContainEqual(
+      expect.objectContaining({ id: deviceEvent.id })
+    );
+
+    expect(localStorage.getItem("quoteWizard.menuCatalog::device")).toContain(deviceEvent.id);
+    expect(localStorage.getItem("quoteWizard.menuCatalog.local")).toContain(tenantEvent.id);
+    expect(localStorage.getItem("quoteWizard.catalog::device")).toContain('"catalogRevision":1');
+    expect(localStorage.getItem("quoteWizard.catalog.local")).toContain('"catalogRevision":1');
   });
 
   test("returns persisted canonical menu fallbacks when firebase is unavailable", async () => {

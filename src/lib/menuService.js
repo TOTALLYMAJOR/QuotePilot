@@ -41,16 +41,19 @@ function localStorageApi() {
   return storage;
 }
 
-function localMenuScope(organizationId = "") {
-  return resolveScopedOrganizationId(organizationId) || "local";
+function localStorageScopeSuffix(organizationId = "") {
+  const resolvedOrganizationId = resolveScopedOrganizationId(organizationId);
+  return resolvedOrganizationId
+    ? `.${encodeURIComponent(resolvedOrganizationId)}`
+    : "::device";
 }
 
 function localMenuKey(organizationId = "") {
-  return `${LOCAL_MENU_KEY_PREFIX}.${localMenuScope(organizationId)}`;
+  return `${LOCAL_MENU_KEY_PREFIX}${localStorageScopeSuffix(organizationId)}`;
 }
 
 function localCatalogKey(organizationId = "") {
-  return `${LEGACY_LOCAL_CATALOG_KEY}.${encodeURIComponent(localMenuScope(organizationId))}`;
+  return `${LEGACY_LOCAL_CATALOG_KEY}${localStorageScopeSuffix(organizationId)}`;
 }
 
 function readLocalCatalogRevision(organizationId = "", fallback = 0) {

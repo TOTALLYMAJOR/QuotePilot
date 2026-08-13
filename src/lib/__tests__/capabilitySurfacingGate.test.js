@@ -174,6 +174,7 @@ describe("capability surfacing delivery gate", () => {
     expect(isBackendDeliveryPath("src/services/futureAuthorityClient.ts")).toBe(true);
     expect(isBackendDeliveryPath("src/future-data/futureAuthorityGateway.ts")).toBe(true);
     expect(isBackendDeliveryPath("src/data/futureCommercialPolicy.js")).toBe(true);
+    expect(isBackendDeliveryPath("src/LegacyApp.jsx")).toBe(false);
     expect(isBackendDeliveryPath("src/context/AmbientContext.jsx")).toBe(false);
     expect(isBackendDeliveryPath("src/context/WorkspaceNavigationContext.jsx")).toBe(false);
     expect(isBackendDeliveryPath("src/hooks/useBrowserLocation.js")).toBe(false);
@@ -192,6 +193,7 @@ describe("capability surfacing delivery gate", () => {
     expect(isBackendDeliveryPath("src/lib/ambientSignals.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/impactPreviewAdapter.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/quoteDraftRuntime.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/quoteDraftRuntimeBase.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/workspacePresentation.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/workspaceRoutes.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/workspaceShellModel.js")).toBe(false);
@@ -213,6 +215,7 @@ describe("capability surfacing delivery gate", () => {
       "src/components/FutureCard.jsx",
       "src/new-runtime/FutureAuthority.js",
       "src/future-data/FutureRepository.ts",
+      "src/LegacyApp.jsx",
       "src/context/AmbientContext.jsx",
       "src/hooks/useWorkspaceRouteHeadingFocus.js",
       "src/lib/aiui01CompatibilityBaseline.js",
@@ -227,6 +230,7 @@ describe("capability surfacing delivery gate", () => {
       "src/lib/ambientSignals.js",
       "src/lib/impactPreviewAdapter.js",
       "src/lib/quoteDraftRuntime.js",
+      "src/lib/quoteDraftRuntimeBase.js",
       "src/lib/workspacePresentation.js",
       "src/lib/workspaceShellModel.js",
       "src/lib/workspaceLayoutAudit.js"
@@ -254,6 +258,7 @@ describe("capability surfacing delivery gate", () => {
     expect(findBackendDeliveryPaths([
       "src/context/AmbientContext.jsx",
       "src/hooks/useWorkspaceRouteHeadingFocus.js",
+      "src/LegacyApp.jsx",
       "src/lib/aiui01CompatibilityBaseline.js",
       "src/lib/ambientContracts.js",
       "src/lib/ambientEventLogisticsObjects.js",
@@ -266,6 +271,7 @@ describe("capability surfacing delivery gate", () => {
       "src/lib/ambientSignals.js",
       "src/lib/impactPreviewAdapter.js",
       "src/lib/quoteDraftRuntime.js",
+      "src/lib/quoteDraftRuntimeBase.js",
       "src/lib/workspacePresentation.js",
       "src/lib/workspaceShellModel.js",
       "src/lib/workspaceLayoutAudit.js"
@@ -273,6 +279,7 @@ describe("capability surfacing delivery gate", () => {
       pathExists: () => true,
       readPath: (file) => (
         file.includes("HeadingFocus")
+          || file === "src/LegacyApp.jsx"
           || file.includes("ambientContracts")
           || file.includes("ambientPackageMenuCatalogEvidence")
           || file.includes("ambientPackageMenuDraftAdoption")
@@ -281,6 +288,7 @@ describe("capability surfacing delivery gate", () => {
       )
     })).toEqual([
       "src/hooks/useWorkspaceRouteHeadingFocus.js",
+      "src/LegacyApp.jsx",
       "src/lib/ambientContracts.js",
       "src/lib/ambientPackageMenuCatalogEvidence.js",
       "src/lib/ambientPackageMenuDraftAdoption.js"
