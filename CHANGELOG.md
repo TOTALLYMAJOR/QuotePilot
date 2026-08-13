@@ -6,6 +6,24 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Changed
+
+- Governed Firebase Hosting and Vercel production builds now source-bind the
+  five reviewed post-competitive presentation flags to `true`. The heavy
+  Playwright lane runs the same flag matrix and asserts NOW, Event Room,
+  deterministic CREATE intake with draft-only price bands, and staged customer
+  change requests before release. Generic/local builds remain default-off.
+- Reconciled the exact all-flags release bundle measurement to 2,731,898
+  aggregate JavaScript bytes with the unchanged 391,596-byte largest chunk;
+  the named temporary ceiling retains zero growth headroom.
+
+### Fixed
+
+- Preserved the canonical saved quote's `portalDecision` in direct-edit
+  metadata so the flag-gated staged-change panel can consume the exact stored
+  `changes_requested` message. The editor still stages draft changes only;
+  ordinary save and authoritative repricing remain unchanged.
+
 ### Added
 
 - Flag-gated client-request panel in the quote editor
@@ -26,7 +44,7 @@ This changelog is backfilled from git history and will be maintained going forwa
   touched-field protection; the ordinary save path remains the sole
   versioning and re-pricing authority, and no customer-facing state
   changes. The panel and parser add 10,011 aggregate JavaScript bytes,
-  recorded by raising the active temporary bundle ceiling to 2,731,349
+  recorded by raising the active temporary bundle ceiling to 2,731,898
   bytes (largest-chunk ceiling and clean-main baseline unchanged).
   Source-only candidate work; not deployed, flag-promoted, or
   human-accepted.

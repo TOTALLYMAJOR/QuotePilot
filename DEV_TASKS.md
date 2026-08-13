@@ -12,7 +12,9 @@ Only open work belongs here. Current operational truth lives in
   create and finish a quote, save, read back the exact revision, reopen from
   Quotes, export PDF, and verify the Event Workspace, Customer 360, Workflow,
   Schedule, Reporting, Messaging Station, Kitchen BEO, Decision Debt, and
-  Operations Audit role boundaries.
+  Operations Audit role boundaries. Include the `v0.6.0` NOW surface, Event
+  Room decision cards, deterministic CREATE intake and draft-only pricing band,
+  guided-selling cards, and staged customer change requests.
 - Run a disposable second-tenant lifecycle: platform-admin plan/create,
   verified owner invitation and activation, neutral defaults, starter-pack
   review, pricing confirmation, trusted quote create/readback/version,

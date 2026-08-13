@@ -144,6 +144,40 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   derived staff presentation, and a fresh read never proves provider delivery,
   customer acceptance, booking, payment, or operational completion.
 
+## NOW, Event Room, CREATE, and Staged Changes
+
+- In governed `v0.6.0` production builds, Home uses the NOW presentation.
+  `What deserves your attention` interprets the same bounded Command Center
+  snapshot as decision cards. Select the card action to open the existing exact
+  Workflow, quote, or Customer 360 target. NOW does not create work, contact a
+  customer, approve a request, or change quote state.
+- On a draft, sent, or viewed Event Workspace, the Event Room presentation may
+  show advisory staffing and proposal-completeness cards. The ring remains the
+  existing proposal score, not event readiness. Staffing uses only the recorded
+  quote and static house ratios; `not derivable` means the quote lacks a safe
+  cost basis. Accepted, booked, and terminal records suppress the advisory
+  stack.
+- On `New quote`, enter pasted email, call-note, or text-thread content under
+  `What are you planning?`, then select `Structure it`. Review every extracted
+  value and its source excerpt. Select `Apply ... facts to the draft` to prefill
+  medium/high-confidence facts; use the individual confirmation button for a
+  low-confidence venue or address. Nothing is saved or sent until the ordinary
+  quote flow is completed.
+- An approximate or ranged guest count shows an estimated total/deposit band in
+  Live Breakdown. The band is a draft preview only. Confirm or type an exact
+  guest count before saving; server-authoritative save always prices the single
+  recorded count and never stores the band as payment authority.
+- Existing guided-selling recommendations appear as decision cards when the
+  tenant's guided-selling and AI-assist settings already permit them. `Take it`
+  calls the existing draft apply action. Review the resulting selections and
+  price before saving; the card itself does not save or send anything.
+- When a customer has submitted `Request Changes`, open that exact quote's edit
+  route. The staged-change panel shows the stored message verbatim, offers only
+  clauses it can parse safely, and leaves unread clauses visible for manual
+  review. Select `Stage this` or resolve an ambiguous item choice to alter the
+  draft. Saving remains the only versioning and authoritative repricing action;
+  staging is not approval and promises nothing to the customer.
+
 ## Commercial Search
 
 - In the flagged staff workspace, select `Search` or press `Ctrl+K` on Windows/

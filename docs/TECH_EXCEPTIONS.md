@@ -20,13 +20,14 @@ Use this log when a change intentionally departs from stable-first policy or req
 
 - Date: August 10, 2026 (supersedes the August 9 ceiling record)
 - Owner: QuotePilot maintainers
-- Change: Apply named, absolute temporary ceilings of 2,731,349 aggregate
+- Change: Apply named, absolute temporary ceilings of 2,731,898 aggregate
   JavaScript bytes and 391,596 bytes for the largest chunk while the
   customer-centered workspace converges and the flag-gated pilot candidates
   (`VITE_PILOT_NOW_ENABLED`, `VITE_PILOT_EVENT_ROOM_ENABLED`,
   `VITE_PILOT_GUIDED_SELLING_ENABLED`, `VITE_PILOT_CREATE_ENABLED`, and
-  `VITE_PILOT_CHANGE_REQUESTS_ENABLED`, all
-  default off) are reviewed with it. The clean-main baseline remains
+  `VITE_PILOT_CHANGE_REQUESTS_ENABLED`; generic builds default off while the
+  governed `v0.6.0` production workflows source-bind all five to `true`) are
+  reviewed with it. The clean-main baseline remains
   1,997,365 aggregate bytes, a 387,929-byte largest chunk, and a 5% normal
   allowance.
 - Exception type: `perf-threshold-temp`
@@ -38,7 +39,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   release qualification. Resetting the baseline prematurely would erase
   the comparison with clean `main`; one shared percentage would also grant the
   largest chunk substantially more room than the measured build needs.
-- Risk impact: The emitted asset set is 733,984 bytes (36.75%) above the
+- Risk impact: The emitted asset set is 734,533 bytes (36.77%) above the
   clean-main aggregate baseline, of which 40,005 bytes are the default-off
   pilot candidates (9,093 for the lazy-chunked NOW home surface, 5,544 for
   the Event Room ring and decide stack, 1,560 for the guided-selling decide
@@ -54,7 +55,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   on slower mobile hardware. This exception has zero byte headroom: any further
   growth fails the guard.
 - Performance impact: The August 10 merged-candidate build with the flag-gated
-  pilot candidates emitted 2,731,349 aggregate JavaScript bytes and a
+  pilot candidates plus the direct-edit integration fix emitted 2,731,898
+  aggregate JavaScript bytes and a
   391,596-byte largest chunk (prior checkpoints: 2,691,344 converged;
   2,700,437 with the NOW surface only; 2,705,981 before the guided-selling
   cards; 2,707,541 before the CREATE intake canvas; 2,719,059 before the

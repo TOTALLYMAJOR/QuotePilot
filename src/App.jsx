@@ -243,6 +243,7 @@ const EMPTY_EDITING_QUOTE = Object.freeze({
   activeVersionId: "",
   customerId: "",
   organizationId: "",
+  portalDecision: null,
   rebooking: null
 });
 
@@ -2579,6 +2580,9 @@ export default function App({ tenantContext, authSession }) {
       activeVersionId: quote.activeVersionId || quote.versionMeta?.versionId || "",
       customerId: quote.customerId || "",
       organizationId: quote.organizationId || authSession.organizationId || "",
+      portalDecision: quote.portalDecision && typeof quote.portalDecision === "object"
+        ? { ...quote.portalDecision }
+        : null,
       rebooking: quote.rebooking && typeof quote.rebooking === "object"
         ? quote.rebooking
         : null

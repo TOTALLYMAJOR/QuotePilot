@@ -245,6 +245,13 @@ Optional:
   path remains the sole versioning and re-pricing authority, and nothing is
   sent to the customer. Purely presentational; not a deployment or
   acceptance decision.)
+
+The governed `v0.6.0` Firebase Hosting and Vercel production workflows
+source-bind all five `VITE_PILOT_*` flags above to `true`. The heavy Playwright
+lane exercises that same production flag matrix. Generic builds remain
+default-off, and flag activation does not widen roles, data access, persistence,
+pricing authority, or provider authority.
+
 - `VITE_BUYER_ACCESS_ENABLED` (defaults off for generic builds; the production
   deployment workflows source-bind it to `true` only alongside syntactically
   valid non-placeholder public flow configuration; provider setup and human
