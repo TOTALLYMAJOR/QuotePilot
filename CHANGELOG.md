@@ -39,6 +39,10 @@ This changelog is backfilled from git history and will be maintained going forwa
   independent. Local defaults stay off, and this release decision does not by
   itself prove provider delivery, staff acknowledgement, attendance, or human
   acceptance.
+- Added a protected, reversible tenant-activation workflow that accepts only an
+  exact successful Firebase all-scope deployment, patches only
+  `operationalStaffingAuthorityEnabled`, and verifies readback before reporting
+  success.
 - Extended the existing temporary bundle exception to the exact emitted graphs
   needed for the lazy Staff workspace, invitation response route, and provider-
   state clients: 2,880,654 bytes for compatibility and 3,804,078 bytes for

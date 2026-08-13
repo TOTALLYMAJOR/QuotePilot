@@ -38,6 +38,9 @@ Last updated: August 13, 2026
   remains working-tree source/local evidence only: it is not in `main`,
   deployed, tenant-enabled, hosted-accepted, provider-sent,
   recipient-acknowledged, or human-accepted.
+  A protected, reversible workflow now exists to set and verify only tenant
+  `250`'s operational-staffing authority field after an exact successful
+  Firebase all-scope deployment; it has not yet been dispatched.
   The promoted Ambient-plus-Staff graph is 3,804,078 JavaScript bytes and stays
   within an exact temporary profile ceiling; the largest chunk remains within
   the prior 391,901-byte ceiling. The compatibility graph is 2,880,654 bytes

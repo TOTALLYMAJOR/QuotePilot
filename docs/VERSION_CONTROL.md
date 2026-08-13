@@ -148,6 +148,12 @@ git push origin v<major>.<minor>.<patch>
     deploy step. Record provider acceptance/READY evidence and update the
     target-specific last-known-good receipt only after post-launch verification
     succeeds.
+11. When a reviewed release requires the operational-staffing tenant gate,
+    dispatch `Set Operational Staffing Tenant` only after the matching
+    Firebase `all` deployment succeeds. Bind the exact release SHA and deploy
+    run id, use the exact state-and-organization confirmation, and retain the
+    verified readback. The reversible field mutation is a separate production
+    action and is not implied by deployment.
 
 If Firebase and Vercel have different last-known-good SHAs, use separate
 target-specific deployment runs. Allowed deployment profiles

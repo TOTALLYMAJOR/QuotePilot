@@ -339,6 +339,19 @@ activation. Before activation:
    readiness evidence. A coverage-confirmed staffing plan proves only the exact
    operator-recorded assignments and schedule-fence check in its receipt.
 
+After the exact tagged release passes main CI and the Firebase `all` deployment
+succeeds, use **Set Operational Staffing Tenant** for the one-tenant promotion.
+Supply the same release SHA, the successful Firebase deployment run id, numeric
+organization id, requested boolean state, and the exact displayed confirmation
+(`SET operational staffing true for organization 250` for the production test).
+The protected workflow accepts only an exact successful Firebase all-scope run,
+reads the current settings document, patches only
+`operationalStaffingAuthorityEnabled`, and verifies the readback. Use the same
+workflow with `false` and its matching confirmation for tenant-gate rollback.
+Its success proves only that one configuration field was verified; it does not
+prove provider delivery, staff acknowledgement, attendance, payroll, or human
+acceptance.
+
 Rollback disables the presentation and global server gates and returns the
 exact tenant setting to false. Preserve immutable records and receipts for a
 later exact read; never rewrite operational history to simulate rollback. See

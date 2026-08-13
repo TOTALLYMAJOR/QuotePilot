@@ -154,6 +154,11 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   `operationalStaffingAuthorityEnabled` setting are enabled. Turning on one
   gate does not turn on either of the others, deploy the source, or establish
   hosted, production-data, or human acceptance.
+- Production operators promote or roll back the tenant gate through the
+  protected **Set Operational Staffing Tenant** release workflow after an exact
+  successful Firebase all-scope deployment. The workflow changes only the named
+  tenant field and verifies readback; it does not create staffing or email
+  evidence.
 - In the flagged Event Workspace, open the exact quote and select `Inspect
   staffing`. The panel reads only that tenant and quote, binds commercial role
   counts and the event window to the exact active immutable quote revision,

@@ -150,6 +150,10 @@ Only open work belongs here. Current operational truth lives in
   after parity, rollback, accepted-release, and promotion evidence all pass;
   until then the legacy stepper, Command Center, table disclosure, older search,
   and presentation flags remain intentional compatibility assets.
+- The operational staffing live-test release now includes a protected,
+  reversible one-tenant activation workflow. Dispatch it only after the exact
+  Firebase all-scope deployment succeeds, retain its readback evidence, and do
+  not interpret activation as provider delivery or staff acceptance.
 
 ## P1 - Workspace Design Follow-ups
 
