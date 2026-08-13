@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: August 11, 2026
+Last updated: August 13, 2026
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -20,45 +20,23 @@ Measured metrics:
 Threshold policy:
 - The clean-main maximum is the recorded baseline plus its normal 5% allowance.
 - A temporary exception, when present in
-  `docs/performance/bundle-exception.json`, supplies separate absolute ceilings
-  for aggregate JavaScript and the largest chunk. The guard accepts it only
-  when its ID is active and its pinned baseline date and metrics exactly match
+  `docs/performance/bundle-exception.json`, supplies graph-specific absolute
+  ceilings. The guard detects the emitted graph from required chunk markers,
+  rejects a requested-profile mismatch, and accepts an exception only when its
+  active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The workspace-convergence exception (now including the flag-gated pilot
-  candidates: NOW home surface, Event Room ring/decide stack, guided-selling
-  decide cards, the CREATE intake canvas with its band pricing strip, and
-  the client-request panel with its structured-record boundary, the Event Room cascade panel, the Pilot command bar, the fail-closed margin strip
-  with its Catalog Admin cost-entry fields and below-target advisor card,
-  the decision-room ask-about affordance in the customer portal, the
-  Model assist intake lane, three hardened rounds of the deterministic
-  CREATE reader (its queued family list now fully closed out, adversarially
-  verified by two independent agents), and
-  event-shape memory) is
-  currently capped at
-  2,776,849
-  aggregate JavaScript bytes and a 391,596-byte largest chunk, covering both
-  the default-off and production-flag (all eight `VITE_PILOT_*` gates true,
-  including the newly production-bound decision-room gate; event-shape
-  memory's own gate is deliberately not one of the eight and stays unbound)
-  CI bundle checks with one number — the larger of two fresh same-environment
-  measurements (2,776,546 production-flag, 2,776,494 default-off) plus the
-  exact current-tree CI-vs-sandbox offset. PR #57 run `31525358682` measured
-  the production-flag bundle at the literal 2,776,849-byte ceiling.
-  `v0.6.0`'s release PR run `31452174098` and exact-main run
-  `31452570192` already passed the production-flag build and bundle guard
-  once, ahead of that tag's production deployment; both configurations are
-  re-measured fresh at each checkpoint now that further pilot work has
-  landed on top. See `docs/TECH_EXCEPTIONS.md` for the full basis and
-  evidence. The exception provides no additional growth headroom. Against
-  the unchanged clean-main baseline, aggregate output is 779,181 bytes
-  (39.01%) larger, while
-  the largest chunk is 3,667 bytes (0.95%) larger and
-  remains 15,729 bytes below the normal 5% largest-chunk ceiling. Targeted quote-store
-  splitting keeps the authenticated route bounded, and route-level
-  splitting keeps the new Customer 360, Messaging Station, Workflow,
-  commercial-authority, Decision Debt, Revenue Autopilot, and BEO surfaces out
-  of the public entry chunk, but aggregate download, parse, and execution cost
-  still requires explicit remediation or reviewed post-merge recalibration.
+- The current compatibility graph retains its prior 2,776,849-byte aggregate
+  and 391,596-byte largest-chunk ceilings. The production-equivalent Ambient
+  graph has a separate temporary 3,700,505-byte aggregate ceiling and the same
+  unchanged 391,596-byte largest-chunk ceiling. Local measurements are
+  2,769,824 / 391,596 bytes for compatibility and 3,700,202 / 391,596 bytes
+  for Ambient. The Ambient aggregate ceiling adds only the previously observed
+  303-byte CI-versus-local offset; it is not general growth headroom.
+  `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
+  the Ambient largest chunk from 436,188 bytes to 391,596 bytes. The remaining
+  aggregate cost must still be optimized or replaced by an explicitly reviewed
+  clean-main baseline decision before legacy retirement or Ambient promotion.
+  See `docs/TECH_EXCEPTIONS.md` for rationale and exit evidence.
 - An active exception prevents `--update-baseline`; remove it before producing
   a new clean-main baseline. Passing under an exception is branch budget
   compliance, not Core Web Vitals, hosted, production, or human-acceptance

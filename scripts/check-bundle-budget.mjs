@@ -1,11 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = process.cwd();
-const DIST_ASSETS_DIR = path.join(ROOT, "dist", "assets");
-const BUDGET_FILE = path.join(ROOT, "docs", "performance", "bundle-budget.json");
-const EXCEPTION_FILE = path.join(ROOT, "docs", "performance", "bundle-exception.json");
-const UPDATE_BASELINE = process.argv.includes("--update-baseline");
+const DEFAULT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const BUDGET_RELATIVE_PATH = "docs/performance/bundle-budget.json";
+const EXCEPTION_RELATIVE_PATH = "docs/performance/bundle-exception.json";
+
+export const BUNDLE_PROFILES = Object.freeze({
+  compatibility: Object.freeze({
+    markerPrefixes: Object.freeze(["LegacyQuoteHistoryModal-"])
+  }),
+  "ambient-production": Object.freeze({
+    markerPrefixes: Object.freeze(["AmbientLivingOpportunityRoute-"])
+  })
+});
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -19,148 +27,189 @@ function toDateStamp() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function readActiveException() {
-  if (!fs.existsSync(EXCEPTION_FILE)) {
-    return null;
-  }
-
-  const exception = readJson(EXCEPTION_FILE);
-  if (exception.status !== "active") {
-    throw new Error(
-      `${path.relative(ROOT, EXCEPTION_FILE)} must be removed when its status is not active.`
-    );
-  }
-  if (typeof exception.id !== "string" || !exception.id.trim()) {
-    throw new Error(`${path.relative(ROOT, EXCEPTION_FILE)} must declare a non-empty id.`);
-  }
-
+function validateMetricRecord(value, pathLabel) {
   for (const metric of ["totalJsBytes", "largestJsChunkBytes"]) {
-    const value = Number(exception.maxMetrics?.[metric]);
-    if (!Number.isSafeInteger(value) || value <= 0) {
-      throw new Error(
-        `${path.relative(ROOT, EXCEPTION_FILE)} must declare a positive integer maxMetrics.${metric}.`
-      );
+    const metricValue = Number(value?.[metric]);
+    if (!Number.isSafeInteger(metricValue) || metricValue <= 0) {
+      throw new Error(`${pathLabel} must declare a positive integer ${metric}.`);
     }
   }
+}
 
+function readActiveException(root) {
+  const exceptionPath = path.join(root, EXCEPTION_RELATIVE_PATH);
+  if (!fs.existsSync(exceptionPath)) return null;
+
+  const exception = readJson(exceptionPath);
+  if (exception.status !== "active") {
+    throw new Error(`${EXCEPTION_RELATIVE_PATH} must be removed when its status is not active.`);
+  }
+  if (typeof exception.id !== "string" || !exception.id.trim()) {
+    throw new Error(`${EXCEPTION_RELATIVE_PATH} must declare a non-empty id.`);
+  }
+  if (!exception.profiles || typeof exception.profiles !== "object" || Array.isArray(exception.profiles)) {
+    throw new Error(`${EXCEPTION_RELATIVE_PATH} must declare profile-specific ceilings.`);
+  }
+  Object.keys(BUNDLE_PROFILES).forEach((profile) => {
+    validateMetricRecord(
+      exception.profiles?.[profile]?.maxMetrics,
+      `${EXCEPTION_RELATIVE_PATH} profiles.${profile}.maxMetrics`
+    );
+  });
   return exception;
 }
 
-function collectJsMetrics() {
-  if (!fs.existsSync(DIST_ASSETS_DIR)) {
-    throw new Error(`Missing ${DIST_ASSETS_DIR}. Run npm run build first.`);
+function collectJsMetrics(root) {
+  const assetsDirectory = path.join(root, "dist", "assets");
+  if (!fs.existsSync(assetsDirectory)) {
+    throw new Error(`Missing ${assetsDirectory}. Run npm run build first.`);
   }
-
-  const files = fs
-    .readdirSync(DIST_ASSETS_DIR)
-    .filter((name) => name.endsWith(".js"))
-    .sort();
-
-  if (!files.length) {
-    throw new Error(`No JavaScript assets found in ${DIST_ASSETS_DIR}.`);
-  }
+  const files = fs.readdirSync(assetsDirectory).filter((name) => name.endsWith(".js")).sort();
+  if (!files.length) throw new Error(`No JavaScript assets found in ${assetsDirectory}.`);
 
   let totalJsBytes = 0;
   let largestJsChunkBytes = 0;
-
   for (const file of files) {
-    const fullPath = path.join(DIST_ASSETS_DIR, file);
-    const size = fs.statSync(fullPath).size;
+    const size = fs.statSync(path.join(assetsDirectory, file)).size;
     totalJsBytes += size;
     largestJsChunkBytes = Math.max(largestJsChunkBytes, size);
   }
-
-  return { totalJsBytes, largestJsChunkBytes };
+  return { files, metrics: { totalJsBytes, largestJsChunkBytes } };
 }
 
-const current = collectJsMetrics();
-const activeException = readActiveException();
+export function detectBundleProfile(files = []) {
+  const detected = Object.entries(BUNDLE_PROFILES)
+    .filter(([, contract]) => contract.markerPrefixes.some((prefix) => (
+      files.some((file) => String(file).startsWith(prefix))
+    )))
+    .map(([profile]) => profile);
 
-if (UPDATE_BASELINE) {
-  if (activeException) {
+  if (detected.length !== 1) {
     throw new Error(
-      `Remove active bundle exception ${activeException.id} before updating the clean-main baseline.`
+      `Bundle profile detection must resolve exactly one graph; detected ${detected.join(", ") || "none"}.`
     );
   }
-
-  const existing = fs.existsSync(BUDGET_FILE)
-    ? readJson(BUDGET_FILE)
-    : { allowancePercent: 15 };
-
-  const baseline = {
-    generatedAt: toDateStamp(),
-    allowancePercent: Number(existing.allowancePercent ?? 15),
-    metrics: current
-  };
-
-  writeJson(BUDGET_FILE, baseline);
-  console.log(`Updated bundle baseline in ${path.relative(ROOT, BUDGET_FILE)}`);
-  console.log(JSON.stringify(baseline, null, 2));
-  process.exit(0);
+  return detected[0];
 }
 
-if (!fs.existsSync(BUDGET_FILE)) {
-  throw new Error(
-    `Missing ${path.relative(ROOT, BUDGET_FILE)}. Run npm run check:perf:bundle -- --update-baseline`
-  );
-}
-
-const baseline = readJson(BUDGET_FILE);
-const allowance = Number(baseline.allowancePercent ?? 15) / 100;
-const standardMaximums = {
-  totalJsBytes: Math.round(baseline.metrics.totalJsBytes * (1 + allowance)),
-  largestJsChunkBytes: Math.round(baseline.metrics.largestJsChunkBytes * (1 + allowance))
-};
-
-if (activeException) {
-  if (activeException.baselineGeneratedAt !== baseline.generatedAt) {
+function compareBaseline(exception, baseline) {
+  if (exception.baselineGeneratedAt !== baseline.generatedAt) {
     throw new Error(
-      `Bundle exception ${activeException.id} targets baseline ${activeException.baselineGeneratedAt}, not ${baseline.generatedAt}.`
+      `Bundle exception ${exception.id} targets baseline ${exception.baselineGeneratedAt}, not ${baseline.generatedAt}.`
     );
   }
   for (const metric of ["totalJsBytes", "largestJsChunkBytes"]) {
-    if (Number(activeException.baselineMetrics?.[metric]) !== Number(baseline.metrics?.[metric])) {
+    if (Number(exception.baselineMetrics?.[metric]) !== Number(baseline.metrics?.[metric])) {
       throw new Error(
-        `Bundle exception ${activeException.id} does not match baseline ${metric} ${baseline.metrics?.[metric]}.`
+        `Bundle exception ${exception.id} does not match baseline ${metric} ${baseline.metrics?.[metric]}.`
       );
     }
   }
 }
 
-const effectiveMaximums = activeException
-  ? {
-      totalJsBytes: Number(activeException.maxMetrics.totalJsBytes),
-      largestJsChunkBytes: Number(activeException.maxMetrics.largestJsChunkBytes)
-    }
-  : standardMaximums;
-
-const failures = [];
-if (current.totalJsBytes > effectiveMaximums.totalJsBytes) {
-  failures.push(
-    `totalJsBytes ${current.totalJsBytes} exceeds allowed ${effectiveMaximums.totalJsBytes} (baseline ${baseline.metrics.totalJsBytes}, normal +${baseline.allowancePercent}%)`
-  );
-}
-if (current.largestJsChunkBytes > effectiveMaximums.largestJsChunkBytes) {
-  failures.push(
-    `largestJsChunkBytes ${current.largestJsChunkBytes} exceeds allowed ${effectiveMaximums.largestJsChunkBytes} (baseline ${baseline.metrics.largestJsChunkBytes}, normal +${baseline.allowancePercent}%)`
-  );
-}
-
-console.log("Bundle budget baseline:", baseline.metrics);
-console.log("Current bundle metrics:", current);
-console.log("Normal allowance percent:", baseline.allowancePercent);
-console.log("Normal maximum metrics:", standardMaximums);
-if (activeException) {
-  console.log("Active temporary exception:", activeException.id);
-  console.log("Temporary exception maximum metrics:", effectiveMaximums);
-}
-
-if (failures.length) {
-  console.error("Bundle budget check failed:");
-  for (const failure of failures) {
-    console.error(`- ${failure}`);
+export function checkBundleBudget({
+  root = DEFAULT_ROOT,
+  requestedProfile = process.env.BUNDLE_BUDGET_PROFILE || "",
+  updateBaseline = false,
+  log = console
+} = {}) {
+  const { files, metrics: current } = collectJsMetrics(root);
+  const detectedProfile = detectBundleProfile(files);
+  const normalizedRequestedProfile = String(requestedProfile || "").trim();
+  if (normalizedRequestedProfile && normalizedRequestedProfile !== detectedProfile) {
+    throw new Error(
+      `Requested bundle profile ${normalizedRequestedProfile} does not match detected graph ${detectedProfile}.`
+    );
   }
-  process.exit(1);
+
+  const budgetPath = path.join(root, BUDGET_RELATIVE_PATH);
+  const activeException = readActiveException(root);
+  if (updateBaseline) {
+    if (detectedProfile !== "compatibility") {
+      throw new Error("The clean-main baseline may be updated only from the compatibility graph.");
+    }
+    if (activeException) {
+      throw new Error(`Remove active bundle exception ${activeException.id} before updating the clean-main baseline.`);
+    }
+    const existing = fs.existsSync(budgetPath)
+      ? readJson(budgetPath)
+      : { allowancePercent: 15 };
+    const baseline = {
+      generatedAt: toDateStamp(),
+      allowancePercent: Number(existing.allowancePercent ?? 15),
+      metrics: current
+    };
+    writeJson(budgetPath, baseline);
+    log.log(`Updated bundle baseline in ${BUDGET_RELATIVE_PATH}`);
+    log.log(JSON.stringify(baseline, null, 2));
+    return Object.freeze({ profile: detectedProfile, current, baseline, updated: true });
+  }
+
+  if (!fs.existsSync(budgetPath)) {
+    throw new Error(
+      `Missing ${BUDGET_RELATIVE_PATH}. Run npm run check:perf:bundle -- --update-baseline`
+    );
+  }
+  const baseline = readJson(budgetPath);
+  const allowance = Number(baseline.allowancePercent ?? 15) / 100;
+  const standardMaximums = {
+    totalJsBytes: Math.round(baseline.metrics.totalJsBytes * (1 + allowance)),
+    largestJsChunkBytes: Math.round(baseline.metrics.largestJsChunkBytes * (1 + allowance))
+  };
+
+  if (activeException) compareBaseline(activeException, baseline);
+  const effectiveMaximums = activeException
+    ? {
+        totalJsBytes: Number(activeException.profiles[detectedProfile].maxMetrics.totalJsBytes),
+        largestJsChunkBytes: Number(
+          activeException.profiles[detectedProfile].maxMetrics.largestJsChunkBytes
+        )
+      }
+    : standardMaximums;
+
+  const failures = [];
+  if (current.totalJsBytes > effectiveMaximums.totalJsBytes) {
+    failures.push(
+      `totalJsBytes ${current.totalJsBytes} exceeds allowed ${effectiveMaximums.totalJsBytes} (baseline ${baseline.metrics.totalJsBytes}, normal +${baseline.allowancePercent}%)`
+    );
+  }
+  if (current.largestJsChunkBytes > effectiveMaximums.largestJsChunkBytes) {
+    failures.push(
+      `largestJsChunkBytes ${current.largestJsChunkBytes} exceeds allowed ${effectiveMaximums.largestJsChunkBytes} (baseline ${baseline.metrics.largestJsChunkBytes}, normal +${baseline.allowancePercent}%)`
+    );
+  }
+
+  log.log("Bundle profile:", detectedProfile);
+  log.log("Bundle budget baseline:", baseline.metrics);
+  log.log("Current bundle metrics:", current);
+  log.log("Normal allowance percent:", baseline.allowancePercent);
+  log.log("Normal maximum metrics:", standardMaximums);
+  if (activeException) {
+    log.log("Active temporary exception:", activeException.id);
+    log.log("Profile exception maximum metrics:", effectiveMaximums);
+  }
+  if (failures.length) {
+    throw new Error(`Bundle budget check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`);
+  }
+  log.log("Bundle budget check passed.");
+  return Object.freeze({
+    profile: detectedProfile,
+    current,
+    baseline,
+    effectiveMaximums,
+    exceptionId: activeException?.id || null,
+    updated: false
+  });
 }
 
-console.log("Bundle budget check passed.");
+const isDirectExecution = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  try {
+    checkBundleBudget({ updateBaseline: process.argv.includes("--update-baseline") });
+  } catch (error) {
+    console.error(error?.message || error);
+    process.exitCode = 1;
+  }
+}

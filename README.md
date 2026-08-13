@@ -535,6 +535,13 @@ or production workflow binding from being silently removed; `lane:quick` runs
 it on every governed change. Passing either command is local/CI evidence, not a
 deployment, hosted-role acceptance, or human approval.
 
+`check:perf:bundle` detects whether `dist` contains the compatibility or Ambient
+production graph from mutually exclusive route chunks. CI builds and checks
+both graphs with an explicit matching `BUNDLE_BUDGET_PROFILE`; a mismatch,
+missing marker, or mixed graph fails closed. Temporary profile ceilings live in
+`docs/performance/bundle-exception.json` and do not change the clean-main
+baseline.
+
 `check:capability-surfaces` is the mechanical no-orphan-capability gate. For a
 backend delivery it requires a revision-bumped contract in
 `docs/capability-surfacing-contracts.json`, owns directly changed, new, or

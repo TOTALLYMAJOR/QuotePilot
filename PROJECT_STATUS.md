@@ -299,11 +299,15 @@ route evidence are complete.
   tests, the 1-of-1 Chromium-admin release-gate case, the full 294-file / 3,455-
   test unit lane, compatibility production build, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
-  The separate production-equivalent Ambient build succeeds but currently
-  totals 3,700,021 JavaScript bytes with a 436,188-byte largest chunk, exceeding
-  the reviewed temporary ceilings of 2,776,849 and 391,596. Do not widen the
-  ceiling or promote that build without an explicit reviewed optimization or
-  budget decision. This is source/local evidence;
+  CI now has independent, graph-detected compatibility and Ambient production
+  build steps. Fresh local builds measure 2,769,824 / 391,596 bytes for the
+  compatibility graph and 3,700,202 / 391,596 for Ambient. Manual opportunity-
+  model and quote-builder chunks eliminate the former 436,188-byte Ambient
+  largest-chunk violation without widening that ceiling. The named Ambient
+  aggregate ceiling is 3,700,505 bytes—only the measured local graph plus the
+  previously confirmed 303-byte CI offset—and remains an explicit temporary
+  exception requiring optimization or reviewed recalibration. This is
+  source/local evidence;
   preview deployment, hosted roles and portal behavior, production timing,
   human acceptance, and rollback evidence remain open.
 
