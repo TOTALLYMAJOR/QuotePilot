@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 36,
+  "catalogVersion": 37,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -45,7 +45,7 @@
     },
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -58,6 +58,7 @@
         "firestore.rules",
         "src/lib/customerCommercialMeasures.js",
         "src/lib/customerCommercialTimeline.js",
+        "src/lib/commandCenterEvidence.js",
         "src/lib/ambientClients.js",
         "src/lib/customerRebookingRadar.js",
         "src/lib/customerWorkspace.js",
@@ -67,6 +68,7 @@
       "backendExports": [],
       "frontendPaths": [
         "src/App.jsx",
+        "src/components/AmbientCustomerDirectoryView.jsx",
         "src/components/CustomerCommercialMeasures.jsx",
         "src/components/CustomerCommercialTimeline.jsx",
         "src/components/CustomerDirectoryView.jsx",
@@ -122,6 +124,10 @@
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
+        {
+          "path": "src/components/__tests__/ambientClientsView.test.jsx",
+          "locator": "keeps the Ambient Clients data host independent from the legacy directory table"
+        },
         {
           "path": "src/components/__tests__/ambientClientsView.test.jsx",
           "locator": "makes relationship identity, state, risk, and the next action understandable at the top layer"

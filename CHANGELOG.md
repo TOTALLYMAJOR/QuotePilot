@@ -24,6 +24,15 @@ This changelog is backfilled from git history and will be maintained going forwa
   completion evidence only, not deployment, provider behavior, retirement
   approval, or human acceptance.
 
+- Removed replaced workspace UI from the Ambient production graph without
+  deleting compatibility implementations. The Ambient app now uses a focused
+  Clients data host, does not mount the legacy Command Center fallback, and
+  disables the redundant commercial search palette in favor of contextual
+  Pilot and exact object routes. Shared Now evidence selectors moved out of the
+  legacy Command Center component. The exact CI-equivalent Ambient build is
+  3,714,204 total JavaScript bytes with a 391,901-byte largest chunk, passing
+  the existing named ceiling without increasing or recalibrating it.
+
 - Implemented the next dormant Stripe Connect control-plane slice without
   exporting or invoking it. The concrete repository can select only the named
   `connect-control` database, reserves an immutable connection generation and

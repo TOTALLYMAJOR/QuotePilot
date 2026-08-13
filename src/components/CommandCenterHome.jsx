@@ -5,11 +5,14 @@ import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeading
 import { getWorkflowAttentionFocusId } from "../lib/quoteWorkflow";
 import {
   classifyAttentionItem,
-  classifyDepositStatus,
-  classifyFinalBalanceDisplayStatus,
-  classifyQuoteStatus,
-  getFinalBalanceDisplayStatus
+  classifyQuoteStatus
 } from "../lib/statusSemantics";
+import {
+  buildMoneyRows,
+  selectUpcomingEvents,
+  summarizeMoneyRows,
+  UPCOMING_WINDOW_DAYS
+} from "../lib/commandCenterEvidence";
 import {
   formatWorkspaceDate,
   formatWorkspaceInteger,
@@ -18,15 +21,9 @@ import {
   hasWorkspaceNumber
 } from "../lib/workspacePresentation";
 
-const UPCOMING_WINDOW_DAYS = 7;
 const ATTENTION_ROW_LIMIT = 8;
 
-function localDateIso(value = new Date()) {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+export { buildMoneyRows, selectUpcomingEvents, summarizeMoneyRows } from "../lib/commandCenterEvidence";
 
 export function attentionRowCopy(item) {
   const customerName = String(item.quote?.customer?.name || item.quote?.customer?.email || "Customer").trim();
@@ -78,73 +75,6 @@ export function attentionRowCopy(item) {
   }
   const count = Array.isArray(item.pendingRequests) ? item.pendingRequests.length : 0;
   return { detail: `${count} pending approval${count === 1 ? "" : "s"}`, meta, customerName, quoteLabel };
-}
-
-export function selectUpcomingEvents(quotes = [], { nowDate = new Date(), windowDays = UPCOMING_WINDOW_DAYS } = {}) {
-  const todayISO = localDateIso(nowDate);
-  const windowEndDate = new Date(nowDate);
-  windowEndDate.setDate(windowEndDate.getDate() + windowDays);
-  const windowEndISO = localDateIso(windowEndDate);
-  return (Array.isArray(quotes) ? quotes : [])
-    .filter((quote) => ["accepted", "booked"].includes(quote?.status))
-    .filter((quote) => {
-      const eventDate = String(quote?.event?.date || "").trim();
-      return /^\d{4}-\d{2}-\d{2}$/.test(eventDate) && eventDate >= todayISO && eventDate <= windowEndISO;
-    })
-    .sort((a, b) => String(a?.event?.date || "").localeCompare(String(b?.event?.date || "")));
-}
-
-export function buildMoneyRows(quotes = []) {
-  const rows = [];
-  (Array.isArray(quotes) ? quotes : []).forEach((quote) => {
-    const depositStatus = String(quote?.payment?.depositStatus || "unpaid").toLowerCase();
-    if (["accepted", "booked"].includes(quote?.status) && ["unpaid", "sent"].includes(depositStatus)) {
-      rows.push({
-        quoteId: quote.id,
-        quoteNumber: quote.quoteNumber,
-        customerName: quote.customer?.name || quote.customer?.email || "Customer",
-        kind: "Deposit",
-        amount: hasWorkspaceNumber(quote.totals?.deposit)
-          ? Number(quote.totals.deposit)
-          : null,
-        ...classifyDepositStatus(depositStatus)
-      });
-    }
-    if (quote?.status === "booked" && quote.booking?.contractNumber) {
-      const displayStatus = getFinalBalanceDisplayStatus(quote.payment?.finalBalance);
-      const amountCents = Number(quote.payment?.finalBalance?.amountCents || 0);
-      // A never-requested ("unpaid") balance is only actionable once the
-      // deposit is paid — mirrors the send_final_balance_request eligibility
-      // gate so this row is never shown as actionable before it really is.
-      const eligibleToShow = displayStatus !== "unpaid" || depositStatus === "paid";
-      if (amountCents > 0 && eligibleToShow && ["unpaid", "sent", "prepared", "processing"].includes(displayStatus)) {
-        rows.push({
-          quoteId: quote.id,
-          quoteNumber: quote.quoteNumber,
-          customerName: quote.customer?.name || quote.customer?.email || "Customer",
-          kind: "Final balance",
-          amount: amountCents / 100,
-          ...classifyFinalBalanceDisplayStatus(displayStatus)
-        });
-      }
-    }
-  });
-  return rows;
-}
-
-export function summarizeMoneyRows(rows = []) {
-  const requestedRows = rows.filter((row) => row.family === "pending");
-  const outstandingRows = rows.filter((row) => row.family === "action");
-  const sumKnown = (items) => items.reduce(
-    (sum, row) => sum + (hasWorkspaceNumber(row.amount) ? Number(row.amount) : 0),
-    0
-  );
-  return {
-    requested: sumKnown(requestedRows),
-    requestedUnknown: requestedRows.filter((row) => !hasWorkspaceNumber(row.amount)).length,
-    outstanding: sumKnown(outstandingRows),
-    outstandingUnknown: outstandingRows.filter((row) => !hasWorkspaceNumber(row.amount)).length
-  };
 }
 
 export default function CommandCenterHome({

@@ -86,7 +86,6 @@ describe("recoverable lazy surfaces", () => {
     expect(appSource).toContain("const QuoteCompareModal = createRecoverableLazy(");
     expect(appSource).toContain("component={QuoteCompareModal}");
     for (const name of [
-      "CommandCenterHome",
       "CustomerDirectoryView",
       "CustomerWorkspaceView",
       "WorkspaceNotFound",
@@ -96,6 +95,8 @@ describe("recoverable lazy surfaces", () => {
       expect(appSource).toContain(`const ${name} = createRecoverableLazy(`);
       expect(appSource).toContain(`component={${name}}`);
     }
+    expect(appSource).toContain("const CommandCenterHome = AMBIENT_UI_ENABLED");
+    expect(appSource).toContain("component={CommandCenterHome}");
     for (const name of [
       "AdminCatalogView",
       "EventScheduleView",

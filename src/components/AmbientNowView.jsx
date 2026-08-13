@@ -5,7 +5,7 @@ import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeading
 import {
   buildMoneyRows,
   selectUpcomingEvents
-} from "./CommandCenterHome";
+} from "../lib/commandCenterEvidence";
 import { buildNowCard } from "./nowPresentation";
 import { buildAmbientNowBriefing } from "../lib/ambientNowBriefing";
 import {

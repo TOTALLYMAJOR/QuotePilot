@@ -7,7 +7,7 @@ import {
   buildMoneyRows,
   selectUpcomingEvents,
   summarizeMoneyRows
-} from "./CommandCenterHome";
+} from "../lib/commandCenterEvidence";
 import {
   NOW_CARD_LIMIT,
   buildNowCards,
