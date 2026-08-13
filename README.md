@@ -578,7 +578,10 @@ runtime configuration plus the allowlisted platform-admin identity immediately
 before deployment. Provider credentials remain in Firebase Secret Manager and
 are never written to Functions dotenv files, artifacts, or logs. The approved
 sender identity in configuration does not prove the Resend domain is verified
-or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider truth.
+or enabled; see [PROJECT_STATUS.md](PROJECT_STATUS.md) for provider truth. Backend
+and all-surface releases also pass Firebase's explicit non-interactive
+acknowledgement for reviewed Functions retry-policy changes; hosting-only
+releases do not receive that acknowledgement.
 
 ## Quality Gates
 ```bash
