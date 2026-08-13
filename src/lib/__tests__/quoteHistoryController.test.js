@@ -82,4 +82,27 @@ describe("quote history controller seams", () => {
     expect(result.eventRoom).toMatchObject({ quoteId: "quote-2", visible: true, missing: false });
     expect(result.actions.quoteId).toBe("quote-2");
   });
+
+  test("resolves an exact focused quote beyond index 500 without a second presentation cap", () => {
+    const quotes = Array.from({ length: 502 }, (_, index) => ({
+      id: `quote-${index + 1}`,
+      status: "draft"
+    }));
+    const result = buildQuoteHistoryController({
+      quotes,
+      visibleQuoteIds: ["quote-502"],
+      focusQuoteId: "quote-502",
+      currentUserRole: "admin",
+      source: "firebase"
+    });
+
+    expect(result.opportunities.totalCount).toBe(502);
+    expect(result.eventRoom).toMatchObject({
+      quoteId: "quote-502",
+      quote: quotes[501],
+      visible: true,
+      missing: false
+    });
+    expect(result.actions.quoteId).toBe("quote-502");
+  });
 });

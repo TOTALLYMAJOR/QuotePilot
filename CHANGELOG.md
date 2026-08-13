@@ -33,6 +33,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   3,714,204 total JavaScript bytes with a 391,901-byte largest chunk, passing
   the existing named ceiling without increasing or recalibrating it.
 
+- Removed a duplicate 500-record presentation cap from the Quote History
+  controller. Exact opportunity routes now resolve every quote in the
+  caller-owned bounded collection, so a selected record after index 500 cannot
+  be reported as missing while remaining visible to the surrounding surface.
+
 - Implemented the next dormant Stripe Connect control-plane slice without
   exporting or invoking it. The concrete repository can select only the named
   `connect-control` database, reserves an immutable connection generation and

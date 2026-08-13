@@ -137,7 +137,10 @@ export function buildQuoteHistoryController({
   currentUserRole = "customer",
   source = ""
 } = {}) {
-  const boundedQuotes = Array.isArray(quotes) ? quotes.slice(0, 500) : [];
+  // The quote store owns and bounds this collection. Do not add a second
+  // presentation cap here: exact route focus must resolve any record the
+  // caller can render, including records after the first 500.
+  const boundedQuotes = Array.isArray(quotes) ? quotes : [];
   const visible = new Set((Array.isArray(visibleQuoteIds) ? visibleQuoteIds : []).map((value) => text(value)));
   const boundedIds = new Set(boundedQuotes.map((quote) => text(quote?.id || quote?.quoteId)).filter(Boolean));
   const boundedVisibleIds = [...visible].filter((id) => boundedIds.has(id));

@@ -174,7 +174,7 @@ Last updated: August 13, 2026
   temporary ceiling without recalibration. Its selected graph excludes the
   replaced Command Center, redundant search palette, and legacy Clients table;
   those surfaces remain available through the compatibility build. The compatibility core lane passes
-  3,569 unit tests with 74 intentional skips, and the production-equivalent
+  3,570 unit tests with 74 intentional skips, and the production-equivalent
   Ambient browser proof passes the exact zero-dead-click contract plus all 80
   no-unintended-overlap cases across the supported widths and contained overlay
   states. This is local source, unit, build, and browser evidence only; no
