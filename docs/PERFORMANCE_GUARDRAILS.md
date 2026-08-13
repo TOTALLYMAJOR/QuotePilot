@@ -25,9 +25,9 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has an exact temporary 2,898,141-byte
+- The current compatibility graph has an exact temporary 2,906,982-byte
   aggregate and 391,901-byte largest-chunk ceiling. The production-equivalent
-  Ambient graph has a separate temporary 3,817,378-byte aggregate ceiling and
+  Ambient graph has a separate temporary 3,826,220-byte aggregate ceiling and
   the same 391,901-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -46,6 +46,10 @@ Threshold policy:
   for compatibility and 3,817,075 bytes for Ambient. Its profile ceilings add
   only the already observed 7,025-byte and 303-byte runner offsets; this is not
   general product-growth headroom.
+  The quote-builder decision-flow slice then measures 2,899,957 bytes for the
+  compatibility graph and 3,825,917 bytes for Ambient. Its exact ceilings keep
+  those same runner offsets and the 391,901-byte largest-chunk limit; no general
+  product-growth headroom was added.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; the current
   largest chunk is 391,901 bytes. The remaining

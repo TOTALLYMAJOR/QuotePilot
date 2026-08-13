@@ -1172,6 +1172,14 @@ function LegacyAppCore({
     () => buildStepperModel({ currentStep: step, stepStatus }),
     [step, stepStatus]
   );
+  const completedStepCount = stepperModel.filter((item) => item.status === "completed").length;
+  const currentStepMeta = stepperModel.find((item) => item.stepNumber === step) || stepperModel[0];
+  const nextStepOutcome = {
+    1: "Build the menu",
+    2: "Compare packages and services",
+    3: "Review pricing",
+    4: "Prepare the draft"
+  }[step] || "Continue";
   const step1Validation = stepValidation.step1 || { valid: false, missingFields: [], fieldErrors: {} };
   const step1CanAdvance = step1Validation.valid;
 
@@ -3817,25 +3825,46 @@ function LegacyAppCore({
               });
             }}
           />
+          <div className="wizard-orientation" aria-live="polite">
+            <div>
+              <span>Creating this quote</span>
+              <strong>{currentStepMeta?.label || "Quote details"}</strong>
+            </div>
+            <p>{completedStepCount} of {stepperModel.length} decisions complete</p>
+          </div>
           <ol className="stepper" ref={stepperRef}>
             {stepperModel.map((stepMeta) => {
               const stepOneMissing = stepMeta.stepNumber === 1 && !step1Validation.valid;
+              const stepContents = (
+                <>
+                  <span className="step-badge">
+                    {stepMeta.status === "completed" ? "✓" : stepOneMissing ? "!" : stepMeta.stepNumber}
+                  </span>
+                  <span className="step-copy">
+                    <em>{stepMeta.label}</em>
+                    <small>{stepMeta.microcopy}</small>
+                    {stepOneMissing && (
+                      <small className="step-warning">Missing required fields</small>
+                    )}
+                  </span>
+                </>
+              );
               return (
                 <li
                   key={stepMeta.label}
                   className={`stepper-item status-${stepMeta.status} ${stepMeta.isLocked ? "is-locked" : ""}`.trim()}
                   aria-current={stepMeta.stepNumber === step ? "step" : undefined}
                 >
-                  <span className="step-badge">
-                    {stepMeta.status === "completed" ? "✓" : stepOneMissing ? "!" : stepMeta.stepNumber}
-                  </span>
-                  <div className="step-copy">
-                    <em>{stepMeta.label}</em>
-                    <small>{stepMeta.microcopy}</small>
-                    {stepOneMissing && (
-                      <small className="step-warning">Missing required fields</small>
-                    )}
-                  </div>
+                  {stepMeta.status === "completed" ? (
+                    <button
+                      type="button"
+                      className="stepper-target"
+                      onClick={() => setStep(stepMeta.stepNumber)}
+                      aria-label={`Return to ${stepMeta.label}`}
+                    >
+                      {stepContents}
+                    </button>
+                  ) : stepContents}
                 </li>
               );
             })}
@@ -3881,6 +3910,9 @@ function LegacyAppCore({
                   form={form}
                   setForm={setForm}
                   menuSections={effectiveMenuSections}
+                  catalog={catalog}
+                  pricingSettings={effectiveSettings}
+                  totals={totals}
                   menuLoading={dynamicMenuLoading}
                   menuError={dynamicMenuError}
                   eventTypeLabel={catalog.eventTypes?.find(
@@ -3926,6 +3958,8 @@ function LegacyAppCore({
                 onClearTemplateDefaults={clearTemplateDefaults}
                 onDismissTemplateNotice={dismissTemplateDefaultsNotice}
                 onAddonSelection={handleAddonSelection}
+                totals={totals}
+                pricingSettings={effectiveSettings}
               />
             )}
             {!catalog.loading && step === 4 && (
@@ -4071,8 +4105,9 @@ function LegacyAppCore({
                   className="cta"
                   onClick={handleNextStep}
                   disabled={catalog.loading}
+                  aria-label={`Next: ${nextStepOutcome}`}
                 >
-                  Next
+                  {nextStepOutcome} →
                 </button>
               ) : (
                 <>
