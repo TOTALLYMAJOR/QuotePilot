@@ -178,6 +178,12 @@ If a topic changes, only update the owning doc and cross-link from others.
 - Project-scoped Functions environment: `NOTIFICATIONS_SMS_PROVIDER`
   - Default trusted runtime value: `none` unless buyer-approved SMS enablement
     is validated; local ignored Functions files are validation-only.
+- Organization-owner repair: `npm run backfill:organization-owner`
+  - The command is a no-write dry run unless `--apply` is supplied with the
+    planned owner UID and the exact `BIND ORGANIZATION OWNER <project>
+    <organization> <uid>` confirmation. A production dry run, reviewed
+    candidate evidence, and separately authorized apply are distinct gates;
+    source or local test evidence never proves a binding occurred.
 - Production frontend flag: `VITE_AMBIENT_UI_ENABLED`
   - Both production deploy workflows bind exactly one `"true"` value into the
     frontend build environment, and the deployment-safety test enforces that

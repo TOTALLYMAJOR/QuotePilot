@@ -62,6 +62,14 @@ and human acceptance are distinct claims.
 
 - Organization-owner activation is explicit, exact-email verified, atomically
   bound, receipted privately, and browser role writes are denied.
+- The owner backfill command defaults to dry-run and returns
+  `ownership_required` unless exactly one consumed admin invitation agrees with
+  its organization, provisioning order, verified Auth user, and existing admin
+  role. Apply additionally requires the planned UID and an exact
+  project/organization/UID confirmation; no production apply has been run.
+  Disposable Auth/Firestore emulator acceptance proves dry-run no-write,
+  transactional bind, immutable receipt, replay idempotency, and ambiguous-
+  candidate denial.
 - `firebase.json` names `default` and `connect` codebases.
 - Existing deployment selectors address only `functions:default`.
 - The Connect package is exactly pinned but exports nothing.

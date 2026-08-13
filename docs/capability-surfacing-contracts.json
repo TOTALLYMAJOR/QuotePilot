@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 31,
+  "catalogVersion": 32,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -4320,7 +4320,7 @@
     },
     {
       "id": "organization-owner-authority",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -4328,11 +4328,14 @@
         "platform_administrators",
         "organization_owners"
       ],
-      "summary": "New tenant provisioning marks organization-owner invitations explicitly. Exact-email verified activation atomically binds organizations/{organizationId}.ownerUid, consumes the invitation, creates the existing admin role, and writes one browser-private immutable owner-binding receipt. Legacy generic admin and sales invitations remain role invitations only and cannot silently acquire owner authority. Browser principals can read their permitted role projection but cannot create, update, or delete any userRoles document.",
+      "summary": "New tenant provisioning marks organization-owner invitations explicitly. Exact-email verified activation atomically binds organizations/{organizationId}.ownerUid, consumes the invitation, creates the existing admin role, and writes one browser-private immutable owner-binding receipt. The operator-only backfill defaults to dry-run and binds only one exact consumed legacy owner invitation after organization, order, verified Auth user, and admin-role evidence agree; zero, multiple, incomplete, or conflicting candidates become ownership_required. Legacy generic admin and sales invitations remain role invitations only and cannot silently acquire owner authority. Browser principals can read their permitted role projection but cannot create, update, or delete any userRoles document.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
         "functions/organizationAuthority.js",
+        "scripts/backfill-organization-owner.mjs",
+        "scripts/organization-owner-backfill-emulator-acceptance.mjs",
+        "scripts/organization-owner-backfill-plan.mjs",
         "scripts/provisioning-emulator-acceptance.mjs"
       ],
       "backendExports": [
@@ -4354,10 +4357,19 @@
       "testPaths": [
         "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
         "src/lib/__tests__/organizationAuthority.server.test.js",
+        "src/lib/__tests__/organizationOwnerBackfill.test.js",
         "src/rules/__tests__/firestore.rules.test.js",
         "scripts/provisioning-emulator-acceptance.mjs"
       ],
       "testLocators": [
+        {
+          "path": "src/lib/__tests__/organizationOwnerBackfill.test.js",
+          "locator": "binds exactly one legacy consumed owner invitation"
+        },
+        {
+          "path": "src/lib/__tests__/organizationOwnerBackfill.test.js",
+          "locator": "fails closed for multiple consumed owner candidates"
+        },
         {
           "path": "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
           "locator": "marks transport uncertainty without discarding the order"
@@ -4393,8 +4405,8 @@
           "locator": "### Organization-owner authority"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "The existing administrator provisioning surface now names its exact owner-invitation boundary, acknowledges checking and submission, retains the unchanged order after an ambiguous transport result, reconciles only that order, and distinguishes a recovered receipt from a definitive rejection. The verified owner sign-in remains the separate activation surface; private owner receipts and direct role writes stay hidden.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "The existing administrator provisioning and verified sign-in surfaces are unchanged. Revision 2 adds an operator-only dry-run/apply repair command and deliberately adds no browser control: ambiguous evidence produces ownership_required, while apply requires an exact planned UID confirmation and transactional revalidation. Private owner receipts and direct role writes remain hidden.",
       "stateEvidence": [
         {
           "state": "ready",

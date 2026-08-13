@@ -20,6 +20,16 @@ This changelog is backfilled from git history and will be maintained going forwa
   chunk ceiling and compatibility ceilings are unchanged; this is no general
   growth allowance.
 
+- Added a fail-closed organization-owner backfill for the Stripe Connect
+  authority prerequisite. It defaults to dry-run, accepts only one consumed
+  admin invitation that exactly agrees with organization, order, verified Auth
+  user, and admin-role evidence, and returns `ownership_required` for ambiguity
+  or conflict. Apply requires the planned owner UID plus exact
+  project/organization/UID confirmation and revalidates the evidence in the
+  write transaction before creating the immutable receipt. No production
+  dry-run or apply was performed; disposable Auth/Firestore emulator acceptance
+  covers no-write planning, exact apply, replay, and candidate ambiguity.
+
 - Added a deploy-empty, separately pinned Stripe Connect Functions codebase and
   converted Firebase configuration to explicit `default` and `connect`
   codebases. Existing production, release-candidate, and artifact selectors now
