@@ -7,6 +7,11 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
 ## Access and Roles
 - Staff access (`sales` or `admin`) is required for the quote builder workspace.
+- The local-development `/auth0` page verifies only the Auth0 React SDK. An
+  Auth0 profile does not sign a user into QuotePilot, assign a tenant or role,
+  or grant access to `/app`, Firestore, or Firebase Functions. Staff continue
+  to use the Firebase-backed **Staff Sign In** flow unless a separately reviewed
+  federation design is implemented.
 - Admin access is required for Catalog Admin configuration and the default-off
   Ambient Library that presents the same guarded catalog authority.
 - Email/password users who cannot sign in can enter their email and select

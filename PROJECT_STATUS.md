@@ -20,6 +20,17 @@ Last updated: August 13, 2026
 
 ## Current Release Candidate (Not Production)
 
+- Current source installs `@auth0/auth0-react` and exposes an isolated
+  local-development `/auth0` SDK verification route. Mocked component coverage
+  proves the provider, login, signup, logout, loading, error, and profile
+  wiring, while both production graphs exclude the route, SDK, styles, and
+  identifiers. A real local browser rendered the route and sent the official
+  PKCE authorization request with `http://localhost:5173/auth0`; Auth0 returned
+  the expected callback-mismatch response because the dashboard allowlist is
+  still empty. No completed callback, logout, silent renewal, hosted behavior,
+  Firebase federation, QuotePilot staff access, or human acceptance is claimed.
+  Firebase Auth and its verified-email, role, organization, Firestore, and
+  Functions boundaries remain authoritative.
 - The Stripe Connect program has begun with a source-only organization
   authority prerequisite. New owner invitations are explicit, verified
   activation atomically binds one owner and leaves an immutable browser-private
@@ -174,12 +185,12 @@ Last updated: August 13, 2026
   payment steps, and limits quiet progress to timestamp-backed internal
   workflow receipts. All 50 remain partial against their complete acceptance
   contracts.
-  The exact CI-equivalent production Ambient build passes locally with 3,714,204 total
+  The exact CI-equivalent production Ambient build passes locally with 3,714,603 total
   JavaScript bytes and a 391,901-byte largest chunk, inside the existing
   temporary ceiling without recalibration. Its selected graph excludes the
   replaced Command Center, redundant search palette, and legacy Clients table;
   those surfaces remain available through the compatibility build. The compatibility core lane passes
-  3,570 unit tests with 74 intentional skips, and the production-equivalent
+  3,575 unit tests with 74 intentional skips, and the production-equivalent
   Ambient browser proof passes the exact zero-dead-click contract plus all 80
   no-unintended-overlap cases across the supported widths and contained overlay
   states. This is local source, unit, build, and browser evidence only; no
@@ -550,6 +561,10 @@ route evidence are complete.
     contract-conversion, and authoritative-staffing items need a separately
     reviewed immutable non-production acceptance window; blocked profile items
     cannot be omitted or attested as passed.
+14. Auth0 is an isolated local SDK verification route, not a QuotePilot
+    authentication migration. Keep it out of production and do not infer
+    workspace authority until exact dashboard URLs are configured and a
+    separately reviewed Auth0-to-Firebase federation design exists.
 
 ## Current Focus
 

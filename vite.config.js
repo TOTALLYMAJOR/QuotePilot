@@ -79,6 +79,11 @@ export default defineConfig(({ mode }) => {
   envDir: ".",
   publicDir: "public",
   plugins: [react()],
+  server: {
+    host: "localhost",
+    port: 5173,
+    strictPort: true
+  },
   resolve: {
     alias: {
       "commercial-dependency-graph-core": COMMERCIAL_DEPENDENCY_GRAPH_CORE,

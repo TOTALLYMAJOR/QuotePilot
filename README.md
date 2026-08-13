@@ -28,6 +28,9 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 ## Application Routes
 - `/`: hospitality-first public QuotePilot marketing page.
 - `/system`: saved dark product and operating-system overview.
+- `/auth0`: local-development-only Auth0 React SDK verification page. It uses
+  Auth0 Universal Login for SDK setup testing but does not establish a Firebase
+  session, QuotePilot tenant membership, staff role, or Firestore access.
 - `/app`: authenticated staff workspace. Generic builds retain the five-step
   builder landing; builds with `VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true`
   use the Commercial Command Center as the default landing.
@@ -136,6 +139,8 @@ Tenant safety mode:
 ## Architecture Snapshot
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
+- Auth0 SDK: isolated local verification route only; Firebase remains the
+  workspace and data-authorization authority
 - Server runtime: Firebase Functions on Node.js 22 with modular Firebase Admin SDK APIs
 - Public custom domain: Vercel (`https://quotepilot.mbmapps.com`)
 - Firebase Hosting origin/fallback: `https://tonicatering.web.app`
@@ -154,8 +159,11 @@ npm run check:env
 
 ### Run (Node)
 ```bash
-npm run dev
+npm run dev -- --host localhost --port 5173 --strictPort
 ```
+
+Vite is pinned to port `5173` and fails instead of selecting another port. This
+keeps OAuth callback URLs deterministic.
 
 To inspect the customer-centered workspace source in a POSIX shell without
 changing a tracked environment file, start Vite with the temporary build flag:
@@ -168,6 +176,36 @@ Open `http://localhost:5173/app`. This proves only that the local source is
 rendering. Firebase-backed customer, quote, rebook, and Change Impact behavior
 still requires the repository's configured development/emulator environment;
 neither command deploys or changes production.
+
+### Auth0 React SDK verification
+
+The official `@auth0/auth0-react` 2.x SDK is available on the local-only
+`/auth0` route. The current quickstart uses tenant
+`dev-xsvppgzt3vgy0ydn.us.auth0.com` and client
+`cMAurgZ60fCyx8KZLBPfGLumsYtvtjhv`. These identifiers are browser-public; do
+not add an Auth0 client secret to this React app or any `VITE_*` variable.
+
+In the Auth0 SPA application settings, configure these exact local values:
+
+- Allowed Callback URLs: `http://localhost:5173/auth0`
+- Allowed Logout URLs: `http://localhost:5173/auth0`
+- Allowed Web Origins: `http://localhost:5173`
+- Application Type: `Single Page Application`
+- Token Endpoint Authentication Method: `None`
+
+Then start the exact port and open the verification page:
+
+```bash
+npm run dev -- --host localhost --port 5173 --strictPort
+```
+
+Open `http://localhost:5173/auth0`, then use **Signup with Auth0** or **Login
+with Auth0**. A successful return shows the Auth0 user profile; logout returns
+to the same route. Callback, logout, and silent-session renewal cannot work
+until the three Auth0 dashboard URL fields above are saved. The SDK route is
+intentionally excluded from production builds while Auth0 is not federated
+with Firebase. Auth0 login therefore does not unlock `/app`, satisfy Firestore
+rules, call Firebase Functions as staff, or assign an organization or role.
 
 ### Run (VS Code Dev Container, isolated)
 Prerequisites:
@@ -206,6 +244,9 @@ Create `.env` from `.env.example` and set required Firebase keys:
 - `VITE_FIREBASE_APP_ID`
 
 Optional:
+- `VITE_AUTH0_DOMAIN` and `VITE_AUTH0_CLIENT_ID` (browser-public overrides for
+  the local `/auth0` verification route; set both together and never expose a
+  client secret)
 - `VITE_FIREBASE_FUNCTIONS_REGION`
 - `VITE_FIREBASE_APP_CHECK_ENABLED` (default off. Enables Firebase App Check
   token acquisition for the browser only after the exact environment has a

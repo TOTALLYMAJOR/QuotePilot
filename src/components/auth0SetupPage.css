@@ -1,0 +1,18 @@
+.auth0-authority-boundary {
+  margin-top: 1rem;
+  border-left: 3px solid var(--tone-gold-3);
+  padding: 0.7rem 0.8rem;
+}
+
+.auth0-profile-json {
+  max-height: 22rem;
+  overflow: auto;
+  border: 1px solid var(--tone-cream-3);
+  border-radius: 10px;
+  background: var(--tone-cream-2);
+  padding: 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

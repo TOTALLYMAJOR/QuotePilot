@@ -6,6 +6,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Added
+
+- Installed the official Auth0 React SDK and added a local-development-only
+  `/auth0` Universal Login verification route for login, signup, logout, error,
+  loading, and user-profile states. The route uses a fixed Vite port and is
+  excluded from production builds. It remains isolated from Firebase Auth,
+  tenant membership, role resolution, Firestore, and Firebase Functions; the
+  Auth0 dashboard callback, logout, and web-origin settings still require
+  operator configuration before a real Auth0 session can be accepted.
+
 ## [0.9.0] - 2026-08-13
 
 ### Changed

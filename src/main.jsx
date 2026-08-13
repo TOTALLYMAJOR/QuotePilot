@@ -20,6 +20,12 @@ const RevenueAutopilotUnsubscribePage = createRecoverableLazy(
   () => import("./components/RevenueAutopilotUnsubscribePage"),
   "RevenueAutopilotUnsubscribePage"
 );
+const Auth0SetupPage = import.meta.env.DEV
+  ? createRecoverableLazy(
+    () => import("./components/Auth0SetupPage"),
+    "Auth0SetupPage"
+  )
+  : null;
 const WorkspaceRoute = createRecoverableLazy(
   () => import("./components/WorkspaceRoute"),
   "WorkspaceRoute"
@@ -63,6 +69,9 @@ const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
 const isMarketingRoute = normalizedPath === "/" && !isPortalRoute;
 const isSystemMarketingRoute = normalizedPath === "/system" && !isPortalRoute;
 const isBuyerAccessRoute = normalizedPath === "/start" && !isPortalRoute;
+const isAuth0SetupRoute = import.meta.env.DEV
+  && normalizedPath === "/auth0"
+  && !isPortalRoute;
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -85,6 +94,12 @@ createRoot(document.getElementById("root")).render(
         surfaceName="Secure buyer access"
         loadingMessage="Loading secure buyer access..."
         component={BuyerAccessPage}
+      />
+    ) : isAuth0SetupRoute && Auth0SetupPage ? (
+      <LazyPublicRoute
+        surfaceName="Auth0 SDK verification"
+        loadingMessage="Loading Auth0 SDK verification..."
+        component={Auth0SetupPage}
       />
     ) : (
       <LazyPublicRoute
