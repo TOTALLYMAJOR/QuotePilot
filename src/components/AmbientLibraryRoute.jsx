@@ -424,7 +424,10 @@ export default function AmbientLibraryRoute({
   if (editorTarget) {
     return (
       <main
-        className="container workspace-route-main ambient-library ambient-library--editing"
+        className="container workspace-route-main ambient-library ambient-library--editing ambient-purpose-surface"
+        data-surface-contract-id={model.surfaceContract.id}
+        data-surface-purpose={model.surfaceContract.purposes.join(" ")}
+        data-surface-density="editorial"
         data-ambient-library-state="editing"
         data-library-draft-preserved={open ? undefined : "route-hidden"}
         hidden={!open}
@@ -478,10 +481,11 @@ export default function AmbientLibraryRoute({
 
   return (
     <main
-      className="container workspace-route-main ambient-library"
+      className="container workspace-route-main ambient-library ambient-purpose-surface"
       data-ambient-library-state={model.state}
       data-surface-contract-id={model.surfaceContract.id}
       data-surface-purpose={model.surfaceContract.purposes.join(" ")}
+      data-surface-density="editorial"
       aria-labelledby="ambient-library-title"
     >
       <header className="ambient-library__masthead">

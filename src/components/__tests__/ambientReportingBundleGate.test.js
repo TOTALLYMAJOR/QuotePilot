@@ -27,7 +27,7 @@ const ACTIVE_SURFACE_SOURCES = [
 ]);
 
 describe("Ambient reporting bundle boundary", () => {
-  test("keeps Ambient surfaces unconditional in the active modules and selects legacy modules at the App boundary", () => {
+  test("keeps Ambient surfaces unconditional and selects the compatibility graph at the build boundary", () => {
     ACTIVE_SURFACE_SOURCES.forEach(([fileName, source]) => {
       expect(source, fileName).not.toContain("VITE_AMBIENT_UI_ENABLED");
     });
@@ -36,19 +36,13 @@ describe("Ambient reporting bundle boundary", () => {
       'const ReportingAmbientMetrics = lazy(() => import("./AmbientReportingMetrics"));'
     );
     expect(LEGACY_REPORTING_SOURCE).not.toContain("AmbientReportingMetrics");
-    expect(APP_SOURCE).toMatch(
-      /const ReportingDashboardView = createRecoverableLazy\([\s\S]*AMBIENT_UI_ENABLED[\s\S]*ReportingDashboardRoute[\s\S]*LegacyReportingDashboardRoute/
-    );
+    expect(APP_SOURCE).toContain('() => import("quotepilot-active-reporting")');
     expect(APP_SOURCE).toContain('import ActiveWorkspaceShell from "quotepilot-active-workspace-shell"');
-    expect(APP_SOURCE).toMatch(
-      /const MessagingStation = createRecoverableLazy\([\s\S]*AMBIENT_UI_ENABLED[\s\S]*MessagingStation[\s\S]*LegacyMessagingStation/
-    );
-    expect(APP_SOURCE).toMatch(
-      /const EventScheduleView = createRecoverableLazy\([\s\S]*AMBIENT_UI_ENABLED[\s\S]*EventScheduleRoute[\s\S]*LegacyEventScheduleRoute/
-    );
-    expect(APP_SOURCE).toMatch(
-      /const SalesWorkflowView = createRecoverableLazy\([\s\S]*AMBIENT_UI_ENABLED[\s\S]*SalesWorkflowRoute[\s\S]*LegacySalesWorkflowRoute/
-    );
+    expect(APP_SOURCE).toContain('() => import("quotepilot-active-messaging-station")');
+    expect(APP_SOURCE).toContain('() => import("quotepilot-active-event-schedule")');
+    expect(APP_SOURCE).toContain('() => import("quotepilot-active-quote-history")');
+    expect(APP_SOURCE).toContain('() => import("quotepilot-active-workflow")');
+    expect(APP_SOURCE).not.toMatch(/Legacy(?:MessagingStation|EventScheduleRoute|QuoteHistoryRoute|ReportingDashboardRoute|SalesWorkflowRoute)/);
     expect(MESSAGING_SOURCE).toContain(
       'import QuoteConversationPanel from "quotepilot-active-conversation-panel"'
     );

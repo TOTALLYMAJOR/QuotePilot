@@ -811,10 +811,18 @@ button.ambient-event-logistics-value:focus-visible {
 
 .ambient-menu-order-list > li[draggable="true"] {
   cursor: grab;
+  touch-action: pan-y;
 }
 
 .ambient-menu-order-list > li[draggable="true"]:active {
   cursor: grabbing;
+}
+
+.ambient-menu-gesture-note {
+  margin: 10px 0 0;
+  color: var(--ambient-muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .ambient-menu-order-list > li > div:first-child {

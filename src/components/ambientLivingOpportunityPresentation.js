@@ -16,6 +16,7 @@ import { buildAmbientConversationObject } from "../lib/ambientConversationObject
 import { buildAmbientMoneyObject } from "../lib/ambientMoneyObject";
 import { buildAmbientProposalObject } from "../lib/ambientProposalObject";
 import { buildAmbientSelectionObjects } from "../lib/ambientSelectionObjects";
+import { buildAmbientOperationalReceipts } from "../lib/ambientOperationalReceipts";
 import { buildProposalReadiness } from "../lib/quoteWorkflow";
 import { buildEventWorkspacePresentation } from "./eventWorkspacePresentation";
 
@@ -2588,6 +2589,9 @@ export function buildAmbientLivingOpportunityPresentation(quote = {}, {
   });
   const moneyObject = buildAmbientMoneyObject(quote, { sourceMode: source });
   const normalizedRole = text(role).toLowerCase() || "non_staff";
+  const operationalReceipts = buildAmbientOperationalReceipts(quote, {
+    role: normalizedRole
+  });
   const conversationObject = buildAmbientConversationObject(quote, {
     sourceMode: source,
     sourceFreshness,
@@ -2973,6 +2977,7 @@ export function buildAmbientLivingOpportunityPresentation(quote = {}, {
     conversationObject,
     moneyObject,
     proposalObject,
+    operationalReceipts,
     packageObject,
     menuObject,
     selectionObjects,

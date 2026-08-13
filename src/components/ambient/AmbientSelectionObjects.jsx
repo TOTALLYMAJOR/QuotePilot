@@ -10,6 +10,11 @@ import {
   AMBIENT_SELECTION_GESTURE_SEMANTICS,
   selectionScenarioQuantity
 } from "../../lib/ambientSelectionObjects";
+import {
+  beginAmbientGesture,
+  gestureDirectionToSelectionOutcome,
+  resolveAmbientGesture
+} from "../../lib/ambientGestureController";
 import "./ambientSelectionObjects.css";
 
 function previewCopy(value) {
@@ -46,24 +51,26 @@ function SelectionObject({
       !item.adjustment.enabled
       || (event.target instanceof Element && event.target.closest("button"))
     ) return;
-    pointerStartRef.current = {
-      pointerId: event.pointerId,
-      x: event.clientX,
-      y: event.clientY
-    };
+    pointerStartRef.current = beginAmbientGesture(event, {
+      axis: "horizontal",
+      itemId: item.id
+    });
+    if (pointerStartRef.current) event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
   const finishPointer = (event) => {
     const start = pointerStartRef.current;
     pointerStartRef.current = null;
-    if (!start || start.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - start.x;
-    const deltaY = event.clientY - start.y;
-    if (
-      Math.abs(deltaX) < AMBIENT_SELECTION_GESTURE_SEMANTICS.minimumDistancePx
-      || Math.abs(deltaX) <= Math.abs(deltaY)
-    ) return;
-    const direction = deltaX > 0 ? "increase" : "reduce";
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    const result = resolveAmbientGesture(start, event, {
+      horizontalThresholdPx: AMBIENT_SELECTION_GESTURE_SEMANTICS.minimumDistancePx,
+      verticalThresholdPx: 42,
+      axisDominanceRatio: 1.15
+    });
+    if (result.state !== "resolved") return;
+    const direction = gestureDirectionToSelectionOutcome(result.direction);
     if ((direction === "increase" && canIncrease) || (direction === "reduce" && canReduce)) {
       onAdjust?.(item, direction, "swipe");
     }
@@ -79,6 +86,7 @@ function SelectionObject({
       onPointerDown={beginPointer}
       onPointerUp={finishPointer}
       onPointerCancel={() => { pointerStartRef.current = null; }}
+      onLostPointerCapture={() => { pointerStartRef.current = null; }}
     >
       <header className="ambient-selection-object__header">
         <div>
@@ -94,7 +102,11 @@ function SelectionObject({
       </header>
 
       {item.adjustment.enabled ? (
-        <div className="ambient-selection-object__controls">
+        <div
+          className="ambient-selection-object__controls"
+          data-gesture-alternative="visible-buttons"
+          data-keyboard-alternative="native-buttons"
+        >
           <button
             type="button"
             onClick={() => onAdjust?.(item, "reduce", "button")}

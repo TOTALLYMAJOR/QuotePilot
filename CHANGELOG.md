@@ -8,6 +8,36 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Completed a material source slice for every AIUI-01–50 Ambient work-plan
+  item without widening data or provider authority. Quote History now exposes a
+  dedicated Opportunities/Event Room/role-safe action controller seam; core
+  Ambient routes share one purpose-bearing editorial surface grammar; accepted
+  and booked Living Opportunities keep acceptance, contract, provider-confirmed
+  payment, BEO, authoritative staffing, and closeout receipts separate; and
+  mobile selection/Menu gestures share one cancellation-safe controller with
+  equally visible native-button and keyboard paths into the same unsaved
+  review. The Ambient build graph now selects focused route implementations
+  directly while the compatibility app preserves rollback. A fail-closed
+  retirement manifest prevents deletion of the legacy stepper, Command Center,
+  table disclosure, older search, or presentation flags until parity, rollback,
+  accepted-release, and promotion evidence all exist. This is source/local
+  completion evidence only, not deployment, provider behavior, retirement
+  approval, or human acceptance.
+
+- Removed replaced workspace UI from the Ambient production graph without
+  deleting compatibility implementations. The Ambient app now uses a focused
+  Clients data host, does not mount the legacy Command Center fallback, and
+  disables the redundant commercial search palette in favor of contextual
+  Pilot and exact object routes. Shared Now evidence selectors moved out of the
+  legacy Command Center component. The exact CI-equivalent Ambient build is
+  3,714,204 total JavaScript bytes with a 391,901-byte largest chunk, passing
+  the existing named ceiling without increasing or recalibrating it.
+
+- Removed a duplicate 500-record presentation cap from the Quote History
+  controller. Exact opportunity routes now resolve every quote in the
+  caller-owned bounded collection, so a selected record after index 500 cannot
+  be reported as missing while remaining visible to the surrounding surface.
+
 - Implemented the next dormant Stripe Connect control-plane slice without
   exporting or invoking it. The concrete repository can select only the named
   `connect-control` database, reserves an immutable connection generation and

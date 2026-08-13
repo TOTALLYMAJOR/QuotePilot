@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 35,
+  "catalogVersion": 37,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -45,7 +45,7 @@
     },
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -58,6 +58,7 @@
         "firestore.rules",
         "src/lib/customerCommercialMeasures.js",
         "src/lib/customerCommercialTimeline.js",
+        "src/lib/commandCenterEvidence.js",
         "src/lib/ambientClients.js",
         "src/lib/customerRebookingRadar.js",
         "src/lib/customerWorkspace.js",
@@ -67,6 +68,7 @@
       "backendExports": [],
       "frontendPaths": [
         "src/App.jsx",
+        "src/components/AmbientCustomerDirectoryView.jsx",
         "src/components/CustomerCommercialMeasures.jsx",
         "src/components/CustomerCommercialTimeline.jsx",
         "src/components/CustomerDirectoryView.jsx",
@@ -122,6 +124,10 @@
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
+        {
+          "path": "src/components/__tests__/ambientClientsView.test.jsx",
+          "locator": "keeps the Ambient Clients data host independent from the legacy directory table"
+        },
         {
           "path": "src/components/__tests__/ambientClientsView.test.jsx",
           "locator": "makes relationship identity, state, risk, and the next action understandable at the top layer"
@@ -3779,7 +3785,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 11,
+      "reviewRevision": 12,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -3809,7 +3815,12 @@
         "src/hooks/usePilotVoiceCapture.js",
         "src/lib/quoteWorkflow.js",
         "src/lib/workspaceArrivalContract.js",
-        "src/lib/workspaceScope.js"
+        "src/lib/workspaceScope.js",
+        "src/lib/quoteHistoryController.js",
+        "src/lib/ambientSurfaceGrammar.js",
+        "src/lib/ambientOperationalReceipts.js",
+        "src/lib/ambientGestureController.js",
+        "src/lib/ambientLegacyRetirement.js"
       ],
       "backendExports": [],
       "affectedBackendExports": [],
@@ -3827,6 +3838,7 @@
         "src/components/AdminCatalogModal.jsx",
         "src/components/StaffEvidenceRail.jsx",
         "src/components/AmbientLivingOpportunity.jsx",
+        "src/components/AmbientOperationalReceipts.jsx",
         "src/components/AmbientMoneyContext.jsx",
         "src/components/AmbientProposalContext.jsx",
         "src/components/AmbientConversationContext.jsx",
@@ -3858,7 +3870,7 @@
         },
         {
           "path": "src/components/AmbientLibraryRoute.jsx",
-          "locator": "data-surface-contract-id={model.surfaceContract.id}"
+          "locator": "aria-labelledby=\"ambient-library-title\""
         },
         {
           "path": "src/components/EventTemplatesEditor.jsx",
@@ -3933,6 +3945,7 @@
         "src/components/__tests__/eventTemplatesEditorModel.test.js",
         "src/components/__tests__/staffEvidenceRail.test.jsx",
         "src/components/__tests__/ambientLivingOpportunity.test.jsx",
+        "src/components/__tests__/ambientOperationalReceipts.test.jsx",
         "src/components/__tests__/ambientLivingOpportunityContracts.test.js",
         "src/components/__tests__/ambientMoneyContext.test.jsx",
         "src/components/__tests__/ambientProposalContext.test.jsx",
@@ -3972,7 +3985,12 @@
         "src/lib/__tests__/pilotCommandPolicy.test.js",
         "src/lib/__tests__/pilotDeterministicCommands.test.js",
         "src/lib/__tests__/quoteWorkflow.test.js",
-        "src/lib/__tests__/workspaceArrivalContract.test.js"
+        "src/lib/__tests__/workspaceArrivalContract.test.js",
+        "src/lib/__tests__/quoteHistoryController.test.js",
+        "src/lib/__tests__/ambientSurfaceGrammar.test.js",
+        "src/lib/__tests__/ambientOperationalReceipts.test.js",
+        "src/lib/__tests__/ambientGestureController.test.js",
+        "src/lib/__tests__/ambientLegacyRetirement.test.js"
       ],
       "testLocators": [
         {
@@ -4210,6 +4228,34 @@
         {
           "path": "src/components/__tests__/reportingDashboardArrival.test.jsx",
           "locator": "uses a targeted quote read, focuses its exact summary, and leaves the aggregate denominator unchanged"
+        },
+        {
+          "path": "src/lib/__tests__/quoteHistoryController.test.js",
+          "locator": "splits bounded opportunities, exact Event Room selection, and role-safe actions"
+        },
+        {
+          "path": "src/lib/__tests__/ambientSurfaceGrammar.test.js",
+          "locator": "reports missing contracts, purposes, and the wrong density"
+        },
+        {
+          "path": "src/lib/__tests__/ambientOperationalReceipts.test.js",
+          "locator": "keeps acceptance, payment, contract, BEO, staffing, and closeout as separate receipts"
+        },
+        {
+          "path": "src/lib/__tests__/ambientGestureController.test.js",
+          "locator": "preserves page scrolling when the other axis dominates"
+        },
+        {
+          "path": "src/lib/__tests__/ambientLegacyRetirement.test.js",
+          "locator": "fails closed without external release and rollback evidence"
+        },
+        {
+          "path": "src/components/__tests__/ambientLivingOpportunity.test.jsx",
+          "locator": "routes a touch Menu swipe through the same unsaved reorder review"
+        },
+        {
+          "path": "src/components/__tests__/ambientOperationalReceipts.test.jsx",
+          "locator": "renders six separate accepted and booked evidence domains without inventing controls"
         }
       ],
       "documentationPaths": [
@@ -4219,7 +4265,7 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Ambient orientation, NOW, Opportunities, Clients, Library, exact arrivals, Living Opportunity, intelligent objects, sensory feedback, deterministic Pilot, and customer decision-room foundations"
+          "locator": "purpose-bearing editorial grammar, accepted/booked receipt domains, and equivalent mobile manipulation"
         },
         {
           "path": "docs/USER_MANUAL.md",

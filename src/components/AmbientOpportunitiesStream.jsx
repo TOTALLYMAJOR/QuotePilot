@@ -206,7 +206,8 @@ export default function AmbientOpportunitiesStream({
   onOpenOpportunity,
   onOpenWorkflow,
   onStartOpportunity,
-  onRefresh
+  onRefresh,
+  controller = null
 }) {
   const acknowledgementRef = useRef(null);
   const [acknowledgement, setAcknowledgement] = useState(null);
@@ -376,11 +377,13 @@ export default function AmbientOpportunitiesStream({
 
   return (
     <section
-      className="ambient-opportunities"
+      className="ambient-opportunities ambient-purpose-surface"
       aria-labelledby="ambient-opportunities-heading"
       data-surface-contract-id={stream.surfaceContract.id}
       data-surface-purpose={stream.surfaceContract.purposes.join(" ")}
+      data-surface-density="editorial"
       data-opportunity-stream-state={stream.state}
+      data-quote-controller={controller?.modelId || undefined}
     >
       <header className="ambient-opportunities__masthead">
         <div>

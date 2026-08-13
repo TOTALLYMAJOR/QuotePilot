@@ -177,6 +177,17 @@ function button(name) {
   ));
 }
 
+function pointerEvent(type, { clientX, clientY, pointerId = 1 }) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+    pointerId: { value: pointerId },
+    pointerType: { value: "touch" }
+  });
+  return event;
+}
+
 async function settle() {
   await act(async () => {
     await new Promise((resolve) => window.setTimeout(resolve, 20));
@@ -971,6 +982,37 @@ describe("AmbientLivingOpportunity", () => {
       }
     });
     expect(QUOTE.selection.menuItems).toEqual(["salad", "chicken"]);
+    expect(QUOTE).toEqual(beforeQuote);
+  });
+
+  test("routes a touch Menu swipe through the same unsaved reorder review", () => {
+    const onEditQuote = vi.fn(() => ({ status: "opened" }));
+    const beforeQuote = structuredClone(QUOTE);
+    mount({ onEditQuote });
+
+    act(() => button("Review menu").click());
+    const firstItem = container.querySelector('[data-menu-item-id]');
+    expect(firstItem).not.toBeNull();
+    expect(firstItem.dataset.gestureAlternative).toBe("visible-move-buttons");
+    expect(firstItem.dataset.keyboardAlternative).toBe("native-move-buttons");
+    act(() => {
+      firstItem.dispatchEvent(pointerEvent("pointerdown", { clientX: 20, clientY: 20 }));
+      firstItem.dispatchEvent(pointerEvent("pointerup", { clientX: 90, clientY: 22 }));
+    });
+
+    expect(onEditQuote).toHaveBeenCalledOnce();
+    expect(onEditQuote.mock.calls[0][1]).toMatchObject({
+      draftIntent: {
+        kind: "reorder_menu",
+        authority: "draft_only",
+        commit: false,
+        fromIndex: 0,
+        toIndex: 1,
+        beforeOrder: ["salad", "chicken"],
+        proposedOrder: ["chicken", "salad"],
+        interaction: "pointer"
+      }
+    });
     expect(QUOTE).toEqual(beforeQuote);
   });
 

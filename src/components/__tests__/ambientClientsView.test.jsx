@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import React, { act } from "react";
+import { readFileSync } from "node:fs";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -166,6 +167,15 @@ async function settleFrame() {
 }
 
 describe("AmbientClientsView", () => {
+  test("keeps the Ambient Clients data host independent from the legacy directory table", () => {
+    const source = readFileSync("src/components/AmbientCustomerDirectoryView.jsx", "utf8");
+
+    expect(source).toContain("AmbientClientsDirectoryHost");
+    expect(source).toContain("getCustomerDirectoryPage");
+    expect(source).not.toContain("CustomerDirectoryPresentation");
+    expect(source).not.toContain("customer-directory-table");
+  });
+
   test("renders truthful loading, meaningful empty, and populated directory states", () => {
     const loading = renderToStaticMarkup(
       <AmbientClientsDirectory

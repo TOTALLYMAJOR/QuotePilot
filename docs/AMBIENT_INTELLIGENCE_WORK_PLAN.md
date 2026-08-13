@@ -1,6 +1,6 @@
 # QuotePilot Ambient Intelligence Work Plan
 
-Last updated: August 12, 2026
+Last updated: August 13, 2026
 
 Status: approved product direction and open implementation plan. The Pilot Slice
 Alpha source implementation is included with this document behind a default-off
@@ -8,13 +8,15 @@ presentation gate; the broader 50-item program remains open. Local tests and
 browser review establish only local implementation evidence, not deployment,
 provider acceptance, production-data acceptance, or human acceptance.
 
-Production checkpoint: `main`, `origin/main`, and the annotated `v0.7.0` tag
-resolve to `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`; governed Firebase and
-Vercel deployment receipts are recorded in
+Production checkpoint: the annotated `v0.7.0` tag resolves to
+`fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`; governed Firebase and Vercel
+deployment receipts are recorded in
 [`PROJECT_STATUS.md`](../PROJECT_STATUS.md). Those receipts do not establish
 authenticated hosted behavior, production-data correctness, provider outcomes,
-or human acceptance. The Ambient/staffing work is the proposed `v0.8.0` source
-candidate. Priority and sequencing are owned by
+or human acceptance. The current Ambient completion candidate starts from
+`origin/main` at `2908fc281215ff9297645f7e05db91b65de04fdf`, nine commits after
+tagged `v0.8.1`; neither branch position nor a tag proves deployment. Priority
+and sequencing are owned by
 [`DEV_TASKS.md`](../DEV_TASKS.md).
 
 ## AIUI-00 — Experience Constitution
@@ -190,13 +192,7 @@ scope is **AIUI-06 + AIUI-08 + AIUI-09 + AIUI-13 + AIUI-14 + AIUI-21 +
 AIUI-24 + AIUI-26 + AIUI-36 + AIUI-45**, governed by AIUI-00.
 
 Source-progress checkpoint: **0 of the 50 items are formally closed** and
-  **45 of 50 are materially implemented in current source**:
-**AIUI-01, AIUI-02, AIUI-03, AIUI-05, AIUI-06, AIUI-07, AIUI-08, AIUI-09,
-AIUI-10, AIUI-11, AIUI-13, AIUI-14, AIUI-15, AIUI-16, AIUI-17, AIUI-18,
-AIUI-19, AIUI-20, AIUI-21, AIUI-22,
-AIUI-23, AIUI-24, AIUI-25, AIUI-26, AIUI-27, AIUI-28, AIUI-29, AIUI-30,
-AIUI-31, AIUI-32, AIUI-33, AIUI-34, AIUI-36, AIUI-37, AIUI-38, AIUI-39,
-AIUI-40, AIUI-41, AIUI-43, AIUI-44, AIUI-45, AIUI-46, AIUI-47, AIUI-49, and
+**50 of 50 are materially implemented in current source: AIUI-01 through
 AIUI-50**.
 
 This is a material-source count, not a claim that each full acceptance contract
@@ -226,6 +222,29 @@ and fail margin closed when cost evidence is missing; discount adjustment and
 broader commercial parity remain open. AIUI-27 adds saved date, time, duration,
 and venue objects with evidence slots and draft-intent handoffs, but the quote
 editor does not yet focus and consume those intents.
+
+AIUI-04 now separates the caller-owned opportunity collection, exact Event
+Room selection, and the complete current role/source-gated quote-action matrix
+through a dedicated read/controller seam. Opportunities and Living Opportunity
+receive that controller identity while provider, payment, portal, booking, BEO,
+and lifecycle execution continues through the existing trusted handlers.
+AIUI-12 now registers a shared purpose-bearing editorial grammar across Now,
+Opportunities, Clients, Library, and Living Opportunity, with open grouping,
+hairlines, restrained nesting, and consistent focus treatment. AIUI-35 now
+shows accepted/booked work as six deliberately separate receipt domains:
+customer acceptance, contract/booking, provider-confirmed payment, Kitchen BEO,
+authoritative staffing, and post-event closeout. Missing evidence remains
+unavailable, lifecycle labels do not fabricate receipts, and one next unresolved
+operational domain is ranked without adding authority. AIUI-42 now routes
+selection swipes and Menu reordering through one axis/dominance/cancellation
+contract; every gesture retains a visible native button and keyboard
+equivalent and produces the same staged, unsaved review. AIUI-48 now removes
+duplicated route implementations from the Ambient build graph while the
+separate compatibility build remains the rollback boundary. An executable
+retirement manifest keeps the stepper, Command Center, table fallback, older
+search, and presentation flags in place until parity, exact rollback, accepted
+release, and promotion evidence all exist. This is material strangler progress,
+not authorization to delete the rollback implementations.
 
 AIUI-16 now reduces the default-off shell to lightweight **Now**,
 **Opportunities**, **Clients**, and role-safe **Library** orientation while

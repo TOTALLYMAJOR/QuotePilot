@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
@@ -105,20 +106,24 @@ const AdminCatalogView = createRecoverableLazy(
   () => import("./components/AdminCatalogModal").then((module) => ({ default: module.AdminCatalogView })),
   "AdminCatalogView"
 );
-const CommandCenterHome = createRecoverableLazy(
-  () => import("./components/CommandCenterHome"),
-  "CommandCenterHome"
-);
-const CommercialSearchPalette = createRecoverableLazy(
-  () => import("./components/CommercialSearchPalette"),
-  "CommercialSearchPalette"
-);
+const CommandCenterHome = AMBIENT_UI_ENABLED
+  ? null
+  : createRecoverableLazy(
+      () => import("./components/CommandCenterHome"),
+      "CommandCenterHome"
+    );
+const CommercialSearchPalette = AMBIENT_UI_ENABLED
+  ? null
+  : createRecoverableLazy(
+      () => import("./components/CommercialSearchPalette"),
+      "CommercialSearchPalette"
+    );
 const CommercialChangeImpactPanel = createRecoverableLazy(
   () => import("./components/CommercialChangeImpactPanel"),
   "CommercialChangeImpactPanel"
 );
 const CustomerDirectoryView = createRecoverableLazy(
-  () => import("./components/CustomerDirectoryView"),
+  () => import("./components/AmbientCustomerDirectoryView"),
   "CustomerDirectoryView"
 );
 const CustomerWorkspaceView = createRecoverableLazy(
@@ -126,9 +131,7 @@ const CustomerWorkspaceView = createRecoverableLazy(
   "CustomerWorkspaceView"
 );
 const MessagingStation = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/MessagingStation")
-    : () => import("./components/LegacyMessagingStation"),
+  () => import("quotepilot-active-messaging-station"),
   "MessagingStation"
 );
 const WorkspaceNotFound = createRecoverableLazy(
@@ -136,9 +139,7 @@ const WorkspaceNotFound = createRecoverableLazy(
   "WorkspaceNotFound"
 );
 const EventScheduleView = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/EventScheduleRoute")
-    : () => import("./components/LegacyEventScheduleRoute"),
+  () => import("quotepilot-active-event-schedule"),
   "EventScheduleView"
 );
 const IntegrationOpsView = createRecoverableLazy(
@@ -158,21 +159,15 @@ const QuoteCompareModal = createRecoverableLazy(
   "QuoteCompareModal"
 );
 const QuoteHistoryView = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/QuoteHistoryRoute")
-    : () => import("./components/LegacyQuoteHistoryRoute"),
+  () => import("quotepilot-active-quote-history"),
   "QuoteHistoryView"
 );
 const ReportingDashboardView = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/ReportingDashboardRoute")
-    : () => import("./components/LegacyReportingDashboardRoute"),
+  () => import("quotepilot-active-reporting"),
   "ReportingDashboardView"
 );
 const SalesWorkflowView = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/SalesWorkflowRoute")
-    : () => import("./components/LegacySalesWorkflowRoute"),
+  () => import("quotepilot-active-workflow"),
   "SalesWorkflowView"
 );
 
@@ -1056,7 +1051,7 @@ export default function App({
   const catalogModalOpen = shellModalOpen(adminOpen, WORKSPACE_ROUTE_IDS.CATALOG);
   const diagnosticsModalOpen = shellModalOpen(diagnosticsOpen, WORKSPACE_ROUTE_IDS.DIAGNOSTICS);
   const commercialSearchAvailable = isCommercialSearchAvailable({
-    enabled: CUSTOMER_CENTERED_WORKSPACE_ENABLED,
+    enabled: CUSTOMER_CENTERED_WORKSPACE_ENABLED && !AMBIENT_UI_ENABLED,
     isStaff: authSession.isStaff,
     organizationId: authSession.organizationId,
     portalMode,
@@ -4298,6 +4293,17 @@ export default function App({
               )}
             </main>
           </WorkspaceLazyRoute>
+        ) : AMBIENT_UI_ENABLED ? (
+          <main className="container workspace-route-main">
+            <section className="panel" role="status" aria-labelledby="ambient-now-gate-title">
+              <p className="eyebrow">Now</p>
+              <h2 id="ambient-now-gate-title">Ambient briefing is not enabled</h2>
+              <p className="source-note">
+                Enable the existing Now presentation gate to open the contextual briefing. Opportunities,
+                Clients, and Library remain available from persistent orientation.
+              </p>
+            </section>
+          </main>
         ) : (
           <WorkspaceLazyRoute surfaceName="Command Center" component={CommandCenterHome}>
             <main className="container workspace-route-main">

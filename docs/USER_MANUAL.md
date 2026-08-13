@@ -1564,6 +1564,14 @@ receipts for those actions and evidence.
   path; the editorial stream does not grant a new control or role. A stale,
   incomplete, truncated, unavailable, or failed read withholds empty and
   caught-up conclusions and offers recovery instead of substituting evidence.
+- For an accepted or booked Living Opportunity, **What is settled, and what is
+  not** keeps customer acceptance, contract/booking, provider-confirmed
+  payment, Kitchen BEO, authoritative staffing, and post-event closeout as six
+  separate receipt domains. A lifecycle label alone does not prove the exact
+  accepted revision or contract identity, and a checkout return or payment
+  request does not prove settlement. Missing BEO, staffing, or closeout evidence
+  remains unavailable and points back to the existing governed surface. The
+  displayed next operational resolution adds no role or mutation authority.
 - Open **Clients** to use the lighter default-off view over the existing
   bounded client directory. Each row shows recorded identity, contact details,
   its most recent linked quote or event, and one **Review client** action. It
@@ -1640,6 +1648,11 @@ receipts for those actions and evidence.
   horizontal swipe may adjust only a reversible browser-memory scenario. The
   scenario is not priced, saved, reserved, communicated, or treated as
   availability evidence; `Keep current selection` restores the saved selection.
+- Menu order supports pointer drag, horizontal touch swipe, and the visible
+  **Move earlier** / **Move later** buttons. Keyboard users activate those same
+  native buttons. Every method opens the same unsaved review; none changes the
+  authoritative quote until the ordinary outcome-named save reprices and
+  versions it.
 - The tested Money object keeps five kinds of evidence separate: deposit
   policy, deposit request, provider-confirmed deposit, balance request, and
   final settlement. A request never becomes payment. A browser return never becomes provider
