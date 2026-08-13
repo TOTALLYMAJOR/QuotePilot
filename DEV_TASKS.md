@@ -56,16 +56,20 @@ Only open work belongs here. Current operational truth lives in
   owner-authority and deploy-empty `functions-connect` foundations. The
   owner/admin Team access surface, password/Google recent reauthentication,
   exact-role mutation receipts, claim synchronization, and App Check
-  monitor-then-enforce source contracts are complete locally. Next register the
-  isolated staging reCAPTCHA Enterprise application/site key, observe App Check
-  monitoring without enforcement, and promote enforcement plus consumed
+  monitor-then-enforce source contracts are complete locally. The isolated
+  staging Terraform/database/IAM/identity/network/egress/OIDC source and
+  credential-free validation workflow are also complete locally. Next review a
+  cloud-authenticated saved staging plan, separately authorize its exact digest,
+  bootstrap separate state, apply it, deploy deny-all named-database rules, and
+  reconcile the real resource IDs into the secret-free manifest. Then register
+  the isolated staging reCAPTCHA Enterprise application/site key, observe App
+  Check monitoring without enforcement, and promote enforcement plus consumed
   limited-use tokens only after hosted negative/replay evidence.
   The exact consumed-invite owner backfill is source-complete but still needs
   governed production dry-run review and separately confirmed apply evidence;
   zero, multiple, unverified, or conflicting candidates remain
   `ownership_required`.
-  In parallel, provision isolated staging IAM/database/network/OIDC resources and
-  implement sandbox-only Accounts v2 merchant
+  After the infrastructure evidence gate, implement sandbox-only Accounts v2 merchant
   onboarding with direct charges, full Stripe Dashboard access, Stripe fee and
   negative-balance responsibility, zero platform application fee, and strict
   credential/webhook/ledger isolation from deposit, final-balance, and buyer-

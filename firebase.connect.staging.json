@@ -1,0 +1,26 @@
+{
+  "functions": [
+    {
+      "source": "functions-connect",
+      "codebase": "connect",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    }
+  ],
+  "firestore": [
+    {
+      "database": "connect-control",
+      "rules": "firestore.connect-control.rules",
+      "indexes": "firestore.connect-control.indexes.json"
+    }
+  ],
+  "emulators": {
+    "firestore": {
+      "port": 8280
+    }
+  }
+}

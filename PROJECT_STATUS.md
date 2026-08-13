@@ -53,6 +53,20 @@ Last updated: August 13, 2026
   was registered or bound, no limited-use token was consumed in a hosted
   environment, and no deployment, production role mutation, or human
   acceptance is claimed.
+- A fifth source-only checkpoint adds a pinned, staging-only Terraform
+  foundation and credential-free validation workflow. It defines—but has not
+  planned or created—the named `connect-control` database, exact-database IAM,
+  five isolated service accounts, seven empty secret containers, private
+  serverless network, fixed NAT egress address, protected state bootstrap, and
+  exact-repository/owner/branch/environment GitHub OIDC admission. A separate
+  Firebase config targets only Connect functions and deny-all named-database
+  browser rules. App Check registration remains structurally available but
+  forced off, and no production Terraform root exists. Local pinned-provider
+  `fmt`, offline-backend `init`, and `validate` pass for bootstrap and staging;
+  the isolated Firestore emulator also compiles the named-database deny rules.
+  This is source/local evidence only: no cloud-authenticated plan, apply, GCP
+  resource, App Check key, Stripe binding, deployment, hosted verification, or
+  human acceptance exists.
 
 - Current `main` is tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient

@@ -173,8 +173,20 @@ If a topic changes, only update the owning doc and cross-link from others.
   - `backend` deploys `firestore,functions:default`; `backend` and `all` never
     separate the existing Functions codebase from its reviewed rules. The
     selected scope is bound into the workflow title and typed confirmation.
-    The generic `functions` selector is prohibited, and Stripe Connect requires
-    a separate protected `functions:connect` workflow that does not yet exist.
+    The generic `functions` selector is prohibited. The credential-free Stripe
+    Connect infrastructure workflow only formats and validates source; it has
+    no OIDC permission, cloud plan, apply, or deployment step. A future
+    protected `functions:connect` deployment workflow remains separately gated.
+- Stripe Connect staging infrastructure:
+  - `.github/workflows/stripe-connect-infra-validation.yml` is validation-only:
+    it pins Terraform, runs the repository policy check, formats, initializes
+    with the backend disabled, and validates bootstrap/staging roots.
+  - It must never gain `id-token: write`, `terraform apply`, provider secrets,
+    or a production target. An authenticated saved plan and an apply are two
+    later approvals; an apply approval must name the exact plan digest.
+  - Future keyless deployment must use the immutable repository and owner IDs,
+    `main`, and protected `stripe-connect-staging` environment encoded in the
+    Terraform WIF condition. It may not create or use a service-account key.
 - Project-scoped Functions environment: `NOTIFICATIONS_SMS_PROVIDER`
   - Default trusted runtime value: `none` unless buyer-approved SMS enablement
     is validated; local ignored Functions files are validation-only.

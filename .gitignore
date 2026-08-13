@@ -21,5 +21,12 @@ firebase.isolated.local.json
 .idea/
 .cache/
 .history/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+gha-creds-*.json
 *.tmp
 *.swp

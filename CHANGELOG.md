@@ -8,6 +8,23 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Added the source-only Stripe Connect staging infrastructure foundation. The
+  pinned Terraform 1.15.8 / Google provider 7.41.0 configuration defines a
+  deletion-protected named `connect-control` database, five responsibility-
+  specific service identities, exact-database conditional IAM, secret
+  containers without values, a private serverless network with one protected
+  fixed NAT egress address, and keyless GitHub OIDC restricted to the immutable
+  repository/owner IDs, `main`, and the protected `stripe-connect-staging`
+  environment. A separate Firebase config targets only the deploy-empty
+  `connect` codebase and deny-all named-database client rules. App Check key
+  creation is represented but forced off, production infrastructure is absent,
+  and the credential-free CI workflow permits format/init/validate only.
+  Dependabot now inventories the root, legacy Functions, Connect Functions,
+  and both Terraform roots independently. No
+  Terraform plan/apply, state bucket, database, IAM binding, service account,
+  secret, network, public key, provider registration, Stripe request,
+  deployment, or hosted acceptance was created by this source slice.
+
 - Added canonical owner/admin Team access authority as the next Stripe Connect
   prerequisite. The in-flow administrator surface shows exact current role,
   why, consequence, do-nothing outcome, and confidence/provenance before an

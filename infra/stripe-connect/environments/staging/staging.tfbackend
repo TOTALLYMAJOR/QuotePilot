@@ -1,0 +1,2 @@
+bucket = "quotepilot-staging-20260804-connect-tfstate"
+prefix = "stripe-connect/staging/foundation"

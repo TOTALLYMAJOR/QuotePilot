@@ -9,6 +9,42 @@ updates:
       - dependencies
       - security
 
+  - package-ecosystem: npm
+    directory: "/functions"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - security
+
+  - package-ecosystem: npm
+    directory: "/functions-connect"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - security
+
+  - package-ecosystem: terraform
+    directory: "/infra/stripe-connect/bootstrap/staging"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - security
+
+  - package-ecosystem: terraform
+    directory: "/infra/stripe-connect/environments/staging"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - security
+
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

@@ -10,6 +10,7 @@ const TARGET_PREFIXES = [
   "config/stripe-connect/",
   "docker/",
   "functions-connect/",
+  "infra/stripe-connect/",
   "scripts/"
 ];
 
@@ -21,6 +22,9 @@ const TARGET_FILES = new Set([
   "docker-compose.yml",
   "docs/capability-surfacing-contracts.json",
   "firebase.json",
+  "firebase.connect.staging.json",
+  "firestore.connect-control.indexes.json",
+  "firestore.connect-control.rules",
   "firestore.indexes.json",
   "firestore.rules",
   "package-lock.json",
