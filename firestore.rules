@@ -828,20 +828,11 @@ service cloud.firestore {
           && isOrgAdmin(resource.data.organizationId)
         )
       );
-      allow create: if request.resource.data.organizationId is string
-        && request.resource.data.role in ["admin", "sales"]
-        && isOrgAdmin(request.resource.data.organizationId);
-      allow update: if (
-          resource.data.organizationId is string
-          && request.resource.data.organizationId is string
-          && request.resource.data.organizationId == resource.data.organizationId
-          && request.resource.data.role in ["admin", "sales"]
-          && isOrgAdmin(resource.data.organizationId)
-        );
-      allow delete: if (
-          resource.data.organizationId is string
-          && isOrgAdmin(resource.data.organizationId)
-        );
+      allow create, update, delete: if false;
+    }
+
+    match /organizationOwnerBindingReceipts/{organizationId} {
+      allow read, create, update, delete: if false;
     }
 
     match /organizations/{orgId} {

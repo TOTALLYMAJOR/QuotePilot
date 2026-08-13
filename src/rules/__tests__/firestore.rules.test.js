@@ -1241,7 +1241,7 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(deleteDoc(existingRoleRef));
   });
 
-  test("verified admins can manage only same-organization role documents", async () => {
+  test("verified admins can read same-organization roles but cannot mutate role authority", async () => {
     const db = testEnv.authenticatedContext("admin-org-a", {
       email: "admin-a@example.com",
       email_verified: true
@@ -1249,22 +1249,38 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     const ownRoleRef = doc(db, "userRoles", "new-sales-org-a");
     const crossOrgRoleRef = doc(db, "userRoles", "sales-org-b");
 
-    await assertSucceeds(setDoc(ownRoleRef, {
+    await assertFails(setDoc(ownRoleRef, {
       role: "sales",
       email: "new-sales@example.com",
       organizationId: "org-a"
     }));
-    await assertSucceeds(getDoc(ownRoleRef));
-    await assertSucceeds(updateDoc(ownRoleRef, {
+    await assertSucceeds(getDoc(doc(db, "userRoles", "sales-org-a")));
+    await assertFails(updateDoc(doc(db, "userRoles", "sales-org-a"), {
       role: "admin"
     }));
-    await assertSucceeds(deleteDoc(ownRoleRef));
+    await assertFails(deleteDoc(doc(db, "userRoles", "sales-org-a")));
 
     await assertFails(getDoc(crossOrgRoleRef));
     await assertFails(updateDoc(crossOrgRoleRef, {
       role: "admin"
     }));
     await assertFails(deleteDoc(crossOrgRoleRef));
+  });
+
+  test("organization owner binding receipts are private and immutable in browsers", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    const receiptRef = doc(adminDb, "organizationOwnerBindingReceipts", "org-a");
+
+    await assertFails(getDoc(receiptRef));
+    await assertFails(setDoc(receiptRef, {
+      organizationId: "org-a",
+      ownerUid: "admin-org-a"
+    }));
+    await assertFails(updateDoc(receiptRef, { ownerUid: "sales-org-a" }));
+    await assertFails(deleteDoc(receiptRef));
   });
 
   test("direct quote creation is denied even with draft shape or fabricated authority labels", async () => {

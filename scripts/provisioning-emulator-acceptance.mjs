@@ -486,6 +486,7 @@ const orgRef = db.collection("organizations").doc(organizationId);
 const settingsRef = orgRef.collection("settings").doc("config");
 const orderRef = db.collection("provisioningOrders").doc(createPayload.orderId);
 const inviteRef = db.collection("organizationInvites").doc(inviteIdFromEmail(ownerEmail));
+const ownerBindingReceiptRef = db.collection("organizationOwnerBindingReceipts").doc(organizationId);
 const [orgSnap, settingsSnap, orderSnap, inviteSnap] = await Promise.all([
   orgRef.get(),
   settingsRef.get(),
@@ -518,6 +519,7 @@ assert.equal((await orgRef.collection("catalogAddons").get()).empty, true);
 assert.equal((await orgRef.collection("catalogRentals").get()).empty, true);
 assert.equal((await orgRef.collection("eventTypes").get()).empty, true);
 assert.equal(orderSnap.data()?.email?.reason, "send_email_disabled");
+assert.equal(inviteSnap.data()?.purpose, "organization_owner");
 const inviteExpiresAtMs = Date.parse(inviteSnap.data()?.expiresAtISO || "");
 assert.equal(Number.isFinite(inviteExpiresAtMs), true);
 assert.ok(inviteExpiresAtMs > Date.now());
@@ -651,14 +653,24 @@ try {
   assert.equal(refreshedToken.claims.role, "admin");
   assert.equal(refreshedToken.claims.organizationId, organizationId);
 
-  const [consumedInviteSnap, ownerRoleSnap] = await Promise.all([
+  const [consumedInviteSnap, ownerRoleSnap, boundOrganizationSnap, ownerBindingReceiptSnap] = await Promise.all([
     inviteRef.get(),
-    db.collection("userRoles").doc(invitedOwner.uid).get()
+    db.collection("userRoles").doc(invitedOwner.uid).get(),
+    orgRef.get(),
+    ownerBindingReceiptRef.get()
   ]);
   assert.equal(consumedInviteSnap.data()?.status, "consumed");
   assert.equal(consumedInviteSnap.data()?.consumedByUid, invitedOwner.uid);
   assert.equal(ownerRoleSnap.data()?.role, "admin");
   assert.equal(ownerRoleSnap.data()?.organizationId, organizationId);
+  assert.equal(boundOrganizationSnap.data()?.ownerUid, invitedOwner.uid);
+  assert.equal(boundOrganizationSnap.data()?.ownerBindingSource, "organization_owner");
+  assert.equal(ownerBindingReceiptSnap.exists, true);
+  assert.equal(ownerBindingReceiptSnap.data()?.organizationId, organizationId);
+  assert.equal(ownerBindingReceiptSnap.data()?.ownerUid, invitedOwner.uid);
+  assert.equal(ownerBindingReceiptSnap.data()?.ownerEmail, ownerEmail);
+  assert.equal(ownerBindingReceiptSnap.data()?.invitePurpose, "organization_owner");
+  assert.equal(ownerBindingReceiptSnap.data()?.inviteId, inviteIdFromEmail(ownerEmail));
 
   const ownerSettingsRef = doc(
     ownerSession.db,

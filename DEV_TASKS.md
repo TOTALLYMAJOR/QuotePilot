@@ -52,10 +52,17 @@ Only open work belongs here. Current operational truth lives in
   reconciliation, late settlement, cross-rail isolation, customer-safe
   projection, and negative paths. Keep provider evidence distinct from local
   emulator coverage.
-- Keep Stripe Connect in architecture discovery until merchant-of-record,
-  connected-account type, credential/webhook isolation, payouts, refunds,
-  disputes, tax/accounting, and coexistence with both current Stripe rails are
-  decided.
+- Continue the separately gated Stripe Connect program from its source-only
+  owner-authority foundation. Next add an isolated `functions-connect`
+  codebase with exact dependency/API pins, default-off capability manifest,
+  deployment selectors, App Check and server authorization contracts, and no
+  provider mutation. Then implement sandbox-only Accounts v2 merchant
+  onboarding with direct charges, full Stripe Dashboard access, Stripe fee and
+  negative-balance responsibility, zero platform application fee, and strict
+  credential/webhook/ledger isolation from deposit, final-balance, and buyer-
+  access rails. Hosted sandbox UAT is the stopping gate; live-mode account
+  creation, charges, payouts, refunds, disputes, tax/accounting promotion, and
+  production enablement require separate evidence and approval.
 
 ## P0 - Runtime-Gate Promotion
 

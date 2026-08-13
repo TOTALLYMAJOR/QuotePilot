@@ -15,6 +15,16 @@ Last updated: August 12, 2026
 
 ## Current Release Candidate (Not Production)
 
+- The Stripe Connect program has begun with a source-only organization
+  authority prerequisite. New owner invitations are explicit, verified
+  activation atomically binds one owner and leaves an immutable browser-private
+  receipt, and browser principals can no longer create or rewrite role
+  authority. The disposable provisioning emulator passes this owner path. No
+  Accounts v2 connected account, Stripe API call, hosted onboarding, charge,
+  payout, refund, dispute, provider evidence, deployment, or human acceptance
+  exists from this slice; the current deposit, final-balance, and buyer-access
+  rails are unchanged.
+
 - Current `main` is tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient
   presentation in both production workflow build environments. The live

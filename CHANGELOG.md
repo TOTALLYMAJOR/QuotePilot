@@ -19,6 +19,17 @@ This changelog is backfilled from git history and will be maintained going forwa
   the previously confirmed 303-byte CI offset. This is source/local performance
   evidence, not hosted timing, production promotion, or human acceptance.
 
+- Established the pre-Stripe-Connect organization authority boundary. New
+  customer provisioning writes an explicit `organization_owner` invitation;
+  exact-email verified bootstrap atomically binds the organization owner,
+  consumes the invite, creates the existing admin access, and records one
+  immutable browser-private binding receipt. Generic legacy staff invitations
+  remain role-only, existing different owners fail closed, and Firestore rules
+  now deny all browser creation, update, or deletion of `userRoles`. Focused
+  unit, rules-emulator, and full provisioning-emulator coverage proves the
+  source boundary. No Stripe connected account, provider request, deployment,
+  hosted activation, or human acceptance is claimed.
+
 - Bound the Ambient zero-dead-click contract into the protected Playwright CI
   lane with a dedicated production-flag browser command. The gate rejects an
   enabled Alpha control without an `AmbientAction` identity and requires an
