@@ -176,6 +176,14 @@ If a topic changes, only update the owning doc and cross-link from others.
 - Project-scoped Functions environment: `NOTIFICATIONS_SMS_PROVIDER`
   - Default trusted runtime value: `none` unless buyer-approved SMS enablement
     is validated; local ignored Functions files are validation-only.
+- Production frontend flag: `VITE_AMBIENT_UI_ENABLED`
+  - Both production deploy workflows bind exactly one `"true"` value into the
+    frontend build environment, and the deployment-safety test enforces that
+    single binding (previously it enforced the flag's absence). This was an
+    explicit solo-operator promotion decision recorded in `CHANGELOG.md`;
+    the hosted UAT acceptance pass was deliberately foregone.
+    `VITE_OPERATIONAL_STAFFING_ENABLED` remains excluded from production
+    binding and the `.env.example` local default for both flags remains off.
 
 ## Orchestration References
 - Blueprint: `docs/ORCHESTRATION_BLUEPRINT.md`

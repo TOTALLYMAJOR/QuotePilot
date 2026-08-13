@@ -8,6 +8,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Enabled the Ambient Intelligence UI in both production deploy workflows by
+  binding `VITE_AMBIENT_UI_ENABLED: "true"` into the Firebase and Vercel
+  production build environments, and amended the deployment-safety test from
+  excluding the flag to requiring exactly one `"true"` binding per workflow.
+  This was an explicit solo-operator decision to promote the flag without the
+  hosted UAT acceptance pass described in the Ambient work plan; local
+  flag-enabled e2e evidence (40/40 ambient object verification, 80/80 overlap
+  foundation) is the supporting record. Operational staffing remains excluded
+  from production binding and the local `.env.example` default remains off.
+
 - Advanced the tracked release-UAT checklist to a fail-closed v3 candidate-
   profile contract. The fixed isolated candidate now binds
   `staging-safe-off` in its hosted manifest and provider receipt, and
