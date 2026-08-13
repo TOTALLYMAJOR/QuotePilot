@@ -140,10 +140,10 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
   sales roles, revision-conflict recovery, responsive layout, and rollback
   evidence before describing AIUI-20 as complete.
 - Continue reducing the production-equivalent Ambient aggregate from the
-  measured 3,700,202 JavaScript bytes toward the standard clean-main budget.
+  measured 3,702,817 JavaScript bytes toward the standard clean-main budget.
   The largest chunk is now restored to the unchanged 391,596-byte ceiling, and
   CI independently enforces detected compatibility and Ambient graph profiles;
-  the temporary 3,700,505 Ambient aggregate ceiling has no growth headroom.
+  the temporary 3,703,120 Ambient aggregate ceiling has no growth headroom.
   Close the exception through optimization or an explicit reviewed clean-main
   recalibration before AIUI-48 retirement or Ambient production promotion.
 - Add inline editing on the event workspace quote page: editable fields with

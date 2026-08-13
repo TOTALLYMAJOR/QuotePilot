@@ -409,26 +409,35 @@ export function IntegrationOpsView({
     }
   };
 
-  const handleProvisionCustomer = async () => {
+  const handleProvisionCustomer = async (reconciliationPayload = null) => {
     if (!canProvisionCustomer) {
       setProvisionState((prev) => ({ ...prev, error: "Admin role is required for customer provisioning." }));
       return;
     }
 
-    const payload = buildCustomerProvisioningPayload(provisionForm, getCanonicalAppUrl());
+    const reconciling = Boolean(reconciliationPayload?.orderId && reconciliationPayload?.organizationId);
+    const payload = reconciling
+      ? { ...reconciliationPayload }
+      : buildCustomerProvisioningPayload(provisionForm, getCanonicalAppUrl());
     const validationError = validateCustomerProvisioningPayload(payload);
     if (validationError) {
       setProvisionState((prev) => ({ ...prev, error: validationError }));
       return;
     }
-    payload.orderId = ensureCustomerProvisioningOrderId(payload.orderId);
-    setProvisionForm((prev) => (
-      prev.orderId === payload.orderId
-        ? prev
-        : { ...prev, orderId: payload.orderId }
-    ));
+    if (!reconciling) {
+      payload.orderId = ensureCustomerProvisioningOrderId(payload.orderId);
+      setProvisionForm((prev) => (
+        prev.orderId === payload.orderId ? prev : { ...prev, orderId: payload.orderId }
+      ));
+    }
 
-    setProvisionState({ loading: true, phase: "checking", error: "", result: null, reconciliationPayload: null });
+    setProvisionState({
+      loading: true,
+      phase: reconciling ? "reconciling" : "checking",
+      error: "",
+      result: null,
+      reconciliationPayload: reconciling ? payload : null
+    });
     setFeedback("");
     setState((prev) => ({ ...prev, error: "" }));
     let completedPreflight = null;
@@ -440,7 +449,7 @@ export function IntegrationOpsView({
       }
       if (preflight.orderExists) {
         if (preflight.canResume) {
-          setFeedback(
+          if (!reconciling) setFeedback(
             `Matching order "${payload.orderId}" found with status ${preflight.orderStatus || "pending"}. Confirm to resume it safely.`
           );
         } else {
@@ -457,6 +466,12 @@ export function IntegrationOpsView({
           });
           return;
         }
+      }
+      if (reconciling && (!preflight.orderExists || !preflight.canResume)) {
+        throw Object.assign(
+          new Error("No committed receipt was found for this exact order. Review the unchanged form before trying again."),
+          { code: "functions/failed-precondition" }
+        );
       }
       if (preflight.unsafeResidue) {
         setProvisionState({
@@ -512,7 +527,7 @@ export function IntegrationOpsView({
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = reconciling || window.confirm(
       buildCustomerProvisioningConfirmationMessage(payload, completedPreflight)
     );
     if (!confirmed) {
@@ -523,7 +538,7 @@ export function IntegrationOpsView({
     setProvisionState({ loading: true, phase: "provisioning", error: "", result: null, reconciliationPayload: null });
     try {
       const result = await provisionCustomerOrder(payload);
-      if (!result?.ok) {
+      if (!result?.ok || (reconciling && String(result.orderId || "") !== String(payload.orderId))) {
         throw new Error("Provisioning failed.");
       }
       setProvisionState({
@@ -536,9 +551,11 @@ export function IntegrationOpsView({
       setLastProvisioningResult(result);
       writeLastProvisioningResult(currentUserUid, result);
       setProvisionForm(createCustomerProvisioningForm(getCanonicalAppUrl()));
-      setFeedback(result.operation === "updated_entitlements"
-        ? `Updated plan entitlements for ${result.organizationName || result.organizationId || "organization"}.`
-        : `Provisioned ${result.organizationName || payload.organizationName} (${result.organizationId || "n/a"}).`);
+      setFeedback(reconciling
+        ? `Recovered the exact provisioning receipt for ${result.organizationName || result.organizationId}.`
+        : result.operation === "updated_entitlements"
+          ? `Updated plan entitlements for ${result.organizationName || result.organizationId || "organization"}.`
+          : `Provisioned ${result.organizationName || payload.organizationName} (${result.organizationId || "n/a"}).`);
     } catch (err) {
       const definitive = isDefinitiveProvisioningError(err);
       setProvisionState({
@@ -553,47 +570,9 @@ export function IntegrationOpsView({
     }
   };
 
-  const handleReconcileProvisioning = async () => {
-    const payload = provisionState.reconciliationPayload;
-    if (!payload?.orderId || !payload?.organizationId) {
-      setProvisionState((prev) => ({
-        ...prev,
-        phase: "",
-        error: "The exact provisioning identity is no longer available. Review the form and start a new check.",
-        reconciliationPayload: null
-      }));
-      return;
-    }
-    setProvisionState((prev) => ({ ...prev, loading: true, phase: "reconciling", error: "" }));
-    try {
-      const preflight = await preflightCustomerOrder(payload);
-      if (!preflight?.orderExists || !preflight?.canResume) {
-        setProvisionState((prev) => ({
-          ...prev,
-          loading: false,
-          phase: "",
-          error: "No committed receipt was found for this exact order. Review the unchanged form before trying again.",
-          reconciliationPayload: null
-        }));
-        return;
-      }
-      const result = await provisionCustomerOrder(payload);
-      if (!result?.ok || String(result.orderId || "") !== String(payload.orderId)) {
-        throw new Error("Exact-order reconciliation returned an unexpected receipt.");
-      }
-      setProvisionState({ loading: false, phase: "", error: "", result, reconciliationPayload: null });
-      setLastProvisioningResult(result);
-      writeLastProvisioningResult(currentUserUid, result);
-      setFeedback(`Recovered the exact provisioning receipt for ${result.organizationName || result.organizationId}.`);
-    } catch (error) {
-      setProvisionState((prev) => ({
-        ...prev,
-        loading: false,
-        phase: "uncertain",
-        error: error?.message || "The exact order outcome is still uncertain. No second order was created."
-      }));
-    }
-  };
+  const handleReconcileProvisioning = () => handleProvisionCustomer(
+    provisionState.reconciliationPayload
+  );
 
   const invalidateProvisioningHandoff = () => {
     setProvisionState((prev) => ({

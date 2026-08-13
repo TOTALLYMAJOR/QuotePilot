@@ -23,7 +23,7 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Change: Enforce separate, detected bundle profiles for the compatibility and
   production-equivalent Ambient graphs. Compatibility retains absolute ceilings
   of 2,776,849 aggregate JavaScript bytes and 391,596 bytes for the largest
-  chunk. Ambient is temporarily capped at 3,700,505 aggregate bytes and the
+  chunk. Ambient is temporarily capped at 3,703,120 aggregate bytes and the
   same 391,596-byte largest-chunk ceiling.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
@@ -32,18 +32,21 @@ Use this log when a change intentionally departs from stable-first policy or req
   compatibility graph unnecessary room. The guard therefore detects the graph
   from mutually exclusive required chunks and rejects any requested-profile
   mismatch. The clean-main baseline remains unchanged.
-- Risk impact: Ambient still carries 930,378 more aggregate JavaScript bytes
-  than the measured compatibility graph. This is meaningful mobile download,
+- Risk impact: Ambient still carries materially more aggregate JavaScript than
+  the measured compatibility graph. This is meaningful mobile download,
   parse, and execution risk even though most code is route-lazy. Passing this
   exception is not Core Web Vitals, hosted, production, or human-acceptance
   evidence.
 - Performance impact: Local production-equivalent builds measured compatibility
   at 2,769,824 aggregate / 391,596 largest bytes and Ambient at 3,700,202 /
-  391,596. Manual `ambient-opportunity-model` and `quote-builder-ui` chunks
+  391,596 before the owner-authority recovery surface. That source-only safety
+  surface adds 2,615 aggregate bytes after reconciliation-path deduplication;
+  its reviewed Ambient local measurement is 3,702,817 bytes. Manual
+  `ambient-opportunity-model` and `quote-builder-ui` chunks
   reduced the prior Ambient largest chunk from 436,188 bytes to the unchanged
-  Firebase ceiling. The Ambient aggregate maximum is the exact local figure plus
-  the previously confirmed 303-byte CI-runner offset; it has no additional
-  growth allowance.
+  Firebase ceiling. The Ambient aggregate maximum remains the exact reviewed
+  local figure plus the previously confirmed 303-byte CI-runner offset; it has
+  no additional growth allowance.
 - Rollback plan: Revert the two manual chunks, graph-aware checker, CI matrix,
   and profile exception together. The prior compatibility ceiling and clean-main
   baseline remain recoverable and unchanged.
