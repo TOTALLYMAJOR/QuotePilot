@@ -41,7 +41,7 @@ This changelog is backfilled from git history and will be maintained going forwa
   acceptance.
 - Extended the existing temporary bundle exception to the exact emitted graphs
   needed for the lazy Staff workspace, invitation response route, and provider-
-  state clients: 2,880,644 bytes for compatibility and 3,804,078 bytes for
+  state clients: 2,880,654 bytes for compatibility and 3,804,078 bytes for
   Ambient production. The 391,901-byte largest-chunk ceiling remains unchanged.
 - Quote actions now include an explicit `Print proposal` outcome and a
   prefilled `Open email app` handoff alongside PDF download. Neither path
