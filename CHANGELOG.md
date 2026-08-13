@@ -6,6 +6,8 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-13
+
 ### Changed
 
 - Completed a material source slice for every AIUI-01–50 Ambient work-plan

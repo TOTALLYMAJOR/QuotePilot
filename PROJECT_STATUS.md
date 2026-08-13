@@ -4,14 +4,19 @@ Last updated: August 13, 2026
 
 ## Current Production Release
 
-- PR #57 merged the governed post-competitive pilot follow-up release into
-  `main` at `fb0aacc1c5c9f6c4ba8733f87c98c7b58e1611bd`; annotated tag `v0.7.0`
+- PR #78 merged the complete 50-item Ambient material source build into
+  `main` at `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`; annotated tag `v0.9.0`
   resolves to that exact commit.
-- Exact-main CI Quality run `31528176575` passed all eight required jobs.
-- Governed Firebase `all` run `31529170963` and governed Vercel run
-  `31530050353` both completed successfully from that tagged revision with
-  `v0.6.0` commit `4f4e00d3829eb29a1ee90d7d8402b786344dd158`
-  recorded as the rollback target.
+- Exact-main CI Quality run `31699316183` passed all eight required jobs.
+- Governed Firebase `all` run `31701000896` and governed Vercel run
+  `31701004013` both completed successfully from that tagged revision with
+  deployed `v0.8.1` commit `31b7f8040667d6ae6158b5d16c1b3556193dde16`
+  recorded as the target-specific rollback revision.
+- Both public origins returned the same `index-rz2UsRhU.js` entry artifact,
+  and each hosted workspace chunk contained the compiled `Living Opportunity`
+  marker. This proves public artifact parity and reachability, not authenticated
+  staff/portal behavior, production-data correctness, downstream provider
+  outcomes, or recipient acceptance.
 
 ## Current Release Candidate (Not Production)
 
