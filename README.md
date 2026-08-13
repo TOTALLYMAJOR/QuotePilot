@@ -430,8 +430,11 @@ value.
 Firebase Functions now has two explicit codebases. `functions` is the existing
 `default` codebase and remains the only codebase selected by current production
 and release-candidate workflows. `functions-connect` is the separately pinned
-Stripe Connect control-plane package; during its foundation checkpoint it
-exports no function and accepts no provider configuration. Install its locked
+Stripe Connect control-plane package. It exports no function and accepts no
+provider configuration. Its dormant source now includes an exact named-
+database repository, transactional HMAC-scoped rate limiter, and injected
+Accounts v2 Sandbox adapter, but none is instantiated by the deploy entry
+point. Install its locked
 dependencies only when validating that codebase with
 `npm ci --prefix functions-connect`, and run
 `npm run check:stripe-connect-foundation`. Do not replace an explicit
@@ -448,13 +451,19 @@ registration, Stripe binding, deployment, or hosted acceptance; each remains a
 separately authorized evidence gate.
 
 Dormant Connect status/onboarding contracts can be checked with
-`npm run check:stripe-connect:onboarding`. They intentionally use injected
-repository, limiter, and provider adapters and are not imported by the
-deploy-empty Connect entry point. The one-use browser destination is an
-internal QuotePilot POST handoff whose token stays out of the URL/referrer,
-never a Stripe Account Link. Passing this check is
-source evidence only; it does not establish a callable, HTTP endpoint,
-connected account, provider request, deployment, or hosted acceptance.
+`npm run check:stripe-connect:onboarding`. They bind repository source only to
+the explicit `connect-control` database selector, reserve one immutable
+connection generation and 30-day Accounts v2 idempotency identity before a
+provider attempt, enforce reviewed principal and organization rate windows in
+one fail-closed transaction, and constrain the injected provider adapter to
+Sandbox Accounts v2 merchant configuration with full Stripe Dashboard access
+and Stripe fee/negative-balance responsibility. The repository, limiter, and
+adapter are not imported by the deploy-empty Connect entry point. The one-use
+browser destination is an internal QuotePilot POST handoff whose token stays
+out of the URL/referrer, never a Stripe Account Link. Passing this check is
+source evidence only; it does not establish an applied database, callable,
+HTTP endpoint, connected account, provider request, deployment, or hosted
+acceptance.
 
 Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
 `test` or `live`, a secret/restricted key with the matching mode prefix, and a

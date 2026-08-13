@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 34,
+  "catalogVersion": 35,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -4247,7 +4247,7 @@
     },
     {
       "id": "stripe-connect-runtime-foundation",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "developer_infrastructure",
@@ -4255,7 +4255,7 @@
         "release_operators",
         "security_reviewers"
       ],
-      "summary": "A separately pinned, deploy-empty Stripe Connect Functions codebase, secret-free staging manifest, apply-disabled staging Terraform foundation, and dormant status/onboarding contracts establish runtime, data, identity, network, state, deployment, authority, redaction, receipt, and one-use handoff boundaries without adding a callable, provider credential, connected account, cloud resource, Account Link, or Stripe request. The strict manifest records a five-minute recent-auth boundary plus App Check monitoring, disabled replay enforcement, and an unbound environment-specific public key; it rejects premature enforcement or key binding. Existing production and candidate workflows select only the legacy default codebase, while credential-free workflows permit source tests and format/init/validate only.",
+      "summary": "A separately pinned, deploy-empty Stripe Connect Functions codebase, secret-free staging manifest, apply-disabled staging Terraform foundation, dormant status/onboarding contracts, exact named-database repository, transactional HMAC-scoped limiter, and injected Accounts v2 Sandbox adapter establish runtime, data, identity, network, state, deployment, authority, redaction, receipt, one-use handoff, unique binding, recovery, and provider-model boundaries without adding a callable, provider credential, connected account, cloud resource, Account Link, or Stripe request. The strict manifest records a five-minute recent-auth boundary plus App Check monitoring, disabled replay enforcement, and an unbound environment-specific public key; it rejects premature enforcement or key binding. Existing production and candidate workflows select only the legacy default codebase, while credential-free workflows permit source tests and format/init/validate only.",
       "backendPaths": [
         "firebase.json",
         "functions-connect/index.js",
@@ -4263,6 +4263,9 @@
         "functions-connect/interfaceContracts.js",
         "functions-connect/onboardingHandoff.js",
         "functions-connect/statusOnboardingService.js",
+        "functions-connect/connectControlRepository.js",
+        "functions-connect/durableRateLimiter.js",
+        "functions-connect/stripeSandboxAdapter.js",
         "functions-connect/package.json",
         "functions-connect/package-lock.json",
         "config/stripe-connect/staging-foundation.json",
@@ -4295,6 +4298,7 @@
         "src/lib/__tests__/stripeConnectFoundation.test.js",
         "src/lib/__tests__/stripeConnectInfrastructure.test.js",
         "src/lib/__tests__/stripeConnectOnboardingContracts.test.js",
+        "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
         "src/lib/__tests__/deploymentSafety.test.js",
         "src/lib/__tests__/productionArtifact.test.js"
       ],
@@ -4332,12 +4336,25 @@
           "locator": "consumes before provider access, stores no URL, and redirects with no-store frame denial"
         },
         {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "selects only the exact connect-control database"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "uses HMAC-only principals and enforces all transactional windows"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "reuses the same Accounts v2 idempotency key after provider success and interrupted completion"
+        },
+        {
           "path": "src/lib/__tests__/deploymentSafety.test.js",
           "locator": "keeps one canonical deploy command per production target"
         }
       ],
       "documentationPaths": [
         "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md",
         "README.md",
         "docs/STRIPE_CONNECT_PROGRAM.md",
         "docs/LAUNCH_RUNBOOK.md",
@@ -4358,6 +4375,10 @@
           "locator": "## Isolation contract"
         },
         {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Stripe connection availability (source only)"
+        },
+        {
           "path": "README.md",
           "locator": "The source-only staging infrastructure lives under"
         },
@@ -4366,8 +4387,8 @@
           "locator": "Stripe Connect staging infrastructure:"
         }
       ],
-      "headlessReason": "The checkpoint changes dependency, manifest, infrastructure, deployment, and dormant authority-contract boundaries only. Revision 4 adds exact-key auth-claim-scoped requests, redacted cached status, HMAC-only rate-limit principals, owner/recent-auth/App Check mutation checks, reservation-before-provider ordering, redacted receipts, and an HMAC-digested one-use internal POST handoff whose token stays out of URLs/referrers while keeping repository, limiter, provider, callable, HTTP, App Check registration, provider calls, plan, apply, deployment, and production bindings absent. It intentionally exposes no Connect user surface or callable until applied isolated infrastructure and hosted Sandbox evidence are available.",
-      "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-bound, production-absent, client-denied, apply-disabled, redacted, POST-only, one-use, and separately reviewable. Application JavaScript receives no Stripe Account Link, and failed dormant handoff plans can describe only explicit recovery—not provider success."
+      "headlessReason": "The checkpoint changes dependency, manifest, infrastructure, deployment, and dormant authority-contract boundaries only. Revision 5 adds a concrete exact-named-database repository, immutable generation reservation, 30-day Accounts v2 recovery identity, unique platform/mode/account binding, collision quarantine, replay receipts, one-use handoff persistence, multi-window transactional rate limits without raw principal or organization storage, and an injected exact-version Sandbox Accounts v2 adapter fixed to the approved merchant/full-Dashboard/Stripe-responsibility model. These modules remain uninstantiated and unexported; callable, HTTP, App Check registration, provider calls, plan, apply, deployment, and production bindings remain absent. It intentionally exposes no Connect user surface until applied isolated infrastructure and hosted Sandbox evidence are available.",
+      "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-only, production-absent, client-denied, apply-disabled, redacted, transactionally limited, uniquely bound, POST-only, one-use, and separately reviewable. Application JavaScript receives no Stripe Account Link, and failed dormant provider plans can describe only explicit recovery—not provider success."
     },
     {
       "id": "organization-owner-authority",

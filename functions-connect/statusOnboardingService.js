@@ -53,6 +53,23 @@ function createStripeConnectStatusOnboardingService({
     return Object.freeze({ actor, authority });
   }
 
+  async function consumeActorRateLimit(operation, actor) {
+    const principalDigest = await hashPrincipal({
+      operation,
+      organizationId: actor.organizationId,
+      uid: actor.uid
+    });
+    if (!/^[a-f0-9]{64}$/.test(String(principalDigest || ""))) {
+      fail("internal", "The Connect rate-limit principal could not be protected.");
+    }
+    await consumeRateLimit({
+      operation,
+      organizationId: actor.organizationId,
+      principalDigest,
+      nowISO: new Date(now()).toISOString()
+    });
+  }
+
   async function getStripeConnectStatus(request = {}) {
     normalizeStatusRequest(request.data || {});
     const { actor, authority } = await resolveActor(request);
@@ -63,20 +80,7 @@ function createStripeConnectStatusOnboardingService({
   async function refreshStripeConnectStatus(request = {}) {
     const input = normalizeMutationRequest(request.data || {}, "refreshStripeConnectStatus");
     const { actor, authority } = await resolveActor(request);
-    const principalDigest = await hashPrincipal({
-      operation: "refresh_status",
-      organizationId: actor.organizationId,
-      uid: actor.uid
-    });
-    if (!/^[a-f0-9]{64}$/.test(String(principalDigest || ""))) {
-      fail("internal", "The Connect rate-limit principal could not be protected.");
-    }
-    await consumeRateLimit({
-      operation: "refresh_status",
-      organizationId: actor.organizationId,
-      principalDigest,
-      nowISO: new Date(now()).toISOString()
-    });
+    await consumeActorRateLimit("refresh_status", actor);
     const current = await readStatus(actor.organizationId);
     if (Number(current?.revision || 0) !== input.expectedRevision || Number(current?.generation || 0) !== input.expectedGeneration) {
       fail("aborted", "Stripe status changed. Refresh before requesting another provider read.");
@@ -113,6 +117,7 @@ function createStripeConnectStatusOnboardingService({
       if (existing.payloadDigest !== input.payloadDigest) fail("already-exists", "requestId was already used for another onboarding request.");
       return existing.publicReceipt;
     }
+    await consumeActorRateLimit("begin_onboarding", actor);
     const reservation = await reserveOnboarding({
       organizationId: actor.organizationId,
       actorUid: actor.uid,
@@ -160,6 +165,7 @@ function createStripeConnectStatusOnboardingService({
     ) {
       fail("aborted", "Stripe onboarding state changed. Refresh before continuing.");
     }
+    await consumeActorRateLimit("prepare_onboarding_redirect", actor);
     const handoff = prepareOneUseOnboardingHandoff({
       organizationId: actor.organizationId,
       generation: input.expectedGeneration,

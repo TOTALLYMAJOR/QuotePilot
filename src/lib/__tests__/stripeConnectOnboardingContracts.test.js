@@ -236,6 +236,10 @@ describe("Stripe Connect public interface contracts", () => {
     });
 
     expect(calls).toEqual(["reserve", "provider", "complete"]);
+    expect(fixture.rateLimiter.consume).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "begin_onboarding",
+      organizationId: "org_alpha"
+    }));
     expect(result).toMatchObject({
       schemaVersion: 1,
       operation: "beginStripeConnectOnboarding",
@@ -288,6 +292,10 @@ describe("Stripe Connect public interface contracts", () => {
       revision: 3,
       state: "prepared",
       tokenDigest: expect.stringMatching(/^[a-f0-9]{64}$/)
+    }));
+    expect(fixture.rateLimiter.consume).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "prepare_onboarding_redirect",
+      organizationId: "org_alpha"
     }));
     expect(JSON.stringify(fixture.repository.savePreparedHandoff.mock.calls)).not.toContain(
       result.handoffUrl.split("/").at(-1)
@@ -352,7 +360,7 @@ describe("Stripe Connect one-use same-tab handoff", () => {
         expect(returnUrl).toContain("connect_return=complete");
         expect(refreshUrl).toContain("connect_return=recover");
         return {
-          url: "https://connect.stripe.com/setup/s/test-link",
+          url: "https://accounts.stripe.com/r/test-link#single-use-fragment",
           expiresAtSeconds: Math.floor(NOW_MS / 1000) + 3600
         };
       })
@@ -371,7 +379,7 @@ describe("Stripe Connect one-use same-tab handoff", () => {
     expect(response).toEqual({
       statusCode: 303,
       headers: {
-        Location: "https://connect.stripe.com/setup/s/test-link",
+        Location: "https://accounts.stripe.com/r/test-link#single-use-fragment",
         "Cache-Control": "no-store, private",
         Pragma: "no-cache",
         "Referrer-Policy": "no-referrer",
@@ -381,6 +389,7 @@ describe("Stripe Connect one-use same-tab handoff", () => {
       }
     });
     expect(store.recordProviderExpiry).toHaveBeenCalledWith({
+      tokenDigest,
       attemptDigest: "b".repeat(64),
       expiresAtISO: "2026-08-13T12:10:00.000Z"
     });
@@ -452,6 +461,7 @@ describe("Stripe Connect one-use same-tab handoff", () => {
     expect(provider.createAccountLink).toHaveBeenCalledTimes(1);
     expect(store.recordProviderExpiry).not.toHaveBeenCalled();
     expect(store.recordHandoffFailure).toHaveBeenCalledWith({
+      tokenDigest,
       attemptDigest: "d".repeat(64),
       reason: "provider_unavailable"
     });

@@ -1273,6 +1273,25 @@ monitoring evidence is reviewed, and the separate promotion is approved.
 Neither this surface nor its receipt creates a Stripe connected account,
 completes onboarding, or enables payment routing.
 
+### Stripe connection availability (source only)
+
+There is no Stripe connection control to operate in the app yet. The isolated
+Connect package now contains dormant server contracts for a full Stripe
+Dashboard account where Stripe collects fees and is responsible for negative
+balances, and where payments will later be created directly for the connected
+account. Those contracts include exact tenant/generation receipts, a one-use
+same-tab hosted-onboarding handoff, transactionally enforced request limits,
+and contextual recovery after an interrupted attempt.
+
+The package still exports no endpoint, the tracked staging platform remains
+unbound, and no browser action can instantiate the repository, limiter, or
+provider adapter. Do not interpret source tests, a local success receipt, or
+the presence of these modules as a connected account, Account Link, payment-
+routing readiness, Stripe provider acceptance, or production availability.
+The first operable surface remains blocked on applied isolated infrastructure,
+App Check enforcement evidence, exact staging bindings, and a separate hosted
+Sandbox release.
+
 ### Operator Runbook
 1. Sign in at `/app` as an authorized platform admin on the canonical
    QuotePilot host with a verified Firebase email. Customer tenant admins

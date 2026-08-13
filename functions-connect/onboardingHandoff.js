@@ -5,7 +5,7 @@ const { canonicalJson, sha256, StripeConnectInterfaceError } = require("./interf
 
 const HANDOFF_SCHEMA_VERSION = 1;
 const HANDOFF_MAX_AGE_SECONDS = 600;
-const STRIPE_ACCOUNT_LINK_HOST = "connect.stripe.com";
+const STRIPE_ACCOUNT_LINK_HOSTS = Object.freeze(new Set(["accounts.stripe.com", "connect.stripe.com"]));
 
 function fail(code, message) {
   throw new StripeConnectInterfaceError(code, message);
@@ -107,7 +107,7 @@ function assertStripeAccountLink(value) {
   }
   const url = new URL(text(value.url, 4096));
   const expiresAtSeconds = Number(value.expiresAtSeconds);
-  if (url.protocol !== "https:" || url.hostname !== STRIPE_ACCOUNT_LINK_HOST || url.username || url.password) {
+  if (url.protocol !== "https:" || !STRIPE_ACCOUNT_LINK_HOSTS.has(url.hostname) || url.username || url.password) {
     fail("unavailable", "Stripe onboarding returned an untrusted destination.");
   }
   if (!Number.isSafeInteger(expiresAtSeconds) || expiresAtSeconds <= 0) {
@@ -158,6 +158,7 @@ async function consumeOneUseOnboardingHandoff({
     const localCeilingSeconds = Math.floor(Number(nowMs) / 1000) + HANDOFF_MAX_AGE_SECONDS;
     const effectiveExpiresAtSeconds = Math.min(providerLink.expiresAtSeconds, localCeilingSeconds);
     await store.recordProviderExpiry({
+      tokenDigest,
       attemptDigest: record.attemptDigest,
       expiresAtISO: new Date(effectiveExpiresAtSeconds * 1000).toISOString()
     });
@@ -176,6 +177,7 @@ async function consumeOneUseOnboardingHandoff({
   } catch (error) {
     if (typeof store.recordHandoffFailure === "function") {
       await store.recordHandoffFailure({
+        tokenDigest,
         attemptDigest: record.attemptDigest,
         reason: error instanceof StripeConnectInterfaceError ? error.code : "provider_unavailable"
       });
@@ -198,7 +200,7 @@ async function consumeOneUseOnboardingHandoff({
 module.exports = {
   HANDOFF_MAX_AGE_SECONDS,
   HANDOFF_SCHEMA_VERSION,
-  STRIPE_ACCOUNT_LINK_HOST,
+  STRIPE_ACCOUNT_LINK_HOSTS,
   assertStripeAccountLink,
   consumeOneUseOnboardingHandoff,
   digestToken,
