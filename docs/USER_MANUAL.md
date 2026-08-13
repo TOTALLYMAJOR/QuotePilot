@@ -1222,6 +1222,13 @@ Backend source of truth:
   not create, update, delete, or read the receipt. Use the existing
   provisioning and verified sign-in outcomes rather than editing Firestore
   role documents directly.
+- A legacy organization without an explicit owner is not repaired through the
+  browser. The operator-only backfill defaults to a no-write plan and accepts
+  only one consumed admin invitation whose organization, order, verified Auth
+  user, and existing admin role all agree. Zero, multiple, incomplete, or
+  conflicting candidates remain `ownership_required`; apply additionally
+  requires the exact planned UID and project/organization/UID confirmation.
+  No production dry-run or apply is implied by the presence of this command.
 - This source foundation does not create a Stripe connected account, complete
   hosted onboarding, enable charges or payouts, or prove production owner
   activation.

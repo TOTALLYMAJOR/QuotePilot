@@ -54,9 +54,13 @@ Only open work belongs here. Current operational truth lives in
   emulator coverage.
 - Continue the separately gated Stripe Connect program from its source-only
   owner-authority and deploy-empty `functions-connect` foundations. Next add
-  exact consumed-invite ownership backfill, owner/admin role-management
-  authority, password/Google recent reauthentication, and App Check monitor-
+  owner/admin role-management authority, password/Google recent
+  reauthentication, and App Check monitor-
   then-enforce contracts with consumed limited-use tokens for high-risk calls.
+  The exact consumed-invite owner backfill is source-complete but still needs
+  governed production dry-run review and separately confirmed apply evidence;
+  zero, multiple, unverified, or conflicting candidates remain
+  `ownership_required`.
   Then provision isolated staging IAM/database/network/OIDC resources and
   implement sandbox-only Accounts v2 merchant
   onboarding with direct charges, full Stripe Dashboard access, Stripe fee and

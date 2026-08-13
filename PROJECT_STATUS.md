@@ -32,6 +32,13 @@ Last updated: August 12, 2026
   Sandbox-only, unbound, provider-disabled, and rejects every infrastructure or
   callable claim; `functions-connect` exports nothing. This is local source and
   test evidence only, not a Connect deployment or provider result.
+- A third source-only checkpoint adds an exact organization-owner backfill.
+  Dry-run is the default; zero, multiple, incomplete, unverified, or conflicting
+  consumed-invite candidates return `ownership_required`. Apply requires the
+  dry-run owner UID and an exact project/organization/UID confirmation, then
+  transactionally revalidates Firestore evidence before binding the organization,
+  provisioning order, and immutable receipt. No production dry-run or apply has
+  been performed.
 
 - Current `main` is tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient
