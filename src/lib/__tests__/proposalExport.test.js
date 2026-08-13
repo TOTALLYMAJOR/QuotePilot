@@ -61,6 +61,17 @@ describe("customer proposal PDF export", () => {
     expect(pdfText).not.toContain("0123456789abcdef0123456789abcdef");
   });
 
+  test("can return a print-ready PDF blob without downloading it", async () => {
+    const attachment = await exportQuoteProposal(versionedDraft(), {
+      output: "blob",
+      compact: true
+    });
+    expect(attachment).toMatchObject({ mimeType: "application/pdf" });
+    expect(attachment.filename).toMatch(/\.pdf$/u);
+    expect(attachment.blob).toBeInstanceOf(Blob);
+    expect(attachment.blob.size).toBeGreaterThan(1_000);
+  });
+
   test("requires an explicit current-delivery decision before including a sent portal", async () => {
     const sentQuote = {
       ...versionedDraft(),

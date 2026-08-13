@@ -1008,6 +1008,32 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Full staff contact, compensation, qualifications and private notes are
+    // admin-callable-owned. They are intentionally separate from the bounded
+    // operational profile used for assignment planning.
+    match /organizations/{orgId}/staffRecords/{staffRecordId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/staffRecords/{staffRecordId}/versions/{versionId} {
+      allow read, write: if false;
+    }
+
+    // Assignment invitations, dispatch/acknowledgement receipts, and signed
+    // provider events are callable-owned. Staff and public responders receive
+    // only bounded projections after role or bearer-token verification.
+    match /organizations/{orgId}/staffInvitations/{invitationId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/staffInvitations/{invitationId}/staffInvitationReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/staffInvitationProviderEvents/{eventId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/eventStaffingPlans/{quoteId} {
       allow read, write: if false;
     }
@@ -1198,6 +1224,10 @@ service cloud.firestore {
     }
 
     match /quoteHistory/{historyId} {
+      allow read, write: if false;
+    }
+
+    match /staffInvitationProviderMessageIndex/{messageId} {
       allow read, write: if false;
     }
 

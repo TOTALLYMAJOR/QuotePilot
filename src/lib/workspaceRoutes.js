@@ -4,6 +4,7 @@ export const WORKSPACE_ROUTE_IDS = Object.freeze({
   HOME: "home",
   CUSTOMER_LIST: "customer-list",
   CUSTOMER_DETAIL: "customer-detail",
+  STAFF: "staff",
   QUOTE_LIST: "quote-list",
   QUOTE_NEW: "quote-new",
   QUOTE_DETAIL: "quote-detail",
@@ -24,6 +25,7 @@ export const WORKSPACE_ROUTE_IDS = Object.freeze({
 export const WORKSPACE_PATHS = Object.freeze({
   home: WORKSPACE_ROOT,
   customers: `${WORKSPACE_ROOT}/customers`,
+  staff: `${WORKSPACE_ROOT}/staff`,
   quotes: `${WORKSPACE_ROOT}/quotes`,
   quoteNew: `${WORKSPACE_ROOT}/quotes/new`,
   messaging: `${WORKSPACE_ROOT}/messages`,
@@ -40,6 +42,7 @@ const ROUTE_META = Object.freeze({
   [WORKSPACE_ROUTE_IDS.HOME]: Object.freeze({ section: "home", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.CUSTOMER_LIST]: Object.freeze({ section: "customers", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL]: Object.freeze({ section: "customers", delivery: "first-release" }),
+  [WORKSPACE_ROUTE_IDS.STAFF]: Object.freeze({ section: "staff", delivery: "follow-on" }),
   [WORKSPACE_ROUTE_IDS.QUOTE_LIST]: Object.freeze({ section: "quotes", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.QUOTE_NEW]: Object.freeze({ section: "quotes", delivery: "first-release" }),
   [WORKSPACE_ROUTE_IDS.QUOTE_DETAIL]: Object.freeze({ section: "quotes", delivery: "first-release" }),
@@ -57,6 +60,7 @@ const ROUTE_META = Object.freeze({
 export const PRIMARY_WORKSPACE_NAVIGATION = Object.freeze([
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.HOME, label: "Home", path: WORKSPACE_PATHS.home }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.CUSTOMER_LIST, label: "Customers", path: WORKSPACE_PATHS.customers }),
+  Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.STAFF, label: "Staff", path: WORKSPACE_PATHS.staff }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.QUOTE_LIST, label: "Quotes", path: WORKSPACE_PATHS.quotes }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.MESSAGING, label: "Messages", path: WORKSPACE_PATHS.messaging }),
   Object.freeze({ routeId: WORKSPACE_ROUTE_IDS.WORKFLOW, label: "Workflow", path: WORKSPACE_PATHS.workflow }),
@@ -74,6 +78,7 @@ export const ADMIN_WORKSPACE_NAVIGATION = Object.freeze([
 const STATIC_ROUTES = new Map([
   [WORKSPACE_PATHS.home, WORKSPACE_ROUTE_IDS.HOME],
   [WORKSPACE_PATHS.customers, WORKSPACE_ROUTE_IDS.CUSTOMER_LIST],
+  [WORKSPACE_PATHS.staff, WORKSPACE_ROUTE_IDS.STAFF],
   [WORKSPACE_PATHS.quotes, WORKSPACE_ROUTE_IDS.QUOTE_LIST],
   [WORKSPACE_PATHS.quoteNew, WORKSPACE_ROUTE_IDS.QUOTE_NEW],
   [WORKSPACE_PATHS.messaging, WORKSPACE_ROUTE_IDS.MESSAGING],
@@ -209,6 +214,8 @@ export function buildWorkspacePath(routeId, params = {}) {
       return WORKSPACE_PATHS.customers;
     case WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL:
       return buildCustomerPath(params.customerId);
+    case WORKSPACE_ROUTE_IDS.STAFF:
+      return WORKSPACE_PATHS.staff;
     case WORKSPACE_ROUTE_IDS.QUOTE_LIST:
       return WORKSPACE_PATHS.quotes;
     case WORKSPACE_ROUTE_IDS.QUOTE_NEW:

@@ -12,6 +12,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const OPERATION_LABELS = [
   "Event Schedule",
+  "Staff",
   "Reporting Dashboard",
   "Integrations Ops",
   "Import Studio",
@@ -36,6 +37,7 @@ function createProps(overrides = {}) {
     onQuotes: vi.fn(),
     onMessages: vi.fn(),
     onWorkflow: vi.fn(),
+    onStaff: vi.fn(),
     onSchedule: vi.fn(),
     onReporting: vi.fn(),
     onIntegrations: vi.fn(),
@@ -75,6 +77,7 @@ function createProps(overrides = {}) {
     },
     capabilities: {
       customerPortal: true,
+      staffDirectory: true,
       eventSchedule: true,
       reportingDashboard: true,
       integrationsOps: true,
@@ -185,7 +188,7 @@ describe("WorkspaceShell", () => {
     expect(shell.classList.contains("app-shell-ambient-navigation")).toBe(true);
     expect(shell.dataset.ambientNavigation).toBe("orientation");
     expect(orientation.map((button) => button.textContent.trim()))
-      .toEqual(["Now", "Opportunities", "Clients", "Library"]);
+      .toEqual(["Now", "Opportunities", "Clients", "Staff", "Library"]);
     expect(orientation.every((button) => button.classList.contains("ambient-orientation-action"))).toBe(true);
     expect(buttonsByText(container, "Home")).toHaveLength(0);
     expect(buttonsByText(container, "Customers")).toHaveLength(0);
@@ -196,6 +199,7 @@ describe("WorkspaceShell", () => {
     const now = buttonsByText(container, "Now")[0];
     const opportunities = buttonsByText(container, "Opportunities")[0];
     const clients = buttonsByText(container, "Clients")[0];
+    const staff = buttonsByText(container, "Staff")[0];
     const library = buttonsByText(container, "Library")[0];
     const search = container.querySelector('button[aria-label="Search"]');
     const newQuote = buttonsByText(container, "New quote")[0];
@@ -214,6 +218,7 @@ describe("WorkspaceShell", () => {
     act(() => now.click());
     act(() => opportunities.click());
     act(() => clients.click());
+    act(() => staff.click());
     act(() => library.click());
     act(() => search.click());
     act(() => newQuote.click());
@@ -221,6 +226,7 @@ describe("WorkspaceShell", () => {
     expect(props.actions.onHome).toHaveBeenCalledTimes(1);
     expect(props.actions.onQuotes).toHaveBeenCalledTimes(1);
     expect(props.actions.onCustomers).toHaveBeenCalledTimes(1);
+    expect(props.actions.onStaff).toHaveBeenCalledTimes(1);
     expect(props.actions.onCatalog).toHaveBeenCalledTimes(1);
     expect(props.actions.onSearch).toHaveBeenCalledWith(search);
     expect(props.actions.onNewQuote).toHaveBeenCalledTimes(1);

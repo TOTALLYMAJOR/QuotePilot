@@ -61,10 +61,12 @@ Firebase Secret Manager. Vercel deploys only to the fixed `mbmapps/quoteflow`
 project. Firebase deploys only to `tonicatering`, and backend/all always bind
 Firestore rules and Functions together.
 
-Both production deploy workflows bind `VITE_AMBIENT_UI_ENABLED: "true"` into
-the frontend build environment, so verified releases ship the Ambient
-Intelligence UI enabled. The deployment-safety test requires exactly one such
-binding per workflow; `VITE_OPERATIONAL_STAFFING_ENABLED` stays excluded.
+Both production deploy workflows bind `VITE_AMBIENT_UI_ENABLED: "true"` and
+`VITE_OPERATIONAL_STAFFING_ENABLED: "true"` into the frontend build
+environment, so this owner-approved release ships the Ambient Intelligence and
+Staff presentation together. The deployment-safety test requires exactly one
+binding of each per workflow. Firebase additionally binds the global staffing
+authority and the exact tenant setting remains independently required.
 
 For Vercel, preserve the reviewed SPA contract in `vercel.json`; Git-triggered
 deployments remain disabled. After deployment, verify that `/`, `/app`, and
@@ -304,11 +306,13 @@ rollback. No step in this runbook authorizes production gate promotion.
 
 ### Authoritative operational staffing activation gate
 
-Keep `VITE_OPERATIONAL_STAFFING_ENABLED=false`,
-`OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false`, and every trusted tenant setting
-`operationalStaffingAuthorityEnabled=false` through source qualification and a
-coordinated frontend/Functions/rules release. Browser principals cannot promote
-the server or tenant gate. Before any one-tenant activation:
+The August 13, 2026 owner-approved production test promotes
+`VITE_OPERATIONAL_STAFFING_ENABLED=true` and
+`OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true` only through the exact tagged
+coordinated frontend/Functions/rules release. Browser principals still cannot
+promote either gate, and every trusted tenant setting
+`operationalStaffingAuthorityEnabled` remains an independent one-tenant
+activation. Before activation:
 
 1. Prove same-tenant administrators can create and revise bounded staff
    profiles and operator-recorded availability, while sales, customers,
@@ -362,7 +366,9 @@ Secret Manager ownership is intentionally split:
 - `RESEND_WEBHOOK_SECRET`: `revenueAutopilotResendWebhook` only. The webhook
   receives raw request bytes and verifies them directly with repository-pinned
   `standardwebhooks@1.0.0` before trusting JSON; it must not receive the Resend
-  API key.
+  API key. Separate server-owned provider-message indexes then route Revenue
+  Autopilot jobs and operational-staff invitations without sharing application
+  authority.
 - `REVENUE_AUTOPILOT_TOKEN_SECRET`: signed v1 organization/customer unsubscribe
   token issue/verification only. The public token is opaque and the stored hash
   is server-owned. V1 intentionally has no timestamp or expiry; signature,

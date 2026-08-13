@@ -110,6 +110,10 @@ const CustomerWorkspaceView = createRecoverableLazy(
   () => import("quotepilot-active-customer-workspace"),
   "CustomerWorkspaceView"
 );
+const StaffWorkspace = createRecoverableLazy(
+  () => import("./components/StaffWorkspace"),
+  "StaffWorkspace"
+);
 const MessagingStation = createRecoverableLazy(
   () => import("./components/LegacyMessagingStation"),
   "MessagingStation"
@@ -176,6 +180,9 @@ const E2E_ALLOW_NON_AUTHORITATIVE_PRICING = ["1", "true", "yes", "on"].includes(
 );
 const CUSTOMER_CENTERED_WORKSPACE_ENABLED = !["0", "false", "no", "off"].includes(
   String(import.meta.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED || "").trim().toLowerCase()
+);
+const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
 // The NOW surface is an additional default-off presentation gate. Absent or
 // unrecognized values keep it off; it never widens data access or authority.
@@ -881,6 +888,8 @@ function LegacyAppCore({
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS;
   const catalogRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG;
+  const staffRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.STAFF;
   const diagnosticsRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS;
   const legacyScheduleRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
@@ -982,6 +991,7 @@ function LegacyAppCore({
   const historyMounted = useStickyMount(historyOpen);
   const dashboardMounted = useStickyMount(reportingModalOpen);
   const catalogRouteMounted = useStickyMount(catalogRouteOpen);
+  const staffRouteMounted = useStickyMount(staffRouteOpen);
   const scheduleRouteMounted = useStickyMount(scheduleRouteOpen);
   const reportingRouteMounted = useStickyMount(reportingRouteOpen);
   const integrationsRouteMounted = useStickyMount(integrationsRouteOpen);
@@ -1241,7 +1251,10 @@ function LegacyAppCore({
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
   const routedToolAuthorized = (
-    (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
+    (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.STAFF
+      && authSession.isAdmin
+      && OPERATIONAL_STAFFING_UI_ENABLED)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS && diagnosticsEnabled)
@@ -3338,6 +3351,7 @@ function LegacyAppCore({
               </button>
               {openHeaderMenu === "operations" && (
                 <div className="header-menu-popover" role="menu" aria-label="Operations">
+                  {CUSTOMER_CENTERED_WORKSPACE_ENABLED && authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.staff); }}>Staff</button>}
                   {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Event Schedule</button>}
                   {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Reporting Dashboard</button>}
                   {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Integrations Ops</button>}
@@ -3387,6 +3401,7 @@ function LegacyAppCore({
               </button>
               {openHeaderMenu === "more" && (
                 <div className="header-menu-popover mobile-more-popover" role="menu" aria-label="More">
+                  {CUSTOMER_CENTERED_WORKSPACE_ENABLED && authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.staff); }}>Staff</button>}
                   {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: moreMenuTriggerRef })}>Event Schedule</button>}
                   {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: moreMenuTriggerRef })}>Reporting Dashboard</button>}
                   {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Integrations Ops</button>}
@@ -3525,6 +3540,20 @@ function LegacyAppCore({
         </WorkspaceLazyRoute>
       )}
 
+      {authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED && staffRouteMounted && (
+        <WorkspaceLazyRoute
+          active={staffRouteOpen}
+          surfaceName="Staff"
+          component={StaffWorkspace}
+          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+        >
+          <StaffWorkspace
+            organizationId={authSession.organizationId}
+            organizationName={workspaceName}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
       {authSession.isAdmin && catalogRouteMounted && (
         <WorkspaceLazyRoute
           active={catalogRouteOpen}
@@ -3650,6 +3679,7 @@ function LegacyAppCore({
       {(browserRoute.routeId === WORKSPACE_ROUTE_IDS.NOT_FOUND
         || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
         || ([
+          WORKSPACE_ROUTE_IDS.STAFF,
           WORKSPACE_ROUTE_IDS.SCHEDULE,
           WORKSPACE_ROUTE_IDS.REPORTING,
           WORKSPACE_ROUTE_IDS.CATALOG,
@@ -3658,6 +3688,7 @@ function LegacyAppCore({
           WORKSPACE_ROUTE_IDS.DIAGNOSTICS
         ].includes(resolvedWorkspaceRouteId) && !routedToolAuthorized)
         || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && [
+          WORKSPACE_ROUTE_IDS.STAFF,
           WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
           WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
           WORKSPACE_ROUTE_IDS.MESSAGING

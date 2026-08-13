@@ -225,8 +225,13 @@ If a topic changes, only update the owning doc and cross-link from others.
     single binding (previously it enforced the flag's absence). This was an
     explicit solo-operator promotion decision recorded in `CHANGELOG.md`;
     the hosted UAT acceptance pass was deliberately foregone.
-    `VITE_OPERATIONAL_STAFFING_ENABLED` remains excluded from production
-    binding and the `.env.example` local default for both flags remains off.
+  - The August 13, 2026 owner-approved operational-staffing test release binds
+    `VITE_OPERATIONAL_STAFFING_ENABLED: "true"` exactly once in both production
+    workflows. Firebase also materializes
+    `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true`; the trusted tenant setting,
+    role checks, direct-browser denials, provider prerequisites, and immutable
+    receipts remain independent. The `.env.example` local default for both
+    presentation flags remains off.
 
 ## Orchestration References
 - Blueprint: `docs/ORCHESTRATION_BLUEPRINT.md`

@@ -93,8 +93,8 @@ export function assertAmbientReleaseGate({ root = ROOT } = {}) {
     requireText(
       errors,
       gateStep,
-      "VITE_OPERATIONAL_STAFFING_ENABLED: \"false\"",
-      "the Ambient UI gate must keep independently governed staffing authority explicitly off"
+      "VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"",
+      "the Ambient UI gate must exercise the promoted staffing presentation"
     );
   }
 
@@ -141,8 +141,8 @@ export function assertAmbientReleaseGate({ root = ROOT } = {}) {
     requireText(
       errors,
       ambientBundleStep,
-      "VITE_OPERATIONAL_STAFFING_ENABLED: \"false\"",
-      "the Ambient bundle step must keep independently governed staffing authority off"
+      "VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"",
+      "the Ambient bundle step must include the promoted staffing presentation"
     );
     requireText(
       errors,
@@ -190,6 +190,12 @@ export function assertAmbientReleaseGate({ root = ROOT } = {}) {
       workflow,
       "VITE_AMBIENT_UI_ENABLED: \"true\"",
       `${relativePath} must retain the reviewed Ambient presentation flag`
+    );
+    requireText(
+      errors,
+      workflow,
+      "VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"",
+      `${relativePath} must retain the owner-approved staffing presentation flag`
     );
   });
 

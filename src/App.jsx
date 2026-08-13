@@ -102,6 +102,9 @@ const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
+const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
+);
 const AdminCatalogView = createRecoverableLazy(
   () => import("./components/AdminCatalogModal").then((module) => ({ default: module.AdminCatalogView })),
   "AdminCatalogView"
@@ -129,6 +132,10 @@ const CustomerDirectoryView = createRecoverableLazy(
 const CustomerWorkspaceView = createRecoverableLazy(
   () => import("quotepilot-active-customer-workspace"),
   "CustomerWorkspaceView"
+);
+const StaffWorkspace = createRecoverableLazy(
+  () => import("./components/StaffWorkspace"),
+  "StaffWorkspace"
 );
 const MessagingStation = createRecoverableLazy(
   () => import("quotepilot-active-messaging-station"),
@@ -1043,6 +1050,7 @@ export default function App({
   const integrationsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.INTEGRATIONS);
   const importsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.IMPORTS);
   const catalogRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.CATALOG);
+  const staffRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.STAFF);
   const diagnosticsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.DIAGNOSTICS);
   const scheduleModalOpen = shellModalOpen(scheduleOpen, WORKSPACE_ROUTE_IDS.SCHEDULE);
   const reportingModalOpen = shellModalOpen(dashboardOpen, WORKSPACE_ROUTE_IDS.REPORTING);
@@ -1083,6 +1091,9 @@ export default function App({
   };
   const returnWorkspaceHome = () => navigateWorkspace(WORKSPACE_PATHS.home);
   const closeCatalogWorkspace = () => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen);
+  const closeStaffWorkspace = () => {
+    if (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.STAFF) navigateWorkspace(WORKSPACE_PATHS.home);
+  };
   const closeImportsWorkspace = () => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.IMPORTS, setImportStudioOpen);
   const closeScheduleWorkspace = () => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen);
   const closeReportingWorkspace = () => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.REPORTING, setDashboardOpen);
@@ -1144,6 +1155,7 @@ export default function App({
   const historyMounted = useStickyMount(historyOpen);
   const dashboardMounted = useStickyMount(reportingModalOpen);
   const catalogRouteMounted = useStickyMount(catalogRouteOpen);
+  const staffRouteMounted = useStickyMount(staffRouteOpen);
   const scheduleRouteMounted = useStickyMount(scheduleRouteOpen);
   const reportingRouteMounted = useStickyMount(reportingRouteOpen);
   const integrationsRouteMounted = useStickyMount(integrationsRouteOpen);
@@ -1776,7 +1788,10 @@ export default function App({
     "--app-bg-end": brandBackgroundEnd
   };
   const routedToolAuthorized = (
-    (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
+    (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.STAFF
+      && authSession.isAdmin
+      && OPERATIONAL_STAFFING_UI_ENABLED)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS && diagnosticsEnabled)
@@ -1790,6 +1805,7 @@ export default function App({
     showNotFound: browserRoute.routeId === WORKSPACE_ROUTE_IDS.NOT_FOUND
       || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
       || ([
+        WORKSPACE_ROUTE_IDS.STAFF,
         WORKSPACE_ROUTE_IDS.SCHEDULE,
         WORKSPACE_ROUTE_IDS.REPORTING,
         WORKSPACE_ROUTE_IDS.CATALOG,
@@ -1798,6 +1814,7 @@ export default function App({
         WORKSPACE_ROUTE_IDS.DIAGNOSTICS
       ].includes(resolvedWorkspaceRouteId) && !routedToolAuthorized)
       || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && [
+        WORKSPACE_ROUTE_IDS.STAFF,
         WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
         WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
         WORKSPACE_ROUTE_IDS.MESSAGING
@@ -3995,6 +4012,18 @@ export default function App({
       props: { onInteractionStateChange: setCatalogModalInteraction }
     }
   };
+  const staffTool = {
+    surfaceName: "Staff",
+    component: StaffWorkspace,
+    enabled: authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED,
+    onClose: closeStaffWorkspace,
+    surfaceProps: {
+      organizationId: authSession.organizationId,
+      organizationName: workspaceName
+    },
+    route: { mounted: staffRouteMounted, open: staffRouteOpen },
+    modal: { mounted: false, open: false }
+  };
   const importsTool = {
     surfaceName: "Import Studio",
     component: ImportStudioView,
@@ -4112,6 +4141,7 @@ export default function App({
       principal={{ email: authSession.user.email, role: authSession.role, isAdmin: authSession.isAdmin }}
       capabilities={{
         customerPortal: customerPortalEnabled,
+        staffDirectory: CUSTOMER_CENTERED_WORKSPACE_ENABLED && OPERATIONAL_STAFFING_UI_ENABLED,
         eventSchedule: eventScheduleEnabled,
         reportingDashboard: dashboardEnabled,
         integrationsOps: integrationsEnabled,
@@ -4142,6 +4172,7 @@ export default function App({
         },
         onMessages: () => navigateWorkspace(WORKSPACE_PATHS.messaging),
         onWorkflow: () => navigateWorkspace(WORKSPACE_PATHS.workflow),
+        onStaff: () => navigateWorkspace(WORKSPACE_PATHS.staff),
         onSchedule: (menuTriggerRef) => openRoutedWorkspaceTool(
           WORKSPACE_PATHS.schedule,
           setScheduleOpen,
@@ -4428,6 +4459,7 @@ export default function App({
       )}
 
       {renderWorkspaceTools("route", [
+        staffTool,
         catalogTool,
         importsTool,
         scheduleTool,
@@ -4440,9 +4472,13 @@ export default function App({
         <WorkspaceLazyRoute surfaceName="Workspace page" component={WorkspaceNotFound}>
           <WorkspaceNotFound
             pathname={browserRoute.pathname}
-            reason={resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && !authSession.isAdmin
-              ? "role-denied"
-              : ""}
+            reason={resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.STAFF
+              ? !authSession.isAdmin
+                ? "role-denied"
+                : "feature-disabled"
+              : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && !authSession.isAdmin
+                ? "role-denied"
+                : ""}
             routeId={resolvedWorkspaceRouteId}
             ambientMode={AMBIENT_UI_ENABLED}
             onHome={() => navigateWorkspace(WORKSPACE_PATHS.home)}

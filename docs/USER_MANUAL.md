@@ -163,6 +163,33 @@ This guide explains day-to-day usage of QuotePilot for staff users and admins.
   `operator_recorded` availability windows. Sales staff may inspect those safe
   profiles but cannot configure them. `operator_recorded` means an authorized
   operator entered the window; it is not a staff member's acknowledgement.
+- When the same gates are enabled, administrators see **Staff** in workspace
+  orientation and can open `/app/staff`. The private record stores the person's
+  preferred/legal name, HTTPS photo, email/phone and contact status, emergency
+  contact, role icons and proficiency, qualifications and document links,
+  recurring and exact availability, workload limits, rates and payroll-review
+  state, travel preferences, reporting/arrival defaults, uniform/parking/meal
+  briefing defaults, attendance summaries, response history, reliability and
+  private notes. Sensitive private fields stay in callable-owned `staffRecords`;
+  the safe profile used by assignment planning still excludes them.
+- Select an exact operator-confirmed event assignment under **Staff briefing
+  sheet** to print or download a role-aware PDF. **Open email app** addresses a
+  prefilled message to the email on file and includes the current role, call
+  time, venue, arrival, uniform and responsibility details. Browsers cannot
+  attach the PDF automatically, so download it first when an attachment is
+  needed. Opening the app does not prove send, provider acceptance, delivery,
+  acknowledgement, attendance or payroll readiness.
+- For a person with a verified private email and enabled communications, select
+  an exact confirmed assignment and choose **Preview invitation**. Review the
+  recipient, assignment, message, consequence, and do-nothing outcome. Nothing
+  is sent until an administrator chooses **Send invitation**.
+- After dispatch, the Staff workspace shows two separate rails. **Delivery**
+  distinguishes provider accepted, delivered, bounced, complained, ambiguous,
+  and failed states. **Acknowledgement** remains pending until the person uses
+  the secure link to **Accept assignment** or **Decline assignment**. An open or
+  click never counts as acknowledgement. The response applies only to that
+  invitation and does not edit the staffing plan, attendance, hours, payroll,
+  payment, booking, event completion, or readiness.
 - Admin and sales staff may assign a person to an exact role slot and select
   `Apply operator-confirmed assignments`. The server rechecks the quote
   revision, profile revisions, complete availability coverage, and relevant
@@ -431,7 +458,12 @@ unchanged.
     callable can also recover an eligible legacy `status=deleted` record, but a
     permanently deleted quote cannot be restored. Accepted, declined, booked,
     paid, or refunded evidence blocks both paths.
-  - Export PDF
+  - Export PDF, or use `Print proposal` to open the same current proposal in a
+    print-ready PDF tab without first finding the downloaded file.
+  - `Open email app` prepares the customer address, subject and proposal body
+    in the device's default mail application. It does not attach the PDF and it
+    never changes provider, delivery, quote or portal status; attach the
+    downloaded proposal manually when needed.
   - Copy email template. Copying prepares an artifact only; it does not send
     anything or change draft status.
   - Copy a customer portal link only after the current saved revision has

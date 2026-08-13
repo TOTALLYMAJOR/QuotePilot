@@ -25,6 +25,11 @@ const {
   buildOperationalStaffingReceiptId,
   deriveOperationalStaffingScheduleFenceRefs
 } = require("../functions/operationalStaffingAuthority.js");
+const { defaultStaffRecord } = require("../functions/staffDirectoryAuthority.js");
+const {
+  buildStaffInvitationToken,
+  hashStaffInvitationToken
+} = require("../functions/staffInvitationAuthority.js");
 
 const projectId = String(process.env.GCLOUD_PROJECT || "").trim();
 const authHost = String(process.env.FIREBASE_AUTH_EMULATOR_HOST || "").trim();
@@ -201,6 +206,37 @@ function profileRequest(staffId, requestId, overrides = {}) {
       availabilityWindows: PROFILE_AVAILABILITY
     },
     ...overrides
+  };
+}
+
+function privateStaffRecord(staffId, displayName, capabilities) {
+  const record = defaultStaffRecord({ organizationId: ORG, staffId, displayName, capabilities });
+  const {
+    schemaVersion,
+    authority,
+    authorityVersion,
+    organizationId,
+    staffId: _serverOwnedStaffId,
+    ...raw
+  } = record;
+  return {
+    ...raw,
+    photoUrl: "https://example.com/staff/avery.jpg",
+    contact: {
+      ...raw.contact,
+      email: "avery.staff@example.com",
+      phone: "+1 512 555 0142",
+      emailStatus: "verified",
+      timeZone: "America/Chicago",
+      lastVerifiedAtISO: "2026-08-13T15:00:00.000Z"
+    },
+    compensation: { ...raw.compensation, hourlyRate: 27.5, overtimeRate: 41.25 },
+    briefingDefaults: {
+      ...raw.briefingDefaults,
+      uniform: "Black shirt and trousers",
+      responsibilities: "Dining room setup and plated service"
+    },
+    privateNotes: "Prefers plated evening events."
   };
 }
 
@@ -742,6 +778,195 @@ assert.equal(
   profileCreatedAt
 );
 
+await expectCallableError(
+  () => callFunction("getStaffDirectory", salesPrincipal, { organizationId: ORG }),
+  "PERMISSION_DENIED",
+  /admin role/i
+);
+await expectCallableError(
+  () => callFunction("getStaffDirectory", platformPrincipal, { organizationId: ORG }),
+  "PERMISSION_DENIED",
+  /same-organization/i
+);
+const staffRecordRequest = {
+  requestId: "staff-record-avery-command-0001",
+  organizationId: ORG,
+  staffId: STAFF_A,
+  expectedProfileRevision: 2,
+  expectedRecordRevision: 0,
+  profile: {
+    displayName: updatedProfileA.snapshot.displayName,
+    active: updatedProfileA.snapshot.active,
+    capabilities: updatedProfileA.snapshot.capabilities,
+    availabilityWindows: updatedProfileA.snapshot.availabilityWindows
+  },
+  record: privateStaffRecord(
+    STAFF_A,
+    updatedProfileA.snapshot.displayName,
+    updatedProfileA.snapshot.capabilities
+  )
+};
+await expectCallableError(
+  () => callFunction("saveStaffRecord", salesPrincipal, staffRecordRequest),
+  "PERMISSION_DENIED",
+  /admin role/i
+);
+const savedStaffRecord = await callFunction("saveStaffRecord", adminPrincipal, staffRecordRequest);
+assert.equal(savedStaffRecord.ok, true);
+assert.equal(savedStaffRecord.idempotent, false);
+assert.equal(savedStaffRecord.profile.revision, 3);
+assert.equal(savedStaffRecord.record.revision, 1);
+assert.equal(savedStaffRecord.record.contact.email, "avery.staff@example.com");
+assert.ok(savedStaffRecord.receipts.profile.receiptId);
+assert.ok(savedStaffRecord.receipts.record.receiptId);
+const replayedStaffRecord = await callFunction("saveStaffRecord", adminPrincipal, staffRecordRequest);
+assert.equal(replayedStaffRecord.idempotent, true);
+assert.equal(replayedStaffRecord.receipts.record.receiptId, savedStaffRecord.receipts.record.receiptId);
+const directory = await callFunction("getStaffDirectory", adminPrincipal, { organizationId: ORG });
+assert.equal(directory.storage, "firebase");
+assert.equal(directory.records.find((entry) => entry.profile.staffId === STAFF_A)
+  ?.record?.contact?.email, "avery.staff@example.com");
+assert.equal(directory.assignments.some((assignment) => (
+  assignment.staffId === STAFF_A
+  && assignment.quoteId === "quote-primary"
+  && assignment.quoteRevisionId === "v0015"
+)), true);
+
+const invitationAssignment = directory.assignments.find((assignment) => (
+  assignment.staffId === STAFF_A
+  && assignment.quoteId === "quote-primary"
+  && assignment.quoteRevisionId === "v0015"
+));
+assert.ok(invitationAssignment);
+const invitationScope = {
+  organizationId: ORG,
+  quoteId: invitationAssignment.quoteId,
+  staffId: STAFF_A,
+  assignmentId: invitationAssignment.assignmentId,
+  expectedQuoteRevisionId: invitationAssignment.quoteRevisionId,
+  expectedPlanRevision: invitationAssignment.planRevision,
+  expectedRecordRevision: savedStaffRecord.record.revision
+};
+await expectCallableError(
+  () => callFunction("previewStaffInvitation", salesPrincipal, invitationScope),
+  "PERMISSION_DENIED",
+  /admin role/i
+);
+const invitationPreviewResult = await callFunction(
+  "previewStaffInvitation",
+  adminPrincipal,
+  invitationScope
+);
+assert.equal(invitationPreviewResult.ok, true);
+assert.equal(invitationPreviewResult.preview.scope.assignmentId, invitationAssignment.assignmentId);
+assert.equal(invitationPreviewResult.preview.recipient.email, "avery.staff@example.com");
+await expectCallableError(
+  () => callFunction("dispatchStaffInvitation", adminPrincipal, {
+    ...invitationScope,
+    previewDigest: invitationPreviewResult.preview.previewDigest,
+    requestId: "staff-invitation-emulator-disabled-provider-0001"
+  }),
+  "FAILED_PRECONDITION",
+  /configured email provider/i
+);
+const invitationRef = orgRef.collection("staffInvitations")
+  .doc(invitationPreviewResult.preview.invitationId);
+assert.equal((await invitationRef.get()).exists, false);
+
+const invitationIssuedAtISO = new Date().toISOString();
+const eventStartsAtMs = Date.parse(invitationAssignment.eventWindow.startAtISO);
+const invitationExpiresAtISO = new Date(Math.min(
+  Date.parse(invitationIssuedAtISO) + (7 * 24 * 60 * 60 * 1000),
+  eventStartsAtMs - 60_000
+)).toISOString();
+const invitationToken = buildStaffInvitationToken({
+  preview: invitationPreviewResult.preview,
+  secret: process.env.STAFF_INVITATION_TOKEN_SECRET,
+  issuedAtISO: invitationIssuedAtISO,
+  expiresAtISO: invitationExpiresAtISO
+});
+const invitationDocument = {
+  invitationId: invitationPreviewResult.preview.invitationId,
+  organizationId: ORG,
+  quoteId: invitationAssignment.quoteId,
+  quoteRevisionId: invitationAssignment.quoteRevisionId,
+  planRevision: invitationAssignment.planRevision,
+  assignmentId: invitationAssignment.assignmentId,
+  staffId: STAFF_A,
+  recordRevision: savedStaffRecord.record.revision,
+  role: invitationAssignment.role,
+  previewDigest: invitationPreviewResult.preview.previewDigest,
+  tokenHash: hashStaffInvitationToken(invitationToken),
+  issuedAtISO: invitationIssuedAtISO,
+  expiresAtISO: invitationExpiresAtISO,
+  state: "provider_accepted",
+  provider: "resend",
+  providerMessageId: "emulator-provider-message-1",
+  providerAcceptedAtISO: invitationIssuedAtISO,
+  acknowledgement: { state: "pending", respondedAtISO: "", declineReason: "" },
+  preview: {
+    recipientName: invitationPreviewResult.preview.recipient.name,
+    role: invitationPreviewResult.preview.role,
+    event: invitationPreviewResult.preview.event
+  },
+  updatedAtISO: invitationIssuedAtISO
+};
+await invitationRef.set(invitationDocument);
+const planBeforeAcknowledgement = comparable(
+  (await orgRef.collection("eventStaffingPlans").doc("quote-primary").get()).data()
+);
+const recordBeforeAcknowledgement = comparable(
+  (await orgRef.collection("staffRecords").doc(STAFF_A).get()).data()
+);
+const publicInvitation = await callFunction("getStaffInvitation", null, { token: invitationToken });
+assert.equal(publicInvitation.canRespond, true);
+assert.equal(publicInvitation.assignment.event.name, invitationPreviewResult.preview.event.name);
+const acceptedInvitation = await callFunction("respondToStaffInvitation", null, {
+  token: invitationToken,
+  decision: "accepted"
+});
+assert.equal(acceptedInvitation.acknowledgement.state, "accepted");
+assert.equal(acceptedInvitation.idempotent, false);
+const replayedAcceptance = await callFunction("respondToStaffInvitation", null, {
+  token: invitationToken,
+  decision: "accepted"
+});
+assert.equal(replayedAcceptance.idempotent, true);
+await expectCallableError(
+  () => callFunction("respondToStaffInvitation", null, {
+    token: invitationToken,
+    decision: "declined",
+    declineReason: "Conflicting response"
+  }),
+  "ALREADY_EXISTS",
+  /already accepted/i
+);
+assert.deepEqual(
+  comparable((await orgRef.collection("eventStaffingPlans").doc("quote-primary").get()).data()),
+  planBeforeAcknowledgement
+);
+assert.deepEqual(
+  comparable((await orgRef.collection("staffRecords").doc(STAFF_A).get()).data()),
+  recordBeforeAcknowledgement
+);
+const directoryAfterAcknowledgement = await callFunction(
+  "getStaffDirectory",
+  adminPrincipal,
+  { organizationId: ORG }
+);
+assert.equal(directoryAfterAcknowledgement.invitations.find((item) => (
+  item.invitationId === invitationDocument.invitationId
+))?.acknowledgement?.state, "accepted");
+
+const providerEventRef = orgRef.collection("staffInvitationProviderEvents")
+  .doc("emulator-provider-event-1");
+const providerMessageIndexRef = db.collection("staffInvitationProviderMessageIndex")
+  .doc("emulator-provider-message-1");
+await Promise.all([
+  providerEventRef.set({ organizationId: ORG, invitationId: invitationDocument.invitationId }),
+  providerMessageIndexRef.set({ organizationId: ORG, invitationId: invitationDocument.invitationId })
+]);
+
 const profileReceiptRef = orgRef.collection("staffProfiles").doc(STAFF_A)
   .collection("versions").doc(profileA.receipt.receiptId);
 const planReceiptRef = orgRef.collection("eventStaffingPlans").doc("quote-primary")
@@ -767,9 +992,15 @@ const browser = await browserDbFor(salesPrincipal, "operational-staffing-rules-c
 const deniedPaths = [
   ["organizations", ORG, "staffProfiles", STAFF_A],
   ["organizations", ORG, "staffProfiles", STAFF_A, "versions", profileA.receipt.receiptId],
+  ["organizations", ORG, "staffRecords", STAFF_A],
+  ["organizations", ORG, "staffRecords", STAFF_A, "versions", savedStaffRecord.receipts.record.receiptId],
+  ["organizations", ORG, "staffInvitations", invitationDocument.invitationId],
+  ["organizations", ORG, "staffInvitations", invitationDocument.invitationId, "staffInvitationReceipts", "acknowledgement"],
+  ["organizations", ORG, "staffInvitationProviderEvents", "emulator-provider-event-1"],
   ["organizations", ORG, "eventStaffingPlans", "quote-primary"],
   ["organizations", ORG, "eventStaffingPlans", "quote-primary", "versions", appliedPrimary.receipt.receiptId],
-  ["organizations", ORG, "staffingScheduleFences", primaryBase.expectedScheduleFences[0].fenceId]
+  ["organizations", ORG, "staffingScheduleFences", primaryBase.expectedScheduleFences[0].fenceId],
+  ["staffInvitationProviderMessageIndex", "emulator-provider-message-1"]
 ];
 for (const path of deniedPaths) {
   const target = doc(browser.browserDb, ...path);
@@ -794,4 +1025,6 @@ console.log("- atomic UTC-day fences prevented concurrent overlap and allowed ha
 console.log("- a moved active quote revision atomically cleaned old-window fences and preserved createdAt");
 console.log("- clearing a plan removed old fence projections without disturbing peer assignments");
 console.log("- direct browser access to current docs, nested receipts, and fences was denied");
+console.log("- private staff records, paired receipts, exact-assignment briefings, and role denial were proven");
+console.log("- exact invitation preview, provider-disabled dispatch, bearer response, replay, and evidence separation were proven");
 console.log("- failed commands left no plan, receipt, or fence writes and did not mutate quote/portal/payment/BEO evidence");

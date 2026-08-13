@@ -36,7 +36,7 @@ function fixture(overrides = {}) {
           VITE_PILOT_EVENT_ROOM_ENABLED: "true"
           VITE_PILOT_COMMAND_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
-          VITE_OPERATIONAL_STAFFING_ENABLED: "false"
+          VITE_OPERATIONAL_STAFFING_ENABLED: "true"
       - name: Build compatibility production bundle
         run: npm run build && npm run check:perf:bundle
         env:
@@ -46,7 +46,7 @@ function fixture(overrides = {}) {
         run: npm run build && npm run check:perf:bundle
         env:
           VITE_AMBIENT_UI_ENABLED: "true"
-          VITE_OPERATIONAL_STAFFING_ENABLED: "false"
+          VITE_OPERATIONAL_STAFFING_ENABLED: "true"
           BUNDLE_BUDGET_PROFILE: ambient-production
       - name: Continue protected lane
         run: npm run build
@@ -57,7 +57,7 @@ function fixture(overrides = {}) {
 });
 `,
     orchestration: "npm run check:ambient-release-gate\n",
-    deploy: "env:\n  VITE_AMBIENT_UI_ENABLED: \"true\"\n",
+    deploy: "env:\n  VITE_AMBIENT_UI_ENABLED: \"true\"\n  VITE_OPERATIONAL_STAFFING_ENABLED: \"true\"\n",
     ...overrides
   };
 
@@ -99,7 +99,7 @@ describe("Ambient zero-dead-click release gate", () => {
     );
   });
 
-  test("fails closed when governed staffing authority is accidentally enabled by the UI gate", () => {
+  test("fails closed when the promoted staffing presentation is missing from the UI gate", () => {
     const root = fixture({
       ci: `jobs:
   playwright_smoke:
@@ -112,7 +112,7 @@ describe("Ambient zero-dead-click release gate", () => {
           VITE_PILOT_EVENT_ROOM_ENABLED: "true"
           VITE_PILOT_COMMAND_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
-          VITE_OPERATIONAL_STAFFING_ENABLED: "true"
+          VITE_OPERATIONAL_STAFFING_ENABLED: "false"
       - name: Build compatibility production bundle
         run: npm run build && npm run check:perf:bundle
         env:
@@ -122,13 +122,13 @@ describe("Ambient zero-dead-click release gate", () => {
         run: npm run build && npm run check:perf:bundle
         env:
           VITE_AMBIENT_UI_ENABLED: "true"
-          VITE_OPERATIONAL_STAFFING_ENABLED: "false"
+          VITE_OPERATIONAL_STAFFING_ENABLED: "true"
           BUNDLE_BUDGET_PROFILE: ambient-production
 `
     });
 
     expect(() => assertAmbientReleaseGate({ root })).toThrow(
-      "must keep independently governed staffing authority explicitly off"
+      "must exercise the promoted staffing presentation"
     );
   });
 });

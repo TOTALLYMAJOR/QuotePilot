@@ -1,6 +1,6 @@
 # Authoritative Operational Staffing ADR
 
-Last updated: August 11, 2026
+Last updated: August 13, 2026
 
 Status: source implementation behind independent default-off presentation,
 server, and tenant gates. This decision record does not establish deployment,
@@ -25,6 +25,21 @@ The authority records only three bounded facts:
 Those facts never establish that the staff member acknowledged the assignment,
 attended, was paid, is qualified beyond the configured capability, or that the
 event is booked or ready.
+
+The administrator-only Staff workspace adds a paired private directory record,
+but it does not widen assignment-plan authority. Contact, photo, qualification,
+rate, travel, briefing, attendance-summary, reliability and note fields are
+trusted operator records. They remain distinct from the safe profile consumed
+by operational planning and from member acknowledgement, payroll, attendance,
+provider delivery or event-readiness evidence.
+
+The first outbound communication slice is deliberately manual. An
+administrator previews a message generated from one exact quote revision,
+staffing-plan revision, operator-confirmed assignment, private-record revision,
+and verified private email. Dispatch recomputes that scope before one
+idempotent provider attempt. The response link is HMAC-signed and bearer-scoped
+to the same immutable invitation. It can write only an accept or decline
+acknowledgement and its immutable receipt.
 
 ## Why the Existing Fields Are Not Authority
 
@@ -57,6 +72,8 @@ until a separately reviewed rollout.
   staffing projection.
 - Tenant administrators alone may create or revise staff profiles and
   operator-recorded availability.
+- Tenant administrators alone may read or revise full private staff records and
+  generate revision-bound staff briefing artifacts.
 - Same-tenant administrators and sales staff may apply an assignment plan.
 - Customer, unauthenticated, unverified-email, cross-tenant, and unscoped
   principals are denied.
@@ -88,6 +105,17 @@ All operational records live below the exact organization:
   capabilities, operator-recorded availability, and revision.
 - `staffProfiles/{staffId}/versions/{receiptId}`: immutable profile-command
   receipt.
+- `staffRecords/{staffId}`: private contact/photo, role detail, qualifications,
+  scheduling preferences, rates, travel, assignment/briefing defaults,
+  attendance summary, reliability and administrative notes.
+- `staffRecords/{staffId}/versions/{receiptId}`: immutable private-record
+  command receipt paired to the safe-profile command identity.
+- `staffInvitations/{invitationId}`: exact assignment and recipient digest,
+  provider-acceptance/delivery state, expiry, and invitation acknowledgement.
+- `staffInvitations/{invitationId}/staffInvitationReceipts/{receiptId}`:
+  immutable manual-dispatch and acknowledgement receipts.
+- `staffInvitationProviderEvents/{eventId}` and the global hashed provider
+  message index: signed, replay-safe Resend delivery/bounce/complaint evidence.
 - `eventStaffingPlans/{quoteId}`: exact quote revision, event window, copied
   commercial requirements, operator-confirmed assignments, coverage gaps, and
   plan revision.
@@ -98,6 +126,24 @@ All operational records live below the exact organization:
 
 Public projections exclude email, phone, token, provider, payment, portal,
 message, payroll, attendance, and internal interval fields.
+
+The Staff directory callable returns private records only to an exact-tenant
+administrator. Its event briefings join only an `operator_confirmed` assignment
+with the named staffing-plan and immutable quote revisions. Role-specific
+content excludes customer contact, pricing, margin, portal tokens and payment
+details. Printing/downloading creates a local artifact; opening a `mailto:`
+handoff does not prove send, provider acceptance, delivery or acknowledgement.
+
+Manual provider dispatch is stronger than the mail-app handoff but keeps three
+evidence domains separate: an accepted Resend API request is
+`provider_accepted`; only a verified provider webhook establishes delivered,
+bounced, or complained; only the signed response link establishes accepted or
+declined. Opens and clicks are ignored for acknowledgement. A late provider
+event cannot downgrade terminal bounce or complaint evidence. The invitation
+provider ingress reuses the existing signed `revenueAutopilotResendWebhook`,
+then routes only through the separate server-owned staff provider-message index.
+One verified signature cannot cross-bind a Revenue Autopilot job and a staff
+invitation.
 
 ## Availability and Assignments
 

@@ -20,6 +20,28 @@ Last updated: August 13, 2026
 
 ## Current Release Candidate (Not Production)
 
+- The owner has authorized exact-candidate publication plus coordinated
+  Firebase and Vercel production deployment for live testing after the required
+  gates. Production configuration already names the approved Resend provider
+  and sender; the Resend API/webhook secrets existed, and a separate staff
+  invitation token secret was created and immediately rotated before use.
+  Provider acceptance, signed delivery evidence, recipient acknowledgement,
+  and human acceptance remain post-deployment tests, not current claims.
+- The current working candidate adds an administrator-only Staff route and a
+  private, callable-owned staff-record authority paired atomically with the
+  existing safe operational profile. It also adds exact-revision role briefing
+  PDFs, default-email-app handoffs, and direct proposal print/email-app actions.
+  Local validation passes the 3,668-test unit suite (3,594 passed and 74
+  skipped), the 70-test Firestore rules suite, the disposable operational
+  staffing authority emulator, capability/doc/secret/workflow gates, the
+  Ambient production-flag build, and the named temporary bundle ceiling. This
+  remains working-tree source/local evidence only: it is not in `main`,
+  deployed, tenant-enabled, hosted-accepted, provider-sent,
+  recipient-acknowledged, or human-accepted.
+  The promoted Ambient-plus-Staff graph is 3,804,078 JavaScript bytes and stays
+  within an exact temporary profile ceiling; the largest chunk remains within
+  the prior 391,901-byte ceiling. The compatibility graph is 2,878,699 bytes
+  under the same named temporary exception; its largest chunk also did not grow.
 - The Stripe Connect program has begun with a source-only organization
   authority prerequisite. New owner invitations are explicit, verified
   activation atomically binds one owner and leaves an immutable browser-private
@@ -248,14 +270,14 @@ Last updated: August 13, 2026
   or provider evidence is introduced; connected exact-token behavior,
   deployment, production data, provider outcomes, and human acceptance remain
   open.
-  The production workflows intentionally omit `VITE_AMBIENT_UI_ENABLED` and
-  `VITE_OPERATIONAL_STAFFING_ENABLED`. The proposed release therefore retains
-  the `v0.7.0` Pilot command and customer decision-room behavior; AIUI-38/39,
-  AIUI-46, the Ambient shell, hold-to-capture voice, and staffing presentation
-  remain dormant. Firebase `all` may publish staffing endpoints and deny-only
-  rules, but the generated Functions environment explicitly keeps
-  `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false`, and the exact tenant gate
-  remains independently required.
+  The production workflows now bind the already promoted Ambient presentation
+  and the owner-approved staffing presentation. Firebase `all` materializes
+  `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true`; the exact tenant gate remains
+  independently required, and provider dispatch also requires the approved
+  sender plus its bound secrets. This changes release intent only after the
+  exact candidate passes source, emulator, CI, tagged-main, and deployment
+  gates; it does not itself prove hosted use, provider delivery, recipient
+  acknowledgement, or human acceptance.
   Focused local proof for this Library slice passes 122 of 122 tests across its
   pure model, structured Event Templates editor, exact-arrival contract, route, role
   boundary, fallback isolation, and existing Catalog Admin tests. A dedicated

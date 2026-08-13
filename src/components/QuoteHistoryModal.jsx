@@ -12,6 +12,7 @@ import {
 import { getEventTypes } from "../lib/menuService";
 import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import { buildQuoteEmailPayload } from "../lib/proposalPayload";
+import { buildDefaultEmailAppHandoff } from "../lib/defaultEmailApp";
 import { getApprovalRequestExecutionEligibility } from "../lib/quoteWorkflow";
 import { getRebookDeliveryGate } from "../lib/rebookQuoteClient";
 import { portalConversationAvailable } from "../lib/portalConversationClient";
@@ -1633,6 +1634,51 @@ export function QuoteHistoryView({
     }
   };
 
+  const handlePrintProposal = async (quote) => {
+    setExportingPdfId(quote.id);
+    try {
+      assertRebookArtifactReady(quote, { tenantTimeZone });
+      const { exportQuoteProposal } = await import("../lib/proposalExport");
+      await exportQuoteProposal(quote, {
+        basePortalUrl,
+        includePortalLink: isCustomerPortalShareable(quote, {
+          requireDeliveryEvidence: state.source === "firebase"
+        }),
+        output: "print"
+      });
+      const feedback = `Opened a printable proposal for ${quote.quoteNumber}.`;
+      setState((prev) => ({ ...prev, feedback }));
+      pushToast(feedback, "success");
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: err?.message || "Failed to open the proposal print preview." }));
+    } finally {
+      setExportingPdfId("");
+    }
+  };
+
+  const handleOpenDefaultEmailApp = (quote) => {
+    try {
+      assertRebookArtifactReady(quote, { tenantTimeZone });
+      const template = buildQuoteEmailPayload(quote, {
+        basePortalUrl,
+        includePortalLink: isCustomerPortalShareable(quote, {
+          requireDeliveryEvidence: state.source === "firebase"
+        })
+      });
+      const handoff = buildDefaultEmailAppHandoff({
+        to: quote?.customer?.email,
+        subject: template.subject,
+        body: template.body
+      });
+      window.location.assign(handoff.href);
+      const feedback = `Opened the default email app for ${quote.quoteNumber}. No send or delivery status changed.`;
+      setState((prev) => ({ ...prev, feedback }));
+      pushToast(feedback, "info");
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: err?.message || "Failed to open the default email app." }));
+    }
+  };
+
   const handleOpenKitchenBeo = (quote) => {
     try {
       assertRebookArtifactReady(quote, { tenantTimeZone });
@@ -2422,6 +2468,28 @@ export function QuoteHistoryView({
                   {exportingPdfId === focusedQuote.id ? "Generating PDF..." : "Download PDF"}
                 </button>
               )}
+              {permissions.canExportProposal && (
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => handlePrintProposal(focusedQuote)}
+                  disabled={exportingPdfId === focusedQuote.id || !focusedRebookDeliveryGate.ready}
+                  title={!focusedRebookDeliveryGate.ready ? focusedRebookDeliveryGate.message : "Open a print-ready proposal PDF"}
+                >
+                  {exportingPdfId === focusedQuote.id ? "Preparing proposal…" : "Print proposal"}
+                </button>
+              )}
+              {permissions.canCopyArtifacts && focusedQuote?.customer?.email && (
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => handleOpenDefaultEmailApp(focusedQuote)}
+                  disabled={!focusedRebookDeliveryGate.ready}
+                  title={!focusedRebookDeliveryGate.ready ? focusedRebookDeliveryGate.message : "Open a prefilled message without changing delivery status"}
+                >
+                  Open email app
+                </button>
+              )}
               {!focusedQuoteCanSend && focusedQuoteEmailUnconfigured && integrationsAvailable && (
                 <button type="button" className="ghost" onClick={handleOpenIntegrations}>
                   Set up email in Integrations
@@ -2885,6 +2953,28 @@ export function QuoteHistoryView({
                             title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : ""}
                           >
                             {exportingPdfId === quote.id ? "Generating PDF..." : "PDF"}
+                          </button>
+                        )}
+                        {permissions.canExportProposal && (
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handlePrintProposal(quote)}
+                            disabled={exportingPdfId === quote.id || !rebookDeliveryGate.ready}
+                            title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : "Open print-ready proposal"}
+                          >
+                            Print
+                          </button>
+                        )}
+                        {permissions.canCopyArtifacts && quote?.customer?.email && (
+                          <button
+                            type="button"
+                            className="ghost compact"
+                            onClick={() => handleOpenDefaultEmailApp(quote)}
+                            disabled={!rebookDeliveryGate.ready}
+                            title={!rebookDeliveryGate.ready ? rebookDeliveryGate.message : "Open default email app"}
+                          >
+                            Email app
                           </button>
                         )}
                         {permissions.canExportBeo && (
