@@ -38,6 +38,11 @@ import {
   selectionScenarioQuantity
 } from "../lib/ambientSelectionObjects";
 import {
+  beginAmbientGesture,
+  gestureDirectionToReorderOffset,
+  resolveAmbientGesture
+} from "../lib/ambientGestureController";
+import {
   recordProductAnalyticsAmbientAssessment,
   recordProductAnalyticsIssueResolved,
   recordProductAnalyticsIssueSurfaced,
@@ -60,6 +65,7 @@ import {
 import AmbientMoneyContext from "./AmbientMoneyContext";
 import AmbientConversationContext from "./AmbientConversationContext";
 import AmbientProposalContext from "./AmbientProposalContext";
+import AmbientOperationalReceipts from "./AmbientOperationalReceipts";
 import "./ambientLivingOpportunity.css";
 
 const AMBIENT_INTERACTION_EVENT_NAME = "quotepilot:ambient-interaction";
@@ -293,7 +299,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   onArrivalResolution = null,
   globalPilotRequest = null,
   globalPilotReturnFocusRef = null,
-  onGlobalPilotResolution = null
+  onGlobalPilotResolution = null,
+  quoteActionController = null
 }, forwardedRef) {
   const ambientContext = useAmbientContext({ optional: true });
   const rootRef = useRef(null);
@@ -366,6 +373,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const selectionScenarioRef = useRef({});
   const [menuReplacementSourceId, setMenuReplacementSourceId] = useState("");
   const menuDragItemRef = useRef("");
+  const menuGestureRef = useRef(null);
   const [pricingPreviewState, setPricingPreviewState] = useState(EMPTY_PRICING_PREVIEW_STATE);
   const pricingScenarioRef = useRef(recordedGuestCount);
   const [pilotOpen, setPilotOpen] = useState(false);
@@ -1297,6 +1305,32 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       inspectActionId: model.actions.inspectMenu.id,
       nextResolution: "Review the exact menu order and live dependencies; then save intentionally or leave the existing version unchanged."
     });
+  };
+
+  const beginMenuGesture = (event, itemId) => {
+    if (!model.actions.reorderMenuInDraft || event.target?.closest?.("button, select, a, input")) return;
+    menuGestureRef.current = beginAmbientGesture(event, {
+      axis: "horizontal",
+      itemId
+    });
+    if (menuGestureRef.current) event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const finishMenuGesture = (event, index) => {
+    const start = menuGestureRef.current;
+    menuGestureRef.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    const result = resolveAmbientGesture(start, event);
+    if (result.state !== "resolved") return;
+    const offset = gestureDirectionToReorderOffset(result.direction);
+    const targetIndex = index + offset;
+    if (!offset || targetIndex < 0 || targetIndex >= model.menuObject.items.length) return;
+    // The trusted draft-intent contract deliberately has only pointer and
+    // keyboard methods. A touch swipe is a pointer representation of the same
+    // reorder outcome, not a third authority path.
+    stageMenuReorder(result.itemId, targetIndex, "pointer");
   };
 
   const updateSelectionScenario = (nextScenario) => {
@@ -2643,12 +2677,15 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
 
   return (
     <article
-      className={`ambient-living-opportunity${contextSurfaceActive ? " ambient-context-active" : ""}`}
+      className={`ambient-living-opportunity ambient-purpose-surface${contextSurfaceActive ? " ambient-context-active" : ""}`}
       data-ambient-model={model.modelId}
       data-feedback-kind={feedbackEvent?.type || feedbackEvent?.kind || undefined}
       data-surface-purpose={model.surface.purpose.join(" ")}
+      data-surface-density="editorial"
+      data-surface-contract-id={model.surface.id}
       data-quote-id={model.identity.quoteId}
       data-ambient-role={ambientRole}
+      data-quote-action-controller={quoteActionController?.modelId || undefined}
       data-ambient-organization={ambientContext?.organizationId || "unscoped"}
       data-ambient-audit-phase={interactionObservation?.phase || "idle"}
       data-ambient-primary-assessments={interactionHealth.observedActionCount}
@@ -3271,6 +3308,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         </dl>
       </section>
 
+      <AmbientOperationalReceipts model={model.operationalReceipts} />
+
       <footer className="ambient-opportunity-evidence">
         <Info size={17} aria-hidden="true" />
         <p>{model.evidenceNote} {model.editBoundary}</p>
@@ -3579,8 +3618,15 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
                     stageMenuReorder(movedItemId, index, "pointer");
                   }}
                   onDragEnd={() => { menuDragItemRef.current = ""; }}
+                  onPointerDown={(event) => beginMenuGesture(event, item.id || "")}
+                  onPointerUp={(event) => finishMenuGesture(event, index)}
+                  onPointerCancel={() => { menuGestureRef.current = null; }}
+                  onLostPointerCapture={() => { menuGestureRef.current = null; }}
                   data-menu-item-id={item.id || undefined}
                   data-ambient-action-id={model.actions.reorderMenuInDraft?.id}
+                  data-pointer-reorder="swipe-or-drag"
+                  data-gesture-alternative="visible-move-buttons"
+                  data-keyboard-alternative="native-move-buttons"
                 >
                   <div>
                     <strong>{item.savedName || item.id || "Unnamed saved item"}</strong>
@@ -3620,6 +3666,11 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
                 </li>
               ))}
             </ol>
+            {model.actions.reorderMenuInDraft && (
+              <p className="ambient-menu-gesture-note">
+                Drag with a pointer, swipe left or right on touch, or use Move earlier and Move later. Every method opens the same unsaved review.
+              </p>
+            )}
           </section>
 
           {model.actions.replaceMenuItemInDraft && (

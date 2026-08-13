@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
@@ -126,9 +127,7 @@ const CustomerWorkspaceView = createRecoverableLazy(
   "CustomerWorkspaceView"
 );
 const MessagingStation = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/MessagingStation")
-    : () => import("./components/LegacyMessagingStation"),
+  () => import("quotepilot-active-messaging-station"),
   "MessagingStation"
 );
 const WorkspaceNotFound = createRecoverableLazy(
@@ -136,9 +135,7 @@ const WorkspaceNotFound = createRecoverableLazy(
   "WorkspaceNotFound"
 );
 const EventScheduleView = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/EventScheduleRoute")
-    : () => import("./components/LegacyEventScheduleRoute"),
+  () => import("quotepilot-active-event-schedule"),
   "EventScheduleView"
 );
 const IntegrationOpsView = createRecoverableLazy(
@@ -158,21 +155,15 @@ const QuoteCompareModal = createRecoverableLazy(
   "QuoteCompareModal"
 );
 const QuoteHistoryView = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/QuoteHistoryRoute")
-    : () => import("./components/LegacyQuoteHistoryRoute"),
+  () => import("quotepilot-active-quote-history"),
   "QuoteHistoryView"
 );
 const ReportingDashboardView = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/ReportingDashboardRoute")
-    : () => import("./components/LegacyReportingDashboardRoute"),
+  () => import("quotepilot-active-reporting"),
   "ReportingDashboardView"
 );
 const SalesWorkflowView = createRecoverableLazy(
-  AMBIENT_UI_ENABLED
-    ? () => import("./components/SalesWorkflowRoute")
-    : () => import("./components/LegacySalesWorkflowRoute"),
+  () => import("quotepilot-active-workflow"),
   "SalesWorkflowView"
 );
 

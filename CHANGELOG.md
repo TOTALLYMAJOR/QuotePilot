@@ -8,6 +8,22 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Completed a material source slice for every AIUI-01–50 Ambient work-plan
+  item without widening data or provider authority. Quote History now exposes a
+  dedicated Opportunities/Event Room/role-safe action controller seam; core
+  Ambient routes share one purpose-bearing editorial surface grammar; accepted
+  and booked Living Opportunities keep acceptance, contract, provider-confirmed
+  payment, BEO, authoritative staffing, and closeout receipts separate; and
+  mobile selection/Menu gestures share one cancellation-safe controller with
+  equally visible native-button and keyboard paths into the same unsaved
+  review. The Ambient build graph now selects focused route implementations
+  directly while the compatibility app preserves rollback. A fail-closed
+  retirement manifest prevents deletion of the legacy stepper, Command Center,
+  table disclosure, older search, or presentation flags until parity, rollback,
+  accepted-release, and promotion evidence all exist. This is source/local
+  completion evidence only, not deployment, provider behavior, retirement
+  approval, or human acceptance.
+
 - Implemented the next dormant Stripe Connect control-plane slice without
   exporting or invoking it. The concrete repository can select only the named
   `connect-control` database, reserves an immutable connection generation and

@@ -237,9 +237,10 @@ export function AmbientClientsDirectory({
       data-capability-state={state}
     >
       <section
-        className="ambient-clients"
+        className="ambient-clients ambient-purpose-surface"
         data-surface-contract-id={model.surfaceContract?.id || "ambient-clients"}
         data-surface-purpose={(model.surfaceContract?.purposes || ["clarify", "advance", "reveal_context"]).join(" ")}
+        data-surface-density="editorial"
         data-ambient-clients-state={state}
       >
         <header className="ambient-clients__masthead">
@@ -714,9 +715,10 @@ export function AmbientClientRelationship({
 
   return (
     <section
-      className="ambient-client-overview"
+      className="ambient-client-overview ambient-purpose-surface"
       data-surface-contract-id={model.surfaceContract?.id || "ambient-client-relationship"}
       data-surface-purpose={(model.surfaceContract?.purposes || ["clarify", "advance", "resolve", "reveal_context"]).join(" ")}
+      data-surface-density="editorial"
       data-client-id={customerId}
       data-client-overview-state={model.state || "success"}
     >

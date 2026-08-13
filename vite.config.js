@@ -57,6 +57,21 @@ export default defineConfig(({ mode }) => {
   const activeStaffEvidenceRail = ambientGraphEnabled
     ? fileURLToPath(new URL("./src/components/StaffEvidenceRail.jsx", import.meta.url))
     : fileURLToPath(new URL("./src/components/LegacyStaffEvidenceRail.jsx", import.meta.url));
+  const activeMessagingStation = ambientGraphEnabled
+    ? fileURLToPath(new URL("./src/components/MessagingStation.jsx", import.meta.url))
+    : fileURLToPath(new URL("./src/components/LegacyMessagingStation.jsx", import.meta.url));
+  const activeEventScheduleRoute = ambientGraphEnabled
+    ? fileURLToPath(new URL("./src/components/EventScheduleRoute.jsx", import.meta.url))
+    : fileURLToPath(new URL("./src/components/LegacyEventScheduleRoute.jsx", import.meta.url));
+  const activeQuoteHistoryRoute = ambientGraphEnabled
+    ? fileURLToPath(new URL("./src/components/QuoteHistoryRoute.jsx", import.meta.url))
+    : fileURLToPath(new URL("./src/components/LegacyQuoteHistoryRoute.jsx", import.meta.url));
+  const activeReportingRoute = ambientGraphEnabled
+    ? fileURLToPath(new URL("./src/components/ReportingDashboardRoute.jsx", import.meta.url))
+    : fileURLToPath(new URL("./src/components/LegacyReportingDashboardRoute.jsx", import.meta.url));
+  const activeWorkflowRoute = ambientGraphEnabled
+    ? fileURLToPath(new URL("./src/components/SalesWorkflowRoute.jsx", import.meta.url))
+    : fileURLToPath(new URL("./src/components/LegacySalesWorkflowRoute.jsx", import.meta.url));
   const activeLegacyHome = environmentFlagEnabled(buildEnvironment.VITE_PILOT_NOW_ENABLED)
     ? fileURLToPath(new URL("./src/components/LegacyNowView.jsx", import.meta.url))
     : activeCommandCenterHome;
@@ -79,6 +94,11 @@ export default defineConfig(({ mode }) => {
       "quotepilot-active-command-center-home": activeCommandCenterHome,
       "quotepilot-active-customer-directory": activeCustomerDirectoryView,
       "quotepilot-active-staff-evidence": activeStaffEvidenceRail,
+      "quotepilot-active-messaging-station": activeMessagingStation,
+      "quotepilot-active-event-schedule": activeEventScheduleRoute,
+      "quotepilot-active-quote-history": activeQuoteHistoryRoute,
+      "quotepilot-active-reporting": activeReportingRoute,
+      "quotepilot-active-workflow": activeWorkflowRoute,
       "quotepilot-active-legacy-home": activeLegacyHome
     }
   },

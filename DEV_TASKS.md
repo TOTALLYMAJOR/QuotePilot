@@ -143,15 +143,13 @@ Only open work belongs here. Current operational truth lives in
   compatibility, role, interaction, accessibility, rollback, and approval gates
   pass; source completion, deployment, provider evidence, production-data
   acceptance, and human acceptance remain separate milestones.
-- Finish the five items that do not yet have a material end-to-end slice:
-  AIUI-04 (quote-history/controller split and lifecycle parity), AIUI-12
-  (app-wide lighter visual grammar), AIUI-35 (accepted/booked operational
-  receipts), AIUI-42 (complete mobile gesture and equivalent-control system),
-  and AIUI-48 (legacy retirement after parity and rollback evidence). AIUI-50
-  now has a material protected-CI slice but still needs preview, authenticated
-  staff and portal acceptance, first-minute/timing review, explicit promotion
-  approval, and an exact rollback artifact. The other 45 remain partial until
-  their complete acceptance contracts close.
+- Qualify all 50 materially implemented AIUI items against their complete
+  acceptance contracts. AIUI-50 still needs preview, authenticated staff and
+  portal acceptance, first-minute/timing review, explicit promotion approval,
+  and an exact rollback artifact. AIUI-48 permits later reviewed deletion only
+  after parity, rollback, accepted-release, and promotion evidence all pass;
+  until then the legacy stepper, Command Center, table disclosure, older search,
+  and presentation flags remain intentional compatibility assets.
 
 ## P1 - Workspace Design Follow-ups
 

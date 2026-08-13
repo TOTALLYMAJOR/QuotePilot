@@ -324,10 +324,11 @@ export default function AmbientNowView({
 
   return (
     <section
-      className="now-surface ambient-now"
+      className="now-surface ambient-now ambient-purpose-surface"
       aria-labelledby="now-heading"
       data-surface-contract-id={AMBIENT_NOW_SURFACE.id}
       data-surface-purpose="clarify advance resolve reveal_context"
+      data-surface-density="editorial"
       data-briefing-state={briefing.state}
     >
       <header className="command-center-head ambient-now__masthead">

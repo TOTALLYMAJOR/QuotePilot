@@ -1,0 +1,43 @@
+/* Ambient route surfaces share one restrained, purpose-bearing visual grammar. */
+.ambient-purpose-surface {
+  --ambient-surface-hairline: color-mix(in srgb, var(--staff-ink, #21302b) 14%, transparent);
+  --ambient-surface-muted: color-mix(in srgb, var(--staff-ink, #21302b) 64%, transparent);
+  --ambient-surface-gap: clamp(1rem, 2vw, 1.75rem);
+  color: var(--staff-ink, #21302b);
+}
+
+.ambient-purpose-surface :where(h1, h2, h3, p, dl) {
+  text-wrap: pretty;
+}
+
+.ambient-purpose-surface :where(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--staff-teal, #168a82) 42%, transparent);
+  outline-offset: 3px;
+}
+
+.ambient-purpose-surface [data-surface-purpose] {
+  scroll-margin-block: 5rem;
+}
+
+.ambient-purpose-surface :where(.panel, [class*="__section"], [class*="__state"])
+  :where(.panel, [class*="__section"], [class*="__state"]) {
+  box-shadow: none;
+}
+
+.ambient-purpose-surface :where([class*="__masthead"], [class*="-hero"]) {
+  border-bottom-color: var(--ambient-surface-hairline);
+}
+
+@media (max-width: 767px) {
+  .ambient-purpose-surface {
+    --ambient-surface-gap: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-purpose-surface *,
+  .ambient-purpose-surface *::before,
+  .ambient-purpose-surface *::after {
+    scroll-behavior: auto !important;
+  }
+}

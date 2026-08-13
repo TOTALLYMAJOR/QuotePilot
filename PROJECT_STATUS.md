@@ -135,9 +135,9 @@ Last updated: August 13, 2026
 - The `v0.7.0` deployment receipts do not establish authenticated hosted-role
   behavior, production-data correctness, downstream provider acceptance,
   recipient evidence, or human acceptance.
-- The current `v0.8.1` candidate contains the Ambient Intelligence build.
-  **45 of the 50 stable AIUI items are materially
-  implemented in local source, while 0 of 50 are formally closed.** This now
+- The current post-`v0.8.1` candidate contains the Ambient Intelligence build.
+  **All 50 stable AIUI items are materially implemented in local source, while
+  0 of 50 are formally closed.** This now
   includes the compatibility inventory/browser baseline; extracted workspace
   shell and saved-draft hydration seams; canonical Ambient signal and action
   kernels; unified client/server `ImpactPreview`; the Living Opportunity;
@@ -146,7 +146,7 @@ Last updated: August 13, 2026
   sensory semantics; accessibility proof; bounded Pilot command classes,
   deterministic explanations and exact Package changes, and bounded under-
   budget/improve-margin scenarios with an explicit draft review; client-
-  observed product metrics; and dead-click/layout recovery. The latest material
+  observed product metrics; and dead-click/layout recovery. The final material
   additions include AIUI-16 (lightweight persistent orientation plus one
   context-resolving global Pilot trigger), AIUI-17 (the bounded Ambient NOW
   briefing), AIUI-18 (the editorial Opportunities stream and exact Living
@@ -157,12 +157,27 @@ Last updated: August 13, 2026
   Living Opportunity remote), and AIUI-46 (the content-first customer decision
   room), AIUI-43 (hold-to-capture Ambient Pilot voice with deterministic
   preview-before-apply), and AIUI-50 (the protected zero-dead-click Alpha
-  browser gate plus its fail-closed configuration policy). Ambient NOW
+  browser gate plus its fail-closed configuration policy); AIUI-04 (the
+  Opportunities/Event Room/role-safe action controller seam); AIUI-12 (the
+  shared purpose-bearing editorial surface grammar); AIUI-35 (separate
+  acceptance, contract, payment, BEO, staffing, and closeout receipt domains);
+  AIUI-42 (shared pointer-gesture resolution with visible and keyboard
+  equivalents); and AIUI-48 (Ambient-graph route retirement plus fail-closed
+  rollback-retirement readiness). Ambient NOW
   preserves the existing ranked Workflow order but shows at most three
   priorities, withholds caught-up language for incomplete evidence or recorded
   payment steps, and limits quiet progress to timestamp-backed internal
-  workflow receipts. All 45 remain partial against their complete acceptance
+  workflow receipts. All 50 remain partial against their complete acceptance
   contracts.
+  The production-equivalent Ambient build passes locally with 3,694,533 total
+  JavaScript bytes and a 391,901-byte largest chunk, inside the existing
+  temporary ceiling without recalibration. The compatibility core lane passes
+  3,568 unit tests with 74 intentional skips, and the production-equivalent
+  Ambient browser proof passes the exact zero-dead-click contract plus all 80
+  no-unintended-overlap cases across the supported widths and contained overlay
+  states. This is local source, unit, build, and browser evidence only; no
+  hosted candidate, production promotion, provider outcome, or human acceptance
+  is established.
   The AIUI-18 stream is a presentation over the caller-owned, already tenant-
   scoped bounded quote read. It presents identity and four independent momentum
   domains, permits a percentage only for proposal completeness, and keeps quote

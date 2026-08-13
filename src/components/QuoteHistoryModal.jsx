@@ -35,6 +35,10 @@ import {
 } from "../lib/quoteStore";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import {
+  buildQuoteHistoryController,
+  getQuoteActionPermissions
+} from "../lib/quoteHistoryController";
+import {
   formatWorkspaceDate,
   formatWorkspaceInteger,
   formatWorkspaceMoney as currency,
@@ -629,41 +633,7 @@ export function getQuoteDeliveryUiState(quote, revisionId, nowMs = Date.now()) {
   };
 }
 
-function normalizeHistoryRole(role) {
-  const normalized = String(role || "").trim().toLowerCase();
-  if (normalized === "admin" || normalized === "sales") return normalized;
-  return "customer";
-}
-
-export function getQuoteHistoryActionPermissions(role) {
-  const normalizedRole = normalizeHistoryRole(role);
-  const isAdmin = normalizedRole === "admin";
-  const isSales = normalizedRole === "sales";
-  const isStaff = isAdmin || isSales;
-
-  return {
-    role: normalizedRole,
-    isStaff,
-    canEditQuote: isStaff,
-    canDuplicateQuote: isStaff,
-    canExportProposal: isStaff,
-    canExportBeo: isStaff,
-    canSendQuoteEmail: isAdmin,
-    canCopyArtifacts: isStaff,
-    canCopyPaymentLink: isAdmin,
-    canCopyFinalBalanceLink: isAdmin,
-    canSendPaymentRequest: isAdmin,
-    canSendFinalBalanceRequest: isAdmin,
-    canReconcilePayment: isAdmin,
-    canReconcileFinalBalance: isAdmin,
-    canManageQuoteStatus: isAdmin,
-    canConvertToContract: isAdmin,
-    canManageConfirmation: isAdmin,
-    canReopenQuote: isAdmin,
-    canRotatePortalLink: isAdmin,
-    canDeleteQuote: isAdmin
-  };
-}
+export { getQuoteActionPermissions as getQuoteHistoryActionPermissions };
 
 export function getQuoteHistoryKitchenBeoMode(source = "") {
   const normalizedSource = String(source || "").trim().toLowerCase();
@@ -1041,7 +1011,7 @@ export function QuoteHistoryView({
     try {
       const result = await getQuoteHistory({
         organizationId: requestedOrganizationId,
-        persistExpiredStatuses: normalizeHistoryRole(currentUserRole) === "admin"
+        persistExpiredStatuses: getQuoteActionPermissions(currentUserRole).role === "admin"
       });
       if (generation !== loadGenerationRef.current) return null;
       const targetFound = targetingSavedQuote
@@ -1106,7 +1076,7 @@ export function QuoteHistoryView({
   }, [open, focusQuoteId, organizationId]);
 
   useEffect(() => {
-    const canCheck = normalizeHistoryRole(currentUserRole) === "admin";
+    const canCheck = getQuoteActionPermissions(currentUserRole).role === "admin";
     if (!open || state.source !== "firebase" || !canCheck) {
       setEmailSetup({
         loading: false,
@@ -1217,7 +1187,7 @@ export function QuoteHistoryView({
   // restored. Contract-conversion identities already live in this parent.
   if (!shouldRenderQuoteHistory({ open, closeGuard: quoteHistoryCloseGuard })) return null;
 
-  const permissions = getQuoteHistoryActionPermissions(currentUserRole);
+  const permissions = getQuoteActionPermissions(currentUserRole);
   const authorityCopy = permissions.role === "admin"
     ? "Admin can change quote, payment, booking, portal, and contract state."
     : permissions.role === "sales"
@@ -1243,9 +1213,14 @@ export function QuoteHistoryView({
     setEventTypeFilter("all");
     setStatusFilter("all");
   };
-  const focusedQuote = focusQuoteId
-    ? state.quotes.find((quote) => quote.id === focusQuoteId) || null
-    : null;
+  const quoteHistoryController = buildQuoteHistoryController({
+    quotes: state.quotes,
+    visibleQuoteIds: filteredQuotes.map((quote) => quote.id),
+    focusQuoteId,
+    currentUserRole,
+    source: state.source
+  });
+  const focusedQuote = quoteHistoryController.eventRoom.quote;
   const focusedQuoteIsVisible = Boolean(
     focusedQuote && filteredQuotes.some((quote) => quote.id === focusedQuote.id)
   );
@@ -2106,6 +2081,7 @@ export function QuoteHistoryView({
                 globalPilotReturnFocusRef={globalPilotReturnFocusRef}
                 onGlobalPilotResolution={onGlobalPilotResolution}
                 arrivalContext={arrivalContext}
+                quoteActionController={quoteHistoryController.actions}
                 onArrivalResolution={onArrivalResolution}
                 ambientContext={{
                   organizationId: String(organizationId || focusedQuote.organizationId || "local-fallback"),
@@ -2504,6 +2480,7 @@ export function QuoteHistoryView({
               onOpenWorkflow={onOpenWorkflow}
               onStartOpportunity={onStartOpportunity}
               onRefresh={load}
+              controller={quoteHistoryController}
             />
           </Suspense>
         )}
