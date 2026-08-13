@@ -61,6 +61,11 @@ Firebase Secret Manager. Vercel deploys only to the fixed `mbmapps/quoteflow`
 project. Firebase deploys only to `tonicatering`, and backend/all always bind
 Firestore rules and Functions together.
 
+Both production deploy workflows bind `VITE_AMBIENT_UI_ENABLED: "true"` into
+the frontend build environment, so verified releases ship the Ambient
+Intelligence UI enabled. The deployment-safety test requires exactly one such
+binding per workflow; `VITE_OPERATIONAL_STAFFING_ENABLED` stays excluded.
+
 For Vercel, preserve the reviewed SPA contract in `vercel.json`; Git-triggered
 deployments remain disabled. After deployment, verify that `/`, `/app`, and
 `/system` each return the application shell with HTTP 200 and retain the
