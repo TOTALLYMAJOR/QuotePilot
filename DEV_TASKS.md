@@ -132,11 +132,13 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
   Templates surfaces on the immutable candidate with authenticated admin and
   sales roles, revision-conflict recovery, responsive layout, and rollback
   evidence before describing AIUI-20 as complete.
-- Reduce the production-equivalent Ambient build from its current 3,700,021
-  JavaScript bytes / 436,188-byte largest chunk to the reviewed 2,776,849 /
-  391,596 temporary ceilings, or obtain an explicit evidence-backed replacement
-  budget decision. Do not silently widen the exception before Ambient
-  production promotion.
+- Continue reducing the production-equivalent Ambient aggregate from the
+  measured 3,700,202 JavaScript bytes toward the standard clean-main budget.
+  The largest chunk is now restored to the unchanged 391,596-byte ceiling, and
+  CI independently enforces detected compatibility and Ambient graph profiles;
+  the temporary 3,700,505 Ambient aggregate ceiling has no growth headroom.
+  Close the exception through optimization or an explicit reviewed clean-main
+  recalibration before AIUI-48 retirement or Ambient production promotion.
 - Add inline editing on the event workspace quote page: editable fields with
   simulate-pricing round trips and Commercial Change Authority integration for
   committed quotes; saving stays intentional and versioned.

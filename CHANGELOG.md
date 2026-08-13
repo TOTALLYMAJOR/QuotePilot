@@ -8,6 +8,17 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Split the temporary bundle contract into fail-closed compatibility and
+  production-equivalent Ambient profiles. The checker detects the emitted graph
+  from mutually exclusive chunks, rejects requested-profile mismatches, and CI
+  builds both graphs independently with operational staffing explicitly off.
+  Compatibility retains its 2,776,849 / 391,596-byte absolute ceilings. Manual
+  opportunity-model and quote-builder chunks reduce Ambient's largest chunk
+  from 436,188 to the unchanged 391,596-byte ceiling; its measured aggregate is
+  3,700,202 bytes under a named 3,700,505-byte temporary ceiling containing only
+  the previously confirmed 303-byte CI offset. This is source/local performance
+  evidence, not hosted timing, production promotion, or human acceptance.
+
 - Bound the Ambient zero-dead-click contract into the protected Playwright CI
   lane with a dedicated production-flag browser command. The gate rejects an
   enabled Alpha control without an `AmbientAction` identity and requires an

@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: August 11, 2026
+Last updated: August 13, 2026
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -17,6 +17,46 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Verification evidence:
 
 ## Active Exceptions
+
+- Date: August 13, 2026 (supersedes the August 11 single-profile record)
+- Owner: QuotePilot maintainers
+- Change: Enforce separate, detected bundle profiles for the compatibility and
+  production-equivalent Ambient graphs. Compatibility retains absolute ceilings
+  of 2,776,849 aggregate JavaScript bytes and 391,596 bytes for the largest
+  chunk. Ambient is temporarily capped at 3,700,505 aggregate bytes and the
+  same 391,596-byte largest-chunk ceiling.
+- Exception type: `perf-threshold-temp`
+- Rationale: The strangler architecture intentionally emits materially
+  different authenticated workspace graphs. A single ceiling either blocks the
+  reviewed Ambient graph without describing its cost or silently grants the
+  compatibility graph unnecessary room. The guard therefore detects the graph
+  from mutually exclusive required chunks and rejects any requested-profile
+  mismatch. The clean-main baseline remains unchanged.
+- Risk impact: Ambient still carries 930,378 more aggregate JavaScript bytes
+  than the measured compatibility graph. This is meaningful mobile download,
+  parse, and execution risk even though most code is route-lazy. Passing this
+  exception is not Core Web Vitals, hosted, production, or human-acceptance
+  evidence.
+- Performance impact: Local production-equivalent builds measured compatibility
+  at 2,769,824 aggregate / 391,596 largest bytes and Ambient at 3,700,202 /
+  391,596. Manual `ambient-opportunity-model` and `quote-builder-ui` chunks
+  reduced the prior Ambient largest chunk from 436,188 bytes to the unchanged
+  Firebase ceiling. The Ambient aggregate maximum is the exact local figure plus
+  the previously confirmed 303-byte CI-runner offset; it has no additional
+  growth allowance.
+- Rollback plan: Revert the two manual chunks, graph-aware checker, CI matrix,
+  and profile exception together. The prior compatibility ceiling and clean-main
+  baseline remain recoverable and unchanged.
+- Exit criteria: Optimize Ambient to the standard clean-main budget or obtain an
+  explicit reviewed clean-main recalibration after merge. Remove the exception,
+  pass both production graphs without it, pass authenticated desktop/mobile CWV,
+  and preserve exact rollback evidence before AIUI-48 retirement or Ambient
+  promotion.
+- Verification evidence: Seven focused profiler/release-policy tests, workflow
+  lint, and fresh local production builds for both graphs pass. CI exact-SHA
+  confirmation, hosted timing, and human acceptance remain open.
+
+## Superseded Exceptions
 
 - Date: August 11, 2026 (supersedes the August 10 ceiling record)
 - Owner: QuotePilot maintainers

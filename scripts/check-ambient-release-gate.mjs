@@ -98,6 +98,60 @@ export function assertAmbientReleaseGate({ root = ROOT } = {}) {
     );
   }
 
+  const compatibilityBundleStep = stepBlock(ciWorkflow, "Build compatibility production bundle");
+  if (!compatibilityBundleStep) {
+    errors.push("CI must retain the named compatibility production bundle step");
+  } else {
+    requireText(
+      errors,
+      compatibilityBundleStep,
+      "run: npm run build && npm run check:perf:bundle",
+      "the compatibility bundle step must build and enforce the bundle budget"
+    );
+    requireText(
+      errors,
+      compatibilityBundleStep,
+      "VITE_AMBIENT_UI_ENABLED: \"false\"",
+      "the compatibility bundle step must explicitly exclude Ambient presentation"
+    );
+    requireText(
+      errors,
+      compatibilityBundleStep,
+      "BUNDLE_BUDGET_PROFILE: compatibility",
+      "the compatibility bundle step must request the compatibility profile"
+    );
+  }
+
+  const ambientBundleStep = stepBlock(ciWorkflow, "Build Ambient production bundle");
+  if (!ambientBundleStep) {
+    errors.push("CI must retain the named Ambient production bundle step");
+  } else {
+    requireText(
+      errors,
+      ambientBundleStep,
+      "run: npm run build && npm run check:perf:bundle",
+      "the Ambient bundle step must build and enforce the bundle budget"
+    );
+    requireText(
+      errors,
+      ambientBundleStep,
+      "VITE_AMBIENT_UI_ENABLED: \"true\"",
+      "the Ambient bundle step must explicitly enable Ambient presentation"
+    );
+    requireText(
+      errors,
+      ambientBundleStep,
+      "VITE_OPERATIONAL_STAFFING_ENABLED: \"false\"",
+      "the Ambient bundle step must keep independently governed staffing authority off"
+    );
+    requireText(
+      errors,
+      ambientBundleStep,
+      "BUNDLE_BUDGET_PROFILE: ambient-production",
+      "the Ambient bundle step must request the Ambient production profile"
+    );
+  }
+
   requireText(
     errors,
     orchestration,

@@ -37,6 +37,17 @@ function fixture(overrides = {}) {
           VITE_PILOT_COMMAND_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
           VITE_OPERATIONAL_STAFFING_ENABLED: "false"
+      - name: Build compatibility production bundle
+        run: npm run build && npm run check:perf:bundle
+        env:
+          VITE_AMBIENT_UI_ENABLED: "false"
+          BUNDLE_BUDGET_PROFILE: compatibility
+      - name: Build Ambient production bundle
+        run: npm run build && npm run check:perf:bundle
+        env:
+          VITE_AMBIENT_UI_ENABLED: "true"
+          VITE_OPERATIONAL_STAFFING_ENABLED: "false"
+          BUNDLE_BUDGET_PROFILE: ambient-production
       - name: Continue protected lane
         run: npm run build
 `,
@@ -102,6 +113,17 @@ describe("Ambient zero-dead-click release gate", () => {
           VITE_PILOT_COMMAND_ENABLED: "true"
           VITE_AMBIENT_UI_ENABLED: "true"
           VITE_OPERATIONAL_STAFFING_ENABLED: "true"
+      - name: Build compatibility production bundle
+        run: npm run build && npm run check:perf:bundle
+        env:
+          VITE_AMBIENT_UI_ENABLED: "false"
+          BUNDLE_BUDGET_PROFILE: compatibility
+      - name: Build Ambient production bundle
+        run: npm run build && npm run check:perf:bundle
+        env:
+          VITE_AMBIENT_UI_ENABLED: "true"
+          VITE_OPERATIONAL_STAFFING_ENABLED: "false"
+          BUNDLE_BUDGET_PROFILE: ambient-production
 `
     });
 

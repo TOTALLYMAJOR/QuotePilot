@@ -98,6 +98,15 @@ export default defineConfig(({ mode }) => {
           if (normalizedId.endsWith("/src/lib/quoteStore.js")) {
             return "workspace-quote-store";
           }
+          if (normalizedId.endsWith("/src/components/ambientLivingOpportunityPresentation.js")) {
+            return "ambient-opportunity-model";
+          }
+          if (
+            normalizedId.endsWith("/src/components/WizardSteps.jsx")
+            || normalizedId.endsWith("/src/lib/wizardUi.js")
+          ) {
+            return "quote-builder-ui";
+          }
           return undefined;
         }
       }
