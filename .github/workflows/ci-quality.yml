@@ -176,6 +176,21 @@ jobs:
       - name: Run Playwright smoke suite
         run: npm run test:e2e
 
+      - name: Run Ambient zero-dead-click release gate
+        run: npm run test:e2e:ambient-release-gate
+        env:
+          VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
+          VITE_PILOT_NOW_ENABLED: "true"
+          VITE_PILOT_EVENT_ROOM_ENABLED: "true"
+          VITE_PILOT_GUIDED_SELLING_ENABLED: "true"
+          VITE_PILOT_CREATE_ENABLED: "true"
+          VITE_PILOT_CHANGE_REQUESTS_ENABLED: "true"
+          VITE_PILOT_COMMAND_ENABLED: "true"
+          VITE_PILOT_MARGINS_ENABLED: "true"
+          VITE_PILOT_DECISION_ROOM_ENABLED: "true"
+          VITE_AMBIENT_UI_ENABLED: "true"
+          VITE_OPERATIONAL_STAFFING_ENABLED: "false"
+
       - name: Build production pilot bundle
         run: npm run build && npm run check:perf:bundle
         env:

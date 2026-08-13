@@ -8,6 +8,22 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Bound the Ambient zero-dead-click contract into the protected Playwright CI
+  lane with a dedicated production-flag browser command. The gate rejects an
+  enabled Alpha control without an `AmbientAction` identity and requires an
+  exact contextual primary handoff with a 250ms acknowledgement contract and
+  a dead-click rate of zero. A fast fail-closed policy checker now runs in
+  `lane:quick` and prevents removal of the browser command, required Ambient
+  flags, production workflow bindings, zero-rate assertion, or the explicit
+  disabled operational-staffing authority boundary. Focused local proof passes
+  24 unit/runtime tests and the dedicated Chromium-admin gate. This is material
+  AIUI-50 source and CI progress; it does not establish a preview deployment,
+  authenticated hosted-role or portal acceptance, production timing, human
+  acceptance, or a rollback artifact. A production-equivalent Ambient build
+  succeeds but exposes 3,700,021 JavaScript bytes and a 436,188-byte largest
+  chunk, above the current reviewed ceilings; the budget was not widened and
+  the optimization/review requirement remains a production blocker.
+
 - Enabled the Ambient Intelligence UI in both production deploy workflows by
   binding `VITE_AMBIENT_UI_ENABLED: "true"` into the Firebase and Vercel
   production build environments, and amended the deployment-safety test from

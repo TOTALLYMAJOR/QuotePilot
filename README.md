@@ -238,8 +238,10 @@ Optional:
   estimates the record cannot support, and route only to the existing
   role-gated edit or administration surfaces. Purely presentational; not a
   deployment or acceptance decision.)
-- `VITE_AMBIENT_UI_ENABLED` (default off and deliberately absent from the
-  production deployment workflows. Activates the source-only Ambient
+- `VITE_AMBIENT_UI_ENABLED` (defaults off outside reviewed release builds. The
+  current production deployment workflow source binds it to `true`, while a
+  workflow binding alone is not a deployment or human-acceptance receipt.
+  Activates the Ambient
   presentation for Now, Opportunities, Clients, administrator Library, and the
   selected staff quote route. Clients reuses the existing bounded directory and relationship reads,
   opens the exact opaque client identity with reason, consequence, and next
@@ -271,7 +273,8 @@ Optional:
   editor, but the saved-record surface never invents a commercial delta; the
   existing live calculator previews it and the intentional trusted save still
   re-prices and versions it. The flag adds no read, write, provider, portal,
-  or role authority. Enabling it is not deployment or human acceptance.)
+  or role authority. Enabling it is not by itself deployment or human
+  acceptance.)
 - `VITE_OPERATIONAL_STAFFING_ENABLED` (default off, deliberately absent from
   production deployment workflows, and effective only inside the Ambient
   Living Opportunity. It exposes the exact tenant-scoped roster, commercial
@@ -494,12 +497,14 @@ npm run test:catalog-import:emulator
 npm run test:rebook-quote:emulator
 npm run test:operational-staffing:emulator
 npm run test:e2e
+npm run test:e2e:ambient-release-gate
 npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
 npm run test:e2e:firebase:starter-onboarding
 npm run build
 npm run check:secrets
 npm run check:workflows
+npm run check:ambient-release-gate
 npm run check:docs:governance
 npm run check:capability-surfaces
 npm run check:perf:bundle
@@ -519,6 +524,16 @@ v1.7.12 archive, verifies its repository-pinned SHA-256, and checks every
 tracked GitHub Actions workflow. The required `lane:quick` runs this gate before
 dependency installation and disables host-provided shellcheck/pyflakes
 integrations so runner tool versions cannot change the result.
+
+`test:e2e:ambient-release-gate` runs the protected Alpha interaction proof with
+the reviewed Ambient presentation flags and operational staffing authority
+explicitly off. It rejects unmapped enabled controls and requires the primary
+route handoff to acknowledge within the 250ms contract with an exact contextual
+result and a dead-click rate of zero. `check:ambient-release-gate` is the fast
+policy guard that prevents the CI command, required flags, zero-rate assertion,
+or production workflow binding from being silently removed; `lane:quick` runs
+it on every governed change. Passing either command is local/CI evidence, not a
+deployment, hosted-role acceptance, or human approval.
 
 `check:capability-surfaces` is the mechanical no-orphan-capability gate. For a
 backend delivery it requires a revision-bumped contract in
@@ -556,6 +571,10 @@ instruction if that browser is unavailable.
   - Excludes Firebase emulator-only specs; those run in the dedicated Firebase
     lanes below.
   - Uses `scripts/run-playwright.sh`, which auto-prepares Linux Playwright runtime libs under `.cache/playwright-libs` when needed.
+- `npm run test:e2e:ambient-release-gate`
+  - Runs the single protected Ambient Alpha dead-click contract with
+    production presentation flags and the independent staffing authority flag
+    explicitly disabled.
 - `npm run test:e2e:firebase`
   - Firebase emulator browser lane for real Auth, organization bootstrap, and
     Firestore rules coverage.

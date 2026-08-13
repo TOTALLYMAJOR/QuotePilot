@@ -190,16 +190,25 @@ scope is **AIUI-06 + AIUI-08 + AIUI-09 + AIUI-13 + AIUI-14 + AIUI-21 +
 AIUI-24 + AIUI-26 + AIUI-36 + AIUI-45**, governed by AIUI-00.
 
 Source-progress checkpoint: **0 of the 50 items are formally closed** and
-  **44 of 50 are materially implemented in the local default-off source**:
+  **45 of 50 are materially implemented in current source**:
 **AIUI-01, AIUI-02, AIUI-03, AIUI-05, AIUI-06, AIUI-07, AIUI-08, AIUI-09,
 AIUI-10, AIUI-11, AIUI-13, AIUI-14, AIUI-15, AIUI-16, AIUI-17, AIUI-18,
 AIUI-19, AIUI-20, AIUI-21, AIUI-22,
 AIUI-23, AIUI-24, AIUI-25, AIUI-26, AIUI-27, AIUI-28, AIUI-29, AIUI-30,
 AIUI-31, AIUI-32, AIUI-33, AIUI-34, AIUI-36, AIUI-37, AIUI-38, AIUI-39,
-AIUI-40, AIUI-41, AIUI-43, AIUI-44, AIUI-45, AIUI-46, AIUI-47, and AIUI-49**.
+AIUI-40, AIUI-41, AIUI-43, AIUI-44, AIUI-45, AIUI-46, AIUI-47, AIUI-49, and
+AIUI-50**.
 
 This is a material-source count, not a claim that each full acceptance contract
-is complete. AIUI-01 now has a machine-readable route, role, flag, local-
+is complete. AIUI-50 now binds the exact zero-dead-click Alpha proof into the
+protected Playwright lane under production-equivalent Ambient presentation
+flags, while a fast `lane:quick` policy check prevents the browser command,
+zero-rate assertion, required presentation flags, production workflow binding,
+or independent staffing-authority boundary from silently disappearing. Preview
+deployment, authenticated staff and portal acceptance, first-minute/timing
+review, explicit promotion approval, and an exact rollback artifact remain
+open, so the item is material rather than closed. AIUI-01 now has a
+machine-readable route, role, flag, local-
 fallback, portal-precedence, and 390/768/1440 browser baseline while its own
 parity ledger still names the legacy opportunity controls not yet hosted by the
 Ambient route. AIUI-02 extracts routing, navigation, lazy mounting, shell
@@ -784,7 +793,9 @@ close. The IDs remain stable even if delivery is split into smaller slices.
   roll out the ambient shell default-off in preview, complete authenticated
   staff and portal acceptance, validate the first-minute experience and timing
   metrics, promote only with explicit approval, and retain an exact rollback
-  artifact.
+  artifact. Current source binds the zero-rate Alpha browser proof to the
+  protected Playwright lane and protects that binding with a fail-closed policy
+  check; the named rollout and acceptance evidence remains open.
 
 ## Validation and Documentation Contract
 
