@@ -51,6 +51,8 @@ const BUYER_ACCESS_ROUTE_FLAG = "VITE_BUYER_ACCESS_ENABLED";
 const BUYER_ACCESS_CTA_FLAG = "VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED";
 const BUYER_ACCESS_TURNSTILE_SITE_KEY = "VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY";
 const BUYER_ACCESS_FORBIDDEN_BROWSER_SECRET = "VITE_BUYER_ACCESS_TURNSTILE_SECRET";
+const APP_CHECK_ENABLED_FLAG = "VITE_FIREBASE_APP_CHECK_ENABLED";
+const APP_CHECK_SITE_KEY = "VITE_FIREBASE_APP_CHECK_RECAPTCHA_ENTERPRISE_SITE_KEY";
 
 const cwd = process.cwd();
 const buildProfile = String(process.env.QUOTEPILOT_BUILD_PROFILE || "").trim();
@@ -202,6 +204,21 @@ if (buyerAccessRouteEnabled || buyerAccessCtaEnabled) {
   ) {
     console.error(
       `${BUYER_ACCESS_TURNSTILE_SITE_KEY} must be a syntactically valid non-placeholder public Turnstile site key whenever buyer access is compiled into a production artifact; provider setup and human review are separate release evidence.`
+    );
+    process.exit(1);
+  }
+}
+
+const appCheckEnabledValue = effectiveValue(APP_CHECK_ENABLED_FLAG);
+if (!["", "true", "false"].includes(appCheckEnabledValue.toLowerCase())) {
+  console.error(`${APP_CHECK_ENABLED_FLAG} must use the exact value true or false.`);
+  process.exit(1);
+}
+if (appCheckEnabledValue.toLowerCase() === "true") {
+  const siteKey = effectiveValue(APP_CHECK_SITE_KEY);
+  if (!siteKey || isPlaceholder(siteKey) || !/^[A-Za-z0-9_-]{10,100}$/.test(siteKey)) {
+    console.error(
+      `${APP_CHECK_SITE_KEY} must be a valid environment-specific public reCAPTCHA Enterprise site key when App Check is enabled.`
     );
     process.exit(1);
   }

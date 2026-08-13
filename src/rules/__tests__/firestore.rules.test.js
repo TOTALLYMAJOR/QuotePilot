@@ -1283,6 +1283,23 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(deleteDoc(receiptRef));
   });
 
+  test("organization role authority receipts are private and immutable in browsers", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true
+    }).firestore();
+    const receiptRef = doc(adminDb, "organizationRoleAuthorityReceipts", "role-request-00000001");
+
+    await assertFails(getDoc(receiptRef));
+    await assertFails(setDoc(receiptRef, {
+      organizationId: "org-a",
+      actorUid: "admin-org-a",
+      targetUid: "sales-org-a"
+    }));
+    await assertFails(updateDoc(receiptRef, { nextRole: "admin" }));
+    await assertFails(deleteDoc(receiptRef));
+  });
+
   test("direct quote creation is denied even with draft shape or fabricated authority labels", async () => {
     const draftRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q-direct-draft");
     const terminalRef = quoteRefFor("sales-org-a", "sales-a@example.com", "org-a", "q-terminal-create");

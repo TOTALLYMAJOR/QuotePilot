@@ -1,6 +1,9 @@
 import {
+  EmailAuthProvider,
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -163,4 +166,60 @@ export async function refreshCurrentUserAccess() {
   await user.reload();
   await user.getIdToken(true);
   return { refreshed: true, emailVerified: user.emailVerified === true };
+}
+
+export function getCurrentUserReauthenticationMethods() {
+  ensureAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sign in before confirming your identity.");
+  const providers = new Set((user.providerData || []).map((entry) => String(entry?.providerId || "")));
+  return Object.freeze([
+    ...(providers.has("password") ? ["password"] : []),
+    ...(providers.has("google.com") ? ["google"] : [])
+  ]);
+}
+
+export async function getCurrentUserRecentAuthState({
+  forceRefresh = false,
+  maxAgeSeconds = 300
+} = {}) {
+  ensureAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sign in before confirming your identity.");
+  const token = await user.getIdTokenResult(forceRefresh === true);
+  const authenticatedAtMs = Date.parse(String(token?.authTime || ""));
+  const ageSeconds = Number.isFinite(authenticatedAtMs)
+    ? Math.max(0, Math.floor((Date.now() - authenticatedAtMs) / 1000))
+    : Number.POSITIVE_INFINITY;
+  return Object.freeze({
+    recent: Number.isFinite(ageSeconds) && ageSeconds <= maxAgeSeconds,
+    ageSeconds,
+    maxAgeSeconds,
+    authenticatedAtISO: Number.isFinite(authenticatedAtMs)
+      ? new Date(authenticatedAtMs).toISOString()
+      : ""
+  });
+}
+
+export async function reauthenticateCurrentUser({ method = "", password = "" } = {}) {
+  ensureAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sign in before confirming your identity.");
+  const methods = getCurrentUserReauthenticationMethods();
+  const selected = String(method || "").trim().toLowerCase();
+  if (!methods.includes(selected)) {
+    throw new Error("This sign-in provider cannot confirm a sensitive access change.");
+  }
+  if (selected === "password") {
+    if (!password) throw new Error("Enter your password to confirm this access change.");
+    const email = normalizeEmail(user.email);
+    if (!email) throw new Error("The signed-in account email is unavailable.");
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(email, password));
+  } else if (selected === "google") {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    await reauthenticateWithPopup(user, provider);
+  }
+  await user.getIdToken(true);
+  return await getCurrentUserRecentAuthState({ forceRefresh: true });
 }

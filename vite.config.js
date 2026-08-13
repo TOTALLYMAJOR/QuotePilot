@@ -20,6 +20,10 @@ export default defineConfig(({ mode }) => {
   // local builds remain selected exclusively by their resolved Ambient flag.
   const ambientGraphEnabled = mode === "test"
     || environmentFlagEnabled(buildEnvironment.VITE_AMBIENT_UI_ENABLED);
+  const appCheckGraphEnabled = buildEnvironment.VITE_FIREBASE_APP_CHECK_ENABLED === "true";
+  const activeFirebaseAppCheck = appCheckGraphEnabled
+    ? fileURLToPath(new URL("./src/lib/firebaseAppCheckEnabled.js", import.meta.url))
+    : fileURLToPath(new URL("./src/lib/firebaseAppCheckDisabled.js", import.meta.url));
   const activeApp = ambientGraphEnabled
     ? fileURLToPath(new URL("./src/App.jsx", import.meta.url))
     : fileURLToPath(new URL("./src/LegacyApp.jsx", import.meta.url));
@@ -63,6 +67,7 @@ export default defineConfig(({ mode }) => {
   resolve: {
     alias: {
       "commercial-dependency-graph-core": COMMERCIAL_DEPENDENCY_GRAPH_CORE,
+      "quotepilot-active-firebase-app-check": activeFirebaseAppCheck,
       "quotepilot-active-app": activeApp,
       "quotepilot-active-workspace-shell": activeWorkspaceShell,
       "quotepilot-active-customer-portal": activeCustomerPortalView,

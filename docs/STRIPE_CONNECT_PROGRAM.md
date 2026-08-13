@@ -1,6 +1,6 @@
 # Stripe Connect Program
 
-Last updated: August 12, 2026
+Last updated: August 13, 2026
 
 ## Purpose and stopping point
 
@@ -70,6 +70,18 @@ and human acceptance are distinct claims.
   Disposable Auth/Firestore emulator acceptance proves dry-run no-write,
   transactional bind, immutable receipt, replay idempotency, and ambiguous-
   candidate denial.
+- Canonical owners can now manage same-organization admin and sales authority
+  through one in-flow Team access surface; non-owner admins can manage sales
+  access only. The callable requires exact verified email, expected current
+  role, five-minute authentication proof, one replay-stable request ID, and an
+  immutable browser-private receipt before synchronizing custom claims.
+  Disposable emulator acceptance proves promotion, sales grant, replay,
+  cross-authority denial, owner-demotion denial, and claims synchronization.
+- Password and Google recent reauthentication are wired. Browser App Check is
+  opt-in through an environment-specific reCAPTCHA Enterprise public site key.
+  The staging foundation records monitoring first, disabled replay enforcement,
+  and an unbound site key; its policy rejects premature enforcement or key
+  binding. No provider registration or hosted token evidence exists yet.
 - `firebase.json` names `default` and `connect` codebases.
 - Existing deployment selectors address only `functions:default`.
 - The Connect package is exactly pinned but exports nothing.

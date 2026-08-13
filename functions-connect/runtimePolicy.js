@@ -23,6 +23,14 @@ const FOUNDATION_MANIFEST_FIELDS = Object.freeze([
   "functionsCodebase",
   "providerCallsEnabled",
   "accountOnboardingEnabled",
+  "authorityPolicyRevision",
+  "recentAuthMaxAgeSeconds",
+  "appCheckProvider",
+  "appCheckMode",
+  "appCheckReplayProtection",
+  "appCheckTokenTtlSeconds",
+  "appCheckRiskThreshold",
+  "appCheckSiteKeyBinding",
   "callableExports",
   "serviceAccounts",
   "egressIps",
@@ -54,7 +62,7 @@ function requireEmptyArray(value, label) {
 
 function validateStripeConnectFoundationManifest(value = {}) {
   exactKeys(value, FOUNDATION_MANIFEST_FIELDS, "manifest");
-  if (value.schemaVersion !== 1) fail("schemaVersion must be 1.");
+  if (value.schemaVersion !== 2) fail("schemaVersion must be 2.");
   if (value.stage !== "staging_foundation") fail("stage must remain staging_foundation.");
   if (value.projectId !== "quotepilot-staging-20260804") fail("projectId does not match isolated staging.");
   if (value.projectNumber !== "844470813106") fail("projectNumber does not match isolated staging.");
@@ -71,6 +79,19 @@ function validateStripeConnectFoundationManifest(value = {}) {
   if (value.functionsCodebase !== CONNECT_CODEBASE) fail("functionsCodebase must be connect.");
   if (value.providerCallsEnabled !== false || value.accountOnboardingEnabled !== false) {
     fail("provider calls and account onboarding must remain disabled.");
+  }
+  if (value.authorityPolicyRevision !== 1 || value.recentAuthMaxAgeSeconds !== 300) {
+    fail("authority policy revision and five-minute recent-auth window must remain exact.");
+  }
+  if (
+    value.appCheckProvider !== "recaptcha_enterprise"
+    || value.appCheckMode !== "monitor"
+    || value.appCheckReplayProtection !== "disabled"
+    || value.appCheckTokenTtlSeconds !== 3600
+    || value.appCheckRiskThreshold !== 0.5
+    || value.appCheckSiteKeyBinding !== "unbound"
+  ) {
+    fail("App Check must remain one-hour reCAPTCHA Enterprise monitoring with an unbound staging key.");
   }
   requireEmptyArray(value.callableExports, "callableExports");
   requireEmptyArray(value.serviceAccounts, "serviceAccounts");

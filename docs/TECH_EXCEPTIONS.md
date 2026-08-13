@@ -21,10 +21,11 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Date: August 13, 2026 (supersedes the August 11 single-profile record)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
-  production-equivalent Ambient graphs. Compatibility retains absolute ceilings
-  of 2,776,849 aggregate JavaScript bytes and 391,596 bytes for the largest
-  chunk. Ambient is temporarily capped at 3,703,156 aggregate bytes and the
-  same 391,596-byte largest-chunk ceiling.
+  production-equivalent Ambient graphs. The owner/admin Team access authority
+  recalibrates compatibility to an absolute ceiling of 2,791,699 aggregate
+  JavaScript bytes and 391,901 bytes for the largest chunk. Ambient is
+  temporarily capped at 3,715,354 aggregate bytes and the same 391,901-byte
+  largest-chunk ceiling.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -43,13 +44,22 @@ Use this log when a change intentionally departs from stable-first policy or req
   surface adds 2,651 aggregate bytes after reconciliation-path deduplication;
   its reviewed Ambient local measurement is 3,702,853 bytes. Manual
   `ambient-opportunity-model` and `quote-builder-ui` chunks
-  reduced the prior Ambient largest chunk from 436,188 bytes to the unchanged
-  Firebase ceiling. The Ambient aggregate maximum remains the exact reviewed
-  local figure plus the previously confirmed 303-byte CI-runner offset; it has
-  no additional growth allowance.
-- Rollback plan: Revert the two manual chunks, graph-aware checker, CI matrix,
-  and profile exception together. The prior compatibility ceiling and clean-main
-  baseline remain recoverable and unchanged.
+  reduced the prior Ambient largest chunk from 436,188 bytes to the then-current
+  Firebase ceiling. Before Team access, the Ambient aggregate maximum remained
+  the exact reviewed local figure plus the previously confirmed 303-byte
+  CI-runner offset.
+  The Team access role review, seven-state mutation recovery, recent-auth
+  adapter, role callable client, and disabled App Check build adapter add
+  14,850 local bytes to compatibility and 12,198 local bytes to Ambient. The
+  new exact local measurements are 2,784,674 / 391,901 and 3,715,051 / 391,901.
+  Compatibility retains its previously observed 7,025-byte CI-versus-local
+  offset; Ambient retains its 303-byte offset. The enabled App Check provider
+  graph is not production-bound and is excluded from these default-off
+  measurements; its later promotion requires a new exact review.
+- Rollback plan: Revert Team access, its role/App Check adapters, and this exact
+  profile recalibration together. The two manual chunks, graph-aware checker,
+  CI matrix, prior compatibility ceiling, and clean-main baseline remain
+  recoverable and unchanged.
 - Exit criteria: Optimize Ambient to the standard clean-main budget or obtain an
   explicit reviewed clean-main recalibration after merge. Remove the exception,
   pass both production graphs without it, pass authenticated desktop/mobile CWV,

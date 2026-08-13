@@ -207,6 +207,14 @@ Create `.env` from `.env.example` and set required Firebase keys:
 
 Optional:
 - `VITE_FIREBASE_FUNCTIONS_REGION`
+- `VITE_FIREBASE_APP_CHECK_ENABLED` (default off. Enables Firebase App Check
+  token acquisition for the browser only after the exact environment has a
+  reviewed reCAPTCHA Enterprise application registration. This flag alone does
+  not enable callable enforcement.)
+- `VITE_FIREBASE_APP_CHECK_RECAPTCHA_ENTERPRISE_SITE_KEY` (environment-specific
+  public site key required when browser App Check is enabled. It is safe to
+  expose as a `VITE_` value, but must never be reused as a secret or treated as
+  evidence that enforcement passed.)
 - `VITE_APP_HOST`
 - `VITE_APP_URL` (exact canonical
   `https://quotepilot.mbmapps.com/app` return URL for Firebase email actions;

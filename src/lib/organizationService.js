@@ -1,6 +1,12 @@
 import { collection, doc, getDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { cloudFunctions, db, firebaseReady } from "./firebase";
+import {
+  appCheckInitialization,
+  appCheckReady,
+  cloudFunctions,
+  db,
+  firebaseReady
+} from "./firebase";
 
 export const ORGANIZATIONS_COLLECTION = "organizations";
 export const DEFAULT_ORGANIZATION_ID = String(import.meta.env.VITE_DEFAULT_ORGANIZATION_ID || "").trim();
@@ -12,9 +18,19 @@ const REPAIR_CUSTOMER_PROVISIONING_CALLABLE = "repairCustomerProvisioningOrder";
 const SYNC_USER_CLAIMS_CALLABLE = "syncUserClaimsFromRole";
 const ARCHIVE_ORGANIZATION_CALLABLE = "archiveOrganizationWorkspace";
 const DELETE_ORGANIZATION_CALLABLE = "deleteOrganizationWorkspace";
+const GET_ORGANIZATION_ROLE_ROSTER_CALLABLE = "getOrganizationRoleRoster";
+const MUTATE_ORGANIZATION_ROLE_CALLABLE = "mutateOrganizationRole";
 const E2E_FUNCTION_ADAPTER_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_E2E_BYPASS_AUTH || "").trim().toLowerCase()
 );
+
+async function ensureRoleAuthorityAppCheck() {
+  if (!appCheckReady) return;
+  const initialized = await appCheckInitialization;
+  if (!initialized) {
+    throw new Error("App verification could not start. Refresh and try again.");
+  }
+}
 
 async function callE2eFunctionAdapter(name, payload) {
   if (!E2E_FUNCTION_ADAPTER_ENABLED) return null;
@@ -195,6 +211,34 @@ export async function deleteOrganizationWorkspace(payload = {}) {
     throw new Error("Cloud Functions are not configured.");
   }
   const call = httpsCallable(cloudFunctions, DELETE_ORGANIZATION_CALLABLE);
+  const result = await call(payload);
+  return result?.data || { ok: false };
+}
+
+export async function getOrganizationRoleRoster() {
+  const e2e = await callE2eFunctionAdapter("getOrganizationRoleRoster", {});
+  if (e2e?.handled) return e2e.result;
+  if (!cloudFunctions) {
+    throw new Error("Cloud Functions are not configured.");
+  }
+  await ensureRoleAuthorityAppCheck();
+  const call = httpsCallable(cloudFunctions, GET_ORGANIZATION_ROLE_ROSTER_CALLABLE);
+  const result = await call({});
+  return result?.data || { ok: false, roles: [] };
+}
+
+export async function mutateOrganizationRole(payload = {}) {
+  const e2e = await callE2eFunctionAdapter("mutateOrganizationRole", payload);
+  if (e2e?.handled) return e2e.result;
+  if (!cloudFunctions) {
+    throw new Error("Cloud Functions are not configured.");
+  }
+  await ensureRoleAuthorityAppCheck();
+  const call = httpsCallable(
+    cloudFunctions,
+    MUTATE_ORGANIZATION_ROLE_CALLABLE,
+    appCheckReady ? { limitedUseAppCheckTokens: true } : {}
+  );
   const result = await call(payload);
   return result?.data || { ok: false };
 }
