@@ -1,7 +1,9 @@
 import { WORKSPACE_ROUTE_IDS } from "./workspaceRoutes";
 
-// id, route id, tenant feature. An empty tenant feature means admin-only.
+// id, route id, tenant feature, admin-only. An empty tenant feature implies
+// admin-only for the legacy catalog/import tools.
 const TOOLS = Object.freeze([
+  ["staff", WORKSPACE_ROUTE_IDS.STAFF, "staffDirectory", true],
   ["schedule", WORKSPACE_ROUTE_IDS.SCHEDULE, "eventSchedule"],
   ["reporting", WORKSPACE_ROUTE_IDS.REPORTING, "reportingDashboard"],
   ["catalog", WORKSPACE_ROUTE_IDS.CATALOG, ""],
@@ -12,9 +14,16 @@ const TOOLS = Object.freeze([
 
 export const WORKSPACE_SHELL_TOOL_IDS = Object.freeze(TOOLS.map(([id]) => id));
 
+function toolAuthorized(feature, adminOnly, features, admin) {
+  const featureAllowed = feature ? features[feature] === true : true;
+  const roleAllowed = adminOnly === true || !feature ? admin : true;
+  return featureAllowed && roleAllowed;
+}
+
 const HISTORY = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL];
 const BUILDERS = [WORKSPACE_ROUTE_IDS.QUOTE_NEW, WORKSPACE_ROUTE_IDS.QUOTE_EDIT];
 const LEGACY_GAPS = [
+  WORKSPACE_ROUTE_IDS.STAFF,
   WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
   WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
   WORKSPACE_ROUTE_IDS.MESSAGING
@@ -72,7 +81,7 @@ export function buildWorkspaceShellModel({
   const selectedTool = TOOLS.find(([, routeId]) => routeId === resolvedRouteId);
   const routedTool = selectedTool?.[0] || "";
   const routedToolAuthorized = Boolean(selectedTool)
-    && (selectedTool[2] ? features[selectedTool[2]] : admin);
+    && toolAuthorized(selectedTool[2], selectedTool[3], features, admin);
 
   let notFoundReason = "";
   if (!portal) {
@@ -80,14 +89,16 @@ export function buildWorkspaceShellModel({
     else if (browserRouteId === WORKSPACE_ROUTE_IDS.NOT_FOUND) notFoundReason = "unknown-route";
     else if (!workspace && LEGACY_GAPS.includes(resolvedRouteId)) notFoundReason = "legacy-unavailable";
     else if (selectedTool && !routedToolAuthorized) {
-      notFoundReason = selectedTool[2] ? "feature-disabled" : "role-denied";
+      notFoundReason = selectedTool[2] && features[selectedTool[2]] !== true
+        ? "feature-disabled"
+        : "role-denied";
     }
   }
   const showNotFound = Boolean(notFoundReason);
   const routedTools = {};
   const modalTools = {};
-  TOOLS.forEach(([id, routeId, feature]) => {
-    const authorized = feature ? features[feature] : admin;
+  TOOLS.forEach(([id, routeId, feature, adminOnly]) => {
+    const authorized = toolAuthorized(feature, adminOnly, features, admin);
     const selected = !portal && routeId === resolvedRouteId;
     const routeOpen = workspace && selected;
     const modalOpen = transientTools?.[id] === true || (!workspace && selected);

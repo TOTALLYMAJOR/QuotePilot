@@ -80,9 +80,11 @@ describe("recoverable lazy surfaces", () => {
     const appSource = readSource("../../App.jsx");
     const workspaceBoundarySource = readSource("../WorkspaceSurfaceBoundary.jsx");
 
-    expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(4);
+    expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(5);
     expect(mainSource).toContain("const RevenueAutopilotUnsubscribePage = createRecoverableLazy(");
     expect(mainSource).toContain('surfaceName="Email preferences"');
+    expect(mainSource).toContain("const StaffInvitationResponsePage = createRecoverableLazy(");
+    expect(mainSource).toContain('surfaceName="Staff assignment invitation"');
     expect(appSource).toContain("const QuoteCompareModal = createRecoverableLazy(");
     expect(appSource).toContain("component={QuoteCompareModal}");
     for (const name of [

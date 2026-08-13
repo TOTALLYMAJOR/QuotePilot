@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 37,
+  "catalogVersion": 39,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -595,7 +595,7 @@
     },
     {
       "id": "event-messaging-station-read",
-      "reviewRevision": 2,
+      "reviewRevision": 3,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -2756,7 +2756,7 @@
     },
     {
       "id": "revenue-autopilot-operations",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -2764,7 +2764,7 @@
         "staff",
         "administrators"
       ],
-      "summary": "Revenue Autopilot independently prepares bounded jobs, gates provider dispatch, preserves uncertain delivery evidence, distinguishes withheld retries from provider acceptance, repairs exact unread-reply Attention, and exposes per-lane record outcomes with truthful dormant or incomplete states.",
+      "summary": "Revenue Autopilot independently prepares bounded jobs, gates provider dispatch, preserves uncertain delivery evidence, distinguishes withheld retries from provider acceptance, repairs exact unread-reply Attention, and exposes per-lane record outcomes with truthful dormant or incomplete states. Its signed Resend ingress remains the sole webhook owner and routes non-Revenue messages only through separate server-owned authority indexes.",
       "backendPaths": [
         "functions/index.js",
         "functions/revenueAutopilot.js",
@@ -4714,7 +4714,7 @@
     },
     {
       "id": "authoritative-operational-staffing",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -4722,28 +4722,53 @@
         "staff",
         "administrators"
       ],
-      "summary": "Independently default-off authoritative operational staffing binds one exact same-tenant quote revision and event window to bounded admin-managed staff profiles, operator-recorded availability, admin-or-sales operator-confirmed assignments, explicit coverage gaps, cross-date schedule fences, and immutable replay-stable profile and plan receipts. The presentation preserves a local_draft fallback and never turns staffing records into attendance, payroll, acknowledgement, payment, booking, or readiness evidence.",
+      "summary": "Independently default-off authoritative operational staffing binds one exact same-tenant quote revision and event window to bounded admin-managed operational profiles, operator-recorded availability, admin-or-sales operator-confirmed assignments, explicit coverage gaps, cross-date schedule fences, and immutable replay-stable profile and plan receipts. An administrator-only Staff workspace adds separately stored private contact, photo, qualification, availability-preference, rate, travel, briefing, attendance-summary, reliability and note fields with paired optimistic receipts. Its briefing sheet joins only an exact operator-confirmed assignment and exact quote revision. An administrator may also preview and manually dispatch one provider-backed invitation to the verified private email for that exact assignment. Provider acceptance, signed-webhook delivery or bounce evidence, and the staff member's bearer-link accept or decline acknowledgement remain separate visible states. Acknowledgement never mutates the staffing plan, attendance, payroll, payment, booking, or readiness evidence. The presentation preserves a local_draft fallback.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
         "functions/operationalStaffingAuthority.js",
         "functions/operationalStaffingRuntime.js",
+        "functions/staffDirectoryAuthority.js",
+        "functions/staffInvitationAuthority.js",
         "scripts/operational-staffing-emulator-acceptance.mjs",
-        "src/lib/operationalStaffingClient.js"
+        "src/lib/defaultEmailApp.js",
+        "src/lib/operationalStaffingClient.js",
+        "src/lib/proposalExport.js",
+        "src/lib/staffBriefingSheet.js",
+        "src/lib/staffDirectoryClient.js",
+        "src/lib/staffInvitationClient.js"
       ],
       "backendExports": [
         "functions/index.js#getOperationalStaffingSnapshot",
         "functions/index.js#configureOperationalStaffProfile",
-        "functions/index.js#applyOperationalStaffingPlan"
+        "functions/index.js#applyOperationalStaffingPlan",
+        "functions/index.js#getStaffDirectory",
+        "functions/index.js#saveStaffRecord",
+        "functions/index.js#previewStaffInvitation",
+        "functions/index.js#dispatchStaffInvitation",
+        "functions/index.js#getStaffInvitation",
+        "functions/index.js#respondToStaffInvitation"
       ],
       "affectedBackendExports": [
         "functions/index.js#getOperationalStaffingSnapshot",
         "functions/index.js#configureOperationalStaffProfile",
-        "functions/index.js#applyOperationalStaffingPlan"
+        "functions/index.js#applyOperationalStaffingPlan",
+        "functions/index.js#getStaffDirectory",
+        "functions/index.js#saveStaffRecord",
+        "functions/index.js#previewStaffInvitation",
+        "functions/index.js#dispatchStaffInvitation",
+        "functions/index.js#getStaffInvitation",
+        "functions/index.js#respondToStaffInvitation"
       ],
       "frontendPaths": [
         "src/components/AmbientLivingOpportunity.jsx",
-        "src/components/OperationalStaffingPanel.jsx"
+        "src/components/OperationalStaffingPanel.jsx",
+        "src/components/StaffInvitationResponsePage.jsx",
+        "src/components/StaffWorkspace.jsx",
+        "src/components/WorkspaceShell.jsx",
+        "src/main.jsx",
+        "src/lib/staffBriefingSheet.js",
+        "src/lib/staffInvitationClient.js"
       ],
       "entryPointLocators": [
         {
@@ -4753,23 +4778,46 @@
         {
           "path": "src/components/OperationalStaffingPanel.jsx",
           "locator": "Who is covering this event?"
+        },
+        {
+          "path": "src/components/WorkspaceShell.jsx",
+          "locator": "staff-directory"
+        },
+        {
+          "path": "src/components/StaffWorkspace.jsx",
+          "locator": "Preview invitation"
+        },
+        {
+          "path": "src/components/StaffInvitationResponsePage.jsx",
+          "locator": "Accept assignment"
+        },
+        {
+          "path": "src/main.jsx",
+          "locator": "surfaceName=\"Staff assignment invitation\""
         }
       ],
       "testPaths": [
         "scripts/operational-staffing-emulator-acceptance.mjs",
         "src/components/__tests__/operationalStaffingPanel.test.jsx",
+        "src/components/__tests__/staffInvitationResponsePage.test.jsx",
+        "src/components/__tests__/staffWorkspace.test.jsx",
         "src/lib/__tests__/deploymentSafety.test.js",
         "src/lib/__tests__/functionsEnvMaterializer.test.js",
         "src/lib/__tests__/operationalStaffingAuthority.server.test.js",
         "src/lib/__tests__/operationalStaffingClient.test.js",
         "src/lib/__tests__/operationalStaffingIntegration.server.test.js",
         "src/lib/__tests__/operationalStaffingRuntime.server.test.js",
+        "src/lib/__tests__/staffBriefingSheet.test.js",
+        "src/lib/__tests__/staffDirectoryAuthority.server.test.js",
+        "src/lib/__tests__/staffInvitationAuthority.server.test.js",
+        "src/lib/__tests__/staffInvitationIntegration.server.test.js",
+        "src/lib/__tests__/staffInvitationRoute.server.test.js",
         "src/rules/__tests__/firestore.rules.test.js"
       ],
       "testLocators": [
         {
           "path": "src/lib/__tests__/operationalStaffingIntegration.server.test.js",
-          "locator": "exports exactly the three named role-safe callable surfaces"
+          "locator": "exports exactly the five named role-safe callable surfaces"
         },
         {
           "path": "src/lib/__tests__/operationalStaffingRuntime.server.test.js",
@@ -4800,6 +4848,34 @@
           "locator": "lets admin add a bounded profile and sends the exact nested DTO"
         },
         {
+          "path": "src/lib/__tests__/staffDirectoryAuthority.server.test.js",
+          "locator": "creates an immutable optimistic receipt and reconciles the exact retry"
+        },
+        {
+          "path": "src/components/__tests__/staffWorkspace.test.jsx",
+          "locator": "opens the exact private staff record with role-safe briefing outcomes"
+        },
+        {
+          "path": "src/lib/__tests__/staffBriefingSheet.test.js",
+          "locator": "creates a prefilled default-email handoff without claiming delivery"
+        },
+        {
+          "path": "src/lib/__tests__/staffInvitationAuthority.server.test.js",
+          "locator": "signs the exact invitation scope and rejects tampering and expiry"
+        },
+        {
+          "path": "src/lib/__tests__/staffInvitationIntegration.server.test.js",
+          "locator": "routes the shared signed provider webhook by authority and never treats opens or clicks as acknowledgement"
+        },
+        {
+          "path": "src/components/__tests__/staffInvitationResponsePage.test.jsx",
+          "locator": "records acceptance and replaces actions with a truthful receipt state"
+        },
+        {
+          "path": "src/lib/__tests__/staffInvitationRoute.server.test.js",
+          "locator": "requires the exact response path and non-empty bearer while preserving portal precedence"
+        },
+        {
           "path": "src/rules/__tests__/firestore.rules.test.js",
           "locator": "operational staffing authority cannot be promoted by a browser administrator"
         }
@@ -4811,7 +4887,7 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "Authoritative operational staffing:"
+          "locator": "Authoritative operational staffing and Staff workspace:"
         },
         {
           "path": "docs/USER_MANUAL.md",
@@ -4819,7 +4895,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The independently gated Event Workspace staffing context, exact tenant/quote read, admin-only bounded profile authority, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundary, explicit gaps, schedule fences, local_draft fallback, immutable receipts, direct-browser denial, and all read and mutation states were reviewed together. The three callable exports remain source-only and default-off behind separate global, tenant, and presentation gates.",
+      "surfaceReviewNote": "The independently gated Event Workspace staffing context, administrator-only Staff route, and public exact-token response route were reviewed together with exact tenant/quote reads, separate safe-profile and private-record storage, paired optimistic receipts, admin-and-sales plan authority, operator-recorded availability, operator-confirmed assignment boundary, revision-bound invitation preview, explicit manual provider dispatch, signed delivery webhooks, bearer-scoped acknowledgement, role-scoped briefing output, explicit gaps, schedule fences, local_draft fallback, direct-browser denial, and contextual read and mutation states. The nine callable exports and one signed webhook remain source-only and default-off behind separate global, tenant, presentation, provider, sender-approval, and secret boundaries.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -4895,7 +4971,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Same-tenant admins can record bounded staff profiles and same-tenant admins or sales staff can read or apply one exact-revision operational staffing plan with immutable replay-stable receipts; local fallback remains explicitly local_draft, and operator-recorded availability, operator-confirmed assignment, or complete coverage never proves member acknowledgement, attendance, payroll, payment, booking, or event readiness."
+      "safeOutcome": "Same-tenant admins can record bounded operational profiles and separate private staff records, print or hand off a revision-bound role briefing, then preview and manually send one exact-assignment invitation to a verified private email. The workspace distinguishes provider acceptance, signed provider delivery or bounce, and the person's accept or decline acknowledgement. Same-tenant admins or sales staff can still read or apply one exact-revision operational staffing plan with immutable replay-stable receipts. Local fallback remains explicitly local_draft, and an email-app handoff, provider acceptance, operator-recorded availability, operator-confirmed assignment, invitation acknowledgement, stored attendance summaries, or complete coverage never proves attendance, hours, payroll, payment, booking, event completion, or readiness."
     }
   ]
 }

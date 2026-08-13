@@ -22,6 +22,12 @@ const UAT_WORKFLOW = path.join(
   "workflows",
   "release-uat-attestation.yml"
 );
+const STAFFING_TENANT_WORKFLOW = path.join(
+  ROOT,
+  ".github",
+  "workflows",
+  "set-operational-staffing-tenant.yml"
+);
 const FIREBASE_STUB = path.join(ROOT, "scripts", "deploy-firebase-production.mjs");
 const VERCEL_STUB = path.join(ROOT, "scripts", "deploy-vercel-production.mjs");
 const CUSTOMER_DEPLOY_SCRIPT = path.join(ROOT, "scripts", "deploy-hosting-customer.mjs");
@@ -113,7 +119,7 @@ describe("direct production deployment safety", () => {
   test.each([
     ["Firebase", FIREBASE_WORKFLOW],
     ["Vercel", VERCEL_WORKFLOW]
-  ])("binds the %s Ambient UI production flag once and keeps staffing out", (_provider, workflow) => {
+  ])("binds the %s Ambient and staffing production flags once", (_provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
     const envExample = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
     const quoteHistory = fs.readFileSync(
@@ -128,7 +134,8 @@ describe("direct production deployment safety", () => {
 
     expect(source.match(/VITE_AMBIENT_UI_ENABLED: "true"/g)).toHaveLength(1);
     expect(source.match(/VITE_AMBIENT_UI_ENABLED/g)).toHaveLength(1);
-    expect(source).not.toContain("VITE_OPERATIONAL_STAFFING_ENABLED");
+    expect(source.match(/VITE_OPERATIONAL_STAFFING_ENABLED: "true"/g)).toHaveLength(1);
+    expect(source.match(/VITE_OPERATIONAL_STAFFING_ENABLED/g)).toHaveLength(1);
     expect(envExample).toMatch(/^VITE_AMBIENT_UI_ENABLED=false$/m);
     expect(envExample).toMatch(/^VITE_OPERATIONAL_STAFFING_ENABLED=false$/m);
     expect(envExample).toMatch(/^VITE_PILOT_DECISION_ROOM_ENABLED=false$/m);
@@ -160,7 +167,7 @@ describe("direct production deployment safety", () => {
     );
   });
 
-  test("keeps authoritative operational staffing dormant in tracked production configuration", () => {
+  test("promotes authoritative operational staffing only through exact production bindings", () => {
     const firebaseWorkflow = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
     const vercelWorkflow = fs.readFileSync(VERCEL_WORKFLOW, "utf8");
     const functionsExample = fs.readFileSync(
@@ -168,13 +175,35 @@ describe("direct production deployment safety", () => {
       "utf8"
     );
 
-    expect(firebaseWorkflow).not.toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
+    expect(firebaseWorkflow.match(/OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"/g)).toHaveLength(1);
     expect(vercelWorkflow).not.toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
     expect(functionsExample).toMatch(/^OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false$/m);
   });
 
   test("does not persist checkout credentials in the UAT attestation job", () => {
     expect(fs.readFileSync(UAT_WORKFLOW, "utf8")).toMatch(/persist-credentials:\s*false/);
+  });
+
+  test("keeps tenant activation inputs out of executable workflow text", () => {
+    const source = fs.readFileSync(STAFFING_TENANT_WORKFLOW, "utf8");
+    const runLines = [];
+    let runIndent = -1;
+    for (const line of source.split("\n")) {
+      const runStart = line.match(/^(\s*)run:\s*\|\s*$/u);
+      if (runStart) {
+        runIndent = runStart[1].length;
+        continue;
+      }
+      const contentIndent = line.match(/^\s*/u)?.[0]?.length || 0;
+      if (runIndent >= 0 && line.trim() && contentIndent <= runIndent) runIndent = -1;
+      if (runIndent >= 0) runLines.push(line);
+    }
+    const runSteps = runLines.join("\n");
+
+    expect(runSteps).not.toContain("${{ inputs.");
+    expect(source).toMatch(/ORGANIZATION_ID:\s*\$\{\{ inputs\.organization_id \}\}/u);
+    expect(source).toMatch(/TENANT_CONFIRMATION:\s*\$\{\{ inputs\.confirmation \}\}/u);
+    expect(source).toMatch(/FIREBASE_TOKEN:\s*\$\{\{ secrets\.FIREBASE_TOKEN \}\}/u);
   });
 
   test("keeps one canonical deploy command per production target", () => {

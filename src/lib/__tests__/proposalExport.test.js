@@ -1,11 +1,16 @@
 import { createRequire } from "node:module";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { exportQuoteProposal } from "../proposalExport";
 import { PRODUCT_FULL_NAME } from "../productIdentity";
 import { proposalPayloadFixtureQuote } from "./fixtures/proposalPayloadFixture";
 
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse");
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function versionedDraft() {
   return {
@@ -59,6 +64,34 @@ describe("customer proposal PDF export", () => {
     expect(pdfText).not.toContain("Customer Portal");
     expect(pdfText).not.toContain("https://quotepilot.example/app?portal=");
     expect(pdfText).not.toContain("0123456789abcdef0123456789abcdef");
+  });
+
+  test("can return a print-ready PDF blob without downloading it", async () => {
+    const attachment = await exportQuoteProposal(versionedDraft(), {
+      output: "blob",
+      compact: true
+    });
+    expect(attachment).toMatchObject({ mimeType: "application/pdf" });
+    expect(attachment.filename).toMatch(/\.pdf$/u);
+    expect(attachment.blob).toBeInstanceOf(Blob);
+    expect(attachment.blob.size).toBeGreaterThan(1_000);
+  });
+
+  test("opens a proposal print preview without noopener's false blocked-popup result", async () => {
+    const popup = { opener: {} };
+    const open = vi.fn(() => popup);
+    vi.stubGlobal("open", open);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:proposal-preview");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    const result = await exportQuoteProposal(versionedDraft(), {
+      output: "print",
+      compact: true
+    });
+
+    expect(open).toHaveBeenCalledWith("blob:proposal-preview", "_blank");
+    expect(popup.opener).toBeNull();
+    expect(result).toMatchObject({ printPreviewOpened: true });
   });
 
   test("requires an explicit current-delivery decision before including a sent portal", async () => {

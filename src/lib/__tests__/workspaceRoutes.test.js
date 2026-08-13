@@ -19,6 +19,7 @@ describe("workspace route parsing and construction", () => {
   test.each([
     ["/app", WORKSPACE_ROUTE_IDS.HOME, "first-release"],
     ["/app/customers", WORKSPACE_ROUTE_IDS.CUSTOMER_LIST, "first-release"],
+    ["/app/staff", WORKSPACE_ROUTE_IDS.STAFF, "follow-on"],
     ["/app/quotes", WORKSPACE_ROUTE_IDS.QUOTE_LIST, "first-release"],
     ["/app/quotes/new", WORKSPACE_ROUTE_IDS.QUOTE_NEW, "first-release"],
     ["/app/messages", WORKSPACE_ROUTE_IDS.MESSAGING, "first-release"],
@@ -92,6 +93,7 @@ describe("workspace route parsing and construction", () => {
   test("builds every parameterized first-release route from its identity", () => {
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL, { customerId: "c-1" }))
       .toBe("/app/customers/c-1");
+    expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.STAFF)).toBe(WORKSPACE_PATHS.staff);
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.QUOTE_DETAIL, { quoteId: "q-1" }))
       .toBe("/app/quotes/q-1");
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.QUOTE_EDIT, { quoteId: "q-1" }))
@@ -103,7 +105,7 @@ describe("workspace route parsing and construction", () => {
 
   test("exposes the persistent primary navigation and separately scoped operational routes", () => {
     expect(PRIMARY_WORKSPACE_NAVIGATION.map((item) => item.label))
-      .toEqual(["Home", "Customers", "Quotes", "Messages", "Workflow", "Schedule"]);
+      .toEqual(["Home", "Customers", "Staff", "Quotes", "Messages", "Workflow", "Schedule"]);
     expect(ADMIN_WORKSPACE_NAVIGATION.map((item) => item.label))
       .toEqual(["Reporting", "Catalog", "Imports", "Integrations", "Diagnostics"]);
   });

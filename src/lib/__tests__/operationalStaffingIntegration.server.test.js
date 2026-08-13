@@ -21,10 +21,12 @@ function callableSource(name, nextName) {
 }
 
 describe("operational staffing callable authority integration", () => {
-  test("exports exactly the three named role-safe callable surfaces", () => {
+  test("exports exactly the five named role-safe callable surfaces", () => {
     expect(FUNCTIONS_SOURCE.match(/exports\.getOperationalStaffingSnapshot\s*=/gu)).toHaveLength(1);
     expect(FUNCTIONS_SOURCE.match(/exports\.configureOperationalStaffProfile\s*=/gu)).toHaveLength(1);
     expect(FUNCTIONS_SOURCE.match(/exports\.applyOperationalStaffingPlan\s*=/gu)).toHaveLength(1);
+    expect(FUNCTIONS_SOURCE.match(/exports\.getStaffDirectory\s*=/gu)).toHaveLength(1);
+    expect(FUNCTIONS_SOURCE.match(/exports\.saveStaffRecord\s*=/gu)).toHaveLength(1);
 
     const snapshot = callableSource(
       "getOperationalStaffingSnapshot",
@@ -32,14 +34,18 @@ describe("operational staffing callable authority integration", () => {
     );
     const profile = callableSource(
       "configureOperationalStaffProfile",
-      "applyOperationalStaffingPlan"
+      "getStaffDirectory"
     );
     const plan = callableSource("applyOperationalStaffingPlan", "getProductAnalyticsSummary");
-    [snapshot, profile, plan].forEach((source) => {
+    const directory = callableSource("getStaffDirectory", "saveStaffRecord");
+    const staffRecord = callableSource("saveStaffRecord", "applyOperationalStaffingPlan");
+    [snapshot, profile, plan, directory, staffRecord].forEach((source) => {
       expect(source).toContain("assertStaff(context, { expectedOrganizationId: scope.organizationId })");
       expect(source).toContain("assertOperationalStaffingSameOrganization");
     });
     expect(profile).toContain("assertAdminStaff(");
+    expect(directory).toContain("assertAdminStaff(");
+    expect(staffRecord).toContain("assertAdminStaff(");
     expect(plan).not.toContain("assertAdminStaff(");
   });
 
@@ -48,8 +54,10 @@ describe("operational staffing callable authority integration", () => {
     expect(RUNTIME_SOURCE).toContain("settings?.operationalStaffingAuthorityEnabled === true");
     [
       callableSource("getOperationalStaffingSnapshot", "configureOperationalStaffProfile"),
-      callableSource("configureOperationalStaffProfile", "applyOperationalStaffingPlan"),
-      callableSource("applyOperationalStaffingPlan", "getProductAnalyticsSummary")
+      callableSource("configureOperationalStaffProfile", "getStaffDirectory"),
+      callableSource("applyOperationalStaffingPlan", "getProductAnalyticsSummary"),
+      callableSource("getStaffDirectory", "saveStaffRecord"),
+      callableSource("saveStaffRecord", "applyOperationalStaffingPlan")
     ].forEach((source) => {
       expect(source).toContain("tx.get(refs.settingsRef)");
       expect(source).toContain("assertOperationalStaffingStorageEnabled(settingsSnap)");
@@ -73,7 +81,7 @@ describe("operational staffing callable authority integration", () => {
   test("reads deterministic nested receipts before reconciliation and creates them immutably", () => {
     const profile = callableSource(
       "configureOperationalStaffProfile",
-      "applyOperationalStaffingPlan"
+      "getStaffDirectory"
     );
     const plan = callableSource("applyOperationalStaffingPlan", "getProductAnalyticsSummary");
     expect(profile).toContain("buildOperationalStaffProfileReceiptId(request)");
@@ -101,7 +109,7 @@ describe("operational staffing callable authority integration", () => {
   test("keeps server timestamps outside immutable domain receipt digests", () => {
     const profile = callableSource(
       "configureOperationalStaffProfile",
-      "applyOperationalStaffingPlan"
+      "getStaffDirectory"
     );
     const plan = callableSource("applyOperationalStaffingPlan", "getProductAnalyticsSummary");
     [profile, plan].forEach((source) => {
@@ -116,7 +124,7 @@ describe("operational staffing callable authority integration", () => {
   test("preserves first-write timestamps when current projections advance", () => {
     const profile = callableSource(
       "configureOperationalStaffProfile",
-      "applyOperationalStaffingPlan"
+      "getStaffDirectory"
     );
     const plan = callableSource("applyOperationalStaffingPlan", "getProductAnalyticsSummary");
     expect(profile).toContain("profileSnap.data()?.createdAt");

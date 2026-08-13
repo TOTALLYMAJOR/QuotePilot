@@ -148,6 +148,14 @@ git push origin v<major>.<minor>.<patch>
     deploy step. Record provider acceptance/READY evidence and update the
     target-specific last-known-good receipt only after post-launch verification
     succeeds.
+11. When a reviewed release requires the operational-staffing tenant gate,
+    dispatch `Set Operational Staffing Tenant` only after the matching
+    Firebase `all` deployment succeeds. Bind the exact release SHA and deploy
+    run id, use the exact state-and-organization confirmation, and retain the
+    verified readback. The reversible field mutation is a separate production
+    action and is not implied by deployment. Workflow dispatch values must be
+    mapped through step environment variables and never interpolated directly
+    into executable shell bodies that can access provider credentials.
 
 If Firebase and Vercel have different last-known-good SHAs, use separate
 target-specific deployment runs. Allowed deployment profiles
@@ -225,8 +233,13 @@ If a topic changes, only update the owning doc and cross-link from others.
     single binding (previously it enforced the flag's absence). This was an
     explicit solo-operator promotion decision recorded in `CHANGELOG.md`;
     the hosted UAT acceptance pass was deliberately foregone.
-    `VITE_OPERATIONAL_STAFFING_ENABLED` remains excluded from production
-    binding and the `.env.example` local default for both flags remains off.
+  - The August 13, 2026 owner-approved operational-staffing test release binds
+    `VITE_OPERATIONAL_STAFFING_ENABLED: "true"` exactly once in both production
+    workflows. Firebase also materializes
+    `OPERATIONAL_STAFFING_AUTHORITY_ENABLED=true`; the trusted tenant setting,
+    role checks, direct-browser denials, provider prerequisites, and immutable
+    receipts remain independent. The `.env.example` local default for both
+    presentation flags remains off.
 
 ## Orchestration References
 - Blueprint: `docs/ORCHESTRATION_BLUEPRINT.md`

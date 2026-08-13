@@ -63,6 +63,16 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
   state is not exposed as an active conversation.
 - `/app/workflow`: routed attention, follow-up, and approval surface; optional
   query parameters focus an exact quote, attention type, and request.
+- `/app/staff`: independently flagged administrator-only Staff workspace for
+  private contact/photo, qualifications, availability, rates, travel,
+  briefing defaults, reliability and notes. Exact operator-confirmed event
+  assignments can produce a role-aware print/download sheet or a prefilled
+  default-email-app handoff. An administrator can preview and manually send an
+  exact-assignment invitation to a verified private email, then see provider
+  delivery and staff acknowledgement on separate rails.
+- `/staffing/respond?staffing=<signed-token>`: public bearer response for one
+  exact staff assignment invitation. The link records accept or decline only;
+  it does not establish attendance, hours, payroll, completion, or readiness.
 - `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
   schedule and proof-safe commercial reporting workspaces.
 - `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
@@ -498,9 +508,15 @@ Commercial Change additionally requires the trusted tenant setting
 `commercialChangeAuthorityEnabled=true`; browser principals cannot enable it.
 Operational staffing independently requires the trusted tenant setting
 `operationalStaffingAuthorityEnabled=true`; administrators alone manage staff
-profiles and operator-recorded availability, while same-tenant administrators
-and sales staff may apply exact-revision assignment plans. Browser Firestore
-access to profiles, schedule fences, plans, and receipts remains denied. See
+profiles, full private staff records, operator-recorded availability and staff
+briefing artifacts, while same-tenant administrators and sales staff may apply
+exact-revision assignment plans. Browser Firestore access to profiles, private
+records, assignment invitations, delivery events, schedule fences, plans, and
+receipts remains denied. Invitation dispatch additionally requires the approved
+Resend notification sender and `STAFF_INVITATION_TOKEN_SECRET` in Secret Manager.
+The existing signed `revenueAutopilotResendWebhook` routes events through separate
+server-owned provider-message indexes; provider acceptance, delivery,
+and staff acknowledgement remain distinct. See
 the [authority ADR](docs/OPERATIONAL_STAFFING_AUTHORITY_ADR.md).
 Revenue Autopilot evaluation/job authority and outbound sends are separate, so
 keep both flags false and the provider `none` until an exact coordinated release

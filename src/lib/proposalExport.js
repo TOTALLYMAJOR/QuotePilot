@@ -649,6 +649,34 @@ export async function exportQuoteProposal(quote, {
     };
   }
 
+  if (output === "blob") {
+    return {
+      filename: pdfFilename,
+      mimeType: "application/pdf",
+      blob: doc.output("blob")
+    };
+  }
+
+  if (output === "print") {
+    const blob = doc.output("blob");
+    const objectUrl = URL.createObjectURL(blob);
+    const printWindow = typeof globalThis.open === "function"
+      ? globalThis.open(objectUrl, "_blank")
+      : null;
+    if (!printWindow) {
+      URL.revokeObjectURL(objectUrl);
+      throw new Error("The proposal print preview was blocked. Allow pop-ups, then try again.");
+    }
+    try {
+      printWindow.opener = null;
+    } catch {
+      // Some browsers expose opener as read-only; the isolated blob URL still
+      // contains no app authority and is revoked below.
+    }
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    return { filename: pdfFilename, mimeType: "application/pdf", printPreviewOpened: true };
+  }
+
   doc.save(pdfFilename);
   return {
     filename: pdfFilename

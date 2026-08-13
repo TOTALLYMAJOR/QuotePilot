@@ -12,6 +12,7 @@ function route(routeId) {
 const STANDARD_ROUTE_CASES = [
   [WORKSPACE_ROUTE_IDS.CUSTOMER_LIST, "customer-directory"],
   [WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL, "customer-360"],
+  [WORKSPACE_ROUTE_IDS.STAFF, "staff"],
   [WORKSPACE_ROUTE_IDS.QUOTE_LIST, "quotes"],
   [WORKSPACE_ROUTE_IDS.QUOTE_NEW, "quote-builder"],
   [WORKSPACE_ROUTE_IDS.QUOTE_DETAIL, "quotes"],
@@ -27,6 +28,7 @@ const STANDARD_ROUTE_CASES = [
 ];
 
 const WORKSPACE_ONLY_LEGACY_GAPS = new Set([
+  WORKSPACE_ROUTE_IDS.STAFF,
   WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
   WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
   WORKSPACE_ROUTE_IDS.MESSAGING
@@ -45,6 +47,7 @@ const MODAL_LEGACY_ROUTES = new Set([
 ]);
 
 const ADMIN_ONLY_ROUTES = new Set([
+  WORKSPACE_ROUTE_IDS.STAFF,
   WORKSPACE_ROUTE_IDS.CATALOG,
   WORKSPACE_ROUTE_IDS.IMPORTS
 ]);
@@ -209,6 +212,54 @@ describe("routed tool authorization and presentation", () => {
     }
   });
 
+  test("keeps Staff admin-only, presentation-gated, and unavailable in the legacy shell", () => {
+    const sales = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.STAFF),
+      customerCenteredWorkspaceEnabled: true,
+      isAdmin: false
+    });
+    expect(sales).toMatchObject({
+      routedTool: "staff",
+      routedToolAuthorized: false,
+      notFoundReason: "role-denied"
+    });
+
+    const disabled = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.STAFF),
+      customerCenteredWorkspaceEnabled: true,
+      isAdmin: true,
+      featureFlags: { staffDirectory: false }
+    });
+    expect(disabled).toMatchObject({
+      routedToolAuthorized: false,
+      notFoundReason: "feature-disabled"
+    });
+
+    const enabled = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.STAFF),
+      customerCenteredWorkspaceEnabled: true,
+      isAdmin: true,
+      featureFlags: { staffDirectory: true }
+    });
+    expect(enabled).toMatchObject({
+      routedToolAuthorized: true,
+      showNotFound: false,
+      primary: { id: "staff", presentation: "embedded" }
+    });
+
+    const legacy = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.STAFF),
+      customerCenteredWorkspaceEnabled: false,
+      isAdmin: true,
+      featureFlags: { staffDirectory: true }
+    });
+    expect(legacy).toMatchObject({
+      routedToolAuthorized: true,
+      showNotFound: true,
+      notFoundReason: "legacy-unavailable"
+    });
+  });
+
   test.each(TOOL_MATRIX)("projects %s as a legacy modal or workspace embedded route", (toolId, routeId) => {
     const legacy = buildWorkspaceShellModel({ route: route(routeId) });
     expect(legacy.active.routedTools[toolId]).toMatchObject({ open: false, visible: false });
@@ -239,6 +290,7 @@ describe("routed tool authorization and presentation", () => {
 
   test("lists every current routed operational tool exactly once", () => {
     expect(WORKSPACE_SHELL_TOOL_IDS).toEqual([
+      "staff",
       "schedule",
       "reporting",
       "catalog",

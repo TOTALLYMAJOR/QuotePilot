@@ -1,0 +1,43 @@
+.staff-invitation-page {
+  min-height: 100vh;
+  padding: clamp(1rem, 4vw, 3rem);
+  background: radial-gradient(circle at 18% 0%, #f4e9d7 0, transparent 34rem), #f7f5f0;
+  color: #28231c;
+}
+
+.staff-invitation-page > header {
+  max-width: 720px;
+  margin: 0 auto 1.4rem;
+}
+
+.staff-invitation-card {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: clamp(1.35rem, 4vw, 3rem);
+  border: 1px solid rgba(97, 73, 34, 0.14);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 24px 70px rgba(53, 42, 24, 0.1);
+}
+
+.staff-invitation-card h1 { margin: 0.2rem 0 1rem; font-size: clamp(2rem, 6vw, 3.4rem); line-height: 1; }
+.staff-invitation-status { min-height: 48px; display: flex; align-items: center; gap: 0.65rem; padding: 0.8rem 0.9rem; border-radius: 13px; background: #f4f0e7; }
+.staff-invitation-status.is-resolved { background: #edf8f2; color: #246b54; }
+.staff-invitation-status.is-error, .staff-invitation-status.is-expired { background: #fff1ed; color: #914334; }
+.staff-invitation-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 1.4rem 0; overflow: hidden; border-radius: 15px; background: rgba(97, 73, 34, 0.12); }
+.staff-invitation-facts div { min-width: 0; padding: 1rem; background: #fff; display: grid; gap: 0.25rem; }
+.staff-invitation-facts span { color: #786d5c; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.staff-invitation-facts strong { overflow-wrap: anywhere; text-transform: capitalize; }
+.staff-invitation-location { display: flex; align-items: flex-start; gap: 0.5rem; color: #625b50; }
+.staff-invitation-actions, .staff-invitation-decline > div { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 1.5rem; }
+.staff-invitation-actions button { min-height: 48px; display: inline-flex; align-items: center; gap: 0.5rem; }
+.staff-invitation-decline { margin-top: 1.1rem; padding: 1rem; border-radius: 15px; background: #fff7f4; }
+.staff-invitation-decline label { display: grid; gap: 0.55rem; }
+.staff-invitation-decline textarea { min-height: 96px; resize: vertical; }
+.staff-invitation-boundary { margin: 1.6rem 0 0; padding-top: 1rem; border-top: 1px solid rgba(97, 73, 34, 0.13); color: #70685d; font-size: 0.88rem; }
+
+@media (max-width: 560px) {
+  .staff-invitation-facts { grid-template-columns: 1fr; }
+  .staff-invitation-actions { display: grid; }
+  .staff-invitation-actions button { width: 100%; justify-content: center; }
+}

@@ -229,7 +229,8 @@ const {
   buildOperationalStaffingReceiptId,
   deriveOperationalStaffingScheduleFenceRefs,
   planOperationalStaffProfileCommand,
-  planOperationalStaffingCommand
+  planOperationalStaffingCommand,
+  projectOperationalStaffProfile
 } = require("./operationalStaffingAuthority");
 const {
   OperationalStaffingRuntimeError,
@@ -240,6 +241,26 @@ const {
   deriveCanonicalOperationalStaffingEvidence,
   emptyScheduleFence
 } = require("./operationalStaffingRuntime");
+const {
+  STAFF_DIRECTORY_AUTHORITY_VERSION,
+  StaffDirectoryAuthorityError,
+  buildStaffRecordReceiptId,
+  defaultStaffRecord,
+  planStaffRecordCommand,
+  projectStaffRecord
+} = require("./staffDirectoryAuthority");
+const {
+  STAFF_INVITATION_AUTHORITY_VERSION,
+  STAFF_INVITATION_SCHEMA_VERSION,
+  STAFF_INVITATION_VALIDITY_MS,
+  StaffInvitationAuthorityError,
+  buildStaffInvitationPreview,
+  buildStaffInvitationToken,
+  hashStaffInvitationToken,
+  projectStaffInvitation,
+  recordStaffInvitationDecision,
+  verifyStaffInvitationToken
+} = require("./staffInvitationAuthority");
 const {
   StarterCatalogPackError,
   applyStarterCatalogPack: applyStarterCatalogPackInternal,
@@ -348,6 +369,11 @@ const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
 const PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION = "proposalAcceptanceReceipts";
 const PRODUCT_ANALYTICS_COLLECTION = "productAnalyticsEvents";
 const OPERATIONAL_STAFF_PROFILES_COLLECTION = "staffProfiles";
+const STAFF_RECORDS_COLLECTION = "staffRecords";
+const STAFF_INVITATIONS_COLLECTION = "staffInvitations";
+const STAFF_INVITATION_RECEIPTS_COLLECTION = "staffInvitationReceipts";
+const STAFF_INVITATION_PROVIDER_EVENTS_COLLECTION = "staffInvitationProviderEvents";
+const STAFF_INVITATION_PROVIDER_MESSAGE_INDEX_COLLECTION = "staffInvitationProviderMessageIndex";
 const OPERATIONAL_STAFFING_PLANS_COLLECTION = "eventStaffingPlans";
 const OPERATIONAL_STAFFING_FENCES_COLLECTION = "staffingScheduleFences";
 const PORTAL_COLLECTION = "customerPortalQuotes";
@@ -395,6 +421,7 @@ const STRIPE_WEBHOOK_SECRET_NAME = "STRIPE_WEBHOOK_SECRET";
 const RESEND_API_KEY_SECRET_NAME = "RESEND_API_KEY";
 const RESEND_WEBHOOK_SECRET_NAME = "RESEND_WEBHOOK_SECRET";
 const REVENUE_AUTOPILOT_TOKEN_SECRET_NAME = "REVENUE_AUTOPILOT_TOKEN_SECRET";
+const STAFF_INVITATION_TOKEN_SECRET_NAME = "STAFF_INVITATION_TOKEN_SECRET";
 const TWILIO_AUTH_TOKEN_SECRET_NAME = "TWILIO_AUTH_TOKEN";
 const BUYER_ACCESS_STRIPE_SECRET_NAME = "BUYER_ACCESS_STRIPE_SECRET_KEY";
 const BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME = "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET";
@@ -8950,6 +8977,8 @@ function operationalStaffingActor(staff, organizationId) {
 function operationalStaffingRefs({ organizationId, quoteId = "", staffId = "" } = {}) {
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
   const profilesRef = organizationRef.collection(OPERATIONAL_STAFF_PROFILES_COLLECTION);
+  const staffRecordsRef = organizationRef.collection(STAFF_RECORDS_COLLECTION);
+  const staffInvitationsRef = organizationRef.collection(STAFF_INVITATIONS_COLLECTION);
   const plansRef = organizationRef.collection(OPERATIONAL_STAFFING_PLANS_COLLECTION);
   return {
     organizationRef,
@@ -8958,6 +8987,9 @@ function operationalStaffingRefs({ organizationId, quoteId = "", staffId = "" } 
     planRef: quoteId ? plansRef.doc(quoteId) : null,
     profilesRef,
     profileRef: staffId ? profilesRef.doc(staffId) : null,
+    staffRecordsRef,
+    staffRecordRef: staffId ? staffRecordsRef.doc(staffId) : null,
+    staffInvitationsRef,
     fencesRef: organizationRef.collection(OPERATIONAL_STAFFING_FENCES_COLLECTION)
   };
 }
@@ -9021,6 +9053,8 @@ function throwOperationalStaffingFailure(error, operation, scope = {}) {
   if (
     error instanceof OperationalStaffingAuthorityError
     || error instanceof OperationalStaffingRuntimeError
+    || error instanceof StaffDirectoryAuthorityError
+    || error instanceof StaffInvitationAuthorityError
   ) {
     throw new functions.https.HttpsError(error.code, error.message);
   }
@@ -9181,6 +9215,791 @@ exports.configureOperationalStaffProfile = functions.region(REGION).https.onCall
     };
   } catch (error) {
     return throwOperationalStaffingFailure(error, "configureOperationalStaffProfile", {
+      ...scope,
+      actorUid: staff.uid
+    });
+  }
+});
+
+function staffDirectoryAssignmentProjection(plan, version) {
+  const snapshot = version?.snapshot && typeof version.snapshot === "object"
+    ? version.snapshot
+    : {};
+  const event = snapshot.event && typeof snapshot.event === "object" ? snapshot.event : {};
+  const selection = snapshot.selection && typeof snapshot.selection === "object" ? snapshot.selection : {};
+  return (Array.isArray(plan?.assignments) ? plan.assignments : []).map((assignment) => ({
+    assignmentId: normalizeText(assignment?.assignmentId),
+    staffId: normalizeText(assignment?.staffId),
+    role: normalizeText(assignment?.role).toLowerCase(),
+    state: normalizeText(assignment?.state).toLowerCase(),
+    quoteId: normalizeText(plan?.quoteId),
+    quoteRevisionId: normalizeText(plan?.quoteRevisionId),
+    planRevision: Math.max(0, Math.round(Number(plan?.revision || 0))),
+    eventWindow: {
+      startAtISO: normalizeText(plan?.eventWindow?.startAtISO),
+      endAtISO: normalizeText(plan?.eventWindow?.endAtISO)
+    },
+    event: {
+      name: normalizeText(event.name || snapshot.customer?.name || "Event"),
+      date: normalizeText(event.date),
+      time: normalizeText(event.time),
+      venue: normalizeText(event.venue),
+      venueAddress: normalizeText(event.venueAddress),
+      guests: Math.max(0, Math.round(Number(event.guests || 0))),
+      style: normalizeText(event.style),
+      dietaryRestrictions: normalizeText(event.dietaryRestrictions)
+    },
+    selection: {
+      packageName: normalizeText(selection.packageName),
+      menuItemNames: Array.isArray(selection.menuItemNames)
+        ? selection.menuItemNames.map((item) => normalizeText(item)).filter(Boolean).slice(0, 60)
+        : []
+    },
+    requirements: plan?.requirements?.byRole && typeof plan.requirements.byRole === "object"
+      ? plan.requirements.byRole
+      : { lead: 0, server: 0, chef: 0, bartender: 0 },
+    coverage: plan?.coverage && typeof plan.coverage === "object" ? {
+      state: normalizeText(plan.coverage.state),
+      gaps: plan.coverage.gaps && typeof plan.coverage.gaps === "object" ? plan.coverage.gaps : {}
+    } : { state: "unknown", gaps: {} }
+  })).filter((assignment) => (
+    assignment.assignmentId
+    && assignment.staffId
+    && assignment.quoteId
+    && assignment.quoteRevisionId
+    && assignment.state === "operator_confirmed"
+  ));
+}
+
+function staffInvitationRequestScope(data = {}) {
+  const base = operationalStaffingScope(data, { requireQuote: true, requireStaff: true });
+  const assignmentId = normalizeText(data?.assignmentId);
+  const quoteRevisionId = normalizeText(data?.expectedQuoteRevisionId);
+  const planRevision = Number(data?.expectedPlanRevision);
+  const recordRevision = Number(data?.expectedRecordRevision);
+  if (
+    !assignmentId
+    || /[\s/?#\\\u0000]/u.test(assignmentId)
+    || !quoteRevisionId
+    || /[\s/?#\\\u0000]/u.test(quoteRevisionId)
+    || !Number.isSafeInteger(planRevision)
+    || planRevision < 1
+    || !Number.isSafeInteger(recordRevision)
+    || recordRevision < 1
+  ) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Invitation preview requires the exact assignment, plan, quote revision, and private-record revision."
+    );
+  }
+  return { ...base, assignmentId, quoteRevisionId, planRevision, recordRevision };
+}
+
+async function readStaffInvitationContext(tx, scope) {
+  const refs = operationalStaffingRefs(scope);
+  const versionRef = refs.quoteRef.collection("versions").doc(scope.quoteRevisionId);
+  const [settingsSnap, organizationSnap, planSnap, profileSnap, recordSnap, versionSnap] = await Promise.all([
+    tx.get(refs.settingsRef),
+    tx.get(refs.organizationRef),
+    tx.get(refs.planRef),
+    tx.get(refs.profileRef),
+    tx.get(refs.staffRecordRef),
+    tx.get(versionRef)
+  ]);
+  assertOperationalStaffingStorageEnabled(settingsSnap);
+  if (!planSnap.exists || !profileSnap.exists || !recordSnap.exists || !versionSnap.exists) {
+    throw new StaffInvitationAuthorityError(
+      "failed-precondition",
+      "The exact confirmed assignment, private staff record, or immutable quote revision is unavailable."
+    );
+  }
+  const plan = { quoteId: scope.quoteId, ...(planSnap.data() || {}) };
+  if (
+    normalizeText(plan.quoteRevisionId) !== scope.quoteRevisionId
+    || Number(plan.revision) !== scope.planRevision
+  ) {
+    throw new StaffInvitationAuthorityError(
+      "aborted",
+      "The staffing plan changed. Preview the invitation again before dispatch."
+    );
+  }
+  const record = projectStaffRecord(recordSnap.data() || {}, {
+    organizationId: scope.organizationId,
+    staffId: scope.staffId,
+    displayName: normalizeText(profileSnap.data()?.displayName),
+    capabilities: profileSnap.data()?.capabilities
+  });
+  if (Number(record.revision) !== scope.recordRevision) {
+    throw new StaffInvitationAuthorityError(
+      "aborted",
+      "The private staff record changed. Preview the invitation again before dispatch."
+    );
+  }
+  const assignment = staffDirectoryAssignmentProjection(plan, versionSnap.data() || {})
+    .find((item) => item.assignmentId === scope.assignmentId && item.staffId === scope.staffId);
+  if (!assignment) {
+    throw new StaffInvitationAuthorityError(
+      "failed-precondition",
+      "The selected person no longer has this exact operator-confirmed assignment."
+    );
+  }
+  const organizationName = normalizeText(
+    organizationSnap.data()?.name
+    || organizationSnap.data()?.organizationName
+    || organizationSnap.data()?.businessName
+    || "QuotePilot"
+  );
+  const preview = buildStaffInvitationPreview({
+    scope,
+    staffRecord: record,
+    assignment,
+    organizationName
+  });
+  return { refs, preview, assignment, record, organizationName };
+}
+
+function staffInvitationPublicSnapshot(preview) {
+  return {
+    organizationName: normalizeText(preview?.organizationName || ""),
+    event: preview.event,
+    role: preview.role,
+    recipientName: preview.recipient.name,
+    consequence: "Your response records only whether you accept this exact assignment invitation.",
+    evidenceBoundary: "It does not record attendance, hours, payroll, event completion, or readiness."
+  };
+}
+
+function staffInvitationTokenSecret() {
+  return normalizeText(readBoundSecret(STAFF_INVITATION_TOKEN_SECRET_NAME));
+}
+
+function staffInvitationResponseUrl(token) {
+  const configured = parseUrlOrThrow(readConfig("app.base_url"), "app.base_url");
+  const url = new URL(configured);
+  url.pathname = "/staffing/respond";
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("staffing", token);
+  return url.toString();
+}
+
+function staffInvitationEmail(preview, responseUrl) {
+  const textBody = `${preview.textWithoutResponseLink}\n\nRespond securely: ${responseUrl}`;
+  const htmlLines = preview.textWithoutResponseLink.split("\n").map((line) => (
+    line ? `<p>${escapeHtml(line)}</p>` : "<br/>"
+  )).join("");
+  return {
+    toEmail: preview.recipient.email,
+    subject: preview.subject,
+    text: textBody,
+    html: `${htmlLines}<p><a href="${escapeHtml(responseUrl)}">Review and respond to this assignment</a></p>`
+  };
+}
+
+function staffInvitationProjectionWithPreview(invitation) {
+  return {
+    ...projectStaffInvitation(invitation),
+    preview: invitation?.preview && typeof invitation.preview === "object"
+      ? {
+          recipientName: normalizeText(invitation.preview.recipientName),
+          event: invitation.preview.event || {},
+          role: normalizeText(invitation.preview.role)
+        }
+      : null
+  };
+}
+
+function staffInvitationMatchesToken(invitation, scope, token) {
+  return (
+    normalizeText(invitation?.tokenHash) === hashStaffInvitationToken(token)
+    && normalizeText(invitation?.invitationId) === scope.invitationId
+    && normalizeOrganizationId(invitation?.organizationId) === scope.organizationId
+    && normalizeText(invitation?.quoteId) === scope.quoteId
+    && normalizeText(invitation?.quoteRevisionId) === scope.quoteRevisionId
+    && Number(invitation?.planRevision) === scope.planRevision
+    && normalizeText(invitation?.assignmentId) === scope.assignmentId
+    && normalizeText(invitation?.staffId) === scope.staffId
+    && Number(invitation?.recordRevision) === scope.recordRevision
+    && normalizeText(invitation?.previewDigest) === scope.previewDigest
+  );
+}
+
+exports.previewStaffInvitation = functions.region(REGION).https.onCall(async (data, context) => {
+  const scope = staffInvitationRequestScope(data);
+  const staff = assertOperationalStaffingSameOrganization(
+    assertAdminStaff(await assertStaff(context, { expectedOrganizationId: scope.organizationId })),
+    scope.organizationId
+  );
+  try {
+    const preview = await db.runTransaction(async (tx) => (
+      (await readStaffInvitationContext(tx, scope)).preview
+    ));
+    return {
+      ok: true,
+      storage: "firebase",
+      authorityVersion: STAFF_INVITATION_AUTHORITY_VERSION,
+      organizationId: scope.organizationId,
+      preview
+    };
+  } catch (error) {
+    return throwOperationalStaffingFailure(error, "previewStaffInvitation", {
+      ...scope,
+      actorUid: staff.uid
+    });
+  }
+});
+
+exports.dispatchStaffInvitation = functions
+  .region(REGION)
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME, STAFF_INVITATION_TOKEN_SECRET_NAME] })
+  .https.onCall(async (data, context) => {
+    const scope = staffInvitationRequestScope(data);
+    const staff = assertOperationalStaffingSameOrganization(
+      assertAdminStaff(await assertStaff(context, { expectedOrganizationId: scope.organizationId })),
+      scope.organizationId
+    );
+    const suppliedPreviewDigest = normalizeText(data?.previewDigest);
+    const requestId = normalizeText(data?.requestId);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:@-]{15,159}$/u.test(requestId) || !/^[a-f0-9]{64}$/u.test(suppliedPreviewDigest)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Manual dispatch requires the exact preview digest and a stable request identity."
+      );
+    }
+    try {
+      const emailConfig = getEmailConfig();
+      if (
+        emailConfig.provider !== "resend"
+        || !emailConfig.resendApiKey
+        || !emailConfig.senderApproved
+      ) {
+        throw new StaffInvitationAuthorityError(
+          "failed-precondition",
+          "Staff invitation dispatch requires the approved configured email provider."
+        );
+      }
+      const secret = staffInvitationTokenSecret();
+      const claimedAtISO = new Date().toISOString();
+      const claim = await db.runTransaction(async (tx) => {
+        const contextEvidence = await readStaffInvitationContext(tx, scope);
+        const { refs, preview } = contextEvidence;
+        if (preview.previewDigest !== suppliedPreviewDigest) {
+          throw new StaffInvitationAuthorityError(
+            "aborted",
+            "The invitation preview changed. Review the current invitation before dispatch."
+          );
+        }
+        const invitationRef = refs.staffInvitationsRef.doc(preview.invitationId);
+        const invitationSnap = await tx.get(invitationRef);
+        if (invitationSnap.exists) {
+          const current = invitationSnap.data() || {};
+          if (
+            normalizeText(current.requestId) !== requestId
+            || normalizeText(current.previewDigest) !== preview.previewDigest
+          ) {
+            throw new StaffInvitationAuthorityError(
+              "already-exists",
+              "This exact assignment already has a different invitation dispatch."
+            );
+          }
+          return { invitationRef, preview, current, resume: normalizeText(current.state) === "dispatching" };
+        }
+        const expiresAtISO = new Date(Math.min(
+          Date.parse(claimedAtISO) + STAFF_INVITATION_VALIDITY_MS,
+          Date.parse(contextEvidence.assignment.eventWindow?.startAtISO || claimedAtISO) || Date.parse(claimedAtISO) + STAFF_INVITATION_VALIDITY_MS
+        )).toISOString();
+        if (expiresAtISO <= claimedAtISO) {
+          throw new StaffInvitationAuthorityError("failed-precondition", "The event has already started; this invitation cannot be dispatched.");
+        }
+        const token = buildStaffInvitationToken({ preview, secret, issuedAtISO: claimedAtISO, expiresAtISO });
+        const invitation = {
+          schemaVersion: STAFF_INVITATION_SCHEMA_VERSION,
+          authority: "server_authoritative",
+          authorityVersion: STAFF_INVITATION_AUTHORITY_VERSION,
+          invitationId: preview.invitationId,
+          organizationId: scope.organizationId,
+          quoteId: scope.quoteId,
+          quoteRevisionId: scope.quoteRevisionId,
+          planRevision: scope.planRevision,
+          assignmentId: scope.assignmentId,
+          staffId: scope.staffId,
+          recordRevision: scope.recordRevision,
+          role: preview.role,
+          requestId,
+          previewDigest: preview.previewDigest,
+          recipientEmail: preview.recipient.email,
+          recipientKey: createHash("sha256").update(preview.recipient.email).digest("hex"),
+          tokenHash: hashStaffInvitationToken(token),
+          issuedAtISO: claimedAtISO,
+          expiresAtISO,
+          state: "dispatching",
+          dispatchClaimedAtISO: claimedAtISO,
+          provider: "",
+          providerMessageId: "",
+          providerAcceptedAtISO: "",
+          deliveredAtISO: "",
+          bouncedAtISO: "",
+          complainedAtISO: "",
+          acknowledgement: { state: "pending", respondedAtISO: "", declineReason: "" },
+          preview: {
+            recipientName: preview.recipient.name,
+            event: preview.event,
+            role: preview.role
+          },
+          createdBy: staff.uid,
+          createdByRole: staff.role,
+          createdAtISO: claimedAtISO,
+          updatedAtISO: claimedAtISO,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        tx.create(invitationRef, invitation);
+        return { invitationRef, preview, current: invitation, resume: true };
+      });
+      if (!claim.resume) {
+        return {
+          ok: true,
+          storage: "firebase",
+          authorityVersion: STAFF_INVITATION_AUTHORITY_VERSION,
+          organizationId: scope.organizationId,
+          idempotent: true,
+          invitation: staffInvitationProjectionWithPreview(claim.current)
+        };
+      }
+      const token = buildStaffInvitationToken({
+        preview: claim.preview,
+        secret,
+        issuedAtISO: normalizeText(claim.current.issuedAtISO),
+        expiresAtISO: normalizeText(claim.current.expiresAtISO)
+      });
+      const responseUrl = staffInvitationResponseUrl(token);
+      const message = staffInvitationEmail(claim.preview, responseUrl);
+      let providerResult;
+      try {
+        providerResult = await sendEmailViaResend({
+          apiKey: emailConfig.resendApiKey,
+          from: `${emailConfig.fromName} <${emailConfig.fromEmail}>`,
+          to: message.toEmail,
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+          idempotencyKey: `staff-invitation:${claim.preview.invitationId}`
+        });
+      } catch (providerError) {
+        const failedAtISO = new Date().toISOString();
+        const ambiguous = normalizeText(providerError?.quoteDeliveryOutcome).toLowerCase() === "ambiguous"
+          || !Number(providerError?.providerHttpStatus);
+        const state = ambiguous ? "outcome_ambiguous" : "definite_failure";
+        await claim.invitationRef.set({
+          state,
+          outcomeReason: normalizeText(providerError?.quoteDeliveryReason || providerError?.code || "provider_send_failed").slice(0, 120),
+          dispatchClaimedAtISO: "",
+          updatedAtISO: failedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return {
+          ok: true,
+          storage: "firebase",
+          authorityVersion: STAFF_INVITATION_AUTHORITY_VERSION,
+          organizationId: scope.organizationId,
+          idempotent: false,
+          invitation: staffInvitationProjectionWithPreview({ ...claim.current, state, updatedAtISO: failedAtISO })
+        };
+      }
+      const acceptedAtISO = new Date().toISOString();
+      const messageIndexRef = db.collection(STAFF_INVITATION_PROVIDER_MESSAGE_INDEX_COLLECTION)
+        .doc(createHash("sha256").update(`resend|${providerResult.id}`).digest("hex"));
+      const receiptRef = claim.invitationRef.collection(STAFF_INVITATION_RECEIPTS_COLLECTION).doc("dispatch");
+      const completed = await db.runTransaction(async (tx) => {
+        const [invitationSnap, receiptSnap, indexSnap] = await Promise.all([
+          tx.get(claim.invitationRef),
+          tx.get(receiptRef),
+          tx.get(messageIndexRef)
+        ]);
+        if (receiptSnap.exists) return { idempotent: true, invitation: invitationSnap.data() || {} };
+        if (!invitationSnap.exists) throw new StaffInvitationAuthorityError("data-loss", "Invitation disappeared after provider acceptance.");
+        const current = invitationSnap.data() || {};
+        if (normalizeText(current.requestId) !== requestId || normalizeText(current.previewDigest) !== suppliedPreviewDigest) {
+          throw new StaffInvitationAuthorityError("aborted", "Invitation evidence changed after provider acceptance.");
+        }
+        const patch = {
+          state: "provider_accepted",
+          provider: "resend",
+          providerMessageId: providerResult.id,
+          providerAcceptedAtISO: acceptedAtISO,
+          dispatchClaimedAtISO: "",
+          outcomeReason: "provider_accepted",
+          updatedAtISO: acceptedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        tx.set(claim.invitationRef, patch, { merge: true });
+        tx.create(receiptRef, {
+          invitationId: claim.preview.invitationId,
+          organizationId: scope.organizationId,
+          operation: "manual_dispatch",
+          requestId,
+          previewDigest: suppliedPreviewDigest,
+          provider: "resend",
+          providerMessageId: providerResult.id,
+          providerAcceptedAtISO: acceptedAtISO,
+          actorUid: staff.uid,
+          actorRole: staff.role,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        if (!indexSnap.exists) {
+          tx.create(messageIndexRef, {
+            provider: "resend",
+            providerMessageId: providerResult.id,
+            organizationId: scope.organizationId,
+            invitationId: claim.preview.invitationId,
+            providerAcceptedAtISO: acceptedAtISO,
+            createdAt: FieldValue.serverTimestamp()
+          });
+        }
+        return { idempotent: false, invitation: { ...current, ...patch } };
+      });
+      return {
+        ok: true,
+        storage: "firebase",
+        authorityVersion: STAFF_INVITATION_AUTHORITY_VERSION,
+        organizationId: scope.organizationId,
+        idempotent: completed.idempotent,
+        invitation: staffInvitationProjectionWithPreview(completed.invitation)
+      };
+    } catch (error) {
+      return throwOperationalStaffingFailure(error, "dispatchStaffInvitation", {
+        ...scope,
+        actorUid: staff.uid
+      });
+    }
+  });
+
+function publicStaffInvitationFailure(error, operation) {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (error instanceof StaffInvitationAuthorityError) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(`${operation} failed`, { error: normalizeText(error?.message).slice(0, 200) });
+  throw new functions.https.HttpsError("internal", "The staff invitation could not be resolved.");
+}
+
+exports.getStaffInvitation = functions
+  .region(REGION)
+  .runWith({ secrets: [STAFF_INVITATION_TOKEN_SECRET_NAME] })
+  .https.onCall(async (data) => {
+    try {
+      const token = normalizeText(data?.token);
+      const scope = verifyStaffInvitationToken(token, staffInvitationTokenSecret(), { allowExpired: true });
+      const ref = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId)
+        .collection(STAFF_INVITATIONS_COLLECTION).doc(scope.invitationId);
+      const snap = await ref.get();
+      if (!snap.exists) throw new StaffInvitationAuthorityError("not-found", "Staff invitation not found.");
+      const invitation = snap.data() || {};
+      if (!staffInvitationMatchesToken(invitation, scope, token)) {
+        throw new StaffInvitationAuthorityError("permission-denied", "Staff invitation link does not match this assignment.");
+      }
+      const projected = projectStaffInvitation(invitation);
+      const nowISO = new Date().toISOString();
+      return {
+        ok: true,
+        storage: "firebase",
+        authorityVersion: STAFF_INVITATION_AUTHORITY_VERSION,
+        invitation: projected,
+        assignment: invitation.preview || {},
+        canRespond: projected.expiresAtISO > nowISO
+          && projected.acknowledgement.state === "pending"
+          && !["bounced", "complained", "definite_failure"].includes(projected.state),
+        expired: projected.expiresAtISO <= nowISO
+      };
+    } catch (error) {
+      return publicStaffInvitationFailure(error, "getStaffInvitation");
+    }
+  });
+
+exports.respondToStaffInvitation = functions
+  .region(REGION)
+  .runWith({ secrets: [STAFF_INVITATION_TOKEN_SECRET_NAME] })
+  .https.onCall(async (data) => {
+    try {
+      const token = normalizeText(data?.token);
+      const scope = verifyStaffInvitationToken(token, staffInvitationTokenSecret());
+      const decision = normalizeText(data?.decision).toLowerCase();
+      const declineReason = normalizeText(data?.declineReason).slice(0, 500);
+      const ref = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId)
+        .collection(STAFF_INVITATIONS_COLLECTION).doc(scope.invitationId);
+      const receiptRef = ref.collection(STAFF_INVITATION_RECEIPTS_COLLECTION).doc("acknowledgement");
+      const respondedAtISO = new Date().toISOString();
+      const result = await db.runTransaction(async (tx) => {
+        const [snap, receiptSnap] = await Promise.all([tx.get(ref), tx.get(receiptRef)]);
+        if (!snap.exists) throw new StaffInvitationAuthorityError("not-found", "Staff invitation not found.");
+        const current = snap.data() || {};
+        if (!staffInvitationMatchesToken(current, scope, token)) {
+          throw new StaffInvitationAuthorityError("permission-denied", "Staff invitation link does not match this assignment.");
+        }
+        const planned = recordStaffInvitationDecision({ invitation: current, decision, declineReason, nowISO: respondedAtISO });
+        if (receiptSnap.exists) {
+          const prior = receiptSnap.data() || {};
+          if (normalizeText(prior.decision) !== planned.acknowledgement.state) {
+            throw new StaffInvitationAuthorityError("already-exists", "This invitation already has a different response.");
+          }
+          return { idempotent: true, acknowledgement: planned.acknowledgement };
+        }
+        if (!planned.idempotent) {
+          tx.set(ref, {
+            acknowledgement: planned.acknowledgement,
+            updatedAtISO: respondedAtISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+        tx.create(receiptRef, {
+          invitationId: scope.invitationId,
+          organizationId: scope.organizationId,
+          quoteId: scope.quoteId,
+          quoteRevisionId: scope.quoteRevisionId,
+          assignmentId: scope.assignmentId,
+          staffId: scope.staffId,
+          decision: planned.acknowledgement.state,
+          declineReason: planned.acknowledgement.declineReason,
+          respondedAtISO,
+          evidenceBoundary: "invitation_acknowledgement_only",
+          createdAt: FieldValue.serverTimestamp()
+        });
+        return { idempotent: planned.idempotent, acknowledgement: planned.acknowledgement };
+      });
+      return {
+        ok: true,
+        storage: "firebase",
+        authorityVersion: STAFF_INVITATION_AUTHORITY_VERSION,
+        idempotent: result.idempotent,
+        acknowledgement: result.acknowledgement,
+        evidenceBoundary: "This records the invitation response only; staffing-plan, attendance, hours, payroll, and readiness evidence are unchanged."
+      };
+    } catch (error) {
+      return publicStaffInvitationFailure(error, "respondToStaffInvitation");
+    }
+  });
+
+exports.getStaffDirectory = functions.region(REGION).https.onCall(async (data, context) => {
+  const scope = operationalStaffingScope(data, { requireQuote: false });
+  const staff = assertOperationalStaffingSameOrganization(
+    assertAdminStaff(await assertStaff(context, { expectedOrganizationId: scope.organizationId })),
+    scope.organizationId
+  );
+  try {
+    const refs = operationalStaffingRefs(scope);
+    const profilesQuery = refs.profilesRef
+      .orderBy(FieldPath.documentId())
+      .limit(OPERATIONAL_STAFFING_MAX_STAFF_PROFILES + 1);
+    const recordsQuery = refs.staffRecordsRef
+      .orderBy(FieldPath.documentId())
+      .limit(OPERATIONAL_STAFFING_MAX_STAFF_PROFILES + 1);
+    const plansQuery = refs.organizationRef
+      .collection(OPERATIONAL_STAFFING_PLANS_COLLECTION)
+      .orderBy(FieldPath.documentId())
+      .limit(101);
+    const invitationsQuery = refs.staffInvitationsRef
+      .orderBy(FieldPath.documentId())
+      .limit(501);
+    const observedAtISO = new Date().toISOString();
+    return await db.runTransaction(async (tx) => {
+      const [settingsSnap, profilesSnap, recordsSnap, plansSnap, invitationsSnap] = await Promise.all([
+        tx.get(refs.settingsRef),
+        tx.get(profilesQuery),
+        tx.get(recordsQuery),
+        tx.get(plansQuery),
+        tx.get(invitationsQuery)
+      ]);
+      assertOperationalStaffingStorageEnabled(settingsSnap);
+      const profilesTruncated = profilesSnap.size > OPERATIONAL_STAFFING_MAX_STAFF_PROFILES;
+      const recordsTruncated = recordsSnap.size > OPERATIONAL_STAFFING_MAX_STAFF_PROFILES;
+      const assignmentsTruncated = plansSnap.size > 100;
+      const invitationsTruncated = invitationsSnap.size > 500;
+      const recordByStaffId = new Map(recordsSnap.docs
+        .slice(0, OPERATIONAL_STAFFING_MAX_STAFF_PROFILES)
+        .map((snapshot) => [snapshot.id, snapshot.data() || {}]));
+      const records = profilesSnap.docs
+        .slice(0, OPERATIONAL_STAFFING_MAX_STAFF_PROFILES)
+        .map((snapshot) => {
+          const profile = projectOperationalStaffProfile({
+            ...(snapshot.data() || {}),
+            organizationId: scope.organizationId,
+            staffId: snapshot.id,
+            availabilityTruncated: false
+          });
+          const privateRecord = recordByStaffId.get(snapshot.id);
+          const record = privateRecord
+            ? projectStaffRecord(privateRecord, {
+              organizationId: scope.organizationId,
+              staffId: snapshot.id,
+              displayName: profile.displayName,
+              capabilities: profile.capabilities
+            })
+            : { ...defaultStaffRecord({
+              organizationId: scope.organizationId,
+              staffId: snapshot.id,
+              displayName: profile.displayName,
+              capabilities: profile.capabilities
+            }), revision: 0, updatedAtISO: "" };
+          return { profile, record };
+        });
+      const plans = plansSnap.docs.slice(0, 100).map((snapshot) => ({
+        ...(snapshot.data() || {}),
+        quoteId: normalizeText(snapshot.data()?.quoteId || snapshot.id)
+      })).filter((plan) => normalizeText(plan.quoteRevisionId));
+      const versionRefs = plans.map((plan) => refs.organizationRef
+        .collection(QUOTES_COLLECTION)
+        .doc(plan.quoteId)
+        .collection("versions")
+        .doc(normalizeText(plan.quoteRevisionId)));
+      const versionSnaps = versionRefs.length ? await tx.getAll(...versionRefs) : [];
+      const assignments = plans.flatMap((plan, index) => (
+        staffDirectoryAssignmentProjection(
+          plan,
+          versionSnaps[index]?.exists ? versionSnaps[index].data() || {} : null
+        )
+      )).slice(0, 1000);
+      const invitations = invitationsSnap.docs.slice(0, 500).map((snapshot) => (
+        staffInvitationProjectionWithPreview({
+          invitationId: snapshot.id,
+          ...(snapshot.data() || {})
+        })
+      ));
+      return {
+        ok: true,
+        storage: "firebase",
+        authorityVersion: STAFF_DIRECTORY_AUTHORITY_VERSION,
+        organizationId: scope.organizationId,
+        observedAtISO,
+        records,
+        assignments,
+        invitations,
+        profilesTruncated,
+        recordsTruncated,
+        assignmentsTruncated: assignmentsTruncated || assignments.length >= 1000,
+        invitationsTruncated
+      };
+    });
+  } catch (error) {
+    return throwOperationalStaffingFailure(error, "getStaffDirectory", {
+      ...scope,
+      actorUid: staff.uid
+    });
+  }
+});
+
+exports.saveStaffRecord = functions.region(REGION).https.onCall(async (data, context) => {
+  const scope = operationalStaffingScope(data, { requireQuote: false, requireStaff: true });
+  const staff = assertOperationalStaffingSameOrganization(
+    assertAdminStaff(await assertStaff(context, { expectedOrganizationId: scope.organizationId })),
+    scope.organizationId
+  );
+  try {
+    const profileRequest = {
+      requestId: data?.requestId,
+      organizationId: scope.organizationId,
+      staffId: scope.staffId,
+      expectedRevision: data?.expectedProfileRevision,
+      profile: data?.profile
+    };
+    const recordRequest = {
+      requestId: data?.requestId,
+      organizationId: scope.organizationId,
+      staffId: scope.staffId,
+      expectedRevision: data?.expectedRecordRevision,
+      record: data?.record
+    };
+    const profileReceiptId = buildOperationalStaffProfileReceiptId(profileRequest);
+    const recordReceiptId = buildStaffRecordReceiptId(recordRequest);
+    const refs = operationalStaffingRefs(scope);
+    const profileReceiptRef = refs.profileRef.collection("versions").doc(profileReceiptId);
+    const recordReceiptRef = refs.staffRecordRef.collection("versions").doc(recordReceiptId);
+    const actor = operationalStaffingActor(staff, scope.organizationId);
+    const serverTimeISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [settingsSnap, profileSnap, recordSnap, profileReceiptSnap, recordReceiptSnap] = await Promise.all([
+        tx.get(refs.settingsRef),
+        tx.get(refs.profileRef),
+        tx.get(refs.staffRecordRef),
+        tx.get(profileReceiptRef),
+        tx.get(recordReceiptRef)
+      ]);
+      assertOperationalStaffingStorageEnabled(settingsSnap);
+      if (profileReceiptSnap.exists !== recordReceiptSnap.exists) {
+        throw new StaffDirectoryAuthorityError(
+          "data-loss",
+          "The staff record command has incomplete paired receipt evidence."
+        );
+      }
+      const profilePlan = planOperationalStaffProfileCommand({
+        request: profileRequest,
+        currentProfile: profileSnap.exists ? profileSnap.data() || {} : null,
+        actor,
+        serverTimeISO,
+        existingReceipt: profileReceiptSnap.exists ? profileReceiptSnap.data()?.receipt : null
+      });
+      const recordPlan = planStaffRecordCommand({
+        request: recordRequest,
+        currentRecord: recordSnap.exists ? recordSnap.data() || {} : null,
+        actor,
+        serverTimeISO,
+        existingReceipt: recordReceiptSnap.exists ? recordReceiptSnap.data()?.receipt : null
+      });
+      if (profilePlan.kind !== recordPlan.kind) {
+        throw new StaffDirectoryAuthorityError(
+          "data-loss",
+          "The staff profile and private record receipts disagree."
+        );
+      }
+      if (profilePlan.kind === "apply") {
+        tx.set(refs.profileRef, {
+          ...profilePlan.nextProfile,
+          createdAt: profileSnap.exists && profileSnap.data()?.createdAt
+            ? profileSnap.data().createdAt
+            : FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        tx.set(refs.staffRecordRef, {
+          ...recordPlan.nextRecord,
+          createdAt: recordSnap.exists && recordSnap.data()?.createdAt
+            ? recordSnap.data().createdAt
+            : FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        tx.create(profileReceiptRef, {
+          organizationId: scope.organizationId,
+          staffId: scope.staffId,
+          requestId: data?.requestId,
+          receipt: profilePlan.receipt,
+          createdAtISO: serverTimeISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        tx.create(recordReceiptRef, {
+          organizationId: scope.organizationId,
+          staffId: scope.staffId,
+          requestId: data?.requestId,
+          receipt: recordPlan.receipt,
+          createdAtISO: serverTimeISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      return { profilePlan, recordPlan };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      authorityVersion: STAFF_DIRECTORY_AUTHORITY_VERSION,
+      organizationId: scope.organizationId,
+      staffId: scope.staffId,
+      idempotent: result.profilePlan.idempotent && result.recordPlan.idempotent,
+      profile: result.profilePlan.snapshot,
+      record: result.recordPlan.snapshot,
+      receipts: {
+        profile: result.profilePlan.receipt,
+        record: result.recordPlan.receipt
+      }
+    };
+  } catch (error) {
+    return throwOperationalStaffingFailure(error, "saveStaffRecord", {
       ...scope,
       actorUid: staff.uid
     });
@@ -17220,6 +18039,30 @@ exports.revenueAutopilotResendWebhook = functions
       .doc(createHash("sha256").update(`resend|${providerMessageId}`).digest("hex"));
     const messageIndexSnap = await messageIndexRef.get();
     if (!messageIndexSnap.exists) {
+      try {
+        const staffEvent = await processStaffInvitationProviderEvent({
+          event,
+          eventId,
+          providerMessageId: normalizeProviderMessageId(providerMessageId)
+        });
+        if (staffEvent.bound) {
+          res.json({
+            received: true,
+            authority: "operational_staffing",
+            ...(staffEvent.result.duplicate ? { duplicate: true } : {}),
+            ...(staffEvent.result.ignored ? { ignored: "unsupported_or_unbound_event" } : {})
+          });
+          return;
+        }
+      } catch (error) {
+        functions.logger.error("Staff invitation provider-event routing failed", {
+          eventId,
+          providerMessageId,
+          error: normalizeText(error?.message).slice(0, 240)
+        });
+        res.status(500).send("Failed to process staff invitation provider event.");
+        return;
+      }
       res.json({ received: true, ignored: "unknown_provider_message" });
       return;
     }
@@ -17371,6 +18214,149 @@ exports.revenueAutopilotResendWebhook = functions
       res.status(500).send("Failed to process provider event.");
     }
   });
+
+async function processStaffInvitationProviderEvent({ event, eventId, providerMessageId }) {
+    const indexRef = db.collection(STAFF_INVITATION_PROVIDER_MESSAGE_INDEX_COLLECTION)
+      .doc(createHash("sha256").update(`resend|${providerMessageId}`).digest("hex"));
+    const indexSnap = await indexRef.get();
+    if (!indexSnap.exists) {
+      return { bound: false };
+    }
+    const index = indexSnap.data() || {};
+    const organizationId = normalizeOrganizationId(index.organizationId);
+    const invitationId = normalizeText(index.invitationId);
+    if (!organizationId || !invitationId) {
+      throw new StaffInvitationAuthorityError(
+        "failed-precondition",
+        "Staff provider-message authority index is invalid."
+      );
+    }
+    const invitationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId)
+      .collection(STAFF_INVITATIONS_COLLECTION).doc(invitationId);
+    const providerEventRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId)
+      .collection(STAFF_INVITATION_PROVIDER_EVENTS_COLLECTION)
+      .doc(createHash("sha256").update(`resend|${eventId}`).digest("hex"));
+    const providerType = normalizeText(event?.type).toLowerCase();
+    const stateByType = {
+      "email.delivered": "delivered",
+      "email.bounced": "bounced",
+      "email.complained": "complained"
+    };
+    const nextState = stateByType[providerType] || "";
+    const observedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+        const [eventSnap, invitationSnap] = await Promise.all([
+          tx.get(providerEventRef),
+          tx.get(invitationRef)
+        ]);
+        if (eventSnap.exists) return { duplicate: true, ignored: false };
+        if (!invitationSnap.exists) {
+          tx.create(providerEventRef, {
+            provider: "resend",
+            eventId,
+            providerMessageId,
+            eventType: providerType,
+            organizationId,
+            invitationId,
+            signatureVerified: true,
+            status: "ignored",
+            result: "invitation_not_found",
+            observedAtISO,
+            createdAt: FieldValue.serverTimestamp()
+          });
+          return { duplicate: false, ignored: true };
+        }
+        const current = invitationSnap.data() || {};
+        if (
+          normalizeText(current.provider) !== "resend"
+          || normalizeProviderMessageId(current.providerMessageId) !== providerMessageId
+          || normalizeText(current.invitationId) !== invitationId
+        ) {
+          throw new StaffInvitationAuthorityError(
+            "permission-denied",
+            "Provider event is outside the accepted staff invitation scope."
+          );
+        }
+        if (!nextState) {
+          tx.create(providerEventRef, {
+            provider: "resend",
+            eventId,
+            providerMessageId,
+            eventType: providerType,
+            organizationId,
+            invitationId,
+            signatureVerified: true,
+            status: "ignored",
+            result: new Set(["email.opened", "email.clicked"]).has(providerType)
+              ? "engagement_event_never_establishes_acknowledgement"
+              : "unsupported_event_type",
+            observedAtISO,
+            createdAt: FieldValue.serverTimestamp()
+          });
+          return { duplicate: false, ignored: true };
+        }
+        if (!new Set(["provider_accepted", "delivered", "bounced", "complained"]).has(normalizeText(current.state))) {
+          throw new StaffInvitationAuthorityError(
+            "failed-precondition",
+            "Provider delivery evidence requires prior provider acceptance."
+          );
+        }
+        const providerOccurredAtISO = normalizeText(event?.data?.created_at || event?.created_at);
+        const evidenceAtISO = (() => {
+          const parsed = new Date(providerOccurredAtISO);
+          return Number.isNaN(parsed.getTime()) ? observedAtISO : parsed.toISOString();
+        })();
+        const currentState = normalizeText(current.state);
+        const terminalFailureStates = new Set(["bounced", "complained"]);
+        const shouldAdvance = !(
+          (terminalFailureStates.has(currentState) && nextState === "delivered")
+          || (currentState === "complained" && nextState === "bounced")
+        );
+        if (!shouldAdvance) {
+          tx.create(providerEventRef, {
+            provider: "resend",
+            eventId,
+            providerMessageId,
+            eventType: providerType,
+            mappedState: nextState,
+            organizationId,
+            invitationId,
+            signatureVerified: true,
+            status: "ignored",
+            result: "provider_event_does_not_downgrade_terminal_evidence",
+            observedAtISO,
+            providerOccurredAtISO: evidenceAtISO,
+            createdAt: FieldValue.serverTimestamp()
+          });
+          return { duplicate: false, ignored: true };
+        }
+        const patch = {
+          state: nextState,
+          ...(nextState === "delivered" ? { deliveredAtISO: normalizeText(current.deliveredAtISO) || evidenceAtISO } : {}),
+          ...(nextState === "bounced" ? { bouncedAtISO: normalizeText(current.bouncedAtISO) || evidenceAtISO } : {}),
+          ...(nextState === "complained" ? { complainedAtISO: normalizeText(current.complainedAtISO) || evidenceAtISO } : {}),
+          updatedAtISO: observedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        tx.set(invitationRef, patch, { merge: true });
+        tx.create(providerEventRef, {
+          provider: "resend",
+          eventId,
+          providerMessageId,
+          eventType: providerType,
+          mappedState: nextState,
+          organizationId,
+          invitationId,
+          signatureVerified: true,
+          status: "processed",
+          observedAtISO,
+          providerOccurredAtISO: evidenceAtISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        return { duplicate: false, ignored: false };
+    });
+    return { bound: true, result, organizationId, invitationId };
+}
 
 exports.reopenQuote = functions.region(REGION).https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);

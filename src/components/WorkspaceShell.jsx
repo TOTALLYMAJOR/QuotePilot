@@ -100,6 +100,12 @@ export default function WorkspaceShell({
         { ariaLabel: workflowLabel, attention: true }
       ],
       [operations && capabilities.eventSchedule !== false, actions.onSchedule, "Event Schedule", true],
+      [
+        operations && isAdmin && capabilities.staffDirectory !== false && !ambientOrientation,
+        actions.onStaff,
+        "Staff",
+        true
+      ],
       [operations && capabilities.reportingDashboard !== false, actions.onReporting, "Reporting Dashboard", true],
       [operations && capabilities.integrationsOps !== false, actions.onIntegrations, "Integrations Ops", true],
       [operations && isAdmin, actions.onImports, "Import Studio", true],
@@ -211,6 +217,16 @@ export default function WorkspaceShell({
                     true,
                     true,
                     "clients"
+                  )}
+                  {isAdmin && capabilities.staffDirectory !== false && navButton(
+                    "Staff",
+                    "staff",
+                    actions.onStaff,
+                    undefined,
+                    "staff-directory",
+                    true,
+                    true,
+                    "staff"
                   )}
                   {isAdmin && navButton(
                     "Library",

@@ -1,0 +1,107 @@
+name: Set Operational Staffing Tenant
+run-name: staffing-tenant/${{ inputs.organization_id }}/${{ inputs.enabled }}/${{ inputs.release_sha }}/${{ inputs.firebase_deploy_run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full deployed tagged main commit SHA
+        required: true
+        type: string
+      firebase_deploy_run_id:
+        description: Successful Firebase all-scope deployment run id for release_sha
+        required: true
+        type: string
+      organization_id:
+        description: Exact numeric organization id
+        required: true
+        default: "250"
+        type: string
+      enabled:
+        description: Requested tenant authority state
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      confirmation:
+        description: SET operational staffing STATE for organization ID
+        required: true
+        type: string
+
+concurrency:
+  group: operational-staffing-tenant-${{ inputs.organization_id }}
+  cancel-in-progress: false
+
+jobs:
+  set_tenant:
+    name: Verify deployment + Set Tenant
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout exact release SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact Firebase all-scope deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          FIREBASE_DEPLOY_RUN_ID: ${{ inputs.firebase_deploy_run_id }}
+        run: |
+          gh run view "${FIREBASE_DEPLOY_RUN_ID}" \
+            --json conclusion,event,headSha,workflowName,displayTitle \
+            > "${RUNNER_TEMP}/firebase-deploy.json"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const evidence = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const release = process.env.RELEASE_SHA;
+            const valid = evidence.conclusion === "success"
+              && evidence.event === "workflow_dispatch"
+              && evidence.headSha === release
+              && evidence.workflowName === "Deploy Firebase Production"
+              && evidence.displayTitle.includes(`/firebase-all/${release}/`);
+            if (!valid) throw new Error("The supplied run is not the successful Firebase all-scope deployment for this release.");
+          ' "${RUNNER_TEMP}/firebase-deploy.json"
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Set and verify exact tenant field
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          REQUESTED_ENABLED: ${{ inputs.enabled }}
+          TENANT_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          node ./scripts/set-operational-staffing-tenant.mjs \
+            --project tonicatering \
+            --organization "${ORGANIZATION_ID}" \
+            --enabled "${REQUESTED_ENABLED}" \
+            --confirm "${TENANT_CONFIRMATION}"
+
+      - name: Record activation
+        env:
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          REQUESTED_ENABLED: ${{ inputs.enabled }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          FIREBASE_DEPLOY_RUN_ID: ${{ inputs.firebase_deploy_run_id }}
+        run: |
+          {
+            echo "### Operational staffing tenant state verified"
+            echo "- Organization: ${ORGANIZATION_ID}"
+            echo "- Enabled: ${REQUESTED_ENABLED}"
+            echo "- Release SHA: ${RELEASE_SHA}"
+            echo "- Firebase deploy run: ${FIREBASE_DEPLOY_RUN_ID}"
+          } >> "${GITHUB_STEP_SUMMARY}"

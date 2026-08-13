@@ -6,6 +6,58 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Added
+
+- Added the independently gated, administrator-only Staff workspace at
+  `/app/staff`. It keeps the existing bounded operational profile as assignment
+  authority while storing sensitive contact/photo, role detail, qualification,
+  scheduling preference, rate, travel, briefing, attendance-summary,
+  reliability and note fields in a separate callable-owned private record.
+  Profile and private-record changes commit atomically with paired immutable,
+  optimistic receipts; direct browser Firestore access remains denied.
+- Added role-aware staff briefing PDFs bound to one exact operator-confirmed
+  staffing-plan revision and immutable quote revision. Admins can print,
+  download or open a prefilled message in the email application on file. The
+  sheet excludes customer contact and commercial/payment data, browsers do not
+  attach it automatically, and the handoff records no send, provider,
+  delivery, acknowledgement, attendance or payroll claim.
+- Added exact-assignment staff invitations: administrators preview the current
+  immutable quote, staffing-plan, assignment, and private-record scope before
+  an explicit manual send to the verified private email. A secure public link
+  records one accept or decline acknowledgement, while a signed Resend webhook
+  records delivery, bounce, or complaint evidence independently. Provider
+  acceptance, provider delivery, and staff acknowledgement remain separate;
+  no response mutates the staffing plan, attendance, hours, payroll, payment,
+  booking, completion, or readiness evidence.
+
+### Changed
+
+- Promoted the reviewed operational-staffing presentation and global Functions
+  gate in both manual production workflows for an owner-approved live test.
+  The exact tenant setting, same-tenant role checks, provider/sender/secret
+  prerequisites, immutable receipts, and direct-browser denials remain
+  independent. Local defaults stay off, and this release decision does not by
+  itself prove provider delivery, staff acknowledgement, attendance, or human
+  acceptance.
+- Added a protected, reversible tenant-activation workflow that accepts only an
+  exact successful Firebase all-scope deployment, patches only
+  `operationalStaffingAuthorityEnabled`, and verifies readback before reporting
+  success.
+- Hardened that workflow so dispatch inputs reach executable steps only through
+  environment variables; a deployment-safety regression test rejects direct
+  input interpolation in shell bodies before the protected Firebase credential
+  can be used.
+- Extended the existing temporary bundle exception to the exact emitted graphs
+  needed for the lazy Staff workspace, invitation response route, and provider-
+  state clients: 2,880,654 bytes for compatibility and 3,804,078 bytes for
+  Ambient production. The 391,901-byte largest-chunk ceiling remains unchanged.
+- Quote actions now include an explicit `Print proposal` outcome and a
+  prefilled `Open email app` handoff alongside PDF download. Neither path
+  mutates quote, portal or delivery evidence.
+- Fixed proposal and staff-briefing print previews so successful browser tab
+  creation is not misreported as a blocked pop-up when opener isolation is
+  requested; focused tests preserve both the acknowledgement and isolation.
+
 ## [0.9.0] - 2026-08-13
 
 ### Changed

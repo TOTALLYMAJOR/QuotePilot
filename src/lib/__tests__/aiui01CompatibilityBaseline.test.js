@@ -66,7 +66,7 @@ describe("AIUI-01 machine-readable compatibility baseline", () => {
     }
   });
 
-  test("keeps admin-only Catalog and Imports absent for sales in every explicit flag profile", () => {
+  test("keeps admin-only Catalog, Imports, and Staff absent for sales", () => {
     for (const profile of AIUI01_FLAG_PROFILES) {
       const flags = resolveAiui01Flags(profile.gates);
       expect(flags.profileId).toBe(profile.id);
@@ -78,11 +78,19 @@ describe("AIUI-01 machine-readable compatibility baseline", () => {
           probe: ".workspace-not-found"
         });
       }
+      expect(getAiui01SurfaceExpectation("staff", { role: "sales", flags }).available).toBe(false);
     }
+
+    const staffingFlags = resolveAiui01Flags({
+      VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true",
+      VITE_OPERATIONAL_STAFFING_ENABLED: "true"
+    });
+    expect(getAiui01SurfaceExpectation("staff", { role: "admin", flags: staffingFlags }))
+      .toMatchObject({ available: true, outcome: "surface", probe: ".staff-workspace" });
 
     const admin = AIUI01_ROLES.find(({ id }) => id === "admin");
     const sales = AIUI01_ROLES.find(({ id }) => id === "sales");
-    expect(admin.routeAuthority).toEqual(["catalog", "imports"]);
+    expect(admin.routeAuthority).toEqual(["catalog", "imports", "staff"]);
     expect(sales.routeAuthority).toEqual([]);
     expect(admin.quoteAuthority).toEqual(["proposal", "payment", "booking", "delete"]);
     expect(sales.quoteAuthority).toEqual(["proposal"]);
@@ -91,7 +99,7 @@ describe("AIUI-01 machine-readable compatibility baseline", () => {
   test("classifies every shell control and binds each primary route action to an inventoried destination", () => {
     const targetIds = new Set(AIUI01_SURFACES.map(({ id }) => id));
     const routeActions = AIUI01_SHELL_ACTIONS.filter(({ classification }) => classification === "primary_route");
-    expect(routeActions).toHaveLength(12);
+    expect(routeActions).toHaveLength(13);
     for (const action of routeActions) {
       expect(targetIds.has(action.targetSurfaceId), action.id).toBe(true);
       expect(["header", "operations"]).toContain(action.entry);
@@ -195,6 +203,7 @@ describe("AIUI-01 machine-readable compatibility baseline", () => {
     for (const gate of [
       AIUI01_GATES.workspace,
       AIUI01_GATES.ambient,
+      AIUI01_GATES.operationalStaffing,
       ...AIUI01_GATES.productionPilot,
       ...AIUI01_GATES.localOnlyPilot
     ]) {

@@ -127,9 +127,15 @@ const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
 const SERVER_OWNED_OPERATIONAL_STAFFING_PATHS = Object.freeze([
   ["organizations", "org-a", "staffProfiles", "staff-profile-1"],
   ["organizations", "org-a", "staffProfiles", "staff-profile-1", "versions", "version-1"],
+  ["organizations", "org-a", "staffRecords", "staff-profile-1"],
+  ["organizations", "org-a", "staffRecords", "staff-profile-1", "versions", "version-1"],
+  ["organizations", "org-a", "staffInvitations", "staff-invitation-1"],
+  ["organizations", "org-a", "staffInvitations", "staff-invitation-1", "staffInvitationReceipts", "dispatch"],
+  ["organizations", "org-a", "staffInvitationProviderEvents", "provider-event-1"],
   ["organizations", "org-a", "eventStaffingPlans", "q1"],
   ["organizations", "org-a", "eventStaffingPlans", "q1", "versions", "version-1"],
-  ["organizations", "org-a", "staffingScheduleFences", "schedule-fence-1"]
+  ["organizations", "org-a", "staffingScheduleFences", "schedule-fence-1"],
+  ["staffInvitationProviderMessageIndex", "provider-message-1"]
 ]);
 
 const CATALOG_COLLECTIONS = new Set([

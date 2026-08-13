@@ -1,0 +1,511 @@
+.staff-workspace {
+  padding-block: clamp(1.4rem, 3vw, 2.6rem) 5rem;
+  color: var(--text, #28231c);
+}
+
+.staff-workspace__header,
+.staff-record__identity,
+.staff-subsection-heading,
+.staff-briefing-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.staff-workspace__header h1,
+.staff-record__identity h2 {
+  margin: 0.1rem 0 0.3rem;
+}
+
+.staff-workspace__header p:last-child {
+  max-width: 66ch;
+  margin: 0;
+  color: var(--muted, #706656);
+}
+
+.staff-workspace__header button,
+.staff-briefing-buttons button,
+.staff-subsection-heading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.staff-workspace__status {
+  min-height: 44px;
+  margin: 1.15rem 0;
+  padding: 0.72rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--tone-gold-2, #b88027) 22%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tone-gold-1, #f6ead1) 55%, white);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.92rem;
+}
+
+.staff-workspace__status.is-error,
+.staff-workspace__status.is-unavailable {
+  border-color: color-mix(in srgb, #b45145 36%, transparent);
+  background: #fff5f2;
+}
+
+.staff-workspace__status.is-receipt {
+  border-color: color-mix(in srgb, #2f8b70 34%, transparent);
+  background: #f0faf6;
+}
+
+.staff-workspace__layout {
+  display: grid;
+  grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
+  gap: clamp(1rem, 2vw, 1.7rem);
+  align-items: start;
+}
+
+.staff-roster {
+  position: sticky;
+  top: 92px;
+  max-height: calc(100vh - 116px);
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.staff-roster__summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0 0.45rem 0.75rem;
+  color: var(--muted, #706656);
+  font-size: 0.85rem;
+}
+
+.staff-roster ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.staff-roster li > button {
+  width: 100%;
+  min-height: 76px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.staff-roster li > button:hover {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(114, 92, 55, 0.12);
+}
+
+.staff-roster li > button.is-selected {
+  border-color: color-mix(in srgb, var(--tone-gold-2, #b88027) 36%, transparent);
+  background: color-mix(in srgb, var(--tone-gold-1, #f6ead1) 55%, white);
+  box-shadow: 0 10px 28px rgba(59, 43, 20, 0.07);
+}
+
+.staff-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, #e8d5b3, #f8f3e9);
+  color: #735524;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.staff-avatar.is-large {
+  width: 66px;
+  height: 66px;
+  font-size: 1rem;
+}
+
+.staff-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.staff-roster__identity {
+  min-width: 0;
+  display: grid;
+  gap: 0.16rem;
+}
+
+.staff-roster__identity strong,
+.staff-roster__identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-roster__identity small,
+.staff-roster__rate small,
+.staff-record__save small {
+  color: var(--muted, #706656);
+  font-size: 0.76rem;
+}
+
+.staff-roster__rate {
+  text-align: right;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.staff-roster__rate small {
+  display: block;
+  font-weight: 500;
+}
+
+.staff-role-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  color: #98702f;
+}
+
+.staff-role-icons > span,
+.staff-role-icons > button {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.staff-role-icons > button {
+  border: 1px solid rgba(112, 91, 57, 0.16);
+  background: white;
+  color: #9a8f7b;
+  cursor: pointer;
+}
+
+.staff-role-icons > button.is-selected {
+  color: #805a19;
+  border-color: rgba(168, 114, 25, 0.36);
+  background: #fff7e8;
+}
+
+.staff-roster__empty,
+.staff-record__empty,
+.staff-briefing-empty {
+  padding: 1.5rem;
+  border: 1px dashed rgba(113, 93, 60, 0.25);
+  border-radius: 14px;
+  color: var(--muted, #706656);
+  text-align: center;
+}
+
+.staff-record {
+  min-width: 0;
+}
+
+.staff-record__identity {
+  padding: 0.2rem 0 1.1rem;
+}
+
+.staff-record__identity > div:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.staff-record__save {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+}
+
+.staff-record-section {
+  border-top: 1px solid rgba(104, 86, 57, 0.14);
+}
+
+.staff-record-section:last-child {
+  border-bottom: 1px solid rgba(104, 86, 57, 0.14);
+}
+
+.staff-record-section > summary {
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem 0.4rem;
+  cursor: pointer;
+  list-style: none;
+  color: #5a4523;
+}
+
+.staff-record-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.staff-record-section > summary span {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.staff-record-section > summary small {
+  color: var(--muted, #706656);
+  font-weight: 400;
+}
+
+.staff-record-section__body {
+  padding: 0.25rem 0.25rem 1.35rem;
+}
+
+.staff-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.staff-field {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.34rem;
+  color: #5f5444;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.staff-field.is-wide {
+  grid-column: 1 / -1;
+}
+
+.staff-field small {
+  color: var(--muted, #706656);
+  font-size: 0.73rem;
+  font-weight: 400;
+}
+
+.staff-field input,
+.staff-field select,
+.staff-field textarea,
+.staff-repeat-grid input,
+.staff-repeat-grid select,
+.staff-role-detail select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid rgba(103, 85, 55, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #30291f;
+  padding: 0.65rem 0.72rem;
+  font: inherit;
+  font-weight: 500;
+}
+
+.staff-field textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.staff-role-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.staff-role-detail {
+  padding: 0.8rem;
+  border: 1px solid rgba(112, 91, 57, 0.13);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  display: grid;
+  gap: 0.55rem;
+  color: #8b6323;
+}
+
+.staff-role-detail label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #5f5444;
+  font-size: 0.78rem;
+}
+
+.staff-subsection-heading {
+  margin: 1.1rem 0 0.7rem;
+}
+
+.staff-subsection-heading h3 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.staff-repeat-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 0.9fr auto;
+  gap: 0.55rem;
+  align-items: center;
+  margin-bottom: 0.55rem;
+}
+
+.staff-repeat-grid.availability {
+  grid-template-columns: 0.8fr 1.2fr 1.2fr auto;
+}
+
+.staff-qualification-card {
+  margin-bottom: 0.8rem;
+  padding: 0.7rem;
+  border: 1px solid rgba(112, 91, 57, 0.13);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.staff-qualification-card .staff-repeat-grid {
+  margin-bottom: 0.7rem;
+}
+
+.staff-qualification-details {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: 0.7rem;
+}
+
+.staff-qualification-details .staff-field.is-wide {
+  grid-column: 1 / -1;
+}
+
+.staff-briefing-actions {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.staff-briefing-preview {
+  padding: 1rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f7f0e2, #fbfaf7);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.staff-briefing-preview span,
+.staff-briefing-preview small {
+  color: var(--muted, #706656);
+}
+
+.staff-briefing-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  text-align: left;
+}
+
+.staff-briefing-empty p {
+  margin: 0.25rem 0 0;
+}
+
+.staff-invitation-rail {
+  margin-top: 0.6rem;
+  padding: clamp(1rem, 2vw, 1.35rem);
+  border: 1px solid color-mix(in srgb, var(--tone-lavender-2, #8f74b8) 25%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(247, 243, 252, 0.96), rgba(255, 255, 255, 0.9));
+  display: grid;
+  gap: 1rem;
+}
+
+.staff-invitation-rail h3,
+.staff-invitation-rail p { margin: 0; }
+
+.staff-invitation-states {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.staff-invitation-states div {
+  min-width: 0;
+  padding: 0.8rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  display: grid;
+  gap: 0.2rem;
+}
+
+.staff-invitation-states span { color: var(--muted, #706656); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.07em; }
+.staff-invitation-states strong { overflow-wrap: anywhere; }
+.staff-invitation-reason { padding: 0.75rem 0.85rem; border-radius: 11px; background: #fff8ec; }
+.staff-invitation-preview { display: grid; gap: 0.75rem; }
+.staff-invitation-preview pre { max-height: 300px; margin: 0; padding: 1rem; overflow: auto; border-radius: 12px; background: #fff; color: inherit; font: inherit; font-size: 0.86rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 980px) {
+  .staff-workspace__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .staff-roster {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .staff-roster ul {
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .staff-workspace__header,
+  .staff-record__identity,
+  .staff-briefing-buttons {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .staff-workspace__header button,
+  .staff-record__save,
+  .staff-record__save button,
+  .staff-briefing-buttons button {
+    width: 100%;
+  }
+
+  .staff-record__save {
+    justify-items: stretch;
+  }
+
+  .staff-invitation-states { grid-template-columns: 1fr; }
+
+  .staff-fields-grid,
+  .staff-qualification-details,
+  .staff-repeat-grid,
+  .staff-repeat-grid.availability {
+    grid-template-columns: 1fr;
+  }
+
+  .staff-field.is-wide {
+    grid-column: auto;
+  }
+}
+
+@media print {
+  .site-header,
+  .staff-roster,
+  .staff-workspace__status,
+  .staff-record__save,
+  .staff-workspace__header button {
+    display: none !important;
+  }
+
+  .staff-workspace__layout {
+    display: block;
+  }
+}

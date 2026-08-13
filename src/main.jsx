@@ -20,6 +20,10 @@ const RevenueAutopilotUnsubscribePage = createRecoverableLazy(
   () => import("./components/RevenueAutopilotUnsubscribePage"),
   "RevenueAutopilotUnsubscribePage"
 );
+const StaffInvitationResponsePage = createRecoverableLazy(
+  () => import("./components/StaffInvitationResponsePage"),
+  "StaffInvitationResponsePage"
+);
 const WorkspaceRoute = createRecoverableLazy(
   () => import("./components/WorkspaceRoute"),
   "WorkspaceRoute"
@@ -57,16 +61,26 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
 
 const searchParams = new URLSearchParams(window.location.search);
 const isPortalRoute = Boolean(String(searchParams.get("portal") || "").trim());
+const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
 const isRevenueAutopilotUnsubscribeRoute = !isPortalRoute
   && Boolean(String(searchParams.get("unsubscribe") || "").trim());
-const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
+const isStaffInvitationRoute = !isPortalRoute
+  && !isRevenueAutopilotUnsubscribeRoute
+  && normalizedPath === "/staffing/respond"
+  && Boolean(String(searchParams.get("staffing") || "").trim());
 const isMarketingRoute = normalizedPath === "/" && !isPortalRoute;
 const isSystemMarketingRoute = normalizedPath === "/system" && !isPortalRoute;
 const isBuyerAccessRoute = normalizedPath === "/start" && !isPortalRoute;
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {isRevenueAutopilotUnsubscribeRoute ? (
+    {isStaffInvitationRoute ? (
+      <LazyPublicRoute
+        surfaceName="Staff assignment invitation"
+        loadingMessage="Loading staff assignment…"
+        component={StaffInvitationResponsePage}
+      />
+    ) : isRevenueAutopilotUnsubscribeRoute ? (
       <LazyPublicRoute
         surfaceName="Email preferences"
         loadingMessage="Loading email preferences..."
