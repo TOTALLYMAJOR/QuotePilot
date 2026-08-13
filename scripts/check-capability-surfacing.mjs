@@ -86,14 +86,31 @@ const CLIENT_PRESENTATION_PREFIXES = Object.freeze([
 ]);
 const CLIENT_PRESENTATION_EXCLUSIONS = new Set([
   "src/App.jsx",
+  "src/LegacyApp.jsx",
   "src/main.jsx",
+  "src/context/AmbientContext.jsx",
   "src/context/WorkspaceNavigationContext.jsx",
   "src/hooks/useBrowserLocation.js",
   "src/hooks/useCommercialWorkspaceSnapshot.js",
   "src/hooks/useWorkspaceRouteHeadingFocus.js",
+  "src/lib/aiui01CompatibilityBaseline.js",
+  "src/lib/ambientContracts.js",
+  "src/lib/ambientEventLogisticsObjects.js",
+  "src/lib/ambientInteractionAudit.js",
+  "src/lib/ambientPackageMenuCatalogEvidence.js",
+  "src/lib/ambientPackageMenuDraftAdoption.js",
+  "src/lib/ambientPackageMenuObjects.js",
+  "src/lib/ambientPricingPreview.js",
+  "src/lib/ambientQuoteDraftPatch.js",
+  "src/lib/ambientSignals.js",
+  "src/lib/impactPreviewAdapter.js",
+  "src/lib/quoteDraftRuntime.js",
+  "src/lib/quoteDraftRuntimeBase.js",
   "src/lib/statusSemantics.js",
   "src/lib/workspacePresentation.js",
-  "src/lib/workspaceRoutes.js"
+  "src/lib/workspaceRoutes.js",
+  "src/lib/workspaceShellModel.js",
+  "src/lib/workspaceLayoutAudit.js"
 ]);
 const DIRECT_CLIENT_AUTHORITY_IMPORT_PATTERN = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:firebase(?:\/|["'])|@google-cloud\/|@supabase\/|stripe(?:\/|["']))/;
 const DIRECT_CLIENT_AUTHORITY_CALL_PATTERN = /\b(?:addDoc|deleteDoc|fetch|getDoc|getDocs|httpsCallable|onSnapshot|runTransaction|setDoc|updateDoc|uploadBytes|writeBatch)\s*\(/;

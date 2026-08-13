@@ -1,0 +1,502 @@
+.ambient-pilot-scenario-review {
+  --pilot-review-ink: var(--ambient-ink, var(--ink, #1d2523));
+  --pilot-review-muted: var(--ambient-muted, var(--muted, #66706d));
+  --pilot-review-line: var(--ambient-hairline, rgba(29, 37, 35, 0.18));
+  --pilot-review-lavender: var(--ambient-lavender, #78699b);
+  --pilot-review-teal: var(--ambient-teal, #237f78);
+  --pilot-review-mint: var(--ambient-mint, #4f8d70);
+  --pilot-review-coral: var(--ambient-coral, #a84f42);
+  --pilot-review-gold: var(--ambient-gold, #a97420);
+  display: grid;
+  gap: clamp(1rem, 2.4vw, 1.5rem);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: clamp(1rem, 2.8vw, 1.6rem) 0;
+  border-block: 1px solid var(--pilot-review-line);
+  color: var(--pilot-review-ink);
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+
+.ambient-pilot-scenario-review,
+.ambient-pilot-scenario-review * {
+  box-sizing: border-box;
+}
+
+.ambient-pilot-scenario-review h2,
+.ambient-pilot-scenario-review h3,
+.ambient-pilot-scenario-review p,
+.ambient-pilot-scenario-review dl,
+.ambient-pilot-scenario-review ol,
+.ambient-pilot-scenario-review ul {
+  margin: 0;
+}
+
+.ambient-pilot-scenario-review__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__header > div {
+  display: grid;
+  gap: 0.34rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__header p,
+.ambient-pilot-scenario-review__changes > h3,
+.ambient-pilot-scenario-review__commercial > h3,
+.ambient-pilot-scenario-review__compromises > h3,
+.ambient-pilot-scenario-review__judgment > h3,
+.ambient-pilot-scenario-review__sources > h3 {
+  color: var(--pilot-review-muted);
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.ambient-pilot-scenario-review__header h2 {
+  font-family: var(--font-editorial, Georgia, serif);
+  font-size: clamp(1.45rem, 3vw, 2.15rem);
+  font-weight: 560;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+.ambient-pilot-scenario-review__header span {
+  max-width: 70ch;
+  color: var(--pilot-review-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.ambient-pilot-scenario-review__header > strong {
+  flex: 0 0 auto;
+  padding: 0.38rem 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--pilot-review-lavender) 48%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--pilot-review-lavender) 82%, var(--pilot-review-ink));
+  background: color-mix(in srgb, var(--pilot-review-lavender) 9%, transparent);
+  font-size: 0.73rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.ambient-pilot-scenario-review__changes,
+.ambient-pilot-scenario-review__commercial,
+.ambient-pilot-scenario-review__compromises,
+.ambient-pilot-scenario-review__judgment,
+.ambient-pilot-scenario-review__sources {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__change {
+  display: grid;
+  gap: 0.72rem;
+  min-width: 0;
+  padding-block: 0.85rem;
+  border-block-start: 1px solid var(--pilot-review-line);
+}
+
+.ambient-pilot-scenario-review__change > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__change h3 {
+  font-size: 0.98rem;
+  line-height: 1.3;
+}
+
+.ambient-pilot-scenario-review code {
+  color: inherit;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.ambient-pilot-scenario-review__change > header code {
+  color: var(--pilot-review-muted);
+  font-size: 0.72rem;
+}
+
+.ambient-pilot-scenario-review__change-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.8rem, 2.5vw, 1.5rem);
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__change-grid > section {
+  display: grid;
+  align-content: start;
+  gap: 0.46rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__change-grid > section + section {
+  padding-inline-start: clamp(0.8rem, 2.5vw, 1.5rem);
+  border-inline-start: 1px solid var(--pilot-review-line);
+}
+
+.ambient-pilot-scenario-review__change-grid > section > span:first-child {
+  color: var(--pilot-review-muted);
+  font-size: 0.75rem;
+  font-weight: 720;
+}
+
+.ambient-pilot-scenario-review__value-list,
+.ambient-pilot-scenario-review__value-map {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ambient-pilot-scenario-review__value-list li {
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__value-map > div {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.45fr) minmax(0, 1fr);
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__value-map dt,
+.ambient-pilot-scenario-review__value-map dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.ambient-pilot-scenario-review__empty-value {
+  color: var(--pilot-review-muted);
+  font-style: italic;
+}
+
+.ambient-pilot-scenario-review__commercial {
+  padding: 1rem;
+  border-inline-start: 3px solid var(--pilot-review-teal);
+  background: color-mix(in srgb, var(--pilot-review-teal) 6%, transparent);
+}
+
+.ambient-pilot-scenario-review__commercial > dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.8rem 1rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__commercial > dl > div {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__commercial dt,
+.ambient-pilot-scenario-review__judgment dt,
+.ambient-pilot-scenario-review__sources dt,
+.ambient-pilot-scenario-review__provenance dt {
+  color: var(--pilot-review-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ambient-pilot-scenario-review__commercial dd {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 760;
+}
+
+.ambient-pilot-scenario-review__commercial > p,
+.ambient-pilot-scenario-review__boundary p,
+.ambient-pilot-scenario-review__status p,
+.ambient-pilot-scenario-review__unavailable {
+  color: var(--pilot-review-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.ambient-pilot-scenario-review__compromises > ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 1.3rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: pilot-compromise;
+}
+
+.ambient-pilot-scenario-review__compromises li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.2rem 0.7rem;
+  min-width: 0;
+  counter-increment: pilot-compromise;
+}
+
+.ambient-pilot-scenario-review__compromises li::before {
+  display: inline-grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  place-items: center;
+  color: var(--pilot-review-lavender);
+  background: color-mix(in srgb, var(--pilot-review-lavender) 10%, transparent);
+  content: counter(pilot-compromise);
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.ambient-pilot-scenario-review__compromises li > div {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__compromises li span,
+.ambient-pilot-scenario-review__compromises li p {
+  color: var(--pilot-review-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.ambient-pilot-scenario-review__compromises li p {
+  grid-column: 2;
+}
+
+.ambient-pilot-scenario-review__judgment > dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem clamp(1rem, 3vw, 2rem);
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__judgment > dl > div {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  padding-block-start: 0.8rem;
+  border-block-start: 1px solid var(--pilot-review-line);
+}
+
+.ambient-pilot-scenario-review__judgment dd,
+.ambient-pilot-scenario-review__sources dd,
+.ambient-pilot-scenario-review__provenance dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.ambient-pilot-scenario-review__provenance {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0;
+  list-style: none;
+}
+
+.ambient-pilot-scenario-review__provenance > li {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.35fr) minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+  min-width: 0;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--pilot-review-line);
+}
+
+.ambient-pilot-scenario-review__provenance dl,
+.ambient-pilot-scenario-review__sources details dl {
+  display: grid;
+  gap: 0.42rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__provenance dl > div,
+.ambient-pilot-scenario-review__sources details dl > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.34fr) minmax(0, 1fr);
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__sources details {
+  min-width: 0;
+  padding-block-start: 0.72rem;
+  border-block-start: 1px solid var(--pilot-review-line);
+}
+
+.ambient-pilot-scenario-review__sources summary {
+  min-height: 44px;
+  color: var(--pilot-review-ink);
+  font-size: 0.86rem;
+  font-weight: 720;
+  line-height: 44px;
+  cursor: pointer;
+}
+
+.ambient-pilot-scenario-review__sources details[open] summary {
+  margin-block-end: 0.65rem;
+}
+
+.ambient-pilot-scenario-review__boundary {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 0;
+  padding-inline-start: 0.85rem;
+  border-inline-start: 3px solid var(--pilot-review-gold);
+}
+
+.ambient-pilot-scenario-review__status {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+  padding: 0.78rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--pilot-review-lavender) 26%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--pilot-review-lavender) 7%, transparent);
+  outline: none;
+}
+
+.ambient-pilot-scenario-review__status > strong {
+  color: var(--pilot-review-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ambient-pilot-scenario-review__status--applying {
+  border-color: color-mix(in srgb, var(--pilot-review-teal) 52%, transparent);
+  background: color-mix(in srgb, var(--pilot-review-teal) 8%, transparent);
+}
+
+.ambient-pilot-scenario-review__status--resolved {
+  border-color: color-mix(in srgb, var(--pilot-review-mint) 52%, transparent);
+  background: color-mix(in srgb, var(--pilot-review-mint) 9%, transparent);
+}
+
+.ambient-pilot-scenario-review__status--recovery {
+  border-color: color-mix(in srgb, var(--pilot-review-coral) 58%, transparent);
+  background: color-mix(in srgb, var(--pilot-review-coral) 8%, transparent);
+}
+
+.ambient-pilot-scenario-review__status:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--pilot-review-lavender) 52%, transparent);
+  outline-offset: 2px;
+}
+
+.ambient-pilot-scenario-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.ambient-pilot-scenario-review__actions button {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0.64rem 0.95rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 760;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ambient-pilot-scenario-review__actions button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ambient-pilot-scenario-review__apply {
+  color: #fff;
+  background: var(--pilot-review-teal);
+}
+
+.ambient-pilot-scenario-review__keep {
+  border-color: var(--pilot-review-line) !important;
+  color: var(--pilot-review-ink);
+  background: transparent;
+}
+
+.ambient-pilot-scenario-review__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.ambient-pilot-scenario-review__actions button:focus-visible,
+.ambient-pilot-scenario-review__sources summary:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--pilot-review-teal) 58%, transparent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .ambient-pilot-scenario-review__header,
+  .ambient-pilot-scenario-review__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ambient-pilot-scenario-review__header > strong {
+    align-self: flex-start;
+  }
+
+  .ambient-pilot-scenario-review__change-grid,
+  .ambient-pilot-scenario-review__compromises > ol,
+  .ambient-pilot-scenario-review__judgment > dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ambient-pilot-scenario-review__change-grid > section + section {
+    padding-block-start: 0.8rem;
+    padding-inline-start: 0;
+    border-block-start: 1px solid var(--pilot-review-line);
+    border-inline-start: 0;
+  }
+
+  .ambient-pilot-scenario-review__provenance > li,
+  .ambient-pilot-scenario-review__provenance dl > div,
+  .ambient-pilot-scenario-review__sources details dl > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+
+  .ambient-pilot-scenario-review__actions button {
+    width: 100%;
+  }
+}
+
+@media (forced-colors: active) {
+  .ambient-pilot-scenario-review__header > strong,
+  .ambient-pilot-scenario-review__commercial,
+  .ambient-pilot-scenario-review__status,
+  .ambient-pilot-scenario-review__actions button {
+    border: 1px solid CanvasText;
+  }
+
+  .ambient-pilot-scenario-review__actions button:focus-visible,
+  .ambient-pilot-scenario-review__sources summary:focus-visible,
+  .ambient-pilot-scenario-review__status:focus-visible {
+    outline: 3px solid Highlight;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-pilot-scenario-review__actions button:active:not(:disabled) {
+    transform: none;
+  }
+}

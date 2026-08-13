@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import CommandCenterHome from "../CommandCenterHome";
+import NowView from "../NowView";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -22,6 +23,26 @@ afterEach(() => {
 });
 
 describe("Command Center central Attention routing", () => {
+  function attentionItems(count) {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `follow-up:quote-${index}`,
+      type: "follow_up",
+      state: "due_today",
+      quoteId: `quote-${index}`,
+      daysOverdue: 0
+    }));
+  }
+
+  function quoteItems(count) {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `quote-${index}`,
+      quoteNumber: `QP-${index}`,
+      status: "sent",
+      customer: { name: `Customer ${index}` },
+      event: {}
+    }));
+  }
+
   test("routes an unread customer reply with its exact quote and Attention identity", () => {
     const onOpenWorkflow = vi.fn();
     act(() => {
@@ -153,5 +174,109 @@ describe("Command Center central Attention routing", () => {
 
     expect(onOpenCustomer).toHaveBeenCalledWith("customer-henderson");
     expect(onOpenWorkflow).not.toHaveBeenCalled();
+  });
+
+  test("reveals Command Center overflow in place under Ambient without a generic Workflow jump", () => {
+    const onOpenWorkflow = vi.fn();
+    const items = attentionItems(10);
+    act(() => {
+      root.render(
+        <CommandCenterHome
+          ambientMode
+          snapshot={{
+            loading: false,
+            error: "",
+            attentionSummary: { items },
+            quotes: quoteItems(10),
+            truncated: false
+          }}
+          onOpenWorkflow={onOpenWorkflow}
+          onOpenQuote={() => {}}
+          onNewQuote={() => {}}
+        />
+      );
+    });
+
+    expect(container.querySelectorAll(".command-center-inbox .command-center-row")).toHaveLength(8);
+    const disclosure = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent === "Show 2 more here");
+    expect(disclosure?.getAttribute("aria-expanded")).toBe("false");
+    act(() => disclosure.click());
+    expect(container.querySelectorAll(".command-center-inbox .command-center-row")).toHaveLength(10);
+    expect(disclosure.textContent).toBe("Show fewer attention items");
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(onOpenWorkflow).not.toHaveBeenCalled();
+
+    act(() => {
+      root.render(
+        <CommandCenterHome
+          snapshot={{
+            loading: false,
+            error: "",
+            attentionSummary: { items },
+            quotes: quoteItems(10),
+            truncated: false
+          }}
+          onOpenWorkflow={onOpenWorkflow}
+          onOpenQuote={() => {}}
+          onNewQuote={() => {}}
+        />
+      );
+    });
+    const legacyAction = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent === "View 2 more in Workflow");
+    act(() => legacyAction.click());
+    expect(onOpenWorkflow).toHaveBeenCalledWith({});
+  });
+
+  test("reveals NOW overflow in place under Ambient while retaining the legacy route behavior", () => {
+    const items = attentionItems(8);
+    const quotes = quoteItems(8);
+    const onOpenWorkflow = vi.fn();
+    act(() => {
+      root.render(
+        <NowView
+          ambientMode
+          snapshot={{
+            loading: false,
+            error: "",
+            attentionSummary: { items },
+            quotes,
+            truncated: false
+          }}
+          onOpenWorkflow={onOpenWorkflow}
+          onNewQuote={() => {}}
+          nowDate={new Date("2026-08-12T12:00:00.000Z")}
+        />
+      );
+    });
+
+    expect(container.querySelectorAll(".now-card")).toHaveLength(6);
+    const disclosure = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent === "Show 2 more here");
+    act(() => disclosure.click());
+    expect(container.querySelectorAll(".now-card")).toHaveLength(8);
+    expect(onOpenWorkflow).not.toHaveBeenCalled();
+
+    act(() => {
+      root.render(
+        <NowView
+          snapshot={{
+            loading: false,
+            error: "",
+            attentionSummary: { items },
+            quotes,
+            truncated: false
+          }}
+          onOpenWorkflow={onOpenWorkflow}
+          onNewQuote={() => {}}
+          nowDate={new Date("2026-08-12T12:00:00.000Z")}
+        />
+      );
+    });
+    const legacyAction = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent === "View 2 more in Workflow");
+    act(() => legacyAction.click());
+    expect(onOpenWorkflow).toHaveBeenCalledWith({});
   });
 });

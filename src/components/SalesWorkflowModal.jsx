@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getQuoteHistory,
   requestQuoteApproval,
@@ -15,6 +15,7 @@ import {
   getApprovalActionEligibility,
   getApprovalRequestExecutionEligibility,
   getRequestableApprovalActions,
+  getWorkflowAttentionFocusId,
   mergeUnreadReplyAttention
 } from "../lib/quoteWorkflow";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
@@ -93,6 +94,8 @@ export function resolveWorkflowFocusTarget({
     && (!attentionType || String(candidate?.type || "").trim() === attentionType)
     && (
       !requestId
+      || String(candidate?.id || "").trim() === requestId
+      || getWorkflowAttentionFocusId(candidate) === requestId
       || String(candidate?.sourceRequestId || "").trim() === requestId
       || String(candidate?.attentionId || "").trim() === requestId
       || String(candidate?.messageId || "").trim() === requestId
@@ -296,18 +299,18 @@ export function buildWorkflowRevenueAutopilotInput({
   const scopedOrganizationId = String(organizationId || "").trim();
   const quoteId = String(quote?.id || quote?.quoteId || "").trim();
   if (String(source || "").trim().toLowerCase() !== "firebase") {
-    throw new TypeError("Revenue autopilot requires a canonical Firestore quote snapshot.");
+    throw new TypeError("Follow-up automation requires a canonical Firestore quote snapshot.");
   }
   if (!scopedOrganizationId || !record(quote) || !quoteId) {
-    throw new TypeError("Revenue autopilot requires one tenant-scoped quote snapshot.");
+    throw new TypeError("Follow-up automation requires one tenant-scoped quote snapshot.");
   }
   const instant = new Date(snapshotAtISO);
   if (Number.isNaN(instant.getTime())) {
-    throw new TypeError("Revenue autopilot requires the successful quote-read timestamp.");
+    throw new TypeError("Follow-up automation requires the successful quote-read timestamp.");
   }
   const normalizedTenantTimeZone = normalizeTimeZone(tenantTimeZone);
   if (!normalizedTenantTimeZone) {
-    throw new TypeError("Revenue autopilot requires an explicit tenant IANA time zone.");
+    throw new TypeError("Follow-up automation requires an explicit tenant IANA time zone.");
   }
   const calendarContext = {
     date: calendarDateAt(instant, normalizedTenantTimeZone),
@@ -403,6 +406,8 @@ export function SalesWorkflowView({
   focusQuoteId = "",
   focusAttentionType = "",
   focusRequestId = "",
+  arrivalContext = null,
+  onArrivalResolution = null,
   organizationId = "",
   currentUserEmail = "",
   currentUserRole = "customer",
@@ -473,6 +478,7 @@ export function SalesWorkflowView({
   const skipReturnFocusRef = useRef(false);
   const tabInteractedRef = useRef(false);
   const loadGenerationRef = useRef(0);
+  const arrivalReportRef = useRef("");
   const autopilotGenerationRef = useRef(0);
   const decisionDebtGenerationRef = useRef(0);
   const workflowScopeRef = useRef("");
@@ -480,6 +486,43 @@ export function SalesWorkflowView({
   workflowScopeRef.current = [organizationId, currentUserRole, currentUserEmail]
     .map((value) => String(value || "").trim().toLowerCase())
     .join(":");
+  const exactArrivalActive = Boolean(
+    open
+    && arrivalContext?.surfaceId === "workflow"
+    && arrivalContext?.focus?.quoteId === focusQuoteId
+    && arrivalContext?.focus?.attentionType === focusAttentionType
+    && arrivalContext?.focus?.requestId === focusRequestId
+  );
+  const exactArrivalKey = exactArrivalActive
+    ? [focusQuoteId, focusAttentionType, focusRequestId].join(":")
+    : "";
+
+  const reportArrivalResolution = useCallback((resolution) => {
+    if (!exactArrivalActive || typeof onArrivalResolution !== "function") return;
+    const next = {
+      ...resolution,
+      focus: {
+        quoteId: focusQuoteId,
+        attentionType: focusAttentionType,
+        requestId: focusRequestId
+      }
+    };
+    const signature = JSON.stringify(next);
+    if (arrivalReportRef.current === signature) return;
+    arrivalReportRef.current = signature;
+    onArrivalResolution(next);
+  }, [
+    exactArrivalActive,
+    focusAttentionType,
+    focusQuoteId,
+    focusRequestId,
+    onArrivalResolution
+  ]);
+
+  useEffect(() => {
+    arrivalReportRef.current = "";
+    if (exactArrivalActive) reportArrivalResolution({ status: "pending" });
+  }, [exactArrivalActive, exactArrivalKey, reportArrivalResolution]);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -523,7 +566,7 @@ export function SalesWorkflowView({
       setAutopilotOperations((current) => ({
         ...current,
         loading: false,
-        error: error?.message || "Revenue Autopilot operations could not be read.",
+        error: error?.message || "Follow-up automation could not be loaded.",
         stale: Boolean(current.snapshot)
       }));
     }
@@ -559,7 +602,7 @@ export function SalesWorkflowView({
       setDecisionDebt((current) => ({
         ...current,
         loading: false,
-        error: error?.message || "Decision Debt could not be derived.",
+        error: error?.message || "Decision priorities could not be calculated.",
         stale: Boolean(current.snapshot)
       }));
     }
@@ -596,6 +639,7 @@ export function SalesWorkflowView({
       });
       setSelectedQuoteId((current) => {
         if (focusQuoteId && result.quotes.some((item) => item.id === focusQuoteId)) return focusQuoteId;
+        if (exactArrivalActive) return "";
         return result.quotes.some((item) => item.id === current) ? current : result.quotes[0]?.id || "";
       });
       if (selectDefaultTab && !tabInteractedRef.current) {
@@ -840,6 +884,7 @@ export function SalesWorkflowView({
 
   useEffect(() => {
     if (!open || state.loading || !focusQuoteId) return undefined;
+    if (exactArrivalActive) return undefined;
     if (focusAttentionType === "decision_debt") return undefined;
     setSelectedQuoteId((current) => (
       state.quotes.some((quote) => quote.id === focusQuoteId) ? focusQuoteId : current
@@ -861,6 +906,7 @@ export function SalesWorkflowView({
     return () => window.cancelAnimationFrame(frame);
   }, [
     attentionSummary.items,
+    exactArrivalActive,
     focusAttentionType,
     focusQuoteId,
     focusRequestId,
@@ -871,6 +917,7 @@ export function SalesWorkflowView({
 
   useEffect(() => {
     if (!open || focusAttentionType !== "decision_debt" || !focusQuoteId) return undefined;
+    if (exactArrivalActive) return undefined;
     setSelectedQuoteId((current) => (
       state.quotes.some((quote) => quote.id === focusQuoteId) ? focusQuoteId : current
     ));
@@ -893,11 +940,182 @@ export function SalesWorkflowView({
   }, [
     decisionDebt.loading,
     decisionDebt.snapshot,
+    exactArrivalActive,
     focusAttentionType,
     focusQuoteId,
     focusRequestId,
     open,
     state.quotes
+  ]);
+
+  useEffect(() => {
+    if (!exactArrivalActive) return undefined;
+    if (state.loading) {
+      reportArrivalResolution({ status: "pending" });
+      return undefined;
+    }
+    if (state.error || workflowReadError) {
+      reportArrivalResolution({
+        status: "recovery",
+        reason: "The exact Workflow item could not be verified because the current Workflow evidence failed to load.",
+        consequence: "No alternate quote or Workflow item was selected; the original work remains unresolved.",
+        nextResolution: "Refresh Workflow, then reopen the exact action from its opportunity if the read still fails."
+      });
+      return undefined;
+    }
+
+    const exactQuote = state.quotes.find((quote) => quote.id === focusQuoteId) || null;
+    if (!exactQuote) {
+      reportArrivalResolution({
+        status: "recovery",
+        reason: state.truncated
+          ? "The requested opportunity is not present in this bounded Workflow snapshot; it may be outside the current read limit or no longer available."
+          : "The requested opportunity is no longer present in the current Workflow snapshot.",
+        consequence: "No alternate opportunity or Workflow item was selected; the requested work remains unresolved.",
+        nextResolution: "Refresh Workflow, or return to the originating opportunity and choose its current next action."
+      });
+      return undefined;
+    }
+
+    let target = null;
+    let tab = "attention";
+    let rowKind = "attention";
+
+    if (focusAttentionType === "decision_debt") {
+      if (decisionDebt.loading) {
+        reportArrivalResolution({ status: "pending" });
+        return undefined;
+      }
+      if (decisionDebt.error || decisionDebt.stale || !decisionDebt.snapshot) {
+        reportArrivalResolution({
+          status: "recovery",
+          reason: decisionDebt.stale
+            ? "The requested decision appears only in stale information, so its current state cannot be verified."
+            : "The requested decision could not be verified from the current information.",
+          consequence: "No alternate decision was selected; navigation did not acknowledge or resolve the requested item.",
+          nextResolution: "Retry the decision review, or return to the opportunity and reopen its current details."
+        });
+        return undefined;
+      }
+      target = resolveWorkflowFocusTarget({
+        focusQuoteId,
+        focusAttentionType,
+        focusRequestId,
+        decisionDebtItems: decisionDebt.snapshot.items
+      });
+      tab = "debt";
+      rowKind = "debt";
+    } else if (focusAttentionType === "approval") {
+      const approval = approvalQueue.find(({ quote, request }) => (
+        quote.id === focusQuoteId && request.id === focusRequestId
+      ));
+      if (approval && approval.request.state !== "pending") {
+        reportArrivalResolution({
+          status: "recovery",
+          reason: `The requested approval is now ${String(approval.request.state || "in another state").replaceAll("_", " ")}, so its earlier pending context is no longer current.`,
+          consequence: "No approval was focused as pending, and navigation did not approve, reject, or execute anything.",
+          nextResolution: "Review the current approval history or return to the opportunity for its newly ranked next action."
+        });
+        return undefined;
+      }
+      target = approval ? { itemId: approval.request.id } : null;
+      tab = "approvals";
+      rowKind = "approval";
+    } else {
+      if (focusAttentionType === "unread_customer_reply" && autopilotOperations.loading) {
+        reportArrivalResolution({ status: "pending" });
+        return undefined;
+      }
+      if (
+        focusAttentionType === "unread_customer_reply"
+        && (autopilotOperations.error || autopilotOperations.stale)
+      ) {
+        reportArrivalResolution({
+          status: "recovery",
+          reason: "The exact customer-reply item appears only in unavailable or stale Workflow evidence, so its current state cannot be verified.",
+          consequence: "No retained reply or alternate Workflow item was focused; nothing was answered or marked handled.",
+          nextResolution: "Reconnect Workflow and retry the exact customer reply after its evidence is current."
+        });
+        return undefined;
+      }
+      target = resolveWorkflowFocusTarget({
+        focusQuoteId,
+        focusAttentionType,
+        focusRequestId,
+        attentionItems: attentionSummary.items
+      });
+    }
+
+    if (!target?.itemId) {
+      const sourceIsBounded = state.truncated
+        || (focusAttentionType === "unread_customer_reply" && autopilotAttentionTruncated)
+        || (focusAttentionType === "decision_debt" && decisionDebt.snapshot?.bounds?.truncated === true);
+      reportArrivalResolution({
+        status: "recovery",
+        reason: sourceIsBounded
+          ? "The exact Workflow item is not present in the bounded evidence currently available; it may be outside the read limit or no longer current."
+          : "The exact Workflow item is no longer present in the current opportunity evidence.",
+        consequence: "No similar or first-listed item was substituted; the requested action remains unresolved.",
+        nextResolution: "Refresh Workflow, or return to the opportunity and choose the next action supported by its current evidence."
+      });
+      return undefined;
+    }
+
+    setSelectedQuoteId(focusQuoteId);
+    setActiveTab(tab);
+    const arrivalFocusFrames = [];
+    const firstFrame = window.requestAnimationFrame(() => {
+      const secondFrame = window.requestAnimationFrame(() => {
+        const row = rowKind === "approval"
+          ? Array.from(dialogRef.current?.querySelectorAll(".approval-row") || []).find((candidate) => (
+              candidate.dataset.quoteId === focusQuoteId
+              && candidate.dataset.requestId === focusRequestId
+            ))
+          : rowKind === "debt"
+            ? Array.from(dialogRef.current?.querySelectorAll("[data-decision-debt-id]") || []).find(
+                (candidate) => candidate.dataset.decisionDebtId === target.itemId
+              )
+            : Array.from(dialogRef.current?.querySelectorAll("[data-attention-id]") || []).find(
+                (candidate) => candidate.dataset.attentionId === target.itemId
+              );
+        row?.scrollIntoView({ behavior: "smooth", block: "center" });
+        row?.focus({ preventScroll: true });
+        if (row && document.activeElement === row) {
+          reportArrivalResolution({ status: "resolved", itemId: target.itemId });
+          return;
+        }
+        reportArrivalResolution({
+          status: "recovery",
+          reason: "The exact Workflow item exists, but its focused resolution state could not be opened.",
+          consequence: "No alternate item was focused and the requested work remains unresolved.",
+          nextResolution: "Refresh Workflow, or return to the opportunity and reopen this exact action."
+        });
+      });
+      arrivalFocusFrames.push(secondFrame);
+    });
+    arrivalFocusFrames.push(firstFrame);
+    return () => arrivalFocusFrames.forEach((frame) => window.cancelAnimationFrame(frame));
+  }, [
+    approvalQueue,
+    attentionSummary.items,
+    autopilotAttentionTruncated,
+    autopilotOperations.error,
+    autopilotOperations.loading,
+    autopilotOperations.stale,
+    decisionDebt.error,
+    decisionDebt.loading,
+    decisionDebt.snapshot,
+    decisionDebt.stale,
+    exactArrivalActive,
+    focusAttentionType,
+    focusQuoteId,
+    focusRequestId,
+    reportArrivalResolution,
+    state.error,
+    state.loading,
+    state.quotes,
+    state.truncated,
+    workflowReadError
   ]);
 
   useEffect(() => {
@@ -1261,7 +1479,7 @@ export function SalesWorkflowView({
       });
       setAutopilotConfigurationOpen(false);
       await loadRevenueAutopilotOperations();
-      pushToast("Revenue Autopilot tenant policy recorded. Runtime and provider gates remain separate.", "success");
+      pushToast("Follow-up automation policy recorded. Runtime and provider gates remain separate.", "success");
     } catch (error) {
       updateAutopilotMutation({
         state: isDefinitiveRevenueAutopilotError(error) ? "error" : "uncertain",
@@ -1429,7 +1647,7 @@ export function SalesWorkflowView({
         ...current,
         mutation: {
           state: pending?.definitive ? "error" : "uncertain",
-          error: error?.message || "Decision Debt policy outcome is uncertain.",
+          error: error?.message || "Decision-priority policy outcome is uncertain.",
           receipt: null,
           requestId: pending?.requestId
         }
@@ -1455,7 +1673,7 @@ export function SalesWorkflowView({
         ...current,
         mutation: {
           state: pending?.definitive ? "error" : "uncertain",
-          error: error?.message || "Decision Debt policy reconciliation remains uncertain.",
+          error: error?.message || "Decision-priority policy reconciliation remains uncertain.",
           receipt: null,
           requestId: pending?.requestId
         }
@@ -1604,6 +1822,7 @@ export function SalesWorkflowView({
   return (
     <div
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      data-layout-overlap-allowed={embedded ? undefined : "true"}
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="sales-workflow-title"
@@ -1690,7 +1909,7 @@ export function SalesWorkflowView({
             className={activeTab === "autopilot" ? "active" : ""}
             onClick={() => selectTab("autopilot")}
           >
-            Revenue autopilot
+            Follow-up automation
           </button>
           <button
             type="button"
@@ -1704,7 +1923,7 @@ export function SalesWorkflowView({
             className={activeTab === "debt" ? "active" : ""}
             onClick={() => selectTab("debt")}
           >
-            Decision Debt
+            Decisions to review
           </button>
           <button
             type="button"
@@ -1736,7 +1955,7 @@ export function SalesWorkflowView({
             </p>
             {autopilotAttentionTruncated && (
               <p className="warning-note" data-unread-attention-bound="truncated">
-                Customer-reply Attention reached the operations read bound. This queue is incomplete; review the Revenue autopilot tab for the bounded source details.
+                Customer-reply Attention reached the operations read bound. This queue is incomplete; review the Follow-up automation tab for the bounded source details.
               </p>
             )}
             <WorkflowTimingPanel
@@ -1947,7 +2166,7 @@ export function SalesWorkflowView({
                             data-capability-id="cwf-11-central-anniversary-attention"
                             data-capability-state="verification_required"
                           >
-                            {formatWorkspaceText(item.eventName, { emptyLabel: "Prior event" })} was recorded as booked for this week last year. Open Customer 360 to verify the retained accepted proposal version and create or resume one governed rebook draft.
+                            {formatWorkspaceText(item.eventName, { emptyLabel: "Prior event" })} was recorded as booked for this week last year. Open the client overview to verify the retained accepted proposal version and create or resume one governed rebook draft.
                           </p>
                           <p className="source-note">
                             {item.evidenceBoundary} {item.sourceBound?.truncated
@@ -1975,17 +2194,17 @@ export function SalesWorkflowView({
                             {item.state === "blocked_source"
                               ? "This legacy booking is preserved, but its exact accepted proposal source could not establish an authoritative closeout. Review the quote record before follow-up."
                               : item.state === "blocked_configuration"
-                              ? "Set a valid business time zone in Catalog Administration, then open Customer 360 to review closeout items."
-                              : "This internal closeout record is due in Customer 360. Reviewing it does not send a thank-you or review request."}
+                              ? "Set a valid business time zone in Catalog Administration, then open the client overview to review closeout items."
+                              : "This internal closeout record is due in the client overview. Reviewing it does not send a thank-you or review request."}
                           </p>
                           <div className="workflow-attention-actions">
                             <button
                               type="button"
                               className="ghost compact"
                               onClick={() => handleOpenCloseoutWorkspace(quote)}
-                              aria-label={`${quote.customerId && onOpenCustomer ? "Open Customer 360" : "Open quote"} for post-event closeout — ${quoteLabel}`}
+                              aria-label={`${quote.customerId && onOpenCustomer ? "Open client overview" : "Open quote"} for post-event closeout — ${quoteLabel}`}
                             >
-                              {quote.customerId && onOpenCustomer ? "Open Customer 360" : "Open quote"}
+                              {quote.customerId && onOpenCustomer ? "Open client overview" : "Open quote"}
                             </button>
                           </div>
                         </>

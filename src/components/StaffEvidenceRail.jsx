@@ -15,6 +15,16 @@ const STATE_PRESENTATION = {
   current: { family: "confirmed", label: "Read complete" }
 };
 
+const COMPACT_STATE_LABELS = {
+  loading: "Gathering view",
+  refreshing: "Updating view",
+  partial: "View incomplete",
+  stale: "Earlier view retained",
+  unavailable: "View unavailable",
+  truncated: "Bounded view",
+  current: "View current"
+};
+
 function readStatus(reads, key) {
   return String(reads?.[key]?.status || "idle").trim().toLowerCase();
 }
@@ -87,7 +97,7 @@ export function buildStaffEvidenceRailModel({
   const detail = {
     loading: "Loading the tenant-scoped staff snapshot.",
     refreshing: "Refreshing now; the last complete snapshot remains visible.",
-    partial: "One staff read completed and one did not. No complete refresh was recorded.",
+    partial: "Some workspace sources refreshed, and at least one did not. A complete refresh was not recorded.",
     stale: "The latest refresh did not complete. Visible retained data comes from the last complete read.",
     unavailable: "No complete staff snapshot is available yet.",
     truncated: "The tenant-scoped staff snapshot completed within a bounded quote-history window.",
@@ -118,7 +128,8 @@ export function StaffReadContextRail({
   boundsNote = "",
   caveat = "Freshness describes this staff read only. It does not prove provider delivery, customer acceptance, booking, payment, or operational completion.",
   title = "Staff read context",
-  titleId = "staff-evidence-rail-title"
+  titleId = "staff-evidence-rail-title",
+  presentation = "standard"
 }) {
   const model = buildStaffEvidenceRailModel({
     loading,
@@ -131,20 +142,27 @@ export function StaffReadContextRail({
   });
   const scopeName = formatWorkspaceText(organizationName, { emptyLabel: "Current organization" });
   const tenantKey = formatWorkspaceText(organizationId, { emptyLabel: "Not available" });
+  const presentationMode = presentation === "compact" ? "compact" : "standard";
 
   return (
     <aside
-      className={`staff-evidence-rail staff-evidence-${model.state}`}
+      className={`staff-evidence-rail staff-evidence-${model.state}${presentationMode === "compact" ? " staff-evidence-rail--compact" : ""}`}
       aria-labelledby={titleId}
       data-capability-state={model.state}
       data-read-truncation={truncationKnown ? (truncated ? "truncated" : "complete") : "unknown"}
+      data-staff-evidence-presentation={presentationMode}
     >
       <div className="staff-evidence-head">
         <div>
           <p className="eyebrow">Data freshness</p>
           <h3 id={titleId}>{title}</h3>
         </div>
-        <StatusChip {...model.presentation} />
+        <StatusChip
+          {...model.presentation}
+          label={presentationMode === "compact"
+            ? COMPACT_STATE_LABELS[model.state]
+            : model.presentation.label}
+        />
       </div>
 
       <p className="staff-evidence-outcome" role="status" aria-live="polite" aria-atomic="true">
@@ -205,7 +223,9 @@ export default function StaffEvidenceRail({
   truncationKnown = false,
   reads = {},
   historyLimit = 200,
-  readContract = "Tenant-scoped Workflow Attention quote read, unread customer-reply Attention projection, plus the latest 200 staff quote records"
+  title = "Staff read context",
+  readContract = "Tenant-scoped Workflow Attention quote read, unread customer-reply Attention projection, plus the latest 200 staff quote records",
+  presentation = "standard"
 }) {
   const model = buildStaffEvidenceRailModel({
     loading,
@@ -229,7 +249,9 @@ export default function StaffEvidenceRail({
       truncated={truncated}
       truncationKnown={truncationKnown}
       historyLimit={historyLimit}
+      title={title}
       readContract={readContract}
+      presentation={presentation}
       outcome={contractOutcome(reads, { retained: model.state === "stale" })}
       boundsNote={`Quote history is capped at the latest ${historyLimit} records and unread customer-reply Attention at 50 records; open Quotes or Workflow for the authoritative records.`}
     />

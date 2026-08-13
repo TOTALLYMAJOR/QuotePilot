@@ -24,7 +24,7 @@ vi.mock("../../lib/portalRecoveryClient", () => ({
   getPortalRecoveryContact: vi.fn().mockResolvedValue({})
 }));
 
-vi.mock("../QuoteConversationPanel", () => ({
+vi.mock("quotepilot-active-conversation-panel", () => ({
   default: (props) => {
     stores.panelProps.current = props;
     return <div data-testid="conversation-panel" />;
@@ -72,6 +72,7 @@ async function settle() {
 
 beforeAll(async () => {
   vi.stubEnv("VITE_PILOT_DECISION_ROOM_ENABLED", "true");
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "true");
   ({ default: CustomerPortalView } = await import("../CustomerPortalView"));
 });
 
@@ -132,9 +133,19 @@ describe("customer portal ask-about with the decision-room flag on", () => {
     });
 
     expect(stores.panelProps.current.prefill).toMatchObject({
-      text: "Question about the pricing: "
+      text: "Question about your proposal total: "
     });
     expect(stores.panelProps.current.prefill.id).toBeGreaterThan(0);
+    expect(container.querySelector('[data-question-prefill-outcome="pending"]')?.textContent)
+      .toContain("Opening your question");
+
+    act(() => stores.panelProps.current.onPrefillResolution({
+      id: stores.panelProps.current.prefill.id,
+      status: "staged",
+      message: "Your question is started below. Add any detail, then choose Send message when ready."
+    }));
+    expect(container.querySelector('[data-question-prefill-outcome="staged"]')?.textContent)
+      .toContain("Question ready");
   });
 
   test("a decidable option drafts the canonical change request without overwriting typed words", async () => {
@@ -142,8 +153,8 @@ describe("customer portal ask-about with the decision-room flag on", () => {
 
     const cards = [...container.querySelectorAll(".portal-decidable-card")];
     expect(cards.map((card) => card.textContent)).toEqual([
-      "Premium Bar$15.00 per guest",
-      "Linens$9.00 per item"
+      "Premium Bar$15.00 per guestAdd to request",
+      "Linens$9.00 per itemAdd to request"
     ]);
 
     act(() => {
@@ -152,20 +163,60 @@ describe("customer portal ask-about with the decision-room flag on", () => {
     const message = container.querySelector(".portal-decision-panel textarea");
     expect(message.value).toBe("Please add Premium Bar.");
     const changesButton = [...container.querySelectorAll(".portal-decision-options button")]
-      .find((button) => button.textContent === "Request Changes");
+      .find((button) => button.textContent === "Ask for changes");
     expect(changesButton.getAttribute("aria-pressed")).toBe("true");
+    expect(cards[0].getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector('[data-option-draft-outcome="added"]')?.textContent)
+      .toContain("Premium Bar is in your request");
 
-    // Same card again: no duplicate sentence. Second card: appends a line.
+    // Same card again: reverses only its generated line. Re-select, then add a second option.
     act(() => {
       cards[0].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
     });
     expect(container.querySelector(".portal-decision-panel textarea").value)
-      .toBe("Please add Premium Bar.");
+      .toBe("");
+    expect(cards[0].getAttribute("aria-pressed")).toBe("false");
+    act(() => {
+      cards[0].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
     act(() => {
       cards[1].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
     });
     expect(container.querySelector(".portal-decision-panel textarea").value)
       .toBe("Please add Premium Bar.\nPlease add Linens.");
+  });
+
+  test.each([
+    "Accept proposal",
+    "Decline proposal"
+  ])("switching to %s discards generated additions and keeps customer words", async (responseLabel) => {
+    await renderPortal();
+
+    const premiumBar = container.querySelector(".portal-decidable-card");
+    act(() => {
+      premiumBar.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+    const message = container.querySelector(".portal-decision-panel textarea");
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value"
+      ).set;
+      setter.call(message, "Please keep the vegetarian option.\nPlease add Premium Bar.");
+      message.dispatchEvent(new window.Event("input", { bubbles: true }));
+    });
+
+    const response = [...container.querySelectorAll(".portal-decision-options button")]
+      .find((button) => button.textContent === responseLabel);
+    act(() => {
+      response.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(message.value).toBe("Please keep the vegetarian option.");
+    expect(premiumBar.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelector('[data-option-draft-outcome="discarded"]')?.textContent)
+      .toContain("optional addition was removed");
+    expect(response.getAttribute("aria-pressed")).toBe("true");
   });
 
   test("asking about a second block issues a new prefill request id", async () => {
@@ -182,8 +233,8 @@ describe("customer portal ask-about with the decision-room flag on", () => {
 
     const first = click("event-details");
     const second = click("package-and-menu");
-    expect(first.text).toBe("Question about the event details: ");
-    expect(second.text).toBe("Question about the package and menu: ");
+    expect(first.text).toBe("Question about your event details: ");
+    expect(second.text).toBe("Question about your menu and service: ");
     expect(second.id).toBeGreaterThan(first.id);
   });
 });

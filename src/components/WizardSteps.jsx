@@ -317,6 +317,7 @@ export function StepEvent({
           <Field label="Event date" error={getError("date")} required>
             <input
               type="date"
+              data-ambient-field="date"
               value={form.date}
               onChange={(e) => updateField("date", e.target.value)}
               onBlur={() => markBlur("date")}
@@ -326,6 +327,7 @@ export function StepEvent({
           <Field label="Start time">
             <input
               type="time"
+              data-ambient-field="time"
               value={form.time}
               onChange={(e) => updateField("time", e.target.value)}
               onBlur={() => markBlur("time")}
@@ -336,6 +338,7 @@ export function StepEvent({
               <div className="hours-meta">
                 <input
                   type="number"
+                  data-ambient-field="hours"
                   min={MIN_EVENT_HOURS}
                   max={MAX_EVENT_HOURS}
                   value={normalizeEventHours(form.hours)}
@@ -411,6 +414,7 @@ export function StepEvent({
           <Field label="Venue" error={getError("venue")} required>
             <input
               type="text"
+              data-ambient-field="venue"
               value={form.venue}
               onChange={(e) => updateField("venue", e.target.value)}
               onBlur={() => markBlur("venue")}
@@ -420,6 +424,7 @@ export function StepEvent({
           <Field label="Venue address">
             <input
               type="text"
+              data-ambient-field="venueAddress"
               value={form.venueAddress || ""}
               onChange={(e) => updateField("venueAddress", e.target.value)}
               onBlur={() => markBlur("venueAddress")}
@@ -750,7 +755,7 @@ export function StepMenu({
   return (
     <div className="grid two-col">
       {resolvedMenuSections.length > 0 && (
-        <div className="menu-library">
+        <div className="menu-library" data-ambient-field="menuItems" tabIndex={-1}>
           <h4>Customized Cuisine Menu</h4>
           <p className="source-note">Select menu items to include in this quote proposal.</p>
           <div className="menu-grid">
@@ -927,6 +932,7 @@ export function StepServices({
       />
       <Field label="Package tier">
         <select
+          data-ambient-field="pkg"
           value={form.pkg}
           onChange={(e) => {
             if (typeof onSelectionTouched === "function") onSelectionTouched("pkg");

@@ -303,7 +303,7 @@ test("New quote confirms only real edits and resets the canonical quote fields",
   expect(dialogCount).toBe(1);
   await expect(page.getByRole("textbox", { name: /Event name/i })).toHaveValue("");
   await expect(page.getByRole("textbox", { name: /Your name/i })).toHaveValue("");
-  await expect(page.getByText("Ready for a new quote")).toBeVisible();
+  await expect(page.getByText("Ready to plan an event")).toBeVisible();
 });
 
 test("step 1 next stays actionable and explains missing required fields", async ({ page }) => {
@@ -353,7 +353,8 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
   const catalogAdmin = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Catalog Admin" }) });
   await expect(catalogAdmin.getByRole("heading", { name: "Catalog Admin" })).toBeVisible();
   await expect(page.locator(".admin-tab.active")).toHaveText("Menu");
-  await expect(catalogAdmin.getByLabel("Event type")).toHaveValue(selectedEventTypeId);
+  await expect(catalogAdmin.getByRole("combobox", { name: "Event type", exact: true }))
+    .toHaveValue(selectedEventTypeId);
 });
 
 test("a menu item created in Catalog Admin appears in the active quote immediately", async ({ page }) => {
@@ -370,9 +371,10 @@ test("a menu item created in Catalog Admin appears in the active quote immediate
   const catalogAdmin = page.getByRole("dialog").filter({
     has: page.getByRole("heading", { name: "Catalog Admin" })
   });
-  await catalogAdmin.getByRole("button", { name: "Menu" }).click();
-  await catalogAdmin.getByLabel("Event type").selectOption(selectedEventTypeId);
-  const category = catalogAdmin.getByLabel("Category");
+  await catalogAdmin.getByRole("tab", { name: "Menu" }).click();
+  await catalogAdmin.getByRole("combobox", { name: "Event type", exact: true })
+    .selectOption(selectedEventTypeId);
+  const category = catalogAdmin.getByRole("combobox", { name: "Category", exact: true });
   await expect.poll(() => category.locator("option").count()).toBeGreaterThan(1);
   await category.selectOption({ index: 1 });
   await catalogAdmin.getByPlaceholder("New item name").fill("Immediate Recovery Entree");
@@ -1393,8 +1395,8 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
   const catalogAdmin = page.getByRole("dialog").filter({
     has: page.getByRole("heading", { name: "Catalog Admin" })
   });
-  await catalogAdmin.getByRole("button", { name: "Menu" }).click();
-  const adminEventType = catalogAdmin.getByLabel("Event type");
+  await catalogAdmin.getByRole("tab", { name: "Menu" }).click();
+  const adminEventType = catalogAdmin.getByRole("combobox", { name: "Event type", exact: true });
   await expect.poll(() => adminEventType.locator("option").count()).toBeGreaterThan(2);
   const alternative = await adminEventType.locator("option").evaluateAll((options, current) => (
     options.map((option) => option.value).find((value) => value && value !== current) || ""

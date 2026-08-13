@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import StatusChip from "./StatusChip";
 import StaffEvidenceRail from "./StaffEvidenceRail";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { getWorkflowAttentionFocusId } from "../lib/quoteWorkflow";
 import {
   classifyAttentionItem,
   classifyDepositStatus,
@@ -63,7 +64,7 @@ export function attentionRowCopy(item) {
   if (item.type === "anniversary_rebooking") {
     const eventName = formatWorkspaceText(item.eventName, { emptyLabel: "Prior event" });
     const boundWarning = item.sourceBound?.truncated
-      ? " The latest quote-history scan is incomplete; Customer 360 must check for older or matching records."
+      ? " The latest quote-history scan is incomplete; check the client overview for older or matching records."
       : "";
     const calendarWarning = item.calendarContext?.source === "tenant"
       ? ""
@@ -154,7 +155,8 @@ export default function CommandCenterHome({
   onOpenWorkflow,
   onOpenQuote,
   onOpenCustomer,
-  onNewQuote
+  onNewQuote,
+  ambientMode = false
 }) {
   const state = snapshot || {
     loading: true,
@@ -164,8 +166,12 @@ export default function CommandCenterHome({
     truncated: false
   };
   const attentionItems = state.attentionSummary?.items || [];
-  const visibleAttentionItems = attentionItems.slice(0, ATTENTION_ROW_LIMIT);
-  const attentionOverflow = attentionItems.length - visibleAttentionItems.length;
+  const [additionalAttentionVisible, setAdditionalAttentionVisible] = useState(false);
+  const hiddenAttentionCount = Math.max(0, attentionItems.length - ATTENTION_ROW_LIMIT);
+  const visibleAttentionItems = ambientMode && additionalAttentionVisible
+    ? attentionItems
+    : attentionItems.slice(0, ATTENTION_ROW_LIMIT);
+  const attentionOverflow = Math.max(0, attentionItems.length - visibleAttentionItems.length);
   const hasAnyAttention = attentionItems.length > 0;
 
   const upcomingEvents = useMemo(
@@ -184,7 +190,7 @@ export default function CommandCenterHome({
     onOpenWorkflow?.({
       quoteId: item.quoteId,
       attentionType: item.type,
-      requestId: item.sourceRequestId || item.pendingRequests?.[0]?.id || ""
+      requestId: getWorkflowAttentionFocusId(item)
     });
   };
 
@@ -262,7 +268,7 @@ export default function CommandCenterHome({
             </p>
           )}
           {hasAnyAttention && (
-            <ul className="command-center-list">
+            <ul className="command-center-list" id="command-center-attention-items">
               {visibleAttentionItems.map((item) => {
                 const { family, label } = classifyAttentionItem(item.type, item.state);
                 const attentionQuote = state.quotes.find((quote) => quote.id === item.quoteId) || item.quote || {};
@@ -309,9 +315,21 @@ export default function CommandCenterHome({
               })}
             </ul>
           )}
-          {attentionOverflow > 0 && (
-            <button type="button" className="ghost command-center-more" onClick={() => onOpenWorkflow?.({})}>
-              View {attentionOverflow} more in Workflow
+          {(ambientMode ? hiddenAttentionCount > 0 : attentionOverflow > 0) && (
+            <button
+              type="button"
+              className="ghost command-center-more"
+              aria-controls={ambientMode ? "command-center-attention-items" : undefined}
+              aria-expanded={ambientMode ? additionalAttentionVisible : undefined}
+              onClick={ambientMode
+                ? () => setAdditionalAttentionVisible((visible) => !visible)
+                : () => onOpenWorkflow?.({})}
+            >
+              {ambientMode
+                ? additionalAttentionVisible
+                  ? "Show fewer attention items"
+                  : `Show ${hiddenAttentionCount} more here`
+                : `View ${attentionOverflow} more in Workflow`}
             </button>
           )}
         </div>

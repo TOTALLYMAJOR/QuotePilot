@@ -9,6 +9,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 function catalog() {
   return {
+    authoritativeVersion: 1,
     packages: [{ id: "classic", name: "Classic", ppp: 20, active: true }],
     addons: [],
     rentals: [],
@@ -67,10 +68,144 @@ function clickSave() {
   });
 }
 
+function setInputValue(input, value) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+  act(() => {
+    setter.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 describe("AdminCatalogModal save capability state", () => {
   test("starts ready with no unsaved changes and no message", () => {
     renderView({ onSave: async () => ({ ok: true }) });
     expect(container.innerHTML).toContain('data-capability-state="ready"');
+  });
+
+  test("reports dirty state and clears it after confirmed discard", () => {
+    const onInteractionStateChange = vi.fn();
+    const onClose = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderView({ onSave: async () => ({ ok: true }), onInteractionStateChange, onClose });
+    makeUnsavedEdit();
+    expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: true, busy: false });
+
+    const back = [...container.querySelectorAll("button")]
+      .find((element) => element.textContent.trim() === "Back to Home");
+    act(() => back.click());
+
+    expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: false, busy: false });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  test("preserves a dirty draft when newer catalog evidence arrives", () => {
+    const onInteractionStateChange = vi.fn();
+    renderView({ onSave: async () => ({ ok: true }), onInteractionStateChange });
+    makeUnsavedEdit();
+    const changedCheckbox = [...container.querySelectorAll('input[type="checkbox"]')]
+      .find((input) => input.getAttribute("aria-label") === "Package 1 active");
+    expect(changedCheckbox.checked).toBe(false);
+
+    renderView({
+      catalog: {
+        ...catalog(),
+        authoritativeVersion: 2,
+        settings: { pricingSetupConfirmed: true, catalogRevision: 2 }
+      },
+      onSave: async () => ({ ok: true }),
+      onInteractionStateChange
+    });
+
+    expect(changedCheckbox.checked).toBe(false);
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("A newer Library version is ready");
+    expect([...container.querySelectorAll("button")]
+      .find((element) => element.textContent.trim() === "Save catalog changes").disabled).toBe(true);
+    expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: true, busy: false });
+  });
+
+  test("reports a typed managed-menu draft as unsaved and protects close", async () => {
+    const onInteractionStateChange = vi.fn();
+    const onClose = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderView({
+      initialTab: "menu",
+      onSave: async () => ({ ok: true }),
+      onInteractionStateChange,
+      onClose
+    });
+    await act(async () => Promise.resolve());
+    const input = container.querySelector('input[aria-label="New menu item name"]');
+    expect(input).toBeTruthy();
+    setInputValue(input, "Seasonal soup");
+
+    expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: true, busy: false });
+    const back = [...container.querySelectorAll("button")]
+      .find((element) => element.textContent.trim() === "Back to Home");
+    act(() => back.click());
+    expect(window.confirm).toHaveBeenCalledWith("Discard unsaved catalog, menu, and branding changes?");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("keeps the main catalog save from closing over a separate managed-menu draft", async () => {
+    const onSave = vi.fn(async () => ({ ok: true }));
+    renderView({ onSave });
+    makeUnsavedEdit();
+    const menuTab = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.trim() === "Menu");
+    act(() => menuTab.click());
+    await act(async () => Promise.resolve());
+    const input = container.querySelector('input[aria-label="New menu item name"]');
+    setInputValue(input, "Seasonal soup");
+
+    await clickSave();
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("Finish or discard the separate menu edits first");
+  });
+
+  test("preserves a managed rename across newer evidence and discards it only after confirmation", async () => {
+    const onInteractionStateChange = vi.fn();
+    renderView({
+      initialTab: "menu",
+      onSave: async () => ({ ok: true }),
+      onInteractionStateChange
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    const renameInput = container.querySelector('input[aria-label="New event type name"]');
+    expect(renameInput).toBeTruthy();
+    setInputValue(renameInput, "Seasonal celebrations");
+
+    renderView({
+      catalog: {
+        ...catalog(),
+        authoritativeVersion: 2,
+        settings: { pricingSetupConfirmed: true, catalogRevision: 2 }
+      },
+      initialTab: "menu",
+      onSave: async () => ({ ok: true }),
+      onInteractionStateChange
+    });
+    await act(async () => Promise.resolve());
+
+    expect(container.querySelector('input[aria-label="New event type name"]').value)
+      .toBe("Seasonal celebrations");
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("A newer Library version is ready");
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const refresh = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.trim() === "Refresh latest catalog");
+    expect(refresh).toBeTruthy();
+    await act(async () => {
+      refresh.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.querySelector('input[aria-label="New event type name"]').value).toBe("");
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("latest Library version is loaded");
   });
 
   test("reflects submitting while the parent-owned saving prop is true", () => {

@@ -187,6 +187,27 @@ describe("quoteStore portal token policy", () => {
     expect(legacy.totals).not.toHaveProperty("serviceFeePctApplied");
   });
 
+  test("mirrors bounded decision-room terms and staff-marked options in local fallback", async () => {
+    seedQuotes([makeQuote({
+      quoteMeta: {
+        portalTermsText: "Deposit terms from the catering team.\nMenu choices close seven days before the event."
+      },
+      decidableOptionsProjection: [
+        { itemType: "addon", name: " Premium Bar ", price: 15, pricingType: "per_person" },
+        { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" },
+        { itemType: "service", name: "Unprojected service", price: 40, pricingType: "per_event" }
+      ]
+    })]);
+
+    const quote = await getPortalQuote("portal-key-12345678901234567890");
+    expect(quote.quoteMeta.portalTermsText).toBe(
+      "Deposit terms from the catering team.\nMenu choices close seven days before the event."
+    );
+    expect(quote.decidableOptions).toEqual([
+      { itemType: "addon", name: "Premium Bar", price: 15, pricingType: "per_person" }
+    ]);
+  });
+
   test("records the first portal view once and preserves its timestamp on reload", async () => {
     seedQuotes([makeQuote()]);
 

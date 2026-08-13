@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   getReleaseUatChecklist,
+  getReleaseUatProfilePlan,
   parseAttesterIds,
   parseReleaseApprovalMode,
   parseSoloOperatorIds,
@@ -41,6 +42,15 @@ export function getReleaseUatItemIdsForTarget(targetValue, root = ROOT) {
   return getReleaseUatChecklist(root).itemIdsByTarget[target];
 }
 
+export function getReleaseUatPlanForTarget(
+  targetValue,
+  candidateProfileValue,
+  root = ROOT
+) {
+  const target = requireReleaseTarget(targetValue);
+  return getReleaseUatProfilePlan(target, candidateProfileValue, root);
+}
+
 export function parseReleaseUatArgs(argv) {
   if (argv.length === 1 && argv[0] === "--print-digest") {
     return { printDigest: true };
@@ -50,6 +60,24 @@ export function parseReleaseUatArgs(argv) {
       throw attestationError("--print-items requires --target and one deployment target.");
     }
     return { printItems: true, target: requireReleaseTarget(argv[2]) };
+  }
+  if (argv[0] === "--print-plan") {
+    if (
+      argv.length !== 5
+      || argv[1] !== "--target"
+      || !argv[2]
+      || argv[3] !== "--candidate-profile"
+      || !argv[4]
+    ) {
+      throw attestationError(
+        "--print-plan requires --target and --candidate-profile."
+      );
+    }
+    return {
+      printPlan: true,
+      target: requireReleaseTarget(argv[2]),
+      candidateProfile: String(argv[4]).trim()
+    };
   }
   const allowed = new Set([
     "--release-sha",
@@ -254,6 +282,14 @@ function main() {
   }
   if (args.printItems) {
     process.stdout.write(`${getReleaseUatItemIdsForTarget(args.target, ROOT).join(",")}\n`);
+    return;
+  }
+  if (args.printPlan) {
+    process.stdout.write(`${JSON.stringify(
+      getReleaseUatPlanForTarget(args.target, args.candidateProfile, ROOT),
+      null,
+      2
+    )}\n`);
     return;
   }
   const receipt = buildReleaseUatReceipt(args, { root: ROOT });

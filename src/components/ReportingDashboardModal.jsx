@@ -1,12 +1,203 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { currency } from "../lib/quoteCalculator";
-import { getQuoteHistory } from "../lib/quoteStore";
-import { getProductAnalyticsSummary } from "../lib/productAnalytics";
+import { getQuoteById, getQuoteHistory } from "../lib/quoteStore";
+import { getProductAnalyticsSummary } from "../lib/productAnalyticsAmbient";
 
 export const REPORTING_QUOTE_LIMIT = 500;
 const REPORTING_MONTH_COUNT = 6;
 const QUOTE_STATUSES = new Set(["draft", "sent", "viewed", "accepted", "booked", "declined", "expired"]);
+const ReportingAmbientMetrics = lazy(() => import("./AmbientReportingMetrics"));
+
+export const REPORTING_ARRIVAL_SIGNAL_BY_SCOPE = Object.freeze({
+  opportunity: "opportunity-summary",
+  pipeline: "pipeline-summary",
+  operations: "ambient-interaction-health"
+});
+const REPORTING_ARRIVAL_TARGET_BY_INTENT = Object.freeze({
+  review_opportunity_report: Object.freeze({
+    reportScope: "opportunity",
+    reportSignal: "opportunity-summary"
+  }),
+  review_pipeline_report: Object.freeze({
+    reportScope: "pipeline",
+    reportSignal: "pipeline-summary"
+  }),
+  review_operational_report: Object.freeze({
+    reportScope: "operations",
+    reportSignal: "ambient-interaction-health"
+  })
+});
+
+function reportingArrivalTarget(context) {
+  return REPORTING_ARRIVAL_TARGET_BY_INTENT[String(context?.intentId || "").trim()] || null;
+}
+
+function reportingArrivalRecovery({
+  code,
+  reason,
+  nextResolution,
+  reportScope = "",
+  reportSignal = "",
+  quoteId = ""
+}) {
+  return Object.freeze({
+    status: "recovery",
+    code,
+    reportScope,
+    reportSignal,
+    quoteId,
+    reason,
+    consequence: "No nearby quote, aggregate, or reporting signal was substituted; the requested view remains unresolved.",
+    nextResolution
+  });
+}
+
+/**
+ * Resolves one Reporting arrival only from the evidence owned by its exact
+ * destination target. Targeted opportunity reads remain separate from the
+ * bounded aggregate collection so they cannot change a displayed denominator.
+ */
+export function buildReportingArrivalResolution({
+  context = null,
+  organizationId = "",
+  targetState = {},
+  reportingState = {}
+} = {}) {
+  if (context?.surfaceId !== "reporting") return null;
+
+  if (
+    context?.destination !== "reporting"
+    || context?.focusConsumerState !== "supported"
+  ) {
+    return reportingArrivalRecovery({
+      code: "unsupported_report_consumer",
+      reason: "This Reporting arrival does not name a supported exact-focus consumer.",
+      nextResolution: "Return to the originating object and choose a current supported Reporting view."
+    });
+  }
+
+  const reportScope = String(context?.focus?.reportScope || "").trim();
+  const quoteId = String(context?.focus?.quoteId || "").trim();
+  const objectType = String(context?.object?.type || "").trim();
+  const objectId = String(context?.object?.id || "").trim();
+  const intentTarget = reportingArrivalTarget(context);
+  const expectedSignal = intentTarget?.reportScope === reportScope
+    ? intentTarget.reportSignal
+    : "";
+  const reportSignal = String(context?.focus?.reportSignal || expectedSignal).trim();
+  const common = { reportScope, reportSignal, quoteId };
+
+  if (!expectedSignal || reportSignal !== expectedSignal) {
+    return reportingArrivalRecovery({
+      ...common,
+      code: "unsupported_report_target",
+      reason: "The requested Reporting signal does not match a supported exact target for this scope.",
+      nextResolution: "Return to the originating object and choose a current supported Reporting view."
+    });
+  }
+
+  const exactObjectMatches = reportScope === "opportunity"
+    ? objectType === "opportunity" && objectId === quoteId
+    : objectType === "report-signal" && objectId === reportSignal;
+  if (!exactObjectMatches) {
+    return reportingArrivalRecovery({
+      ...common,
+      code: "report_object_mismatch",
+      reason: "The requested Reporting object does not match the exact target named by this arrival.",
+      nextResolution: "Return to the originating object and reopen its exact Reporting action."
+    });
+  }
+
+  if (reportScope === "opportunity") {
+    const expectedOrganizationId = String(organizationId || "").trim();
+    if (!quoteId || !expectedOrganizationId) {
+      return reportingArrivalRecovery({
+        ...common,
+        code: "opportunity_scope_incomplete",
+        reason: "The exact opportunity and organization scope required for this report are unavailable.",
+        nextResolution: "Restore the organization workspace, then reopen this opportunity report."
+      });
+    }
+    if (String(targetState?.requestedQuoteId || "").trim() !== quoteId) {
+      return Object.freeze({ status: "pending", ...common });
+    }
+    if (targetState?.loading || !targetState?.completed) {
+      return Object.freeze({ status: "pending", ...common });
+    }
+    if (targetState?.error || !targetState?.quote) {
+      return reportingArrivalRecovery({
+        ...common,
+        code: "opportunity_unavailable",
+        reason: "The exact opportunity could not be loaded from its targeted reporting read.",
+        nextResolution: "Refresh the exact opportunity report or return to the originating opportunity."
+      });
+    }
+
+    const loadedQuoteId = String(targetState.quote?.id || "").trim();
+    const loadedOrganizationId = String(targetState.quote?.organizationId || "").trim();
+    if (loadedQuoteId !== quoteId || loadedOrganizationId !== expectedOrganizationId) {
+      return reportingArrivalRecovery({
+        ...common,
+        code: "opportunity_identity_mismatch",
+        reason: "The targeted read did not return the exact opportunity inside the active organization.",
+        nextResolution: "Keep this arrival unresolved and reopen the report from the exact opportunity."
+      });
+    }
+
+    return Object.freeze({
+      status: "resolved",
+      targetId: "reporting-opportunity-summary",
+      quote: targetState.quote,
+      ...common
+    });
+  }
+
+  const hasCompletedRead = Boolean(reportingState?.loadedAtISO);
+  if (reportingState?.loading || !hasCompletedRead) {
+    return Object.freeze({ status: "pending", ...common });
+  }
+  if (reportingState?.error) {
+    return reportingArrivalRecovery({
+      ...common,
+      code: "report_snapshot_stale",
+      reason: "The exact Reporting target is available only in a retained snapshot whose refresh failed.",
+      nextResolution: "Refresh Reporting before relying on this exact view."
+    });
+  }
+
+  if (reportScope === "pipeline") {
+    if (reportingState?.truncated) {
+      return reportingArrivalRecovery({
+        ...common,
+        code: "pipeline_snapshot_truncated",
+        reason: "The bounded quote read is truncated, so the exact pipeline view cannot be presented as a complete tenant snapshot.",
+        nextResolution: "Narrow the reporting question or use a complete governed reporting source."
+      });
+    }
+    return Object.freeze({
+      status: "resolved",
+      targetId: "reporting-pipeline-summary",
+      ...common
+    });
+  }
+
+  const analyticsAvailable = reportingState?.analytics?.source === "firebase"
+    && !reportingState?.analytics?.error;
+  if (!analyticsAvailable) {
+    return reportingArrivalRecovery({
+      ...common,
+      code: "interaction_health_unavailable",
+      reason: "The exact interaction-health summary is unavailable from the current Reporting evidence.",
+      nextResolution: "Refresh Reporting after the same-tenant product-event summary is available."
+    });
+  }
+  return Object.freeze({
+    status: "resolved",
+    targetId: "reporting-ambient-interaction-health",
+    ...common
+  });
+}
 
 function finiteMoney(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -220,6 +411,29 @@ function reportingRate(value) {
   return Number.isFinite(value) ? `${value.toFixed(1)}%` : "Not available";
 }
 
+function ReportingAmbientMetricsFallback({ loading = false }) {
+  return (
+    <section
+      className="dashboard-section"
+      aria-labelledby="ambient-interaction-health-heading"
+      data-reporting-state={loading ? "loading" : "unavailable"}
+    >
+      <div className="dashboard-section-head">
+        <div>
+          <h3 id="ambient-interaction-health-heading">Ambient interaction health</h3>
+          <p className="source-note">Client-observed Ambient workspace signals</p>
+        </div>
+        <strong>{loading ? "Loading" : "Not enabled"}</strong>
+      </div>
+      <p className="source-note" role="status">
+        {loading
+          ? "Loading Ambient interaction measures."
+          : "Ambient interaction measures are available only when the Ambient workspace is enabled. No rate or duration is inferred."}
+      </p>
+    </section>
+  );
+}
+
 export function getReportingCapabilityState(state = {}, metrics = {}) {
   const hasCompletedRead = Boolean(state.loadedAtISO);
   if (state.loading && !hasCompletedRead) return "loading";
@@ -333,12 +547,48 @@ export function ReportingDashboardView({
   presentation = "embedded",
   organizationId = "",
   addons = [],
+  arrivalContext = null,
+  onArrivalResolution = null,
   returnFocusRef = null
 }) {
   const embedded = presentation === "embedded";
   const routeHeadingRef = useRef(null);
+  const opportunitySummaryRef = useRef(null);
+  const pipelineSummaryRef = useRef(null);
+  const interactionHealthRef = useRef(null);
   const requestGenerationRef = useRef(0);
+  const arrivalGenerationRef = useRef(0);
+  const arrivalReportRef = useRef("");
   const initialNowISORef = useRef(new Date().toISOString());
+  const [focusedArrivalKey, setFocusedArrivalKey] = useState("");
+  const [arrivalRetryToken, setArrivalRetryToken] = useState(0);
+  const exactArrivalActive = Boolean(
+    open
+    && arrivalContext?.surfaceId === "reporting"
+    && arrivalContext?.destination === "reporting"
+    && arrivalContext?.focusConsumerState === "supported"
+  );
+  const arrivalReportScope = exactArrivalActive
+    ? String(arrivalContext?.focus?.reportScope || "").trim()
+    : "";
+  const arrivalQuoteId = exactArrivalActive
+    ? String(arrivalContext?.focus?.quoteId || "").trim()
+    : "";
+  const arrivalReportSignal = exactArrivalActive
+    ? String(
+        arrivalContext?.focus?.reportSignal
+        || reportingArrivalTarget(arrivalContext)?.reportSignal
+        || ""
+      ).trim()
+    : "";
+  const arrivalKey = exactArrivalActive
+    ? [
+        arrivalContext?.object?.id,
+        arrivalReportScope,
+        arrivalQuoteId,
+        arrivalReportSignal
+      ].map((value) => String(value || "").trim()).join(":")
+    : "";
   const [state, setState] = useState({
     loading: Boolean(open),
     error: "",
@@ -349,6 +599,35 @@ export function ReportingDashboardView({
     limit: REPORTING_QUOTE_LIMIT,
     loadedAtISO: ""
   });
+  const [targetState, setTargetState] = useState({
+    requestedQuoteId: "",
+    loading: false,
+    completed: false,
+    error: false,
+    quote: null
+  });
+
+  const reportArrivalResolution = useCallback((resolution) => {
+    if (!exactArrivalActive || typeof onArrivalResolution !== "function") return;
+    const next = {
+      ...resolution,
+      focus: {
+        reportScope: arrivalReportScope,
+        quoteId: arrivalQuoteId,
+        reportSignal: arrivalReportSignal
+      }
+    };
+    const signature = JSON.stringify(next);
+    if (arrivalReportRef.current === signature) return;
+    arrivalReportRef.current = signature;
+    onArrivalResolution(next);
+  }, [
+    arrivalQuoteId,
+    arrivalReportScope,
+    arrivalReportSignal,
+    exactArrivalActive,
+    onArrivalResolution
+  ]);
 
   const load = useCallback(async () => {
     const generation = requestGenerationRef.current + 1;
@@ -398,10 +677,89 @@ export function ReportingDashboardView({
     };
   }, [load, open]);
 
+  useEffect(() => {
+    arrivalReportRef.current = "";
+    setFocusedArrivalKey("");
+    if (exactArrivalActive) reportArrivalResolution({ status: "pending" });
+  }, [arrivalKey, exactArrivalActive, reportArrivalResolution]);
+
+  useEffect(() => {
+    const generation = arrivalGenerationRef.current + 1;
+    arrivalGenerationRef.current = generation;
+    if (!exactArrivalActive || arrivalReportScope !== "opportunity") {
+      setTargetState({
+        requestedQuoteId: "",
+        loading: false,
+        completed: false,
+        error: false,
+        quote: null
+      });
+      return undefined;
+    }
+
+    if (!arrivalQuoteId || !String(organizationId || "").trim()) {
+      setTargetState({
+        requestedQuoteId: arrivalQuoteId,
+        loading: false,
+        completed: true,
+        error: true,
+        quote: null
+      });
+      return undefined;
+    }
+
+    setTargetState({
+      requestedQuoteId: arrivalQuoteId,
+      loading: true,
+      completed: false,
+      error: false,
+      quote: null
+    });
+    getQuoteById(arrivalQuoteId)
+      .then((quote) => {
+        if (arrivalGenerationRef.current !== generation) return;
+        setTargetState({
+          requestedQuoteId: arrivalQuoteId,
+          loading: false,
+          completed: true,
+          error: false,
+          quote
+        });
+      })
+      .catch(() => {
+        if (arrivalGenerationRef.current !== generation) return;
+        setTargetState({
+          requestedQuoteId: arrivalQuoteId,
+          loading: false,
+          completed: true,
+          error: true,
+          quote: null
+        });
+      });
+
+    return () => {
+      arrivalGenerationRef.current += 1;
+    };
+  }, [
+    arrivalKey,
+    arrivalQuoteId,
+    arrivalReportScope,
+    arrivalRetryToken,
+    exactArrivalActive,
+    organizationId
+  ]);
+
   const metrics = useMemo(() => buildReportingMetrics(state.quotes, {
     nowDate: new Date(state.loadedAtISO || initialNowISORef.current),
     source: state.source
   }), [state.loadedAtISO, state.quotes, state.source]);
+
+  const arrivalResolution = useMemo(() => buildReportingArrivalResolution({
+    context: exactArrivalActive ? arrivalContext : null,
+    organizationId,
+    targetState,
+    reportingState: state
+  }), [arrivalContext, exactArrivalActive, organizationId, state, targetState]);
 
   const addonNames = useMemo(() => new Map(
     (Array.isArray(addons) ? addons : []).map((item) => [
@@ -424,11 +782,81 @@ export function ReportingDashboardView({
     return () => window.cancelAnimationFrame(frame);
   }, [embedded, open]);
 
+  useEffect(() => {
+    if (!exactArrivalActive || !arrivalResolution) return undefined;
+    if (arrivalResolution.status === "pending") {
+      reportArrivalResolution({ status: "pending" });
+      return undefined;
+    }
+    if (arrivalResolution.status === "recovery") {
+      reportArrivalResolution(arrivalResolution);
+      return undefined;
+    }
+
+    const targetRef = arrivalResolution.reportSignal === "opportunity-summary"
+      ? opportunitySummaryRef
+      : arrivalResolution.reportSignal === "pipeline-summary"
+        ? pipelineSummaryRef
+        : interactionHealthRef;
+    const frames = [];
+    const firstFrame = window.requestAnimationFrame(() => {
+      const secondFrame = window.requestAnimationFrame(() => {
+        const target = targetRef.current;
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+        target?.focus({ preventScroll: true });
+        if (target && document.activeElement === target) {
+          setFocusedArrivalKey(arrivalKey);
+          reportArrivalResolution({
+            status: "resolved",
+            itemId: arrivalResolution.reportSignal
+          });
+          return;
+        }
+        reportArrivalResolution(reportingArrivalRecovery({
+          reportScope: arrivalResolution.reportScope,
+          reportSignal: arrivalResolution.reportSignal,
+          quoteId: arrivalResolution.quoteId,
+          code: "report_target_focus_failed",
+          reason: "The exact Reporting target was loaded, but its focused review state could not be opened.",
+          nextResolution: "Refresh Reporting or reopen this exact report from the originating object."
+        }));
+      });
+      frames.push(secondFrame);
+    });
+    frames.push(firstFrame);
+    return () => frames.forEach((frame) => window.cancelAnimationFrame(frame));
+  }, [
+    arrivalKey,
+    arrivalResolution,
+    exactArrivalActive,
+    reportArrivalResolution
+  ]);
+
+  const retryReporting = useCallback(() => {
+    if (exactArrivalActive && arrivalReportScope === "opportunity") {
+      setArrivalRetryToken((value) => value + 1);
+    }
+    return load();
+  }, [arrivalReportScope, exactArrivalActive, load]);
+
+  const arrivalTargetAttributes = (reportSignal) => (
+    exactArrivalActive && arrivalReportSignal === reportSignal
+      ? {
+          tabIndex: -1,
+          "data-arrival-focus": focusedArrivalKey === arrivalKey ? "resolved" : "requested",
+          "data-report-scope": arrivalReportScope,
+          "data-report-signal": arrivalReportSignal,
+          ...(arrivalQuoteId ? { "data-report-quote-id": arrivalQuoteId } : {})
+        }
+      : {}
+  );
+
   if (!open) return null;
 
   return (
     <div
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      data-layout-overlap-allowed={embedded ? undefined : "true"}
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="reporting-dashboard-title"
@@ -458,9 +886,57 @@ export function ReportingDashboardView({
           </div>
         </div>
 
-        <ReportingEvidenceRail state={state} metrics={metrics} onRetry={load} />
+        {arrivalResolution?.status === "resolved"
+          && arrivalResolution.reportSignal === "opportunity-summary" && (
+          <section
+            className="dashboard-section reporting-arrival-opportunity"
+            id="reporting-opportunity-summary"
+            ref={opportunitySummaryRef}
+            aria-labelledby="reporting-opportunity-summary-heading"
+            {...arrivalTargetAttributes("opportunity-summary")}
+          >
+            <div className="dashboard-section-head">
+              <div>
+                <p className="eyebrow">Focused opportunity</p>
+                <h3 id="reporting-opportunity-summary-heading">
+                  {arrivalResolution.quote?.event?.name
+                    || arrivalResolution.quote?.quoteNumber
+                    || "Opportunity summary"}
+                </h3>
+              </div>
+              <strong>{String(arrivalResolution.quote?.status || "Status unavailable")}</strong>
+            </div>
+            <div className="status-strip">
+              <span>Quote: {arrivalResolution.quote?.quoteNumber || "Not recorded"}</span>
+              <span>
+                Total: {reportingMoney(
+                  finiteMoney(arrivalResolution.quote?.totals?.total) || 0,
+                  finiteMoney(arrivalResolution.quote?.totals?.total) === null ? 0 : 1
+                )}
+              </span>
+              <span>
+                Deposit: {reportingMoney(
+                  finiteMoney(arrivalResolution.quote?.totals?.deposit) || 0,
+                  finiteMoney(arrivalResolution.quote?.totals?.deposit) === null ? 0 : 1
+                )}
+              </span>
+            </div>
+            <p className="source-note">
+              This targeted same-organization read is shown separately. It is not added to the
+              aggregate displayed-record denominator below.
+            </p>
+          </section>
+        )}
 
-        <div className="dashboard-grid" aria-label="Commercial measures from displayed quote records">
+        <ReportingEvidenceRail state={state} metrics={metrics} onRetry={retryReporting} />
+
+        <div
+          className="dashboard-grid"
+          id="reporting-pipeline-summary"
+          ref={pipelineSummaryRef}
+          aria-label="Recorded quote measures from displayed records"
+          {...arrivalTargetAttributes("pipeline-summary")}
+        >
           <div className="metric-card">
             <span>Loaded Quotes</span>
             <strong>{state.loadedAtISO ? metrics.quotes : "Not available"}</strong>
@@ -514,6 +990,16 @@ export function ReportingDashboardView({
           <span>Recorded Payment Refunded: {metrics.paymentRefunded}</span>
           {metrics.statusUnknown > 0 && <span>Lifecycle unavailable: {metrics.statusUnknown}</span>}
           {metrics.paymentUnknown > 0 && <span>Deposit state unavailable: {metrics.paymentUnknown}</span>}
+        </div>
+
+        <div
+          id="reporting-ambient-interaction-health"
+          ref={interactionHealthRef}
+          {...arrivalTargetAttributes("ambient-interaction-health")}
+        >
+          <Suspense fallback={<ReportingAmbientMetricsFallback loading />}>
+            <ReportingAmbientMetrics analytics={state.analytics} loading={state.loading} />
+          </Suspense>
         </div>
 
         <section className="dashboard-section" aria-labelledby="wizard-funnel-heading">

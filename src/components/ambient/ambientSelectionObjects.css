@@ -1,0 +1,347 @@
+.ambient-selection-groups,
+.ambient-selection-group,
+.ambient-selection-group > div,
+.ambient-selection-object,
+.ambient-selection-object__dependencies,
+.ambient-selection-object__dependencies ul {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ambient-selection-group > h3 {
+  margin: 0;
+  color: var(--ambient-muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.ambient-selection-object {
+  touch-action: pan-y;
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--ambient-lavender-local) 24%, var(--ambient-hairline));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ambient-lavender-local) 5%, rgba(255, 255, 255, 0.74));
+}
+
+.ambient-selection-object[data-scenario-state="changed"] {
+  border-color: color-mix(in srgb, var(--ambient-teal-local) 48%, var(--ambient-hairline));
+  background: color-mix(in srgb, var(--ambient-teal-local) 7%, rgba(255, 255, 255, 0.74));
+}
+
+.ambient-selection-object__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+  gap: 18px;
+  align-items: start;
+}
+
+.ambient-selection-object__header > div,
+.ambient-selection-object__quantity,
+.ambient-selection-object__recommendation > div {
+  min-width: 0;
+}
+
+.ambient-selection-object__header span,
+.ambient-selection-object__quantity small,
+.ambient-selection-object__header p,
+.ambient-selection-object__provenance,
+.ambient-selection-object__recommendation small {
+  color: var(--ambient-muted);
+  overflow-wrap: anywhere;
+}
+
+.ambient-selection-object__header span,
+.ambient-selection-object__quantity span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.ambient-selection-object__header h3,
+.ambient-selection-object__header p,
+.ambient-selection-object__quantity strong,
+.ambient-selection-object__quantity small,
+.ambient-selection-object__facts,
+.ambient-selection-object__dependencies h4,
+.ambient-selection-object__dependencies ul,
+.ambient-selection-object__recommendation h4,
+.ambient-selection-object__recommendation p,
+.ambient-selection-object__counterfactuals h4,
+.ambient-selection-object__counterfactuals p,
+.ambient-selection-object__provenance,
+.ambient-selection-object__boundary {
+  margin: 0;
+}
+
+.ambient-selection-object__header h3 {
+  margin-top: 3px;
+  color: var(--ambient-ink);
+  font-size: 1.05rem;
+}
+
+.ambient-selection-object__header p {
+  margin-top: 5px;
+  font-size: 0.82rem;
+}
+
+.ambient-selection-object__quantity {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  text-align: right;
+}
+
+.ambient-selection-object__quantity strong {
+  color: var(--ambient-ink);
+  font-size: 0.98rem;
+  overflow-wrap: anywhere;
+}
+
+.ambient-selection-object__quantity small {
+  font-size: 0.76rem;
+}
+
+.ambient-selection-object__controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ambient-selection-object__controls button,
+.ambient-selection-object__recommendation button {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, var(--ambient-teal-local) 34%, var(--ambient-hairline));
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ambient-ink);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.ambient-selection-object__controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.ambient-selection-object__controls button:not(:disabled):hover,
+.ambient-selection-object__controls button:not(:disabled):focus-visible,
+.ambient-selection-object__recommendation button:not(:disabled):hover,
+.ambient-selection-object__recommendation button:not(:disabled):focus-visible {
+  border-color: var(--ambient-teal-local);
+  background: color-mix(in srgb, var(--ambient-teal-local) 8%, rgba(255, 255, 255, 0.86));
+}
+
+.ambient-selection-object__controls button:active,
+.ambient-selection-object__recommendation button:active {
+  transform: translateY(1px);
+}
+
+.ambient-selection-object__controls button:disabled {
+  opacity: 0.45;
+}
+
+.ambient-selection-object__controls > p {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  margin: 2px 0 0;
+  color: var(--ambient-muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.ambient-selection-object__controls > p svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.ambient-selection-object__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ambient-selection-object__facts > div {
+  min-width: 0;
+  padding: 10px 11px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ambient-lavender-local) 8%, rgba(255, 255, 255, 0.76));
+}
+
+.ambient-selection-object__facts dt {
+  color: var(--ambient-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.ambient-selection-object__facts dd {
+  margin: 4px 0 0;
+  color: var(--ambient-ink);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.ambient-selection-object__dependencies h4,
+.ambient-selection-object__recommendation h4,
+.ambient-selection-object__counterfactuals h4 {
+  color: var(--ambient-ink);
+  font-size: 0.82rem;
+}
+
+.ambient-selection-object__dependencies ul {
+  list-style: none;
+  padding: 0;
+}
+
+.ambient-selection-object__dependencies li {
+  display: grid;
+  grid-template-columns: minmax(104px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+}
+
+.ambient-selection-object__dependencies strong,
+.ambient-selection-object__dependencies span {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.ambient-selection-object__dependencies span {
+  color: var(--ambient-muted);
+  line-height: 1.45;
+}
+
+.ambient-selection-object__recommendation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 13px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ambient-mint-local) 16%, rgba(255, 255, 255, 0.76));
+}
+
+.ambient-selection-object__recommendation > svg {
+  margin-top: 1px;
+  color: var(--ambient-mint-local);
+}
+
+.ambient-selection-object__recommendation p {
+  margin-top: 4px;
+  color: var(--ambient-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.ambient-selection-object__recommendation small {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.ambient-selection-object__recommendation button {
+  margin-top: 9px;
+  padding: 8px 12px;
+}
+
+.ambient-selection-object__counterfactuals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ambient-selection-object__counterfactuals > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+  align-content: start;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ambient-mint-local) 10%, rgba(255, 255, 255, 0.76));
+}
+
+.ambient-selection-object__counterfactuals > div:last-child {
+  background: color-mix(in srgb, var(--ambient-coral-local) 9%, rgba(255, 255, 255, 0.76));
+}
+
+.ambient-selection-object__counterfactuals svg {
+  grid-row: 1 / span 2;
+  margin-top: 1px;
+  color: var(--ambient-mint-local);
+}
+
+.ambient-selection-object__counterfactuals > div:last-child svg {
+  color: var(--ambient-coral-local);
+}
+
+.ambient-selection-object__counterfactuals p {
+  color: var(--ambient-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ambient-selection-object__provenance,
+.ambient-selection-object__boundary {
+  color: var(--ambient-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.ambient-selection-object__provenance strong {
+  color: var(--ambient-ink);
+}
+
+@media (max-width: 767px) {
+  .ambient-selection-object {
+    padding: 14px;
+  }
+
+  .ambient-selection-object__header,
+  .ambient-selection-object__facts,
+  .ambient-selection-object__counterfactuals {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ambient-selection-object__quantity {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .ambient-selection-object__dependencies li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+}
+
+@media (max-width: 430px) {
+  .ambient-selection-object__controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ambient-selection-object__controls > p {
+    grid-column: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-selection-object__controls button,
+  .ambient-selection-object__recommendation button {
+    transition: none;
+  }
+}

@@ -1,0 +1,383 @@
+.ambient-proposal-context {
+  display: grid;
+  gap: 1.15rem;
+  min-width: 0;
+  color: var(--ambient-ink, var(--ink, #1d2523));
+  overflow-wrap: anywhere;
+}
+
+.ambient-proposal-context h3,
+.ambient-proposal-context h4,
+.ambient-proposal-context p,
+.ambient-proposal-context ul,
+.ambient-proposal-context ol,
+.ambient-proposal-context dl,
+.ambient-proposal-context dd {
+  margin: 0;
+}
+
+.ambient-proposal-context ul,
+.ambient-proposal-context ol {
+  padding: 0;
+  list-style: none;
+}
+
+.ambient-proposal-context__intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--ambient-hairline, rgb(29 37 35 / 16%));
+}
+
+.ambient-proposal-context__intro > div:first-child {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.ambient-proposal-context__intro h3 {
+  font-family: var(--font-editorial, Georgia, serif);
+  font-size: clamp(1.25rem, 5vw, 1.75rem);
+  font-weight: 560;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.ambient-proposal-context__intro p,
+.ambient-proposal-context__section-heading p,
+.ambient-proposal-context__boundary {
+  color: var(--ambient-muted, var(--muted, #66706d));
+  font-size: 0.76rem;
+  line-height: 1.48;
+}
+
+.ambient-proposal-context__total {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 8.5rem;
+  text-align: right;
+}
+
+.ambient-proposal-context__total span,
+.ambient-proposal-context__evidence article > span,
+.ambient-proposal-context__judgment dt {
+  color: var(--ambient-muted, var(--muted, #66706d));
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.ambient-proposal-context__total strong {
+  font-family: var(--font-editorial, Georgia, serif);
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.ambient-proposal-context__state {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.19rem 0.48rem;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 999px;
+  color: #245f7d;
+  background: #e8f3f7;
+  font-size: 0.64rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.ambient-proposal-context__state.is-current,
+.ambient-proposal-context__state.is-available,
+.ambient-proposal-context__state.is-current_authoritative {
+  color: #205e46;
+  background: #e7f5ed;
+}
+
+.ambient-proposal-context__state.is-needs_resolution,
+.ambient-proposal-context__state.is-partial,
+.ambient-proposal-context__state.is-requires_authoritative_reprice,
+.ambient-proposal-context__state.is-requires_rotation,
+.ambient-proposal-context__state.is-provider_accepted_portal_inactive,
+.ambient-proposal-context__state.is-governed_resolution {
+  color: #6f561c;
+  background: #fff4d8;
+}
+
+.ambient-proposal-context__state.is-unavailable,
+.ambient-proposal-context__state.is-malformed,
+.ambient-proposal-context__state.is-stale,
+.ambient-proposal-context__state.is-stale_revision,
+.ambient-proposal-context__state.is-expired,
+.ambient-proposal-context__state.is-blocked,
+.ambient-proposal-context__state.is-failed,
+.ambient-proposal-context__state.is-outcome_ambiguous,
+.ambient-proposal-context__state.is-outcome_unknown {
+  color: #8f2f25;
+  background: #fcecea;
+}
+
+.ambient-proposal-context__state.is-local_preview,
+.ambient-proposal-context__state.is-local_unverified,
+.ambient-proposal-context__state.is-not_needed,
+.ambient-proposal-context__state.is-not_recorded,
+.ambient-proposal-context__state.is-absent {
+  color: #4b5660;
+  background: #f1f3f2;
+}
+
+.ambient-proposal-context__projection,
+.ambient-proposal-context__readiness,
+.ambient-proposal-context__evidence,
+.ambient-proposal-context__actions,
+.ambient-proposal-context__dependencies {
+  display: grid;
+  gap: 0.72rem;
+  min-width: 0;
+}
+
+.ambient-proposal-context__section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.ambient-proposal-context__section-heading > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.ambient-proposal-context h4 {
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.ambient-proposal-context__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem 1rem;
+}
+
+.ambient-proposal-context__facts > div {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.ambient-proposal-context__facts dt {
+  color: var(--ambient-muted, var(--muted, #66706d));
+  font-size: 0.65rem;
+  font-weight: 760;
+}
+
+.ambient-proposal-context__facts dd {
+  font-size: 0.84rem;
+  font-weight: 680;
+  line-height: 1.4;
+}
+
+.ambient-proposal-context__gaps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.ambient-proposal-context__gaps li {
+  display: grid;
+  gap: 0.17rem;
+  min-width: 0;
+  padding: 0.62rem;
+  border-left: 3px solid var(--ambient-coral-local, var(--ambient-coral, #c76855));
+  background: color-mix(in srgb, var(--ambient-coral-local, var(--ambient-coral, #c76855)) 8%, transparent);
+}
+
+.ambient-proposal-context__gaps span {
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.ambient-proposal-context__gaps small,
+.ambient-proposal-context__actions small,
+.ambient-proposal-context__judgment small {
+  color: var(--ambient-muted, var(--muted, #66706d));
+  font-size: 0.68rem;
+  line-height: 1.42;
+}
+
+.ambient-proposal-context__caught-up {
+  padding: 0.68rem 0.75rem;
+  border-left: 3px solid var(--ambient-mint-local, var(--ambient-mint, #70a889));
+  background: color-mix(in srgb, var(--ambient-mint-local, var(--ambient-mint, #70a889)) 10%, transparent);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.ambient-proposal-context__evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.ambient-proposal-context__evidence article {
+  display: grid;
+  align-content: start;
+  gap: 0.22rem;
+  min-width: 0;
+  padding-top: 0.68rem;
+  border-top: 1px solid var(--ambient-hairline, rgb(29 37 35 / 16%));
+}
+
+.ambient-proposal-context__evidence article > strong {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-transform: capitalize;
+}
+
+.ambient-proposal-context__evidence article > p {
+  color: var(--ambient-muted, var(--muted, #66706d));
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.ambient-proposal-context__actions ol {
+  display: grid;
+  gap: 0;
+}
+
+.ambient-proposal-context__actions li {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.72rem 0;
+  border-top: 1px solid var(--ambient-hairline, rgb(29 37 35 / 16%));
+}
+
+.ambient-proposal-context__actions li:last-child {
+  border-bottom: 1px solid var(--ambient-hairline, rgb(29 37 35 / 16%));
+}
+
+.ambient-proposal-context__actions li > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.ambient-proposal-context__actions li > div > strong {
+  min-width: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.ambient-proposal-context__actions li > p {
+  color: var(--ambient-muted, var(--muted, #66706d));
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.ambient-proposal-context__judgment {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem;
+  border-left: 3px solid var(--ambient-gold-local, var(--ambient-gold, #b9852e));
+  background: color-mix(in srgb, var(--ambient-gold-local, var(--ambient-gold, #b9852e)) 8%, transparent);
+}
+
+.ambient-proposal-context__judgment > div {
+  display: grid;
+  gap: 0.17rem;
+  min-width: 0;
+}
+
+.ambient-proposal-context__judgment dd {
+  display: grid;
+  gap: 0.12rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.ambient-proposal-context__judgment dd > strong {
+  text-transform: capitalize;
+}
+
+.ambient-proposal-context__dependencies ul {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ambient-proposal-context__dependencies li {
+  display: grid;
+  grid-template-columns: minmax(6rem, 0.32fr) minmax(0, 1fr);
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.ambient-proposal-context__dependencies strong,
+.ambient-proposal-context__dependencies span {
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.ambient-proposal-context__dependencies span {
+  color: var(--ambient-muted, var(--muted, #66706d));
+}
+
+.ambient-proposal-context--unavailable {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.82rem;
+  border: 1px solid #dba69f;
+  border-radius: 0.75rem;
+  color: var(--ambient-ink, var(--ink, #1d2523));
+  background: #fff1ef;
+  overflow-wrap: anywhere;
+}
+
+.ambient-proposal-context--unavailable p {
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .ambient-proposal-context__intro,
+  .ambient-proposal-context__section-heading,
+  .ambient-proposal-context__actions li > div {
+    display: grid;
+  }
+
+  .ambient-proposal-context__total {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .ambient-proposal-context__facts,
+  .ambient-proposal-context__gaps,
+  .ambient-proposal-context__evidence-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ambient-proposal-context__dependencies li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+  }
+}
+
+@media (forced-colors: active) {
+  .ambient-proposal-context__state,
+  .ambient-proposal-context__gaps li,
+  .ambient-proposal-context__caught-up,
+  .ambient-proposal-context__judgment,
+  .ambient-proposal-context--unavailable {
+    border: 1px solid CanvasText;
+    color: CanvasText;
+    background: Canvas;
+    forced-color-adjust: auto;
+  }
+}

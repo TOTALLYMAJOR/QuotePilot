@@ -32,7 +32,7 @@ const LOCAL_EVENT_TYPES = (() => {
   });
   return sortByName(items);
 })();
-const LOCAL_CATALOG_KEY = "quoteWizard.catalog";
+const LEGACY_LOCAL_CATALOG_KEY = "quoteWizard.catalog";
 const LOCAL_MENU_KEY_PREFIX = "quoteWizard.menuCatalog";
 
 function localStorageApi() {
@@ -41,12 +41,29 @@ function localStorageApi() {
   return storage;
 }
 
-function localMenuScope(organizationId = "") {
-  return resolveScopedOrganizationId(organizationId) || "local";
+function localStorageScopeSuffix(organizationId = "") {
+  const resolvedOrganizationId = resolveScopedOrganizationId(organizationId);
+  return resolvedOrganizationId
+    ? `.${encodeURIComponent(resolvedOrganizationId)}`
+    : "::device";
 }
 
 function localMenuKey(organizationId = "") {
-  return `${LOCAL_MENU_KEY_PREFIX}.${localMenuScope(organizationId)}`;
+  return `${LOCAL_MENU_KEY_PREFIX}${localStorageScopeSuffix(organizationId)}`;
+}
+
+function localCatalogKey(organizationId = "") {
+  return `${LEGACY_LOCAL_CATALOG_KEY}${localStorageScopeSuffix(organizationId)}`;
+}
+
+function readLocalCatalogRevision(organizationId = "", fallback = 0) {
+  try {
+    const cached = JSON.parse(localStorageApi().getItem(localCatalogKey(organizationId)) || "null");
+    const revision = Number(cached?.settings?.catalogRevision);
+    return Number.isSafeInteger(revision) && revision >= 0 ? revision : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function buildLocalMenuSeed() {
@@ -105,11 +122,12 @@ function localId(prefix) {
   return `${prefix}-${uuid || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 }
 
-function updateLocalCatalogSettings(catalogRevision) {
+function updateLocalCatalogSettings(catalogRevision, organizationId = "") {
   const storage = localStorageApi();
+  const scopedKey = localCatalogKey(organizationId);
   let cached = null;
   try {
-    cached = JSON.parse(storage.getItem(LOCAL_CATALOG_KEY) || "null");
+    cached = JSON.parse(storage.getItem(scopedKey) || "null");
   } catch {
     cached = null;
   }
@@ -129,28 +147,49 @@ function updateLocalCatalogSettings(catalogRevision) {
     pricingConfirmation: null,
     updatedAtISO: new Date().toISOString()
   };
-  storage.setItem(LOCAL_CATALOG_KEY, JSON.stringify({
+  storage.setItem(scopedKey, JSON.stringify({
     ...source,
     settings: catalogSettings
   }));
   return catalogSettings;
 }
 
-function commitLocalMenuMutation(organizationId, mutate) {
+function expectedRevision(value) {
+  const revision = Number(value);
+  if (!Number.isSafeInteger(revision) || revision < 0) {
+    throw new Error("expectedCatalogRevision is required for menu changes.");
+  }
+  return revision;
+}
+
+function assertExpectedRevision(currentRevision, expectedCatalogRevision) {
+  const expected = expectedRevision(expectedCatalogRevision);
+  if (currentRevision === expected) return;
+  const error = new Error(
+    `Catalog revision changed from ${expected} to ${currentRevision}. Refresh before saving.`
+  );
+  error.code = "aborted";
+  throw error;
+}
+
+function commitLocalMenuMutation(organizationId, expectedCatalogRevision, mutate) {
+  const expected = expectedRevision(expectedCatalogRevision);
   const current = readLocalMenuState(organizationId);
+  const currentRevision = readLocalCatalogRevision(organizationId, current.revision);
+  assertExpectedRevision(currentRevision, expected);
   const next = {
-    revision: current.revision,
+    revision: currentRevision,
     eventTypes: current.eventTypes.map((item) => ({ ...item })),
     categories: current.categories.map((item) => ({ ...item })),
     items: current.items.map((item) => ({ ...item }))
   };
   const result = mutate(next) || {};
-  next.revision = current.revision + 1;
+  next.revision = currentRevision + 1;
   writeLocalMenuState(organizationId, next);
   return {
     ...result,
     catalogRevision: next.revision,
-    catalogSettings: updateLocalCatalogSettings(next.revision)
+    catalogSettings: updateLocalCatalogSettings(next.revision, organizationId)
   };
 }
 
@@ -200,7 +239,13 @@ export function isMenuCatalogRevisionConflict(error) {
   return code === "aborted" || message.includes("catalog revision changed");
 }
 
-async function commitCatalogMutation(organizationId, updatedAtISO, applyWrites) {
+async function commitCatalogMutation(
+  organizationId,
+  updatedAtISO,
+  expectedCatalogRevision,
+  applyWrites
+) {
+  const expected = expectedRevision(expectedCatalogRevision);
   const settingsRef = orgDocRef("settings", "config", organizationId);
   return runTransaction(db, async (transaction) => {
     const settingsSnapshot = await transaction.get(settingsRef);
@@ -209,6 +254,7 @@ async function commitCatalogMutation(organizationId, updatedAtISO, applyWrites) 
     }
     const currentSettings = settingsSnapshot.data() || {};
     const currentRevision = Math.max(0, Number(currentSettings.catalogRevision || 0));
+    assertExpectedRevision(currentRevision, expected);
     const settingsPatch = {
       catalogRevision: currentRevision + 1,
       pricingSetupConfirmed: false,
@@ -386,7 +432,7 @@ export async function createMenuItem(data = {}) {
   }
   if (!firebaseReady || !db) {
     const id = localId("menu-item");
-    const mutation = commitLocalMenuMutation(data.organizationId, (state) => {
+    const mutation = commitLocalMenuMutation(data.organizationId, data.expectedCatalogRevision, (state) => {
       if (!state.eventTypes.some((item) => item.id === payload.eventTypeId)) {
         throw new Error("Event type no longer exists. Refresh the menu and try again.");
       }
@@ -403,9 +449,14 @@ export async function createMenuItem(data = {}) {
   ensureReady();
   const targetCollectionRef = resolveWritableCollectionRef("menuItems", organizationId, "createMenuItem");
   const ref = doc(targetCollectionRef);
-  const catalogMutation = await commitCatalogMutation(organizationId, payload.createdAtISO, (transaction) => {
+  const catalogMutation = await commitCatalogMutation(
+    organizationId,
+    payload.createdAtISO,
+    data.expectedCatalogRevision,
+    (transaction) => {
     transaction.set(ref, payload);
-  });
+    }
+  );
   return {
     id: ref.id,
     ...payload,
@@ -449,7 +500,7 @@ export async function updateMenuItem(id, data = {}) {
   payload.updatedAtISO = new Date().toISOString();
 
   if (!firebaseReady || !db) {
-    return commitLocalMenuMutation(data.organizationId, (state) => {
+    return commitLocalMenuMutation(data.organizationId, data.expectedCatalogRevision, (state) => {
       const itemIndex = state.items.findIndex((item) => item.id === itemId);
       if (itemIndex < 0) throw new Error("Menu item no longer exists. Refresh and try again.");
       const current = state.items[itemIndex];
@@ -487,7 +538,7 @@ export async function updateMenuItem(id, data = {}) {
           : {}),
         pricingType: payload.pricingType || payload.type
       },
-      expectedCatalogRevision: Number(data.expectedCatalogRevision)
+      expectedCatalogRevision: expectedRevision(data.expectedCatalogRevision)
     });
     return {
       id: itemId,
@@ -498,9 +549,14 @@ export async function updateMenuItem(id, data = {}) {
     };
   }
   const ref = resolveWritableDocRef("menuItems", itemId, organizationId, "updateMenuItem");
-  const catalogMutation = await commitCatalogMutation(organizationId, payload.updatedAtISO, (transaction) => {
+  const catalogMutation = await commitCatalogMutation(
+    organizationId,
+    payload.updatedAtISO,
+    data.expectedCatalogRevision,
+    (transaction) => {
     transaction.update(ref, payload);
-  });
+    }
+  );
   return {
     id: itemId,
     ...payload,
@@ -518,7 +574,7 @@ export async function deleteMenuItem(id, {
     throw new Error("Menu item id is required.");
   }
   if (!firebaseReady || !db) {
-    return commitLocalMenuMutation(organizationId, (state) => {
+    return commitLocalMenuMutation(organizationId, expectedCatalogRevision, (state) => {
       const itemIndex = state.items.findIndex((item) => item.id === itemId);
       if (itemIndex < 0) throw new Error("Menu item no longer exists. Refresh and try again.");
       state.items.splice(itemIndex, 1);
@@ -531,7 +587,7 @@ export async function deleteMenuItem(id, {
     organizationId: resolvedOrganizationId,
     itemId,
     action: "delete",
-    expectedCatalogRevision: Number(expectedCatalogRevision)
+    expectedCatalogRevision: expectedRevision(expectedCatalogRevision)
   });
   return {
     ok: true,
@@ -553,7 +609,7 @@ export async function createCategory(data = {}) {
   }
   if (!firebaseReady || !db) {
     const id = localId("menu-category");
-    return commitLocalMenuMutation(data.organizationId, (state) => {
+    return commitLocalMenuMutation(data.organizationId, data.expectedCatalogRevision, (state) => {
       if (!state.eventTypes.some((item) => item.id === payload.eventTypeId)) {
         throw new Error("Event type no longer exists. Refresh the menu and try again.");
       }
@@ -564,9 +620,14 @@ export async function createCategory(data = {}) {
   ensureReady();
   const targetCollectionRef = resolveWritableCollectionRef("menuCategories", organizationId, "createCategory");
   const ref = doc(targetCollectionRef);
-  const catalogMutation = await commitCatalogMutation(organizationId, payload.createdAtISO, (transaction) => {
+  const catalogMutation = await commitCatalogMutation(
+    organizationId,
+    payload.createdAtISO,
+    data.expectedCatalogRevision,
+    (transaction) => {
     transaction.set(ref, payload);
-  });
+    }
+  );
   return {
     id: ref.id,
     ...payload,
@@ -590,7 +651,7 @@ export async function updateCategory(id, data = {}) {
   payload.updatedAtISO = new Date().toISOString();
 
   if (!firebaseReady || !db) {
-    return commitLocalMenuMutation(data.organizationId, (state) => {
+    return commitLocalMenuMutation(data.organizationId, data.expectedCatalogRevision, (state) => {
       const categoryIndex = state.categories.findIndex((item) => item.id === categoryId);
       if (categoryIndex < 0) throw new Error("Category no longer exists. Refresh and try again.");
       const current = state.categories[categoryIndex];
@@ -613,9 +674,14 @@ export async function updateCategory(id, data = {}) {
 
   const organizationId = resolveScopedOrganizationId(data.organizationId);
   const ref = resolveWritableDocRef("menuCategories", categoryId, organizationId, "updateCategory");
-  const catalogMutation = await commitCatalogMutation(organizationId, payload.updatedAtISO, (transaction) => {
+  const catalogMutation = await commitCatalogMutation(
+    organizationId,
+    payload.updatedAtISO,
+    data.expectedCatalogRevision,
+    (transaction) => {
     transaction.update(ref, payload);
-  });
+    }
+  );
   return {
     id: categoryId,
     ...payload,
@@ -636,7 +702,7 @@ export async function createEventType(data = {}) {
       name: asText(data.name, "New Event Type"),
       createdAtISO
     };
-    return commitLocalMenuMutation(data.organizationId, (state) => {
+    return commitLocalMenuMutation(data.organizationId, data.expectedCatalogRevision, (state) => {
       state.eventTypes.push({ id: eventTypeId, ...payload, source: "local-custom" });
       state.categories.push(...canonicalSeed.categories.map((entry) => ({
         ...entry,
@@ -673,7 +739,11 @@ export async function createEventType(data = {}) {
     createdAtISO
   };
 
-  const catalogMutation = await commitCatalogMutation(organizationId, createdAtISO, (transaction) => {
+  const catalogMutation = await commitCatalogMutation(
+    organizationId,
+    createdAtISO,
+    data.expectedCatalogRevision,
+    (transaction) => {
     transaction.set(eventTypeRef, payload);
     canonicalSeed.categories.forEach((entry) => {
       transaction.set(doc(categoryCollectionRef, entry.id), {
@@ -691,7 +761,8 @@ export async function createEventType(data = {}) {
         createdAtISO
       });
     });
-  });
+    }
+  );
 
   return {
     id: eventTypeId,
@@ -717,7 +788,7 @@ export async function updateEventType(id, data = {}) {
   payload.updatedAtISO = new Date().toISOString();
 
   if (!firebaseReady || !db) {
-    return commitLocalMenuMutation(data.organizationId, (state) => {
+    return commitLocalMenuMutation(data.organizationId, data.expectedCatalogRevision, (state) => {
       const eventTypeIndex = state.eventTypes.findIndex((item) => item.id === eventTypeId);
       if (eventTypeIndex < 0) throw new Error("Event type no longer exists. Refresh and try again.");
       state.eventTypes[eventTypeIndex] = {
@@ -731,9 +802,14 @@ export async function updateEventType(id, data = {}) {
 
   const organizationId = resolveScopedOrganizationId(data.organizationId);
   const ref = resolveWritableDocRef("eventTypes", eventTypeId, organizationId, "updateEventType");
-  const catalogMutation = await commitCatalogMutation(organizationId, payload.updatedAtISO, (transaction) => {
+  const catalogMutation = await commitCatalogMutation(
+    organizationId,
+    payload.updatedAtISO,
+    data.expectedCatalogRevision,
+    (transaction) => {
     transaction.update(ref, payload);
-  });
+    }
+  );
   return {
     id: eventTypeId,
     ...payload,

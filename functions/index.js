@@ -209,6 +209,25 @@ const {
 } = require("./productAnalytics");
 const { buildOperationsAuditSnapshot } = require("./operationsAudit");
 const {
+  MAX_SCHEDULE_FENCES: OPERATIONAL_STAFFING_MAX_SCHEDULE_FENCES,
+  MAX_STAFF_PROFILES: OPERATIONAL_STAFFING_MAX_STAFF_PROFILES,
+  OperationalStaffingAuthorityError,
+  buildOperationalStaffProfileReceiptId,
+  buildOperationalStaffingReceiptId,
+  deriveOperationalStaffingScheduleFenceRefs,
+  planOperationalStaffProfileCommand,
+  planOperationalStaffingCommand
+} = require("./operationalStaffingAuthority");
+const {
+  OperationalStaffingRuntimeError,
+  assertOperationalStaffingAuthorityEnabled,
+  buildOperationalStaffingSnapshotEnvelope,
+  buildSnapshotScheduleFenceRefs,
+  dedupeScheduleFenceAssignments,
+  deriveCanonicalOperationalStaffingEvidence,
+  emptyScheduleFence
+} = require("./operationalStaffingRuntime");
+const {
   StarterCatalogPackError,
   applyStarterCatalogPack: applyStarterCatalogPackInternal,
   confirmCatalogPricing: confirmCatalogPricingInternal,
@@ -313,6 +332,9 @@ const QUOTE_APPROVAL_EXECUTIONS_COLLECTION = "quoteApprovalExecutions";
 const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
 const PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION = "proposalAcceptanceReceipts";
 const PRODUCT_ANALYTICS_COLLECTION = "productAnalyticsEvents";
+const OPERATIONAL_STAFF_PROFILES_COLLECTION = "staffProfiles";
+const OPERATIONAL_STAFFING_PLANS_COLLECTION = "eventStaffingPlans";
+const OPERATIONAL_STAFFING_FENCES_COLLECTION = "staffingScheduleFences";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 const CUSTOMER_EMAIL_CLAIMS_COLLECTION = "customerEmailClaims";
 const CUSTOMER_IMPORT_BATCH_KIND = "customer";
@@ -8470,6 +8492,442 @@ exports.recordProductAnalyticsEvents = functions.region(REGION).https.onCall(asy
     return { accepted, deduplicated: events.length - accepted };
   });
   return { ok: true, ...result };
+});
+
+const OPERATIONAL_STAFFING_GLOBAL_AUTHORITY_ENABLED =
+  normalizeText(process.env.OPERATIONAL_STAFFING_AUTHORITY_ENABLED).toLowerCase() === "true";
+
+function operationalStaffingScope(data = {}, { requireQuote = true, requireStaff = false } = {}) {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const quoteId = normalizeText(data?.quoteId);
+  const staffId = normalizeText(data?.staffId);
+  const invalidOpaqueId = (value) => (
+    !value
+    || value.length > 256
+    || /[\s/?#\\\u0000]/u.test(value)
+    || value === "."
+    || value === ".."
+  );
+  if (
+    invalidOpaqueId(organizationId)
+    || (requireQuote && invalidOpaqueId(quoteId))
+    || (requireStaff && invalidOpaqueId(staffId))
+  ) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Exact organization, quote, and staff scope is required for operational staffing."
+    );
+  }
+  return { organizationId, quoteId, staffId };
+}
+
+function assertOperationalStaffingSameOrganization(staff, organizationId) {
+  if (normalizeOrganizationId(staff?.principalOrganizationId) !== organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Operational staffing requires exact same-organization staff authority."
+    );
+  }
+  return staff;
+}
+
+function operationalStaffingActor(staff, organizationId) {
+  return {
+    organizationId,
+    uid: normalizeText(staff?.uid),
+    role: normalizeText(staff?.role).toLowerCase()
+  };
+}
+
+function operationalStaffingRefs({ organizationId, quoteId = "", staffId = "" } = {}) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const profilesRef = organizationRef.collection(OPERATIONAL_STAFF_PROFILES_COLLECTION);
+  const plansRef = organizationRef.collection(OPERATIONAL_STAFFING_PLANS_COLLECTION);
+  return {
+    organizationRef,
+    settingsRef: organizationRef.collection("settings").doc("config"),
+    quoteRef: quoteId ? organizationRef.collection(QUOTES_COLLECTION).doc(quoteId) : null,
+    planRef: quoteId ? plansRef.doc(quoteId) : null,
+    profilesRef,
+    profileRef: staffId ? profilesRef.doc(staffId) : null,
+    fencesRef: organizationRef.collection(OPERATIONAL_STAFFING_FENCES_COLLECTION)
+  };
+}
+
+function assertOperationalStaffingQuote(quote, { organizationId, quoteId } = {}) {
+  if (!quote || typeof quote !== "object") {
+    throw new OperationalStaffingRuntimeError("not-found", "Quote not found.");
+  }
+  if (
+    normalizeOrganizationId(quote.organizationId) !== organizationId
+    || (normalizeText(quote.id) && normalizeText(quote.id) !== quoteId)
+  ) {
+    throw new OperationalStaffingRuntimeError(
+      "permission-denied",
+      "The quote is outside the operational staffing scope."
+    );
+  }
+  const activeQuoteRevisionId = normalizeText(quote.activeVersionId);
+  if (!activeQuoteRevisionId || /[\s/?#\\\u0000]/u.test(activeQuoteRevisionId)) {
+    throw new OperationalStaffingRuntimeError(
+      "failed-precondition",
+      "The quote has no exact active immutable revision for operational staffing."
+    );
+  }
+  return activeQuoteRevisionId;
+}
+
+function assertOperationalStaffingStorageEnabled(settingsSnap) {
+  if (!settingsSnap?.exists) {
+    throw new OperationalStaffingRuntimeError(
+      "failed-precondition",
+      "Organization settings are unavailable for operational staffing."
+    );
+  }
+  return assertOperationalStaffingAuthorityEnabled(
+    OPERATIONAL_STAFFING_GLOBAL_AUTHORITY_ENABLED,
+    settingsSnap.data() || {}
+  );
+}
+
+function operationalStaffingStoredFence(snapshot, ref) {
+  if (!snapshot?.exists) return emptyScheduleFence(ref);
+  const stored = snapshot.data() || {};
+  if (
+    normalizeText(snapshot.id) !== ref.fenceId
+    || normalizeText(stored.fenceId) !== ref.fenceId
+    || normalizeOrganizationId(stored.organizationId) !== ref.organizationId
+    || normalizeText(stored.staffId) !== ref.staffId
+    || normalizeText(stored.utcDate) !== ref.utcDate
+  ) {
+    throw new OperationalStaffingRuntimeError(
+      "data-loss",
+      "Stored operational staffing schedule fence identity is inconsistent."
+    );
+  }
+  return stored;
+}
+
+function throwOperationalStaffingFailure(error, operation, scope = {}) {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (
+    error instanceof OperationalStaffingAuthorityError
+    || error instanceof OperationalStaffingRuntimeError
+  ) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(`${operation} failed`, {
+    organizationId: normalizeOrganizationId(scope.organizationId),
+    quoteId: normalizeText(scope.quoteId),
+    staffId: normalizeText(scope.staffId),
+    actorUid: normalizeText(scope.actorUid),
+    error: normalizeText(error?.message).slice(0, 240)
+  });
+  throw new functions.https.HttpsError(
+    "internal",
+    "The authoritative operational staffing operation did not complete."
+  );
+}
+
+exports.getOperationalStaffingSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  const scope = operationalStaffingScope(data);
+  const staff = assertOperationalStaffingSameOrganization(
+    await assertStaff(context, { expectedOrganizationId: scope.organizationId }),
+    scope.organizationId
+  );
+  try {
+    const refs = operationalStaffingRefs(scope);
+    const observedAtISO = new Date().toISOString();
+    return await db.runTransaction(async (tx) => {
+      const profilesQuery = refs.profilesRef
+        .orderBy(FieldPath.documentId())
+        .limit(OPERATIONAL_STAFFING_MAX_STAFF_PROFILES + 1);
+      const [settingsSnap, quoteSnap, planSnap, profilesSnap] = await Promise.all([
+        tx.get(refs.settingsRef),
+        tx.get(refs.quoteRef),
+        tx.get(refs.planRef),
+        tx.get(profilesQuery)
+      ]);
+      assertOperationalStaffingStorageEnabled(settingsSnap);
+      if (!quoteSnap.exists) {
+        throw new OperationalStaffingRuntimeError("not-found", "Quote not found.");
+      }
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      const activeQuoteRevisionId = assertOperationalStaffingQuote(quote, scope);
+      const versionRef = refs.quoteRef.collection("versions").doc(activeQuoteRevisionId);
+      const versionSnap = await tx.get(versionRef);
+      if (!versionSnap.exists) {
+        throw new OperationalStaffingRuntimeError(
+          "failed-precondition",
+          "The exact active immutable quote revision is unavailable."
+        );
+      }
+      const canonicalEvidence = deriveCanonicalOperationalStaffingEvidence({
+        ...scope,
+        activeQuoteRevisionId,
+        version: versionSnap.data() || {},
+        settings: settingsSnap.data() || {}
+      });
+      const profilesTruncated = profilesSnap.size > OPERATIONAL_STAFFING_MAX_STAFF_PROFILES;
+      const profiles = profilesSnap.docs
+        .slice(0, OPERATIONAL_STAFFING_MAX_STAFF_PROFILES)
+        .map((snapshot) => ({
+          ...(snapshot.data() || {}),
+          organizationId: normalizeOrganizationId(snapshot.data()?.organizationId),
+          staffId: normalizeText(snapshot.data()?.staffId || snapshot.id),
+          availabilityTruncated: snapshot.data()?.availabilityTruncated === true
+        }));
+      const currentPlan = planSnap.exists ? planSnap.data() || {} : null;
+      const fencePlan = buildSnapshotScheduleFenceRefs({
+        organizationId: scope.organizationId,
+        eventWindow: canonicalEvidence.canonicalEventWindow,
+        profiles,
+        currentPlan,
+        maximum: OPERATIONAL_STAFFING_MAX_SCHEDULE_FENCES
+      });
+      const fenceDocRefs = fencePlan.refs.map((ref) => refs.fencesRef.doc(ref.fenceId));
+      const fenceSnaps = fenceDocRefs.length ? await tx.getAll(...fenceDocRefs) : [];
+      const fences = fencePlan.refs.map((ref, index) => (
+        operationalStaffingStoredFence(fenceSnaps[index], ref)
+      ));
+      dedupeScheduleFenceAssignments(fences);
+      return buildOperationalStaffingSnapshotEnvelope({
+        ...scope,
+        observedAtISO,
+        canonicalEvidence,
+        profiles,
+        profilesTruncated,
+        fences,
+        scheduleFencesTruncated: fencePlan.truncated,
+        currentPlan
+      });
+    });
+  } catch (error) {
+    return throwOperationalStaffingFailure(error, "getOperationalStaffingSnapshot", {
+      ...scope,
+      actorUid: staff.uid
+    });
+  }
+});
+
+exports.configureOperationalStaffProfile = functions.region(REGION).https.onCall(async (data, context) => {
+  const scope = operationalStaffingScope(data, { requireQuote: false, requireStaff: true });
+  const staff = assertOperationalStaffingSameOrganization(
+    assertAdminStaff(await assertStaff(context, { expectedOrganizationId: scope.organizationId })),
+    scope.organizationId
+  );
+  try {
+    const request = {
+      requestId: data?.requestId,
+      organizationId: scope.organizationId,
+      staffId: scope.staffId,
+      expectedRevision: data?.expectedRevision,
+      profile: data?.profile
+    };
+    const receiptId = buildOperationalStaffProfileReceiptId(request);
+    const refs = operationalStaffingRefs(scope);
+    const receiptRef = refs.profileRef.collection("versions").doc(receiptId);
+    const actor = operationalStaffingActor(staff, scope.organizationId);
+    const serverTimeISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [settingsSnap, receiptSnap, profileSnap] = await Promise.all([
+        tx.get(refs.settingsRef),
+        tx.get(receiptRef),
+        tx.get(refs.profileRef)
+      ]);
+      assertOperationalStaffingStorageEnabled(settingsSnap);
+      const planned = planOperationalStaffProfileCommand({
+        request,
+        currentProfile: profileSnap.exists ? profileSnap.data() || {} : null,
+        actor,
+        serverTimeISO,
+        existingReceipt: receiptSnap.exists ? receiptSnap.data()?.receipt : null
+      });
+      if (planned.kind === "apply") {
+        tx.set(refs.profileRef, {
+          ...planned.nextProfile,
+          createdAt: profileSnap.exists && profileSnap.data()?.createdAt
+            ? profileSnap.data().createdAt
+            : FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        tx.create(receiptRef, {
+          organizationId: scope.organizationId,
+          staffId: scope.staffId,
+          requestId: planned.request.requestId,
+          receipt: planned.receipt,
+          createdAtISO: planned.receipt.recordedAtISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      return planned;
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: scope.organizationId,
+      staffId: scope.staffId,
+      idempotent: result.idempotent,
+      snapshot: result.snapshot,
+      receipt: result.receipt
+    };
+  } catch (error) {
+    return throwOperationalStaffingFailure(error, "configureOperationalStaffProfile", {
+      ...scope,
+      actorUid: staff.uid
+    });
+  }
+});
+
+exports.applyOperationalStaffingPlan = functions.region(REGION).https.onCall(async (data, context) => {
+  const scope = operationalStaffingScope(data);
+  const staff = assertOperationalStaffingSameOrganization(
+    await assertStaff(context, { expectedOrganizationId: scope.organizationId }),
+    scope.organizationId
+  );
+  try {
+    const request = {
+      requestId: data?.requestId,
+      organizationId: scope.organizationId,
+      quoteId: scope.quoteId,
+      expectedQuoteRevisionId: data?.expectedQuoteRevisionId,
+      expectedPlanRevision: data?.expectedPlanRevision,
+      eventWindow: data?.eventWindow,
+      requirements: data?.requirements,
+      assignments: data?.assignments,
+      expectedScheduleFences: data?.expectedScheduleFences
+    };
+    const receiptId = buildOperationalStaffingReceiptId(request);
+    const refs = operationalStaffingRefs(scope);
+    const receiptRef = refs.planRef.collection("versions").doc(receiptId);
+    const actor = operationalStaffingActor(staff, scope.organizationId);
+    const serverTimeISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [settingsSnap, receiptSnap] = await Promise.all([
+        tx.get(refs.settingsRef),
+        tx.get(receiptRef)
+      ]);
+      assertOperationalStaffingStorageEnabled(settingsSnap);
+      if (receiptSnap.exists) {
+        return planOperationalStaffingCommand({
+          request,
+          actor,
+          existingReceipt: receiptSnap.data()?.receipt
+        });
+      }
+      const versionRef = refs.quoteRef
+        .collection("versions")
+        .doc(normalizeText(request.expectedQuoteRevisionId));
+      const [quoteSnap, versionSnap, planSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(versionRef),
+        tx.get(refs.planRef)
+      ]);
+      if (!quoteSnap.exists) {
+        throw new OperationalStaffingRuntimeError("not-found", "Quote not found.");
+      }
+      const quote = { id: quoteSnap.id, ...(quoteSnap.data() || {}) };
+      const activeQuoteRevisionId = assertOperationalStaffingQuote(quote, scope);
+      if (activeQuoteRevisionId !== normalizeText(request.expectedQuoteRevisionId)) {
+        throw new OperationalStaffingRuntimeError(
+          "aborted",
+          "The active commercial quote revision changed before staffing confirmation."
+        );
+      }
+      if (!versionSnap.exists) {
+        throw new OperationalStaffingRuntimeError(
+          "failed-precondition",
+          "The exact requested immutable quote revision is unavailable."
+        );
+      }
+      const canonicalEvidence = deriveCanonicalOperationalStaffingEvidence({
+        ...scope,
+        activeQuoteRevisionId,
+        version: versionSnap.data() || {},
+        settings: settingsSnap.data() || {}
+      });
+      const currentPlan = planSnap.exists ? planSnap.data() || {} : null;
+      const fenceRefs = deriveOperationalStaffingScheduleFenceRefs({
+        organizationId: scope.organizationId,
+        eventWindow: request.eventWindow,
+        assignments: request.assignments,
+        currentPlan
+      });
+      const staffIds = [...new Set(request.assignments.map((assignment) => assignment.staffId))]
+        .sort();
+      const profileDocRefs = staffIds.map((staffId) => refs.profilesRef.doc(staffId));
+      const fenceDocRefs = fenceRefs.map((ref) => refs.fencesRef.doc(ref.fenceId));
+      const profileSnaps = profileDocRefs.length ? await tx.getAll(...profileDocRefs) : [];
+      const fenceSnaps = fenceDocRefs.length ? await tx.getAll(...fenceDocRefs) : [];
+      const profiles = profileSnaps
+        .filter((snapshot) => snapshot.exists)
+        .map((snapshot) => snapshot.data() || {});
+      const fences = fenceRefs.map((ref, index) => (
+        operationalStaffingStoredFence(fenceSnaps[index], ref)
+      ));
+      const overlappingAssignments = dedupeScheduleFenceAssignments(fences);
+      const planned = planOperationalStaffingCommand({
+        request,
+        activeQuoteRevisionId: canonicalEvidence.activeQuoteRevisionId,
+        canonicalEventWindow: canonicalEvidence.canonicalEventWindow,
+        canonicalRequirements: canonicalEvidence.canonicalRequirements,
+        currentPlan,
+        staffProfiles: profiles,
+        overlappingAssignments,
+        scheduleFences: fences,
+        evidenceBounds: {
+          staffProfilesTruncated: false,
+          overlapAssignmentsTruncated: false,
+          scheduleFencesTruncated: false
+        },
+        actor,
+        serverTimeISO
+      });
+      tx.set(refs.planRef, {
+        ...planned.nextPlan,
+        createdAt: planSnap.exists && planSnap.data()?.createdAt
+          ? planSnap.data().createdAt
+          : FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.create(receiptRef, {
+        organizationId: scope.organizationId,
+        quoteId: scope.quoteId,
+        requestId: planned.request.requestId,
+        receipt: planned.receipt,
+        createdAtISO: planned.receipt.recordedAtISO,
+        createdAt: FieldValue.serverTimestamp()
+      });
+      planned.scheduleFenceOutputs.forEach((output, index) => {
+        const fenceRef = refs.fencesRef.doc(output.fenceId);
+        const priorSnap = fenceSnaps[index];
+        const record = {
+          ...output.nextProjection,
+          createdAt: priorSnap?.exists && priorSnap.data()?.createdAt
+            ? priorSnap.data().createdAt
+            : FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        if (priorSnap?.exists) tx.set(fenceRef, record);
+        else tx.create(fenceRef, record);
+      });
+      return planned;
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: scope.organizationId,
+      quoteId: scope.quoteId,
+      idempotent: result.idempotent,
+      snapshot: result.snapshot,
+      receipt: result.receipt
+    };
+  } catch (error) {
+    return throwOperationalStaffingFailure(error, "applyOperationalStaffingPlan", {
+      ...scope,
+      actorUid: staff.uid
+    });
+  }
 });
 
 exports.getProductAnalyticsSummary = functions.region(REGION).https.onCall(async (data, context) => {

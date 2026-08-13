@@ -160,6 +160,7 @@ export default function QuoteCompareModal({
     <div
       ref={dialogRef}
       className="modal-overlay"
+      data-layout-overlap-allowed="true"
       role="dialog"
       aria-modal="true"
       aria-labelledby="scenario-compare-title"

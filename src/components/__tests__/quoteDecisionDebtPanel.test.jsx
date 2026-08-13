@@ -86,7 +86,7 @@ describe("exact quote Decision Debt surface", () => {
       '[data-capability-id="cwf-15-decision-debt-quote-record"]'
     )).toBeTruthy();
     expect(container.querySelector('[data-capability-state="empty"]')).toBeTruthy();
-    expect(container.textContent).toContain("No current unresolved Decision Debt");
+    expect(container.textContent).toContain("No quote decisions need review right now");
     expect(container.querySelector('[data-decision-debt-policy]')).toBeFalsy();
     expect(container.querySelector('[data-capability-action="configure-decision-debt-policy"]')).toBeFalsy();
   });
@@ -100,7 +100,7 @@ describe("exact quote Decision Debt surface", () => {
 
     expect(mocks.getDecisionDebtSnapshot).not.toHaveBeenCalled();
     expect(container.querySelector('[data-capability-state="error"]')).toBeTruthy();
-    expect(container.textContent).toContain("connected same-tenant quote record");
+    expect(container.textContent).toContain("connected quote from this workspace");
   });
 
   test("opens Workflow with the exact Decision Debt quote and item identity", async () => {

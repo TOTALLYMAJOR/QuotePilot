@@ -213,7 +213,7 @@ describe("Customer revenue opportunities presentation", () => {
 
     expect(markup).toContain('data-capability-id="cwf-11-rebooking-radar"');
     expect(markup).toContain('data-capability-state="success"');
-    expect(markup).toContain("Revenue opportunities");
+    expect(markup).toContain("Follow-ups worth revisiting");
     expect(markup).toContain("Device-local calendar date");
     expect(markup).toContain("America/Chicago");
     expect(markup).toContain("Leadership dinner reached its one-week closeout window");
@@ -222,7 +222,7 @@ describe("Customer revenue opportunities presentation", () => {
     expect(markup).toContain("Henderson corporate picnic was scheduled for this week last year");
     expect(markup).toContain("Accepted source identified: version v0002");
     expect(markup).toContain("No matching trusted rebook record was found in this completed bounded customer read");
-    expect(markup).toContain("not a lead, booking, delivery, payment, or revenue fact");
+    expect(markup).toContain("does not create a lead, booking, delivery, payment, or revenue record");
     expect(markup).not.toContain("Rebook now");
     expect(sourceButton.props["data-capability-action"]).toBe("open-authoritative-source-quote");
     expect(rebookAction.props.reviewedAction).toMatchObject({
@@ -425,10 +425,10 @@ describe("Customer revenue opportunities presentation", () => {
 
     expect(describeUnavailableRebookReason(
       "existing_rebook_not_found_quote_history_truncated"
-    )).toContain("outside this bounded Customer 360 quote read");
+    )).toContain("beyond the quotes currently shown in this client overview");
     expect(describeUnavailableRebookReason("existing_rebook_invalid"))
       .toContain("trusted provenance is incomplete");
-    expect(markup).toContain("A matching rebook may exist outside this bounded Customer 360 quote read");
+    expect(markup).toContain("A matching rebook may exist beyond the quotes currently shown in this client overview");
     expect(markup).not.toContain("No matching trusted rebook record was found");
     expect(findElement(tree, (element) => element.type === CustomerRebookDraftAction)).toBeNull();
   });
@@ -478,7 +478,7 @@ describe("Customer revenue opportunities presentation", () => {
 
     expect(emptyMarkup).toContain('data-capability-state="empty"');
     expect(emptyMarkup).toContain("Source: Firestore customer workspace");
-    expect(emptyMarkup).toContain("Evaluation bound: first 12 eligible opportunities");
+    expect(emptyMarkup).toContain("Review bound: first 12 eligible follow-ups");
     expect(emptyMarkup).toContain("No closeout or anniversary cues fall within this calendar window");
     expect(partialMarkup).toContain('data-capability-state="partial"');
     expect(partialMarkup).toContain("Older linked quotes may contain additional opportunities");
@@ -518,7 +518,7 @@ describe("Customer revenue opportunities presentation", () => {
 
     expect(refreshingMarkup).toContain('data-capability-state="loading"');
     expect(refreshingMarkup).toContain('data-read-state="refreshing"');
-    expect(refreshingMarkup).toContain("prior opportunity evaluation remains visible");
+    expect(refreshingMarkup).toContain("previous follow-up check remains visible");
     expect(staleMarkup).toContain('data-capability-state="stale"');
     expect(staleMarkup).toContain("retained snapshot and may be stale");
   });

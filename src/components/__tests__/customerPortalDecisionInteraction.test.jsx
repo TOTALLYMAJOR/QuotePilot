@@ -157,7 +157,7 @@ describe("customer portal decision presentation", () => {
       <PortalDecisionMutationState mutation={{ phase: "stale" }} />
     );
 
-    expect(uncertainMarkup).toContain("Check the same decision before trying anything again");
+    expect(uncertainMarkup).toContain("Check the same response before trying again");
     expect(uncertainMarkup).toContain('data-capability-state="recovery"');
     button.props.onClick();
     expect(onReconcile).toHaveBeenCalledOnce();
@@ -174,7 +174,7 @@ describe("customer portal decision presentation", () => {
       }} />
     );
 
-    expect(markup).toContain("exact delivered revision");
+    expect(markup).toContain("the proposal you reviewed");
     expect(markup).toContain("Payment and booking remain separate");
     expect(markup).not.toContain("Event booked");
     expect(markup).not.toContain("Payment received");

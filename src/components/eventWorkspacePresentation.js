@@ -1,7 +1,8 @@
 import { classifyQuoteStatus } from "../lib/statusSemantics";
 import {
   buildProposalReadiness,
-  buildWorkflowAttentionSummary
+  buildWorkflowAttentionSummary,
+  getWorkflowAttentionFocusId
 } from "../lib/quoteWorkflow";
 import {
   formatWorkspaceDate,
@@ -114,11 +115,10 @@ function attentionPresentation(quote, { now, todayISO } = {}) {
   const target = {
     quoteId: text(item.quoteId || quote?.id),
     attentionType: text(item.type),
-    requestId: text(
-      item.sourceRequestId
-      || item.pendingRequests?.[0]?.id
-      || item.closeoutId
-    )
+    // The route calls this requestId for compatibility. For projected
+    // follow-up/closeout rows it carries the canonical attention-item id,
+    // never a fabricated request or mutation credential.
+    requestId: getWorkflowAttentionFocusId(item)
   };
 
   if (item.type === "change_request") {

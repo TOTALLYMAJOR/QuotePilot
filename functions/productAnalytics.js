@@ -5,8 +5,41 @@ const ANALYTICS_EVENT_NAMES = new Set([
   "wizard_step_completed",
   "addon_selected",
   "addon_removed",
-  "quote_saved"
+  "quote_saved",
+  "first_intent_observed",
+  "priced_draft_receipt_observed",
+  "ambient_primary_action_assessed",
+  "ambient_issue_surfaced",
+  "ambient_issue_resolved"
 ]);
+const AMBIENT_RESULT_KINDS = new Set([
+  "context",
+  "preview",
+  "pending",
+  "receipt",
+  "resolved",
+  "recovery"
+]);
+const PRODUCT_ANALYTICS_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+const PRODUCT_ANALYTICS_MAX_ACKNOWLEDGEMENT_MS = 60 * 1000;
+const PRODUCT_ANALYTICS_DEAD_CLICK_DEADLINE_MS = 250;
+const PRODUCT_ANALYTICS_ISSUE_CATEGORIES = Object.freeze([
+  "workflow-attention",
+  "proposal-gap-customer-name",
+  "proposal-gap-customer-email",
+  "proposal-gap-customer-phone",
+  "proposal-gap-event-name",
+  "proposal-gap-event-date",
+  "proposal-gap-event-time",
+  "proposal-gap-venue",
+  "proposal-gap-guest-count",
+  "proposal-gap-duration",
+  "proposal-gap-package",
+  "proposal-gap-menu",
+  "proposal-gap-total",
+  "staffing-guidance"
+]);
+const ISSUE_CATEGORIES = new Set(PRODUCT_ANALYTICS_ISSUE_CATEGORIES);
 
 class ProductAnalyticsError extends Error {
   constructor(code, message) {
@@ -21,9 +54,32 @@ function text(value, max = 120) {
 }
 
 function requireIdentifier(value, label, max = 80) {
-  const normalized = text(value, max);
-  if (!normalized || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(normalized)) {
+  const normalized = String(value || "").trim();
+  if (
+    !normalized
+    || normalized.length > max
+    || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(normalized)
+  ) {
     throw new ProductAnalyticsError("invalid-argument", `${label} is invalid.`);
+  }
+  return normalized;
+}
+
+function requireInteger(value, label, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  if (value == null || value === "") {
+    throw new ProductAnalyticsError("invalid-argument", `${label} is invalid.`);
+  }
+  const normalized = Number(value);
+  if (!Number.isSafeInteger(normalized) || normalized < min || normalized > max) {
+    throw new ProductAnalyticsError("invalid-argument", `${label} is invalid.`);
+  }
+  return normalized;
+}
+
+function requireIssueCategory(value) {
+  const normalized = text(value, 64).toLowerCase();
+  if (!ISSUE_CATEGORIES.has(normalized)) {
+    throw new ProductAnalyticsError("invalid-argument", "Analytics issue category is invalid.");
   }
   return normalized;
 }
@@ -71,6 +127,59 @@ function sanitizeAnalyticsEvent(raw, { organizationId, receivedAtISO }) {
   if (eventName === "addon_selected" || eventName === "addon_removed") {
     event.addonId = requireIdentifier(raw?.addonId, "Add-on ID", 120);
   }
+  if (eventName === "priced_draft_receipt_observed") {
+    if (raw?.pricingAuthority !== "server_authoritative" || raw?.storage !== "firebase") {
+      throw new ProductAnalyticsError(
+        "invalid-argument",
+        "Priced draft receipt evidence is invalid."
+      );
+    }
+    event.durationMs = requireInteger(raw?.durationMs, "Priced draft duration", {
+      max: PRODUCT_ANALYTICS_MAX_DURATION_MS
+    });
+    event.pricingAuthority = "server_authoritative";
+    event.storage = "firebase";
+  }
+  if (eventName === "ambient_primary_action_assessed") {
+    if (
+      raw?.primary !== true
+      || raw?.deadlineMs !== PRODUCT_ANALYTICS_DEAD_CLICK_DEADLINE_MS
+      || typeof raw?.deadClick !== "boolean"
+    ) {
+      throw new ProductAnalyticsError(
+        "invalid-argument",
+        "Ambient primary-action assessment is invalid."
+      );
+    }
+    event.primary = true;
+    event.deadlineMs = PRODUCT_ANALYTICS_DEAD_CLICK_DEADLINE_MS;
+    event.deadClick = raw.deadClick;
+    if (raw?.acknowledgementMs != null) {
+      event.acknowledgementMs = requireInteger(
+        raw.acknowledgementMs,
+        "Ambient acknowledgement duration",
+        { max: PRODUCT_ANALYTICS_MAX_ACKNOWLEDGEMENT_MS }
+      );
+    }
+    if (raw?.resultKind != null) {
+      const resultKind = text(raw.resultKind, 16).toLowerCase();
+      if (!AMBIENT_RESULT_KINDS.has(resultKind)) {
+        throw new ProductAnalyticsError(
+          "invalid-argument",
+          "Ambient acknowledgement result kind is invalid."
+        );
+      }
+      event.resultKind = resultKind;
+    }
+  }
+  if (eventName === "ambient_issue_surfaced" || eventName === "ambient_issue_resolved") {
+    event.issueCategory = requireIssueCategory(raw?.issueCategory);
+    if (eventName === "ambient_issue_resolved") {
+      event.durationMs = requireInteger(raw?.durationMs, "Ambient issue duration", {
+        max: PRODUCT_ANALYTICS_MAX_DURATION_MS
+      });
+    }
+  }
   event.eventId = createHash("sha256")
     .update(`${event.organizationId}\n${sessionId}\n${sequence}`)
     .digest("hex");
@@ -91,6 +200,7 @@ function sanitizeAnalyticsBatch(rawEvents, context) {
 function summarizeAnalyticsEvents(rawEvents = []) {
   const sessions = new Map();
   const addons = new Map();
+  const metricEventsBySession = new Map();
   rawEvents.forEach((event) => {
     const sessionId = text(event?.sessionId, 80);
     if (!sessionId) return;
@@ -112,6 +222,10 @@ function summarizeAnalyticsEvents(rawEvents = []) {
       if (event.eventName === "addon_removed") row.removed += 1;
       addons.set(event.addonId, row);
     }
+
+    const metricEvents = metricEventsBySession.get(sessionId) || [];
+    metricEvents.push(event);
+    metricEventsBySession.set(sessionId, metricEvents);
   });
 
   const sessionRows = [...sessions.values()].filter((session) => session.started);
@@ -122,6 +236,82 @@ function summarizeAnalyticsEvents(rawEvents = []) {
     )).length
   }));
   const saved = sessionRows.filter((session) => session.saved).length;
+  let primaryActionsAssessed = 0;
+  let deadClicks = 0;
+  const intentToPricedDraftDurations = [];
+  const issueResolutionDurations = [];
+  const issueResolutionDurationsByCategory = new Map();
+
+  metricEventsBySession.forEach((events) => {
+    const ordered = [...events].sort((left, right) => (
+      Number(left?.sequence || 0) - Number(right?.sequence || 0)
+    ));
+    let started = false;
+    let mode = "";
+    let firstIntentObserved = false;
+    let pricedDraftObserved = false;
+    const activeIssueCategories = new Set();
+
+    ordered.forEach((event) => {
+      if (event?.eventName === "wizard_started" && !started) {
+        started = true;
+        mode = text(event?.mode, 12).toLowerCase();
+        return;
+      }
+      if (!started || text(event?.mode, 12).toLowerCase() !== mode) return;
+
+      if (event?.eventName === "first_intent_observed") {
+        firstIntentObserved = true;
+        return;
+      }
+      if (
+        event?.eventName === "priced_draft_receipt_observed"
+        && firstIntentObserved
+        && !pricedDraftObserved
+      ) {
+        const durationMs = boundedMetricDuration(event?.durationMs);
+        if (
+          durationMs !== null
+          && event?.pricingAuthority === "server_authoritative"
+          && event?.storage === "firebase"
+        ) {
+          intentToPricedDraftDurations.push(durationMs);
+          pricedDraftObserved = true;
+        }
+        return;
+      }
+      if (
+        event?.eventName === "ambient_primary_action_assessed"
+        && event?.primary === true
+        && event?.deadlineMs === PRODUCT_ANALYTICS_DEAD_CLICK_DEADLINE_MS
+      ) {
+        if (typeof event?.deadClick !== "boolean") return;
+        primaryActionsAssessed += 1;
+        if (event.deadClick) deadClicks += 1;
+        return;
+      }
+      if (event?.eventName === "ambient_issue_surfaced") {
+        if (ISSUE_CATEGORIES.has(event?.issueCategory)) {
+          activeIssueCategories.add(event.issueCategory);
+        }
+        return;
+      }
+      if (
+        event?.eventName === "ambient_issue_resolved"
+        && ISSUE_CATEGORIES.has(event?.issueCategory)
+        && activeIssueCategories.has(event.issueCategory)
+      ) {
+        const durationMs = boundedMetricDuration(event?.durationMs);
+        if (durationMs === null) return;
+        activeIssueCategories.delete(event.issueCategory);
+        issueResolutionDurations.push(durationMs);
+        const categoryDurations = issueResolutionDurationsByCategory.get(event.issueCategory) || [];
+        categoryDurations.push(durationMs);
+        issueResolutionDurationsByCategory.set(event.issueCategory, categoryDurations);
+      }
+    });
+  });
+
   return {
     sessionsStarted: sessionRows.length,
     quotesSaved: saved,
@@ -129,12 +319,67 @@ function summarizeAnalyticsEvents(rawEvents = []) {
     funnel,
     addons: [...addons.values()]
       .sort((left, right) => right.selected - left.selected || left.addonId.localeCompare(right.addonId))
-      .slice(0, 10)
+      .slice(0, 10),
+    ambientInteractions: {
+      observationSource: "client",
+      deadlineMs: PRODUCT_ANALYTICS_DEAD_CLICK_DEADLINE_MS,
+      primaryActionsAssessed,
+      deadClicks,
+      deadClickRate: primaryActionsAssessed ? deadClicks / primaryActionsAssessed : 0
+    },
+    intentToPricedDraft: {
+      observationSource: "client",
+      receiptAuthority: "server_authoritative",
+      storage: "firebase",
+      ...summarizeDurations(intentToPricedDraftDurations)
+    },
+    issueResolution: {
+      observationSource: "client",
+      pairing: "same_session_exact_category",
+      ...summarizeDurations(issueResolutionDurations),
+      byCategory: PRODUCT_ANALYTICS_ISSUE_CATEGORIES
+        .filter((issueCategory) => issueResolutionDurationsByCategory.has(issueCategory))
+        .map((issueCategory) => ({
+          issueCategory,
+          ...summarizeDurations(issueResolutionDurationsByCategory.get(issueCategory))
+        }))
+    }
+  };
+}
+
+function boundedMetricDuration(value) {
+  if (value == null || value === "") return null;
+  const normalized = Number(value);
+  return Number.isSafeInteger(normalized)
+    && normalized >= 0
+    && normalized <= PRODUCT_ANALYTICS_MAX_DURATION_MS
+    ? normalized
+    : null;
+}
+
+function percentile(sortedValues, fraction) {
+  if (!sortedValues.length) return null;
+  const position = (sortedValues.length - 1) * fraction;
+  const lowerIndex = Math.floor(position);
+  const upperIndex = Math.ceil(position);
+  const lower = sortedValues[lowerIndex];
+  const upper = sortedValues[upperIndex];
+  return Math.round(lower + (upper - lower) * (position - lowerIndex));
+}
+
+function summarizeDurations(values) {
+  const sorted = values.map(boundedMetricDuration).filter((value) => value !== null)
+    .sort((left, right) => left - right);
+  return {
+    samples: sorted.length,
+    medianMs: percentile(sorted, 0.5),
+    p75Ms: percentile(sorted, 0.75)
   };
 }
 
 module.exports = {
   ANALYTICS_EVENT_NAMES,
+  PRODUCT_ANALYTICS_ISSUE_CATEGORIES,
   ProductAnalyticsError,
   sanitizeAnalyticsBatch,
   sanitizeAnalyticsEvent,

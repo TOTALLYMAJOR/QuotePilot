@@ -89,7 +89,9 @@ Risk policy:
   - Fan-out jobs for smoke, Firebase lanes, CWV.
   - Concurrency cancellation prevents stale branch runs consuming compute.
   - Failure artifacts retained for fast triage.
-  - Mainline safety net auto-reverts failed `main` pushes when CI fails, reducing dependence on manual branch protection setup.
+  - Mainline safety net opens a generated revert PR when the current `main`
+    head fails CI, then dispatches the exact recovery head through CI without
+    bypassing branch protection.
 
 ## Evidence and Tracking
 - Source of truth:

@@ -28,6 +28,8 @@ const HIGH_RISK_EXACT = new Set([
   "scripts/prepare-production-artifact.mjs",
   "scripts/stage-production-payload.mjs",
   "scripts/release-uat-attestation.mjs",
+  "scripts/release-candidate-policy.mjs",
+  "scripts/deploy-release-candidate.mjs",
   "docs/release-uat-checklist.json",
   ".github/workflows/ci-quality.yml",
   ".github/workflows/mainline-safety-net.yml",

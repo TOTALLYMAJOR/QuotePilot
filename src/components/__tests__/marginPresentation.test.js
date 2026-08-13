@@ -99,10 +99,36 @@ describe("buildMarginPresentation", () => {
     expect(noTarget.targetNote).toBe("");
   });
 
-  test("returns nothing without guests, totals, or the selected package", () => {
+  test("returns nothing without guests or totals and fails closed when the selected package is unavailable", () => {
     expect(buildMarginPresentation({ form: { ...form, guests: 0 }, totals, catalog, settings })).toBeNull();
     expect(buildMarginPresentation({ form, totals: { total: 0 }, catalog, settings })).toBeNull();
-    expect(buildMarginPresentation({ form: { ...form, pkg: "ghost" }, totals, catalog, settings })).toBeNull();
+    expect(buildMarginPresentation({ form: { ...form, pkg: "ghost" }, totals, catalog, settings }))
+      .toMatchObject({
+        available: false,
+        missing: ["Selected package ghost (catalog item unavailable)"]
+      });
+  });
+
+  test("fails closed when any selected add-on, rental, or menu item is missing from the current catalog", () => {
+    const result = buildMarginPresentation({
+      form: {
+        ...form,
+        addons: [...form.addons, "retired-addon"],
+        rentals: [...form.rentals, "retired-rental"],
+        menuItems: [...form.menuItems, "retired-menu-item"]
+      },
+      totals,
+      catalog,
+      settings
+    });
+
+    expect(result.available).toBe(false);
+    expect(result.missing).toEqual(expect.arrayContaining([
+      "Selected item retired-addon (catalog item unavailable)",
+      "Selected item retired-rental (catalog item unavailable)",
+      "Selected item retired-menu-item (catalog item unavailable)"
+    ]));
+    expect(result.note).toContain("Margins unavailable");
   });
 
   test("caps the cost guest basis at 400 exactly like calculateQuote, so cost and revenue share one basis", () => {

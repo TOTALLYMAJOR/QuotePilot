@@ -174,13 +174,30 @@ describe("capability surfacing delivery gate", () => {
     expect(isBackendDeliveryPath("src/services/futureAuthorityClient.ts")).toBe(true);
     expect(isBackendDeliveryPath("src/future-data/futureAuthorityGateway.ts")).toBe(true);
     expect(isBackendDeliveryPath("src/data/futureCommercialPolicy.js")).toBe(true);
+    expect(isBackendDeliveryPath("src/LegacyApp.jsx")).toBe(false);
+    expect(isBackendDeliveryPath("src/context/AmbientContext.jsx")).toBe(false);
     expect(isBackendDeliveryPath("src/context/WorkspaceNavigationContext.jsx")).toBe(false);
     expect(isBackendDeliveryPath("src/hooks/useBrowserLocation.js")).toBe(false);
     expect(isBackendDeliveryPath("src/hooks/useCommercialWorkspaceSnapshot.js")).toBe(false);
     expect(isBackendDeliveryPath("src/hooks/useWorkspaceRouteHeadingFocus.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/__tests__/quoteStore.test.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/aiui01CompatibilityBaseline.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/ambientContracts.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/ambientEventLogisticsObjects.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/ambientInteractionAudit.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/ambientPackageMenuCatalogEvidence.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/ambientPackageMenuDraftAdoption.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/ambientPackageMenuObjects.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/ambientPricingPreview.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/ambientQuoteDraftPatch.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/ambientSignals.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/impactPreviewAdapter.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/quoteDraftRuntime.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/quoteDraftRuntimeBase.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/workspacePresentation.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/workspaceRoutes.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/workspaceShellModel.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/workspaceLayoutAudit.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/statusSemantics.js")).toBe(false);
     expect(isBackendDeliveryPath("functions/package.json")).toBe(false);
     expect(isBackendDeliveryPath("src/components/QuoteHistoryModal.jsx")).toBe(false);
@@ -198,8 +215,25 @@ describe("capability surfacing delivery gate", () => {
       "src/components/FutureCard.jsx",
       "src/new-runtime/FutureAuthority.js",
       "src/future-data/FutureRepository.ts",
+      "src/LegacyApp.jsx",
+      "src/context/AmbientContext.jsx",
       "src/hooks/useWorkspaceRouteHeadingFocus.js",
-      "src/lib/workspacePresentation.js"
+      "src/lib/aiui01CompatibilityBaseline.js",
+      "src/lib/ambientContracts.js",
+      "src/lib/ambientEventLogisticsObjects.js",
+      "src/lib/ambientInteractionAudit.js",
+      "src/lib/ambientPackageMenuCatalogEvidence.js",
+      "src/lib/ambientPackageMenuDraftAdoption.js",
+      "src/lib/ambientPackageMenuObjects.js",
+      "src/lib/ambientPricingPreview.js",
+      "src/lib/ambientQuoteDraftPatch.js",
+      "src/lib/ambientSignals.js",
+      "src/lib/impactPreviewAdapter.js",
+      "src/lib/quoteDraftRuntime.js",
+      "src/lib/quoteDraftRuntimeBase.js",
+      "src/lib/workspacePresentation.js",
+      "src/lib/workspaceShellModel.js",
+      "src/lib/workspaceLayoutAudit.js"
     ])).toEqual([
       "src/new-runtime/FutureAuthority.js",
       "src/future-data/FutureRepository.ts"
@@ -222,16 +256,47 @@ describe("capability surfacing delivery gate", () => {
     expect(hasDirectClientAuthoritySignals(directAuthority)).toBe(true);
     expect(hasDirectClientAuthoritySignals(commentsAndStrings)).toBe(false);
     expect(findBackendDeliveryPaths([
+      "src/context/AmbientContext.jsx",
       "src/hooks/useWorkspaceRouteHeadingFocus.js",
-      "src/lib/workspacePresentation.js"
+      "src/LegacyApp.jsx",
+      "src/lib/aiui01CompatibilityBaseline.js",
+      "src/lib/ambientContracts.js",
+      "src/lib/ambientEventLogisticsObjects.js",
+      "src/lib/ambientInteractionAudit.js",
+      "src/lib/ambientPackageMenuCatalogEvidence.js",
+      "src/lib/ambientPackageMenuDraftAdoption.js",
+      "src/lib/ambientPackageMenuObjects.js",
+      "src/lib/ambientPricingPreview.js",
+      "src/lib/ambientQuoteDraftPatch.js",
+      "src/lib/ambientSignals.js",
+      "src/lib/impactPreviewAdapter.js",
+      "src/lib/quoteDraftRuntime.js",
+      "src/lib/quoteDraftRuntimeBase.js",
+      "src/lib/workspacePresentation.js",
+      "src/lib/workspaceShellModel.js",
+      "src/lib/workspaceLayoutAudit.js"
     ], {
       pathExists: () => true,
-      readPath: (file) => file.includes("HeadingFocus") ? directAuthority : commentsAndStrings
-    })).toEqual(["src/hooks/useWorkspaceRouteHeadingFocus.js"]);
+      readPath: (file) => (
+        file.includes("HeadingFocus")
+          || file === "src/LegacyApp.jsx"
+          || file.includes("ambientContracts")
+          || file.includes("ambientPackageMenuCatalogEvidence")
+          || file.includes("ambientPackageMenuDraftAdoption")
+          ? directAuthority
+          : commentsAndStrings
+      )
+    })).toEqual([
+      "src/hooks/useWorkspaceRouteHeadingFocus.js",
+      "src/LegacyApp.jsx",
+      "src/lib/ambientContracts.js",
+      "src/lib/ambientPackageMenuCatalogEvidence.js",
+      "src/lib/ambientPackageMenuDraftAdoption.js"
+    ]);
   });
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
-    expect(parseFunctionExports(functionsEntrypointSource)).toHaveLength(77);
+    expect(parseFunctionExports(functionsEntrypointSource)).toHaveLength(80);
 
     const source = [
       "exports.first = onCall(async () => {",

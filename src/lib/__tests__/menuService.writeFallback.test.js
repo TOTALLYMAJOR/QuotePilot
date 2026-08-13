@@ -90,7 +90,8 @@ describe("menuService write fallback behavior", () => {
         eventTypeId: "wedding",
         categoryId: "mains",
         name: "Smoked Ribs",
-        price: 6
+        price: 6,
+        expectedCatalogRevision: 0
       })
     ).rejects.toThrow(/organizationId is required for createMenuItem/i);
 
@@ -105,7 +106,8 @@ describe("menuService write fallback behavior", () => {
       categoryId: "mains",
       name: "Smoked Ribs",
       price: 6,
-      organizationId: "Org 123"
+      organizationId: "Org 123",
+      expectedCatalogRevision: 0
     });
 
     expect(mockState.getOrganizationCollectionRef).toHaveBeenCalledWith("menuItems", "org-123");
@@ -119,7 +121,8 @@ describe("menuService write fallback behavior", () => {
       eventTypeId: "wedding",
       categoryId: "mains",
       name: "Smoked Ribs",
-      price: 6
+      price: 6,
+      expectedCatalogRevision: 0
     });
 
     expect(mockState.getOrganizationCollectionRef).toHaveBeenCalledWith("menuItems", "active-org");
@@ -135,7 +138,8 @@ describe("menuService write fallback behavior", () => {
       createMenuItem({
         eventTypeId: "wedding",
         categoryId: "mains",
-        name: "Smoked Ribs"
+        name: "Smoked Ribs",
+        expectedCatalogRevision: 0
       })
     ).rejects.toThrow(/organizationId is required for createMenuItem/i);
   });
@@ -143,7 +147,8 @@ describe("menuService write fallback behavior", () => {
   test("createEventType starts blank unless canonical seeding is explicitly requested", async () => {
     const created = await createEventType({
       name: "New Event Type",
-      organizationId: "Org 123"
+      organizationId: "Org 123",
+      expectedCatalogRevision: 0
     });
 
     expect(created.id).toBe("event-type-seeded");
@@ -159,6 +164,7 @@ describe("menuService write fallback behavior", () => {
     const created = await createEventType({
       name: "New Event Type",
       organizationId: "Org 123",
+      expectedCatalogRevision: 0,
       seedCanonical: true
     });
 
@@ -168,5 +174,23 @@ describe("menuService write fallback behavior", () => {
     });
     expect(mockState.transaction.set).toHaveBeenCalledTimes(105);
     expect(mockState.runTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects a stale firebase menu mutation before any record write", async () => {
+    mockState.transaction.get.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ catalogRevision: 4, pricingSetupConfirmed: true })
+    });
+
+    await expect(createMenuItem({
+      eventTypeId: "wedding",
+      categoryId: "mains",
+      name: "Smoked Ribs",
+      organizationId: "Org 123",
+      expectedCatalogRevision: 3
+    })).rejects.toMatchObject({ code: "aborted" });
+
+    expect(mockState.transaction.set).not.toHaveBeenCalled();
+    expect(mockState.transaction.update).not.toHaveBeenCalled();
   });
 });

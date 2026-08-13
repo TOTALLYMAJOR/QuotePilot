@@ -116,37 +116,29 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
   pilotEventRoom = PILOT_EVENT_ROOM_ENABLED
 }, forwardedRef) {
   const soldScopeRef = useRef(null);
+
   const model = buildEventWorkspacePresentation(quote, {
     source,
     ordinaryEditAllowed
   });
+  const { attention, nextAction } = model;
   const decideStack = pilotEventRoom
     ? buildDecideStack(quote, { ordinaryEditAllowed })
     : null;
   const cascade = pilotEventRoom ? buildCascadePresentation(quote) : null;
 
-  const runDecideAction = (action) => {
-    if (action?.kind === "edit") {
-      onEditQuote?.(quote);
-      return;
-    }
-    onMoreQuoteActions?.();
-  };
+  const runDecideAction = (action) => (
+    action?.kind === "edit" ? onEditQuote?.(quote) : onMoreQuoteActions?.()
+  );
 
-  const runNextAction = () => {
-    if (model.nextAction.kind === "workflow") {
-      onOpenWorkflow?.(model.nextAction.target);
-      return;
-    }
-    if (model.nextAction.kind === "edit") {
-      onEditQuote?.(quote);
-      return;
-    }
-    onMoreQuoteActions?.();
-  };
+  const runNextAction = () => (
+    nextAction.kind === "workflow"
+      ? onOpenWorkflow?.(nextAction.target)
+      : runDecideAction(nextAction)
+  );
 
   const focusSoldScope = () => {
-    soldScopeRef.current?.focus({ preventScroll: false });
+    soldScopeRef.current?.focus();
     soldScopeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
@@ -174,7 +166,7 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
             <StatusChip {...model.status} />
           </div>
           <p className="event-venue">{model.venue}</p>
-          <dl className="event-key-facts" aria-label="Event facts">
+          <dl className="event-key-facts" aria-label="Event details">
             <div><dt>Customer</dt><dd>{model.customerName}</dd></div>
             <div><dt>Date</dt><dd>{model.eventDate}</dd></div>
             <div><dt>Time</dt><dd>{model.eventTime}</dd></div>
@@ -198,17 +190,17 @@ const EventWorkspaceView = forwardRef(function EventWorkspaceView({
       <div className="event-workspace-body">
       <div className="event-main-col">
       <section className="event-triage-grid" aria-label="Current event condition and next action">
-        <div className={`event-condition-card is-${model.attention.state}`}>
+        <div className={`event-condition-card is-${attention.state}`}>
           <p className="eyebrow">Current condition</p>
-          <strong>{model.attention.title}</strong>
-          <p>{model.attention.detail}</p>
+          <strong>{attention.title}</strong>
+          <p>{attention.detail}</p>
         </div>
         <div className="event-next-action-card">
           <p className="eyebrow">{model.intelligence.needsYou.state === "attention" ? "Needs you" : "Next action"}</p>
-          <strong>{model.nextAction.title}</strong>
-          <p>{model.nextAction.detail}</p>
+          <strong>{nextAction.title}</strong>
+          <p>{nextAction.detail}</p>
           <button type="button" className="event-inline-action" onClick={runNextAction}>
-            {model.nextAction.label}
+            {nextAction.label}
             <ArrowRight size={17} aria-hidden="true" />
           </button>
         </div>

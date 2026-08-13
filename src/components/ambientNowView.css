@@ -1,0 +1,311 @@
+.ambient-now {
+  display: grid;
+  gap: clamp(1.5rem, 3vw, 3rem);
+  padding: clamp(1.1rem, 2.8vw, 2.6rem) 6px clamp(2.5rem, 5vw, 5rem);
+}
+
+.ambient-now__masthead {
+  align-items: flex-start;
+  padding-bottom: clamp(1rem, 2vw, 1.7rem);
+  border-bottom: 1px solid color-mix(in srgb, var(--tone-ink-1) 14%, transparent);
+}
+
+.ambient-now__masthead h2 {
+  max-width: 13ch;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.15rem, 5vw, 4.75rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+.ambient-now__intro {
+  max-width: 36rem;
+  margin: 0.85rem 0 0;
+  color: var(--tone-ink-2);
+  line-height: 1.55;
+}
+
+.ambient-now .right-actions button {
+  min-height: 44px;
+}
+
+.ambient-now__acknowledgement,
+.ambient-now__error {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  border-left: 3px solid var(--ambient-teal, #237f78);
+  background: color-mix(in srgb, var(--ambient-teal, #237f78) 8%, transparent);
+  color: var(--tone-ink-2);
+}
+
+.ambient-now__acknowledgement--recovery,
+.ambient-now__error {
+  border-left-color: var(--tone-danger);
+  background: color-mix(in srgb, var(--tone-danger) 9%, transparent);
+}
+
+.ambient-now__section-heading,
+.ambient-now-horizon__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.25rem;
+  align-items: end;
+}
+
+.ambient-now__section-heading h3,
+.ambient-now-progress h3,
+.ambient-now-horizon h3 {
+  margin: 0.15rem 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.55rem, 3vw, 2.45rem);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.ambient-now__section-heading > p,
+.ambient-now-progress > div > p:last-child {
+  max-width: 30rem;
+  margin: 0;
+  color: var(--tone-ink-3);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.ambient-now-priority-list {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid color-mix(in srgb, var(--tone-ink-1) 16%, transparent);
+}
+
+.ambient-now-priority {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr);
+  gap: clamp(0.8rem, 2vw, 1.6rem);
+  padding: clamp(1.1rem, 2.5vw, 1.8rem) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--tone-ink-1) 12%, transparent);
+}
+
+.ambient-now-priority__number {
+  color: var(--tone-gold-3);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.1rem;
+}
+
+.ambient-now-priority[data-signal-severity="blocking"] .ambient-now-priority__number,
+.ambient-now-priority[data-signal-severity="warning"] .ambient-now-priority__number {
+  color: var(--tone-danger);
+}
+
+.ambient-now-priority__body {
+  min-width: 0;
+}
+
+.ambient-now-priority__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.ambient-now-priority__heading p {
+  margin: 0 0 0.15rem;
+  color: var(--tone-ink-3);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ambient-now-priority__heading h4 {
+  margin: 0;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.ambient-now-priority__sentence {
+  max-width: 54rem;
+  margin: 0.55rem 0 0;
+  color: var(--tone-ink-2);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.ambient-now-priority__boundary {
+  margin: 0.45rem 0 0;
+  color: var(--tone-danger);
+  font-size: 0.78rem;
+}
+
+.ambient-now-priority__action {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 0.7rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--ambient-teal, #237f78) 76%, #111);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.ambient-now-priority__action:hover,
+.ambient-now-priority__action:focus-visible {
+  color: color-mix(in srgb, var(--tone-gold-3) 84%, #111);
+  text-decoration: underline;
+  text-underline-offset: 0.25rem;
+}
+
+.ambient-now-priority__action:disabled {
+  color: var(--tone-ink-3);
+  cursor: not-allowed;
+}
+
+.ambient-now__loading,
+.ambient-now__caught-up {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0 0;
+  padding: clamp(1rem, 2.5vw, 1.6rem) 0;
+  border-top: 1px solid color-mix(in srgb, var(--tone-ink-1) 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--tone-ink-1) 14%, transparent);
+}
+
+.ambient-now__caught-up > span {
+  color: var(--tone-ink-3);
+  font-size: 1.4rem;
+}
+
+.ambient-now__caught-up--healthy > span {
+  color: var(--tone-success);
+}
+
+.ambient-now__caught-up h4,
+.ambient-now__caught-up p {
+  margin: 0;
+}
+
+.ambient-now__caught-up p {
+  margin-top: 0.25rem;
+  color: var(--tone-ink-2);
+  line-height: 1.55;
+}
+
+.ambient-now-progress {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.8fr) minmax(0, 1.2fr);
+  gap: clamp(1.5rem, 4vw, 4rem);
+  padding: clamp(1.2rem, 2.5vw, 2rem);
+  background: color-mix(in srgb, var(--ambient-mint, #70a889) 12%, transparent);
+  border-radius: 1.1rem;
+}
+
+.ambient-now-progress ul,
+.ambient-now-horizon ul {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ambient-now-progress li {
+  display: flex;
+  gap: 0.7rem;
+}
+
+.ambient-now-progress li > span {
+  color: var(--tone-success);
+}
+
+.ambient-now-progress strong,
+.ambient-now-progress small {
+  display: block;
+}
+
+.ambient-now-progress small,
+.ambient-now-horizon span {
+  margin-top: 0.15rem;
+  color: var(--tone-ink-3);
+  line-height: 1.45;
+}
+
+.ambient-now-horizon {
+  display: grid;
+  gap: 1rem;
+  padding-top: clamp(1rem, 2vw, 1.7rem);
+  border-top: 1px solid color-mix(in srgb, var(--tone-ink-1) 14%, transparent);
+}
+
+.ambient-now-horizon__columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(1.5rem, 4vw, 4rem);
+}
+
+.ambient-now-horizon h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ambient-now-horizon li {
+  display: grid;
+  gap: 0.15rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--tone-ink-1) 10%, transparent);
+}
+
+@media (max-width: 720px) {
+  .ambient-now {
+    gap: 1.5rem;
+  }
+
+  .ambient-now__masthead,
+  .ambient-now__section-heading,
+  .ambient-now-horizon__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ambient-now__masthead h2 {
+    font-size: clamp(2.2rem, 12vw, 3.5rem);
+  }
+
+  .ambient-now .right-actions {
+    width: 100%;
+  }
+
+  .ambient-now .right-actions button {
+    flex: 1 1 auto;
+  }
+
+  .ambient-now-priority {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .ambient-now-priority__heading {
+    display: grid;
+  }
+
+  .ambient-now-progress,
+  .ambient-now-horizon__columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-now *,
+  .ambient-now *::before,
+  .ambient-now *::after {
+    scroll-behavior: auto !important;
+  }
+}

@@ -177,7 +177,7 @@ function resolveAcceptedRebookSource({ request, sourceQuote, sourceVersion } = {
   if (text(quote.activeVersionId || quote.versionMeta?.versionId) !== normalized.sourceVersionId) {
     throw new RebookQuoteDraftError(
       "aborted",
-      "The accepted source version changed. Refresh Customer 360 before rebooking."
+      "The accepted source version changed. Refresh the client overview before rebooking."
     );
   }
   if (!acceptedRevisionMatches(receipt, normalized.sourceVersionId)) {

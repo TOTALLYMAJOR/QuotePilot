@@ -44,10 +44,11 @@ git checkout -b feature/<scope>-<topic>
   `vercel.json` `git.deploymentEnabled: false` setting. Git publication and
   production mutation are separate events; only the manual evidence-gated
   workflow may promote a release.
-- `Mainline Safety Net (Auto-Revert Failed Pushes)` is recovery defense that
-  reverts a failed current `main` push head. It does not substitute for branch
-  protection, the configured approval policy, or release evidence; production
-  release is blocked wherever those controls are unavailable.
+- `Mainline Safety Net (Recovery PR for Failed Pushes)` is recovery defense
+  that prepares a revert only when the failed commit remains current `main`,
+  publishes it to a dedicated branch, opens a PR, and dispatches CI against
+  that exact recovery head. It never bypasses protected `main` and does not
+  substitute for the configured approval policy or release evidence.
 
 ## Branch Naming
 - `feature/<scope>-<topic>`
@@ -81,7 +82,10 @@ git checkout -b feature/<scope>-<topic>
    - `lane:core (Unit + Build + Governance + Bundle)`
      - checks out full branch history so governance can compare the PR head
        against its actual `origin/main` merge base.
-   - heavy lanes (`lane:firebase-auth-rules`, `lane:authoritative-pricing`, `lane:cwv-smoke`) when required by risk classifier or `main` push policy
+   - heavy lanes (`lane:firebase-auth-rules`, `lane:authoritative-pricing`,
+     `lane:cwv-smoke`) when required by risk classifier or `main` push policy;
+     protected `main` requires all eight named contexts, including
+     classification and all three heavy lanes
      - Firebase heavy lanes install the independently locked `functions/`
        dependencies before starting emulators; root installation alone is not
        a Functions runtime proof;
@@ -95,11 +99,31 @@ git checkout -b feature/<scope>-<topic>
    - Every `CI Quality` job receives only `contents: read`; checkout credentials
      are never persisted into local Git configuration before repository code
      runs. Write-capable recovery remains isolated to the separately reviewed
-     mainline safety-net workflow.
+     mainline safety-net workflow and can create only a branch/PR for ordinary
+     protected-main review.
 4. Complete the pre-merge release-candidate UAT checklist from
    `docs/LAUNCH_RUNBOOK.md` for every intended production target and record the
    immutable candidate deployment. Portal projection backfill is separate
    source/data-operation acceptance, not deployment-target evidence.
+   Use `npm run release:candidate:deploy` only from the clean, published
+   `release/vX.Y.Z` head with its exact successful CI run. The command is fixed
+   to the isolated Firebase staging identity or the `quoteflow` Vercel preview
+   project, requires a SHA-bound confirmation, and records a hosted source/gate
+   manifest plus provider deployment id. The receipt path is reserved before
+   mutation and retains failed or partial outcomes. Firebase-all verification
+   binds Hosting, active Functions revisions and fail-closed runtime readback,
+   and the exact Firestore release/ruleset; Vercel requires the coordinated
+   staging-Functions readback. It cannot promote an alias or enable operational
+   staffing authority.
+   Each candidate manifest and receipt binds the tracked `staging-safe-off`
+   UAT profile. Run
+   `npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`
+   to obtain the machine-readable applicable/blocked plan. Every target item is
+   classified exactly once and every blocked item carries a reason. Applicable
+   is not passed; blocked is not N/A and prevents production qualification.
+   `npm run release:uat:items -- --target <profile>` remains the all-positive
+   target contract. The exact-main attestation accepts only that complete set
+   and never accepts a profile plan, blocked item, waiver, or partial result.
 5. Set/confirm rollback target:
    - Preserve the current target-specific signed provider receipt, including
      deployment id, source SHA, artifact/configuration digests, and health
@@ -111,6 +135,8 @@ git checkout -b feature/<scope>-<topic>
 8. Exercise the exact main SHA on an immutable non-production deployment when
    the release risk calls for it. `Release UAT Attestation` remains available
    for separately recorded human acceptance but is not a normal deploy input.
+   It runs only from exact `main` after exact-main CI and is distinct from the
+   pre-merge candidate assessment.
 9. Tag the same semantic version SHA:
 ```bash
 git tag v<major>.<minor>.<patch>

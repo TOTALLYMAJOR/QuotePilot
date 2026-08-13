@@ -731,6 +731,7 @@ service cloud.firestore {
         "featureFlagsLockReason",
         "featureFlagsLockUpdatedAtISO",
         "commercialChangeAuthorityEnabled",
+        "operationalStaffingAuthorityEnabled",
         "orderId",
         "onboarding"
       ])
@@ -751,6 +752,7 @@ service cloud.firestore {
         "featureFlagsLockReason",
         "featureFlagsLockUpdatedAtISO",
         "commercialChangeAuthorityEnabled",
+        "operationalStaffingAuthorityEnabled",
         "orderId",
         "onboarding"
       ])
@@ -997,6 +999,29 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/postEventCloseouts/{closeoutId}/actionReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Operational staffing profiles, event plans and immutable versions, and
+    // scheduling fences are trusted-server authority. Browser clients consume
+    // only bounded, role-safe projections returned by callables.
+    match /organizations/{orgId}/staffProfiles/{staffProfileId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/staffProfiles/{staffProfileId}/versions/{versionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventStaffingPlans/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventStaffingPlans/{quoteId}/versions/{versionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/staffingScheduleFences/{fenceId} {
       allow read, write: if false;
     }
 

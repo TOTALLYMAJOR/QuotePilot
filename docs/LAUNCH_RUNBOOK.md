@@ -293,6 +293,44 @@ Rollback is to return both global and tenant gates to false. Preserve immutable
 receipts and artifacts for audit; do not delete or rewrite history to simulate a
 rollback. No step in this runbook authorizes production gate promotion.
 
+### Authoritative operational staffing activation gate
+
+Keep `VITE_OPERATIONAL_STAFFING_ENABLED=false`,
+`OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false`, and every trusted tenant setting
+`operationalStaffingAuthorityEnabled=false` through source qualification and a
+coordinated frontend/Functions/rules release. Browser principals cannot promote
+the server or tenant gate. Before any one-tenant activation:
+
+1. Prove same-tenant administrators can create and revise bounded staff
+   profiles and operator-recorded availability, while sales, customers,
+   unverified, cross-tenant, and unscoped principals cannot configure them.
+2. Prove same-tenant administrators and sales staff can read and apply exact
+   quote-revision plans, while every other principal is denied. Direct browser
+   Firestore access to profiles, plans, nested receipts, and schedule fences
+   must remain denied.
+3. Exercise invalid, missing, ambiguous, and nonexistent tenant-local event
+   times; stale or forged quote revisions, counts, staff revisions, and fence
+   revisions; truncated evidence; overlapping availability; and concurrent
+   overlapping assignments. All must fail closed without a partial record.
+4. Prove lost-response retry reuses the identical request and receipt, changed
+   payload replay is rejected, adjacent half-open assignments remain legal, a
+   moved revision clears only its old fence projections, and a transaction
+   failure leaves plans, receipts, and fences unchanged.
+5. Verify the Living Opportunity separates quoted requirements from
+   operator-confirmed assignments, keeps partial plans as visible gaps, exposes
+   stale/uncertain/reconciliation/recovery states, preserves focus and work on
+   dismissal, and labels disconnected fallback `local_draft` at 390, 768, and
+   1440px.
+6. Confirm no command changes quote pricing/version history, portal, proposal,
+   payment, contract, booking, Kitchen BEO, messaging, attendance, payroll, or
+   readiness evidence. A coverage-confirmed staffing plan proves only the exact
+   operator-recorded assignments and schedule-fence check in its receipt.
+
+Rollback disables the presentation and global server gates and returns the
+exact tenant setting to false. Preserve immutable records and receipts for a
+later exact read; never rewrite operational history to simulate rollback. See
+the [authority ADR](OPERATIONAL_STAFFING_AUTHORITY_ADR.md).
+
 ### Revenue Autopilot activation gate
 
 Revenue Autopilot evaluation and outbound sends are independent. Keep this
@@ -492,6 +530,12 @@ production-only buyer flags. Browser variables are not backend authority.
 Keep `BUYER_ACCESS_ENABLED=false` until the exact
 candidate passes review and the merged-main, semantic-tag, target-specific UAT,
 prepare-artifact, and separately owned trusted-deployer controls in section 6.
+
+The following is the separately authorized production-project buyer activation
+window. It is not the fixed pre-merge candidate profile and cannot be cited as
+pre-merge candidate evidence for an unmerged release SHA. Until an immutable
+exact-SHA non-production buyer-acceptance profile exists, the corresponding v3
+candidate-plan items remain blocked.
 
 For an approved hosted test-mode acceptance window:
 
@@ -706,10 +750,90 @@ Session.
 
 Pass all checks before merging a release-intent PR to `main`. For every
 production target intended by the release, use the stable item ids, labels, and
-v2 target applicability in `docs/release-uat-checklist.json`; changes to that
+v3 target applicability in `docs/release-uat-checklist.json`; changes to that
 file change its SHA-256 digest and invalidate older attestations. The broader
 source-acceptance list below also includes the portal backfill tool, which is a
 separate data operation and is deliberately absent from deployment-target UAT.
+
+Candidate assessment and exact-main attestation are distinct evidence stages.
+The fixed candidate declares the machine-enforced `staging-safe-off` UAT
+profile in both its hosted manifest and provider receipt. Print its exact plan
+for a production target with:
+
+```bash
+npm run release:uat:plan -- \
+  --target <firebase-hosting|firebase-backend|firebase-all|vercel> \
+  --candidate-profile staging-safe-off
+```
+
+The JSON plan classifies every target-required item exactly once as
+`applicable` or `blocked`, gives every blocked item a reason, and reports the
+whole profile as `blocked` while any such item remains. `Applicable` means only
+that the profile exposes the prerequisites for the check; it is not a pass.
+`Blocked` is truthful pre-merge evidence of an unmet qualification gate, never
+an omission, waiver, not-applicable result, or successful UAT. A safe-off
+candidate may therefore prove its compatible UI, core authority, and disabled
+boundaries without being misrepresented as production-qualified.
+
+Deploy the exact clean, published `release/vX.Y.Z` head only after the canonical
+`CI Quality` run for that SHA has all eight required jobs green. The guarded
+command fixes provider scope to Firebase project/site
+`quotepilot-staging-20260804` or Vercel project `quoteflow` preview and requires
+a SHA-bound typed confirmation:
+
+```bash
+npm run release:candidate:deploy -- \
+  --target firebase-all \
+  --release-sha <full-release-branch-sha> \
+  --ci-run-id <exact-successful-ci-run-id> \
+  --confirm "DEPLOY CANDIDATE quotepilot-staging-20260804 <full-release-branch-sha>"
+
+npm run release:candidate:deploy -- \
+  --target vercel-preview \
+  --release-sha <full-release-branch-sha> \
+  --ci-run-id <exact-successful-ci-run-id> \
+  --confirm "DEPLOY CANDIDATE quoteflow PREVIEW <full-release-branch-sha>"
+```
+
+The Firebase candidate requires a git-ignored, mode-`0600`
+`functions/.env.quotepilot-staging-20260804` whose provider/send/buyer gates are
+off, `STRIPE_MODE=test`, and the staffing, Commercial Change, Revenue Autopilot
+preparation, and Revenue Autopilot send authority gates explicitly set to
+`false`. The file must be a real regular file, use the exact staging `/app`
+callbacks and approved inert identities, contain no plaintext secret or
+disabled-provider residue, and contain no unreviewed variables. Before any
+Firebase mutation, the command checks metadata only—never secret values—for an
+enabled version of every Secret Manager name bound by the tracked Functions.
+Missing metadata is a blocker and this command does not create placeholders.
+
+Both candidates compile Ambient UI and the staffing browser surface on; that is
+presentation evidence, not staffing or commercial write authority. The Vercel
+preview build uses an explicit exact-staging validation profile; ordinary
+`npm run check:env` remains production-only. Vercel also requires provider
+readback showing the coordinated staging Functions retain every fail-closed
+runtime value before it deploys the browser preview.
+
+Use an authenticated local CLI or the provider token environment variable. The
+command never uses a production target/alias. It exclusively reserves
+`artifacts/release/candidates/<sha>/<target>.json` before provider mutation.
+Build/preflight failures remain `failed`; an attempted provider mutation that
+cannot be completely verified remains `partial`, including any deployment URL
+or id already returned. A `verified` Firebase-all receipt binds the Hosting
+release/version, every active Functions revision and safe runtime-config
+readback, the Firestore release/ruleset and exact rules digest, and the hosted
+SHA/gate manifest. It does not claim secret-value readback. This receipt is
+candidate evidence, not deployment approval, production mutation,
+provider-business acceptance, or human UAT.
+
+The tracked all-positive item list remains available with
+`npm run release:uat:items -- --target <profile>`. Production qualification
+still requires every printed target item to pass exactly once. The exact-main
+`Release UAT Attestation` accepts only that complete positive set; it accepts no
+candidate profile, blocked item, N/A marker, or partial plan. If the safe-off
+plan blocks a required path, use a separately reviewed immutable acceptance
+deployment whose authority and provider scope can exercise that path, or stop
+the release. Do not enable a gate on the fixed safe-off candidate or edit a
+blocked result into a pass.
 
 For any release containing either Stripe collection rail, the applicable
 tracked `payment.*` items are mandatory, not optional spot checks. The exact
@@ -751,6 +875,17 @@ Prove the action changes the designated password and returns to the canonical
 protection is enabled and the continue domain is authorized. The same rendered
 confirmation alone is not network-level enumeration protection, and public
 registration remains a separate abuse-control boundary.
+
+For any release containing authoritative operational staffing, all applicable
+`staffing.*` items are mandatory. The fixed safe-off candidate can prove only
+the disabled-authority boundary. Positive hosted acceptance requires a
+separately authorized non-production window with the global server gate, exact
+disposable tenant gate, and matching presentation gate deliberately enabled;
+it must cover same-tenant roles, profile and availability recording, exact-
+revision partial and complete plans, conflict and replay behavior, immutable
+receipts, responsive accessible recovery, cross-tenant denial, non-mutation of
+commercial/customer evidence, and three-gate rollback. Local emulator success
+does not satisfy these hosted items.
 
 1. CI is fully green:
    - `Classify Changes + Lane Plan`
@@ -876,6 +1011,10 @@ After the reviewed PR merges:
 2. Exercise an immutable exact-SHA preview when the release risk warrants it.
    The optional `Release UAT Attestation` workflow can record human acceptance,
    but the normal solo deployment does not depend on that separate ceremony.
+   This workflow runs only from the exact `main` SHA after exact-main CI and
+   records only the complete all-positive target checklist. It is not the
+   pre-merge candidate assessment and cannot convert a blocked profile plan
+   into acceptance.
 3. Create and publish the semantic version tag on that same SHA.
 4. Confirm the target-specific last-known-good rollback SHA remains an ancestor
    of the release SHA.

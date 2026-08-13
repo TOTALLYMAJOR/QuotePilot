@@ -10,19 +10,55 @@ const REQUIRED = [
   "VITE_FIREBASE_MESSAGING_SENDER_ID",
   "VITE_FIREBASE_APP_ID"
 ];
-const EXPECTED_FIREBASE_PROJECT_ID = "tonicatering";
+const PRODUCTION_FIREBASE_PROJECT_ID = "tonicatering";
+const RELEASE_CANDIDATE_BUILD_PROFILE = "release-candidate";
+const RELEASE_CANDIDATE_FIREBASE = Object.freeze({
+  VITE_FIREBASE_AUTH_DOMAIN: "quotepilot-staging-20260804.firebaseapp.com",
+  VITE_FIREBASE_PROJECT_ID: "quotepilot-staging-20260804",
+  VITE_FIREBASE_STORAGE_BUCKET: "quotepilot-staging-20260804.firebasestorage.app",
+  VITE_FIREBASE_MESSAGING_SENDER_ID: "844470813106",
+  VITE_FIREBASE_APP_ID: "1:844470813106:web:1b2137f26676ef780ca4ab",
+  VITE_APP_URL: "https://quotepilot-staging-20260804.web.app/app",
+  VITE_APP_HOST: "quotepilot-staging-20260804.web.app"
+});
+const RELEASE_CANDIDATE_ENABLED_FLAGS = Object.freeze([
+  "VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED",
+  "VITE_PILOT_NOW_ENABLED",
+  "VITE_PILOT_EVENT_ROOM_ENABLED",
+  "VITE_PILOT_GUIDED_SELLING_ENABLED",
+  "VITE_PILOT_CREATE_ENABLED",
+  "VITE_PILOT_CHANGE_REQUESTS_ENABLED",
+  "VITE_PILOT_COMMAND_ENABLED",
+  "VITE_PILOT_MARGINS_ENABLED",
+  "VITE_PILOT_DECISION_ROOM_ENABLED",
+  "VITE_AMBIENT_UI_ENABLED",
+  "VITE_OPERATIONAL_STAFFING_ENABLED"
+]);
 const PRODUCTION_UNSAFE_FLAGS = [
   "VITE_E2E_BYPASS_AUTH",
   "VITE_USE_FIREBASE_EMULATORS",
   "VITE_ALLOW_LOCAL_CATALOG_FALLBACK",
   "VITE_E2E_ALLOW_NON_AUTHORITATIVE_PRICING"
 ];
+const RELEASE_CANDIDATE_DISABLED_FLAGS = Object.freeze([
+  "VITE_PILOT_MEMORY_ENABLED",
+  "VITE_PILOT_MODEL_ENABLED",
+  "VITE_BUYER_ACCESS_ENABLED",
+  "VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED",
+  ...PRODUCTION_UNSAFE_FLAGS
+]);
 const BUYER_ACCESS_ROUTE_FLAG = "VITE_BUYER_ACCESS_ENABLED";
 const BUYER_ACCESS_CTA_FLAG = "VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED";
 const BUYER_ACCESS_TURNSTILE_SITE_KEY = "VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY";
 const BUYER_ACCESS_FORBIDDEN_BROWSER_SECRET = "VITE_BUYER_ACCESS_TURNSTILE_SECRET";
 
 const cwd = process.cwd();
+const buildProfile = String(process.env.QUOTEPILOT_BUILD_PROFILE || "").trim();
+if (buildProfile && buildProfile !== RELEASE_CANDIDATE_BUILD_PROFILE) {
+  console.error(`Unknown QUOTEPILOT_BUILD_PROFILE: ${buildProfile}.`);
+  process.exit(1);
+}
+const isReleaseCandidateBuild = buildProfile === RELEASE_CANDIDATE_BUILD_PROFILE;
 const productionEnv = {};
 for (const fileName of [
   ".env",
@@ -82,14 +118,40 @@ const configuredProjectIds = [
   .map((value) => String(value || "").trim())
   .filter(Boolean);
 
+const expectedFirebaseProjectId = isReleaseCandidateBuild
+  ? RELEASE_CANDIDATE_FIREBASE.VITE_FIREBASE_PROJECT_ID
+  : PRODUCTION_FIREBASE_PROJECT_ID;
 if (
-  configuredProjectIds.some((projectId) => projectId !== EXPECTED_FIREBASE_PROJECT_ID)
-  || effectiveValue("VITE_FIREBASE_PROJECT_ID") !== EXPECTED_FIREBASE_PROJECT_ID
+  configuredProjectIds.some((projectId) => projectId !== expectedFirebaseProjectId)
+  || effectiveValue("VITE_FIREBASE_PROJECT_ID") !== expectedFirebaseProjectId
 ) {
   console.error(
-    `Firebase project mismatch. QuotePilot production configuration must target ${EXPECTED_FIREBASE_PROJECT_ID}.`
+    `Firebase project mismatch. QuotePilot ${isReleaseCandidateBuild ? "release candidate" : "production"} configuration must target ${expectedFirebaseProjectId}.`
   );
   process.exit(1);
+}
+
+if (isReleaseCandidateBuild) {
+  const identityMismatches = Object.entries(RELEASE_CANDIDATE_FIREBASE)
+    .filter(([name, expected]) => effectiveValue(name) !== expected)
+    .map(([name]) => name);
+  if (identityMismatches.length) {
+    console.error("Release-candidate Firebase identity mismatch:");
+    identityMismatches.forEach((key) => console.error(`- ${key}`));
+    process.exit(1);
+  }
+  const disabledResidue = RELEASE_CANDIDATE_DISABLED_FLAGS.filter((name) => (
+    isTruthy(effectiveValue(name))
+  ));
+  const missingPresentationFlags = RELEASE_CANDIDATE_ENABLED_FLAGS.filter((name) => (
+    !isTruthy(effectiveValue(name))
+  ));
+  if (disabledResidue.length || missingPresentationFlags.length) {
+    console.error("Release-candidate presentation and safety flags do not match the fixed profile:");
+    disabledResidue.forEach((key) => console.error(`- ${key} must be false`));
+    missingPresentationFlags.forEach((key) => console.error(`- ${key} must be true`));
+    process.exit(1);
+  }
 }
 
 const enabledUnsafeFlags = PRODUCTION_UNSAFE_FLAGS.filter((key) => (

@@ -178,6 +178,29 @@ describe("Firebase email actions", () => {
     );
   });
 
+  test("accepts the fixed isolated QuotePilot staging /app continue URL", async () => {
+    vi.stubEnv("VITE_APP_URL", "https://quotepilot-staging-20260804.web.app/app");
+
+    await requestPasswordReset({ email: "owner@example.com" });
+
+    expect(authMocks.sendPasswordResetEmail).toHaveBeenCalledWith(
+      authMocks.auth,
+      "owner@example.com",
+      {
+        url: "https://quotepilot-staging-20260804.web.app/app",
+        handleCodeInApp: false
+      }
+    );
+  });
+
+  test("rejects lookalike QuotePilot staging hosts", async () => {
+    vi.stubEnv("VITE_APP_URL", "https://quotepilot-staging-20260804.web.app.evil.example/app");
+
+    await expect(requestPasswordReset({ email: "owner@example.com" }))
+      .rejects.toThrow("approved HTTPS /app location");
+    expect(authMocks.sendPasswordResetEmail).not.toHaveBeenCalled();
+  });
+
   test("uses the canonical custom-domain URL from the Firebase Hosting fallback", async () => {
     vi.stubGlobal("window", {
       location: { origin: "https://tonicatering.web.app" }

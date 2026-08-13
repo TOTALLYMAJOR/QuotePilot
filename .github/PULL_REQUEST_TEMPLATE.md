@@ -41,12 +41,13 @@
 ## Production Release Gate
 - Production impact: none / production-triggering
 - [ ] If production-triggering: all hard-gate CI jobs are green (including Firebase/CWV lanes when required)
-- [ ] If production-triggering: every intended target's applicable tracked UAT items from `docs/release-uat-checklist.json` passed on an immutable candidate deployment
+- [ ] If production-triggering: every intended target's tracked UAT item passed on immutable coordinated evidence; no profile-plan item remains blocked
 - [ ] If production-triggering: rollback SHA/path is confirmed against `PROJECT_STATUS.md`
 - Candidate commit SHA:
 - Immutable candidate deployment id/URL:
 - Checklist digest (`npm run release:uat:digest`):
-- Intended target(s) and applicable ids (`npm run release:uat:items -- --target <profile>`):
+- Intended target(s) and complete required positive-pass ids (`npm run release:uat:items -- --target <profile>`):
+- Candidate profile plan (`npm run release:uat:plan -- --target <profile> --candidate-profile staging-safe-off`), including blocked ids/reasons:
 - Candidate UAT attester and evidence link:
 - Post-merge release SHA / exact-main CI run id (release operator):
 - Protected UAT run id / exact deploy profile / rollback SHA (release operator):

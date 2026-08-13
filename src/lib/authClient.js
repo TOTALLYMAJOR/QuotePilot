@@ -20,7 +20,8 @@ function normalizeEmail(value) {
 }
 
 const APPROVED_EMAIL_ACTION_HOSTS = new Set([
-  "quotepilot.mbmapps.com"
+  "quotepilot.mbmapps.com",
+  "quotepilot-staging-20260804.web.app"
 ]);
 const CANONICAL_EMAIL_ACTION_URL = "https://quotepilot.mbmapps.com/app";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);

@@ -67,6 +67,7 @@ export function CommercialSearchPaletteContent({
   return (
     <div
       className="modal-overlay commercial-search-overlay"
+      data-layout-overlap-allowed="true"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -83,7 +84,7 @@ export function CommercialSearchPaletteContent({
       >
         <header className="commercial-search-head">
           <div>
-            <p className="eyebrow">Commercial search</p>
+            <p className="eyebrow">Workspace search</p>
             <h2 id="commercial-search-title">Find a customer or quote</h2>
             <p className="muted">Jump to an existing staff record without leaving a draft behind.</p>
           </div>
@@ -144,12 +145,12 @@ export function CommercialSearchPaletteContent({
 
           {status === "error" && (
             <p role="alert" className="commercial-search-message error-note">
-              Commercial search could not read either bounded source. Try again.
+              Workspace search could not read either bounded source. Try again.
             </p>
           )}
 
           {results.length > 0 && (
-            <ul className="commercial-search-results" aria-label="Commercial search results">
+            <ul className="commercial-search-results" aria-label="Workspace search results">
               {results.map((result) => (
                 <li key={`${result.kind}:${result.id}`}>
                   <button

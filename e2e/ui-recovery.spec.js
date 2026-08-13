@@ -70,7 +70,7 @@ test("Escape preserves the Catalog Admin unsaved-change guard", async ({ page })
 
   const catalog = page.getByRole("dialog", { name: "Catalog Admin" });
   await expect(catalog).toBeVisible();
-  await catalog.getByRole("button", { name: "Pricing" }).click();
+  await catalog.getByRole("tab", { name: "Pricing" }).click();
   const businessName = catalog.getByLabel("Business name");
   await businessName.fill(`${await businessName.inputValue()} recovery test`);
   await expect(catalog.getByText("Unsaved changes")).toBeVisible();
@@ -81,7 +81,7 @@ test("Escape preserves the Catalog Admin unsaved-change guard", async ({ page })
     await guard.dismiss();
   });
   await page.keyboard.press("Escape");
-  await expect.poll(() => guardMessage).toBe("Discard unsaved catalog and branding changes?");
+  await expect.poll(() => guardMessage).toBe("Discard unsaved catalog, menu, and branding changes?");
   await expect(catalog).toBeVisible();
 
   page.once("dialog", (guard) => guard.accept());
@@ -95,13 +95,13 @@ test("authoritative menu deactivate and delete keep unrelated Catalog Admin draf
   await openOperationsItem(page, "Catalog Admin");
 
   const catalog = page.getByRole("dialog", { name: "Catalog Admin" });
-  await catalog.getByRole("button", { name: "Pricing" }).click();
+  await catalog.getByRole("tab", { name: "Pricing" }).click();
   const businessName = catalog.getByLabel("Business name");
   const draftName = `${await businessName.inputValue()} protected draft`;
   await businessName.fill(draftName);
   await expect(catalog.getByText("Unsaved changes")).toBeVisible();
 
-  await catalog.getByRole("button", { name: "Menu" }).click();
+  await catalog.getByRole("tab", { name: "Menu" }).click();
   const managedRows = catalog.locator(".admin-menu-row-managed");
   await expect.poll(() => managedRows.count()).toBeGreaterThan(0);
   const row = managedRows.first();
@@ -122,7 +122,7 @@ test("authoritative menu deactivate and delete keep unrelated Catalog Admin draf
   ).first()).toBeVisible();
   await expect(managedRows).toHaveCount(rowCount);
 
-  await catalog.getByRole("button", { name: "Pricing" }).click();
+  await catalog.getByRole("tab", { name: "Pricing" }).click();
   await expect(catalog.getByLabel("Business name")).toHaveValue(draftName);
   await expect(catalog.getByText("Unsaved changes")).toBeVisible();
 });

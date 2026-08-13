@@ -229,7 +229,8 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
     );
   }
   await expect(changeImpact).toContainText("fact.event.guest_count");
-  await expect(changeImpact).toContainText("Commercial delta");
+  await expect(changeImpact.getByRole("heading", { name: "Price change", exact: true })).toBeVisible();
+  await expect(changeImpact).toContainText("Total change");
   await expect(changeImpact).toContainText(
     "Nothing is invalidated, regenerated, or published here."
   );

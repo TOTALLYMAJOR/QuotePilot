@@ -1,20 +1,25 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import AttentionBadge from "./components/AttentionBadge";
 import AuthGate from "./components/AuthGate";
-import CustomerPortalView from "./components/CustomerPortalView";
+import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProductBrandLockup from "./components/ProductBrandLockup";
+import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
   createRecoverableLazy,
-  LazySurfaceLoading,
   RecoverableErrorBoundary
 } from "./components/RecoverableErrorBoundary";
+import {
+  useStickyMount,
+  WorkspaceArrivalNotice,
+  WorkspaceLazyRoute,
+  WorkspaceLazyTool,
+  WorkspaceToolSurface
+} from "./components/WorkspaceSurfaceBoundary";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import CreateIntake from "./components/CreateIntake";
-import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
-import PilotCommandBar from "./components/PilotCommandBar";
+import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
 import {
   isDefinitiveRecordError,
@@ -45,8 +50,10 @@ import {
   reconcileCatalogSelections
 } from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import {
+  hydrateSavedQuoteDraftBase
+} from "./lib/quoteDraftRuntimeBase";
 import { recommendationWouldChangeForm } from "./lib/recommendationState";
-import { PRODUCT_NAME } from "./lib/productIdentity";
 import {
   applyEventTypeTemplateDefaults,
   buildStepperModel,
@@ -78,18 +85,22 @@ import {
   WORKSPACE_PATHS,
   WORKSPACE_ROUTE_IDS
 } from "./lib/workspaceRoutes";
+import {
+  createWorkspaceArrivalHandoff,
+  parseWorkspaceArrivalHandoff
+} from "./lib/workspaceArrivalContract";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
 import { createRebookQuoteDraft } from "./lib/rebookQuoteClient";
 import { clearTenantContextCache } from "./lib/tenantDomainService";
 import {
   beginWizardAnalyticsSession,
   recordProductAnalyticsEvent
-} from "./lib/productAnalytics";
+} from "quotepilot-active-product-analytics";
 
-const AdminCatalogModal = createRecoverableLazy(
-  () => import("./components/AdminCatalogModal"),
-  "AdminCatalogModal"
-);
+const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
 const AdminCatalogView = createRecoverableLazy(
   () => import("./components/AdminCatalogModal").then((module) => ({ default: module.AdminCatalogView })),
   "AdminCatalogView"
@@ -97,10 +108,6 @@ const AdminCatalogView = createRecoverableLazy(
 const CommandCenterHome = createRecoverableLazy(
   () => import("./components/CommandCenterHome"),
   "CommandCenterHome"
-);
-const NowView = createRecoverableLazy(
-  () => import("./components/NowView"),
-  "NowView"
 );
 const CommercialSearchPalette = createRecoverableLazy(
   () => import("./components/CommercialSearchPalette"),
@@ -115,44 +122,32 @@ const CustomerDirectoryView = createRecoverableLazy(
   "CustomerDirectoryView"
 );
 const CustomerWorkspaceView = createRecoverableLazy(
-  () => import("./components/CustomerWorkspaceView"),
+  () => import("quotepilot-active-customer-workspace"),
   "CustomerWorkspaceView"
 );
 const MessagingStation = createRecoverableLazy(
-  () => import("./components/MessagingStation"),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/MessagingStation")
+    : () => import("./components/LegacyMessagingStation"),
   "MessagingStation"
 );
 const WorkspaceNotFound = createRecoverableLazy(
   () => import("./components/WorkspaceNotFound"),
   "WorkspaceNotFound"
 );
-const EventScheduleModal = createRecoverableLazy(
-  () => import("./components/EventScheduleModal"),
-  "EventScheduleModal"
-);
 const EventScheduleView = createRecoverableLazy(
-  () => import("./components/EventScheduleModal").then((module) => ({ default: module.EventScheduleView })),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/EventScheduleRoute")
+    : () => import("./components/LegacyEventScheduleRoute"),
   "EventScheduleView"
-);
-const IntegrationOpsModal = createRecoverableLazy(
-  () => import("./components/IntegrationOpsModal"),
-  "IntegrationOpsModal"
 );
 const IntegrationOpsView = createRecoverableLazy(
   () => import("./components/IntegrationOpsModal").then((module) => ({ default: module.IntegrationOpsView })),
   "IntegrationOpsView"
 );
-const ImportStudioModal = createRecoverableLazy(
-  () => import("./components/ImportStudioModal"),
-  "ImportStudioModal"
-);
 const ImportStudioView = createRecoverableLazy(
   () => import("./components/ImportStudioModal").then((module) => ({ default: module.ImportStudioView })),
   "ImportStudioView"
-);
-const DiagnosticsModal = createRecoverableLazy(
-  () => import("./components/DiagnosticsModal"),
-  "DiagnosticsModal"
 );
 const DiagnosticsView = createRecoverableLazy(
   () => import("./components/DiagnosticsModal").then((module) => ({ default: module.DiagnosticsView })),
@@ -163,19 +158,21 @@ const QuoteCompareModal = createRecoverableLazy(
   "QuoteCompareModal"
 );
 const QuoteHistoryView = createRecoverableLazy(
-  () => import("./components/QuoteHistoryModal").then((module) => ({ default: module.QuoteHistoryView })),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/QuoteHistoryRoute")
+    : () => import("./components/LegacyQuoteHistoryRoute"),
   "QuoteHistoryView"
 );
-const ReportingDashboardModal = createRecoverableLazy(
-  () => import("./components/ReportingDashboardModal"),
-  "ReportingDashboardModal"
-);
 const ReportingDashboardView = createRecoverableLazy(
-  () => import("./components/ReportingDashboardModal").then((module) => ({ default: module.ReportingDashboardView })),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/ReportingDashboardRoute")
+    : () => import("./components/LegacyReportingDashboardRoute"),
   "ReportingDashboardView"
 );
 const SalesWorkflowView = createRecoverableLazy(
-  () => import("./components/SalesWorkflowModal").then((module) => ({ default: module.SalesWorkflowView })),
+  AMBIENT_UI_ENABLED
+    ? () => import("./components/SalesWorkflowRoute")
+    : () => import("./components/LegacySalesWorkflowRoute"),
   "SalesWorkflowView"
 );
 
@@ -187,28 +184,104 @@ const CUSTOMER_CENTERED_WORKSPACE_ENABLED = !["0", "false", "no", "off"].include
 );
 // The NOW surface is an additional default-off presentation gate. Absent or
 // unrecognized values keep it off; it never widens data access or authority.
-const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
-  && ["1", "true", "yes", "on"].includes(
-    String(import.meta.env.VITE_PILOT_NOW_ENABLED || "").trim().toLowerCase()
-  );
+const PILOT_NOW_REQUESTED = import.meta.env.VITE_PILOT_NOW_ENABLED === "1"
+  || import.meta.env.VITE_PILOT_NOW_ENABLED === "true"
+  || import.meta.env.VITE_PILOT_NOW_ENABLED === "yes"
+  || import.meta.env.VITE_PILOT_NOW_ENABLED === "on";
+const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED && PILOT_NOW_REQUESTED;
 // The CREATE intake canvas is an additional default-off presentation gate
 // (docs/INTENT_INTAKE_ADR.md). It prefills the ordinary editable draft form
 // only; quote creation authority is unchanged.
-const PILOT_CREATE_ENABLED = ["1", "true", "yes", "on"].includes(
-  String(import.meta.env.VITE_PILOT_CREATE_ENABLED || "").trim().toLowerCase()
-);
+const PILOT_CREATE_ENABLED = import.meta.env.VITE_PILOT_CREATE_ENABLED === "1"
+  || import.meta.env.VITE_PILOT_CREATE_ENABLED === "true"
+  || import.meta.env.VITE_PILOT_CREATE_ENABLED === "yes"
+  || import.meta.env.VITE_PILOT_CREATE_ENABLED === "on";
 // The client-request panel is an additional default-off presentation gate.
 // It parses the stored change-request message into stageable draft edits
 // only; the ordinary save path remains the sole versioning authority.
-const PILOT_CHANGE_REQUESTS_ENABLED = ["1", "true", "yes", "on"].includes(
-  String(import.meta.env.VITE_PILOT_CHANGE_REQUESTS_ENABLED || "").trim().toLowerCase()
-);
+const PILOT_CHANGE_REQUESTS_ENABLED = import.meta.env.VITE_PILOT_CHANGE_REQUESTS_ENABLED === "1"
+  || import.meta.env.VITE_PILOT_CHANGE_REQUESTS_ENABLED === "true"
+  || import.meta.env.VITE_PILOT_CHANGE_REQUESTS_ENABLED === "yes"
+  || import.meta.env.VITE_PILOT_CHANGE_REQUESTS_ENABLED === "on";
 // The Pilot command bar is an additional default-off presentation gate.
 // Commands preview before anything touches the draft; applying stages
 // draft edits only, and the save path remains the sole authority.
-const PILOT_COMMAND_ENABLED = ["1", "true", "yes", "on"].includes(
-  String(import.meta.env.VITE_PILOT_COMMAND_ENABLED || "").trim().toLowerCase()
-);
+const PILOT_COMMAND_ENABLED = import.meta.env.VITE_PILOT_COMMAND_ENABLED === "1"
+  || import.meta.env.VITE_PILOT_COMMAND_ENABLED === "true"
+  || import.meta.env.VITE_PILOT_COMMAND_ENABLED === "yes"
+  || import.meta.env.VITE_PILOT_COMMAND_ENABLED === "on";
+// Default-off presentation replacement for Pilot Slice Alpha. This class is
+// used only to remove duplicate mobile chrome around the selected opportunity;
+// authority remains in the existing quote callbacks and save path.
+const AMBIENT_NOW_ENABLED = AMBIENT_UI_ENABLED && PILOT_NOW_ENABLED;
+// Keep the v0.7 command surface available under its existing gate while the
+// expanded query/scenario contract stays coupled to the separately default-off
+// Ambient release. Production currently binds Pilot Command but not Ambient.
+const AMBIENT_PILOT_COMMANDS_ENABLED = AMBIENT_UI_ENABLED && PILOT_COMMAND_ENABLED;
+const LEGACY_NOW_ENABLED = PILOT_NOW_ENABLED && !AMBIENT_UI_ENABLED;
+
+const AmbientGlobalPilotSurface = AMBIENT_UI_ENABLED
+  ? createRecoverableLazy(
+      () => import("./components/AmbientGlobalPilotSurface"),
+      "AmbientGlobalPilotSurface"
+    )
+  : null;
+const AmbientNowView = AMBIENT_NOW_ENABLED
+  ? createRecoverableLazy(
+      () => import("./components/AmbientNowView"),
+      "AmbientNowView"
+    )
+  : null;
+const NowView = LEGACY_NOW_ENABLED
+  ? createRecoverableLazy(
+      () => import("./components/NowView"),
+      "NowView"
+    )
+  : null;
+const PilotCommandBar = PILOT_COMMAND_ENABLED
+  ? createRecoverableLazy(
+      AMBIENT_UI_ENABLED
+        ? () => import("./components/PilotCommandBar")
+        : () => import("./components/LegacyPilotCommandBar"),
+      "PilotCommandBar"
+    )
+  : null;
+const loadAmbientPackageMenuCatalogEvidence = AMBIENT_PILOT_COMMANDS_ENABLED
+  ? () => import("./lib/ambientPackageMenuCatalogEvidence")
+  : null;
+const loadPilotScenarioDraftReview = AMBIENT_PILOT_COMMANDS_ENABLED
+  ? () => import("./lib/pilotScenarioDraftReview")
+  : null;
+const loadAmbientPackageMenuDraftAdoption = AMBIENT_UI_ENABLED
+  ? () => import("./lib/ambientPackageMenuDraftAdoption")
+  : null;
+const loadAmbientQuoteDraftRuntime = AMBIENT_UI_ENABLED
+  ? () => import("./lib/quoteDraftRuntime")
+  : null;
+const loadAmbientProductAnalytics = AMBIENT_UI_ENABLED
+  ? () => import("./lib/productAnalyticsAmbient")
+  : null;
+const loadAmbientGlobalPilotTarget = AMBIENT_UI_ENABLED
+  ? () => import("./lib/ambientGlobalPilotTarget")
+  : null;
+const AmbientDraftIntentReview = AMBIENT_UI_ENABLED
+  ? createRecoverableLazy(
+      () => import("./components/AmbientDraftIntentReview"),
+      "AmbientDraftIntentReview"
+    )
+  : null;
+const AmbientLibraryRoute = AMBIENT_UI_ENABLED
+  ? createRecoverableLazy(
+      () => import("./components/AmbientLibraryRoute"),
+      "AmbientLibraryRoute"
+    )
+  : null;
+const AmbientPilotScenarioReview = AMBIENT_PILOT_COMMANDS_ENABLED
+  ? createRecoverableLazy(
+      () => import("./components/AmbientPilotScenarioReview"),
+      "AmbientPilotScenarioReview"
+    )
+  : null;
 
 const INITIAL_FORM = {
   date: "",
@@ -279,6 +352,7 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   applyResult: null,
   applyOutcome: null
 });
+const EMPTY_LIBRARY_INTERACTION = Object.freeze({ dirty: false, busy: false });
 
 function readPortalKeyFromUrl() {
   if (typeof window === "undefined") return "";
@@ -338,78 +412,6 @@ const OWNER_SMS_TIMEOUT_MS = toPositiveTimeout(
   import.meta.env.VITE_OWNER_SMS_TIMEOUT_MS,
   15_000
 );
-
-function toOptionalNumber(value) {
-  if (value === null || value === undefined || value === "") return "";
-  const n = Number(value);
-  return Number.isFinite(n) ? n : "";
-}
-
-function useStickyMount(active) {
-  const [hasMounted, setHasMounted] = useState(Boolean(active));
-
-  useEffect(() => {
-    if (active) setHasMounted(true);
-  }, [active]);
-
-  return Boolean(active) || hasMounted;
-}
-
-function WorkspaceLazyTool({
-  open,
-  surfaceName,
-  component: LazyComponent,
-  onClose,
-  returnFocusRef,
-  hasUnsavedWorkspaceChanges = false,
-  children
-}) {
-  return (
-    <RecoverableErrorBoundary
-      active={open}
-      surfaceName={surfaceName}
-      surfaceKind="tool"
-      onRetry={LazyComponent.retry}
-      onClose={onClose}
-      returnFocusRef={returnFocusRef}
-      hasUnsavedWorkspaceChanges={hasUnsavedWorkspaceChanges}
-    >
-      <Suspense
-        fallback={open ? (
-          <LazySurfaceLoading
-            surfaceName={surfaceName}
-            onClose={onClose}
-            returnFocusRef={returnFocusRef}
-          />
-        ) : null}
-      >
-        {children}
-      </Suspense>
-    </RecoverableErrorBoundary>
-  );
-}
-
-function WorkspaceLazyRoute({
-  active = true,
-  surfaceName,
-  component: LazyComponent,
-  onClose = () => window.location.assign(WORKSPACE_PATHS.home),
-  children
-}) {
-  return (
-    <RecoverableErrorBoundary
-      active={active}
-      surfaceName={surfaceName}
-      surfaceKind="route"
-      onRetry={LazyComponent.retry}
-      onClose={onClose}
-    >
-      <Suspense fallback={active ? <div className="qp-route-loading" role="status">Loading {surfaceName}...</div> : null}>
-        {children}
-      </Suspense>
-    </RecoverableErrorBoundary>
-  );
-}
 
 function WorkspaceStatusCard({ children }) {
   return (
@@ -645,12 +647,181 @@ function buildTemplateDefaultsNotice({
   };
 }
 
-export default function App({ tenantContext, authSession }) {
-  const { route: browserRoute, navigate, replace } = useWorkspaceNavigation();
+const WORKFLOW_ARRIVAL_INTENT_BY_ATTENTION = Object.freeze({
+  approval: "review_approval",
+  change_request: "review_customer_request",
+  follow_up: "review_follow_up",
+  post_event_closeout: "review_follow_up",
+  anniversary_rebooking: "review_follow_up",
+  decision_debt: "review_decision_debt",
+  unread_customer_reply: "review_customer_reply"
+});
+
+function ambientWorkflowArrivalInput(target = {}, options = {}) {
+  const arrivalTarget = options?.arrivalContext?.target || {};
+  const quoteId = String(target?.quoteId || arrivalTarget?.quoteId || "").trim();
+  const requestId = String(target?.requestId || arrivalTarget?.requestId || "").trim();
+  const inferredConversationRequest = options?.arrivalContext?.object?.type
+    === "customer-communication-evidence";
+  const attentionType = String(
+    target?.attentionType
+    || arrivalTarget?.attentionType
+    || (inferredConversationRequest && requestId ? "change_request" : "")
+  ).trim();
+  const approval = attentionType === "approval";
+  return {
+    destination: approval ? "approval" : "workflow",
+    object: {
+      id: requestId,
+      type: approval ? "approval" : "workflow-item"
+    },
+    focus: approval
+      ? { quoteId, requestId }
+      : { quoteId, attentionType, requestId },
+    intentId: WORKFLOW_ARRIVAL_INTENT_BY_ATTENTION[attentionType] || "review_workflow_item"
+  };
+}
+
+function ambientConversationArrivalInput(quoteId, options = {}) {
+  const normalizedQuoteId = String(quoteId || "").trim();
+  const messageId = String(options?.arrivalContext?.target?.messageId || "").trim();
+  return {
+    destination: "messages",
+    object: messageId
+      ? { id: messageId, type: "customer-communication-evidence" }
+      : { id: normalizedQuoteId, type: "opportunity" },
+    focus: messageId
+      ? { quoteId: normalizedQuoteId, messageId }
+      : { quoteId: normalizedQuoteId },
+    intentId: messageId
+      ? "review_customer_reply"
+      : "review_conversation"
+  };
+}
+
+function ambientOpportunityArrivalInput(target = {}) {
+  const quoteId = String(target?.quoteId || "").trim();
+  const actionId = String(target?.actionId || "").trim();
+  return {
+    destination: "opportunity",
+    object: { id: quoteId, type: "opportunity" },
+    focus: { quoteId },
+    intentId: actionId.startsWith("review-opportunity-proposal:")
+      ? "review_proposal_gap"
+      : "review_opportunity"
+  };
+}
+
+function ambientClientArrivalInput(target = {}) {
+  const customerId = String(target?.customerId || target?.clientId || "").trim();
+  return {
+    destination: "client",
+    object: { id: customerId, type: "client" },
+    focus: { customerId },
+    intentId: "review_client"
+  };
+}
+
+export default function App({
+  tenantContext,
+  authSession,
+  portalRouteAllowed = true,
+  committedPortalToken = "",
+  onPortalScopeCommit
+}) {
+  const {
+    route: browserRoute,
+    location: browserLocation,
+    navigate,
+    replace
+  } = useWorkspaceNavigation();
+  const workspaceArrivalHandoff = useMemo(() => {
+    if (!AMBIENT_UI_ENABLED || !browserLocation.state?.ambientArrival) return null;
+    return parseWorkspaceArrivalHandoff(browserLocation);
+  }, [browserLocation]);
+  const workspaceArrivalAttempted = Boolean(
+    AMBIENT_UI_ENABLED && browserLocation.state?.ambientArrival
+  );
+  const workspaceArrivalContext = workspaceArrivalHandoff?.ok
+    ? workspaceArrivalHandoff.contract
+    : null;
+  const [workspaceArrivalResolution, setWorkspaceArrivalResolution] = useState(null);
+  const [catalogRouteInteraction, setCatalogRouteInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
+  const [catalogModalInteraction, setCatalogModalInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
+  const ambientLibraryInteraction = useMemo(() => ({
+    dirty: catalogRouteInteraction.dirty || catalogModalInteraction.dirty,
+    busy: catalogRouteInteraction.busy || catalogModalInteraction.busy
+  }), [catalogRouteInteraction, catalogModalInteraction]);
+  const workspaceArrivalKey = workspaceArrivalAttempted
+      ? workspaceArrivalContext ? [
+        workspaceArrivalContext.surfaceId,
+        workspaceArrivalContext.intentId,
+        workspaceArrivalContext.object?.type,
+        workspaceArrivalContext.object?.id,
+        workspaceArrivalContext.focus?.quoteId,
+        workspaceArrivalContext.focus?.customerId,
+        workspaceArrivalContext.focus?.attentionType,
+        workspaceArrivalContext.focus?.requestId,
+        workspaceArrivalContext.focus?.messageId,
+        workspaceArrivalContext.focus?.reportScope,
+        workspaceArrivalContext.focus?.reportSignal,
+        workspaceArrivalContext.focus?.sectionId,
+        workspaceArrivalContext.focus?.recordId
+      ].filter(Boolean).join(":") : [
+        "recovery",
+        browserLocation.pathname,
+        browserLocation.search,
+        workspaceArrivalHandoff?.recovery?.code || "invalid_input"
+      ].join(":")
+    : "";
+  useEffect(() => {
+    if (workspaceArrivalContext) {
+      setWorkspaceArrivalResolution({ status: "pending" });
+      return;
+    }
+    if (workspaceArrivalAttempted && workspaceArrivalHandoff?.recovery) {
+      setWorkspaceArrivalResolution({
+        status: "recovery",
+        ...workspaceArrivalHandoff.recovery
+      });
+      return;
+    }
+    setWorkspaceArrivalResolution(null);
+  }, [workspaceArrivalKey]);
   const navigateWorkspace = useCallback((destination, options = {}) => navigate(destination, {
     ...options,
     preserveSearch: false
   }), [navigate]);
+  const navigateAmbientWorkflow = useCallback((target = {}, options = {}) => {
+    if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff(ambientWorkflowArrivalInput(target, options));
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return { status: "pending", contract: handoff.contract };
+  }, [navigateWorkspace]);
+  const navigateAmbientConversation = useCallback((quoteId, options = {}) => {
+    if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff(
+      ambientConversationArrivalInput(quoteId, options)
+    );
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return { status: "pending", contract: handoff.contract };
+  }, [navigateWorkspace]);
+  const navigateAmbientOpportunity = useCallback((target = {}) => {
+    if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff(ambientOpportunityArrivalInput(target));
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return { status: "pending", contract: handoff.contract };
+  }, [navigateWorkspace]);
+  const navigateAmbientClient = useCallback((target = {}) => {
+    if (!AMBIENT_UI_ENABLED) return { status: "recovery" };
+    const handoff = createWorkspaceArrivalHandoff(ambientClientArrivalInput(target));
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return { status: "pending", contract: handoff.contract };
+  }, [navigateWorkspace]);
   const wizardRef = useRef(null);
   const stepperRef = useRef(null);
   const mobilePricingToggleRef = useRef(null);
@@ -660,6 +831,9 @@ export default function App({ tenantContext, authSession }) {
   const operationsMenuTriggerRef = useRef(null);
   const accountMenuTriggerRef = useRef(null);
   const moreMenuTriggerRef = useRef(null);
+  const globalPilotTriggerRef = useRef(null);
+  const globalPilotRequestCounterRef = useRef(0);
+  const globalPilotRouteRef = useRef("");
   const commercialSearchTriggerRef = useRef(null);
   const commercialSearchReturnFocusRef = useRef(null);
   const workspaceToolReturnFocusRef = useRef(null);
@@ -674,16 +848,10 @@ export default function App({ tenantContext, authSession }) {
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
   const [paymentReturn] = useState(() => readPaymentReturnFromUrl());
-
-  useEffect(() => {
-    if (browserRoute.surface === "portal") {
-      setPortalKey(browserRoute.portalToken);
-      setPortalMode(true);
-      return;
-    }
-    setPortalKey("");
-    setPortalMode(false);
-  }, [browserRoute.portalToken, browserRoute.surface]);
+  const lastWorkspaceLocationRef = useRef(browserRoute.surface === "workspace" ? {
+    destination: `${browserLocation.pathname}${browserLocation.search}${browserLocation.hash}`,
+    state: browserLocation.state
+  } : { destination: WORKSPACE_PATHS.home, state: null });
   const isUnscopedPlatformOperator = (
     tenantContext.ready
     && (tenantContext.hostType === "app" || tenantContext.hostType === "local")
@@ -861,44 +1029,32 @@ export default function App({ tenantContext, authSession }) {
     previousStepRef.current = step;
   }, [step]);
   const [commercialSearchOpen, setCommercialSearchOpen] = useState(false);
-  const resolvedWorkspaceRouteId = (
-    !CUSTOMER_CENTERED_WORKSPACE_ENABLED
+  const resolvedWorkspaceRouteId = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && browserRoute.routeId === WORKSPACE_ROUTE_IDS.HOME
-  ) ? WORKSPACE_ROUTE_IDS.QUOTE_NEW : browserRoute.routeId;
-  const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL].includes(resolvedWorkspaceRouteId);
+    ? WORKSPACE_ROUTE_IDS.QUOTE_NEW
+    : browserRoute.routeId;
+  const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL]
+    .includes(resolvedWorkspaceRouteId);
   const messagingOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.MESSAGING;
   const salesWorkflowOpen = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.WORKFLOW;
-  const scheduleRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE;
-  const reportingRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING;
-  const integrationsRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS;
-  const importsRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS;
-  const catalogRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG;
-  const diagnosticsRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS;
-  const legacyScheduleRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE;
-  const legacyReportingRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING;
-  const legacyIntegrationsRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS;
-  const legacyImportsRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS;
-  const legacyCatalogRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG;
-  const legacyDiagnosticsRouteOpen = !CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS;
-  const scheduleModalOpen = scheduleOpen || legacyScheduleRouteOpen;
-  const reportingModalOpen = dashboardOpen || legacyReportingRouteOpen;
-  const integrationsModalOpen = integrationsOpen || legacyIntegrationsRouteOpen;
-  const importsModalOpen = importStudioOpen || legacyImportsRouteOpen;
-  const catalogModalOpen = adminOpen || legacyCatalogRouteOpen;
-  const diagnosticsModalOpen = diagnosticsOpen || legacyDiagnosticsRouteOpen;
+  const shellRouteOpen = (routeId) => CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && resolvedWorkspaceRouteId === routeId;
+  const shellModalOpen = (open, routeId) => open || (
+    !CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === routeId
+  );
+  const scheduleRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.SCHEDULE);
+  const reportingRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.REPORTING);
+  const integrationsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.INTEGRATIONS);
+  const importsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.IMPORTS);
+  const catalogRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.CATALOG);
+  const diagnosticsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.DIAGNOSTICS);
+  const scheduleModalOpen = shellModalOpen(scheduleOpen, WORKSPACE_ROUTE_IDS.SCHEDULE);
+  const reportingModalOpen = shellModalOpen(dashboardOpen, WORKSPACE_ROUTE_IDS.REPORTING);
+  const integrationsModalOpen = shellModalOpen(integrationsOpen, WORKSPACE_ROUTE_IDS.INTEGRATIONS);
+  const importsModalOpen = shellModalOpen(importStudioOpen, WORKSPACE_ROUTE_IDS.IMPORTS);
+  const catalogModalOpen = shellModalOpen(adminOpen, WORKSPACE_ROUTE_IDS.CATALOG);
+  const diagnosticsModalOpen = shellModalOpen(diagnosticsOpen, WORKSPACE_ROUTE_IDS.DIAGNOSTICS);
   const commercialSearchAvailable = isCommercialSearchAvailable({
     enabled: CUSTOMER_CENTERED_WORKSPACE_ENABLED,
     isStaff: authSession.isStaff,
@@ -930,6 +1086,19 @@ export default function App({ tenantContext, authSession }) {
     setOpen(false);
     if (resolvedWorkspaceRouteId === routeId) navigateWorkspace(WORKSPACE_PATHS.home);
   };
+  const returnWorkspaceHome = () => navigateWorkspace(WORKSPACE_PATHS.home);
+  const closeCatalogWorkspace = () => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen);
+  const closeImportsWorkspace = () => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.IMPORTS, setImportStudioOpen);
+  const closeScheduleWorkspace = () => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen);
+  const closeReportingWorkspace = () => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.REPORTING, setDashboardOpen);
+  const closeIntegrationsWorkspace = () => closeWorkspaceToolRoute(
+    WORKSPACE_ROUTE_IDS.INTEGRATIONS,
+    setIntegrationsOpen
+  );
+  const closeDiagnosticsWorkspace = () => closeWorkspaceToolRoute(
+    WORKSPACE_ROUTE_IDS.DIAGNOSTICS,
+    setDiagnosticsOpen
+  );
   const openWorkspaceTool = (setOpen, {
     menuTriggerRef = null,
     fallbackRef = null,
@@ -1012,6 +1181,32 @@ export default function App({ tenantContext, authSession }) {
   const [toasts, setToasts] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
   const [quoteDirty, setQuoteDirty] = useState(false);
+  const [ambientDraftIntentReview, setAmbientDraftIntentReview] = useState(null);
+  const [ambientDraftCatalogContext, setAmbientDraftCatalogContext] = useState(null);
+  const [ambientDraftReviewResolution, setAmbientDraftReviewResolution] = useState("");
+  const [pilotScenarioDraftReview, setPilotScenarioDraftReview] = useState(null);
+  const [pilotScenarioDraftProposal, setPilotScenarioDraftProposal] = useState(null);
+  const [pilotScenarioReviewResolution, setPilotScenarioReviewResolution] = useState("");
+  const [globalPilotRequest, setGlobalPilotRequest] = useState(null);
+  const [globalPilotSurfaceModel, setGlobalPilotSurfaceModel] = useState(null);
+  const [globalPilotSurfaceOpen, setGlobalPilotSurfaceOpen] = useState(false);
+  const [pilotCommandSurfaceOpen, setPilotCommandSurfaceOpen] = useState(true);
+  const clearPilotScenarioDraftReview = () => {
+    setPilotScenarioDraftReview(null);
+    setPilotScenarioDraftProposal(null);
+    setPilotScenarioReviewResolution("");
+  };
+  const ambientDraftOutcomeSaveLabel = pilotScenarioReviewResolution === "applied"
+    ? "Save Pilot scenario"
+    : ambientDraftReviewResolution === "applied"
+    ? ambientDraftIntentReview?.kind === "replace_package"
+      ? "Save package change"
+      : ambientDraftIntentReview?.kind === "replace_menu_item"
+        ? "Save menu replacement"
+        : ambientDraftIntentReview?.kind === "reorder_menu"
+          ? "Save menu order"
+          : "Save reviewed change"
+    : "";
   const [touchedFields, setTouchedFields] = useState({});
   const [showStepValidation, setShowStepValidation] = useState(false);
   const [menuSelectionValidationMessage, setMenuSelectionValidationMessage] = useState("");
@@ -1027,14 +1222,17 @@ export default function App({ tenantContext, authSession }) {
   };
 
   useEffect(() => {
-    if (!quoteDirty || typeof window === "undefined") return undefined;
-    const protectDirtyQuote = (event) => {
+    if (
+      (!quoteDirty && !ambientLibraryInteraction.dirty && !ambientLibraryInteraction.busy)
+      || typeof window === "undefined"
+    ) return undefined;
+    const protectPendingWork = (event) => {
       event.preventDefault();
       event.returnValue = "";
     };
-    window.addEventListener("beforeunload", protectDirtyQuote);
-    return () => window.removeEventListener("beforeunload", protectDirtyQuote);
-  }, [quoteDirty]);
+    window.addEventListener("beforeunload", protectPendingWork);
+    return () => window.removeEventListener("beforeunload", protectPendingWork);
+  }, [ambientLibraryInteraction.busy, ambientLibraryInteraction.dirty, quoteDirty]);
 
   useEffect(() => {
     if (!commercialSearchAvailable || typeof document === "undefined") {
@@ -1098,9 +1296,225 @@ export default function App({ tenantContext, authSession }) {
     }, 3600);
   }, []);
 
+  const canLeaveAmbientLibrary = useCallback((nextPlace) => {
+    if (ambientLibraryInteraction.busy) {
+      pushToast("Wait for the current Library action to finish first.", "info");
+      return false;
+    }
+    if (!quoteDirty && !ambientLibraryInteraction.dirty) return true;
+    const work = quoteDirty && ambientLibraryInteraction.dirty
+      ? "quote and Library changes"
+      : quoteDirty ? "quote changes" : "Library changes";
+    return window.confirm(`Discard unsaved ${work} and ${nextPlace}?`);
+  }, [ambientLibraryInteraction, pushToast, quoteDirty]);
+
+  useEffect(() => {
+    if (browserRoute.surface === "portal") {
+      if (!portalRouteAllowed) {
+        if (!canLeaveAmbientLibrary("open the customer portal")) {
+          const previous = lastWorkspaceLocationRef.current;
+          replace(previous.destination, {
+            state: previous.state,
+            preserveSearch: false,
+            preserveHash: false
+          });
+          return;
+        }
+        onPortalScopeCommit?.(browserRoute.portalToken);
+        return;
+      }
+      setCatalogRouteInteraction(EMPTY_LIBRARY_INTERACTION);
+      setCatalogModalInteraction(EMPTY_LIBRARY_INTERACTION);
+      setPortalKey(browserRoute.portalToken);
+      setPortalMode(true);
+      return;
+    }
+    if (browserRoute.surface !== "workspace") return;
+    lastWorkspaceLocationRef.current = {
+      destination: `${browserLocation.pathname}${browserLocation.search}${browserLocation.hash}`,
+      state: browserLocation.state
+    };
+    if (committedPortalToken) {
+      onPortalScopeCommit?.("");
+      return;
+    }
+    setPortalKey("");
+    setPortalMode(false);
+  }, [
+    browserLocation.hash,
+    browserLocation.pathname,
+    browserLocation.search,
+    browserLocation.state,
+    browserRoute.portalToken,
+    browserRoute.surface,
+    canLeaveAmbientLibrary,
+    committedPortalToken,
+    onPortalScopeCommit,
+    portalRouteAllowed,
+    replace
+  ]); // portalMode is intentionally excluded so the explicit in-app preview remains open.
+
+  const nextGlobalPilotRequest = useCallback((target, targetModel) => {
+    if (!AMBIENT_UI_ENABLED || !targetModel) return null;
+    globalPilotRequestCounterRef.current += 1;
+    return {
+      id: `global-pilot-${globalPilotRequestCounterRef.current}`,
+      target,
+      routeId: resolvedWorkspaceRouteId,
+      opportunityId: target === "living_opportunity"
+        ? targetModel.object.id
+        : ""
+    };
+  }, [resolvedWorkspaceRouteId]);
+
+  const openGlobalPilot = useCallback(async () => {
+    if (!AMBIENT_UI_ENABLED || !loadAmbientGlobalPilotTarget) return;
+    setOpenHeaderMenu("");
+    setGlobalPilotSurfaceOpen(false);
+    setGlobalPilotSurfaceModel(null);
+    setGlobalPilotRequest(null);
+    pushToast("Finding the most useful Pilot context here.", "info");
+    if (typeof window !== "undefined") {
+      const trigger = globalPilotTriggerRef.current;
+      const focusDeadline = window.performance.now() + 1000;
+      const focusMountedDraftCommand = () => {
+        const activeElement = document.activeElement;
+        if (
+          activeElement
+          && activeElement !== document.body
+          && activeElement !== trigger
+        ) return;
+        const commandInput = wizardRef.current?.querySelector(".pilot-command-input");
+        const inputVisible = commandInput
+          && commandInput.closest('[aria-hidden="true"]') === null
+          && commandInput.getClientRects().length > 0;
+        if (inputVisible) {
+          commandInput.scrollIntoView?.({ block: "center", behavior: "smooth" });
+          commandInput.focus?.({ preventScroll: true });
+          return;
+        }
+        if (window.performance.now() < focusDeadline) {
+          window.requestAnimationFrame(focusMountedDraftCommand);
+        }
+      };
+      window.requestAnimationFrame(focusMountedDraftCommand);
+    }
+    let targetModel;
+    try {
+      const { resolveAmbientGlobalPilotTarget } = await loadAmbientGlobalPilotTarget();
+      targetModel = resolveAmbientGlobalPilotTarget({
+        routeId: resolvedWorkspaceRouteId,
+        opportunityId: browserRoute.params?.quoteId || "",
+        draftObject: quoteBuilderActive ? {
+          id: String(editingQuote.id || "new-draft"),
+          type: "quote-draft",
+          label: String(
+            form.eventName
+            || editingQuote.event?.name
+            || editingQuote.quoteNumber
+            || "New quote draft"
+          ).trim()
+        } : null,
+        pilotCommandEnabled: PILOT_COMMAND_ENABLED
+      });
+    } catch {
+      setGlobalPilotSurfaceOpen(true);
+      return;
+    }
+    setGlobalPilotSurfaceModel(targetModel);
+    if (targetModel.target === "living_opportunity") {
+      setGlobalPilotRequest(nextGlobalPilotRequest("living_opportunity", targetModel));
+      return;
+    }
+    if (targetModel.target === "draft_command") {
+      setGlobalPilotRequest(nextGlobalPilotRequest("draft_command", targetModel));
+      return;
+    }
+    setGlobalPilotSurfaceOpen(true);
+  }, [
+    browserRoute.params?.quoteId,
+    editingQuote.event?.name,
+    editingQuote.id,
+    editingQuote.quoteNumber,
+    form.eventName,
+    nextGlobalPilotRequest,
+    pushToast,
+    quoteBuilderActive,
+    resolvedWorkspaceRouteId
+  ]);
+
+  const handleGlobalPilotResolution = useCallback((resolution) => {
+    if (!AMBIENT_UI_ENABLED || !globalPilotSurfaceModel) return;
+    if (["opened", "focused"].includes(resolution?.status)) return;
+    setGlobalPilotSurfaceModel({
+      ...globalPilotSurfaceModel,
+      target: "recovery",
+      reason: String(
+        resolution?.reason
+        || "Pilot could not confirm which opportunity or draft you meant from this view."
+      ).trim(),
+      consequence: "Pilot did not switch to another opportunity or draft, and nothing in the workspace changed.",
+      nextResolution: {
+        id: "open-opportunities",
+        label: "Choose an opportunity"
+      }
+    });
+    setGlobalPilotSurfaceOpen(true);
+  }, [globalPilotSurfaceModel]);
+
+  const closeGlobalPilotSurface = useCallback(() => {
+    if (!AMBIENT_UI_ENABLED) return;
+    setGlobalPilotSurfaceOpen(false);
+  }, []);
+
+  const chooseGlobalPilotOpportunity = useCallback(() => {
+    if (!AMBIENT_UI_ENABLED) return;
+    setGlobalPilotSurfaceOpen(false);
+    setGlobalPilotRequest(null);
+    navigateWorkspace(WORKSPACE_PATHS.quotes);
+  }, [navigateWorkspace]);
+
+  useEffect(() => {
+    if (!AMBIENT_UI_ENABLED) return;
+    const previousRouteId = globalPilotRouteRef.current;
+    globalPilotRouteRef.current = resolvedWorkspaceRouteId;
+    if (!previousRouteId || previousRouteId === resolvedWorkspaceRouteId) return;
+    if (globalPilotRequest?.routeId === resolvedWorkspaceRouteId) return;
+    setGlobalPilotSurfaceOpen(false);
+    setGlobalPilotSurfaceModel(null);
+    setGlobalPilotRequest(null);
+  }, [globalPilotRequest?.routeId, resolvedWorkspaceRouteId]);
+
+  useEffect(() => {
+    if (!PILOT_COMMAND_ENABLED) return;
+    setPilotCommandSurfaceOpen(true);
+  }, [resolvedWorkspaceRouteId]);
+
+  const openAmbientWorkflow = useCallback((target = {}, options = {}) => {
+    const result = navigateAmbientWorkflow(target, options);
+    if (result?.status === "recovery") {
+      pushToast(`${result.reason} ${result.nextResolution}`, "warning");
+    }
+    return result;
+  }, [navigateAmbientWorkflow, pushToast]);
+
+  const openAmbientConversation = useCallback((quoteId, options = {}) => {
+    const result = navigateAmbientConversation(quoteId, options);
+    if (result?.status === "recovery") {
+      pushToast(`${result.reason} ${result.nextResolution}`, "warning");
+    }
+    return result;
+  }, [navigateAmbientConversation, pushToast]);
+
   const markFieldsTouched = (fields = []) => {
     const unique = Array.from(new Set(fields.filter(Boolean)));
     if (!unique.length) return;
+    if (typeof loadAmbientProductAnalytics === "function") {
+      const observedAtMs = Date.now();
+      void loadAmbientProductAnalytics()
+        .then((analytics) => analytics.recordProductAnalyticsFirstIntent({ observedAtMs }))
+        .catch(() => {});
+    }
     setTouchedFields((prev) => {
       const next = { ...prev };
       let changed = false;
@@ -1138,6 +1552,14 @@ export default function App({ tenantContext, authSession }) {
   const handleSelectionTouched = (field, itemId) => {
     markFieldsTouched([field]);
     releaseTemplateDefault(field, itemId);
+    if (
+      ambientDraftIntentReview
+      && ["pkg", "menuItems", "menuItemQuantities"].includes(String(field || "").trim())
+    ) {
+      setAmbientDraftIntentReview(null);
+      setAmbientDraftCatalogContext(null);
+      setAmbientDraftReviewResolution("");
+    }
     setQuoteDirty(true);
   };
 
@@ -1218,6 +1640,26 @@ export default function App({ tenantContext, authSession }) {
       guidedSellingEnabled: (catalog.settings?.guidedSellingEnabled !== false) && featureFlags.guidedSelling
     };
   }, [catalog.settings, effectiveMenuSections, organization?.name]);
+  const pilotScenarioCatalogContext = useMemo(() => {
+    if (!AMBIENT_PILOT_COMMANDS_ENABLED) return null;
+    return {
+      organizationId: authSession.organizationId,
+      catalog: {
+        ...catalog,
+        settings: effectiveSettings
+      }
+    };
+  }, [
+    authSession.organizationId,
+    catalog.addons,
+    catalog.error,
+    catalog.loading,
+    catalog.observedAtISO,
+    catalog.packages,
+    catalog.rentals,
+    catalog.source,
+    effectiveSettings
+  ]);
   const featureFlags = effectiveSettings.featureFlags || DEFAULT_FEATURE_FLAGS;
   const customerPortalEnabled = featureFlags.customerPortal !== false;
   const eventScheduleEnabled = featureFlags.eventSchedule !== false;
@@ -1227,15 +1669,6 @@ export default function App({ tenantContext, authSession }) {
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
-  const routedToolAuthorized = (
-    (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
-    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
-    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
-    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS && diagnosticsEnabled)
-    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && authSession.isAdmin)
-    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS && authSession.isAdmin)
-  );
-
   useEffect(() => {
     setStepValidation(buildStepValidation(form));
   }, [form]);
@@ -1262,7 +1695,19 @@ export default function App({ tenantContext, authSession }) {
   useEffect(() => {
     const organizationId = String(authSession.organizationId || "").trim();
     if (!organizationId || !authSession.isStaff || catalog.loading) return;
-    beginWizardAnalyticsSession({ organizationId, mode: editingQuote.id ? "edit" : "create" });
+    let cancelled = false;
+    const beginSession = () => {
+      if (cancelled) return;
+      beginWizardAnalyticsSession({ organizationId, mode: editingQuote.id ? "edit" : "create" });
+    };
+    if (typeof loadAmbientProductAnalytics === "function") {
+      void loadAmbientProductAnalytics().then(beginSession).catch(beginSession);
+    } else {
+      beginSession();
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [authSession.isStaff, authSession.organizationId, catalog.loading, editingQuote.id]);
 
   useEffect(() => {
@@ -1315,7 +1760,6 @@ export default function App({ tenantContext, authSession }) {
     || authSession.organizationId
     || "Organization workspace"
   ).trim();
-  const brandName = tenantBrandName || organizationName || "Catering workspace";
   const tenantTimeZone = String(effectiveSettings.businessTimeZone || "").trim();
   const brandPrimaryColor = catalog.settings?.brandPrimaryColor || "#c99334";
   const brandAccentColor = catalog.settings?.brandAccentColor || "#f0d29a";
@@ -1336,10 +1780,34 @@ export default function App({ tenantContext, authSession }) {
     "--app-bg-mid": brandBackgroundMid,
     "--app-bg-end": brandBackgroundEnd
   };
-  const activeWorkspaceSection = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
-    || resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_EDIT
-    ? "quotes"
-    : browserRoute.section;
+  const routedToolAuthorized = (
+    (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.DIAGNOSTICS && diagnosticsEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && authSession.isAdmin)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS && authSession.isAdmin)
+  );
+  const workspaceShellModel = {
+    mode: CUSTOMER_CENTERED_WORKSPACE_ENABLED ? "workspace" : "legacy",
+    activeSection: quoteBuilderActive ? "quotes" : browserRoute.section,
+    active: { quoteBuilder: quoteBuilderActive },
+    showNotFound: browserRoute.routeId === WORKSPACE_ROUTE_IDS.NOT_FOUND
+      || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
+      || ([
+        WORKSPACE_ROUTE_IDS.SCHEDULE,
+        WORKSPACE_ROUTE_IDS.REPORTING,
+        WORKSPACE_ROUTE_IDS.CATALOG,
+        WORKSPACE_ROUTE_IDS.IMPORTS,
+        WORKSPACE_ROUTE_IDS.INTEGRATIONS,
+        WORKSPACE_ROUTE_IDS.DIAGNOSTICS
+      ].includes(resolvedWorkspaceRouteId) && !routedToolAuthorized)
+      || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && [
+        WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
+        WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
+        WORKSPACE_ROUTE_IDS.MESSAGING
+      ].includes(resolvedWorkspaceRouteId))
+  };
 
   useEffect(() => {
     let alive = true;
@@ -1723,6 +2191,166 @@ export default function App({ tenantContext, authSession }) {
     setQuoteDirty(true);
     markFieldsTouched(proposalTouchedFields(proposal));
     setForm((prev) => applyProposalToForm(prev, proposal));
+  };
+
+  const loadCurrentPilotScenarioRuntime = async () => {
+    if (
+      typeof loadAmbientPackageMenuCatalogEvidence !== "function"
+      || typeof loadPilotScenarioDraftReview !== "function"
+      || !pilotScenarioCatalogContext
+    ) {
+      throw new Error("Pilot scenario review is unavailable outside the Ambient workspace.");
+    }
+    const [catalogEvidenceModule, reviewModule] = await Promise.all([
+      loadAmbientPackageMenuCatalogEvidence(),
+      loadPilotScenarioDraftReview()
+    ]);
+    return {
+      catalogEvidence: catalogEvidenceModule.buildAmbientPackageMenuCatalogEvidence(
+        pilotScenarioCatalogContext
+      ),
+      reviewModule
+    };
+  };
+
+  const handoffPilotScenarioToDraftReview = async (proposal) => {
+    if (
+      ambientDraftIntentReview
+      && ambientDraftReviewResolution === "pending_review"
+    ) {
+      return {
+        ok: false,
+        acknowledgement: {
+          reason: "Resolve the current Package or Menu review before opening a Pilot scenario review.",
+          consequence: "Neither pending outcome was changed.",
+          nextResolutions: ["Apply or keep the current reviewed outcome, then run Pilot again."]
+        }
+      };
+    }
+    if (
+      pilotScenarioDraftReview
+      && pilotScenarioReviewResolution === "pending_review"
+    ) {
+      return {
+        ok: false,
+        acknowledgement: {
+          reason: "A Pilot scenario is already awaiting review.",
+          consequence: "The existing review remains current and the draft is unchanged.",
+          nextResolutions: ["Apply or keep the current scenario before choosing another."]
+        }
+      };
+    }
+    let created;
+    try {
+      const { catalogEvidence, reviewModule } = await loadCurrentPilotScenarioRuntime();
+      created = await reviewModule.createPilotScenarioDraftReview({
+        proposal,
+        organizationId: authSession.organizationId,
+        catalogEvidence,
+        form
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        acknowledgement: {
+          reason: String(error?.message || "Pilot scenario review could not be prepared.").trim(),
+          consequence: "The current draft is unchanged.",
+          nextResolutions: ["Keep working from this draft, then retry the scenario review."]
+        }
+      };
+    }
+    if (!created.ok) {
+      setSubmitState((current) => ({
+        ...current,
+        saving: false,
+        message: `${created.acknowledgement.reason} ${created.acknowledgement.nextResolutions.join(" ")}`
+      }));
+      return created;
+    }
+    setPilotScenarioDraftReview(created.review);
+    setPilotScenarioDraftProposal(proposal);
+    setPilotScenarioReviewResolution("pending_review");
+    setSubmitState((current) => ({
+      ...current,
+      saving: false,
+      message: `${created.acknowledgement.reason} ${created.acknowledgement.consequence}`
+    }));
+    window.requestAnimationFrame(() => {
+      const review = wizardRef.current?.querySelector('[data-ambient-pilot-scenario-review="available"]');
+      review?.scrollIntoView({ behavior: "smooth", block: "center" });
+      review?.querySelector('[data-pilot-scenario-review-action="apply"]')?.focus({ preventScroll: true });
+    });
+    return created;
+  };
+
+  const handleApplyPilotScenarioDraftReview = async (review) => {
+    if (
+      review !== pilotScenarioDraftReview
+      || pilotScenarioReviewResolution !== "pending_review"
+      || !pilotScenarioDraftProposal
+    ) {
+      return {
+        ok: false,
+        acknowledgement: {
+          reason: "This Pilot scenario review is no longer current. Create a new scenario from the current draft."
+        }
+      };
+    }
+    let result;
+    try {
+      const { catalogEvidence, reviewModule } = await loadCurrentPilotScenarioRuntime();
+      result = await reviewModule.applyPilotScenarioDraftReview({
+        review,
+        currentProposal: pilotScenarioDraftProposal,
+        organizationId: authSession.organizationId,
+        catalogEvidence,
+        form,
+        confirmed: true
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        acknowledgement: {
+          reason: String(error?.message || "Pilot scenario review could not be applied.").trim(),
+          consequence: "The current draft is unchanged.",
+          nextResolutions: ["Keep the current draft or retry from the latest opportunity state."]
+        }
+      };
+    }
+    if (!result.ok) return result;
+    resetChangeImpactPreview();
+    setForm(result.form);
+    setQuoteDirty(true);
+    markFieldsTouched(result.dirtyFields);
+    setPilotScenarioReviewResolution("applied");
+    setStep(result.dirtyFields.includes("pkg") ? 3 : result.dirtyFields.some((field) => (
+      ["menuItems", "menuItemQuantities"].includes(field)
+    )) ? 2 : 4);
+    setSubmitState((current) => ({
+      ...current,
+      saving: false,
+      message: `${result.acknowledgement.reason} ${result.acknowledgement.consequence} Next step: ${result.acknowledgement.nextResolutions.join(" ")}`
+    }));
+    return result;
+  };
+
+  const handleKeepPilotScenarioDraftReview = (review) => {
+    if (
+      review !== pilotScenarioDraftReview
+      || pilotScenarioReviewResolution !== "pending_review"
+    ) {
+      return {
+        ok: false,
+        acknowledgement: { reason: "This Pilot scenario review is no longer current." }
+      };
+    }
+    setPilotScenarioReviewResolution("kept");
+    setSubmitState((current) => ({
+      ...current,
+      saving: false,
+      message: "Kept the current draft. No Pilot scenario field was applied, repriced, saved, sent, or published."
+    }));
+    return { ok: true };
   };
 
   const applyRecommendation = (item, { userOriginated = true } = {}) => {
@@ -2224,6 +2852,94 @@ export default function App({ tenantContext, authSession }) {
     }
   };
 
+  const handleApplyAmbientDraftIntent = async (intent) => {
+    if (
+      !ambientDraftIntentReview
+      || intent !== ambientDraftIntentReview
+      || ambientDraftReviewResolution !== "pending_review"
+    ) {
+      return {
+        ok: false,
+        reason: "This Package or Menu review is no longer the current editor handoff. Return to the Living Opportunity and choose the exact outcome again."
+      };
+    }
+    let result;
+    try {
+      if (typeof loadAmbientPackageMenuDraftAdoption !== "function") {
+        throw new Error("Package and Menu draft review is unavailable outside the Ambient workspace.");
+      }
+      const adoptionModule = await loadAmbientPackageMenuDraftAdoption();
+      result = adoptionModule.adoptAmbientPackageMenuDraftChange({
+        ambientDraftIntent: intent,
+        form,
+        catalogContext: ambientDraftCatalogContext
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        reason: `${String(error?.message || "This change could not be added to the draft.").trim()} The draft is unchanged; retry from the current Living Opportunity.`
+      };
+    }
+    if (!result.ok) {
+      return {
+        ok: false,
+        reason: `${result.acknowledgement.reason} ${result.acknowledgement.nextResolutions.join(" ")}`
+      };
+    }
+
+    resetChangeImpactPreview();
+    setForm(result.form);
+    setQuoteDirty(true);
+    markFieldsTouched(result.dirtyFields);
+    setTemplateDefaultsNotice((current) => {
+      if (!current?.ownership) return current;
+      const ownership = result.dirtyFields.reduce(
+        (next, field) => releaseTemplateDefaultsOwnership(next, field),
+        current.ownership
+      );
+      return hasTemplateDefaultsOwnership(ownership)
+        ? { ...current, ownership }
+        : null;
+    });
+    setMenuSelectionValidationMessage("");
+    setAmbientDraftReviewResolution("applied");
+    const nextStep = intent.kind === "replace_package" ? 3 : 2;
+    setStep(nextStep);
+    setSubmitState({
+      saving: false,
+      message: `${result.acknowledgement.reason} ${result.acknowledgement.consequence} Next step: ${result.acknowledgement.nextResolutions.join(" ")}`
+    });
+    const focusField = intent.kind === "replace_package" ? "pkg" : "menuItems";
+    window.requestAnimationFrame(() => {
+      const target = wizardRef.current?.querySelector(`[data-ambient-field="${focusField}"]`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    });
+    return result;
+  };
+
+  const handleKeepAmbientDraftIntent = (intent) => {
+    if (
+      !ambientDraftIntentReview
+      || intent !== ambientDraftIntentReview
+      || ambientDraftReviewResolution !== "pending_review"
+    ) {
+      return {
+        ok: false,
+        reason: "This Package or Menu review is no longer current. The editor draft was not changed."
+      };
+    }
+    setAmbientDraftReviewResolution("kept");
+    setSubmitState((current) => ({
+      ...current,
+      saving: false,
+      message: intent.kind === "replace_package"
+        ? "Kept the saved package. No package outcome was applied, repriced, or saved."
+        : "Kept the saved menu state. No menu outcome was applied, repriced, or saved."
+    }));
+    return { ok: true };
+  };
+
   const handleSubmitQuote = async ({
     commercialChangeAuthority = null,
     propagateError = false
@@ -2235,6 +2951,39 @@ export default function App({ tenantContext, authSession }) {
         message: "This saved quote has not loaded for editing. Retry the edit before saving."
       }));
       return;
+    }
+    if (
+      pilotScenarioDraftReview
+      && pilotScenarioReviewResolution === "pending_review"
+    ) {
+      setSubmitState((current) => ({
+        ...current,
+        saving: false,
+        message: "Resolve the pending Pilot scenario review before saving: apply the exact scenario to this draft, or keep the current draft. Nothing has been saved."
+      }));
+      window.requestAnimationFrame(() => {
+        const reviewAction = wizardRef.current?.querySelector('[data-pilot-scenario-review-action="apply"]');
+        reviewAction?.scrollIntoView({ behavior: "smooth", block: "center" });
+        reviewAction?.focus({ preventScroll: true });
+      });
+      return null;
+    }
+    if (
+      ambientDraftIntentReview
+      && ambientDraftReviewResolution === "pending_review"
+    ) {
+      setStep(ambientDraftIntentReview.kind === "replace_package" ? 3 : 2);
+      setSubmitState((current) => ({
+        ...current,
+        saving: false,
+        message: "Resolve the pending Package or Menu review before saving: apply the exact outcome to this draft, or keep the saved value. Nothing has been saved."
+      }));
+      window.requestAnimationFrame(() => {
+        const reviewAction = wizardRef.current?.querySelector('[data-draft-review-outcome="apply"]');
+        reviewAction?.scrollIntoView({ behavior: "smooth", block: "center" });
+        reviewAction?.focus({ preventScroll: true });
+      });
+      return null;
     }
     if (isEditingQuote && changeImpactPreviewAvailable && !commercialChangeAuthority) {
       if (!changeImpactScopeIsCurrent()) {
@@ -2415,7 +3164,21 @@ export default function App({ tenantContext, authSession }) {
       );
       if (isEditingQuote) {
         setQuoteDirty(false);
+        setAmbientDraftIntentReview(null);
+        setAmbientDraftCatalogContext(null);
+        setAmbientDraftReviewResolution("");
+        clearPilotScenarioDraftReview();
         recordProductAnalyticsEvent("quote_saved");
+        if (typeof loadAmbientProductAnalytics === "function") {
+          const observedAtMs = Date.now();
+          void loadAmbientProductAnalytics()
+            .then((analytics) => analytics.recordProductAnalyticsPricedDraftReceipt({
+              pricingAuthority: pricingSnapshot?.authority,
+              storage: result.storage,
+              observedAtMs
+            }))
+            .catch(() => {});
+        }
         setSubmitState({
           saving: false,
           message: `Quote ${result.quoteNumber} updated in ${result.storage}. Version snapshot saved and rates locked.${pricingAdjustmentNote}`
@@ -2450,7 +3213,21 @@ export default function App({ tenantContext, authSession }) {
 
       const savedDraftMessage = `Quote ${result.quoteNumber} saved as a draft in ${result.storage}. It has not been sent to the customer.`;
       setQuoteDirty(false);
+      setAmbientDraftIntentReview(null);
+      setAmbientDraftCatalogContext(null);
+      setAmbientDraftReviewResolution("");
+      clearPilotScenarioDraftReview();
       recordProductAnalyticsEvent("quote_saved");
+      if (typeof loadAmbientProductAnalytics === "function") {
+        const observedAtMs = Date.now();
+        void loadAmbientProductAnalytics()
+          .then((analytics) => analytics.recordProductAnalyticsPricedDraftReceipt({
+            pricingAuthority: pricingSnapshot?.authority,
+            storage: result.storage,
+            observedAtMs
+          }))
+          .catch(() => {});
+      }
       setSubmitState({
         saving: false,
         message: `${savedDraftMessage}${pricingAdjustmentNote}`
@@ -2512,126 +3289,105 @@ export default function App({ tenantContext, authSession }) {
     }
   };
 
-  const handleEditQuote = (quote, { navigateToRoute = true } = {}) => {
-    if (!quote?.id) return;
+  const handleEditQuote = async (
+    quote,
+    {
+      navigateToRoute = true,
+      draftPatch = null,
+      draftIntent = null,
+      ambientCatalogContext = null
+    } = {},
+    ambientArrival = null
+  ) => {
+    const arrivalContext = AMBIENT_UI_ENABLED ? ambientArrival : null;
+    if (!quote?.id) {
+      if (!AMBIENT_UI_ENABLED) return;
+      return {
+        status: "recovery",
+        reason: "The selected quote has no stable identifier.",
+        consequence: "No editor route opened and the current work remains unchanged.",
+        nextResolution: "Return to Opportunities and select a valid saved quote."
+      };
+    }
     if (
       navigateToRoute
       && CUSTOMER_CENTERED_WORKSPACE_ENABLED
       && quoteDirty
       && !window.confirm("Edit this saved quote? Your unsaved quote changes will be discarded.")
     ) {
-      return;
+      if (!AMBIENT_UI_ENABLED) return;
+      return {
+        status: "cancelled",
+        reason: "The route change was cancelled to preserve unsaved quote work.",
+        consequence: "The current draft, saved quote, and Ambient scenario remain unchanged.",
+        nextResolution: "Save or discard the current draft, then open this priced editor again."
+      };
     }
 
-    const selection = quote.selection || {};
-    const event = quote.event || {};
-    const customer = quote.customer || {};
-    const menuItemsFromSelection = Array.isArray(selection.menuItems) ? selection.menuItems : [];
-    const menuItemsFromDetails = Array.isArray(selection.menuItemDetails)
-      ? selection.menuItemDetails.map((item) => String(item?.id || "").trim()).filter(Boolean)
-      : [];
-    const menuItems = menuItemsFromSelection.length ? menuItemsFromSelection : menuItemsFromDetails;
-    const menuItemQuantitiesFromDetails = Array.isArray(selection.menuItemDetails)
-      ? selection.menuItemDetails.reduce((acc, item) => {
-        const id = String(item?.id || "").trim();
-        if (!id) return acc;
-        acc[id] = Math.max(1, Number(item?.quantity || 1));
-        return acc;
-      }, {})
-      : {};
-    const menuItemQuantities = {
-      ...menuItemQuantitiesFromDetails,
-      ...(selection.menuItemQuantities || {})
+    const safeArrivalContext = AMBIENT_UI_ENABLED
+      && arrivalContext
+      && (
+        String(arrivalContext.object?.id || "").trim() === String(quote.id)
+        || String(arrivalContext.object?.opportunityId || "").trim() === String(quote.id)
+      )
+      && String(arrivalContext.reason || "").trim()
+      && String(arrivalContext.consequence || "").trim()
+      && String(arrivalContext.nextResolution || "").trim()
+      ? arrivalContext
+      : null;
+    const draftInput = {
+      quote,
+      previousForm: form,
+      catalogPackages: catalog.packages,
+      organizationId: authSession.organizationId
     };
-    const addonQuantities = selection.addonQuantities || {};
-    const rentalQuantities = selection.rentalQuantities || {};
-    const quoteEventTypeId = String(quote.eventTypeId || selection.eventTypeId || event.eventTypeId || "");
+    let draftRuntime;
+    if (AMBIENT_UI_ENABLED) {
+      try {
+        if (typeof loadAmbientQuoteDraftRuntime !== "function") {
+          throw new Error("Ambient draft context is not available in this build.");
+        }
+        const runtimeModule = await loadAmbientQuoteDraftRuntime();
+        draftRuntime = runtimeModule.hydrateSavedQuoteDraft({
+          ...draftInput,
+          draftPatch,
+          draftIntent,
+          ambientCatalogContext,
+          ambientEnabled: true
+        });
+      } catch (error) {
+        return {
+          status: "recovery",
+          reason: String(error?.message || "The Ambient draft context could not be prepared.").trim(),
+          consequence: "No editor route opened and the current work remains unchanged.",
+          nextResolution: "Return to the opportunity and retry the exact edit outcome."
+        };
+      }
+    } else {
+      draftRuntime = hydrateSavedQuoteDraftBase(draftInput);
+    }
+    if (!draftRuntime.ok) {
+      return {
+        status: "recovery",
+        reason: draftRuntime.reason,
+        consequence: draftRuntime.consequence,
+        nextResolution: draftRuntime.nextResolution
+      };
+    }
+    const stagedDraftFields = draftRuntime.stagedFields;
     resetChangeImpactPreview();
-    setGlobalEventTypeId(quoteEventTypeId);
-
-    // Lock labor rates during editing by defaulting overrides to the applied snapshot.
-    const laborRateSnapshot = selection.laborRateSnapshot || {};
-    const bartenderApplied = toOptionalNumber(
-      laborRateSnapshot.bartenderRateApplied ?? quote.totals?.bartenderRateApplied
-    );
-    const serverApplied = toOptionalNumber(
-      laborRateSnapshot.serverRateApplied ?? quote.totals?.serverRateApplied
-    );
-    const chefApplied = toOptionalNumber(
-      laborRateSnapshot.chefRateApplied ?? quote.totals?.chefRateApplied
-    );
-
-    setForm((prev) => ({
-      ...prev,
-      date: event.date || "",
-      time: event.time || "",
-      hours: normalizeEventHours(event.hours),
-      bartenders: toNumber(event.bartenders, 0),
-      guests: toNumber(event.guests, 0),
-      venue: event.venue || "",
-      venueAddress: event.venueAddress || "",
-      eventName: event.name || "",
-      clientOrg: customer.organization || "",
-      style: event.style || prev.style,
-      servers: toNumber(event.servers, 0),
-      chefs: toNumber(event.chefs, 0),
-      name: customer.name || "",
-      phone: customer.phone || "",
-      email: customer.email || "",
-      dietaryRestrictions: String(event.dietaryRestrictions || ""),
-      pkg: resolveFirstValidPackageId(catalog.packages, selection.packageId || prev.pkg),
-      addons: Array.isArray(selection.addons) ? selection.addons : [],
-      addonQuantities,
-      rentals: Array.isArray(selection.rentals) ? selection.rentals : [],
-      rentalQuantities,
-      menuItems,
-      menuItemQuantities,
-      eventTypeId: quoteEventTypeId,
-      bartenderRateTypeId:
-        String(selection.bartenderRateTypeId || laborRateSnapshot.bartenderRateTypeId || ""),
-      staffingRateTypeId:
-        String(selection.staffingRateTypeId || laborRateSnapshot.staffingRateTypeId || ""),
-      bartenderRateOverride:
-        selection.bartenderRateOverride !== "" && selection.bartenderRateOverride !== null && selection.bartenderRateOverride !== undefined
-          ? toOptionalNumber(selection.bartenderRateOverride)
-          : bartenderApplied,
-      serverRateOverride:
-        selection.serverRateOverride !== "" && selection.serverRateOverride !== null && selection.serverRateOverride !== undefined
-          ? toOptionalNumber(selection.serverRateOverride)
-          : serverApplied,
-      serverRateMixCsv: String(selection.serverRateMixCsv || ""),
-      chefRateMixCsv: String(selection.chefRateMixCsv || ""),
-      chefRateOverride:
-        selection.chefRateOverride !== "" && selection.chefRateOverride !== null && selection.chefRateOverride !== undefined
-          ? toOptionalNumber(selection.chefRateOverride)
-          : chefApplied,
-      eventTemplateId: selection.eventTemplateId || "custom",
-      taxRegion: selection.taxRegion || prev.taxRegion,
-      seasonProfileId: selection.seasonProfileId || prev.seasonProfileId || "auto",
-      milesRT: toNumber(selection.milesRT, 0),
-      includeDisposables: quote.quoteMeta?.includeDisposables !== false,
-      payMethod: selection.payMethod || prev.payMethod
-    }));
-
-    setEditingQuote({
-      id: quote.id,
-      quoteNumber: quote.quoteNumber || quote.id,
-      activeVersionId: quote.activeVersionId || quote.versionMeta?.versionId || "",
-      customerId: quote.customerId || "",
-      organizationId: quote.organizationId || authSession.organizationId || "",
-      rebooking: quote.rebooking && typeof quote.rebooking === "object"
-        ? quote.rebooking
-        : null,
-      // Presentation context only: the client-request panel needs the stored
-      // request to render beside the editor. Carrying the snapshot grants no
-      // authority — the panel stages draft edits and the trusted save path
-      // remains the sole versioning authority.
-      portalDecision: quote.portalDecision && typeof quote.portalDecision === "object"
-        ? quote.portalDecision
-        : null
-    });
-    setQuoteDirty(false);
-    setTouchedFields({});
+    clearPilotScenarioDraftReview();
+    setGlobalEventTypeId(draftRuntime.eventTypeId);
+    setForm(draftRuntime.form);
+    setEditingQuote(draftRuntime.editingQuote);
+    const packageMenuDraftIntent = draftRuntime.ambientDraftIntent?.family === "package_menu"
+      ? draftRuntime.ambientDraftIntent
+      : null;
+    setAmbientDraftIntentReview(packageMenuDraftIntent);
+    setAmbientDraftCatalogContext(packageMenuDraftIntent ? ambientCatalogContext : null);
+    setAmbientDraftReviewResolution(packageMenuDraftIntent ? "pending_review" : "");
+    setQuoteDirty(stagedDraftFields.length > 0);
+    setTouchedFields(Object.fromEntries(stagedDraftFields.map((field) => [field, true])));
     setShowStepValidation(false);
     setTemplateDefaultsNotice(null);
     setAvailabilityBlock(null);
@@ -2647,12 +3403,26 @@ export default function App({ tenantContext, authSession }) {
     const rebookReviewRequired = quote.rebooking?.state === "draft_created_for_staff_review";
     setSubmitState({
       saving: false,
-      message: rebookReviewRequired
+      message: safeArrivalContext
+        ? `${quote.event?.name || quote.quoteNumber || quote.id}: ${safeArrivalContext.object.label || "Selected object"}. ${safeArrivalContext.reason} ${safeArrivalContext.consequence} Next step: ${safeArrivalContext.nextResolution}`
+        : rebookReviewRequired
         ? `Rebook review required for ${quote.quoteNumber || quote.id}: choose a current-or-future event date, review the copied scope, then save. Delivery remains blocked until that trusted edit succeeds.`
         : `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
+    const ambientFocusField = draftRuntime.ambientDraftIntent?.focusField || "";
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
+    window.requestAnimationFrame(() => {
+      const exactField = ambientFocusField
+        ? wizardRef.current?.querySelector(`[data-ambient-field="${ambientFocusField}"]`)
+        : null;
+      (exactField || wizardRef.current)?.focus({ preventScroll: true });
+      exactField?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return AMBIENT_UI_ENABLED ? {
+      status: "opened",
+      focusField: ambientFocusField,
+      draftIntentFamily: draftRuntime.ambientDraftIntent?.family || ""
+    } : undefined;
   };
 
   const handleCreateCustomerRebook = async (reviewedAction, { mode = "create" } = {}) => {
@@ -2730,9 +3500,13 @@ export default function App({ tenantContext, authSession }) {
     setQuoteEditLoadState({ quoteId, loading: true, error: "" });
     setSubmitState((current) => ({ ...current, message: "Loading the saved quote for editing..." }));
     getQuoteById(quoteId)
-      .then((quote) => {
+      .then(async (quote) => {
         if (directEditLoadRef.current.generation !== generation) return;
-        handleEditQuote(quote, { navigateToRoute: false });
+        const editResult = await handleEditQuote(quote, { navigateToRoute: false });
+        if (directEditLoadRef.current.generation !== generation) return;
+        if (editResult?.status === "recovery") {
+          throw new Error(editResult.reason || "Unable to prepare this saved quote for editing.");
+        }
         setQuoteEditLoadState({ quoteId, loading: false, error: "" });
       })
       .catch((error) => {
@@ -2773,11 +3547,19 @@ export default function App({ tenantContext, authSession }) {
 
   const handleGetInstantQuote = () => {
     if (quoteDirty && !window.confirm("Start a new quote? Your unsaved changes will be discarded.")) {
-      return;
+      return {
+        status: "recovery",
+        reason: "The existing unsaved draft was kept.",
+        nextResolution: "Continue the current draft or choose Start an opportunity again when you are ready to replace it."
+      };
     }
     directEditLoadRef.current = { key: "", generation: directEditLoadRef.current.generation + 1 };
     navigateWorkspace(WORKSPACE_PATHS.quoteNew);
     setEditingQuote(EMPTY_EDITING_QUOTE);
+    setAmbientDraftIntentReview(null);
+    setAmbientDraftCatalogContext(null);
+    setAmbientDraftReviewResolution("");
+    clearPilotScenarioDraftReview();
     resetChangeImpactPreview();
     setQuoteDirty(false);
     setForm({
@@ -2801,9 +3583,11 @@ export default function App({ tenantContext, authSession }) {
       force: true
     });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return { status: "pending" };
   };
 
   const handleSignOut = async () => {
+    if (!canLeaveAmbientLibrary("sign out")) return;
     try {
       await authSession.signOut();
     } catch (err) {
@@ -2868,7 +3652,9 @@ export default function App({ tenantContext, authSession }) {
   };
 
   const openPortalMode = () => {
-    if (!customerPortalEnabled) return;
+    if (!customerPortalEnabled || !canLeaveAmbientLibrary("open the customer portal")) return;
+    setCatalogRouteInteraction(EMPTY_LIBRARY_INTERACTION);
+    setCatalogModalInteraction(EMPTY_LIBRARY_INTERACTION);
     setPortalKey("");
     setPortalMode(true);
   };
@@ -2909,6 +3695,7 @@ export default function App({ tenantContext, authSession }) {
     }
     const result = await catalog.saveCatalog(nextCatalog);
     if (result.ok) {
+      setCatalogModalInteraction(EMPTY_LIBRARY_INTERACTION);
       setAdminOpen(false);
     }
     return result;
@@ -3050,14 +3837,15 @@ export default function App({ tenantContext, authSession }) {
           <WorkspaceLazyTool
             open={integrationsOpen}
             surfaceName="Customer Provisioning"
-            component={IntegrationOpsModal}
-            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
+            component={IntegrationOpsView}
+            onClose={closeIntegrationsWorkspace}
             returnFocusRef={workspaceToolReturnFocusRef}
             hasUnsavedWorkspaceChanges={quoteDirty}
           >
-            <IntegrationOpsModal
+            <IntegrationOpsView
               open={integrationsOpen}
-              onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
+              presentation="modal"
+              onClose={closeIntegrationsWorkspace}
               returnFocusRef={workspaceToolReturnFocusRef}
               organizationId=""
               settings={{}}
@@ -3144,16 +3932,17 @@ export default function App({ tenantContext, authSession }) {
           <WorkspaceLazyTool
             open={adminOpen}
             surfaceName="Catalog Admin"
-            component={AdminCatalogModal}
-            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
+            component={AdminCatalogView}
+            onClose={closeCatalogWorkspace}
             returnFocusRef={workspaceToolReturnFocusRef}
             hasUnsavedWorkspaceChanges={quoteDirty}
           >
-            <AdminCatalogModal
+            <AdminCatalogView
               open={adminOpen}
+              presentation="modal"
               catalog={catalog}
               organizationId={authSession.organizationId}
-              onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
+              onClose={closeCatalogWorkspace}
               returnFocusRef={workspaceToolReturnFocusRef}
               onSave={saveCatalogDuringSetup}
               onApplyStarterPack={catalog.stageStarterPack}
@@ -3162,6 +3951,7 @@ export default function App({ tenantContext, authSession }) {
               saving={catalog.saving}
               selectedEventType={globalEventTypeId}
               onEventTypeChange={setGlobalEventTypeId}
+              onInteractionStateChange={setCatalogModalInteraction}
               onToast={pushToast}
             />
           </WorkspaceLazyTool>
@@ -3170,269 +3960,356 @@ export default function App({ tenantContext, authSession }) {
     );
   }
 
+  const currentUserEmail = authSession.user.email || "";
+  const currentUserUid = authSession.user.uid || "";
+  const catalogTool = {
+    surfaceName: AMBIENT_UI_ENABLED ? "Library" : "Catalog Admin",
+    component: AdminCatalogView,
+    enabled: authSession.isAdmin,
+    onClose: closeCatalogWorkspace,
+    surfaceProps: {
+      catalog,
+      organizationId: authSession.organizationId,
+      onSave: catalog.saveCatalog,
+      onApplyStarterPack: catalog.stageStarterPack,
+      onCatalogMutation: handleCatalogMutation,
+      onReload: catalog.reload,
+      saving: catalog.saving,
+      initialTab: adminInitialTab,
+      onToast: pushToast
+    },
+    route: {
+      mounted: catalogRouteMounted,
+      open: catalogRouteOpen,
+      component: AMBIENT_UI_ENABLED && AmbientLibraryRoute ? AmbientLibraryRoute : AdminCatalogView,
+      props: {
+        selectedEventType: globalEventTypeId,
+        onEventTypeChange: setGlobalEventTypeId,
+        currentUserRole: authSession.role,
+        arrivalContext: workspaceArrivalContext?.surfaceId === "ambient-library"
+          ? workspaceArrivalContext
+          : null,
+        arrivalAttempted: workspaceArrivalAttempted,
+        onArrivalResolution: setWorkspaceArrivalResolution,
+        onInteractionStateChange: setCatalogRouteInteraction
+      }
+    },
+    modal: {
+      mounted: adminMounted,
+      open: catalogModalOpen,
+      props: { onInteractionStateChange: setCatalogModalInteraction }
+    }
+  };
+  const importsTool = {
+    surfaceName: "Import Studio",
+    component: ImportStudioView,
+    enabled: authSession.isAdmin,
+    onClose: closeImportsWorkspace,
+    surfaceProps: {
+      organizationId: authSession.organizationId,
+      organizationName: workspaceName,
+      currentUserUid,
+      currentUserEmail,
+      catalogRevision: Math.max(0, Number(catalog.settings?.catalogRevision || 0)),
+      onReload: () => catalog.reload({ background: true }),
+      onImported: (result) => {
+        catalog.reload({ background: true });
+        if (result?.status === "rolled_back") {
+          pushToast(`Import ${result.importBatchId} was undone.`, "info");
+        } else {
+          pushToast(`Imported ${result?.createdCount || 0} record(s) into ${authSession.organizationId}.`, "success");
+        }
+      }
+    },
+    route: { mounted: importsRouteMounted, open: importsRouteOpen },
+    modal: { mounted: importStudioMounted, open: importsModalOpen }
+  };
+  const scheduleTool = {
+    surfaceName: "Event Schedule",
+    component: EventScheduleView,
+    enabled: eventScheduleEnabled,
+    onClose: closeScheduleWorkspace,
+    surfaceProps: {
+      organizationId: authSession.organizationId,
+      staffLeads: scheduleStaffLeads,
+      capacityLimit: scheduleCapacityLimit,
+      currentUserEmail,
+      arrivalContext: workspaceArrivalContext?.surfaceId === "schedule"
+        ? workspaceArrivalContext
+        : null,
+      onArrivalResolution: setWorkspaceArrivalResolution
+    },
+    route: { mounted: scheduleRouteMounted, open: scheduleRouteOpen },
+    modal: { mounted: scheduleMounted, open: scheduleModalOpen }
+  };
+  const reportingTool = {
+    surfaceName: "Reporting Dashboard",
+    component: ReportingDashboardView,
+    enabled: dashboardEnabled,
+    onClose: closeReportingWorkspace,
+    surfaceProps: {
+      organizationId: authSession.organizationId,
+      addons: catalog.addons,
+      arrivalContext: workspaceArrivalContext?.surfaceId === "reporting"
+        ? workspaceArrivalContext
+        : null,
+      onArrivalResolution: setWorkspaceArrivalResolution
+    },
+    route: { mounted: reportingRouteMounted, open: reportingRouteOpen },
+    modal: { mounted: dashboardMounted, open: reportingModalOpen }
+  };
+  const integrationsTool = {
+    surfaceName: "Integrations Ops",
+    component: IntegrationOpsView,
+    enabled: integrationsEnabled,
+    onClose: closeIntegrationsWorkspace,
+    surfaceProps: {
+      organizationId: authSession.organizationId,
+      settings: effectiveSettings,
+      currentUserEmail,
+      currentUserUid,
+      canProvisionCustomer: authSession.isAdmin && authSession.platformAdmin,
+      canManageProviders: authSession.isAdmin
+    },
+    route: { mounted: integrationsRouteMounted, open: integrationsRouteOpen },
+    modal: { mounted: integrationsMounted, open: integrationsModalOpen }
+  };
+  const diagnosticsTool = {
+    surfaceName: "Session Diagnostics",
+    component: DiagnosticsView,
+    enabled: diagnosticsEnabled,
+    onClose: closeDiagnosticsWorkspace,
+    route: { mounted: diagnosticsRouteMounted, open: diagnosticsRouteOpen },
+    modal: { mounted: diagnosticsMounted, open: diagnosticsModalOpen }
+  };
+  const renderWorkspaceTools = (presentation, tools) => tools.map((tool) => {
+    const state = tool[presentation];
+    const onClose = presentation === "route" ? returnWorkspaceHome : tool.onClose;
+    const Surface = state.component || tool.component;
+    return (
+      <WorkspaceToolSurface
+        key={tool.surfaceName}
+        mounted={tool.enabled && state.mounted}
+        open={state.open}
+        presentation={presentation}
+        surfaceName={tool.surfaceName}
+        component={Surface}
+        onClose={onClose}
+        returnFocusRef={workspaceToolReturnFocusRef}
+        hasUnsavedWorkspaceChanges={quoteDirty}
+        surfaceProps={tool.surfaceProps}
+        presentationProps={state.props}
+      />
+    );
+  });
+
   return (
-    <div className={`app-shell${CUSTOMER_CENTERED_WORKSPACE_ENABLED ? " app-shell-neutral" : ""}`} style={appThemeVars}>
-      <header className="site-header">
-        <div className="container nav">
-          <div className="workspace-header-identity">
-            <ProductBrandLockup compact className="header-product-brand" />
-            <div className="workspace-brand" aria-label={`Current workspace: ${workspaceName}`}>
-              {tenantBrandLogoUrl ? (
-                <img
-                  className="workspace-brand-logo"
-                  src={tenantBrandLogoUrl}
-                  alt=""
-                  loading="eager"
-                  decoding="async"
-                />
-              ) : (
-                <span className="workspace-brand-logo workspace-brand-logo-placeholder" aria-hidden="true">
-                  {workspaceName.slice(0, 2).toUpperCase()}
-                </span>
-              )}
-              <div className="workspace-brand-copy">
-                <small>Workspace</small>
-                <strong>{workspaceName}</strong>
-                {tenantBrandTagline && tenantBrandName !== PRODUCT_NAME && <span>{tenantBrandTagline}</span>}
-              </div>
-            </div>
-          </div>
-          {brandCrew.length > 0 && (
-            <div className="brand-crew">
-              {brandCrew.map((member, idx) => (
-                <figure className="crew-chip" key={`${member.label || "member"}-${idx}`}>
-                  {member.imageUrl ? (
-                    <img src={member.imageUrl} alt={member.label || `Team member ${idx + 1}`} loading="lazy" decoding="async" />
-                  ) : tenantBrandLogoUrl ? (
-                    <img src={tenantBrandLogoUrl} alt={member.label || `Team member ${idx + 1}`} loading="lazy" decoding="async" />
-                  ) : (
-                    <span className="crew-chip-placeholder" aria-hidden="true">
-                      {String(member.label || "TM").slice(0, 2).toUpperCase()}
-                    </span>
-                  )}
-                  <figcaption>{member.label || `Team member ${idx + 1}`}</figcaption>
-                </figure>
-              ))}
-            </div>
-          )}
-          <div className="right-actions header-actions" ref={headerMenusRef}>
-            {CUSTOMER_CENTERED_WORKSPACE_ENABLED && (
-              <>
-                <button
-                  className={`ghost${activeWorkspaceSection === "home" ? " nav-view-active" : ""}`}
-                  type="button"
-                  aria-current={activeWorkspaceSection === "home" ? "page" : undefined}
-                  onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.home); }}
-                >
-                  Home
-                </button>
-                <button
-                  className={`ghost${activeWorkspaceSection === "customers" ? " nav-view-active" : ""}`}
-                  type="button"
-                  aria-current={activeWorkspaceSection === "customers" ? "page" : undefined}
-                  onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.customers); }}
-                >
-                  Customers
-                </button>
-                <button
-                  className="ghost commercial-search-trigger"
-                  type="button"
-                  ref={commercialSearchTriggerRef}
-                  aria-haspopup="dialog"
-                  aria-keyshortcuts="Meta+K Control+K"
-                  title="Search customers and quotes (Ctrl or Command K)"
-                  onClick={(event) => openCommercialSearch(event.currentTarget)}
-                >
-                  <span>Search</span>
-                  <kbd aria-hidden="true">⌘K</kbd>
-                </button>
-              </>
-            )}
-            <button className="cta header-quick-cta" type="button" onClick={handleGetInstantQuote}>New quote</button>
-            <button
-              className={`ghost${activeWorkspaceSection === "quotes" && !quoteBuilderActive ? " nav-view-active" : ""}`}
-              type="button"
-              ref={historyTriggerRef}
-              onClick={() => {
-                setOpenHeaderMenu("");
-                setHistoryTarget({ quoteId: "", reason: "" });
-                navigateWorkspace(WORKSPACE_PATHS.quotes);
-              }}
-            >
-              Quotes
-            </button>
-            {CUSTOMER_CENTERED_WORKSPACE_ENABLED && (
-              <button
-                className={`ghost${activeWorkspaceSection === "messaging" ? " nav-view-active" : ""}`}
-                type="button"
-                data-capability-entry="event-messaging-station"
-                aria-current={activeWorkspaceSection === "messaging" ? "page" : undefined}
-                onClick={() => {
-                  setOpenHeaderMenu("");
-                  navigateWorkspace(WORKSPACE_PATHS.messaging);
-                }}
-              >
-                Messages
-              </button>
-            )}
-            <button
-              className={`ghost workflow-attention-trigger${activeWorkspaceSection === "workflow" ? " nav-view-active" : ""}`}
-              type="button"
-              ref={workflowTriggerRef}
-              onClick={() => {
-                setOpenHeaderMenu("");
-                navigateWorkspace(WORKSPACE_PATHS.workflow);
-              }}
-              aria-label={workflowAttentionCount === null
-                ? "Workflow"
-                : workflowAttentionCount > 0
-                  ? `Workflow, ${workflowAttentionCount} ${workflowAttentionCount === 1 ? "quote needs" : "quotes need"} attention`
-                  : "Workflow, no quotes need attention"}
-            >
-              <span>Workflow</span>
-              <AttentionBadge count={workflowAttentionCount} />
-            </button>
-            <div className="header-menu desktop-header-menu">
-              <button
-                className="ghost header-menu-trigger"
-                type="button"
-                ref={operationsMenuTriggerRef}
-                aria-haspopup="menu"
-                aria-expanded={openHeaderMenu === "operations"}
-                onClick={() => setOpenHeaderMenu((current) => current === "operations" ? "" : "operations")}
-              >
-                Operations
-              </button>
-              {openHeaderMenu === "operations" && (
-                <div className="header-menu-popover" role="menu" aria-label="Operations">
-                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Event Schedule</button>}
-                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Reporting Dashboard</button>}
-                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Integrations Ops</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.imports, setImportStudioOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Import Studio</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.catalog, setAdminOpen, { menuTriggerRef: operationsMenuTriggerRef, beforeOpen: () => setAdminInitialTab("") })}>Catalog Admin</button>}
-                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.diagnostics, setDiagnosticsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Session Diagnostics</button>}
-                </div>
-              )}
-            </div>
-
-            <div className="header-menu desktop-header-menu">
-              <button
-                className="ghost header-menu-trigger"
-                type="button"
-                ref={accountMenuTriggerRef}
-                aria-haspopup="menu"
-                aria-expanded={openHeaderMenu === "account"}
-                onClick={() => setOpenHeaderMenu((current) => current === "account" ? "" : "account")}
-              >
-                Account
-              </button>
-              {openHeaderMenu === "account" && (
-                <div className="header-menu-popover account-menu-popover" role="menu" aria-label="Account">
-                  <div className="header-account-summary" role="presentation">
-                    <strong>{authSession.user.email}</strong>
-                    <span>{authSession.role}</span>
-                  </div>
-                  {customerPortalEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); openPortalMode(); }}>Customer Portal</button>}
-                  <button type="button" role="menuitem" aria-pressed={workspaceSoundsOn} onClick={toggleWorkspaceSounds}>
-                    Sounds: {workspaceSoundsOn ? "On" : "Off"}
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); handleSignOut(); }}>Sign Out</button>
-                </div>
-              )}
-            </div>
-
-            <div className="header-menu mobile-header-menu">
-              <button
-                className="ghost header-menu-trigger"
-                type="button"
-                ref={moreMenuTriggerRef}
-                aria-haspopup="menu"
-                aria-expanded={openHeaderMenu === "more"}
-                onClick={() => setOpenHeaderMenu((current) => current === "more" ? "" : "more")}
-              >
-                More
-              </button>
-              {openHeaderMenu === "more" && (
-                <div className="header-menu-popover mobile-more-popover" role="menu" aria-label="More">
-                  {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: moreMenuTriggerRef })}>Event Schedule</button>}
-                  {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: moreMenuTriggerRef })}>Reporting Dashboard</button>}
-                  {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Integrations Ops</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.imports, setImportStudioOpen, { menuTriggerRef: moreMenuTriggerRef })}>Import Studio</button>}
-                  {authSession.isAdmin && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.catalog, setAdminOpen, { menuTriggerRef: moreMenuTriggerRef, beforeOpen: () => setAdminInitialTab("") })}>Catalog Admin</button>}
-                  {diagnosticsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.diagnostics, setDiagnosticsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Session Diagnostics</button>}
-                  <div className="header-account-summary" role="presentation">
-                    <strong>{authSession.user.email}</strong>
-                    <span>{authSession.role}</span>
-                  </div>
-                  {customerPortalEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); openPortalMode(); }}>Customer Portal</button>}
-                  <button type="button" role="menuitem" aria-pressed={workspaceSoundsOn} onClick={toggleWorkspaceSounds}>
-                    Sounds: {workspaceSoundsOn ? "On" : "Off"}
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); handleSignOut(); }}>Sign Out</button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {commercialSearchAvailable && commercialSearchOpen && (
-        <div data-commercial-search-surface="true">
-          <WorkspaceLazyTool
+    <ActiveWorkspaceShell
+      model={workspaceShellModel}
+      identity={{
+        workspaceName,
+        tenantBrandName,
+        tenantBrandTagline,
+        tenantBrandLogoUrl,
+        organizationName: String(organization?.name || tenantBrandName || "Catering workspace").trim(),
+        brandCrew
+      }}
+      principal={{ email: authSession.user.email, role: authSession.role, isAdmin: authSession.isAdmin }}
+      capabilities={{
+        customerPortal: customerPortalEnabled,
+        eventSchedule: eventScheduleEnabled,
+        reportingDashboard: dashboardEnabled,
+        integrationsOps: integrationsEnabled,
+        diagnostics: diagnosticsEnabled
+      }}
+      draftStatus={{ dirty: quoteDirty, editing: isEditingQuote, quoteNumber: editingQuote.quoteNumber }}
+      attentionCount={workflowAttentionCount}
+      sounds={{ enabled: workspaceSoundsOn, onToggle: toggleWorkspaceSounds }}
+      triggerRefs={{
+        headerMenus: headerMenusRef,
+        search: commercialSearchTriggerRef,
+        quotes: historyTriggerRef,
+        workflow: workflowTriggerRef,
+        operations: operationsMenuTriggerRef,
+        account: accountMenuTriggerRef,
+        more: moreMenuTriggerRef,
+        pilot: AMBIENT_UI_ENABLED ? globalPilotTriggerRef : undefined
+      }}
+      menu={{ openId: openHeaderMenu, onOpenChange: setOpenHeaderMenu }}
+      actions={{
+        onHome: () => navigateWorkspace(WORKSPACE_PATHS.home),
+        onCustomers: () => navigateWorkspace(WORKSPACE_PATHS.customers),
+        onSearch: openCommercialSearch,
+        onNewQuote: handleGetInstantQuote,
+        onQuotes: () => {
+          setHistoryTarget({ quoteId: "", reason: "" });
+          navigateWorkspace(WORKSPACE_PATHS.quotes);
+        },
+        onMessages: () => navigateWorkspace(WORKSPACE_PATHS.messaging),
+        onWorkflow: () => navigateWorkspace(WORKSPACE_PATHS.workflow),
+        onSchedule: (menuTriggerRef) => openRoutedWorkspaceTool(
+          WORKSPACE_PATHS.schedule,
+          setScheduleOpen,
+          { menuTriggerRef }
+        ),
+        onReporting: (menuTriggerRef) => openRoutedWorkspaceTool(
+          WORKSPACE_PATHS.reporting,
+          setDashboardOpen,
+          { menuTriggerRef }
+        ),
+        onIntegrations: (menuTriggerRef) => openRoutedWorkspaceTool(
+          WORKSPACE_PATHS.integrations,
+          setIntegrationsOpen,
+          { menuTriggerRef }
+        ),
+        onImports: (menuTriggerRef) => openRoutedWorkspaceTool(
+          WORKSPACE_PATHS.imports,
+          setImportStudioOpen,
+          { menuTriggerRef }
+        ),
+        onCatalog: (menuTriggerRef) => openRoutedWorkspaceTool(
+          WORKSPACE_PATHS.catalog,
+          setAdminOpen,
+          { menuTriggerRef, beforeOpen: () => setAdminInitialTab("") }
+        ),
+        onDiagnostics: (menuTriggerRef) => openRoutedWorkspaceTool(
+          WORKSPACE_PATHS.diagnostics,
+          setDiagnosticsOpen,
+          { menuTriggerRef }
+        ),
+        onPortal: openPortalMode,
+        onPilot: AMBIENT_UI_ENABLED ? openGlobalPilot : undefined,
+        onSignOut: handleSignOut
+      }}
+      searchSurface={commercialSearchAvailable && commercialSearchOpen ? (
+        <WorkspaceLazyTool
+          open
+          surfaceName="Workspace search"
+          component={CommercialSearchPalette}
+          onClose={closeCommercialSearch}
+          returnFocusRef={commercialSearchReturnFocusRef}
+        >
+          <CommercialSearchPalette
             open
-            surfaceName="Commercial search"
-            component={CommercialSearchPalette}
+            organizationId={authSession.organizationId}
             onClose={closeCommercialSearch}
+            onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
             returnFocusRef={commercialSearchReturnFocusRef}
+          />
+        </WorkspaceLazyTool>
+      ) : null}
+      themeVars={appThemeVars}
+      ambientOpportunity={AMBIENT_UI_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_DETAIL}
+      ambientNavigation={AMBIENT_UI_ENABLED}
+    >
+      {AMBIENT_UI_ENABLED && AmbientGlobalPilotSurface && (
+        <RecoverableErrorBoundary
+          active={globalPilotSurfaceOpen}
+          surfaceName="Pilot context"
+          surfaceKind="tool"
+          onRetry={AmbientGlobalPilotSurface.retry}
+          onClose={closeGlobalPilotSurface}
+          returnFocusRef={globalPilotTriggerRef}
+        >
+          <Suspense fallback={globalPilotSurfaceOpen ? (
+            <section
+              className="workspace-arrival-context source-note"
+              role="status"
+              aria-live="polite"
+              data-surface-purpose="clarify reveal_context"
+            >
+              <strong>Finding Pilot context</strong>
+              <span>The current workspace stays unchanged while Pilot prepares the relevant next step.</span>
+            </section>
+          ) : null}
           >
-            <CommercialSearchPalette
-              open
-              organizationId={authSession.organizationId}
-              onClose={closeCommercialSearch}
-              onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
-              onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
-              returnFocusRef={commercialSearchReturnFocusRef}
+            <AmbientGlobalPilotSurface
+              open={globalPilotSurfaceOpen}
+              model={globalPilotSurfaceModel}
+              anchorRef={globalPilotTriggerRef}
+              returnFocusRef={globalPilotTriggerRef}
+              onClose={closeGlobalPilotSurface}
+              onChooseOpportunity={chooseGlobalPilotOpportunity}
             />
-          </WorkspaceLazyTool>
+          </Suspense>
+        </RecoverableErrorBoundary>
+      )}
+      {toasts.length > 0 && (
+        <div
+          className="toast-stack"
+          role="status"
+          aria-live="polite"
+          aria-atomic="false"
+          data-layout-audit-surface="workspace-feedback"
+          data-layout-audit-overflow="workspace-feedback"
+          data-surface-purpose="clarify resolve reveal_context"
+        >
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`toast toast-${toast.tone || "info"}`}>
+              {toast.message}
+            </div>
+          ))}
         </div>
       )}
 
-      <section className="workspace-intro container">
-        <p><strong>{String(organization?.name || brandName || "Catering workspace").trim()}</strong></p>
-        <p className={quoteDirty ? "workspace-save-state is-dirty" : "workspace-save-state"} aria-live="polite">
-          {quoteDirty
-            ? "Unsaved changes"
-            : isEditingQuote
-              ? `Editing ${editingQuote.quoteNumber || "saved quote"} · no unsaved changes`
-              : "Ready for a new quote"}
-        </p>
-      </section>
+      {AMBIENT_UI_ENABLED && workspaceArrivalAttempted && !workspaceArrivalContext && (
+        <WorkspaceArrivalNotice
+          context={null}
+          resolution={workspaceArrivalResolution}
+          fallbackSurfaceId={resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.MESSAGING
+            ? "conversation"
+            : resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.WORKFLOW
+              ? "workflow"
+              : String(resolvedWorkspaceRouteId || "workspace")}
+        />
+      )}
 
       {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.HOME && (
         PILOT_NOW_ENABLED ? (
-          <WorkspaceLazyRoute surfaceName="Now" component={NowView}>
+          <WorkspaceLazyRoute
+            surfaceName="Now"
+            component={AMBIENT_NOW_ENABLED ? AmbientNowView : NowView}
+          >
             <main className="container workspace-route-main">
-              <NowView
-                snapshot={commercialSnapshot}
-                organizationName={organizationName}
-                organizationId={authSession.organizationId}
-                onRefresh={commercialSnapshot.refresh}
-                onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
-                onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
-                onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
-                onNewQuote={handleGetInstantQuote}
-              />
+              {AMBIENT_NOW_ENABLED ? (
+                <AmbientNowView
+                  snapshot={commercialSnapshot}
+                  organizationName={organizationName}
+                  organizationId={authSession.organizationId}
+                  currentUserRole={authSession.role}
+                  tenantTimeZone={tenantTimeZone}
+                  onRefresh={commercialSnapshot.refresh}
+                  onOpenWorkflow={openAmbientWorkflow}
+                  onNewQuote={handleGetInstantQuote}
+                />
+              ) : (
+                <NowView
+                  ambientMode={false}
+                  snapshot={commercialSnapshot}
+                  organizationName={organizationName}
+                  organizationId={authSession.organizationId}
+                  onRefresh={commercialSnapshot.refresh}
+                  onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+                  onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
+                  onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+                  onNewQuote={handleGetInstantQuote}
+                />
+              )}
             </main>
           </WorkspaceLazyRoute>
         ) : (
           <WorkspaceLazyRoute surfaceName="Command Center" component={CommandCenterHome}>
             <main className="container workspace-route-main">
               <CommandCenterHome
+                ambientMode={AMBIENT_UI_ENABLED}
                 snapshot={commercialSnapshot}
                 organizationName={organizationName}
                 organizationId={authSession.organizationId}
                 onRefresh={commercialSnapshot.refresh}
-                onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+                onOpenWorkflow={AMBIENT_UI_ENABLED
+                  ? openAmbientWorkflow
+                  : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
                 onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
                 onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
                 onNewQuote={handleGetInstantQuote}
@@ -3443,18 +4320,28 @@ export default function App({ tenantContext, authSession }) {
       )}
 
       {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CUSTOMER_LIST && (
-        <WorkspaceLazyRoute surfaceName="Customer directory" component={CustomerDirectoryView}>
+        <WorkspaceLazyRoute surfaceName={AMBIENT_UI_ENABLED ? "Clients" : "Customer directory"} component={CustomerDirectoryView}>
           <CustomerDirectoryView
             organizationId={authSession.organizationId}
             organizationName={organizationName}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
+            onOpenClientAmbient={navigateAmbientClient}
             onNewQuote={handleGetInstantQuote}
+            ambientMode={AMBIENT_UI_ENABLED}
+            currentUserRole={authSession.role}
           />
         </WorkspaceLazyRoute>
       )}
 
       {CUSTOMER_CENTERED_WORKSPACE_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL && (
-        <WorkspaceLazyRoute surfaceName="Customer 360" component={CustomerWorkspaceView}>
+        <WorkspaceLazyRoute surfaceName="Client overview" component={CustomerWorkspaceView}>
+          {AMBIENT_UI_ENABLED && workspaceArrivalContext?.surfaceId === "client-overview" && (
+            <WorkspaceArrivalNotice
+              context={workspaceArrivalContext}
+              resolution={workspaceArrivalResolution}
+              fallbackSurfaceId="client-overview"
+            />
+          )}
           <CustomerWorkspaceView
             organizationId={authSession.organizationId}
             organizationName={organizationName}
@@ -3462,25 +4349,50 @@ export default function App({ tenantContext, authSession }) {
             onBack={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
             onOpenQuotes={() => navigateWorkspace(WORKSPACE_PATHS.quotes)}
             onOpenQuote={(quoteId) => navigateWorkspace(buildQuotePath(quoteId))}
-            onOpenConversation={(quoteId) => navigateWorkspace(buildMessagingPath({ quoteId }))}
+            onOpenOpportunity={navigateAmbientOpportunity}
+            onOpenConversation={AMBIENT_UI_ENABLED
+              ? openAmbientConversation
+              : (quoteId) => navigateWorkspace(buildMessagingPath({ quoteId }))}
             onOpenQuoteEdit={(quoteId) => navigateWorkspace(buildQuoteEditPath(quoteId))}
             onCreateRebook={handleCreateCustomerRebook}
-            onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenWorkflow={AMBIENT_UI_ENABLED
+              ? openAmbientWorkflow
+              : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
             onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
             scheduleAvailable={eventScheduleEnabled}
             tenantTimeZone={tenantTimeZone}
             isAdmin={authSession.isAdmin}
+            currentUserRole={authSession.role}
+            ambientMode={AMBIENT_UI_ENABLED}
+            arrivalContext={workspaceArrivalContext?.surfaceId === "client-overview"
+              ? workspaceArrivalContext
+              : null}
+            arrivalAttempted={workspaceArrivalAttempted}
+            onArrivalResolution={setWorkspaceArrivalResolution}
           />
         </WorkspaceLazyRoute>
       )}
 
       {messagingOpen && (
+        <>
+        {AMBIENT_UI_ENABLED && workspaceArrivalContext?.surfaceId === "conversation" && (
+          <WorkspaceArrivalNotice
+            context={workspaceArrivalContext}
+            resolution={workspaceArrivalResolution}
+            fallbackSurfaceId="conversation"
+          />
+        )}
         <WorkspaceLazyRoute surfaceName="Messages" component={MessagingStation}>
           <div className="container workspace-route-main messaging-route-main">
             <MessagingStation
               organizationId={authSession.organizationId}
               seedQuotes={commercialSnapshot.quotes}
               initialQuoteId={browserRoute.messagingFocus?.quoteId || ""}
+              arrivalContext={workspaceArrivalContext?.surfaceId === "conversation"
+                ? workspaceArrivalContext
+                : null}
+              arrivalAttempted={workspaceArrivalAttempted}
+              onArrivalResolution={setWorkspaceArrivalResolution}
               onSelectQuote={(quoteId) => navigateWorkspace(
                 buildMessagingPath({ quoteId }),
                 { replace: !quoteId }
@@ -3490,146 +4402,45 @@ export default function App({ tenantContext, authSession }) {
             />
           </div>
         </WorkspaceLazyRoute>
+        </>
       )}
 
-      {authSession.isAdmin && catalogRouteMounted && (
-        <WorkspaceLazyRoute
-          active={catalogRouteOpen}
-          surfaceName="Catalog Admin"
-          component={AdminCatalogView}
-          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-        >
-          <AdminCatalogView
-            open={catalogRouteOpen}
-            catalog={catalog}
-            organizationId={authSession.organizationId}
-            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-            onSave={catalog.saveCatalog}
-            onApplyStarterPack={catalog.stageStarterPack}
-            onCatalogMutation={handleCatalogMutation}
-            onReload={catalog.reload}
-            saving={catalog.saving}
-            initialTab={adminInitialTab}
-            selectedEventType={globalEventTypeId}
-            onEventTypeChange={setGlobalEventTypeId}
-            onToast={pushToast}
-          />
-        </WorkspaceLazyRoute>
+      {AMBIENT_UI_ENABLED && workspaceArrivalContext?.surfaceId === "reporting" && (
+        <WorkspaceArrivalNotice
+          context={workspaceArrivalContext}
+          resolution={workspaceArrivalResolution}
+          fallbackSurfaceId="reporting"
+        />
       )}
 
-      {authSession.isAdmin && importsRouteMounted && (
-        <WorkspaceLazyRoute
-          active={importsRouteOpen}
-          surfaceName="Import Studio"
-          component={ImportStudioView}
-          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-        >
-          <ImportStudioView
-            open={importsRouteOpen}
-            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-            organizationId={authSession.organizationId}
-            organizationName={workspaceName}
-            currentUserUid={authSession.user?.uid || ""}
-            currentUserEmail={authSession.user?.email || ""}
-            catalogRevision={Math.max(0, Number(catalog.settings?.catalogRevision || 0))}
-            onReload={() => catalog.reload({ background: true })}
-            onImported={(result) => {
-              catalog.reload({ background: true });
-              if (result?.status === "rolled_back") {
-                pushToast(`Import ${result.importBatchId} was undone.`, "info");
-              } else {
-                pushToast(`Imported ${result?.createdCount || 0} record(s) into ${authSession.organizationId}.`, "success");
-              }
-            }}
-          />
-        </WorkspaceLazyRoute>
+      {AMBIENT_UI_ENABLED && workspaceArrivalContext?.surfaceId === "schedule" && (
+        <WorkspaceArrivalNotice
+          context={workspaceArrivalContext}
+          resolution={workspaceArrivalResolution}
+          fallbackSurfaceId="schedule"
+        />
       )}
 
-      {eventScheduleEnabled && scheduleRouteMounted && (
-        <WorkspaceLazyRoute
-          active={scheduleRouteOpen}
-          surfaceName="Event Schedule"
-          component={EventScheduleView}
-          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-        >
-          <EventScheduleView
-            open={scheduleRouteOpen}
-            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-            organizationId={authSession.organizationId}
-            staffLeads={scheduleStaffLeads}
-            capacityLimit={scheduleCapacityLimit}
-            currentUserEmail={authSession.user?.email || ""}
-          />
-        </WorkspaceLazyRoute>
-      )}
+      {renderWorkspaceTools("route", [
+        catalogTool,
+        importsTool,
+        scheduleTool,
+        reportingTool,
+        integrationsTool,
+        diagnosticsTool
+      ])}
 
-      {dashboardEnabled && reportingRouteMounted && (
-        <WorkspaceLazyRoute
-          active={reportingRouteOpen}
-          surfaceName="Reporting Dashboard"
-          component={ReportingDashboardView}
-          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-        >
-          <ReportingDashboardView
-            open={reportingRouteOpen}
-            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-            organizationId={authSession.organizationId}
-            addons={catalog.addons}
-          />
-        </WorkspaceLazyRoute>
-      )}
-
-      {integrationsEnabled && integrationsRouteMounted && (
-        <WorkspaceLazyRoute
-          active={integrationsRouteOpen}
-          surfaceName="Integrations Ops"
-          component={IntegrationOpsView}
-          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-        >
-          <IntegrationOpsView
-            open={integrationsRouteOpen}
-            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-            organizationId={authSession.organizationId}
-            settings={effectiveSettings}
-            currentUserEmail={authSession.user?.email || ""}
-            currentUserUid={authSession.user?.uid || ""}
-            canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
-            canManageProviders={authSession.isAdmin}
-          />
-        </WorkspaceLazyRoute>
-      )}
-
-      {diagnosticsEnabled && diagnosticsRouteMounted && (
-        <WorkspaceLazyRoute
-          active={diagnosticsRouteOpen}
-          surfaceName="Session Diagnostics"
-          component={DiagnosticsView}
-          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-        >
-          <DiagnosticsView
-            open={diagnosticsRouteOpen}
-            onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
-          />
-        </WorkspaceLazyRoute>
-      )}
-
-      {(browserRoute.routeId === WORKSPACE_ROUTE_IDS.NOT_FOUND
-        || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
-        || ([
-          WORKSPACE_ROUTE_IDS.SCHEDULE,
-          WORKSPACE_ROUTE_IDS.REPORTING,
-          WORKSPACE_ROUTE_IDS.CATALOG,
-          WORKSPACE_ROUTE_IDS.IMPORTS,
-          WORKSPACE_ROUTE_IDS.INTEGRATIONS,
-          WORKSPACE_ROUTE_IDS.DIAGNOSTICS
-        ].includes(resolvedWorkspaceRouteId) && !routedToolAuthorized)
-        || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && [
-          WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
-          WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
-          WORKSPACE_ROUTE_IDS.MESSAGING
-        ].includes(resolvedWorkspaceRouteId))) && (
+      {workspaceShellModel.showNotFound && (
         <WorkspaceLazyRoute surfaceName="Workspace page" component={WorkspaceNotFound}>
-          <WorkspaceNotFound pathname={browserRoute.pathname} onHome={() => navigateWorkspace(WORKSPACE_PATHS.home)} />
+          <WorkspaceNotFound
+            pathname={browserRoute.pathname}
+            reason={resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.CATALOG && !authSession.isAdmin
+              ? "role-denied"
+              : ""}
+            routeId={resolvedWorkspaceRouteId}
+            ambientMode={AMBIENT_UI_ENABLED}
+            onHome={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+          />
         </WorkspaceLazyRoute>
       )}
 
@@ -3679,16 +4490,46 @@ export default function App({ tenantContext, authSession }) {
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
       >
-        {PILOT_COMMAND_ENABLED && (
-          <PilotCommandBar
-            form={form}
-            catalog={catalog}
-            settings={effectiveSettings}
-            styles={Object.keys(STAFF_RULES)}
-            onStageProposal={stageChangeRequestProposal}
-          />
+        {PILOT_COMMAND_ENABLED && PilotCommandBar && pilotCommandSurfaceOpen && (
+          <RecoverableErrorBoundary
+            key={`pilot-command-${authSession.organizationId || "no-org"}-${quoteEditRouteId || "new"}`}
+            active={pilotCommandSurfaceOpen}
+            surfaceName="Pilot for this draft"
+            surfaceKind="tool"
+            hasUnsavedWorkspaceChanges={quoteDirty}
+            onRetry={PilotCommandBar.retry}
+            onClose={() => setPilotCommandSurfaceOpen(false)}
+          >
+            <Suspense fallback={(
+              <section className="panel source-note" role="status" data-surface-purpose="clarify">
+                Preparing Pilot for this draft. Nothing is changing.
+              </section>
+            )}>
+              <PilotCommandBar
+                ambientEnabled={AMBIENT_PILOT_COMMANDS_ENABLED}
+                form={form}
+                catalog={catalog}
+                settings={effectiveSettings}
+                styles={Object.keys(STAFF_RULES)}
+                canViewStaffMargin={authSession.isStaff}
+                scenarioOrganizationId={authSession.organizationId}
+                scenarioCatalogContext={pilotScenarioCatalogContext}
+                scenarioLockedScope={[]}
+                onStageProposal={stageChangeRequestProposal}
+                onHandoffScenarioToDraftReview={AMBIENT_PILOT_COMMANDS_ENABLED
+                  ? handoffPilotScenarioToDraftReview
+                  : undefined}
+                contextLabel={globalPilotSurfaceModel?.object?.label || form.eventName?.trim() || "New quote"}
+                focusRequest={AMBIENT_UI_ENABLED && globalPilotRequest?.target === "draft_command"
+                  ? globalPilotRequest
+                  : null}
+                onFocusRequestResolution={AMBIENT_UI_ENABLED ? handleGlobalPilotResolution : undefined}
+                voiceCaptureMode={AMBIENT_UI_ENABLED ? "hold" : "toggle"}
+              />
+            </Suspense>
+          </RecoverableErrorBoundary>
         )}
-        {PILOT_CREATE_ENABLED
+        {PILOT_CREATE_ENABLED && CreateIntake
           && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
           && !editingQuote.id && (
           <CreateIntake
@@ -3699,45 +4540,94 @@ export default function App({ tenantContext, authSession }) {
             onModelParse={parseIntentDraftWithModel}
           />
         )}
-        {PILOT_CHANGE_REQUESTS_ENABLED
+        {PILOT_CHANGE_REQUESTS_ENABLED && ChangeRequestPanel
           && isEditingQuote
           && editingQuote?.portalDecision?.decision === "changes_requested"
           && String(editingQuote?.portalDecision?.message || "").trim() && (
           <ChangeRequestPanel
-            message={editingQuote.portalDecision.message}
-            submittedAtISO={editingQuote.portalDecision.submittedAtISO || ""}
-            requestId={editingQuote.portalDecision.requestId || ""}
-            form={form}
-            catalog={catalog}
-            settings={effectiveSettings}
-            styles={Object.keys(STAFF_RULES)}
-            onStageProposal={stageChangeRequestProposal}
-            onRecordParse={
-              String(catalog.source || "").trim().toLowerCase().startsWith("firebase")
-                ? async (payload) => {
-                    try {
-                      const receipt = await recordChangeRequestParse({
-                        organizationId: authSession.organizationId,
-                        quoteId: editingQuote.id,
-                        ...payload
-                      });
-                      setPendingResolutionLink({
-                        quoteId: editingQuote.id,
-                        resolutionId: receipt.resolutionId
-                      });
-                      return receipt;
-                    } catch (error) {
-                      if (error && typeof error === "object") {
-                        error.definitive = isDefinitiveRecordError(error);
+                message={editingQuote.portalDecision.message}
+                submittedAtISO={editingQuote.portalDecision.submittedAtISO || ""}
+                requestId={editingQuote.portalDecision.requestId || ""}
+                form={form}
+                catalog={catalog}
+                settings={effectiveSettings}
+                styles={Object.keys(STAFF_RULES)}
+                onStageProposal={stageChangeRequestProposal}
+                onRecordParse={
+                  String(catalog.source || "").trim().toLowerCase().startsWith("firebase")
+                    ? async (payload) => {
+                        try {
+                          const receipt = await recordChangeRequestParse({
+                            organizationId: authSession.organizationId,
+                            quoteId: editingQuote.id,
+                            ...payload
+                          });
+                          setPendingResolutionLink({
+                            quoteId: editingQuote.id,
+                            resolutionId: receipt.resolutionId
+                          });
+                          return receipt;
+                        } catch (error) {
+                          if (error && typeof error === "object") {
+                            error.definitive = isDefinitiveRecordError(error);
+                          }
+                          throw error;
+                        }
                       }
-                      throw error;
-                    }
-                  }
-                : null
-            }
+                    : null
+                }
           />
         )}
         <section className="panel wizard-panel">
+          {AMBIENT_PILOT_COMMANDS_ENABLED && AmbientPilotScenarioReview && pilotScenarioDraftReview && (
+            <RecoverableErrorBoundary
+              active
+              surfaceName="Pilot scenario review"
+              surfaceKind="tool"
+              hasUnsavedWorkspaceChanges={quoteDirty}
+              onRetry={AmbientPilotScenarioReview.retry}
+              onClose={clearPilotScenarioDraftReview}
+            >
+              <Suspense fallback={(
+                <p className="source-note" role="status">
+                  Preparing the Pilot scenario review. Your draft stays unchanged.
+                </p>
+              )}>
+                <AmbientPilotScenarioReview
+                  review={pilotScenarioDraftReview}
+                  onApply={handleApplyPilotScenarioDraftReview}
+                  onKeep={handleKeepPilotScenarioDraftReview}
+                />
+              </Suspense>
+            </RecoverableErrorBoundary>
+          )}
+          {AMBIENT_UI_ENABLED && AmbientDraftIntentReview && ambientDraftIntentReview && (
+            <RecoverableErrorBoundary
+              active
+              surfaceName="Draft change review"
+              surfaceKind="tool"
+              hasUnsavedWorkspaceChanges={quoteDirty}
+              onRetry={AmbientDraftIntentReview.retry}
+              onClose={() => {
+                setAmbientDraftIntentReview(null);
+                setAmbientDraftCatalogContext(null);
+                setAmbientDraftReviewResolution("");
+              }}
+            >
+              <Suspense fallback={(
+                <p className="source-note" role="status">
+                  Preparing the draft change review. Your saved quote stays unchanged.
+                </p>
+              )}>
+                <AmbientDraftIntentReview
+                  intent={ambientDraftIntentReview}
+                  catalogContext={ambientDraftCatalogContext}
+                  onApply={handleApplyAmbientDraftIntent}
+                  onKeep={handleKeepAmbientDraftIntent}
+                />
+              </Suspense>
+            </RecoverableErrorBoundary>
+          )}
           <RebookQuoteReviewBanner
             quoteNumber={editingQuote.quoteNumber}
             organizationId={editingQuote.organizationId || authSession.organizationId}
@@ -3910,7 +4800,7 @@ export default function App({ tenantContext, authSession }) {
                   >
                     <div className="quote-change-impact-preview-head">
                       <div>
-                        <p className="eyebrow">Commercial dependency graph</p>
+                        <p className="eyebrow">Related quote items</p>
                         <h3>Preview change blast radius</h3>
                         <p className="source-note">
                           Server-authoritative comparison of the saved canonical revision and current form. The simulation itself changes nothing; an exact authorization and atomic apply receipt are required when governed dependencies are affected.
@@ -4017,7 +4907,9 @@ export default function App({ tenantContext, authSession }) {
                   onClick={() => void handleSubmitQuote()}
                   disabled={submitState.saving || catalog.loading || totals.guests <= 0}
                 >
-                    {submitState.saving ? (isEditingQuote ? "Saving Changes..." : "Saving Draft...") : (isEditingQuote ? "Save Changes" : "Save draft")}
+                    {submitState.saving
+                      ? (isEditingQuote ? "Saving Changes..." : "Saving Draft...")
+                      : (isEditingQuote ? (ambientDraftOutcomeSaveLabel || "Save Changes") : "Save draft")}
                   </button>
                 </>
               )}
@@ -4080,74 +4972,17 @@ export default function App({ tenantContext, authSession }) {
       </main>
       )}
 
-      {toasts.length > 0 && (
-        <div className="toast-stack" role="status" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={`toast toast-${toast.tone || "info"}`}>
-              {toast.message}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {authSession.isAdmin && adminMounted && (
-        <WorkspaceLazyTool
-          open={catalogModalOpen}
-          surfaceName="Catalog Admin"
-          component={AdminCatalogModal}
-          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
-          returnFocusRef={workspaceToolReturnFocusRef}
-          hasUnsavedWorkspaceChanges={quoteDirty}
-        >
-          <AdminCatalogModal
-            open={catalogModalOpen}
-            catalog={catalog}
-            organizationId={authSession.organizationId}
-            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.CATALOG, setAdminOpen)}
-            returnFocusRef={workspaceToolReturnFocusRef}
-            onSave={catalog.saveCatalog}
-            onApplyStarterPack={catalog.stageStarterPack}
-            onCatalogMutation={handleCatalogMutation}
-            onReload={catalog.reload}
-            saving={catalog.saving}
-            initialTab={adminInitialTab}
-            onToast={pushToast}
-          />
-        </WorkspaceLazyTool>
-      )}
-
-      {authSession.isAdmin && importStudioMounted && (
-        <WorkspaceLazyTool
-          open={importsModalOpen}
-          surfaceName="Import Studio"
-          component={ImportStudioModal}
-          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.IMPORTS, setImportStudioOpen)}
-          returnFocusRef={workspaceToolReturnFocusRef}
-          hasUnsavedWorkspaceChanges={quoteDirty}
-        >
-          <ImportStudioModal
-            open={importsModalOpen}
-            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.IMPORTS, setImportStudioOpen)}
-            returnFocusRef={workspaceToolReturnFocusRef}
-            organizationId={authSession.organizationId}
-            organizationName={workspaceName}
-            currentUserUid={authSession.user?.uid || ""}
-            currentUserEmail={authSession.user?.email || ""}
-            catalogRevision={Math.max(0, Number(catalog.settings?.catalogRevision || 0))}
-            onReload={() => catalog.reload({ background: true })}
-            onImported={(result) => {
-              catalog.reload({ background: true });
-              if (result?.status === "rolled_back") {
-                pushToast(`Import ${result.importBatchId} was undone.`, "info");
-              } else {
-                pushToast(`Imported ${result?.createdCount || 0} record(s) into ${authSession.organizationId}.`, "success");
-              }
-            }}
-          />
-        </WorkspaceLazyTool>
-      )}
+      {renderWorkspaceTools("modal", [catalogTool, importsTool])}
 
       {historyMounted && (
+        <>
+        {AMBIENT_UI_ENABLED && workspaceArrivalContext?.surfaceId === "living-opportunity" && (
+          <WorkspaceArrivalNotice
+            context={workspaceArrivalContext}
+            resolution={workspaceArrivalResolution}
+            fallbackSurfaceId="living-opportunity"
+          />
+        )}
         <WorkspaceLazyRoute
           active={historyOpen}
           surfaceName="Quotes"
@@ -4168,13 +5003,29 @@ export default function App({ tenantContext, authSession }) {
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
             tenantTimeZone={tenantTimeZone}
+            ambientPricingCatalog={AMBIENT_UI_ENABLED ? catalog : null}
+            ambientPricingSettings={AMBIENT_UI_ENABLED ? effectiveSettings : null}
+            globalPilotRequest={AMBIENT_UI_ENABLED && globalPilotRequest?.target === "living_opportunity"
+              ? globalPilotRequest
+              : null}
+            globalPilotReturnFocusRef={AMBIENT_UI_ENABLED ? globalPilotTriggerRef : null}
+            onGlobalPilotResolution={AMBIENT_UI_ENABLED ? handleGlobalPilotResolution : undefined}
             focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
             focusAction={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.action : ""}
             focusReason={historyTarget.quoteId === browserRoute.params?.quoteId ? historyTarget.reason : ""}
-            onEditQuote={(quote) => {
-              requestWorkflowAttentionRefresh({ force: true });
-              handleEditQuote(quote);
-            }}
+            arrivalContext={workspaceArrivalContext?.surfaceId === "living-opportunity"
+              ? workspaceArrivalContext
+              : null}
+            onArrivalResolution={setWorkspaceArrivalResolution}
+            onEditQuote={AMBIENT_UI_ENABLED
+              ? (quote, options) => {
+                  requestWorkflowAttentionRefresh({ force: true });
+                  return handleEditQuote(quote, options, options?.arrivalContext || null);
+                }
+              : (quote) => {
+                  requestWorkflowAttentionRefresh({ force: true });
+                  handleEditQuote(quote);
+                }}
             onBackToQuotes={() => {
               setHistoryTarget({ quoteId: "", reason: "" });
               navigateWorkspace(WORKSPACE_PATHS.quotes);
@@ -4182,22 +5033,43 @@ export default function App({ tenantContext, authSession }) {
             onOpenSchedule={() => navigateWorkspace(WORKSPACE_PATHS.schedule)}
             scheduleAvailable={eventScheduleEnabled}
             onOpenCustomer={(customerId) => navigateWorkspace(buildCustomerPath(customerId))}
-            onOpenWorkflow={(target = {}) => navigateWorkspace(buildWorkflowPath(target))}
+            onOpenOpportunity={(target = {}) => {
+              const result = navigateAmbientOpportunity(target);
+              if (result.status === "pending") {
+                setHistoryTarget({ quoteId: "", reason: "" });
+              }
+              return result;
+            }}
+            onOpenWorkflow={AMBIENT_UI_ENABLED
+              ? openAmbientWorkflow
+              : (target = {}) => navigateWorkspace(buildWorkflowPath(target))}
             onOpenConversation={CUSTOMER_CENTERED_WORKSPACE_ENABLED
-              ? (quoteId) => navigateWorkspace(buildMessagingPath({ quoteId }))
+              ? AMBIENT_UI_ENABLED
+                ? openAmbientConversation
+                : (quoteId) => navigateWorkspace(buildMessagingPath({ quoteId }))
               : undefined}
             onOpenIntegrations={() => {
               setHistoryTarget({ quoteId: "", reason: "" });
               navigateWorkspace(WORKSPACE_PATHS.integrations);
             }}
+            onStartOpportunity={handleGetInstantQuote}
             integrationsAvailable={integrationsEnabled}
             canDeleteQuotes={authSession.isAdmin}
             onToast={pushToast}
           />
         </WorkspaceLazyRoute>
+        </>
       )}
 
       {salesWorkflowMounted && (
+        <>
+        {AMBIENT_UI_ENABLED && workspaceArrivalContext?.surfaceId === "workflow" && (
+          <WorkspaceArrivalNotice
+            context={workspaceArrivalContext}
+            resolution={workspaceArrivalResolution}
+            fallbackSurfaceId="workflow"
+          />
+        )}
         <WorkspaceLazyRoute
           active={salesWorkflowOpen}
           surfaceName="Workflow"
@@ -4210,7 +5082,11 @@ export default function App({ tenantContext, authSession }) {
             onClose={closeSalesWorkflowWorkspace}
             onOpenQuoteHistory={({ quoteId = "", action = "" } = {}) => {
               if (action === "conversation" && CUSTOMER_CENTERED_WORKSPACE_ENABLED) {
-                navigateWorkspace(buildMessagingPath({ quoteId }));
+                if (AMBIENT_UI_ENABLED) {
+                  openAmbientConversation(quoteId);
+                } else {
+                  navigateWorkspace(buildMessagingPath({ quoteId }));
+                }
                 return;
               }
               const actionLabel = String(action || "approved action").replaceAll("_", " ");
@@ -4232,6 +5108,10 @@ export default function App({ tenantContext, authSession }) {
             focusQuoteId={browserRoute.workflowFocus?.quoteId || ""}
             focusAttentionType={browserRoute.workflowFocus?.attentionType || ""}
             focusRequestId={browserRoute.workflowFocus?.requestId || ""}
+            arrivalContext={workspaceArrivalContext?.surfaceId === "workflow"
+              ? workspaceArrivalContext
+              : null}
+            onArrivalResolution={setWorkspaceArrivalResolution}
             onEditQuote={(quote) => {
               handleEditQuote(quote);
             }}
@@ -4239,68 +5119,10 @@ export default function App({ tenantContext, authSession }) {
             onToast={pushToast}
           />
         </WorkspaceLazyRoute>
+        </>
       )}
 
-      {eventScheduleEnabled && scheduleMounted && (
-        <WorkspaceLazyTool
-          open={scheduleModalOpen}
-          surfaceName="Event Schedule"
-          component={EventScheduleModal}
-          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
-          returnFocusRef={workspaceToolReturnFocusRef}
-          hasUnsavedWorkspaceChanges={quoteDirty}
-        >
-          <EventScheduleModal
-            open={scheduleModalOpen}
-            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
-            returnFocusRef={workspaceToolReturnFocusRef}
-            organizationId={authSession.organizationId}
-            staffLeads={scheduleStaffLeads}
-            capacityLimit={scheduleCapacityLimit}
-            currentUserEmail={authSession.user?.email || ""}
-          />
-        </WorkspaceLazyTool>
-      )}
-
-      {integrationsEnabled && integrationsMounted && (
-        <WorkspaceLazyTool
-          open={integrationsModalOpen}
-          surfaceName="Integrations Ops"
-          component={IntegrationOpsModal}
-          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
-          returnFocusRef={workspaceToolReturnFocusRef}
-          hasUnsavedWorkspaceChanges={quoteDirty}
-        >
-          <IntegrationOpsModal
-            open={integrationsModalOpen}
-            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.INTEGRATIONS, setIntegrationsOpen)}
-            returnFocusRef={workspaceToolReturnFocusRef}
-            organizationId={authSession.organizationId}
-            settings={effectiveSettings}
-            currentUserEmail={authSession.user?.email || ""}
-            currentUserUid={authSession.user?.uid || ""}
-            canProvisionCustomer={authSession.isAdmin && authSession.platformAdmin}
-            canManageProviders={authSession.isAdmin}
-          />
-        </WorkspaceLazyTool>
-      )}
-
-      {diagnosticsEnabled && diagnosticsMounted && (
-        <WorkspaceLazyTool
-          open={diagnosticsModalOpen}
-          surfaceName="Session Diagnostics"
-          component={DiagnosticsModal}
-          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.DIAGNOSTICS, setDiagnosticsOpen)}
-          returnFocusRef={workspaceToolReturnFocusRef}
-          hasUnsavedWorkspaceChanges={quoteDirty}
-        >
-          <DiagnosticsModal
-            open={diagnosticsModalOpen}
-            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.DIAGNOSTICS, setDiagnosticsOpen)}
-            returnFocusRef={workspaceToolReturnFocusRef}
-          />
-        </WorkspaceLazyTool>
-      )}
+      {renderWorkspaceTools("modal", [scheduleTool, integrationsTool, diagnosticsTool])}
 
       {quoteCompareEnabled && compareMounted && (
         <WorkspaceLazyTool
@@ -4328,24 +5150,7 @@ export default function App({ tenantContext, authSession }) {
         </WorkspaceLazyTool>
       )}
 
-      {dashboardEnabled && dashboardMounted && (
-        <WorkspaceLazyTool
-          open={reportingModalOpen}
-          surfaceName="Reporting Dashboard"
-          component={ReportingDashboardModal}
-          onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.REPORTING, setDashboardOpen)}
-          returnFocusRef={workspaceToolReturnFocusRef}
-          hasUnsavedWorkspaceChanges={quoteDirty}
-        >
-          <ReportingDashboardModal
-            open={reportingModalOpen}
-            onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.REPORTING, setDashboardOpen)}
-            returnFocusRef={workspaceToolReturnFocusRef}
-            organizationId={authSession.organizationId}
-            addons={catalog.addons}
-          />
-        </WorkspaceLazyTool>
-      )}
-    </div>
+      {renderWorkspaceTools("modal", [reportingTool])}
+    </ActiveWorkspaceShell>
   );
 }

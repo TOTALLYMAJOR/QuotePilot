@@ -1,0 +1,220 @@
+.ambient-money-context {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  color: var(--ink, #17202a);
+}
+.ambient-money-context__intro {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.ambient-money-context__intro p {
+  margin: 0;
+  color: var(--muted, #5d6670);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.ambient-money-context__intro .eyebrow {
+  color: var(--tone-gold-4, #6f561c);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ambient-money-context__rail {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ambient-money-context__stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.72rem;
+  padding: 0.82rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--ink, #17202a) 12%, transparent);
+}
+
+.ambient-money-context__stage:last-child {
+  border-bottom: 1px solid color-mix(in srgb, var(--ink, #17202a) 12%, transparent);
+}
+
+.ambient-money-context__index {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid color-mix(in srgb, var(--ink, #17202a) 18%, transparent);
+  border-radius: 999px;
+  place-items: center;
+  color: var(--muted, #5d6670);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.ambient-money-context__stage-copy,
+.ambient-money-context__stage-heading {
+  min-width: 0;
+}
+
+.ambient-money-context__stage-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.ambient-money-context__stage h3,
+.ambient-money-context__stage p,
+.ambient-money-context__stage small {
+  margin: 0;
+}
+
+.ambient-money-context__stage h3 {
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.ambient-money-context__state {
+  flex: 0 1 auto;
+  padding: 0.16rem 0.45rem;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 999px;
+  color: #4b5660;
+  background: #f5f6f5;
+  font-size: 0.63rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: right;
+}
+
+.ambient-money-context__stage.is-provider_confirmed_paid .ambient-money-context__state,
+.ambient-money-context__stage.is-provider_confirmed_refund .ambient-money-context__state {
+  color: #205e46;
+  background: #e7f5ed;
+}
+
+.ambient-money-context__stage.is-provider_request_recorded .ambient-money-context__state {
+  color: #245f7d;
+  background: #e8f3f7;
+}
+
+.ambient-money-context__stage.is-recorded_unverified .ambient-money-context__state,
+.ambient-money-context__stage.is-unavailable .ambient-money-context__state {
+  color: #8f2f25;
+  background: #fcecea;
+}
+
+.ambient-money-context__amount {
+  display: block;
+  margin-top: 0.18rem;
+  font-family: var(--font-editorial, Georgia, serif);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.ambient-money-context__stage p {
+  margin-top: 0.42rem;
+  color: var(--muted, #5d6670);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.ambient-money-context__stage small {
+  display: block;
+  margin-top: 0.35rem;
+  color: color-mix(in srgb, var(--muted, #5d6670) 92%, #000);
+  font-size: 0.7rem;
+  line-height: 1.42;
+}
+
+.ambient-money-context__judgment {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.ambient-money-context__judgment > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.ambient-money-context__judgment dt {
+  color: var(--muted, #5d6670);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ambient-money-context__judgment dd {
+  display: grid;
+  gap: 0.12rem;
+  margin: 0;
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
+
+.ambient-money-context__judgment dd > strong {
+  text-transform: capitalize;
+}
+
+.ambient-money-context__next {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.78rem;
+  border-left: 3px solid var(--tone-gold-3, #8d611a);
+  background: #fff8e9;
+}
+
+.ambient-money-context__next span {
+  color: #6f561c;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ambient-money-context__next strong {
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.ambient-money-context--unavailable {
+  padding: 0.8rem;
+  border: 1px solid #dba69f;
+  border-radius: 0.7rem;
+  background: #fff1ef;
+}
+
+.ambient-money-context--unavailable p {
+  margin: 0;
+}
+
+@media (max-width: 420px) {
+  .ambient-money-context__stage-heading {
+    display: grid;
+  }
+
+  .ambient-money-context__state {
+    width: fit-content;
+    text-align: left;
+  }
+}
+
+@media (forced-colors: active) {
+  .ambient-money-context__state,
+  .ambient-money-context__next,
+  .ambient-money-context--unavailable {
+    border: 1px solid CanvasText;
+    color: CanvasText;
+    background: Canvas;
+    forced-color-adjust: auto;
+  }
+}

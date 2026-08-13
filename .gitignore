@@ -20,5 +20,6 @@ firebase.isolated.local.json
 .vscode/
 .idea/
 .cache/
+.history/
 *.tmp
 *.swp

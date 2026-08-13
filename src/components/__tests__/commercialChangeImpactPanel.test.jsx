@@ -12,6 +12,14 @@ const APP_SOURCE = readFileSync(
   fileURLToPath(new URL("../../App.jsx", import.meta.url)),
   "utf8"
 );
+const QUOTE_DRAFT_RUNTIME_SOURCE = readFileSync(
+  fileURLToPath(new URL("../../lib/quoteDraftRuntime.js", import.meta.url)),
+  "utf8"
+);
+const QUOTE_DRAFT_RUNTIME_BASE_SOURCE = readFileSync(
+  fileURLToPath(new URL("../../lib/quoteDraftRuntimeBase.js", import.meta.url)),
+  "utf8"
+);
 const FUNCTIONS_SOURCE = readFileSync(
   fileURLToPath(new URL("../../../functions/index.js", import.meta.url)),
   "utf8"
@@ -166,6 +174,8 @@ describe("CommercialChangeImpactPanel", () => {
     expect(markup).toContain('{&quot;id&quot;:&quot;venue-2&quot;,&quot;room&quot;:&quot;Ballroom&quot;}');
     expect(markup).toContain("$12,480.00");
     expect(markup).toContain("$16,920.00");
+    expect(markup).toContain(">Price change<");
+    expect(markup).toContain(">Total change<");
     expect(markup).toContain("+$4,440.00");
     expect(markup).toContain("$3,120.00 → $4,230.00");
     expect(markup).toContain("+$1,110.00");
@@ -195,9 +205,9 @@ describe("CommercialChangeImpactPanel", () => {
     expect(markup).toContain("v0014");
     expect(markup).toContain("preview-v0015");
     expect(markup).toContain("commercial-dependency-graph-v1");
-    expect(markup).toContain("2 of 32 changed facts");
+    expect(markup).toContain("2 of 32 changed inputs");
     expect(markup).toContain("2 of 64 dependents");
-    expect(markup).toContain("9 declared facts");
+    expect(markup).toContain("9 tracked inputs");
     expect(markup).toContain("262,144 byte output limit");
   });
 
@@ -220,7 +230,7 @@ describe("CommercialChangeImpactPanel", () => {
 
     expect(empty).toContain('data-capability-state="empty"');
     expect(empty).toContain("no declared commercial change");
-    expect(empty).toContain("No declared fact changed in this simulation.");
+    expect(empty).toContain("No tracked input changed in this simulation.");
     expect(partial).toContain('data-capability-state="partial"');
     expect(partial).toContain('data-read-truncation="truncated"');
     expect(partial).toContain("Do not authorize or publish from this view.");
@@ -418,10 +428,31 @@ describe("CommercialChangeImpactPanel", () => {
   });
 
   test("is mechanically bound to the trusted quote edit and authoritative pricing path", () => {
+    expect(APP_SOURCE).toMatch(
+      /import\s*\{[\s\S]*?RecoverableErrorBoundary[\s\S]*?\}\s*from\s*["']\.\/components\/RecoverableErrorBoundary["']/
+    );
+    expect(APP_SOURCE).toContain("<RecoverableErrorBoundary");
     expect(APP_SOURCE).toContain('data-capability-id="cwf-15b-commercial-change-impact-preview"');
     expect(APP_SOURCE).toContain("handlePreviewChangeImpact");
     expect(APP_SOURCE).toContain("expectedActiveVersionId: editingQuote.activeVersionId");
-    expect(APP_SOURCE).toContain('activeVersionId: quote.activeVersionId || quote.versionMeta?.versionId || ""');
+    expect(APP_SOURCE).toContain("const loadAmbientQuoteDraftRuntime = AMBIENT_UI_ENABLED");
+    expect(APP_SOURCE).toContain('? () => import("./lib/quoteDraftRuntime")');
+    expect(APP_SOURCE).toContain("const runtimeModule = await loadAmbientQuoteDraftRuntime();");
+    expect(APP_SOURCE).toContain("draftRuntime = runtimeModule.hydrateSavedQuoteDraft({");
+    expect(APP_SOURCE).toContain("...draftInput,");
+    expect(APP_SOURCE).toContain("draftPatch,");
+    expect(APP_SOURCE).toContain("draftIntent,");
+    expect(APP_SOURCE).toContain("ambientCatalogContext,");
+    expect(APP_SOURCE).toContain("ambientEnabled: true");
+    expect(APP_SOURCE).toContain("draftRuntime = hydrateSavedQuoteDraftBase(draftInput);");
+    expect(QUOTE_DRAFT_RUNTIME_SOURCE).toContain("normalizeAmbientQuoteDraftPatch({");
+    expect(QUOTE_DRAFT_RUNTIME_SOURCE).toContain("normalizeAmbientDraftIntent({");
+    expect(QUOTE_DRAFT_RUNTIME_SOURCE).toContain(
+      "return hydrateSavedQuoteDraftBase({ ...input, normalizedPatch, normalizedDraftIntent });"
+    );
+    expect(QUOTE_DRAFT_RUNTIME_BASE_SOURCE).toContain(
+      "activeVersionId: text(quote.activeVersionId || quote.versionMeta?.versionId)"
+    );
     expect(APP_SOURCE).toContain("simulateCommercialQuoteChange({");
     expect(APP_SOURCE).toContain("requestCommercialQuoteChangeAuthorization({");
     expect(APP_SOURCE).toContain("authorizeCommercialQuoteChange({");

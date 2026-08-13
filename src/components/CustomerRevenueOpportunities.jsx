@@ -24,7 +24,7 @@ const REBOOK_UNAVAILABLE_REASONS = Object.freeze({
   accepted_source_version_ambiguous: "More than one retained version matches the accepted version identity.",
   accepted_source_version_invalid: "The retained accepted version does not pass quote and organization scope checks.",
   existing_rebook_not_found_quote_history_truncated:
-    "A matching rebook may exist outside this bounded Customer 360 quote read. Refresh or open Quotes before creating another draft.",
+    "A matching rebook may exist beyond the quotes currently shown in this client overview. Refresh the client overview or open Quotes before creating another draft.",
   existing_rebook_invalid:
     "A same-customer rebook record claims this source but its trusted provenance is incomplete. Open Quotes and repair that record before continuing.",
   existing_rebook_ambiguous:
@@ -77,7 +77,7 @@ export function resolveCustomerRevenueCalendarContext({
 } = {}) {
   const instant = loadedAt instanceof Date ? new Date(loadedAt.getTime()) : new Date(loadedAt);
   if (Number.isNaN(instant.getTime())) {
-    throw new TypeError("A completed Customer 360 read time is required for revenue opportunities.");
+    throw new TypeError("A completed client-overview read time is required before checking follow-ups.");
   }
 
   const requestedTenantTimeZone = text(tenantTimeZone);
@@ -146,7 +146,7 @@ function partialBoundsSummary(pageInfo = {}) {
   if (pageInfo.versionReadTruncated) {
     notes.push("Some accepted-source checks are limited by the retained proposal history loaded here.");
   }
-  return notes.join(" ") || "This opportunity view is partial because an upstream Customer 360 read reached its bound.";
+  return notes.join(" ") || "This follow-up view is partial because the client overview reached its quote limit.";
 }
 
 function rebookReviewLabel(state) {
@@ -213,7 +213,7 @@ function OpportunityCard({
     <article className="customer-revenue-opportunity" data-opportunity-type={opportunity.type}>
       <div>
         <span className="customer-revenue-opportunity-type">
-          {opportunity.type === "anniversary_rebooking" ? "Repeat-event radar" : "Post-event closeout"}
+          {opportunity.type === "anniversary_rebooking" ? "Repeat-event reminder" : "Post-event follow-up"}
         </span>
         <h3>{opportunity.title}</h3>
         <p>
@@ -321,43 +321,43 @@ export function CustomerRevenueOpportunitiesPresentation({
     >
       <div className="workspace-route-head">
         <div>
-          <h2 id="customer-revenue-opportunities-title">Revenue opportunities</h2>
-          <p className="muted">Post-event closeout and repeat-event cues from recorded booked events.</p>
+          <h2 id="customer-revenue-opportunities-title">Follow-ups worth revisiting</h2>
+          <p className="muted">Post-event follow-ups and repeat-event reminders from recorded bookings.</p>
         </div>
         <span className="source-note">Source: {sourceLabel(radar?.source)}</span>
       </div>
 
       {error && !radar ? (
         <p className="warning-note" role="alert">
-          Revenue opportunities could not be evaluated for this completed customer read. No actions were created.
+          Follow-ups could not be checked for this completed client read. No actions were created.
         </p>
       ) : loading && !radar ? (
-        <p className="source-note" role="status">Evaluating bounded closeout and anniversary windows.</p>
+        <p className="source-note" role="status">Checking bounded closeout and anniversary windows.</p>
       ) : (
         <>
           {loading && radar && (
             <p className="source-note" role="status">
-              Refreshing Customer 360; the prior opportunity evaluation remains visible.
+              Refreshing the client overview; the previous follow-up check remains visible.
             </p>
           )}
           {stale && radar && (
             <p className="warning-note" role="alert">
-              The Customer 360 refresh failed. These opportunity cues come from the retained snapshot and may be stale.
+              The client overview refresh failed. These reminders come from the retained snapshot and may be stale.
             </p>
           )}
           {error && radar && (
             <p className="warning-note" role="alert">
-              The current opportunity evaluation failed. The prior bounded evaluation remains visible.
+              The current follow-up check failed. The previous bounded check remains visible.
             </p>
           )}
           <p className="source-note">
             {radar?.calendarContext?.label || "Calendar source not confirmed"}: {formatWorkspaceDate(radar?.calendarContext?.date)} ({formatWorkspaceText(radar?.calendarContext?.timeZone, { emptyLabel: "time zone unavailable" })}).
           </p>
           <p className="source-note">
-            Evaluation bound: first {formatWorkspaceInteger(pageInfo.limit)} eligible opportunities from this bounded Customer 360 read.
+            Review bound: first {formatWorkspaceInteger(pageInfo.limit)} eligible follow-ups from this bounded client read.
           </p>
           <p className="source-note">
-            {radar?.evidenceCopy?.opportunity || "These are read-only opportunity cues, not completed commercial outcomes."}
+            {radar?.evidenceCopy?.opportunity || "These reminders are read-only. They do not record a completed follow-up or booking."}
           </p>
           {state === "partial" && (
             <p className="warning-note" role="status" data-capability-state="partial">

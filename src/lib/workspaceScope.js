@@ -27,9 +27,12 @@ export function buildAuthenticatedWorkspaceScopeKey({
 
 export function buildWorkspaceRouteScopeKey({
   publicPortal = false,
+  publicPortalToken = "",
   tenantContext = {},
   authSession = {}
 } = {}) {
-  if (publicPortal) return JSON.stringify(["public-portal"]);
+  if (publicPortal || normalized(publicPortalToken)) {
+    return JSON.stringify(["public-portal", normalized(publicPortalToken)]);
+  }
   return buildAuthenticatedWorkspaceScopeKey({ tenantContext, authSession });
 }

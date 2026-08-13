@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   RELEASE_EVIDENCE_POLICY,
   getReleaseUatChecklist,
+  getReleaseUatProfilePlan,
   parseAttesterIds,
   parseReleaseApprovalMode,
   parseSoloOperatorIds,
@@ -28,6 +29,7 @@ import {
 import {
   buildReleaseUatReceipt,
   getReleaseUatItemIdsForTarget,
+  getReleaseUatPlanForTarget,
   parseReleaseUatArgs,
   writeReleaseUatReceipt
 } from "../../../scripts/release-uat-attestation.mjs";
@@ -68,6 +70,8 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "portal.decision",
     "delivery.link-surface-gating",
     "payment.customer-surface",
+    "staffing.disabled-authority-boundary",
+    "staffing.authoritative-surface",
     "proposal.pdf",
     "integrations.status",
     "sms.disabled-nonblocking"
@@ -93,6 +97,8 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "payment.webhook-reconciliation",
     "payment.cross-rail-isolation",
     "payment.customer-projection-privacy",
+    "staffing.disabled-authority-boundary",
+    "staffing.authoritative-plan",
     "integrations.status",
     "sms.disabled-nonblocking"
   ],
@@ -124,6 +130,9 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "payment.cross-rail-isolation",
     "payment.customer-projection-privacy",
     "payment.customer-surface",
+    "staffing.disabled-authority-boundary",
+    "staffing.authoritative-plan",
+    "staffing.authoritative-surface",
     "proposal.pdf",
     "integrations.status",
     "sms.disabled-nonblocking"
@@ -140,6 +149,8 @@ const EXPECTED_UAT_ITEM_IDS_BY_TARGET = Object.freeze({
     "portal.decision",
     "delivery.link-surface-gating",
     "payment.customer-surface",
+    "staffing.disabled-authority-boundary",
+    "staffing.authoritative-surface",
     "proposal.pdf",
     "integrations.status",
     "sms.disabled-nonblocking"
@@ -163,7 +174,15 @@ const CRITICAL_UAT_TARGETS = Object.freeze({
   "payment.webhook-reconciliation": ["firebase-backend", "firebase-all"],
   "payment.cross-rail-isolation": ["firebase-backend", "firebase-all"],
   "payment.customer-projection-privacy": ["firebase-backend", "firebase-all"],
-  "payment.customer-surface": ["firebase-hosting", "firebase-all", "vercel"]
+  "payment.customer-surface": ["firebase-hosting", "firebase-all", "vercel"],
+  "staffing.disabled-authority-boundary": [
+    "firebase-hosting",
+    "firebase-backend",
+    "firebase-all",
+    "vercel"
+  ],
+  "staffing.authoritative-plan": ["firebase-backend", "firebase-all"],
+  "staffing.authoritative-surface": ["firebase-hosting", "firebase-all", "vercel"]
 });
 const NOW = new Date("2026-08-04T12:00:00.000Z");
 const CI_COMPLETED_AT = "2026-08-04T09:00:00.000Z";
@@ -530,15 +549,25 @@ function writeChecklistFixture(contents) {
 }
 
 function validChecklistFixture(overrides = {}) {
+  const items = overrides.items || [{
+    id: "one",
+    label: "Required across every release target.",
+    targets: [...DEPLOYMENT_PROFILES]
+  }];
+  const candidateProfiles = overrides.candidateProfiles || [{
+    id: "fixture-safe-off",
+    label: "Fixture candidate profile.",
+    itemStates: Object.fromEntries(items.map((item) => [
+      item.id,
+      { state: "applicable" }
+    ]))
+  }];
   return {
-    schema: "com.mbmapps.quotepilot.release-uat-checklist/v2",
-    version: "fixture-v2",
+    schema: "com.mbmapps.quotepilot.release-uat-checklist/v3",
+    version: "fixture-v3",
     maximumAttestationAgeHours: 24,
-    items: [{
-      id: "one",
-      label: "Required across every release target.",
-      targets: [...DEPLOYMENT_PROFILES]
-    }],
+    candidateProfiles,
+    items,
     ...overrides
   };
 }
@@ -642,9 +671,9 @@ describe("production release evidence receipt writer", () => {
 describe("tracked UAT checklist", () => {
   test("loads a versioned, deduplicated checklist and stable digest", () => {
     expect(checklist.checklist.schema).toBe(
-      "com.mbmapps.quotepilot.release-uat-checklist/v2"
+      "com.mbmapps.quotepilot.release-uat-checklist/v3"
     );
-    expect(checklist.checklist.version).toBe("2026-08-04.10");
+    expect(checklist.checklist.version).toBe("2026-08-12.1");
     expect(checklist.itemIds).toHaveLength(checklist.checklist.items.length);
     expect(checklist.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(checklist.maximumAttestationAgeHours).toBeGreaterThan(0);
@@ -710,13 +739,63 @@ describe("tracked UAT checklist", () => {
     expect(labelsByItemId.get("buyer.verified-activation-surface")).toMatch(
       /stops automatic status polling.*manual Check again.*only active/is
     );
+    expect(labelsByItemId.get("staffing.authoritative-plan")).toMatch(
+      /same-tenant admins.*operator-confirmed plans.*immutable quote revision.*fail closed.*immutable receipt/is
+    );
+    expect(labelsByItemId.get("staffing.authoritative-surface")).toMatch(
+      /explicitly enabled disposable tenant.*cross-tenant denials.*390, 768, and 1440px.*rollback.*gates to false/is
+    );
+  });
+
+  test("classifies every target item for the fixed safe-off candidate without treating blocked work as passed", () => {
+    const plan = getReleaseUatProfilePlan(
+      "firebase-all",
+      "staging-safe-off",
+      process.cwd()
+    );
+
+    expect(plan).toEqual(getReleaseUatPlanForTarget(
+      "firebase-all",
+      "staging-safe-off",
+      process.cwd()
+    ));
+    expect(plan).toMatchObject({
+      schema: "com.mbmapps.quotepilot.release-uat-profile-plan/v1",
+      target: "firebase-all",
+      candidateProfile: { id: "staging-safe-off" },
+      qualification: "blocked"
+    });
+    expect(plan.applicableItemIds).toContain("staffing.disabled-authority-boundary");
+    expect(plan.blockedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "buyer.hosted-invoice-lifecycle" }),
+      expect.objectContaining({ id: "delivery.current-issuance" }),
+      expect.objectContaining({ id: "payment.webhook-reconciliation" }),
+      expect.objectContaining({ id: "staffing.authoritative-plan" }),
+      expect.objectContaining({ id: "staffing.authoritative-surface" })
+    ]));
+    const classified = [
+      ...plan.applicableItemIds,
+      ...plan.blockedItems.map((item) => item.id)
+    ];
+    expect(new Set(classified)).toEqual(new Set(
+      EXPECTED_UAT_ITEM_IDS_BY_TARGET["firebase-all"]
+    ));
+    expect(plan.blockedItems.every((item) => item.reason.length > 0)).toBe(true);
   });
 
   test("changes the checklist digest when only target applicability changes", () => {
     const base = {
-      schema: "com.mbmapps.quotepilot.release-uat-checklist/v2",
+      schema: "com.mbmapps.quotepilot.release-uat-checklist/v3",
       version: "fixture",
       maximumAttestationAgeHours: 24,
+      candidateProfiles: [{
+        id: "fixture-safe-off",
+        label: "Fixture candidate profile.",
+        itemStates: {
+          one: { state: "applicable" },
+          coverage: { state: "applicable" }
+        }
+      }],
       items: [
         {
           id: "one",
@@ -748,6 +827,7 @@ describe("tracked UAT checklist", () => {
     ["not-json", /missing or invalid JSON/i],
     [{ ...validChecklistFixture(), schema: "wrong" }, /schema is not supported/i],
     [{ ...validChecklistFixture(), schema: "com.mbmapps.quotepilot.release-uat-checklist/v1" }, /schema is not supported/i],
+    [{ ...validChecklistFixture(), schema: "com.mbmapps.quotepilot.release-uat-checklist/v2" }, /schema is not supported/i],
     [validChecklistFixture({ items: [] }), /no required items/i],
     [validChecklistFixture({ items: [{
       id: "Bad ID",
@@ -803,13 +883,34 @@ describe("tracked UAT checklist", () => {
       label: "Firebase all has no narrow owner",
       targets: ["firebase-all", "vercel"]
     }] }), /firebase-all equal to its Firebase narrow-target applicability/i],
-    [validChecklistFixture({ unexpected: true }), /fields do not match the v2 contract/i],
+    [validChecklistFixture({ unexpected: true }), /fields do not match the v3 contract/i],
     [validChecklistFixture({ items: [{
       id: "one",
       label: "Unexpected item field",
       targets: [...DEPLOYMENT_PROFILES],
       optional: true
-    }] }), /item does not match the v2 contract/i]
+    }] }), /item does not match the v3 contract/i],
+    [validChecklistFixture({ candidateProfiles: [] }), /no candidate profiles/i],
+    [validChecklistFixture({ candidateProfiles: [{
+      id: "fixture-safe-off",
+      label: "Fixture candidate profile.",
+      itemStates: {}
+    }] }), /classify every checklist item exactly once/i],
+    [validChecklistFixture({ candidateProfiles: [{
+      id: "fixture-safe-off",
+      label: "Fixture candidate profile.",
+      itemStates: { one: { state: "blocked" } }
+    }] }), /must explain why one is blocked/i],
+    [validChecklistFixture({ candidateProfiles: [{
+      id: "fixture-safe-off",
+      label: "Fixture candidate profile.",
+      itemStates: { one: { state: "applicable", reason: "Unexpected" } }
+    }] }), /invalid state for one/i],
+    [validChecklistFixture({ candidateProfiles: [{
+      id: "fixture-safe-off",
+      label: "Fixture candidate profile.",
+      itemStates: { one: { state: "not-applicable" } }
+    }] }), /invalid state for one/i]
   ])("rejects invalid checklist fixture %#", (contents, expected) => {
     expect(() => getReleaseUatChecklist(writeChecklistFixture(contents))).toThrow(expected);
   });
@@ -1653,6 +1754,15 @@ describe("release UAT attestation validator", () => {
     expect(getReleaseUatItemIdsForTarget("firebase-backend", process.cwd())).toEqual(
       EXPECTED_UAT_ITEM_IDS_BY_TARGET["firebase-backend"]
     );
+    expect(parseReleaseUatArgs([
+      "--print-plan",
+      "--target", "firebase-all",
+      "--candidate-profile", "staging-safe-off"
+    ])).toEqual({
+      printPlan: true,
+      target: "firebase-all",
+      candidateProfile: "staging-safe-off"
+    });
     expect(parseReleaseUatArgs(validArgv)).toEqual(makeReceiptArgs());
   });
 
@@ -1660,6 +1770,8 @@ describe("release UAT attestation validator", () => {
     [["--print-digest", "extra"], /unknown argument --print-digest/i],
     [["--print-items"], /requires --target/i],
     [["--print-items", "--target", "vercel", "extra"], /requires --target/i],
+    [["--print-plan", "--target", "vercel"], /requires --target and --candidate-profile/i],
+    [["--print-plan", "--candidate-profile", "staging-safe-off", "--target", "vercel"], /requires --target and --candidate-profile/i],
     [["--print-items", "--target", "all"], /--target must be firebase-hosting/i],
     [[...validArgv, "--target", "all"], /duplicate argument --target/i],
     [["--release-sha", "--target"], /--release-sha requires a value/i],

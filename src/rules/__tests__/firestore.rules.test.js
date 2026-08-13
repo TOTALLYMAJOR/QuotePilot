@@ -124,6 +124,14 @@ const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
   ["revenueAutopilotSchedulerState", "global"]
 ]);
 
+const SERVER_OWNED_OPERATIONAL_STAFFING_PATHS = Object.freeze([
+  ["organizations", "org-a", "staffProfiles", "staff-profile-1"],
+  ["organizations", "org-a", "staffProfiles", "staff-profile-1", "versions", "version-1"],
+  ["organizations", "org-a", "eventStaffingPlans", "q1"],
+  ["organizations", "org-a", "eventStaffingPlans", "q1", "versions", "version-1"],
+  ["organizations", "org-a", "staffingScheduleFences", "schedule-fence-1"]
+]);
+
 const CATALOG_COLLECTIONS = new Set([
   "catalogPackages",
   "catalogAddons",
@@ -1979,6 +1987,59 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
   });
 
   test.each([
+    ["same-org admin", () => testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    })],
+    ["same-org sales", () => testEnv.authenticatedContext("sales-org-a", {
+      email: "sales-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    })],
+    ["same-org customer", () => testEnv.authenticatedContext("customer-org-a", {
+      email: "customer-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    })],
+    ["cross-tenant staff", () => testEnv.authenticatedContext("sales-org-b", {
+      email: "sales-b@example.com",
+      email_verified: true,
+      organizationId: "org-b"
+    })]
+  ])("operational staffing authority denies every %s browser operation", async (_label, contextFactory) => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      for (const authorityPath of SERVER_OWNED_OPERATIONAL_STAFFING_PATHS) {
+        await setDoc(doc(db, ...authorityPath), {
+          schemaVersion: 1,
+          organizationId: "org-a",
+          serverOwned: true
+        });
+      }
+    });
+
+    const browserDb = contextFactory().firestore();
+    for (const authorityPath of SERVER_OWNED_OPERATIONAL_STAFFING_PATHS) {
+      const existingRef = doc(browserDb, ...authorityPath);
+      const collectionPath = authorityPath.slice(0, -1);
+      const browserDocumentPath = [
+        ...collectionPath,
+        `${authorityPath.at(-1)}-browser-created`
+      ];
+
+      await assertFails(getDoc(existingRef));
+      await assertFails(getDocs(query(collection(browserDb, ...collectionPath), limit(5))));
+      await assertFails(setDoc(doc(browserDb, ...browserDocumentPath), {
+        organizationId: "org-a",
+        serverOwned: false
+      }));
+      await assertFails(updateDoc(existingRef, { serverOwned: false }));
+      await assertFails(deleteDoc(existingRef));
+    }
+  }, 30_000);
+
+  test.each([
     ["unauthenticated", () => testEnv.unauthenticatedContext()],
     ["unassigned", () => testEnv.authenticatedContext("unassigned-commercial-user", {
       email: "unassigned-commercial@example.com",
@@ -2048,6 +2109,31 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       doc(adminDb, "organizations", "org-a", "settings", "config"),
       { commercialChangeAuthorityEnabled: true }
     ));
+  });
+
+  test("operational staffing authority cannot be promoted by a browser administrator", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    }).firestore();
+    const settingsRef = doc(adminDb, "organizations", "org-a", "settings", "config");
+    await assertFails(updateDoc(
+      settingsRef,
+      { operationalStaffingAuthorityEnabled: true }
+    ));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await deleteDoc(doc(
+        context.firestore(),
+        "organizations",
+        "org-a",
+        "settings",
+        "config"
+      ));
+    });
+    await assertFails(setDoc(settingsRef, {
+      operationalStaffingAuthorityEnabled: true
+    }));
   });
 
   test("product analytics events are callable-owned and cannot expose raw staff activity", async () => {

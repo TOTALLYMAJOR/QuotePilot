@@ -145,7 +145,7 @@ export function buildRevenueAutopilotCustomerControlsPresentation({
       : availability === "unavailable"
       ? `${text(projectionError) || "The authoritative customer-control projection is unavailable."} No current state is assumed and new changes are locked.`
       : availability === "stale"
-        ? "The retained customer-control projection may be stale. Refresh Customer 360 before changing it."
+        ? "The saved customer controls may be out of date. Refresh the client overview before changing them."
         : MUTATION_COPY[state],
     controls,
     availability,
@@ -392,7 +392,7 @@ export default function RevenueAutopilotCustomerControls({
     >
       <div className="workspace-route-head">
         <div>
-          <p className="eyebrow">Revenue Autopilot</p>
+          <p className="eyebrow">Follow-up automation</p>
           <h2 id="revenue-autopilot-customer-controls-title">Customer email controls</h2>
           <p>{view.headerDetail}</p>
         </div>
@@ -436,7 +436,7 @@ export default function RevenueAutopilotCustomerControls({
               <span>
                 {view.availability === "unavailable"
                   ? `${text(projectionError) || "Current controls were not returned by the server projection."} Blank choices are not treated as the current state.`
-                  : "Current controls came from a retained Customer 360 read and may have changed."}
+                  : "Current controls came from an earlier client overview and may have changed."}
               </span>
               {typeof onRefresh === "function" && (
                 <button
@@ -445,7 +445,7 @@ export default function RevenueAutopilotCustomerControls({
                   data-capability-action="refresh-customer-email-controls"
                   onClick={() => onRefresh()}
                 >
-                  Refresh Customer 360
+                  Refresh client overview
                 </button>
               )}
             </div>

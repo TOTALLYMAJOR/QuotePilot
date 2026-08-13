@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildMessagingSyncPresentation,
   MessagingStationCapabilitySurface,
+  resolveMessagingArrivalConsumption,
   resolveMessagingStationState
 } from "../MessagingStation";
 
@@ -37,5 +38,67 @@ describe("messaging station capability states", () => {
     expect(renderState("partial")).toContain('data-capability-state="partial"');
     expect(renderState("error")).toContain('data-capability-state="error"');
     expect(renderState("recovery")).toContain('data-capability-state="recovery"');
+  });
+
+  test("requires the exact requested thread and never substitutes the first conversation", () => {
+    const threads = [{
+      quoteId: "quote-first",
+      conversationAvailable: true
+    }];
+    expect(resolveMessagingArrivalConsumption({
+      active: true,
+      quoteId: "quote-stale",
+      inboxStatus: "ready",
+      inboxBounded: false,
+      threads,
+      selectedQuoteId: "quote-first"
+    })).toMatchObject({
+      status: "recovery",
+      consequence: expect.stringMatching(/No first-listed or similar conversation was substituted/i)
+    });
+  });
+
+  test("distinguishes pending, unavailable, and exactly selected conversation arrivals", () => {
+    expect(resolveMessagingArrivalConsumption({
+      active: true,
+      quoteId: "quote-42",
+      inboxStatus: "connecting"
+    })).toEqual({ status: "pending" });
+
+    expect(resolveMessagingArrivalConsumption({
+      active: true,
+      quoteId: "quote-42",
+      inboxStatus: "stale",
+      inboxStale: true,
+      threads: [{ quoteId: "quote-42", conversationAvailable: true }],
+      selectedQuoteId: "quote-42"
+    })).toMatchObject({
+      status: "recovery",
+      consequence: expect.stringMatching(/No retained conversation was treated as current/i)
+    });
+
+    expect(resolveMessagingArrivalConsumption({
+      active: true,
+      quoteId: "quote-42",
+      inboxStatus: "ready",
+      threads: [{
+        quoteId: "quote-42",
+        conversationAvailable: false,
+        unavailableReason: "Deliver the current proposal before messaging."
+      }],
+      selectedQuoteId: "quote-42"
+    })).toMatchObject({
+      status: "recovery",
+      reason: "Deliver the current proposal before messaging."
+    });
+
+    const thread = { quoteId: "quote-42", conversationAvailable: true };
+    expect(resolveMessagingArrivalConsumption({
+      active: true,
+      quoteId: "quote-42",
+      inboxStatus: "ready",
+      threads: [thread],
+      selectedQuoteId: "quote-42"
+    })).toEqual({ status: "ready", thread });
   });
 });

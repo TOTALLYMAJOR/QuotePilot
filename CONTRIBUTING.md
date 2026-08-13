@@ -53,6 +53,9 @@ npm run lane:authoritative-pricing
 Notes:
 - Heavy CI lanes (Playwright/Firebase/CWV) are advisory on feature branches unless elevated by classifier risk rules.
 - `main` pushes enforce full hard-gate CI matrix.
+- Protected `main` requires all eight named `CI Quality` contexts, including
+  classification, Firebase authority, authoritative pricing, and CWV. The
+  production deploy verifier independently rechecks the same exact-main run.
 - `test:e2e` uses the Playwright wrapper (`scripts/run-playwright.sh`) and auto-prepares Linux runtime libs in `.cache/playwright-libs`.
 - `test:e2e:firebase` runs browser flow against Firebase emulators with seeded org/user fixtures.
 - `test:e2e:firebase:authoritative` adds Functions emulator and enforces authoritative pricing callable success in browser flow.
@@ -79,6 +82,10 @@ person other than the author.
   private repository; otherwise transfer/upgrade the repository or use an
   approved external deployment protection rule before release.
 - Keep `.github/workflows/mainline-safety-net.yml` active as recovery defense;
-  it does not replace branch protection or pre-deployment evidence.
+  it does not replace branch protection or pre-deployment evidence. Its no-op
+  guard must inspect the staged index because `git revert --no-commit` stages
+  the recovery change before the workflow commits it. The workflow publishes
+  that commit to a dedicated recovery branch, opens a PR, and dispatches CI
+  against the exact recovery head; it never pushes around protected `main`.
 - Keep Dependabot enabled for npm and GitHub Actions dependency updates.
 - Use `Security` tab private advisories for vulnerability intake.

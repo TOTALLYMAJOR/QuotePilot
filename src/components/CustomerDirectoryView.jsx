@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { getCustomerDirectoryPage } from "../lib/customerWorkspace";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { StaffReadContextRail } from "./StaffEvidenceRail";
@@ -7,6 +7,16 @@ import {
   formatWorkspaceSource,
   formatWorkspaceText
 } from "../lib/workspacePresentation";
+
+const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "yes"
+  || import.meta.env.VITE_AMBIENT_UI_ENABLED === "on";
+const AmbientClientsDirectoryHost = AMBIENT_UI_ENABLED
+  ? lazy(() => import("./AmbientClientsView").then((module) => ({
+      default: module.AmbientClientsDirectoryHost
+    })))
+  : null;
 
 const INITIAL_STATE = {
   loading: true,
@@ -194,7 +204,10 @@ export default function CustomerDirectoryView({
   organizationId = "",
   organizationName = "",
   onOpenCustomer,
-  onNewQuote
+  onOpenClientAmbient,
+  onNewQuote,
+  ambientMode = false,
+  currentUserRole = "staff"
 }) {
   const headingRef = useWorkspaceRouteHeadingFocus(true);
   const [searchDraft, setSearchDraft] = useState("");
@@ -263,6 +276,33 @@ export default function CustomerDirectoryView({
   const visibleState = state.readKey === requestedReadKey
     ? state
     : { ...INITIAL_STATE, loading: true, readKey: requestedReadKey };
+  if (ambientMode && AmbientClientsDirectoryHost) {
+    return (
+      <Suspense fallback={<main className="container workspace-route-main" role="status">Loading Clients…</main>}>
+        <AmbientClientsDirectoryHost
+          state={visibleState}
+          organizationId={organizationId}
+          searchDraft={searchDraft}
+          cursorHistoryLength={cursorHistory.length}
+          currentUserRole={currentUserRole}
+          onSearchDraftChange={setSearchDraft}
+          onApplySearch={applySearch}
+          onClear={() => {
+            setSearchDraft("");
+            setSearch("");
+            setCursor("");
+            setCursorHistory([]);
+          }}
+          onRefresh={() => setRefreshToken((value) => value + 1)}
+          onOpenClient={onOpenClientAmbient}
+          onStartOpportunity={onNewQuote}
+          onPreviousPage={openPreviousPage}
+          onNextPage={openNextPage}
+          headingRef={headingRef}
+        />
+      </Suspense>
+    );
+  }
 
   return (
     <CustomerDirectoryPresentation
