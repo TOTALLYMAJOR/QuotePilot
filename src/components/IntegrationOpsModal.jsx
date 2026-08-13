@@ -517,12 +517,13 @@ export function IntegrationOpsView({
         payload.organizationId = preflight.organizationId;
       }
     } catch (err) {
+      const uncertainReconciliation = reconciling && !isDefinitiveProvisioningError(err);
       setProvisionState({
         loading: false,
-        phase: "",
+        phase: uncertainReconciliation ? "uncertain" : "",
         error: err?.message || "Failed to check the organization before provisioning.",
         result: null,
-        reconciliationPayload: null
+        reconciliationPayload: uncertainReconciliation ? payload : null
       });
       return;
     }

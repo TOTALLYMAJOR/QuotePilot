@@ -8,9 +8,14 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Preserved the exact provisioning payload and recovery action when a transient
+  preflight failure occurs during reconciliation. Definitive denials still
+  clear the retained payload; ambiguous transport outcomes no longer become a
+  dead-end error.
+
 - Deduplicated the customer-provisioning exact-order reconciliation path before
-  recording its 2,615-byte Ambient aggregate cost. The active temporary
-  Ambient ceiling is now 3,703,120 bytes: the reviewed 3,702,817-byte local
+  recording its 2,651-byte Ambient aggregate cost. The active temporary
+  Ambient ceiling is now 3,703,156 bytes: the reviewed 3,702,853-byte local
   graph plus the existing 303-byte CI-runner offset. The 391,596-byte largest
   chunk ceiling and compatibility ceilings are unchanged; this is no general
   growth allowance.

@@ -27,11 +27,11 @@ Threshold policy:
   `bundle-budget.json`.
 - The current compatibility graph retains its prior 2,776,849-byte aggregate
   and 391,596-byte largest-chunk ceilings. The production-equivalent Ambient
-  graph has a separate temporary 3,703,120-byte aggregate ceiling and the same
+  graph has a separate temporary 3,703,156-byte aggregate ceiling and the same
   unchanged 391,596-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
-  states add 2,615 Ambient aggregate bytes, for a reviewed 3,702,817-byte local
+  states add 2,651 Ambient aggregate bytes, for a reviewed 3,702,853-byte local
   graph. The Ambient aggregate ceiling adds only the previously observed
   303-byte CI-versus-local offset; it is not general growth headroom.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced

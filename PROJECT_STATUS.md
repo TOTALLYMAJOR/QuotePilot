@@ -314,9 +314,9 @@ route evidence are complete.
   compatibility graph and 3,700,202 / 391,596 for Ambient. Manual opportunity-
   model and quote-builder chunks eliminate the former 436,188-byte Ambient
   largest-chunk violation without widening that ceiling. The named Ambient
-  owner-provisioning recovery states add 2,615 bytes after reconciliation-path
-  deduplication. The aggregate ceiling is 3,703,120 bytes—only the resulting
-  3,702,817-byte local graph plus the previously confirmed 303-byte CI
+  owner-provisioning recovery states add 2,651 bytes after reconciliation-path
+  deduplication. The aggregate ceiling is 3,703,156 bytes—only the resulting
+  3,702,853-byte local graph plus the previously confirmed 303-byte CI
   offset—and remains an explicit temporary
   exception requiring optimization or reviewed recalibration. This is
   source/local evidence;
