@@ -1,6 +1,14 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { buildDefaultEmailAppHandoff } from "../defaultEmailApp";
-import { buildStaffBriefing, buildStaffBriefingEmail } from "../staffBriefingSheet";
+import {
+  buildStaffBriefing,
+  buildStaffBriefingEmail,
+  exportStaffBriefingSheet
+} from "../staffBriefingSheet";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const entry = Object.freeze({
   profile: { staffId: "staff-1", displayName: "Avery Lane" },
@@ -75,5 +83,21 @@ describe("staff briefing handoff", () => {
       entry: { ...entry, record: { ...entry.record, contact: { email: "" } } },
       assignment
     }))).toThrow(/email address/i);
+  });
+
+  test("opens the print sheet without noopener's false blocked-popup result", () => {
+    const popup = { opener: {} };
+    const openWindow = vi.fn(() => popup);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:staff-briefing");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    const result = exportStaffBriefingSheet(buildStaffBriefing({ entry, assignment }), {
+      output: "print",
+      openWindow
+    });
+
+    expect(openWindow).toHaveBeenCalledWith("blob:staff-briefing", "_blank");
+    expect(popup.opener).toBeNull();
+    expect(result).toMatchObject({ printPreviewOpened: true });
   });
 });

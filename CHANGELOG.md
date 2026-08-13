@@ -46,6 +46,9 @@ This changelog is backfilled from git history and will be maintained going forwa
 - Quote actions now include an explicit `Print proposal` outcome and a
   prefilled `Open email app` handoff alongside PDF download. Neither path
   mutates quote, portal or delivery evidence.
+- Fixed proposal and staff-briefing print previews so successful browser tab
+  creation is not misreported as a blocked pop-up when opener isolation is
+  requested; focused tests preserve both the acknowledgement and isolation.
 
 ## [0.9.0] - 2026-08-13
 

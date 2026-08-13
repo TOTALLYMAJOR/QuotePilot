@@ -165,10 +165,16 @@ export function exportStaffBriefingSheet(briefing, { output = "save", openWindow
   if (output === "print") {
     const blob = doc.output("blob");
     const objectUrl = URL.createObjectURL(blob);
-    const popup = typeof openWindow === "function" ? openWindow(objectUrl, "_blank", "noopener,noreferrer") : null;
+    const popup = typeof openWindow === "function" ? openWindow(objectUrl, "_blank") : null;
     if (!popup) {
       URL.revokeObjectURL(objectUrl);
       throw new Error("The print preview was blocked. Allow pop-ups, then try again.");
+    }
+    try {
+      popup.opener = null;
+    } catch {
+      // Some browsers expose opener as read-only; the isolated blob URL still
+      // contains no app authority and is revoked below.
     }
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     return { filename: pdfFilename, printPreviewOpened: true };
