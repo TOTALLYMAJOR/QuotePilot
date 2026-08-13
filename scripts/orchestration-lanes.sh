@@ -63,6 +63,7 @@ case "$lane" in
     echo "==> lane:quick"
     npm run check:env
     npm run check:secrets
+    npm run check:ambient-release-gate
     npm run check:workflows
     ;;
   lane:core)

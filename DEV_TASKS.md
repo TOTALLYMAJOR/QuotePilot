@@ -106,18 +106,23 @@ Only open work belongs here. Current operational truth lives in
 
 - Execute the 50-item [Ambient Intelligence work plan](docs/AMBIENT_INTELLIGENCE_WORK_PLAN.md)
   under its AIUI-00 Experience Constitution, beginning with Pilot Slice Alpha
-  as the vertical proof before broader replacement. Keep the ambient shell
-  default-off until its compatibility, authority, interaction, accessibility,
-  sensory-preference, and rollback gates pass; source completion, deployment,
-  provider evidence, production-data acceptance, and human acceptance remain
-  separate milestones.
-- Finish the six items that do not yet have a material end-to-end slice:
+  as the vertical proof before broader replacement. The production workflow
+  source now enables the Ambient presentation and the protected CI lane enforces
+  its zero-dead-click Alpha contract; do not describe either source binding as a
+  deployment or acceptance receipt. Keep operational staffing and every
+  independent server/provider authority gate default-off until its exact
+  compatibility, role, interaction, accessibility, rollback, and approval gates
+  pass; source completion, deployment, provider evidence, production-data
+  acceptance, and human acceptance remain separate milestones.
+- Finish the five items that do not yet have a material end-to-end slice:
   AIUI-04 (quote-history/controller split and lifecycle parity), AIUI-12
   (app-wide lighter visual grammar), AIUI-35 (accepted/booked operational
   receipts), AIUI-42 (complete mobile gesture and equivalent-control system),
-  AIUI-48 (legacy retirement after parity and rollback evidence), and AIUI-50
-  (permanent zero-dead-click release gate and accepted rollout). The other 44
-  remain partial until their complete acceptance contracts close.
+  and AIUI-48 (legacy retirement after parity and rollback evidence). AIUI-50
+  now has a material protected-CI slice but still needs preview, authenticated
+  staff and portal acceptance, first-minute/timing review, explicit promotion
+  approval, and an exact rollback artifact. The other 45 remain partial until
+  their complete acceptance contracts close.
 
 ## P1 - Workspace Design Follow-ups
 
@@ -127,6 +132,11 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
   Templates surfaces on the immutable candidate with authenticated admin and
   sales roles, revision-conflict recovery, responsive layout, and rollback
   evidence before describing AIUI-20 as complete.
+- Reduce the production-equivalent Ambient build from its current 3,700,021
+  JavaScript bytes / 436,188-byte largest chunk to the reviewed 2,776,849 /
+  391,596 temporary ceilings, or obtain an explicit evidence-backed replacement
+  budget decision. Do not silently widen the exception before Ambient
+  production promotion.
 - Add inline editing on the event workspace quote page: editable fields with
   simulate-pricing round trips and Commercial Change Authority integration for
   committed quotes; saving stays intentional and versioned.

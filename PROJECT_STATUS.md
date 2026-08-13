@@ -15,7 +15,12 @@ Last updated: August 12, 2026
 
 ## Current Release Candidate (Not Production)
 
-- The work after `v0.7.0` is the proposed `v0.8.0` source candidate. This
+- Current `main` is tagged `v0.8.1` at
+  `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient
+  presentation in both production workflow build environments. The live
+  deployment receipts below still identify `v0.7.0`, so this source state is
+  not evidence that `v0.8.1` was deployed or accepted.
+- The work after `v0.7.0` is the proposed `v0.8.1` source candidate. This
   source snapshot does not itself establish a published candidate head, release
   tag, exact-candidate CI run, governed deployment receipt, or production
   acceptance; each requires its separate Git, CI, provider, or human evidence.
@@ -45,8 +50,8 @@ Last updated: August 12, 2026
 - The `v0.7.0` deployment receipts do not establish authenticated hosted-role
   behavior, production-data correctness, downstream provider acceptance,
   recipient evidence, or human acceptance.
-- The current `v0.8.0` candidate contains the default-off Ambient
-  Intelligence build. **44 of the 50 stable AIUI items are materially
+- The current `v0.8.1` candidate contains the Ambient Intelligence build.
+  **45 of the 50 stable AIUI items are materially
   implemented in local source, while 0 of 50 are formally closed.** This now
   includes the compatibility inventory/browser baseline; extracted workspace
   shell and saved-draft hydration seams; canonical Ambient signal and action
@@ -57,7 +62,7 @@ Last updated: August 12, 2026
   deterministic explanations and exact Package changes, and bounded under-
   budget/improve-margin scenarios with an explicit draft review; client-
   observed product metrics; and dead-click/layout recovery. The latest material
-  additions are AIUI-16 (lightweight persistent orientation plus one
+  additions include AIUI-16 (lightweight persistent orientation plus one
   context-resolving global Pilot trigger), AIUI-17 (the bounded Ambient NOW
   briefing), AIUI-18 (the editorial Opportunities stream and exact Living
   Opportunity handoff), AIUI-19 (the lighter Clients directory, relationship
@@ -65,12 +70,13 @@ Last updated: August 12, 2026
   class Event Templates, and exact guarded editor arrivals), AIUI-40 (exact Workflow, Approval,
   Messages, Schedule, and Reporting arrivals), and AIUI-41 (the in-flow mobile
   Living Opportunity remote), and AIUI-46 (the content-first customer decision
-  room), and AIUI-43 (hold-to-capture Ambient Pilot voice with deterministic
-  preview-before-apply). Ambient NOW
+  room), AIUI-43 (hold-to-capture Ambient Pilot voice with deterministic
+  preview-before-apply), and AIUI-50 (the protected zero-dead-click Alpha
+  browser gate plus its fail-closed configuration policy). Ambient NOW
   preserves the existing ranked Workflow order but shows at most three
   priorities, withholds caught-up language for incomplete evidence or recorded
   payment steps, and limits quiet progress to timestamp-backed internal
-  workflow receipts. All 44 remain partial against their complete acceptance
+  workflow receipts. All 45 remain partial against their complete acceptance
   contracts.
   The AIUI-18 stream is a presentation over the caller-owned, already tenant-
   scoped bounded quote read. It presents identity and four independent momentum
@@ -284,6 +290,22 @@ route evidence are complete.
 | CRM synchronization | disabled | No reviewed server-authorized connector with provider acceptance is deployed. |
 
 ## Current Validation Evidence
+
+- The Ambient zero-dead-click release contract now runs as a dedicated step in
+  the protected Playwright CI lane with the production presentation flags and
+  operational staffing explicitly disabled. A fail-closed `lane:quick` policy
+  check protects the command, flags, workflow bindings, enabled-control mapping,
+  and zero-rate assertion. Local proof passes 24 focused monitor/runtime/policy
+  tests, the 1-of-1 Chromium-admin release-gate case, the full 294-file / 3,455-
+  test unit lane, compatibility production build, capability-surfacing check,
+  documentation governance, workflow lint, and its existing bundle budget.
+  The separate production-equivalent Ambient build succeeds but currently
+  totals 3,700,021 JavaScript bytes with a 436,188-byte largest chunk, exceeding
+  the reviewed temporary ceilings of 2,776,849 and 391,596. Do not widen the
+  ceiling or promote that build without an explicit reviewed optimization or
+  budget decision. This is source/local evidence;
+  preview deployment, hosted roles and portal behavior, production timing,
+  human acceptance, and rollback evidence remain open.
 
 - The authoritative operational staffing source passes 77 focused
   server/runtime/client tests and 19 focused panel tests (96 focused tests
