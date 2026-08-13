@@ -105,14 +105,14 @@ const scopes = {
     functions: false
   },
   backend: {
-    selector: "firestore,functions",
-    confirmation: `DEPLOY ${PROJECT_ID} firestore,functions`,
+    selector: "firestore,functions:default",
+    confirmation: `DEPLOY ${PROJECT_ID} firestore,functions:default`,
     build: false,
     functions: true
   },
   all: {
-    selector: "hosting:app,firestore,functions",
-    confirmation: `DEPLOY ${PROJECT_ID} hosting:app,firestore,functions`,
+    selector: "hosting:app,firestore,functions:default",
+    confirmation: `DEPLOY ${PROJECT_ID} hosting:app,firestore,functions:default`,
     build: true,
     functions: true
   }

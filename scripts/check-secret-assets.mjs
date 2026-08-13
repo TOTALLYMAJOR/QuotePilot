@@ -4,7 +4,14 @@ import { execSync } from "node:child_process";
 
 const ROOT = process.cwd();
 
-const TARGET_PREFIXES = [".github/", ".devcontainer/", "docker/", "scripts/"];
+const TARGET_PREFIXES = [
+  ".github/",
+  ".devcontainer/",
+  "config/stripe-connect/",
+  "docker/",
+  "functions-connect/",
+  "scripts/"
+];
 
 const TARGET_FILES = new Set([
   ".env.example",

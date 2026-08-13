@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "stage": "staging_foundation",
+  "projectId": "quotepilot-staging-20260804",
+  "projectNumber": "844470813106",
+  "stripeMode": "sandbox",
+  "stripePlatformBinding": "unbound",
+  "canonicalReturnOrigin": "https://quotepilot-staging-20260804.web.app",
+  "stripeSdkVersion": "22.5.0",
+  "stripeApiVersion": "2026-07-29.dahlia",
+  "legacyStripeSdkVersion": "16.12.0",
+  "legacyStripeApiVersion": "2024-06-20",
+  "databaseId": "connect-control",
+  "functionsCodebase": "connect",
+  "providerCallsEnabled": false,
+  "accountOnboardingEnabled": false,
+  "callableExports": [],
+  "serviceAccounts": [],
+  "egressIps": [],
+  "webhookDestinations": [],
+  "keyPolicies": [],
+  "minimumRollbackSha": ""
+}

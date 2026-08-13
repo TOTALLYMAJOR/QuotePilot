@@ -53,10 +53,12 @@ Only open work belongs here. Current operational truth lives in
   projection, and negative paths. Keep provider evidence distinct from local
   emulator coverage.
 - Continue the separately gated Stripe Connect program from its source-only
-  owner-authority foundation. Next add an isolated `functions-connect`
-  codebase with exact dependency/API pins, default-off capability manifest,
-  deployment selectors, App Check and server authorization contracts, and no
-  provider mutation. Then implement sandbox-only Accounts v2 merchant
+  owner-authority and deploy-empty `functions-connect` foundations. Next add
+  exact consumed-invite ownership backfill, owner/admin role-management
+  authority, password/Google recent reauthentication, and App Check monitor-
+  then-enforce contracts with consumed limited-use tokens for high-risk calls.
+  Then provision isolated staging IAM/database/network/OIDC resources and
+  implement sandbox-only Accounts v2 merchant
   onboarding with direct charges, full Stripe Dashboard access, Stripe fee and
   negative-balance responsibility, zero platform application fee, and strict
   credential/webhook/ledger isolation from deposit, final-balance, and buyer-

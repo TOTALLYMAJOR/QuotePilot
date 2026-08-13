@@ -24,6 +24,14 @@ Last updated: August 12, 2026
   payout, refund, dispute, provider evidence, deployment, or human acceptance
   exists from this slice; the current deposit, final-balance, and buyer-access
   rails are unchanged.
+- A second source-only checkpoint names Firebase `default` and `connect`
+  Functions codebases, pins the existing Stripe package to `16.12.0` and the
+  isolated Connect package to `22.5.0`, records the Connect API contract as
+  `2026-07-29.dahlia`, and makes all existing production/candidate selectors
+  address `functions:default` explicitly. The tracked staging manifest is
+  Sandbox-only, unbound, provider-disabled, and rejects every infrastructure or
+  callable claim; `functions-connect` exports nothing. This is local source and
+  test evidence only, not a Connect deployment or provider result.
 
 - Current `main` is tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient

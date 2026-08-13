@@ -1,0 +1,74 @@
+# Stripe Connect Program
+
+Last updated: August 12, 2026
+
+## Purpose and stopping point
+
+Build Stripe Connect as a separately deployed control plane while preserving
+the current deposit, final-balance, and buyer-access rails. The authorized
+program stops after authenticated hosted Stripe Sandbox UAT and a pilot-ready
+evidence package. Production connected-account creation, onboarding, routing,
+charges, refunds, and pilot promotion remain separately authorized.
+
+## Fixed commercial and provider model
+
+- United States and USD only.
+- The caterer is the merchant and the customer pays the caterer.
+- Stripe Accounts v2 merchant configuration with full Stripe Dashboard access.
+- Stripe collects fees and is responsible for negative balances.
+- Direct charges in connected-account context.
+- No application fee, transfer data, or `on_behalf_of` behavior.
+- Hosted Stripe onboarding; Dashboard owns KYC, banking, tax configuration,
+  payouts, refunds, and disputes.
+
+## Isolation contract
+
+| Domain | Contract |
+|---|---|
+| Existing payments | `functions` / Firebase codebase `default`; exact `stripe@16.12.0`; existing API and evidence semantics remain authoritative. |
+| Connect | `functions-connect` / Firebase codebase `connect`; Node 22; exact `stripe@22.5.0`; API `2026-07-29.dahlia`. |
+| Control data | Future named Firestore database `connect-control`; no browser access and no Connect-worker access to the default database. |
+| Deployment | Existing release workflows select `functions:default` explicitly. The `connect` codebase has no deployable export during the foundation checkpoint. |
+| Provider state | The tracked staging foundation manifest is secret-free, Sandbox-only, unbound, and rejects provider calls, onboarding, exports, service accounts, egress, webhooks, key policies, and rollback-floor claims until their own gates land. |
+
+The fixed staging identity is project `quotepilot-staging-20260804`, project
+number `844470813106`, and return origin
+`https://quotepilot-staging-20260804.web.app`. Production remains project
+`tonicatering` and origin `https://quotepilot.mbmapps.com`; there is no tracked
+production Connect manifest yet.
+
+## Delivery sequence
+
+1. Establish explicit organization-owner authority and server-only role writes.
+2. Split deployment codebases and pin both Stripe runtimes without adding a
+   Connect export or provider credential.
+3. Add exact owner backfill, owner/admin role-management authority, recent-auth
+   proof, and App Check monitor-then-enforce contracts.
+4. Provision isolated staging database, IAM, identities, network/egress,
+   secrets, and GitHub OIDC with Terraform and separate state.
+5. Implement strict status/onboarding interfaces and one-use same-tab Account
+   Link handoff, still Sandbox-only.
+6. Implement generation-bound routing, preclaims, direct Checkout binding,
+   endpoint-specific inboxes, workers, receipt relay, journals, retention locks,
+   projection, and no-fallback behavior.
+7. Complete foundation and payment hosted Sandbox UAT; produce the evidence
+   package and stop.
+
+Each step is its own rollback and evidence boundary. A source commit, passing
+local test, CI run, hosted route, Stripe request, provider object, deployment,
+and human acceptance are distinct claims.
+
+## Current source checkpoint
+
+- Organization-owner activation is explicit, exact-email verified, atomically
+  bound, receipted privately, and browser role writes are denied.
+- `firebase.json` names `default` and `connect` codebases.
+- Existing deployment selectors address only `functions:default`.
+- The Connect package is exactly pinned but exports nothing.
+- `config/stripe-connect/staging-foundation.json` is provider-disabled and
+  intentionally incomplete; its empty infrastructure bindings are blockers,
+  not placeholders to infer as ready.
+
+No connected account, App Check enforcement, Terraform resource, credential,
+Stripe call, webhook destination, provider evidence, Connect deployment, hosted
+UAT, production enablement, or human acceptance is claimed.
