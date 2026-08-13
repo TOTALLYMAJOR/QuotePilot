@@ -79,9 +79,26 @@ Last updated: August 13, 2026
   Stripe URL to application JavaScript, and
   records only bounded expiry/attempt evidence. `functions-connect` still
   exports nothing. Focused local tests and a credential-free source policy
-  pass; no named-database repository, durable limiter, Stripe adapter, callable,
-  HTTP handoff export, provider request, deployment, hosted result, or human
-  acceptance exists.
+  pass; no callable, HTTP handoff export, provider request, deployment, hosted
+  result, or human acceptance exists.
+- A seventh source-only checkpoint implements, but does not instantiate, an
+  exact `connect-control` repository, transactional durable limiter, and
+  injected Accounts v2 Sandbox adapter. The repository reserves one immutable
+  connection generation and stable 30-day provider idempotency identity before
+  access, binds a platform/mode/account identity to only one organization and
+  generation, quarantines collisions, preserves one-use handoffs, and stores
+  redacted replay receipts. The limiter enforces fixed principal and
+  organization windows in one transaction, stores neither raw UID nor
+  organization ID, and denies access when state is unavailable. The adapter
+  accepts only the approved US/USD merchant configuration with full Stripe
+  Dashboard access, Stripe fee and negative-balance responsibility, direct-
+  charge semantics, and Sandbox mode. Failure injection proves that a provider
+  success followed by database interruption reuses the same idempotency key
+  and converges on one binding and receipt. The staging manifest remains
+  provider-disabled and unbound, and `functions-connect/index.js` still exports
+  nothing. This is source/local evidence only: no applied database, credential,
+  Stripe request, connected account, Account Link, callable/HTTP export,
+  deployment, hosted result, or human acceptance exists.
 
 - Current `main` is tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient
@@ -358,6 +375,16 @@ route evidence are complete.
 | CRM synchronization | disabled | No reviewed server-authorized connector with provider acceptance is deployed. |
 
 ## Current Validation Evidence
+
+- The dormant Connect repository/limiter/adapter slice passes its credential-
+  free source policy and 26 focused tests. Those tests cover exact named-
+  database selection, stable generation reservation, 30-day Accounts v2
+  idempotency recovery, unique provider-account binding, collision quarantine,
+  replay receipts, one-use handoffs, multi-window transactional rate limits,
+  limiter-state failure, exact Accounts v2 merchant payloads, Sandbox/mode/
+  responsibility/origin denial, status projection, and interrupted-completion
+  convergence. This is source/local evidence only and made no provider or cloud
+  request.
 
 - The Ambient zero-dead-click release contract now runs as a dedicated step in
   the protected Playwright CI lane with the production presentation flags and

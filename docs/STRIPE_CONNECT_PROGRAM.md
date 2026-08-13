@@ -58,6 +58,18 @@ Each step is its own rollback and evidence boundary. A source commit, passing
 local test, CI run, hosted route, Stripe request, provider object, deployment,
 and human acceptance are distinct claims.
 
+## Dormant rate policy
+
+Every operation must pass both its principal and organization window in one
+`connect-control` transaction. A limiter read or commit failure denies the
+operation.
+
+| Operation | Principal window | Organization window |
+|---|---:|---:|
+| Provider status refresh | 6 per 5 minutes | 30 per 5 minutes |
+| Begin onboarding | 6 per 24 hours | 10 per 24 hours |
+| Prepare onboarding redirect | 5 per 15 minutes | 20 per 15 minutes |
+
 ## Current source checkpoint
 
 - Organization-owner activation is explicit, exact-email verified, atomically
@@ -103,10 +115,28 @@ and human acceptance are distinct claims.
   token out of URLs/referrers, stores only an HMAC token digest, is consumed
   before an injected Account Link adapter runs,
   limits retained provider evidence to the attempt digest and bounded expiry,
-  and recovers without automatic link recreation. These modules are not
-  imported by `functions-connect/index.js`; repository, rate-limiter, provider,
-  callable, and HTTP bindings remain absent until the applied infrastructure
-  and App Check gates pass.
+  and recovers without automatic link recreation.
+- A dormant concrete repository selects Firestore only through the exact named
+  `connect-control` database argument. It transactionally reserves one
+  immutable generation and stable 30-day Accounts v2 idempotency identity,
+  binds each platform/mode/account identity to one organization and generation,
+  quarantines collisions, stores redacted replay receipts, refreshes by exact
+  revision, and consumes each HMAC-digested handoff once. The paired limiter
+  stores no raw UID or organization ID and enforces the reviewed principal and
+  organization windows atomically with fail-closed database behavior.
+- A dormant injected Stripe adapter is fixed to the exact SDK/API versions,
+  Sandbox mode, an explicit platform-account binding, Accounts v2 merchant
+  configuration, full Stripe Dashboard access, Stripe fee and negative-balance
+  responsibility, USD, US identity, and requested card payments. It creates
+  merchant-only hosted Account Links with stable v2 idempotency and projects
+  only bounded health evidence. Live mode, responsibility drift, platform
+  mismatch, foreign return origins, and provider identity mismatch fail before
+  a usable binding is returned.
+- These repository, limiter, and adapter modules are not imported by
+  `functions-connect/index.js`. The tracked staging platform remains `unbound`,
+  so the adapter cannot be instantiated from the current manifest. Callable and
+  HTTP bindings remain absent until the applied infrastructure and App Check
+  gates pass.
 
 No connected account, App Check enforcement, applied Terraform resource,
 credential, callable/HTTP export, Stripe call, Account Link, webhook

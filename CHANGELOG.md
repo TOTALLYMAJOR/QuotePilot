@@ -8,6 +8,25 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Implemented the next dormant Stripe Connect control-plane slice without
+  exporting or invoking it. The concrete repository can select only the named
+  `connect-control` database, reserves an immutable connection generation and
+  stable 30-day Accounts v2 idempotency identity before provider access,
+  uniquely binds each Sandbox platform/mode/account identity, quarantines
+  collisions, stores redacted replay receipts, and consumes each HMAC-digested
+  handoff once. The durable limiter atomically enforces reviewed principal and
+  organization windows, stores neither raw UID nor organization ID, and fails
+  closed when transaction state is unavailable. The injected provider adapter
+  is fixed to Accounts v2, exact SDK/API versions, Sandbox mode, US/USD merchant
+  configuration, full Stripe Dashboard access, Stripe fee and negative-balance
+  responsibility, direct-charge semantics, requested card payments, and
+  merchant-only hosted onboarding. Failure-injection coverage proves that an
+  interrupted database completion after provider success reuses the same
+  provider idempotency key and converges on one binding and receipt. The
+  staging manifest remains provider-disabled and unbound; no credential,
+  provider request, connected account, Account Link, callable/HTTP export,
+  deployment, or hosted acceptance was created.
+
 - Added dormant Stripe Connect status/onboarding authority contracts without
   exporting a callable or enabling provider access. Strict exact-key requests
   derive tenant scope only from verified admin claims; the status projection

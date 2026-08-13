@@ -65,23 +65,26 @@ Only open work belongs here. Current operational truth lives in
   the isolated staging reCAPTCHA Enterprise application/site key, observe App
   Check monitoring without enforcement, and promote enforcement plus consumed
   limited-use tokens only after hosted negative/replay evidence.
-  The strict redacted-status, owner-onboarding, idempotent receipt, and one-use
-  same-tab handoff contracts are now source-complete but deliberately unexported.
-  After the infrastructure/App Check evidence gate, bind their named-database
-  repository, fail-closed durable limiter, Accounts v2 adapter, callable/HTTP
-  exports, and exact staging manifest inventory; do not expose a partial
-  browser surface or return an Account Link to application JavaScript.
+  The strict redacted-status, owner-onboarding, idempotent receipt, one-use
+  same-tab handoff, exact named-database repository, fail-closed durable
+  limiter, and Accounts v2 Sandbox adapter are now source-complete but
+  deliberately uninstantiated and unexported. After the infrastructure/App
+  Check evidence gate, reconcile the applied database/platform/resource IDs
+  into the exact staging manifest, instantiate these adapters with the scoped
+  identities and secrets, and add the callable/HTTP exports. Do not expose a
+  partial browser surface or return an Account Link to application JavaScript.
   The exact consumed-invite owner backfill is source-complete but still needs
   governed production dry-run review and separately confirmed apply evidence;
   zero, multiple, unverified, or conflicting candidates remain
   `ownership_required`.
-  After the infrastructure evidence gate, complete and bind sandbox-only
+  After the infrastructure evidence gate, bind and validate Sandbox-only
   Accounts v2 merchant onboarding with direct charges, full Stripe Dashboard
   access, Stripe fee and negative-balance responsibility, zero platform
   application fee, and strict credential/webhook/ledger isolation from deposit,
-  final-balance, and buyer-access rails. Hosted sandbox UAT is the stopping gate; live-mode account
-  creation, charges, payouts, refunds, disputes, tax/accounting promotion, and
-  production enablement require separate evidence and approval.
+  final-balance, and buyer-access rails. Hosted Sandbox UAT is the stopping
+  gate; live-mode account creation, charges, payouts, refunds, disputes,
+  tax/accounting promotion, and production enablement require separate evidence
+  and approval.
 
 ## P0 - Runtime-Gate Promotion
 
