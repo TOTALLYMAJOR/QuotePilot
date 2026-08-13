@@ -6,6 +6,21 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ## [Unreleased]
 
+### Changed
+
+- Reworked the staff quote-builder decision flow without widening pricing or
+  save authority. The progress rail now states the current decision and permits
+  exact return to completed steps; Menu adds search, selected-only filtering,
+  a removable selection tray, and full-draft impact context; and Services adds
+  package comparison cards plus a live, reversible bundle summary for menu,
+  add-ons, and rentals. Outcome-named continuation controls replace the generic
+  Next label, while every preview remains advisory until the existing trusted
+  save re-prices against the approved catalog. Fresh production-profile builds
+  measure 2,791,568 / 391,901 bytes for compatibility and 3,723,445 / 391,901
+  for Ambient. Compatibility stays inside its prior ceiling; Ambient retains
+  only the previously observed 303-byte runner offset under its temporary
+  graph-specific ceiling, with no largest-chunk increase.
+
 ## [0.9.0] - 2026-08-13
 
 ### Changed

@@ -24,8 +24,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   production-equivalent Ambient graphs. The owner/admin Team access authority
   recalibrates compatibility to an absolute ceiling of 2,791,699 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient is
-  temporarily capped at 3,715,354 aggregate bytes and the same 391,901-byte
-  largest-chunk ceiling.
+  temporarily capped at 3,723,748 aggregate bytes and the same 391,901-byte
+  largest-chunk ceiling after the reviewed quote-builder decision-flow slice.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -56,10 +56,18 @@ Use this log when a change intentionally departs from stable-first policy or req
   offset; Ambient retains its 303-byte offset. The enabled App Check provider
   graph is not production-bound and is excluded from these default-off
   measurements; its later promotion requires a new exact review.
-- Rollback plan: Revert Team access, its role/App Check adapters, and this exact
-  profile recalibration together. The two manual chunks, graph-aware checker,
-  CI matrix, prior compatibility ceiling, and clean-main baseline remain
-  recoverable and unchanged.
+- Performance impact: The staff quote-builder decision-flow slice measures
+  2,791,568 / 391,901 bytes for compatibility and 3,723,445 / 391,901 for
+  Ambient. Compatibility fits its existing exact ceiling without adjustment.
+  Ambient adds only the reviewed interaction code for outcome orientation,
+  Menu search/selection context, package comparison, draft impact, and the
+  reversible bundle summary; its ceiling retains only the prior 303-byte
+  runner offset. The largest chunk does not increase.
+- Rollback plan: Revert the quote-builder decision-flow slice and its narrow
+  Ambient ceiling adjustment together, or revert Team access and its role/App
+  Check adapters with the earlier recalibration. The two manual chunks,
+  graph-aware checker, CI matrix, compatibility ceiling, and clean-main
+  baseline remain recoverable and unchanged.
 - Exit criteria: Optimize Ambient to the standard clean-main budget or obtain an
   explicit reviewed clean-main recalibration after merge. Remove the exception,
   pass both production graphs without it, pass authenticated desktop/mobile CWV,

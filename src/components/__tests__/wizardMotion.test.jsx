@@ -9,6 +9,7 @@ vi.mock("../soundKit", () => ({
 
 import {
   StepMenu,
+  StepMenuContent,
   StepServices,
   StepperNumberInput,
   runOneShotMotionClass
@@ -162,7 +163,7 @@ describe("runOneShotMotionClass", () => {
 describe("StepMenu selection motion wiring", () => {
   test("explicit selection settles the card and plays the tick cue", () => {
     const setForm = vi.fn();
-    const tree = StepMenu({ form: menuForm(), setForm, menuSections });
+    const tree = StepMenuContent({ form: menuForm(), setForm, menuSections });
     const checkboxes = collectElements(
       tree,
       (el) => el.type === "input" && el.props.type === "checkbox"
@@ -182,7 +183,7 @@ describe("StepMenu selection motion wiring", () => {
 
   test("deselection neither settles nor plays a cue", () => {
     const setForm = vi.fn();
-    const tree = StepMenu({
+    const tree = StepMenuContent({
       form: menuForm({ menuItems: ["smoked-ribs"] }),
       setForm,
       menuSections
@@ -207,7 +208,7 @@ describe("StepMenu selection motion wiring", () => {
 
   test("quantity edits pulse the row without playing a cue", () => {
     const setForm = vi.fn();
-    const tree = StepMenu({
+    const tree = StepMenuContent({
       form: menuForm({ menuItems: ["slider-tray"], menuItemQuantities: { "slider-tray": 2 } }),
       setForm,
       menuSections
@@ -332,7 +333,7 @@ describe("static markup stays free of one-shot motion classes", () => {
         menuSections={menuSections}
       />
     );
-    expect(menuMarkup).toContain('class="checkrow checkrow-quantity"');
+    expect(menuMarkup).toContain('class="checkrow checkrow-choice is-selected"');
     expect(menuMarkup).not.toContain("selection-settle");
     expect(menuMarkup).not.toContain("qty-pulse");
 
@@ -345,7 +346,7 @@ describe("static markup stays free of one-shot motion classes", () => {
         onApplyRecommendation={() => {}}
       />
     );
-    expect(servicesMarkup).toContain('class="checkrow checkrow-quantity"');
+    expect(servicesMarkup).toContain('class="checkrow checkrow-choice is-selected"');
     expect(servicesMarkup).not.toContain("selection-settle");
     expect(servicesMarkup).not.toContain("qty-pulse");
   });

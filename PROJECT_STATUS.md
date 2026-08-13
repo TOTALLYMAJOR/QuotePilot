@@ -17,6 +17,17 @@ Last updated: August 13, 2026
   marker. This proves public artifact parity and reachability, not authenticated
   staff/portal behavior, production-data correctness, downstream provider
   outcomes, or recipient acceptance.
+- Authenticated production acceptance subsequently completed the narrow quote
+  lifecycle path in the disposable `mm05366-sandbox` organization: staff
+  created and read back quote `Q-260813-1359-600681E8` at immutable revision
+  `v0001`, exported its PDF, and observed the signed-out exact-token portal
+  render and electronic acceptance receipt before exact cleanup. A controlled
+  Resend attempt to a non-routable `.test` address was provider-accepted; this
+  does not prove delivery, inbox receipt, or recipient viewing. A same-session
+  cross-tenant read returned `403` while the owned record returned `200`.
+  The disposable quote, version, portal projection, customer, receipt, role,
+  claim, and Auth user were then deleted. This acceptance covers only that
+  exercised path, not every staff role, provider, or production-data scenario.
 
 ## Current Release Candidate (Not Production)
 
@@ -420,7 +431,9 @@ route evidence are complete.
   build steps. After the owner-provisioning recovery and owner/admin Team access
   authority, fresh local production-flag builds measure 2,784,674 / 391,901
   bytes for compatibility and 3,715,051 / 391,901 for Ambient. The exact
-  temporary ceilings are 2,791,699 and 3,715,354 aggregate bytes respectively,
+  quote-builder decision-flow candidate measures 2,791,568 / 391,901 for
+  compatibility and 3,723,445 / 391,901 for Ambient. Its exact temporary
+  ceilings are 2,791,699 and 3,723,748 aggregate bytes respectively,
   retaining only the previously observed per-profile CI offsets; both use the
   391,901-byte largest-chunk ceiling. App Check provider code is excluded while
   its browser flag is off. This remains an explicit temporary exception
