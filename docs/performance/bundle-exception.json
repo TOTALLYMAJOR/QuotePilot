@@ -10,7 +10,7 @@
   "profiles": {
     "compatibility": {
       "maxMetrics": {
-        "totalJsBytes": 2878699,
+        "totalJsBytes": 2880644,
         "largestJsChunkBytes": 391901
       }
     },

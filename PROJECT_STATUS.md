@@ -40,7 +40,7 @@ Last updated: August 13, 2026
   recipient-acknowledged, or human-accepted.
   The promoted Ambient-plus-Staff graph is 3,804,078 JavaScript bytes and stays
   within an exact temporary profile ceiling; the largest chunk remains within
-  the prior 391,901-byte ceiling. The compatibility graph is 2,878,699 bytes
+  the prior 391,901-byte ceiling. The compatibility graph is 2,880,644 bytes
   under the same named temporary exception; its largest chunk also did not grow.
 - The Stripe Connect program has begun with a source-only organization
   authority prerequisite. New owner invitations are explicit, verified
