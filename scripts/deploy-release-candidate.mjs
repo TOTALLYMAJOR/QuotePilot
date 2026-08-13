@@ -445,7 +445,7 @@ async function deployFirebase({
       "--config",
       temporaryConfigPath,
       "--only",
-      "hosting,firestore,functions",
+      "hosting,firestore,functions:default",
       "--project",
       RELEASE_CANDIDATE_POLICY.firebase.projectId,
       "--non-interactive",

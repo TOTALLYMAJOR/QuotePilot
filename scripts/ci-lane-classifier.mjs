@@ -39,7 +39,9 @@ const HIGH_RISK_EXACT = new Set([
 ]);
 
 const HIGH_RISK_PREFIXES = [
-  "functions/"
+  "functions/",
+  "functions-connect/",
+  "config/stripe-connect/"
 ];
 
 const AUTH_RULES_PATHS = new Set([
@@ -172,7 +174,11 @@ function inferTenantImpact(files = []) {
   if (files.some((file) => file === "firestore.rules" || file === "firestore.indexes.json")) {
     return "rules";
   }
-  if (files.some((file) => TENANT_WRITE_HINTS.includes(file) || file.startsWith("functions/"))) {
+  if (files.some((file) => (
+    TENANT_WRITE_HINTS.includes(file)
+    || file.startsWith("functions/")
+    || file.startsWith("functions-connect/")
+  ))) {
     return "write";
   }
   if (files.some((file) => file.startsWith("src/context/OrganizationContext") || file.startsWith("src/lib/organizationService"))) {

@@ -419,6 +419,17 @@ credentials. Confirm the target is ignored with
 `git check-ignore -v functions/.secret.local` before adding any non-production
 value.
 
+Firebase Functions now has two explicit codebases. `functions` is the existing
+`default` codebase and remains the only codebase selected by current production
+and release-candidate workflows. `functions-connect` is the separately pinned
+Stripe Connect control-plane package; during its foundation checkpoint it
+exports no function and accepts no provider configuration. Install its locked
+dependencies only when validating that codebase with
+`npm ci --prefix functions-connect`, and run
+`npm run check:stripe-connect-foundation`. Do not replace an explicit
+`functions:default` release selector with the generic `functions` selector.
+See [`docs/STRIPE_CONNECT_PROGRAM.md`](docs/STRIPE_CONNECT_PROGRAM.md).
+
 Stripe Functions configuration requires an explicit `STRIPE_MODE` value of
 `test` or `live`, a secret/restricted key with the matching mode prefix, and a
 webhook secret. Event and Checkout Session `livemode` must also match. The

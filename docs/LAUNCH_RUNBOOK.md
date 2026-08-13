@@ -247,8 +247,12 @@ configuration, customer-ready sender-domain proof, or recipient-inbox proof.
 
 Deploy the Firebase backend only by dispatching `Deploy Firebase Production`
 with `firebase_scope=backend` and the exact tagged-main CI evidence. This scope
-deploys `firestore,functions` together. Use `firebase_scope=all` only for an
-explicitly coordinated Hosting, rules, and Functions release.
+deploys `firestore,functions:default` together. Use `firebase_scope=all` only
+for an explicitly coordinated Hosting, rules, and default-codebase Functions
+release. The typed confirmations now name `functions:default`; the generic
+`functions` selector is forbidden because it could include the separately
+gated Connect codebase. No current production workflow deploys
+`functions:connect`.
 
 After a controlled Resend deployment, send exactly one onboarding test to a
 controlled recipient and capture all three proof layers:

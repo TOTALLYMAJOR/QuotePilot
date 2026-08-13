@@ -170,9 +170,11 @@ If a topic changes, only update the owning doc and cross-link from others.
 ## Production Interface Controls
 - Firebase workflow input: `firebase_scope`
   - Default operator selection: `hosting`.
-  - `backend` deploys `firestore,functions`; `backend` and `all` never separate
-    Functions from their reviewed rules. The selected scope is bound into the
-    workflow title and typed confirmation.
+  - `backend` deploys `firestore,functions:default`; `backend` and `all` never
+    separate the existing Functions codebase from its reviewed rules. The
+    selected scope is bound into the workflow title and typed confirmation.
+    The generic `functions` selector is prohibited, and Stripe Connect requires
+    a separate protected `functions:connect` workflow that does not yet exist.
 - Project-scoped Functions environment: `NOTIFICATIONS_SMS_PROVIDER`
   - Default trusted runtime value: `none` unless buyer-approved SMS enablement
     is validated; local ignored Functions files are validation-only.

@@ -64,6 +64,7 @@ case "$lane" in
     npm run check:env
     npm run check:secrets
     npm run check:ambient-release-gate
+    npm run check:stripe-connect-foundation
     npm run check:workflows
     ;;
   lane:core)

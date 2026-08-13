@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 30,
+  "catalogVersion": 31,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -4244,6 +4244,79 @@
       ],
       "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
       "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, and truthful local fallback without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, or blocked with a safe next resolution."
+    },
+    {
+      "id": "stripe-connect-runtime-foundation",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "release_operators",
+        "security_reviewers"
+      ],
+      "summary": "A separately pinned, deploy-empty Stripe Connect Functions codebase and secret-free staging foundation manifest establish deployment and dependency isolation without adding a callable, provider credential, connected account, or Stripe request. Existing production and candidate workflows select only the legacy default codebase.",
+      "backendPaths": [
+        "firebase.json",
+        "functions-connect/index.js",
+        "functions-connect/runtimePolicy.js",
+        "functions-connect/package.json",
+        "functions-connect/package-lock.json",
+        "config/stripe-connect/staging-foundation.json",
+        "scripts/ci-lane-classifier.mjs",
+        "scripts/check-secret-assets.mjs",
+        "scripts/check-stripe-connect-foundation.mjs",
+        "scripts/deploy-firebase-production.mjs",
+        "scripts/deploy-release-candidate.mjs",
+        "scripts/prepare-production-artifact.mjs"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "src/lib/__tests__/stripeConnectFoundation.test.js",
+        "src/lib/__tests__/deploymentSafety.test.js",
+        "src/lib/__tests__/productionArtifact.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/stripeConnectFoundation.test.js",
+          "locator": "accepts only the exact provider-disabled staging foundation"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectFoundation.test.js",
+          "locator": "rejects undeclared manifest fields"
+        },
+        {
+          "path": "src/lib/__tests__/deploymentSafety.test.js",
+          "locator": "keeps one canonical deploy command per production target"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "README.md",
+        "docs/STRIPE_CONNECT_PROGRAM.md",
+        "docs/LAUNCH_RUNBOOK.md",
+        "docs/VERSION_CONTROL.md",
+        "docs/DOC_SYSTEM.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Stripe Connect isolated control-plane foundation"
+        },
+        {
+          "path": "README.md",
+          "locator": "Firebase Functions now has two explicit codebases"
+        },
+        {
+          "path": "docs/STRIPE_CONNECT_PROGRAM.md",
+          "locator": "## Isolation contract"
+        }
+      ],
+      "headlessReason": "The checkpoint changes dependency, manifest, and deployment boundaries only. It intentionally exposes no user surface or callable until owner authority, App Check, isolated infrastructure, recent authentication, and hosted Sandbox evidence are available.",
+      "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-bound, and separately reviewable."
     },
     {
       "id": "organization-owner-authority",

@@ -55,13 +55,13 @@ export const PRODUCTION_PROVIDER_IDENTIFIERS = Object.freeze({
   "firebase-backend": Object.freeze({
     provider: "firebase",
     projectId: "tonicatering",
-    deploymentSelector: "firestore,functions",
+    deploymentSelector: "firestore,functions:default",
     functionsRegion: "us-central1"
   }),
   "firebase-all": Object.freeze({
     provider: "firebase",
     projectId: "tonicatering",
-    deploymentSelector: "hosting:app,firestore,functions",
+    deploymentSelector: "hosting:app,firestore,functions:default",
     hostingTarget: "app",
     hostingSiteId: "tonicatering",
     functionsRegion: "us-central1"

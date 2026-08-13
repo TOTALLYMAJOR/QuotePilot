@@ -20,6 +20,17 @@ This changelog is backfilled from git history and will be maintained going forwa
   chunk ceiling and compatibility ceilings are unchanged; this is no general
   growth allowance.
 
+- Added a deploy-empty, separately pinned Stripe Connect Functions codebase and
+  converted Firebase configuration to explicit `default` and `connect`
+  codebases. Existing production, release-candidate, and artifact selectors now
+  deploy only `functions:default`; the legacy Stripe package is exactly pinned
+  at `16.12.0`, while `functions-connect` pins `stripe@22.5.0` on Node 22 and
+  records API `2026-07-29.dahlia`. A strict secret-free staging foundation
+  manifest and CI checker reject provider calls, onboarding, callable exports,
+  infrastructure bindings, and rollback-floor claims. This adds no Connect
+  function export, credential, Stripe call, connected account, deployment, or
+  hosted acceptance.
+
 - Split the temporary bundle contract into fail-closed compatibility and
   production-equivalent Ambient profiles. The checker detects the emitted graph
   from mutually exclusive chunks, rejects requested-profile mismatches, and CI
