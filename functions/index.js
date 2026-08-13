@@ -8,6 +8,12 @@ const twilio = require("twilio");
 const { Resend } = require("resend");
 const { Webhook } = require("standardwebhooks");
 const {
+  ORGANIZATION_OWNER_INVITE_PURPOSE,
+  OrganizationAuthorityError,
+  normalizeInvitePurpose,
+  planOrganizationOwnerBinding
+} = require("./organizationAuthority");
+const {
   PricingEngineError,
   assertPricingCatalogAuthorityCurrent,
   buildPricingCatalogAuthority,
@@ -322,6 +328,7 @@ const TENANT_DOMAINS_COLLECTION = "tenantDomains";
 const STAFF_ROLES = new Set(["admin", "sales"]);
 const ROLE_VALUES = new Set(["admin", "sales", "customer"]);
 const INVITES_COLLECTION = "organizationInvites";
+const ORGANIZATION_OWNER_BINDING_RECEIPTS_COLLECTION = "organizationOwnerBindingReceipts";
 const ORGANIZATION_TOMBSTONES_COLLECTION = "organizationTombstones";
 const SMS_PROVIDERS = new Set(["twilio", "none"]);
 const EMAIL_PROVIDERS = new Set(["resend", "none"]);
@@ -808,7 +815,10 @@ async function readPendingOrganizationInvite(tx, email) {
   if (!organizationId) return null;
 
   return {
+    inviteId,
     inviteRef,
+    email: normalizedEmail,
+    purpose: normalizeInvitePurpose(invite.purpose),
     role,
     organizationId,
     organizationName: normalizeText(invite.organizationName),
@@ -3028,6 +3038,8 @@ async function ensureOrganizationBootstrapInternal({
     let buyerAccessOrderRef = null;
     let buyerAccessOrder = null;
     let resolvedBuyerAccessOrderId = "";
+    let organizationRef = null;
+    let organizationRecord = null;
     const roleBuyerAccessOrderId = normalizeText(roleData.buyerAccessOrderId);
     const roleBuyerAccessMode = normalizeText(roleData.buyerAccessMode);
     const roleSource = normalizeText(roleData.source);
@@ -3163,10 +3175,56 @@ async function ensureOrganizationBootstrapInternal({
           "This organization is inactive or archived. Contact a platform administrator."
         );
       }
+      organizationRef = orgRef;
+      organizationRecord = orgSnap.data() || {};
     }
 
     if (pendingInvite) {
       const nowISO = new Date().toISOString();
+      let ownerBinding = null;
+      try {
+        ownerBinding = planOrganizationOwnerBinding({
+          invite: pendingInvite,
+          organization: organizationRecord || {},
+          organizationId,
+          uid: normalizedUid,
+          email: normalizedEmail,
+          nowISO
+        });
+      } catch (err) {
+        if (err instanceof OrganizationAuthorityError) {
+          throw new functions.https.HttpsError(err.code, err.message);
+        }
+        throw err;
+      }
+      if (ownerBinding.required) {
+        if (!organizationRef) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Organization owner binding requires an active organization."
+          );
+        }
+        const receiptRef = db.collection(ORGANIZATION_OWNER_BINDING_RECEIPTS_COLLECTION)
+          .doc(organizationId);
+        const receiptSnap = await tx.get(receiptRef);
+        if (receiptSnap.exists) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Organization ownership already has an immutable binding receipt."
+          );
+        }
+        tx.set(organizationRef, {
+          ...ownerBinding.organizationPatch,
+          ownerBoundAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedAtISO: nowISO
+        }, { merge: true });
+        tx.create(receiptRef, {
+          ...ownerBinding.receipt,
+          inviteId: pendingInvite.inviteId,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
       tx.set(pendingInvite.inviteRef, {
         status: "consumed",
         consumedByUid: normalizedUid,
@@ -6900,6 +6958,19 @@ exports.provisionCustomerOrder = functions
         createdAt: now
       });
     }
+    batch.create(
+      db.collection(ORGANIZATION_OWNER_BINDING_RECEIPTS_COLLECTION).doc(organizationId),
+      {
+        schemaVersion: 1,
+        organizationId,
+        ownerUid,
+        ownerEmail,
+        invitePurpose: ORGANIZATION_OWNER_INVITE_PURPOSE,
+        boundAtISO: nowISO,
+        bindingSource: "direct_verified_owner",
+        createdAt: now
+      }
+    );
   }
 
   if (inviteId) {
@@ -6909,6 +6980,7 @@ exports.provisionCustomerOrder = functions
         email: ownerEmail,
         ownerName,
         role: "admin",
+        purpose: ORGANIZATION_OWNER_INVITE_PURPOSE,
         organizationId,
         organizationName,
         orderId,
@@ -6926,6 +6998,7 @@ exports.provisionCustomerOrder = functions
         email: ownerEmail,
         ownerName,
         role: "admin",
+        purpose: ORGANIZATION_OWNER_INVITE_PURPOSE,
         organizationId,
         organizationName,
         featureFlags: entitlements.featureFlags,
@@ -21574,6 +21647,7 @@ async function processBuyerAccessInvoiceWebhook({
       email: ownerEmail,
       ownerName,
       role: "admin",
+      purpose: ORGANIZATION_OWNER_INVITE_PURPOSE,
       organizationId,
       organizationName,
       featureFlags: entitlements.featureFlags,

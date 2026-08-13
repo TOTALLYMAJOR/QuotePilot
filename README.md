@@ -951,6 +951,12 @@ email. Optional email dispatch uses an order-scoped idempotency key and an
 expiring audit-backed lease so concurrent retries cannot start another send.
 Pending email invitations expire after seven days, and the exact invited email
 must be verified before organization bootstrap can consume the invitation.
+New owner invitations carry the explicit `organization_owner` purpose. Exact-
+email verified activation atomically binds `organizations/{id}.ownerUid`,
+consumes the invite, establishes the existing admin access, and records one
+browser-private immutable binding receipt. Generic admin or sales invitations
+remain role-only, and Firestore rejects every browser create, update, or delete
+of `userRoles`; role authority must use a reviewed server path.
 New tenants begin with a blank catalog so an unreviewed zero-price placeholder
 cannot reach a customer quote. The owner workspace remains in catalog setup
 mode until an organization admin either builds a catalog or stages one of the

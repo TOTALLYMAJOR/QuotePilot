@@ -1207,6 +1207,25 @@ Backend source of truth:
 - Firebase Callable Function `provisionCustomerOrder` handles provisioning logic server-side.
 - Firestore `provisioningOrders/{orderId}` stores onboarding status, feature entitlements, and email send outcome.
 
+### Organization-owner authority
+
+- New owner invitations are explicitly marked for organization ownership; a
+  generic admin or sales invitation is role access only.
+- After the invited person verifies the exact invited email and returns to the
+  app, one server transaction binds that Firebase principal to the
+  organization, consumes the invitation, and establishes the admin role.
+- If the email, organization, role, existing owner, or invitation purpose does
+  not match, owner binding fails closed. An older generic staff invitation is
+  never upgraded into ownership by inference.
+- The server records one immutable owner-binding receipt. That receipt and all
+  direct role writes are private: browser users, including tenant admins, may
+  not create, update, delete, or read the receipt. Use the existing
+  provisioning and verified sign-in outcomes rather than editing Firestore
+  role documents directly.
+- This source foundation does not create a Stripe connected account, complete
+  hosted onboarding, enable charges or payouts, or prove production owner
+  activation.
+
 ### Operator Runbook
 1. Sign in at `/app` as an authorized platform admin on the canonical
    QuotePilot host with a verified Firebase email. Customer tenant admins

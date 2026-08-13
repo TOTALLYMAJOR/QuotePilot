@@ -52,10 +52,17 @@ Only open work belongs here. Current operational truth lives in
   reconciliation, late settlement, cross-rail isolation, customer-safe
   projection, and negative paths. Keep provider evidence distinct from local
   emulator coverage.
-- Keep Stripe Connect in architecture discovery until merchant-of-record,
-  connected-account type, credential/webhook isolation, payouts, refunds,
-  disputes, tax/accounting, and coexistence with both current Stripe rails are
-  decided.
+- Continue the separately gated Stripe Connect program from its source-only
+  owner-authority foundation. Next add an isolated `functions-connect`
+  codebase with exact dependency/API pins, default-off capability manifest,
+  deployment selectors, App Check and server authorization contracts, and no
+  provider mutation. Then implement sandbox-only Accounts v2 merchant
+  onboarding with direct charges, full Stripe Dashboard access, Stripe fee and
+  negative-balance responsibility, zero platform application fee, and strict
+  credential/webhook/ledger isolation from deposit, final-balance, and buyer-
+  access rails. Hosted sandbox UAT is the stopping gate; live-mode account
+  creation, charges, payouts, refunds, disputes, tax/accounting promotion, and
+  production enablement require separate evidence and approval.
 
 ## P0 - Runtime-Gate Promotion
 
@@ -133,10 +140,10 @@ Design system and contracts are recorded in docs/DESIGN_SYSTEM.md (v0.5.0).
   sales roles, revision-conflict recovery, responsive layout, and rollback
   evidence before describing AIUI-20 as complete.
 - Continue reducing the production-equivalent Ambient aggregate from the
-  measured 3,700,202 JavaScript bytes toward the standard clean-main budget.
+  measured 3,702,853 JavaScript bytes toward the standard clean-main budget.
   The largest chunk is now restored to the unchanged 391,596-byte ceiling, and
   CI independently enforces detected compatibility and Ambient graph profiles;
-  the temporary 3,700,505 Ambient aggregate ceiling has no growth headroom.
+  the temporary 3,703,156 Ambient aggregate ceiling has no growth headroom.
   Close the exception through optimization or an explicit reviewed clean-main
   recalibration before AIUI-48 retirement or Ambient production promotion.
 - Add inline editing on the event workspace quote page: editable fields with

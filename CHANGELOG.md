@@ -8,6 +8,18 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Preserved the exact provisioning payload and recovery action when a transient
+  preflight failure occurs during reconciliation. Definitive denials still
+  clear the retained payload; ambiguous transport outcomes no longer become a
+  dead-end error.
+
+- Deduplicated the customer-provisioning exact-order reconciliation path before
+  recording its 2,651-byte Ambient aggregate cost. The active temporary
+  Ambient ceiling is now 3,703,156 bytes: the reviewed 3,702,853-byte local
+  graph plus the existing 303-byte CI-runner offset. The 391,596-byte largest
+  chunk ceiling and compatibility ceilings are unchanged; this is no general
+  growth allowance.
+
 - Split the temporary bundle contract into fail-closed compatibility and
   production-equivalent Ambient profiles. The checker detects the emitted graph
   from mutually exclusive chunks, rejects requested-profile mismatches, and CI
@@ -18,6 +30,17 @@ This changelog is backfilled from git history and will be maintained going forwa
   3,700,202 bytes under a named 3,700,505-byte temporary ceiling containing only
   the previously confirmed 303-byte CI offset. This is source/local performance
   evidence, not hosted timing, production promotion, or human acceptance.
+
+- Established the pre-Stripe-Connect organization authority boundary. New
+  customer provisioning writes an explicit `organization_owner` invitation;
+  exact-email verified bootstrap atomically binds the organization owner,
+  consumes the invite, creates the existing admin access, and records one
+  immutable browser-private binding receipt. Generic legacy staff invitations
+  remain role-only, existing different owners fail closed, and Firestore rules
+  now deny all browser creation, update, or deletion of `userRoles`. Focused
+  unit, rules-emulator, and full provisioning-emulator coverage proves the
+  source boundary. No Stripe connected account, provider request, deployment,
+  hosted activation, or human acceptance is claimed.
 
 - Bound the Ambient zero-dead-click contract into the protected Playwright CI
   lane with a dedicated production-flag browser command. The gate rejects an

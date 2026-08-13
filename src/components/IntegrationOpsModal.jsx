@@ -26,6 +26,7 @@ import {
   recordQuoteIntegrationSync
 } from "../lib/quoteStore";
 import { useModalDialog } from "../hooks/useModalDialog";
+import CustomerProvisioningAuthorityState from "./CustomerProvisioningAuthorityState";
 
 const PROVIDERS = ["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"];
 const STATES = ["queued", "success", "error", "retrying", "skipped"];
@@ -55,6 +56,23 @@ const PREPARE_BACKEND_GUIDANCE = [
   "This stages a provider-mutation-credential-free payload with a deterministic manifest; it does not change runtime configuration or deploy.",
   "Promotion remains blocked until the separately owned trusted deployer is implemented and qualified."
 ].join("\n");
+const DEFINITIVE_PROVISIONING_ERROR_CODES = new Set([
+  "already-exists",
+  "failed-precondition",
+  "invalid-argument",
+  "not-found",
+  "out-of-range",
+  "permission-denied",
+  "unauthenticated"
+]);
+
+function isDefinitiveProvisioningError(error) {
+  const code = String(error?.code || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^functions\//, "");
+  return DEFINITIVE_PROVISIONING_ERROR_CODES.has(code);
+}
 
 function toIso(value) {
   const date = new Date(value || "");
@@ -252,7 +270,8 @@ export function IntegrationOpsView({
     loading: false,
     phase: "",
     error: "",
-    result: null
+    result: null,
+    reconciliationPayload: null
   });
   const [lastProvisioningResult, setLastProvisioningResult] = useState(null);
   const [provisionForm, setProvisionForm] = useState(
@@ -390,26 +409,35 @@ export function IntegrationOpsView({
     }
   };
 
-  const handleProvisionCustomer = async () => {
+  const handleProvisionCustomer = async (reconciliationPayload = null) => {
     if (!canProvisionCustomer) {
       setProvisionState((prev) => ({ ...prev, error: "Admin role is required for customer provisioning." }));
       return;
     }
 
-    const payload = buildCustomerProvisioningPayload(provisionForm, getCanonicalAppUrl());
+    const reconciling = Boolean(reconciliationPayload?.orderId && reconciliationPayload?.organizationId);
+    const payload = reconciling
+      ? { ...reconciliationPayload }
+      : buildCustomerProvisioningPayload(provisionForm, getCanonicalAppUrl());
     const validationError = validateCustomerProvisioningPayload(payload);
     if (validationError) {
       setProvisionState((prev) => ({ ...prev, error: validationError }));
       return;
     }
-    payload.orderId = ensureCustomerProvisioningOrderId(payload.orderId);
-    setProvisionForm((prev) => (
-      prev.orderId === payload.orderId
-        ? prev
-        : { ...prev, orderId: payload.orderId }
-    ));
+    if (!reconciling) {
+      payload.orderId = ensureCustomerProvisioningOrderId(payload.orderId);
+      setProvisionForm((prev) => (
+        prev.orderId === payload.orderId ? prev : { ...prev, orderId: payload.orderId }
+      ));
+    }
 
-    setProvisionState({ loading: true, phase: "checking", error: "", result: null });
+    setProvisionState({
+      loading: true,
+      phase: reconciling ? "reconciling" : "checking",
+      error: "",
+      result: null,
+      reconciliationPayload: reconciling ? payload : null
+    });
     setFeedback("");
     setState((prev) => ({ ...prev, error: "" }));
     let completedPreflight = null;
@@ -421,7 +449,7 @@ export function IntegrationOpsView({
       }
       if (preflight.orderExists) {
         if (preflight.canResume) {
-          setFeedback(
+          if (!reconciling) setFeedback(
             `Matching order "${payload.orderId}" found with status ${preflight.orderStatus || "pending"}. Confirm to resume it safely.`
           );
         } else {
@@ -433,17 +461,25 @@ export function IntegrationOpsView({
             error: artifactsBlocked
               ? `Provisioning order "${payload.orderId}" cannot be resumed because its tenant artifacts are incomplete or no longer match. No email was sent.`
               : `Provisioning order "${payload.orderId}" already exists. No changes were made. Use a new order id.`,
-            result: null
+            result: null,
+            reconciliationPayload: null
           });
           return;
         }
+      }
+      if (reconciling && (!preflight.orderExists || !preflight.canResume)) {
+        throw Object.assign(
+          new Error("No committed receipt was found for this exact order. Review the unchanged form before trying again."),
+          { code: "functions/failed-precondition" }
+        );
       }
       if (preflight.unsafeResidue) {
         setProvisionState({
           loading: false,
           phase: "",
           error: `Organization id "${preflight.organizationId || payload.organizationId}" has retired or orphaned state and cannot be provisioned automatically. No changes were made.`,
-          result: null
+          result: null,
+          reconciliationPayload: null
         });
         return;
       }
@@ -452,7 +488,8 @@ export function IntegrationOpsView({
           loading: false,
           phase: "",
           error: `Organization "${preflight.organizationId || payload.organizationId || payload.organizationName}" already exists. No changes were made. Use an explicit tenant update workflow instead.`,
-          result: null
+          result: null,
+          reconciliationPayload: null
         });
         return;
       }
@@ -461,7 +498,8 @@ export function IntegrationOpsView({
           loading: false,
           phase: "",
           error: `Organization "${preflight.organizationId || payload.organizationId}" does not exist. No changes were made.`,
-          result: null
+          result: null,
+          reconciliationPayload: null
         });
         return;
       }
@@ -470,7 +508,8 @@ export function IntegrationOpsView({
           loading: false,
           phase: "",
           error: `Organization "${preflight.organizationId || payload.organizationId}" cannot be updated safely. No changes were made.`,
-          result: null
+          result: null,
+          reconciliationPayload: null
         });
         return;
       }
@@ -478,56 +517,71 @@ export function IntegrationOpsView({
         payload.organizationId = preflight.organizationId;
       }
     } catch (err) {
+      const uncertainReconciliation = reconciling && !isDefinitiveProvisioningError(err);
       setProvisionState({
         loading: false,
-        phase: "",
+        phase: uncertainReconciliation ? "uncertain" : "",
         error: err?.message || "Failed to check the organization before provisioning.",
-        result: null
+        result: null,
+        reconciliationPayload: uncertainReconciliation ? payload : null
       });
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = reconciling || window.confirm(
       buildCustomerProvisioningConfirmationMessage(payload, completedPreflight)
     );
     if (!confirmed) {
-      setProvisionState({ loading: false, phase: "", error: "", result: null });
+      setProvisionState({ loading: false, phase: "", error: "", result: null, reconciliationPayload: null });
       return;
     }
 
-    setProvisionState({ loading: true, phase: "provisioning", error: "", result: null });
+    setProvisionState({ loading: true, phase: "provisioning", error: "", result: null, reconciliationPayload: null });
     try {
       const result = await provisionCustomerOrder(payload);
-      if (!result?.ok) {
+      if (!result?.ok || (reconciling && String(result.orderId || "") !== String(payload.orderId))) {
         throw new Error("Provisioning failed.");
       }
       setProvisionState({
         loading: false,
         phase: "",
         error: "",
-        result
+        result,
+        reconciliationPayload: null
       });
       setLastProvisioningResult(result);
       writeLastProvisioningResult(currentUserUid, result);
       setProvisionForm(createCustomerProvisioningForm(getCanonicalAppUrl()));
-      setFeedback(result.operation === "updated_entitlements"
-        ? `Updated plan entitlements for ${result.organizationName || result.organizationId || "organization"}.`
-        : `Provisioned ${result.organizationName || payload.organizationName} (${result.organizationId || "n/a"}).`);
+      setFeedback(reconciling
+        ? `Recovered the exact provisioning receipt for ${result.organizationName || result.organizationId}.`
+        : result.operation === "updated_entitlements"
+          ? `Updated plan entitlements for ${result.organizationName || result.organizationId || "organization"}.`
+          : `Provisioned ${result.organizationName || payload.organizationName} (${result.organizationId || "n/a"}).`);
     } catch (err) {
+      const definitive = isDefinitiveProvisioningError(err);
       setProvisionState({
         loading: false,
-        phase: "",
-        error: err?.message || "Failed to provision customer order.",
-        result: null
+        phase: definitive ? "" : "uncertain",
+        error: err?.message || (definitive
+          ? "Provisioning was rejected without changing the organization."
+          : "The provisioning request ended without a receipt."),
+        result: null,
+        reconciliationPayload: definitive ? null : payload
       });
     }
   };
+
+  const handleReconcileProvisioning = () => handleProvisionCustomer(
+    provisionState.reconciliationPayload
+  );
 
   const invalidateProvisioningHandoff = () => {
     setProvisionState((prev) => ({
       ...prev,
       error: "",
-      result: null
+      result: null,
+      phase: "",
+      reconciliationPayload: null
     }));
     setLastProvisioningResult(null);
     clearLastProvisioningResult(currentUserUid);
@@ -857,6 +911,17 @@ export function IntegrationOpsView({
   const showingRecoveredProvisioningResult = !provisionState.result
     && canShowRecoveredProvisioningResult
     && Boolean(lastProvisioningResult?.ok);
+  const provisioningCapabilityState = provisionState.phase === "uncertain"
+    ? "uncertain"
+    : provisionState.phase === "reconciling"
+      ? "reconciliation"
+      : provisionState.loading
+        ? "submitting"
+        : provisioningResult.ok
+          ? "receipt"
+          : provisionState.error
+            ? "error"
+            : "ready";
 
   const handleRecord = async () => {
     if (!form.quoteId) {
@@ -1108,6 +1173,14 @@ export function IntegrationOpsView({
           <p className="source-note">
             Create or update customer organizations directly in-app with order-based module entitlements.
           </p>
+          {canProvisionCustomer && (
+            <CustomerProvisioningAuthorityState
+              state={provisioningCapabilityState}
+              message={provisionState.phase === "uncertain" ? provisionState.error : ""}
+              onReconcile={handleReconcileProvisioning}
+              onReset={invalidateProvisioningHandoff}
+            />
+          )}
           {!canProvisionCustomer && (
             <p className="warning-note">Provisioning controls are restricted to admin users.</p>
           )}

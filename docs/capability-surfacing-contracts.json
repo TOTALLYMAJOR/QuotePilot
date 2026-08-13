@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 29,
+  "catalogVersion": 30,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -4244,6 +4244,130 @@
       ],
       "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
       "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, and truthful local fallback without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, or blocked with a safe next resolution."
+    },
+    {
+      "id": "organization-owner-authority",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mutation_surface",
+      "audiences": [
+        "platform_administrators",
+        "organization_owners"
+      ],
+      "summary": "New tenant provisioning marks organization-owner invitations explicitly. Exact-email verified activation atomically binds organizations/{organizationId}.ownerUid, consumes the invitation, creates the existing admin role, and writes one browser-private immutable owner-binding receipt. Legacy generic admin and sales invitations remain role invitations only and cannot silently acquire owner authority. Browser principals can read their permitted role projection but cannot create, update, or delete any userRoles document.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/organizationAuthority.js",
+        "scripts/provisioning-emulator-acceptance.mjs"
+      ],
+      "backendExports": [
+        "functions/index.js#provisionCustomerOrder"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#provisionCustomerOrder"
+      ],
+      "frontendPaths": [
+        "src/components/IntegrationOpsModal.jsx",
+        "src/components/CustomerProvisioningAuthorityState.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/IntegrationOpsModal.jsx",
+          "locator": "<h3>Customer Provisioning (Admin)</h3>"
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
+        "src/lib/__tests__/organizationAuthority.server.test.js",
+        "src/rules/__tests__/firestore.rules.test.js",
+        "scripts/provisioning-emulator-acceptance.mjs"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
+          "locator": "marks transport uncertainty without discarding the order"
+        },
+        {
+          "path": "src/lib/__tests__/organizationAuthority.server.test.js",
+          "locator": "treats only an explicit organization_owner purpose as ownership authority"
+        },
+        {
+          "path": "src/lib/__tests__/organizationAuthority.server.test.js",
+          "locator": "builds an immutable owner receipt and organization patch from exact evidence"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "verified admins can read same-organization roles but cannot mutate role authority"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "organization owner binding receipts are private and immutable in browsers"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "explicit organization-owner authority"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Organization-owner authority"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The existing administrator provisioning surface now names its exact owner-invitation boundary, acknowledges checking and submission, retains the unchanged order after an ambiguous transport result, reconciles only that order, and distinguishes a recovered receipt from a definitive rejection. The verified owner sign-in remains the separate activation surface; private owner receipts and direct role writes stay hidden.",
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
+          "locator": "marks the owner provisioning ready state",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
+          "locator": "marks the exact request submitting state",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
+          "locator": "marks transport uncertainty without discarding the order",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
+          "locator": "marks exact-order reconciliation while it is running",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
+          "locator": "marks a successful provisioning receipt",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
+          "locator": "marks a definitive error with contextual recovery",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/customerProvisioningAuthorityState.test.jsx",
+          "locator": "marks a definitive error with contextual recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "A platform administrator sees whether the exact owner-provisioning request is ready, pending, uncertain, reconciling, rejected, or receipted. An ambiguous request preserves one order identity and can only reconcile that unchanged order. A newly provisioned owner gains admin access only after exact invited-email verification, and that same transaction binds the organization to the principal once. Older generic staff invitations remain role-only; browser code cannot mint roles or read private binding receipts."
     },
     {
       "id": "authoritative-operational-staffing",

@@ -15,6 +15,16 @@ Last updated: August 12, 2026
 
 ## Current Release Candidate (Not Production)
 
+- The Stripe Connect program has begun with a source-only organization
+  authority prerequisite. New owner invitations are explicit, verified
+  activation atomically binds one owner and leaves an immutable browser-private
+  receipt, and browser principals can no longer create or rewrite role
+  authority. The disposable provisioning emulator passes this owner path. No
+  Accounts v2 connected account, Stripe API call, hosted onboarding, charge,
+  payout, refund, dispute, provider evidence, deployment, or human acceptance
+  exists from this slice; the current deposit, final-balance, and buyer-access
+  rails are unchanged.
+
 - Current `main` is tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient
   presentation in both production workflow build environments. The live
@@ -304,8 +314,10 @@ route evidence are complete.
   compatibility graph and 3,700,202 / 391,596 for Ambient. Manual opportunity-
   model and quote-builder chunks eliminate the former 436,188-byte Ambient
   largest-chunk violation without widening that ceiling. The named Ambient
-  aggregate ceiling is 3,700,505 bytes—only the measured local graph plus the
-  previously confirmed 303-byte CI offset—and remains an explicit temporary
+  owner-provisioning recovery states add 2,651 bytes after reconciliation-path
+  deduplication. The aggregate ceiling is 3,703,156 bytes—only the resulting
+  3,702,853-byte local graph plus the previously confirmed 303-byte CI
+  offset—and remains an explicit temporary
   exception requiring optimization or reviewed recalibration. This is
   source/local evidence;
   preview deployment, hosted roles and portal behavior, production timing,
