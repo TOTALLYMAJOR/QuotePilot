@@ -113,7 +113,7 @@ describe("direct production deployment safety", () => {
   test.each([
     ["Firebase", FIREBASE_WORKFLOW],
     ["Vercel", VERCEL_WORKFLOW]
-  ])("keeps the %s Ambient UI proof slice out of production binding", (_provider, workflow) => {
+  ])("binds the %s Ambient UI production flag once and keeps staffing out", (_provider, workflow) => {
     const source = fs.readFileSync(workflow, "utf8");
     const envExample = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
     const quoteHistory = fs.readFileSync(
@@ -126,7 +126,8 @@ describe("direct production deployment safety", () => {
       "utf8"
     );
 
-    expect(source).not.toContain("VITE_AMBIENT_UI_ENABLED");
+    expect(source.match(/VITE_AMBIENT_UI_ENABLED: "true"/g)).toHaveLength(1);
+    expect(source.match(/VITE_AMBIENT_UI_ENABLED/g)).toHaveLength(1);
     expect(source).not.toContain("VITE_OPERATIONAL_STAFFING_ENABLED");
     expect(envExample).toMatch(/^VITE_AMBIENT_UI_ENABLED=false$/m);
     expect(envExample).toMatch(/^VITE_OPERATIONAL_STAFFING_ENABLED=false$/m);
