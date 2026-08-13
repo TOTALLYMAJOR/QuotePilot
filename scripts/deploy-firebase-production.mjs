@@ -173,5 +173,6 @@ run("npx", [
   "--message",
   `QuotePilot ${readArg("--release-sha")}`,
   "--token",
-  process.env.FIREBASE_TOKEN
+  process.env.FIREBASE_TOKEN,
+  ...(selected.functions ? ["--force"] : [])
 ]);

@@ -44,6 +44,10 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Fixed the guarded Firebase production runner so backend and all-surface
+  deployments explicitly acknowledge reviewed Functions retry-policy changes.
+  The acknowledgement is derived from the selected scope rather than accepted
+  as a caller-controlled argument, and hosting-only releases remain unchanged.
 - Reworked the staff quote-builder decision flow without widening pricing or
   save authority. The progress rail states the current decision and permits an
   exact return to completed steps; Menu adds search, selected-only filtering,

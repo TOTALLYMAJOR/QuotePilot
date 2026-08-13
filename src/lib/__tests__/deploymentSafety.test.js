@@ -188,6 +188,17 @@ describe("direct production deployment safety", () => {
     expect(functionsExample).toMatch(/^OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false$/m);
   });
 
+  test("explicitly acknowledges retry-policy changes only for Functions deployments", () => {
+    const source = fs.readFileSync(FIREBASE_STUB, "utf8");
+    const allowedArguments = source.slice(
+      source.indexOf("const allowed = new Set"),
+      source.indexOf("const args = process.argv.slice")
+    );
+
+    expect(source).toContain('...(selected.functions ? ["--force"] : [])');
+    expect(allowedArguments).not.toContain('"--force"');
+  });
+
   test("does not persist checkout credentials in the UAT attestation job", () => {
     expect(fs.readFileSync(UAT_WORKFLOW, "utf8")).toMatch(/persist-credentials:\s*false/);
   });
