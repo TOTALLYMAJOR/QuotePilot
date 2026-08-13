@@ -22,6 +22,12 @@ const UAT_WORKFLOW = path.join(
   "workflows",
   "release-uat-attestation.yml"
 );
+const STAFFING_TENANT_WORKFLOW = path.join(
+  ROOT,
+  ".github",
+  "workflows",
+  "set-operational-staffing-tenant.yml"
+);
 const FIREBASE_STUB = path.join(ROOT, "scripts", "deploy-firebase-production.mjs");
 const VERCEL_STUB = path.join(ROOT, "scripts", "deploy-vercel-production.mjs");
 const CUSTOMER_DEPLOY_SCRIPT = path.join(ROOT, "scripts", "deploy-hosting-customer.mjs");
@@ -176,6 +182,28 @@ describe("direct production deployment safety", () => {
 
   test("does not persist checkout credentials in the UAT attestation job", () => {
     expect(fs.readFileSync(UAT_WORKFLOW, "utf8")).toMatch(/persist-credentials:\s*false/);
+  });
+
+  test("keeps tenant activation inputs out of executable workflow text", () => {
+    const source = fs.readFileSync(STAFFING_TENANT_WORKFLOW, "utf8");
+    const runLines = [];
+    let runIndent = -1;
+    for (const line of source.split("\n")) {
+      const runStart = line.match(/^(\s*)run:\s*\|\s*$/u);
+      if (runStart) {
+        runIndent = runStart[1].length;
+        continue;
+      }
+      const contentIndent = line.match(/^\s*/u)?.[0]?.length || 0;
+      if (runIndent >= 0 && line.trim() && contentIndent <= runIndent) runIndent = -1;
+      if (runIndent >= 0) runLines.push(line);
+    }
+    const runSteps = runLines.join("\n");
+
+    expect(runSteps).not.toContain("${{ inputs.");
+    expect(source).toMatch(/ORGANIZATION_ID:\s*\$\{\{ inputs\.organization_id \}\}/u);
+    expect(source).toMatch(/TENANT_CONFIRMATION:\s*\$\{\{ inputs\.confirmation \}\}/u);
+    expect(source).toMatch(/FIREBASE_TOKEN:\s*\$\{\{ secrets\.FIREBASE_TOKEN \}\}/u);
   });
 
   test("keeps one canonical deploy command per production target", () => {

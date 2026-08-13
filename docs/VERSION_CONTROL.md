@@ -153,7 +153,9 @@ git push origin v<major>.<minor>.<patch>
     Firebase `all` deployment succeeds. Bind the exact release SHA and deploy
     run id, use the exact state-and-organization confirmation, and retain the
     verified readback. The reversible field mutation is a separate production
-    action and is not implied by deployment.
+    action and is not implied by deployment. Workflow dispatch values must be
+    mapped through step environment variables and never interpolated directly
+    into executable shell bodies that can access provider credentials.
 
 If Firebase and Vercel have different last-known-good SHAs, use separate
 target-specific deployment runs. Allowed deployment profiles

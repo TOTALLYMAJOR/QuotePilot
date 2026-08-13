@@ -81,19 +81,27 @@ jobs:
       - name: Set and verify exact tenant field
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          REQUESTED_ENABLED: ${{ inputs.enabled }}
+          TENANT_CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           node ./scripts/set-operational-staffing-tenant.mjs \
             --project tonicatering \
-            --organization "${{ inputs.organization_id }}" \
-            --enabled "${{ inputs.enabled }}" \
-            --confirm "${{ inputs.confirmation }}"
+            --organization "${ORGANIZATION_ID}" \
+            --enabled "${REQUESTED_ENABLED}" \
+            --confirm "${TENANT_CONFIRMATION}"
 
       - name: Record activation
+        env:
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          REQUESTED_ENABLED: ${{ inputs.enabled }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          FIREBASE_DEPLOY_RUN_ID: ${{ inputs.firebase_deploy_run_id }}
         run: |
           {
             echo "### Operational staffing tenant state verified"
-            echo "- Organization: ${{ inputs.organization_id }}"
-            echo "- Enabled: ${{ inputs.enabled }}"
-            echo "- Release SHA: ${{ inputs.release_sha }}"
-            echo "- Firebase deploy run: ${{ inputs.firebase_deploy_run_id }}"
+            echo "- Organization: ${ORGANIZATION_ID}"
+            echo "- Enabled: ${REQUESTED_ENABLED}"
+            echo "- Release SHA: ${RELEASE_SHA}"
+            echo "- Firebase deploy run: ${FIREBASE_DEPLOY_RUN_ID}"
           } >> "${GITHUB_STEP_SUMMARY}"
