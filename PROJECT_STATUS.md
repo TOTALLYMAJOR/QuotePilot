@@ -340,9 +340,9 @@ route evidence are complete.
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
   build steps. After the owner-provisioning recovery and owner/admin Team access
-  authority, fresh local production-flag builds measure 2,784,668 / 391,901
-  bytes for compatibility and 3,715,045 / 391,901 for Ambient. The exact
-  temporary ceilings are 2,791,693 and 3,715,348 aggregate bytes respectively,
+  authority, fresh local production-flag builds measure 2,784,674 / 391,901
+  bytes for compatibility and 3,715,051 / 391,901 for Ambient. The exact
+  temporary ceilings are 2,791,699 and 3,715,354 aggregate bytes respectively,
   retaining only the previously observed per-profile CI offsets; both use the
   391,901-byte largest-chunk ceiling. App Check provider code is excluded while
   its browser flag is off. This remains an explicit temporary exception

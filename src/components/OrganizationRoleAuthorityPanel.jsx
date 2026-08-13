@@ -82,11 +82,11 @@ export default function OrganizationRoleAuthorityPanel() {
         appCheck: result.appCheck === "verified" ? "verified" : "monitoring",
         truncated: result.truncated === true
       });
-    } catch (error) {
+    } catch {
       setRoster((current) => ({
         ...current,
         loading: false,
-        error: error?.message || "Team access is unavailable."
+        error: "Team access could not reach its trusted service."
       }));
     }
   }, []);

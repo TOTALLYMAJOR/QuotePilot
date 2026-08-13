@@ -24,7 +24,7 @@ This changelog is backfilled from git history and will be maintained going forwa
   performed.
   Build-graph selection excludes the App Check provider module while its flag
   is off. The exact Team access/recovery slice recalibrates the named temporary
-  ceilings to 2,791,693 / 391,901 bytes for compatibility and 3,715,348 /
+  ceilings to 2,791,699 / 391,901 bytes for compatibility and 3,715,354 /
   391,901 for Ambient, preserving only the already observed profile-specific CI
   offsets and no general growth headroom; the clean-main baseline is unchanged.
 

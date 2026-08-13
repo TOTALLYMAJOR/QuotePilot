@@ -22,9 +22,9 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
   production-equivalent Ambient graphs. The owner/admin Team access authority
-  recalibrates compatibility to an absolute ceiling of 2,791,693 aggregate
+  recalibrates compatibility to an absolute ceiling of 2,791,699 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient is
-  temporarily capped at 3,715,348 aggregate bytes and the same 391,901-byte
+  temporarily capped at 3,715,354 aggregate bytes and the same 391,901-byte
   largest-chunk ceiling.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
@@ -50,8 +50,8 @@ Use this log when a change intentionally departs from stable-first policy or req
   CI-runner offset.
   The Team access role review, seven-state mutation recovery, recent-auth
   adapter, role callable client, and disabled App Check build adapter add
-  14,844 local bytes to compatibility and 12,192 local bytes to Ambient. The
-  new exact local measurements are 2,784,668 / 391,901 and 3,715,045 / 391,901.
+  14,850 local bytes to compatibility and 12,198 local bytes to Ambient. The
+  new exact local measurements are 2,784,674 / 391,901 and 3,715,051 / 391,901.
   Compatibility retains its previously observed 7,025-byte CI-versus-local
   offset; Ambient retains its 303-byte offset. The enabled App Check provider
   graph is not production-bound and is excluded from these default-off
