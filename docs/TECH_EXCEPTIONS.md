@@ -21,10 +21,10 @@ Use this log when a change intentionally departs from stable-first policy or req
 - Date: August 13, 2026 (supersedes the August 11 single-profile record)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
-  production-equivalent Ambient graphs. The current Pingram source candidate
-  recalibrates compatibility to an absolute ceiling of 2,898,141 aggregate
+  production-equivalent Ambient graphs. The current quote-builder source
+  candidate recalibrates compatibility to an absolute ceiling of 2,906,982 aggregate
   JavaScript bytes and 391,901 bytes for the largest chunk. Ambient is
-  temporarily capped at 3,817,378 aggregate bytes and the same 391,901-byte
+  temporarily capped at 3,826,220 aggregate bytes and the same 391,901-byte
   largest-chunk ceiling.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
@@ -61,8 +61,11 @@ Use this log when a change intentionally departs from stable-first policy or req
   candidate measures 2,891,116 / 391,901 bytes for compatibility and 3,817,075
   / 391,901 bytes for Ambient. Its ceilings retain only the same 7,025-byte and
   303-byte runner offsets and add no general headroom.
-- Rollback plan: Revert the Pingram source slice and this exact profile
-  recalibration together, or revert Team access and its role/App Check adapters
+  The quote-builder decision-flow slice then measures 2,899,957 / 391,901 bytes
+  for compatibility and 3,825,917 / 391,901 bytes for Ambient. Its ceilings
+  retain those same runner offsets and do not increase the largest chunk.
+- Rollback plan: Revert the quote-builder decision-flow slice and its exact
+  recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,
   CI matrix, prior compatibility ceiling, and clean-main baseline remain
   recoverable and unchanged.

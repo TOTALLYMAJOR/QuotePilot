@@ -171,11 +171,14 @@ describe("wizard visual snapshots", () => {
   });
 
   test("step menu layout snapshot", () => {
+    const totals = calculateQuote(snapshotForm, snapshotCatalog, snapshotCatalog.settings);
     const markup = renderToStaticMarkup(
       <StepMenu
         form={snapshotForm}
         setForm={() => {}}
         catalog={snapshotCatalog}
+        pricingSettings={snapshotCatalog.settings}
+        totals={totals}
         recommendations={[
           {
             key: "upgrade-deluxe",
@@ -190,7 +193,10 @@ describe("wizard visual snapshots", () => {
         menuSections={snapshotCatalog.settings.menuSections}
       />
     );
-    expect(normalizeMarkup(markup)).toMatchInlineSnapshot(`"<div class="grid two-col"><div class="menu-library" data-ambient-field="menuItems" tabindex="-1"><h4>Customized Cuisine Menu</h4><p class="source-note">Select menu items to include in this quote proposal.</p><div class="menu-grid"><section class="menu-category"><div class="menu-category-head"><strong>Mains</strong><small>1/2</small></div><div class="checklist"><label class="checkrow checkrow-quantity"><input type="checkbox" checked=""/><span>Smoked Ribs</span><small>$6.00/person</small></label><label class="checkrow checkrow-quantity"><input type="checkbox"/><span>Herb Chicken</span><small>$5.00/person</small></label></div></section><section class="menu-category"><div class="menu-category-head"><strong>Sides</strong><small>1/1</small></div><div class="checklist"><label class="checkrow checkrow-quantity"><input type="checkbox" checked=""/><span>Garlic Mashed Potatoes</span><small>$110.00</small></label></div></section></div></div></div>"`);
+    expect(markup).toContain("Search menu");
+    expect(markup).toContain("Your menu so far");
+    expect(markup).toContain("Currently adds");
+    expect(normalizeMarkup(markup)).toMatchInlineSnapshot(`"<div class="grid two-col"><div class="menu-library" data-ambient-field="menuItems" tabindex="-1"><div class="menu-library-head"><div><span>Shape the experience</span><h4>Build the menu</h4><p class="source-note">Find choices quickly, then keep the selected menu visible while you refine it.</p></div><div class="menu-selection-measure" aria-live="polite"><strong>2</strong><span>selected</span><small>$830.00 in menu additions</small></div></div><div class="menu-toolbar"><label class="menu-search"><span>Search menu</span><input type="search" placeholder="Search by item or category" value=""/></label><button type="button" class="ghost menu-selected-filter" aria-pressed="false">Show selected (2)</button></div><section class="menu-selection-tray" aria-labelledby="menu-selection-tray-title"><div><h5 id="menu-selection-tray-title">Your menu so far</h5><p>Remove a choice here or keep exploring below.</p></div><ul><li><span>Smoked Ribs</span><button type="button" aria-label="Remove Smoked Ribs from menu">Remove</button></li><li><span>Garlic Mashed Potatoes</span><button type="button" aria-label="Remove Garlic Mashed Potatoes from menu">Remove</button></li></ul></section><div class="menu-grid"><section class="menu-category"><div class="menu-category-head"><strong>Mains</strong><small>1/2</small></div><div class="checklist"><label class="checkrow checkrow-choice is-selected"><input type="checkbox" checked=""/><span class="selection-item-copy"><strong>Smoked Ribs</strong><small>$6.00/person</small><em>Currently adds $934.56 to the draft total</em></span></label><label class="checkrow checkrow-choice"><input type="checkbox"/><span class="selection-item-copy"><strong>Herb Chicken</strong><small>$5.00/person</small><em>Adds $778.80 in the draft preview</em></span></label></div></section><section class="menu-category"><div class="menu-category-head"><strong>Sides</strong><small>1/1</small></div><div class="checklist"><label class="checkrow checkrow-choice is-selected"><input type="checkbox" checked=""/><span class="selection-item-copy"><strong>Garlic Mashed Potatoes</strong><small>$110.00</small><em>Currently adds $142.78 to the draft total</em></span></label></div></section></div><p class="package-preview-boundary">Visible impacts use the current draft calculator. The trusted save remains the pricing authority.</p></div></div>"`);
   });
 
   test("step menu exposes distinct loading, error, and role-aware empty states", () => {
@@ -252,6 +258,28 @@ describe("wizard visual snapshots", () => {
     expect(menuMarkup).toContain("Included at no added charge — select to add");
     expect(serviceMarkup).toContain("Unselected items will not appear in the quote.");
     expect(serviceMarkup).toContain("3 select-to-add choices included");
+  });
+
+  test("services compare packages and keep a reversible bundle summary visible", () => {
+    const totals = calculateQuote(snapshotForm, snapshotCatalog, snapshotCatalog.settings);
+    const markup = renderToStaticMarkup(
+      <StepServices
+        form={snapshotForm}
+        setForm={() => {}}
+        catalog={snapshotCatalog}
+        recommendations={[]}
+        onApplyRecommendation={() => {}}
+        totals={totals}
+        pricingSettings={snapshotCatalog.settings}
+      />
+    );
+
+    expect(markup).toContain("Package choices");
+    expect(markup).toContain("Current package");
+    expect(markup).toContain("Your bundle");
+    expect(markup).toContain("Current draft total");
+    expect(markup).toContain("Remove Dessert from bundle");
+    expect(markup).toContain("Saving still runs the trusted catalog and pricing checks.");
   });
 
   test("step review proposal sheet snapshot", () => {
