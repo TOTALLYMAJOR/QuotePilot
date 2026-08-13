@@ -96,6 +96,19 @@ const FIREBASE_HOSTING_CONFIGURATION = Object.freeze({
   ])
 });
 const FIREBASE_FUNCTIONS_CONFIGURATION = Object.freeze({ source: "functions" });
+const FIREBASE_SOURCE_FUNCTIONS_CONFIGURATION = Object.freeze([
+  Object.freeze({ source: "functions", codebase: "default" }),
+  Object.freeze({
+    source: "functions-connect",
+    codebase: "connect",
+    ignore: Object.freeze([
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log"
+    ])
+  })
+]);
 const FIREBASE_FIRESTORE_CONFIGURATION = Object.freeze({
   rules: "firestore.rules",
   indexes: "firestore.indexes.json"
@@ -223,7 +236,7 @@ function validateFirebaseSourceConfiguration(source) {
   if (canonicalJson(actualTopLevelFields) !== canonicalJson(expectedTopLevelFields)) {
     throw stageError("firebase.json contains an unreviewed top-level deployment field.");
   }
-  if (canonicalJson(actual.functions) !== canonicalJson(FIREBASE_FUNCTIONS_CONFIGURATION)) {
+  if (canonicalJson(actual.functions) !== canonicalJson(FIREBASE_SOURCE_FUNCTIONS_CONFIGURATION)) {
     throw stageError("firebase.json Functions configuration no longer matches the reviewed policy.");
   }
   if (canonicalJson(actual.firestore) !== canonicalJson(FIREBASE_FIRESTORE_CONFIGURATION)) {

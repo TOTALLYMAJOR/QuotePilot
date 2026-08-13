@@ -234,7 +234,7 @@ describe("target-scoped production payload staging", () => {
     const root = makeRoot();
     const configPath = path.join(root, "firebase.json");
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    config.functions.predeploy = "node attacker.js";
+    config.functions[0].predeploy = "node attacker.js";
     fs.writeFileSync(configPath, `${JSON.stringify(config)}\n`);
     const output = path.join(root, "artifacts", "release", "payload", "firebase-backend");
     fs.mkdirSync(output, { recursive: true });
@@ -245,6 +245,21 @@ describe("target-scoped production payload staging", () => {
       { env: {} }
     )).toThrow(/Functions configuration no longer matches/i);
     expect(fs.readFileSync(path.join(output, "sentinel.txt"), "utf8")).toBe("preserve\n");
+  });
+
+  test("keeps the provider-disabled Connect codebase out of every production payload", () => {
+    for (const target of ["firebase-hosting", "firebase-backend", "firebase-all"]) {
+      const root = makeRoot();
+      const result = stageProductionPayload({ target, root }, { env: {} });
+      const stagedConfig = JSON.parse(fs.readFileSync(
+        path.join(result.output, "firebase.json"),
+        "utf8"
+      ));
+
+      expect(JSON.stringify(stagedConfig)).not.toContain("functions-connect");
+      expect(JSON.stringify(stagedConfig)).not.toContain('"codebase":"connect"');
+      expect(fs.existsSync(path.join(result.output, "functions-connect"))).toBe(false);
+    }
   });
 
   test("fails closed when vercel.json drifts from the reviewed prebuilt translation", () => {
