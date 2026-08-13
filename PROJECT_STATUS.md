@@ -4,47 +4,49 @@ Last updated: August 13, 2026
 
 ## Current Production Release
 
-- PR #78 merged the complete 50-item Ambient material source build into
-  `main` at `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`; annotated tag `v0.9.0`
+- PR #83 merged the quote-builder decision-flow enhancements into `main` at
+  `618f8e5c7d0322e0349abf3751eb407d5c03d582`; annotated tag `v0.11.0`
   resolves to that exact commit.
-- Exact-main CI Quality run `31699316183` passed all eight required jobs.
-- Governed Firebase `all` run `31701000896` and governed Vercel run
-  `31701004013` both completed successfully from that tagged revision with
-  deployed `v0.8.1` commit `31b7f8040667d6ae6158b5d16c1b3556193dde16`
-  recorded as the target-specific rollback revision.
-- Both public origins returned the same `index-rz2UsRhU.js` entry artifact,
-  and each hosted workspace chunk contained the compiled `Living Opportunity`
-  marker. This proves public artifact parity and reachability, not authenticated
-  staff/portal behavior, production-data correctness, downstream provider
-  outcomes, or recipient acceptance.
+- Exact-main CI Quality run `31738817551` passed all eight required jobs,
+  including authoritative pricing, Firebase rules/emulators, the full
+  Playwright interaction suite, performance, bundle, governance, and Docker
+  gates.
+- Governed Vercel run `31739681893` deployed exact `v0.11.0` with `v0.10.0`
+  commit `4e60f484edb1fa4110ada01e1aa792fb0ca7f11e` as its explicit rollback
+  target. Independent HTTP probes returned `200` for both `/` and `/app` at
+  `https://quotepilot.mbmapps.com` with entry artifact `index-7oQ3cwMj.js`.
+- Firebase Hosting and Functions have not been promoted to `v0.11.0`.
+  Firebase all-scope run `31701000896` remains the latest successful recorded
+  deployment, at `v0.9.0` commit
+  `dc6f0e7e4f7ce307bbcc772fd23c198dbd2e3ffd`. The later `v0.10.0` Firebase
+  attempt failed before mutation because its CI credential was rejected.
+- These receipts prove exact source, CI, Vercel deployment, and public-edge
+  reachability only. They do not prove authenticated staff/portal acceptance,
+  production-data correctness, provider delivery, recipient acknowledgement,
+  or human acceptance.
 
-## Current Release Candidate (Not Production)
+## Pending Production Completion
 
-- The owner has authorized exact-candidate publication plus coordinated
-  Firebase and Vercel production deployment for live testing after the required
-  gates. Production configuration already names the approved Resend provider
-  and sender; the Resend API/webhook secrets existed, and a separate staff
-  invitation token secret was created and immediately rotated before use.
-  Provider acceptance, signed delivery evidence, recipient acknowledgement,
-  and human acceptance remain post-deployment tests, not current claims.
-- The current working candidate adds an administrator-only Staff route and a
-  private, callable-owned staff-record authority paired atomically with the
-  existing safe operational profile. It also adds exact-revision role briefing
-  PDFs, default-email-app handoffs, and direct proposal print/email-app actions.
-  Local validation passes the 3,668-test unit suite (3,594 passed and 74
-  skipped), the 70-test Firestore rules suite, the disposable operational
-  staffing authority emulator, capability/doc/secret/workflow gates, the
-  Ambient production-flag build, and the named temporary bundle ceiling. This
-  remains working-tree source/local evidence only: it is not in `main`,
-  deployed, tenant-enabled, hosted-accepted, provider-sent,
-  recipient-acknowledged, or human-accepted.
-  A protected, reversible workflow now exists to set and verify only tenant
-  `250`'s operational-staffing authority field after an exact successful
-  Firebase all-scope deployment; it has not yet been dispatched.
-  The promoted Ambient-plus-Staff graph is 3,804,078 JavaScript bytes and stays
-  within an exact temporary profile ceiling; the largest chunk remains within
-  the prior 391,901-byte ceiling. The compatibility graph is 2,880,654 bytes
-  under the same named temporary exception; its largest chunk also did not grow.
+- Rotate the Firebase CI credential, deploy exact `v0.11.0` with Firebase
+  scope `all`, then use that exact successful deployment receipt to set and
+  verify only tenant `250`'s `operationalStaffingAuthorityEnabled` field.
+- Production configuration names Resend as the email provider and keeps owner
+  SMS at `none`. Configuration does not prove provider acceptance, delivery,
+  staff acknowledgement, attendance, payroll, or human acceptance.
+- The source release includes the Ambient workspace, authoritative operational
+  staffing, Staff workspace and private records, briefing output, manual staff
+  invitations with independently tracked delivery and acknowledgement states,
+  hardened dormant owner-SMS provider support, and the lighter quote-builder
+  decisions. Firebase authority and tenant availability remain unavailable
+  until the pending deployment and tenant activation complete.
+
+## Engineering Checkpoint Detail
+
+- The owner authorized exact-candidate publication and coordinated Firebase
+  and Vercel production deployment for live testing after the required gates.
+  Vercel is complete; Firebase remains pending as recorded above. Provider
+  acceptance, signed delivery evidence, recipient acknowledgement, and human
+  acceptance remain separate post-deployment tests.
 - The Stripe Connect program has begun with a source-only organization
   authority prerequisite. New owner invitations are explicit, verified
   activation atomically binds one owner and leaves an immutable browser-private
