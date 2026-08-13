@@ -1321,8 +1321,8 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
       await expect(review).toHaveAttribute("data-review-state", "resolved");
       await expect(review.getByRole("status")).toContainText("reviewed option is now in your draft");
       await expect(page.locator('[data-ambient-field="pkg"]')).toHaveValue("focused");
-      await page.getByRole("button", { name: "Next" }).click();
-      await page.getByRole("button", { name: "Next" }).click();
+      await page.getByRole("button", { name: /^Next:/ }).click();
+      await page.getByRole("button", { name: /^Next:/ }).click();
       await expect(page.getByRole("button", { name: "Save Pilot scenario" })).toBeVisible();
       const afterApply = await page.evaluate((quoteId) => {
         const quotes = JSON.parse(localStorage.getItem("quoteWizard.quotes") || "[]");

@@ -43,7 +43,7 @@ async function advanceToSave(page) {
       return;
     }
 
-    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: /^Next:/ }).click();
   }
 
   throw new Error("Unable to reach Save draft");

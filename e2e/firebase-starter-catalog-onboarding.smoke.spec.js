@@ -26,9 +26,9 @@ async function advanceBlankOwnerToPopulatedMenu(page) {
   await page.getByRole("textbox", { name: /Venue/i }).first().fill("Starter Hall");
   await page.getByRole("textbox", { name: /Your name/i }).fill("E2E Owner");
   await page.getByRole("textbox", { name: /Email/i }).fill("owner@example.com");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
 
-  await expect(page.getByRole("heading", { name: "Customized Cuisine Menu" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: /Build the menu|Customized Cuisine Menu/i })).toBeVisible({
     timeout: 45_000
   });
   await expect.poll(

@@ -47,10 +47,10 @@ async function advanceToSave(page, saveLabel = "Save draft") {
       return;
     }
 
-    const nextButton = page.getByRole("button", { name: "Next" });
+    const nextButton = page.getByRole("button", { name: /^Next:/ });
     if (!(await nextButton.count())) break;
 
-    const menuHeading = page.getByRole("heading", { name: "Customized Cuisine Menu" });
+    const menuHeading = page.getByRole("heading", { name: /Build the menu|Customized Cuisine Menu/i });
     if (await menuHeading.isVisible()) {
       const firstMenuItem = page.getByRole("checkbox").first();
       await expect(firstMenuItem).toBeVisible();
@@ -71,10 +71,10 @@ async function advanceToFinalReview(page, saveLabel = "Save Changes") {
       return;
     }
 
-    const nextButton = page.getByRole("button", { name: "Next", exact: true });
+    const nextButton = page.getByRole("button", { name: /^Next:/ });
     if (!(await nextButton.count())) break;
 
-    const menuHeading = page.getByRole("heading", { name: "Customized Cuisine Menu" });
+    const menuHeading = page.getByRole("heading", { name: /Build the menu|Customized Cuisine Menu/i });
     if (await menuHeading.isVisible()) {
       const firstMenuItem = page.getByRole("checkbox").first();
       await expect(firstMenuItem).toBeVisible();
