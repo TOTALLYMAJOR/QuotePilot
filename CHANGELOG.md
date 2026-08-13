@@ -8,6 +8,27 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Added dormant Stripe Connect status/onboarding authority contracts without
+  exporting a callable or enabling provider access. Strict exact-key requests
+  derive tenant scope only from verified admin claims; the status projection
+  removes organization, owner, connected-account, and provider-object IDs.
+  Onboarding planning requires the canonical owner, verified email,
+  five-minute authentication, an unused App Check token, expected revision and
+  generation, a payload digest, reservation-before-provider ordering, and an
+  immutable redacted receipt. The same-tab continuation gives application
+  JavaScript only a one-use QuotePilot POST destination and internal token;
+  the token never enters the URL or referrer and is stored only as an HMAC
+  digest. Live-refresh limiter storage receives only a separately HMAC-hashed
+  principal digest, never a raw UID. The server consumes the handoff before
+  requesting an Account Link, persists
+  only the bounded provider expiry and attempt digest, and returns provider
+  failures to explicit recovery without automatic link recreation. A separate
+  credential-free workflow proves these dormant contracts and prohibits
+  direct Stripe imports, function exports, provider-link logging, or deployed
+  behavior. No callable, repository binding, limiter state, Stripe adapter,
+  account/link request, credential, deployment, hosted result, or human
+  acceptance exists from this source slice.
+
 - Added the source-only Stripe Connect staging infrastructure foundation. The
   pinned Terraform 1.15.8 / Google provider 7.41.0 configuration defines a
   deletion-protected named `connect-control` database, five responsibility-

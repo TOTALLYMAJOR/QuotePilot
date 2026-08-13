@@ -95,7 +95,20 @@ and human acceptance are distinct claims.
   OIDC token permission, plan, or apply. App Check creation is forced off and
   production infrastructure is absent. Pinned-provider local format/init/
   validate is source evidence only; no cloud plan or resource exists.
+- Dormant status/onboarding contract modules now define exact-key request
+  digests, auth-claim tenant scope, redacted `StripeConnectStatusV1`, owner-only
+  recent-auth/App Check checks, HMAC-only rate-limit principals,
+  reservation-before-provider ordering, redacted
+  mutation receipts, and a one-use same-tab POST handoff. The handoff keeps its
+  token out of URLs/referrers, stores only an HMAC token digest, is consumed
+  before an injected Account Link adapter runs,
+  limits retained provider evidence to the attempt digest and bounded expiry,
+  and recovers without automatic link recreation. These modules are not
+  imported by `functions-connect/index.js`; repository, rate-limiter, provider,
+  callable, and HTTP bindings remain absent until the applied infrastructure
+  and App Check gates pass.
 
-No connected account, App Check enforcement, applied Terraform resource, credential,
-Stripe call, webhook destination, provider evidence, Connect deployment, hosted
-UAT, production enablement, or human acceptance is claimed.
+No connected account, App Check enforcement, applied Terraform resource,
+credential, callable/HTTP export, Stripe call, Account Link, webhook
+destination, provider evidence, Connect deployment, hosted UAT, production
+enablement, or human acceptance is claimed.
