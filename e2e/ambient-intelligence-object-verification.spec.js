@@ -1018,8 +1018,8 @@ test.describe("Ambient intelligent-object browser verification", () => {
     await expect(page.locator('select[data-ambient-field="pkg"]')).toHaveValue("premium");
     await expect(page.getByRole("complementary", { name: "Live Breakdown" })).toContainText("Premium");
 
-    await page.getByRole("button", { name: "Next" }).click();
-    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: /^Next:/ }).click();
+    await page.getByRole("button", { name: /^Next:/ }).click();
     await expect(page.getByRole("button", { name: "Save package change" })).toBeVisible();
     expect(await readPersistedQuote(page)).toEqual(savedBefore);
   });
@@ -1037,7 +1037,7 @@ test.describe("Ambient intelligent-object browser verification", () => {
     const apply = review.getByRole("button", { name: /Apply Premium.*to draft/iu });
 
     for (let step = 1; step < 5; step += 1) {
-      await page.getByRole("button", { name: "Next" }).click();
+      await page.getByRole("button", { name: /^Next:/ }).click();
     }
     await page.getByRole("button", { name: "Save Changes" }).click();
 

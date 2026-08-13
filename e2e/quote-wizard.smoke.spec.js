@@ -66,7 +66,7 @@ async function advanceToSaveButton(page, saveButtonLabel) {
       return;
     }
 
-    const nextButton = page.getByRole("button", { name: "Next" });
+    const nextButton = page.getByRole("button", { name: /^Next:/ });
     if (!(await nextButton.count())) {
       break;
     }
@@ -307,7 +307,7 @@ test("New quote confirms only real edits and resets the canonical quote fields",
 });
 
 test("step 1 next stays actionable and explains missing required fields", async ({ page }) => {
-  const nextButton = page.getByRole("button", { name: "Next" });
+  const nextButton = page.getByRole("button", { name: /^Next:/ });
   await expect(nextButton).toBeEnabled();
   await expect(page.getByText(/Missing required fields/i)).toBeVisible();
 
@@ -325,7 +325,7 @@ test("step 1 next stays actionable and explains missing required fields", async 
   await fillRequiredQuoteFields(page, { guests: 58, eventName: "E2E Soft Lock", venue: "Guidance Hall" });
   await expect(page.getByText(/Missing required fields/i)).toHaveCount(0);
   await nextButton.click();
-  await expect(page.getByText(/Customized Cuisine Menu/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Build the menu|Customized Cuisine Menu/i })).toBeVisible();
 });
 
 test("menu loading and empty states lead admins to the selected Catalog Admin menu", async ({ page }) => {
@@ -341,7 +341,7 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
   await fillRequiredQuoteFields(page, { guests: 54, eventName: "Menu State Test", venue: "Menu Hall" });
   const selectedEventTypeId = await page.getByLabel(/Event type/i).inputValue();
   const selectedEventType = await page.getByLabel(/Event type/i).locator("option:checked").textContent();
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
   await expect(page.locator(".menu-skeleton-row")).toHaveCount(3);
   await expect(page.locator(".menu-state")).toHaveAttribute("aria-busy", "true");
 
@@ -364,7 +364,7 @@ test("a menu item created in Catalog Admin appears in the active quote immediate
     venue: "Refresh Hall"
   });
   const selectedEventTypeId = await page.getByLabel(/Event type/i).inputValue();
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
 
   await page.getByRole("button", { name: "Operations" }).click();
   await page.getByRole("menuitem", { name: "Catalog Admin" }).click();
@@ -408,7 +408,7 @@ test("menu retry repeats the selected event request without clearing selections"
   });
   await page.reload();
   await fillRequiredQuoteFields(page, { guests: 56, eventName: "Menu Retry Test", venue: "Retry Hall" });
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
   const chicken = page.getByRole("checkbox", { name: /Herb Chicken/i });
   await expect(chicken).toBeVisible();
   await chicken.check();
@@ -418,7 +418,7 @@ test("menu retry repeats the selected event request without clearing selections"
   const eventType = page.getByLabel(/Event type/i);
   const optionCount = await eventType.locator("option").count();
   await eventType.selectOption({ index: Math.min(2, optionCount - 1) });
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
   await expect(page.getByRole("alert")).toContainText(/couldn't load the menu/i);
   await page.evaluate(() => { window.__menuShouldFail = false; });
   await page.getByRole("button", { name: "Retry" }).click();
@@ -501,12 +501,12 @@ test("staffing counts stay primary while optional rate values remain reviewable"
 
 test("hero CTA remains available and returns workflow focus to step 1", async ({ page }) => {
   await fillRequiredQuoteFields(page, { guests: 64, eventName: "E2E Hero CTA", venue: "CTA Ballroom" });
-  await page.getByRole("button", { name: "Next" }).click();
-  await expect(page.getByText("Customized Cuisine Menu")).toBeVisible();
+  await page.getByRole("button", { name: /^Next:/ }).click();
+  await expect(page.getByRole("heading", { name: /Build the menu|Customized Cuisine Menu/i })).toBeVisible();
 
   await page.getByRole("button", { name: "New Quote" }).click();
   await expect(page.getByText("Core Event Basics")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Next" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Next:/ })).toBeVisible();
 });
 
 test("live breakdown shows transient change cues when quote inputs update", async ({ page }) => {
@@ -541,7 +541,7 @@ test("mobile quote pricing stays visible through the workflow without covering c
   await expect(breakdownToggle).toHaveAccessibleName("View breakdown");
   await expect(breakdown).toBeHidden();
   await fillRequiredQuoteFields(page, { guests: 72 });
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
   await page.locator(".menu-library input[type='checkbox']").first().check();
 
   await expect(mobileSummary).toBeVisible();
@@ -551,7 +551,7 @@ test("mobile quote pricing stays visible through the workflow without covering c
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("110");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
   await expect.poll(async () => parseMoney(await mobileTotal.innerText())).toBeGreaterThan(initialTotal);
   await expect.poll(async () => liveStatus.innerText()).not.toBe(initialLiveStatus);
   await expect(liveStatus).toContainText(await mobileTotal.innerText());
@@ -565,7 +565,7 @@ test("mobile quote pricing stays visible through the workflow without covering c
 
   const stepLabels = ["Add-ons / Rentals", "Pricing Summary", "Save Quote"];
   for (const stepLabel of stepLabels) {
-    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: /^Next:/ }).click();
     await expect(mobileSummary).toBeVisible();
     await expect(mobileSummary).toBeInViewport();
     await expectCurrentStepContained(stepLabel);
@@ -644,7 +644,7 @@ test("good better best scenarios can be compared and applied", async ({ page }) 
     eventName: "E2E Scenario Gala",
     venue: "Scenario Hall"
   });
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
   await page.locator(".menu-library input[type='checkbox']").first().check();
   await page.getByRole("button", { name: "Compare Scenario" }).click();
 
@@ -656,13 +656,13 @@ test("good better best scenarios can be compared and applied", async ({ page }) 
   await dialog.getByRole("button", { name: "Compare Best" }).click();
   await dialog.getByRole("button", { name: "Use Best" }).click();
   await expect(dialog).toHaveCount(0);
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
   await expect(page.getByLabel("Package tier")).toHaveValue("deluxe");
 });
 
 test("draft save handoff targets the exact new quote and stays truthful across saves", async ({ page }) => {
   await fillRequiredQuoteFields(page, { guests: 60, eventName: "E2E Quote A", venue: "Hall A" });
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
 
   const totalLocator = page.locator(".breakdown-panel [data-row-key='total'] dd strong");
   await page.waitForTimeout(700);
@@ -670,7 +670,7 @@ test("draft save handoff targets the exact new quote and stays truthful across s
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("110");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
 
   await page.waitForTimeout(700);
   const afterTotal = parseMoney(await totalLocator.innerText());
@@ -1384,7 +1384,7 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
   const originalEventType = await quoteEventType.inputValue();
   expect(originalEventType).toBeTruthy();
 
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
   const selectedMenuIds = await page.locator(".wizard-panel .menu-library input[type='checkbox']:checked")
     .evaluateAll((inputs) => inputs.map((input) => input.value).sort());
   expect(selectedMenuIds.length).toBeGreaterThan(0);
@@ -1406,7 +1406,7 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
   await catalogAdmin.getByRole("button", { name: "Close" }).click();
 
   await expect(quoteEventType).toHaveValue(originalEventType);
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Next:/ }).click();
   await expect(page.locator(".wizard-panel .menu-library input[type='checkbox']:checked"))
     .toHaveCount(selectedMenuIds.length);
   expect(await page.locator(".wizard-panel .menu-library input[type='checkbox']:checked")

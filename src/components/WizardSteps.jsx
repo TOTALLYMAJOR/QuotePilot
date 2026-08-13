@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
+import { calculateQuote, currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import { MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
 import DecisionCard from "./DecisionCard";
 import { buildGuidedSellingCards } from "./guidedSellingPresentation";
@@ -15,6 +15,93 @@ const PILOT_GUIDED_SELLING_ENABLED = ["1", "true", "yes", "on"].includes(
 
 function joinClassNames(...parts) {
   return parts.filter(Boolean).join(" ");
+}
+
+function stableSelectionIds(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function previewTotalDelta({ form, catalog, settings, totals, patch }) {
+  if (!catalog || !settings || !totals || !patch) return null;
+  try {
+    const nextTotals = calculateQuote({ ...form, ...patch }, catalog, settings);
+    const delta = Number(nextTotals.total || 0) - Number(totals.total || 0);
+    return Number.isFinite(delta) ? Math.round(delta * 100) / 100 : null;
+  } catch {
+    return null;
+  }
+}
+
+function impactLabel(delta, { selected = false } = {}) {
+  if (delta === null || delta === undefined) return "Draft impact updates in the live breakdown";
+  if (Math.abs(delta) < 0.005) return "No added charge in this package";
+  if (selected) return `Currently adds ${currency(Math.abs(delta))} to the draft total`;
+  return `${delta > 0 ? "Adds" : "Reduces by"} ${currency(Math.abs(delta))} in the draft preview`;
+}
+
+function PackageComparison({
+  form,
+  setForm,
+  catalog,
+  settings,
+  totals,
+  activePackages,
+  packageInclusionCount,
+  onSelectionTouched
+}) {
+  if (!activePackages.length) return null;
+
+  return (
+    <section className="package-comparison" aria-labelledby="package-comparison-title">
+      <div className="package-comparison-head">
+        <div>
+          <span>Compare the fit</span>
+          <h4 id="package-comparison-title">Package choices</h4>
+        </div>
+        <p>Full-quote draft previews include the current guest count and selections.</p>
+      </div>
+      <div className="package-choice-grid">
+        {activePackages.map((pkg) => {
+          const selected = pkg.id === form.pkg;
+          let preview = null;
+          try {
+            preview = calculateQuote({ ...form, pkg: pkg.id }, catalog, settings);
+          } catch {
+            preview = null;
+          }
+          const delta = preview && totals
+            ? Math.round((Number(preview.total || 0) - Number(totals.total || 0)) * 100) / 100
+            : null;
+          return (
+            <button
+              key={pkg.id}
+              type="button"
+              className={joinClassNames("package-choice", selected && "is-selected")}
+              aria-pressed={selected}
+              onClick={() => {
+                if (selected) return;
+                if (typeof onSelectionTouched === "function") onSelectionTouched("pkg");
+                setForm((current) => ({ ...current, pkg: pkg.id }));
+              }}
+            >
+              <span className="package-choice-state">{selected ? "Current package" : "Compare"}</span>
+              <strong>{pkg.name}</strong>
+              <span>{currency(pkg.ppp)}/person</span>
+              <small>{packageInclusionCount(pkg)} included choice{packageInclusionCount(pkg) === 1 ? "" : "s"}</small>
+              <em>
+                {preview
+                  ? `${currency(preview.total)} draft total${delta && !selected ? ` · ${delta > 0 ? "+" : "−"}${currency(Math.abs(delta))}` : ""}`
+                  : "Preview unavailable"}
+              </em>
+            </button>
+          );
+        })}
+      </div>
+      <p className="package-preview-boundary">Draft preview only. Saving still re-prices against the current approved catalog.</p>
+    </section>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -629,10 +716,27 @@ export function StepEvent({
   );
 }
 
-export function StepMenu({
+export function StepMenu(props) {
+  const [menuQuery, setMenuQuery] = useState("");
+  const [selectedOnly, setSelectedOnly] = useState(false);
+  return (
+    <StepMenuContent
+      {...props}
+      menuQuery={menuQuery}
+      onMenuQueryChange={setMenuQuery}
+      selectedOnly={selectedOnly}
+      onSelectedOnlyChange={setSelectedOnly}
+    />
+  );
+}
+
+export function StepMenuContent({
   form,
   setForm,
   menuSections,
+  catalog = null,
+  pricingSettings = null,
+  totals = null,
   menuLoading = false,
   menuError = "",
   eventTypeLabel = "",
@@ -640,7 +744,11 @@ export function StepMenu({
   onRetry,
   onOpenCatalogMenu,
   onSelectionTouched,
-  packageIncludedMenuItemIds = []
+  packageIncludedMenuItemIds = [],
+  menuQuery = "",
+  onMenuQueryChange = () => {},
+  selectedOnly = false,
+  onSelectedOnlyChange = () => {}
 }) {
   const resolvedMenuSections = Array.isArray(menuSections) ? menuSections : [];
   const includedMenuItemIds = new Set(
@@ -660,6 +768,38 @@ export function StepMenu({
     return currency(item.price);
   };
   const menuQuantities = form.menuItemQuantities || {};
+  const allMenuItems = resolvedMenuSections.flatMap((section) => (
+    (section.items || []).map((item) => ({ ...item, sectionId: section.id, sectionName: section.name }))
+  ));
+  const selectedMenuIds = new Set(stableSelectionIds(form.menuItems));
+  const selectedMenuItems = allMenuItems.filter((item) => selectedMenuIds.has(item.id));
+  const normalizedMenuQuery = String(menuQuery || "").trim().toLowerCase();
+  const filteredMenuSections = resolvedMenuSections.map((section) => ({
+    ...section,
+    items: (section.items || []).filter((item) => {
+      if (selectedOnly && !selectedMenuIds.has(item.id)) return false;
+      if (!normalizedMenuQuery) return true;
+      return `${item.name || ""} ${section.name || ""}`.toLowerCase().includes(normalizedMenuQuery);
+    })
+  })).filter((section) => section.items.length > 0);
+
+  const menuItemImpact = (item) => {
+    if (!catalog || !pricingSettings || !totals) return null;
+    const selected = selectedMenuIds.has(item.id);
+    const nextMenuItems = selected
+      ? stableSelectionIds(form.menuItems).filter((id) => id !== item.id)
+      : [...stableSelectionIds(form.menuItems), item.id];
+    const nextQuantities = { ...(form.menuItemQuantities || {}) };
+    if (!selected && resolvePricingType(item) === "per_item") nextQuantities[item.id] = 1;
+    if (selected) delete nextQuantities[item.id];
+    return previewTotalDelta({
+      form,
+      catalog,
+      settings: pricingSettings,
+      totals,
+      patch: { menuItems: nextMenuItems, menuItemQuantities: nextQuantities }
+    });
+  };
 
   const toggleMenuItem = (item, checked, event = null) => {
     const itemId = String(item?.id || "").trim();
@@ -756,10 +896,60 @@ export function StepMenu({
     <div className="grid two-col">
       {resolvedMenuSections.length > 0 && (
         <div className="menu-library" data-ambient-field="menuItems" tabIndex={-1}>
-          <h4>Customized Cuisine Menu</h4>
-          <p className="source-note">Select menu items to include in this quote proposal.</p>
+          <div className="menu-library-head">
+            <div>
+              <span>Shape the experience</span>
+              <h4>Build the menu</h4>
+              <p className="source-note">Find choices quickly, then keep the selected menu visible while you refine it.</p>
+            </div>
+            <div className="menu-selection-measure" aria-live="polite">
+              <strong>{selectedMenuItems.length}</strong>
+              <span>selected</span>
+              {totals && <small>{currency(totals.menu)} in menu additions</small>}
+            </div>
+          </div>
+
+          <div className="menu-toolbar">
+            <label className="menu-search">
+              <span>Search menu</span>
+              <input
+                type="search"
+                value={menuQuery}
+                onChange={(event) => onMenuQueryChange(event.target.value)}
+                placeholder="Search by item or category"
+              />
+            </label>
+            <button
+              type="button"
+              className="ghost menu-selected-filter"
+              aria-pressed={selectedOnly}
+              onClick={() => onSelectedOnlyChange(!selectedOnly)}
+            >
+              {selectedOnly ? "Show all choices" : `Show selected (${selectedMenuItems.length})`}
+            </button>
+          </div>
+
+          <section className="menu-selection-tray" aria-labelledby="menu-selection-tray-title">
+            <div>
+              <h5 id="menu-selection-tray-title">Your menu so far</h5>
+              <p>{selectedMenuItems.length ? "Remove a choice here or keep exploring below." : "Choose at least one item to build the proposal menu."}</p>
+            </div>
+            {selectedMenuItems.length > 0 && (
+              <ul>
+                {selectedMenuItems.map((item) => (
+                  <li key={item.id}>
+                    <span>{item.name}</span>
+                    <button type="button" onClick={() => toggleMenuItem(item, false)} aria-label={`Remove ${item.name} from menu`}>
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <div className="menu-grid">
-            {resolvedMenuSections.map((section) => (
+            {filteredMenuSections.map((section) => (
               <section className="menu-category" key={section.id}>
                 <div className="menu-category-head">
                   <strong>{section.name}</strong>
@@ -770,16 +960,22 @@ export function StepMenu({
                   </small>
                 </div>
                 <div className="checklist">
-                  {(section.items || []).map((item) => (
-                    <label className="checkrow checkrow-quantity" key={item.id}>
+                  {(section.items || []).map((item) => {
+                    const selected = selectedMenuIds.has(item.id);
+                    const impact = menuItemImpact(item);
+                    return (
+                    <label className={joinClassNames("checkrow", "checkrow-choice", selected && "is-selected")} key={item.id}>
                       <input
                         type="checkbox"
-                        checked={form.menuItems.includes(item.id)}
+                        checked={selected}
                         onChange={(e) => toggleMenuItem(item, e.target.checked, e)}
                       />
-                      <span>{item.name}</span>
-                      <small>{includedMenuItemIds.has(item.id) ? "Included at no added charge — select to add" : pricingLabel(item)}</small>
-                      {resolvePricingType(item) === "per_item" && form.menuItems.includes(item.id) && (
+                      <span className="selection-item-copy">
+                        <strong>{item.name}</strong>
+                        <small>{includedMenuItemIds.has(item.id) ? "Included in the current package" : pricingLabel(item)}</small>
+                        <em>{impactLabel(selected ? (impact === null ? null : -impact) : impact, { selected })}</em>
+                      </span>
+                      {resolvePricingType(item) === "per_item" && selected && (
                         <input
                           className="qty-input"
                           type="number"
@@ -790,11 +986,21 @@ export function StepMenu({
                         />
                       )}
                     </label>
-                  ))}
+                  );})}
                 </div>
               </section>
             ))}
+            {filteredMenuSections.length === 0 && (
+              <div className="menu-no-results" role="status">
+                <strong>No menu choices match this view.</strong>
+                <p>Clear the search or show all choices to keep building.</p>
+              </div>
+            )}
           </div>
+          <p className="package-preview-boundary">
+            {includedMenuItemIds.size > 0 && "Included at no added charge — select to add. "}
+            Visible impacts use the current draft calculator. The trusted save remains the pricing authority.
+          </p>
         </div>
       )}
     </div>
@@ -815,6 +1021,8 @@ export function StepServices({
   onClearTemplateDefaults,
   onDismissTemplateNotice,
   onAddonSelection,
+  totals = null,
+  pricingSettings = null,
   pilotGuidedSelling = PILOT_GUIDED_SELLING_ENABLED
 }) {
   const guidedSellingEnabled =
@@ -830,7 +1038,7 @@ export function StepServices({
   const includedAddonIds = new Set(selectedPackage.includedAddonIds || []);
   const includedRentalIds = new Set(selectedPackage.includedRentalIds || []);
   const menuItemsById = new Map(
-    (catalog.settings?.menuSections || []).flatMap((section) => section.items || [])
+    ((pricingSettings?.menuSections || catalog.settings?.menuSections) || []).flatMap((section) => section.items || [])
       .map((item) => [item.id, item])
   );
   const packageInclusionLabels = [
@@ -843,6 +1051,11 @@ export function StepServices({
     ...(pkg?.includedAddonIds || []),
     ...(pkg?.includedRentalIds || [])
   ].length;
+  const selectedMenuItems = stableSelectionIds(form.menuItems)
+    .map((id) => menuItemsById.get(id))
+    .filter(Boolean);
+  const selectedAddons = activeAddons.filter((item) => stableSelectionIds(form.addons).includes(item.id));
+  const selectedRentals = activeRentals.filter((item) => stableSelectionIds(form.rentals).includes(item.id));
   const resolvePricingType = (item, fallback = "per_event") => {
     const raw = String(item?.pricingType || item?.type || "").trim().toLowerCase();
     if (raw === "per_person" || raw === "per_item" || raw === "per_event") return raw;
@@ -923,6 +1136,38 @@ export function StepServices({
     }));
   };
 
+  const selectionImpact = (key, quantityKey, item, fallbackQty = 1) => {
+    if (!pricingSettings || !totals) return null;
+    const selectedIds = stableSelectionIds(form[key]);
+    const selected = selectedIds.includes(item.id);
+    const nextIds = selected
+      ? selectedIds.filter((id) => id !== item.id)
+      : [...selectedIds, item.id];
+    const nextQuantities = { ...(form[quantityKey] || {}) };
+    if (selected) delete nextQuantities[item.id];
+    else nextQuantities[item.id] = Math.max(1, Number(nextQuantities[item.id] || fallbackQty || 1));
+    return previewTotalDelta({
+      form,
+      catalog,
+      settings: pricingSettings,
+      totals,
+      patch: { [key]: nextIds, [quantityKey]: nextQuantities }
+    });
+  };
+
+  const removeMenuItem = (item) => {
+    if (typeof onSelectionTouched === "function") onSelectionTouched("menuItems", item.id);
+    setForm((current) => {
+      const quantities = { ...(current.menuItemQuantities || {}) };
+      delete quantities[item.id];
+      return {
+        ...current,
+        menuItems: stableSelectionIds(current.menuItems).filter((id) => id !== item.id),
+        menuItemQuantities: quantities
+      };
+    });
+  };
+
   return (
     <div className="grid two-col">
       <TemplateDefaultsBanner
@@ -946,6 +1191,16 @@ export function StepServices({
           ))}
         </select>
       </Field>
+      <PackageComparison
+        form={form}
+        setForm={setForm}
+        catalog={catalog}
+        settings={pricingSettings || catalog.settings || {}}
+        totals={totals}
+        activePackages={activePackages}
+        packageInclusionCount={packageInclusionCount}
+        onSelectionTouched={onSelectionTouched}
+      />
       {packageInclusionLabels.length > 0 && (
         <div className="package-inclusion-summary" role="status">
           <strong>Available at no added charge with {selectedPackage.name || "this package"}</strong>
@@ -965,6 +1220,41 @@ export function StepServices({
         />
       </Field>
 
+      <section className="bundle-workbench" aria-labelledby="bundle-workbench-title">
+        <div className="bundle-workbench-head">
+          <div>
+            <span>One clear picture</span>
+            <h4 id="bundle-workbench-title">Your bundle</h4>
+          </div>
+          {totals && (
+            <div>
+              <small>Current draft total</small>
+              <strong>{currency(totals.total)}</strong>
+            </div>
+          )}
+        </div>
+        <dl className="bundle-measures">
+          <div><dt>Package</dt><dd>{selectedPackage.name || "Not selected"}{totals ? ` · ${currency(totals.base)}` : ""}</dd></div>
+          <div><dt>Menu</dt><dd>{selectedMenuItems.length} selected{totals ? ` · ${currency(totals.menu)}` : ""}</dd></div>
+          <div><dt>Add-ons</dt><dd>{selectedAddons.length} selected{totals ? ` · ${currency(totals.addons)}` : ""}</dd></div>
+          <div><dt>Rentals</dt><dd>{selectedRentals.length} selected{totals ? ` · ${currency(totals.rentals)}` : ""}</dd></div>
+        </dl>
+        {(selectedMenuItems.length > 0 || selectedAddons.length > 0 || selectedRentals.length > 0) && (
+          <div className="bundle-selection-groups">
+            {selectedMenuItems.length > 0 && (
+              <div><strong>Menu</strong>{selectedMenuItems.map((item) => <button type="button" key={item.id} onClick={() => removeMenuItem(item)} aria-label={`Remove ${item.name} from bundle`}>{item.name}<span>Remove</span></button>)}</div>
+            )}
+            {selectedAddons.length > 0 && (
+              <div><strong>Add-ons</strong>{selectedAddons.map((item) => <button type="button" key={item.id} onClick={() => toggle("addons", "addonQuantities", item, false)} aria-label={`Remove ${item.name} from bundle`}>{item.name}<span>Remove</span></button>)}</div>
+            )}
+            {selectedRentals.length > 0 && (
+              <div><strong>Rentals</strong>{selectedRentals.map((item) => <button type="button" key={item.id} onClick={() => toggle("rentals", "rentalQuantities", item, false)} aria-label={`Remove ${item.name} from bundle`}>{item.name}<span>Remove</span></button>)}</div>
+            )}
+          </div>
+        )}
+        <p>Every selection stays reversible here. Saving still runs the trusted catalog and pricing checks.</p>
+      </section>
+
       <div>
         <h4>Add-ons</h4>
         <p className="source-note">Per-item (and configured unit-based) add-ons support quantity edits.</p>
@@ -974,15 +1264,20 @@ export function StepServices({
             const pricingType = resolvePricingType(item, "per_person");
             const quantityEnabled = addonSupportsQuantity(item, pricingType);
             const selected = form.addons.includes(item.id);
+            const rawImpact = selectionImpact("addons", "addonQuantities", item);
+            const impact = selected && rawImpact !== null ? -rawImpact : rawImpact;
             return (
-              <label className="checkrow checkrow-quantity" key={item.id}>
+              <label className={joinClassNames("checkrow", "checkrow-choice", selected && "is-selected")} key={item.id}>
                 <input
                   type="checkbox"
                   checked={selected}
                   onChange={(e) => toggle("addons", "addonQuantities", item, e.target.checked, 1, e)}
                 />
-                <span>{item.name}</span>
-                <small>{includedAddonIds.has(item.id) ? "Included at no added charge — select to add" : pricingLabel(item, "per_person")}</small>
+                <span className="selection-item-copy">
+                  <strong>{item.name}</strong>
+                  <small>{includedAddonIds.has(item.id) ? "Included in the current package" : pricingLabel(item, "per_person")}</small>
+                  <em>{impactLabel(impact, { selected })}</em>
+                </span>
                 {quantityEnabled && selected && (
                   <input
                     className="qty-input"
@@ -1009,15 +1304,20 @@ export function StepServices({
             const fallbackQty = typeof item.qtyRule === "function"
               ? item.qtyRule(Math.max(0, Number(form.guests || 0)))
               : 1;
+            const rawImpact = selectionImpact("rentals", "rentalQuantities", item, fallbackQty);
+            const impact = selected && rawImpact !== null ? -rawImpact : rawImpact;
             return (
-              <label className="checkrow checkrow-quantity" key={item.id}>
+              <label className={joinClassNames("checkrow", "checkrow-choice", selected && "is-selected")} key={item.id}>
                 <input
                   type="checkbox"
                   checked={selected}
                   onChange={(e) => toggle("rentals", "rentalQuantities", item, e.target.checked, fallbackQty, e)}
                 />
-                <span>{item.name}</span>
-                <small>{includedRentalIds.has(item.id) ? "Included at no added charge — select to add" : pricingLabel(item, "per_item")}</small>
+                <span className="selection-item-copy">
+                  <strong>{item.name}</strong>
+                  <small>{includedRentalIds.has(item.id) ? "Included in the current package" : pricingLabel(item, "per_item")}</small>
+                  <em>{impactLabel(impact, { selected })}</em>
+                </span>
                 {pricingType === "per_item" && selected && (
                   <input
                     className="qty-input"

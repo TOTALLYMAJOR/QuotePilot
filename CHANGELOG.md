@@ -44,6 +44,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Reworked the staff quote-builder decision flow without widening pricing or
+  save authority. The progress rail states the current decision and permits an
+  exact return to completed steps; Menu adds search, selected-only filtering,
+  a removable selection tray, and full-draft impact context; and Services adds
+  package comparison cards plus a live, reversible bundle summary for menu,
+  add-ons, and rentals. Outcome-named continuation controls replace the generic
+  Next label, while every preview remains advisory until the trusted save
+  re-prices against the approved catalog. The combined current-main candidate
+  measures 2,899,957 / 391,901 bytes for compatibility and 3,825,917 / 391,901
+  for Ambient; its ceilings retain only the previously observed runner offsets.
 - Promoted the reviewed operational-staffing presentation and global Functions
   gate in both manual production workflows for an owner-approved live test.
   The exact tenant setting, same-tenant role checks, provider/sender/secret

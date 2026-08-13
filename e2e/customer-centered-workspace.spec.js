@@ -454,7 +454,7 @@ test.describe("customer-centered workspace", () => {
     });
     await page.goto("/app/quotes/new");
     await fillRequiredQuoteFields(page);
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: /^Next:/ }).click();
     await expect(page.getByText(/No menu items are configured for/i)).toBeVisible();
     await page.getByRole("button", { name: "Add menu items", exact: true }).click();
 
@@ -1146,16 +1146,16 @@ test.describe("customer-centered workspace", () => {
     await expect(eventNameInput).toHaveValue(eventName);
     await expect(page.getByText("Editing quote Q-DIRECT-EDIT-1001", { exact: false })).toBeVisible();
 
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: /^Next:/ }).click();
     const seededMenuItem = page.getByRole("checkbox", { name: /Roasted Chicken/i });
     await expect(seededMenuItem).toBeVisible();
     if (!(await seededMenuItem.isChecked())) await seededMenuItem.check();
 
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: /^Next:/ }).click();
     await expect(page.getByLabel("Package tier")).toHaveValue("premium");
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: /^Next:/ }).click();
     await expect(page.getByRole("heading", { name: "Catering Quote" })).toBeVisible();
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: /^Next:/ }).click();
 
     const recap = page.locator(".quote-recap-card");
     await expect(recap).toContainText(eventName);

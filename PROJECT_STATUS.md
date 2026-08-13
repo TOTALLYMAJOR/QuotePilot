@@ -463,10 +463,10 @@ route evidence are complete.
   3,518-test unit lane, capability-surfacing check,
   documentation governance, workflow lint, and its existing bundle budget.
   CI now has independent, graph-detected compatibility and Ambient production
-  build steps. After the operational Staff/invitation release, the current
-  Pingram source candidate measures 2,891,116 / 391,901 bytes for compatibility
-  and 3,817,075 / 391,901 for Ambient. The exact temporary ceilings are
-  2,898,141 and 3,817,378 aggregate bytes respectively, retaining only the
+  build steps. After the operational Staff/invitation and Pingram source slices,
+  the current quote-builder candidate measures 2,899,957 / 391,901 bytes for
+  compatibility and 3,825,917 / 391,901 for Ambient. The exact temporary ceilings
+  are 2,906,982 and 3,826,220 aggregate bytes respectively, retaining only the
   previously observed per-profile CI offsets; both use the 391,901-byte
   largest-chunk ceiling. App Check provider code is excluded while its browser
   flag is off. This remains an explicit temporary exception
@@ -582,8 +582,9 @@ route evidence are complete.
 8. Portal projection and legacy customer-identity normalization remain guarded
    data operations. Run tenant-scoped dry runs and review conflicts before any
    production apply.
-9. The workspace plus owner-SMS bundle uses named per-graph temporary ceilings:
-   2,898,141 bytes for compatibility and 3,817,378 bytes for Ambient, each
+9. The workspace, owner-SMS, and quote-builder candidate uses named per-graph
+   temporary ceilings: 2,906,982 bytes for compatibility and 3,826,220 bytes
+   for Ambient, each
    retaining only its previously observed runner offset above the measured
    candidate. Exact-SHA CI confirmation is still required before merge, and
    optimization or reviewed clean-main recalibration is required before the
