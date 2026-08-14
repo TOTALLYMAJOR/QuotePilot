@@ -8,6 +8,44 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Added
 
+- Added the next deploy-dormant Stripe Connect control-plane checkpoint. A
+  receipt-bound authority projection replaces identity-token role freshness
+  with the current enabled, verified administrator set and canonical owner;
+  stale, inactive, removed-admin, owner-missing, publisher-mismatched, and
+  digest-mismatched projections fail closed. The edge now freezes account-
+  creation and status-refresh work into immutable digest-bound commands with
+  one command-derived `qpcmd` provider identity; the repository reserves only
+  generation, authority digest, and the 30-day recovery deadline. A separately
+  composed leased worker rechecks authority/state and records terminal,
+  quarantine, or dead-letter receipts. Post-create validation failure,
+  authority drift, or a binding conflict retains the returned account identity
+  and occurrence privately as a quarantined claim without exposing a usable
+  binding. Retry after command-receipt interruption reconstructs that exact
+  quarantine without another Stripe call. The one-use owner handoff is replay-
+  stable and bound to the current authority, App Check application, revision,
+  generation, request, and payload; a second post-provider check withholds the
+  Account Link and returns only recovery when that evidence drifts or cannot be
+  committed. Account-binding authority freshness is resampled on every
+  transaction attempt. Identity-backed quarantine replay now recomputes the private
+  occurrence and verifies its provider-account claim. Account Link disclosure
+  also rechecks local/provider expiry and the clock after the issuance receipt;
+  an uncommitted receipt leaves the consumed attempt held until local expiry
+  without claiming `provider_withheld`. Exact rate windows now match the
+  reviewed policy. The Sandbox
+  cached-status contract now also requires the exact App Check application;
+  provider refresh requires a consumed limited-use token, and repository
+  binding rejects unreviewed platform/configuration identities. The Sandbox
+  adapter verifies the exact platform account and test-mode balance before
+  access, accepts the provider-shaped Accounts v2 merchant application
+  timestamp, retains failed post-create identity only as non-enumerable private
+  evidence, and requires both card-payment and payout capabilities before
+  `ready`. The Connect entry point remains export-empty and the staging manifest
+  remains provider-disabled and unbound; no callable, HTTP route, Stripe request,
+  connected account, Account Link, deployment, hosted result, or production
+  activation was created.
+  The no-orphan capability gate now classifies runtime JavaScript under the
+  separate `functions-connect` codebase as backend delivery, so future Connect
+  changes cannot bypass catalog revision and headless/surface traceability.
 - Added the hardened, deployment-owned owner-SMS rail with explicit `none`,
   `twilio`, or `pingram` selection; a provider-neutral admin status and bounded
   diagnostic surface; transactional private outbox and one-call claims;

@@ -10,16 +10,16 @@ const SAFE_ID_PATTERN = /^[A-Za-z0-9_-]{1,160}$/;
 
 const RATE_LIMIT_POLICIES = Object.freeze({
   refresh_status: Object.freeze([
-    Object.freeze({ scope: "principal", limit: 6, windowSeconds: 5 * 60 }),
-    Object.freeze({ scope: "organization", limit: 30, windowSeconds: 5 * 60 })
+    Object.freeze({ scope: "principal", limit: 6, windowSeconds: 5 * 60, minIntervalSeconds: 0 }),
+    Object.freeze({ scope: "organization", limit: 6, windowSeconds: 5 * 60, minIntervalSeconds: 10 })
   ]),
   begin_onboarding: Object.freeze([
-    Object.freeze({ scope: "principal", limit: 6, windowSeconds: 24 * 60 * 60 }),
-    Object.freeze({ scope: "organization", limit: 10, windowSeconds: 24 * 60 * 60 })
+    Object.freeze({ scope: "principal", limit: 6, windowSeconds: 24 * 60 * 60, minIntervalSeconds: 0 }),
+    Object.freeze({ scope: "organization", limit: 10, windowSeconds: 24 * 60 * 60, minIntervalSeconds: 0 })
   ]),
   prepare_onboarding_redirect: Object.freeze([
-    Object.freeze({ scope: "principal", limit: 5, windowSeconds: 15 * 60 }),
-    Object.freeze({ scope: "organization", limit: 20, windowSeconds: 15 * 60 })
+    Object.freeze({ scope: "principal", limit: 3, windowSeconds: 15 * 60, minIntervalSeconds: 0 }),
+    Object.freeze({ scope: "organization", limit: 10, windowSeconds: 24 * 60 * 60, minIntervalSeconds: 0 })
   ])
 });
 
@@ -107,7 +107,9 @@ function createDurableConnectRateLimiter({ database, hmacKey } = {}) {
         operation: input.operation,
         scope: policy.scope,
         subjectDigest,
-        windowSeconds: policy.windowSeconds
+        windowSeconds: policy.windowSeconds,
+        limit: policy.limit,
+        minIntervalSeconds: policy.minIntervalSeconds
       }), key);
       return Object.freeze({
         ...policy,
@@ -128,6 +130,9 @@ function createDurableConnectRateLimiter({ database, hmacKey } = {}) {
             || existing.operation !== input.operation
             || existing.scope !== rule.scope
             || existing.subjectDigest !== rule.subjectDigest
+            || Number(existing.limit) !== rule.limit
+            || Number(existing.windowSeconds) !== rule.windowSeconds
+            || Number(existing.minIntervalSeconds || 0) !== rule.minIntervalSeconds
           )) {
             fail("data-loss", "The Connect rate-limit bucket binding is invalid.");
           }
@@ -137,6 +142,19 @@ function createDurableConnectRateLimiter({ database, hmacKey } = {}) {
             .map(Number)
             .filter((eventMs) => Number.isSafeInteger(eventMs) && eventMs > windowStartMs && eventMs <= input.nowMs)
             .sort((left, right) => left - right);
+          const lastEventAtMs = activeEvents.at(-1);
+          if (
+            rule.minIntervalSeconds > 0
+            && Number.isSafeInteger(lastEventAtMs)
+            && input.nowMs < lastEventAtMs + rule.minIntervalSeconds * 1000
+          ) {
+            throw new StripeConnectRateLimitError(
+              "Stripe settings are receiving requests too quickly. Wait before trying again.",
+              Math.max(1, Math.ceil(
+                (lastEventAtMs + rule.minIntervalSeconds * 1000 - input.nowMs) / 1000
+              ))
+            );
+          }
           if (activeEvents.length >= rule.limit) {
             const retryAtMs = activeEvents[0] + rule.windowSeconds * 1000 + 1;
             throw new StripeConnectRateLimitError(
@@ -155,6 +173,7 @@ function createDurableConnectRateLimiter({ database, hmacKey } = {}) {
               subjectDigest: rule.subjectDigest,
               limit: rule.limit,
               windowSeconds: rule.windowSeconds,
+              minIntervalSeconds: rule.minIntervalSeconds,
               eventsAtMs,
               updatedAtISO: new Date(input.nowMs).toISOString(),
               expiresAt: new Date(eventsAtMs.at(-1) + rule.windowSeconds * 1000)

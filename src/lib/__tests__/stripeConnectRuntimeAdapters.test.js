@@ -4,6 +4,9 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const contracts = require("../../../functions-connect/interfaceContracts.js");
 const {
+  buildConnectAuthorityProjection
+} = require("../../../functions-connect/authorityProjection.js");
+const {
   COLLECTIONS,
   createConnectControlRepository,
   createNamedConnectControlDatabase
@@ -16,20 +19,19 @@ const {
 const {
   REVIEWED_CONFIGURATION_DIGEST,
   createStripeSandboxAdapter,
+  hasReviewedConfiguration,
   projectAccountObservation
 } = require("../../../functions-connect/stripeSandboxAdapter.js");
 const {
   STRIPE_CONNECT_API_VERSION,
   STRIPE_CONNECT_SDK_VERSION
 } = require("../../../functions-connect/runtimePolicy.js");
-const { createStripeConnectStatusOnboardingService } = require(
-  "../../../functions-connect/statusOnboardingService.js"
-);
 
 const NOW_MS = Date.parse("2026-08-13T12:00:00.000Z");
 const RATE_KEY = "connect-runtime-rate-limit-test-key-at-least-32-bytes";
 const ORIGIN = "https://quotepilot-staging-20260804.web.app";
 const PLATFORM_ACCOUNT = "acct_platformSandbox001";
+const AUTHORITY_PUBLISHER = "stripe-connect-authority-publisher@quotepilot-staging-20260804.iam.gserviceaccount.com";
 
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
@@ -124,9 +126,12 @@ function reviewedAccount(overrides = {}) {
     },
     configuration: {
       merchant: {
-        applied: true,
+        applied: "2026-08-13T11:55:00.000Z",
         capabilities: {
-          card_payments: { status: "pending", status_details: [] }
+          card_payments: { status: "pending", status_details: [] },
+          stripe_balance: {
+            payouts: { status: "pending", status_details: [] }
+          }
         }
       }
     },
@@ -147,18 +152,53 @@ function privateBinding(overrides = {}) {
   };
 }
 
+function authorityProjection(overrides = {}) {
+  return buildConnectAuthorityProjection({
+    organizationId: "org_alpha",
+    authorityRevision: 1,
+    organizationActive: true,
+    ownerUid: "owner_uid",
+    members: [{
+      uid: "owner_uid",
+      email: "owner@example.test",
+      role: "admin",
+      emailVerified: true,
+      disabled: false
+    }],
+    sourceReceiptId: "owner-binding:org_alpha",
+    sourceReceiptDigest: "a".repeat(64),
+    observedAtISO: new Date(NOW_MS).toISOString(),
+    expiresAtISO: new Date(NOW_MS + 600_000).toISOString(),
+    ...overrides
+  }, { nowMs: NOW_MS });
+}
+
+function storedAuthority(overrides = {}) {
+  const projection = authorityProjection(overrides);
+  return {
+    schemaVersion: 1,
+    organizationId: projection.organizationId,
+    authorityRevision: projection.authorityRevision,
+    payloadDigest: projection.payloadDigest,
+    projection,
+    publisherIdentityDigest: "b".repeat(64),
+    receivedAtISO: new Date(NOW_MS).toISOString()
+  };
+}
+
 describe("Connect named-database repository", () => {
   let database;
   let repository;
 
   beforeEach(() => {
     database = createMemoryFirestore({
-      [`${COLLECTIONS.authorities}/org_alpha`]: {
-        organizationId: "org_alpha",
-        ownerUid: "owner_uid"
-      }
+      [`${COLLECTIONS.authorities}/org_alpha`]: storedAuthority()
     });
-    repository = createConnectControlRepository({ database, now: () => NOW_MS });
+    repository = createConnectControlRepository({
+      database,
+      now: () => NOW_MS,
+      authorityPublisherIdentity: AUTHORITY_PUBLISHER
+    });
   });
 
   test("selects only the exact connect-control database", () => {
@@ -177,12 +217,59 @@ describe("Connect named-database repository", () => {
     })).toThrow(/connect-control/i);
   });
 
-  test("reserves a generation and stable 30-day provider identity before account creation", async () => {
+  test("applies monotonically versioned authority projections with immutable replay receipts", async () => {
+    const emptyDatabase = createMemoryFirestore();
+    const authorityRepository = createConnectControlRepository({
+      database: emptyDatabase,
+      now: () => NOW_MS,
+      authorityPublisherIdentity: AUTHORITY_PUBLISHER
+    });
+    const first = authorityProjection();
+    await expect(authorityRepository.applyAuthorityProjection({
+      projection: first,
+      publisherIdentity: AUTHORITY_PUBLISHER,
+      receivedAtISO: new Date(NOW_MS).toISOString()
+    })).resolves.toEqual({
+      replayed: false,
+      authorityRevision: 1,
+      payloadDigest: first.payloadDigest
+    });
+    await expect(authorityRepository.applyAuthorityProjection({
+      projection: first,
+      publisherIdentity: AUTHORITY_PUBLISHER,
+      receivedAtISO: new Date(NOW_MS + 1).toISOString()
+    })).resolves.toMatchObject({ replayed: true, authorityRevision: 1 });
+    await expect(authorityRepository.readAuthority("org_alpha")).resolves.toEqual(first);
+
+    await expect(authorityRepository.applyAuthorityProjection({
+      projection: authorityProjection({
+        authorityRevision: 2,
+        ownerUid: "another_owner",
+        members: [{
+          uid: "another_owner",
+          email: "another-owner@example.test",
+          role: "admin",
+          emailVerified: true,
+          disabled: false
+        }]
+      }),
+      publisherIdentity: AUTHORITY_PUBLISHER,
+      receivedAtISO: new Date(NOW_MS + 2).toISOString()
+    })).rejects.toMatchObject({ code: "failed-precondition" });
+    await expect(authorityRepository.applyAuthorityProjection({
+      projection: authorityProjection({ authorityRevision: 2 }),
+      publisherIdentity: "unexpected-publisher@example.test",
+      receivedAtISO: new Date(NOW_MS + 2).toISOString()
+    })).rejects.toMatchObject({ code: "permission-denied" });
+  });
+
+  test("reserves a generation, authority digest, and 30-day recovery deadline before account creation", async () => {
     const input = mutation("beginStripeConnectOnboarding");
     const first = await repository.reserveOnboarding({
       organizationId: "org_alpha",
       actorUid: "owner_uid",
       actorEmail: "owner@example.test",
+      authorityPayloadDigest: authorityProjection().payloadDigest,
       input,
       reservedAtISO: new Date(NOW_MS).toISOString()
     });
@@ -190,6 +277,7 @@ describe("Connect named-database repository", () => {
       organizationId: "org_alpha",
       actorUid: "owner_uid",
       actorEmail: "owner@example.test",
+      authorityPayloadDigest: authorityProjection().payloadDigest,
       input,
       reservedAtISO: new Date(NOW_MS + 1000).toISOString()
     });
@@ -197,7 +285,8 @@ describe("Connect named-database repository", () => {
     expect(first).toMatchObject({
       requestId: input.requestId,
       payloadDigest: input.payloadDigest,
-      providerIdempotencyKey: expect.stringMatching(/^qpca_[a-f0-9]{64}$/),
+      authorityPayloadDigest: authorityProjection().payloadDigest,
+      providerRecoveryExpiresAtISO: new Date(NOW_MS + 30 * 24 * 60 * 60 * 1000).toISOString(),
       outcome: { revision: 1, generation: 1, state: "onboarding" }
     });
     expect(replay).toEqual(first);
@@ -216,6 +305,7 @@ describe("Connect named-database repository", () => {
       organizationId: "org_alpha",
       actorUid: "owner_uid",
       actorEmail: "owner@example.test",
+      authorityPayloadDigest: authorityProjection().payloadDigest,
       input,
       reservedAtISO: new Date(NOW_MS).toISOString()
     });
@@ -223,6 +313,7 @@ describe("Connect named-database repository", () => {
       organizationId: "org_alpha",
       actorUid: "new_owner_uid",
       actorEmail: "new-owner@example.test",
+      authorityPayloadDigest: authorityProjection().payloadDigest,
       input,
       reservedAtISO: new Date(NOW_MS + 1000).toISOString()
     })).rejects.toMatchObject({ code: "failed-precondition" });
@@ -237,6 +328,7 @@ describe("Connect named-database repository", () => {
       organizationId: "org_alpha",
       actorUid: "owner_uid",
       actorEmail: "owner@example.test",
+      authorityPayloadDigest: authorityProjection().payloadDigest,
       input,
       reservedAtISO: new Date(NOW_MS).toISOString()
     });
@@ -253,6 +345,10 @@ describe("Connect named-database repository", () => {
       reservation,
       providerAccount,
       publicReceipt: receipt,
+      providerCommandIdentity: {
+        commandId: "1".repeat(64),
+        requestDigest: "2".repeat(64)
+      },
       completedAtISO: new Date(NOW_MS).toISOString()
     })).resolves.toEqual(receipt);
 
@@ -272,7 +368,105 @@ describe("Connect named-database repository", () => {
       operation: "beginStripeConnectOnboarding",
       requestId: input.requestId
     })).resolves.toEqual({ payloadDigest: input.payloadDigest, publicReceipt: receipt });
-    expect(JSON.stringify(database.entries())).not.toContain("owner@example.test");
+    expect(JSON.stringify(
+      database.entries().filter(([path]) => !path.startsWith(`${COLLECTIONS.authorities}/`))
+    )).not.toContain("owner@example.test");
+  });
+
+  test("rejects an unreviewed platform or configuration before provider binding", async () => {
+    const input = mutation("beginStripeConnectOnboarding", {
+      requestId: "beginStripeConnectOnboarding-invalid-binding-0001"
+    });
+    const reservation = await repository.reserveOnboarding({
+      organizationId: "org_alpha",
+      actorUid: "owner_uid",
+      actorEmail: "owner@example.test",
+      authorityPayloadDigest: authorityProjection().payloadDigest,
+      input,
+      reservedAtISO: new Date(NOW_MS).toISOString()
+    });
+    const completion = {
+      organizationId: "org_alpha",
+      reservation,
+      publicReceipt: publicReceipt(input, reservation.outcome),
+      providerCommandIdentity: {
+        commandId: "f".repeat(64),
+        requestDigest: "e".repeat(64)
+      },
+      completedAtISO: new Date(NOW_MS).toISOString()
+    };
+
+    await expect(repository.completeOnboarding({
+      ...completion,
+      providerAccount: {
+        privateAccountId: "acct_connectedSandbox01",
+        providerMode: "sandbox",
+        platformAccountBinding: "foreign_platform",
+        configurationDigest: REVIEWED_CONFIGURATION_DIGEST
+      }
+    })).rejects.toMatchObject({ code: "failed-precondition" });
+    await expect(repository.completeOnboarding({
+      ...completion,
+      providerAccount: {
+        privateAccountId: "acct_connectedSandbox01",
+        providerMode: "sandbox",
+        platformAccountBinding: PLATFORM_ACCOUNT,
+        configurationDigest: "0".repeat(64)
+      }
+    })).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(database.entries().some(([path]) => (
+      path.startsWith(`${COLLECTIONS.accountBindings}/`)
+    ))).toBe(false);
+  });
+
+  test("rechecks authority with the current transaction-attempt clock before account binding", async () => {
+    let currentNowMs = NOW_MS;
+    const timedDatabase = createMemoryFirestore({
+      [`${COLLECTIONS.authorities}/org_alpha`]: storedAuthority()
+    });
+    const timedRepository = createConnectControlRepository({
+      database: timedDatabase,
+      now: () => currentNowMs,
+      authorityPublisherIdentity: AUTHORITY_PUBLISHER
+    });
+    const input = mutation("beginStripeConnectOnboarding", {
+      requestId: "beginStripeConnectOnboarding-expired-at-commit-0001"
+    });
+    const reservation = await timedRepository.reserveOnboarding({
+      organizationId: "org_alpha",
+      actorUid: "owner_uid",
+      actorEmail: "owner@example.test",
+      authorityPayloadDigest: authorityProjection().payloadDigest,
+      input,
+      reservedAtISO: new Date(NOW_MS).toISOString()
+    });
+    currentNowMs = NOW_MS + 600_001;
+
+    await expect(timedRepository.completeOnboarding({
+      organizationId: "org_alpha",
+      reservation,
+      providerAccount: {
+        privateAccountId: "acct_expiredAuthority01",
+        providerMode: "sandbox",
+        platformAccountBinding: PLATFORM_ACCOUNT,
+        configurationDigest: REVIEWED_CONFIGURATION_DIGEST
+      },
+      publicReceipt: publicReceipt(input, reservation.outcome),
+      providerCommandIdentity: {
+        commandId: "d".repeat(64),
+        requestDigest: "c".repeat(64)
+      },
+      completedAtISO: new Date(NOW_MS + 1_000).toISOString()
+    })).resolves.toMatchObject({
+      quarantined: true,
+      quarantine: {
+        safeCode: "provider_authority_changed",
+        quarantinedAtISO: new Date(currentNowMs).toISOString()
+      }
+    });
+    await expect(timedRepository.readStatus("org_alpha")).resolves.toMatchObject({
+      connectionState: "security_review"
+    });
   });
 
   test("quarantines a provider account that collides with another organization generation", async () => {
@@ -287,6 +481,7 @@ describe("Connect named-database repository", () => {
       organizationId: "org_alpha",
       actorUid: "owner_uid",
       actorEmail: "owner@example.test",
+      authorityPayloadDigest: authorityProjection().payloadDigest,
       input: alphaInput,
       reservedAtISO: new Date(NOW_MS).toISOString()
     });
@@ -295,9 +490,26 @@ describe("Connect named-database repository", () => {
       reservation: alphaReservation,
       providerAccount,
       publicReceipt: publicReceipt(alphaInput, alphaReservation.outcome),
+      providerCommandIdentity: {
+        commandId: "3".repeat(64),
+        requestDigest: "4".repeat(64)
+      },
       completedAtISO: new Date(NOW_MS).toISOString()
     });
 
+    const betaAuthority = storedAuthority({
+      organizationId: "org_beta",
+      ownerUid: "owner_beta",
+      members: [{
+        uid: "owner_beta",
+        email: "beta@example.test",
+        role: "admin",
+        emailVerified: true,
+        disabled: false
+      }],
+      sourceReceiptId: "owner-binding:org_beta"
+    });
+    database.seed(`${COLLECTIONS.authorities}/org_beta`, betaAuthority);
     const betaInput = mutation("beginStripeConnectOnboarding", {
       requestId: "beginStripeConnectOnboarding-beta-request-0001"
     });
@@ -305,6 +517,7 @@ describe("Connect named-database repository", () => {
       organizationId: "org_beta",
       actorUid: "owner_beta",
       actorEmail: "beta@example.test",
+      authorityPayloadDigest: betaAuthority.payloadDigest,
       input: betaInput,
       reservedAtISO: new Date(NOW_MS).toISOString()
     });
@@ -313,8 +526,15 @@ describe("Connect named-database repository", () => {
       reservation: betaReservation,
       providerAccount,
       publicReceipt: publicReceipt(betaInput, betaReservation.outcome),
+      providerCommandIdentity: {
+        commandId: "5".repeat(64),
+        requestDigest: "6".repeat(64)
+      },
       completedAtISO: new Date(NOW_MS).toISOString()
-    })).rejects.toMatchObject({ code: "failed-precondition" });
+    })).resolves.toMatchObject({
+      quarantined: true,
+      quarantine: { safeCode: "provider_binding_conflict" }
+    });
     await expect(repository.readStatus("org_beta")).resolves.toMatchObject({
       connectionState: "security_review",
       generation: 1
@@ -334,12 +554,15 @@ describe("Connect named-database repository", () => {
     const tokenDigest = "a".repeat(64);
     const attemptDigest = "b".repeat(64);
     await repository.savePreparedHandoff({
-      schemaVersion: 1,
+      schemaVersion: 2,
       organizationId: "org_alpha",
       generation: 1,
       revision: 3,
       requestId: "prepare-runtime-request-0001",
       payloadDigest: "c".repeat(64),
+      ownerUid: "owner_uid",
+      authorityRevision: 1,
+      appIdDigest: "d".repeat(64),
       tokenDigest,
       attemptDigest,
       state: "prepared",
@@ -361,8 +584,140 @@ describe("Connect named-database repository", () => {
       expiresAtISO: new Date(NOW_MS + 300_000).toISOString()
     });
     const stored = database.read(`${COLLECTIONS.onboardingHandoffs}/${tokenDigest}`);
-    expect(stored).toMatchObject({ state: "consumed", providerExpiresAtISO: "2026-08-13T12:05:00.000Z" });
+    expect(stored).toMatchObject({ state: "provider_issued", providerExpiresAtISO: "2026-08-13T12:05:00.000Z" });
+    expect(database.read(statusPath)).toMatchObject({ latestOnboardingAttemptDigest: attemptDigest });
     expect(JSON.stringify(stored)).not.toMatch(/https?:\/\//i);
+  });
+
+  test("revokes a prepared handoff when authority revision or connection state changes", async () => {
+    const statusPath = `${COLLECTIONS.organizations}/org_alpha`;
+    database.seed(statusPath, {
+      organizationId: "org_alpha",
+      revision: 3,
+      generation: 1,
+      connectionState: "onboarding",
+      routingState: "legacy_platform",
+      privateAccountBinding: privateBinding()
+    });
+    const record = {
+      schemaVersion: 2,
+      organizationId: "org_alpha",
+      generation: 1,
+      revision: 3,
+      requestId: "prepare-revocation-request-0001",
+      payloadDigest: "c".repeat(64),
+      ownerUid: "owner_uid",
+      authorityRevision: 1,
+      appIdDigest: "d".repeat(64),
+      tokenDigest: "e".repeat(64),
+      attemptDigest: "f".repeat(64),
+      state: "prepared",
+      createdAtISO: new Date(NOW_MS).toISOString(),
+      expiresAtISO: new Date(NOW_MS + 600_000).toISOString()
+    };
+    await repository.savePreparedHandoff(record);
+
+    database.seed(`${COLLECTIONS.authorities}/org_alpha`, storedAuthority({ authorityRevision: 2 }));
+    await expect(repository.consumePreparedHandoff({
+      tokenDigest: record.tokenDigest,
+      nowISO: new Date(NOW_MS + 1).toISOString()
+    })).resolves.toBeNull();
+
+    database.seed(`${COLLECTIONS.authorities}/org_alpha`, storedAuthority());
+    database.seed(statusPath, {
+      ...database.read(statusPath),
+      connectionState: "security_review"
+    });
+    await expect(repository.consumePreparedHandoff({
+      tokenDigest: record.tokenDigest,
+      nowISO: new Date(NOW_MS + 2).toISOString()
+    })).resolves.toBeNull();
+  });
+
+  test("withholds a provider-issued Account Link when owner authority changes during the provider call", async () => {
+    const statusPath = `${COLLECTIONS.organizations}/org_alpha`;
+    database.seed(statusPath, {
+      organizationId: "org_alpha",
+      revision: 3,
+      generation: 1,
+      connectionState: "onboarding",
+      routingState: "legacy_platform",
+      privateAccountBinding: privateBinding()
+    });
+    const record = {
+      schemaVersion: 2,
+      organizationId: "org_alpha",
+      generation: 1,
+      revision: 3,
+      requestId: "prepare-post-provider-authority-request-0001",
+      payloadDigest: "1".repeat(64),
+      ownerUid: "owner_uid",
+      authorityRevision: 1,
+      appIdDigest: "2".repeat(64),
+      tokenDigest: "3".repeat(64),
+      attemptDigest: "4".repeat(64),
+      state: "prepared",
+      createdAtISO: new Date(NOW_MS).toISOString(),
+      expiresAtISO: new Date(NOW_MS + 600_000).toISOString()
+    };
+    await repository.savePreparedHandoff(record);
+    await repository.consumePreparedHandoff({
+      tokenDigest: record.tokenDigest,
+      nowISO: new Date(NOW_MS).toISOString()
+    });
+    database.seed(`${COLLECTIONS.authorities}/org_alpha`, storedAuthority({
+      authorityRevision: 2,
+      sourceReceiptDigest: "5".repeat(64)
+    }));
+
+    await expect(repository.recordProviderExpiry({
+      tokenDigest: record.tokenDigest,
+      attemptDigest: record.attemptDigest,
+      expiresAtISO: new Date(NOW_MS + 300_000).toISOString()
+    })).resolves.toMatchObject({ state: "provider_withheld" });
+    expect(database.read(`${COLLECTIONS.onboardingHandoffs}/${record.tokenDigest}`))
+      .toMatchObject({ state: "provider_withheld" });
+    expect(database.read(statusPath)).not.toHaveProperty("latestOnboardingAttemptDigest");
+  });
+
+  test("withholds a provider result whose effective expiry is no longer in the future", async () => {
+    const statusPath = `${COLLECTIONS.organizations}/org_alpha`;
+    database.seed(statusPath, {
+      organizationId: "org_alpha",
+      revision: 3,
+      generation: 1,
+      connectionState: "onboarding",
+      routingState: "legacy_platform",
+      privateAccountBinding: privateBinding()
+    });
+    const record = {
+      schemaVersion: 2,
+      organizationId: "org_alpha",
+      generation: 1,
+      revision: 3,
+      requestId: "prepare-expired-provider-result-request-0001",
+      payloadDigest: "6".repeat(64),
+      ownerUid: "owner_uid",
+      authorityRevision: 1,
+      appIdDigest: "7".repeat(64),
+      tokenDigest: "8".repeat(64),
+      attemptDigest: "9".repeat(64),
+      state: "prepared",
+      createdAtISO: new Date(NOW_MS).toISOString(),
+      expiresAtISO: new Date(NOW_MS + 600_000).toISOString()
+    };
+    await repository.savePreparedHandoff(record);
+    await repository.consumePreparedHandoff({
+      tokenDigest: record.tokenDigest,
+      nowISO: new Date(NOW_MS).toISOString()
+    });
+
+    await expect(repository.recordProviderExpiry({
+      tokenDigest: record.tokenDigest,
+      attemptDigest: record.attemptDigest,
+      expiresAtISO: new Date(NOW_MS - 1).toISOString()
+    })).resolves.toMatchObject({ state: "provider_withheld" });
+    expect(database.read(statusPath)).not.toHaveProperty("latestOnboardingAttemptDigest");
   });
 });
 
@@ -377,20 +732,36 @@ describe("Connect durable rate limiter", () => {
       uid: "admin_uid"
     });
     expect(principalDigest).toMatch(/^[a-f0-9]{64}$/);
-    for (let index = 0; index < RATE_LIMIT_POLICIES.refresh_status[0].limit; index += 1) {
+    await expect(limiter.consume({
+      operation: "refresh_status",
+      organizationId: "org_alpha",
+      principalDigest,
+      nowISO: new Date(NOW_MS).toISOString()
+    })).resolves.toMatchObject({ allowed: true, operation: "refresh_status" });
+    await expect(limiter.consume({
+      operation: "refresh_status",
+      organizationId: "org_alpha",
+      principalDigest,
+      nowISO: new Date(NOW_MS + 9_999).toISOString()
+    })).rejects.toMatchObject({ code: "resource-exhausted", retryAfterSeconds: 1 });
+    for (let index = 1; index < RATE_LIMIT_POLICIES.refresh_status[0].limit; index += 1) {
       await expect(limiter.consume({
         operation: "refresh_status",
         organizationId: "org_alpha",
         principalDigest,
-        nowISO: new Date(NOW_MS + index).toISOString()
+        nowISO: new Date(NOW_MS + index * 10_000).toISOString()
       })).resolves.toMatchObject({ allowed: true, operation: "refresh_status" });
     }
     await expect(limiter.consume({
       operation: "refresh_status",
       organizationId: "org_alpha",
       principalDigest,
-      nowISO: new Date(NOW_MS + 10).toISOString()
+      nowISO: new Date(NOW_MS + 60_000).toISOString()
     })).rejects.toMatchObject({ code: "resource-exhausted", retryAfterSeconds: expect.any(Number) });
+    expect(RATE_LIMIT_POLICIES.prepare_onboarding_redirect).toEqual([
+      { scope: "principal", limit: 3, windowSeconds: 15 * 60, minIntervalSeconds: 0 },
+      { scope: "organization", limit: 10, windowSeconds: 24 * 60 * 60, minIntervalSeconds: 0 }
+    ]);
     const stored = JSON.stringify(database.entries());
     expect(stored).not.toContain("admin_uid");
     expect(stored).not.toContain("org_alpha");
@@ -424,21 +795,31 @@ describe("Stripe Accounts v2 Sandbox adapter", () => {
         expires_at: "2026-08-13T12:10:00.000Z"
       }))
     };
+    const platformAccounts = {
+      retrieve: vi.fn(async () => ({ object: "account", id: PLATFORM_ACCOUNT }))
+    };
+    const balance = {
+      retrieve: vi.fn(async () => ({ object: "balance", livemode: false }))
+    };
     const adapter = createStripeSandboxAdapter({
-      stripeClient: { v2: { core: { accounts, accountLinks } } },
+      stripeClient: {
+        accounts: platformAccounts,
+        balance,
+        v2: { core: { accounts, accountLinks } }
+      },
       apiVersion: STRIPE_CONNECT_API_VERSION,
       sdkVersion: STRIPE_CONNECT_SDK_VERSION,
       providerMode: "sandbox",
       platformAccountBinding: PLATFORM_ACCOUNT,
       canonicalReturnOrigin: ORIGIN
     });
-    return { adapter, accounts, accountLinks };
+    return { adapter, accounts, accountLinks, platformAccounts, balance };
   }
 
   test("creates only the reviewed merchant/full-Dashboard/Stripe-responsibility payload", async () => {
     const fixture = createFixture();
     await expect(fixture.adapter.createMerchantAccount({
-      idempotencyKey: `qpca_${"a".repeat(64)}`,
+      idempotencyKey: `qpcmd_${"a".repeat(64)}`,
       country: "US",
       currency: "usd",
       dashboard: "full",
@@ -465,18 +846,68 @@ describe("Stripe Accounts v2 Sandbox adapter", () => {
         merchant: { capabilities: { card_payments: { requested: true } } }
       },
       include: ["configuration.merchant", "defaults", "requirements"]
-    }, { idempotencyKey: `qpca_${"a".repeat(64)}` });
+    }, { idempotencyKey: `qpcmd_${"a".repeat(64)}` });
     expect(JSON.stringify(fixture.accounts.create.mock.calls)).not.toMatch(
       /application_fee_amount|transfer_data|on_behalf_of/
     );
+    expect(fixture.platformAccounts.retrieve).toHaveBeenCalledWith(PLATFORM_ACCOUNT);
+    expect(fixture.balance.retrieve).toHaveBeenCalledWith();
+    expect(fixture.platformAccounts.retrieve.mock.invocationCallOrder[0])
+      .toBeLessThan(fixture.accounts.create.mock.invocationCallOrder[0]);
+  });
+
+  test("returns non-enumerable private identity evidence when a created account requires review", async () => {
+    const fixture = createFixture({
+      createAccount: reviewedAccount({
+        defaults: {
+          currency: "usd",
+          responsibilities: {
+            fees_collector: "application",
+            losses_collector: "stripe",
+            requirements_collector: "stripe"
+          }
+        }
+      })
+    });
+    let caught;
+    try {
+      await fixture.adapter.createMerchantAccount({
+        idempotencyKey: `qpcmd_${"f".repeat(64)}`,
+        country: "US",
+        currency: "usd",
+        dashboard: "full",
+        feesCollector: "stripe",
+        lossesCollector: "stripe",
+        capabilities: { cardPayments: "requested" },
+        contactEmail: "owner@example.test"
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({
+      code: "failed-precondition",
+      privateProviderEvidence: {
+        privateAccountId: "acct_connectedSandbox01",
+        providerMode: "sandbox",
+        platformAccountBinding: PLATFORM_ACCOUNT,
+        reviewReason: "unreviewed_configuration"
+      }
+    });
+    expect(Object.keys(caught)).not.toContain("privateProviderEvidence");
+    expect(JSON.stringify(caught)).not.toContain("acct_connectedSandbox01");
   });
 
   test("projects current provider truth and rejects live or responsibility-mismatched accounts", async () => {
     expect(projectAccountObservation(reviewedAccount({
       configuration: {
         merchant: {
-          applied: true,
-          capabilities: { card_payments: { status: "active", status_details: [] } }
+          applied: "2026-08-13T11:55:00.000Z",
+          capabilities: {
+            card_payments: { status: "active", status_details: [] },
+            stripe_balance: {
+              payouts: { status: "active", status_details: [] }
+            }
+          }
         }
       }
     }))).toMatchObject({
@@ -484,7 +915,42 @@ describe("Stripe Accounts v2 Sandbox adapter", () => {
       requirementState: "clear",
       healthState: "healthy",
       cardPaymentsState: "active",
+      payoutsState: "active",
       responsibilityState: "confirmed"
+    });
+    expect(projectAccountObservation(reviewedAccount({
+      configuration: {
+        merchant: {
+          applied: "2026-08-13T11:55:00.000Z",
+          capabilities: {
+            card_payments: { status: "active", status_details: [] },
+            stripe_balance: {
+              payouts: { status: "pending", status_details: [] }
+            }
+          }
+        }
+      }
+    }))).toMatchObject({
+      connectionState: "pending_review",
+      healthState: "attention",
+      cardPaymentsState: "active",
+      payoutsState: "pending"
+    });
+    expect(projectAccountObservation(reviewedAccount({
+      configuration: {
+        merchant: {
+          applied: "2026-08-13T11:55:00.000Z",
+          capabilities: {
+            card_payments: { status: "active", status_details: [] },
+            stripe_balance: {
+              payouts: { status: "restricted", status_details: [] }
+            }
+          }
+        }
+      }
+    }))).toMatchObject({
+      connectionState: "attention_required",
+      payoutsState: "restricted"
     });
     expect(projectAccountObservation(reviewedAccount({
       requirements: {
@@ -510,6 +976,43 @@ describe("Stripe Accounts v2 Sandbox adapter", () => {
         }
       }
     }))).toMatchObject({ connectionState: "security_review", responsibilityState: "mismatch" });
+  });
+
+  test("accepts only an applied merchant configuration with a valid RFC3339 timestamp", () => {
+    expect(hasReviewedConfiguration(reviewedAccount())).toBe(true);
+    expect(hasReviewedConfiguration(reviewedAccount({
+      configuration: {
+        merchant: {
+          applied: "2026-08-13T06:55:00-05:00",
+          capabilities: {}
+        }
+      }
+    }))).toBe(true);
+
+    for (const applied of [
+      true,
+      false,
+      "",
+      "2026-08-13",
+      "2026-02-30T11:55:00.000Z",
+      "2026-08-13T24:00:00.000Z",
+      "2026-08-13T11:55:00.000Z "
+    ]) {
+      const account = reviewedAccount({
+        configuration: {
+          merchant: {
+            applied,
+            capabilities: {}
+          }
+        }
+      });
+      expect(hasReviewedConfiguration(account)).toBe(false);
+      expect(projectAccountObservation(account)).toMatchObject({
+        connectionState: "security_review",
+        healthState: "unavailable",
+        responsibilityState: "mismatch"
+      });
+    }
   });
 
   test("creates a merchant-only one-use Account Link with stable v2 idempotency", async () => {
@@ -557,87 +1060,37 @@ describe("Stripe Accounts v2 Sandbox adapter", () => {
     })).rejects.toMatchObject({ code: "failed-precondition" });
     expect(fixture.accountLinks.create).not.toHaveBeenCalled();
   });
-});
 
-describe("Connect reservation-to-provider recovery", () => {
-  test("reuses the same Accounts v2 idempotency key after provider success and interrupted completion", async () => {
-    const database = createMemoryFirestore({
-      [`${COLLECTIONS.authorities}/org_alpha`]: {
-        organizationId: "org_alpha",
-        ownerUid: "owner_uid"
-      }
+  test("fails before mutation when the credential platform or mode preflight does not match", async () => {
+    const wrongPlatform = createFixture();
+    wrongPlatform.platformAccounts.retrieve.mockResolvedValueOnce({
+      object: "account",
+      id: "acct_anotherPlatform001"
     });
-    const concreteRepository = createConnectControlRepository({ database, now: () => NOW_MS });
-    let interruptCompletion = true;
-    const repository = {
-      ...concreteRepository,
-      completeOnboarding: vi.fn(async (input) => {
-        if (interruptCompletion) {
-          interruptCompletion = false;
-          throw new Error("simulated database interruption after provider success");
-        }
-        return concreteRepository.completeOnboarding(input);
-      })
-    };
-    const account = reviewedAccount();
-    const accounts = {
-      create: vi.fn(async () => account),
-      retrieve: vi.fn(async () => account)
-    };
-    const accountLinks = { create: vi.fn() };
-    const provider = createStripeSandboxAdapter({
-      stripeClient: { v2: { core: { accounts, accountLinks } } },
-      apiVersion: STRIPE_CONNECT_API_VERSION,
-      sdkVersion: STRIPE_CONNECT_SDK_VERSION,
-      providerMode: "sandbox",
-      platformAccountBinding: PLATFORM_ACCOUNT,
-      canonicalReturnOrigin: ORIGIN
-    });
-    const rateLimiter = createDurableConnectRateLimiter({ database, hmacKey: RATE_KEY });
-    const principalHasher = createConnectPrincipalHasher({ hmacKey: RATE_KEY });
-    const service = createStripeConnectStatusOnboardingService({
-      repository,
-      provider,
-      rateLimiter,
-      principalHasher,
-      hmacKey: "connect-onboarding-handoff-test-key-at-least-32-bytes",
-      canonicalReturnOrigin: ORIGIN,
-      now: () => NOW_MS
-    });
-    const data = mutation("beginStripeConnectOnboarding");
-    const request = {
-      data,
-      auth: {
-        uid: "owner_uid",
-        token: {
-          organizationId: "org_alpha",
-          role: "admin",
-          email: "owner@example.test",
-          email_verified: true,
-          auth_time: Math.floor(NOW_MS / 1000) - 30
-        }
-      },
-      app: { appId: "staging-app", alreadyConsumed: false }
-    };
+    await expect(wrongPlatform.adapter.createMerchantAccount({
+      idempotencyKey: `qpcmd_${"a".repeat(64)}`,
+      country: "US",
+      currency: "usd",
+      dashboard: "full",
+      feesCollector: "stripe",
+      lossesCollector: "stripe",
+      capabilities: { cardPayments: "requested" },
+      contactEmail: "owner@example.test"
+    })).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(wrongPlatform.accounts.create).not.toHaveBeenCalled();
 
-    await expect(service.beginStripeConnectOnboarding(request)).rejects.toThrow(/simulated database interruption/i);
-    expect(database.read(`${COLLECTIONS.organizations}/org_alpha`)).toMatchObject({
-      connectionState: "provisioning",
-      activeReservation: { payloadDigest: data.payloadDigest }
-    });
-    await expect(service.beginStripeConnectOnboarding(request)).resolves.toMatchObject({
-      operation: "beginStripeConnectOnboarding",
-      generation: 1,
-      revision: 1,
-      state: "onboarding"
-    });
-    await expect(service.beginStripeConnectOnboarding(request)).resolves.toMatchObject({
-      operation: "beginStripeConnectOnboarding",
-      generation: 1,
-      revision: 1
-    });
-    expect(accounts.create).toHaveBeenCalledTimes(2);
-    expect(accounts.create.mock.calls[0][1]).toEqual(accounts.create.mock.calls[1][1]);
-    expect(repository.completeOnboarding).toHaveBeenCalledTimes(2);
+    const liveMode = createFixture();
+    liveMode.balance.retrieve.mockResolvedValueOnce({ object: "balance", livemode: true });
+    await expect(liveMode.adapter.createMerchantAccount({
+      idempotencyKey: `qpcmd_${"b".repeat(64)}`,
+      country: "US",
+      currency: "usd",
+      dashboard: "full",
+      feesCollector: "stripe",
+      lossesCollector: "stripe",
+      capabilities: { cardPayments: "requested" },
+      contactEmail: "owner@example.test"
+    })).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(liveMode.accounts.create).not.toHaveBeenCalled();
   });
 });

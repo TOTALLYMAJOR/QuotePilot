@@ -65,14 +65,22 @@ Only open work belongs here. Current operational truth lives in
   the isolated staging reCAPTCHA Enterprise application/site key, observe App
   Check monitoring without enforcement, and promote enforcement plus consumed
   limited-use tokens only after hosted negative/replay evidence.
-  The strict redacted-status, owner-onboarding, idempotent receipt, one-use
-  same-tab handoff, exact named-database repository, fail-closed durable
-  limiter, and Accounts v2 Sandbox adapter are now source-complete but
-  deliberately uninstantiated and unexported. After the infrastructure/App
-  Check evidence gate, reconcile the applied database/platform/resource IDs
-  into the exact staging manifest, instantiate these adapters with the scoped
-  identities and secrets, and add the callable/HTTP exports. Do not expose a
-  partial browser surface or return an Account Link to application JavaScript.
+  The strict redacted status, receipt-bound current-role projection, exact
+  named-database repository, fail-closed reviewed rate windows, immutable edge
+  commands with the sole `qpcmd` provider identity, leased-worker terminal
+  receipts, exact quarantine replay, private post-provider identity/occurrence
+  retention, pre- and post-provider authority checks, `provider_withheld`
+  recovery, an owner-bound replay-stable handoff, and the Accounts v2 Sandbox
+  adapter with exact platform/mode preflight are now source-complete but
+  deliberately uninstantiated and unexported. The next runtime review must bind
+  a trusted authority publisher, prove that the edge identity cannot access the
+  Stripe key, prove worker-only provider access, private quarantine/dead-letter
+  operations, and no Account Link disclosure after authority drift, and enable
+  exact App Check enforcement/limited-use token consumption. Only after those
+  infrastructure/App Check evidence gates may the applied database/platform/
+  resource IDs be reconciled into the staging manifest and the callable/HTTP
+  exports be considered. Do not expose a partial browser surface or return an
+  Account Link to application JavaScript.
   The exact consumed-invite owner backfill is source-complete but still needs
   governed production dry-run review and separately confirmed apply evidence;
   zero, multiple, unverified, or conflicting candidates remain

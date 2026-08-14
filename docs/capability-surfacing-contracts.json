@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 40,
+  "catalogVersion": 44,
   "contracts": [
     {
       "id": "firebase-email-action-return-policy",
@@ -3381,7 +3381,7 @@
     },
     {
       "id": "catalog-cost-and-pricing-data-entry",
-      "reviewRevision": 8,
+      "reviewRevision": 10,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -4293,7 +4293,7 @@
     },
     {
       "id": "stripe-connect-runtime-foundation",
-      "reviewRevision": 5,
+      "reviewRevision": 8,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "developer_infrastructure",
@@ -4301,16 +4301,23 @@
         "release_operators",
         "security_reviewers"
       ],
-      "summary": "A separately pinned, deploy-empty Stripe Connect Functions codebase, secret-free staging manifest, apply-disabled staging Terraform foundation, dormant status/onboarding contracts, exact named-database repository, transactional HMAC-scoped limiter, and injected Accounts v2 Sandbox adapter establish runtime, data, identity, network, state, deployment, authority, redaction, receipt, one-use handoff, unique binding, recovery, and provider-model boundaries without adding a callable, provider credential, connected account, cloud resource, Account Link, or Stripe request. The strict manifest records a five-minute recent-auth boundary plus App Check monitoring, disabled replay enforcement, and an unbound environment-specific public key; it rejects premature enforcement or key binding. Existing production and candidate workflows select only the legacy default codebase, while credential-free workflows permit source tests and format/init/validate only.",
+      "summary": "A separately pinned, deploy-empty Stripe Connect Functions codebase, secret-free staging manifest, apply-disabled staging Terraform foundation, receipt-bound current-role authority projection, dormant redacted status/onboarding contracts, exact named-database repository, transactional HMAC-scoped limiter, immutable edge-command/leased-worker receipt bridge, private post-provider quarantine occurrences, replay-stable owner handoff with provider-withheld recovery, and preflight-bound Accounts v2 Sandbox adapter establish runtime, data, identity, network, state, deployment, authority, redaction, anti-orphan recovery, provider-isolation, and provider-model boundaries without adding a callable, provider credential, connected account, cloud resource, Account Link, or Stripe request. Every future status callable is contract-bound to the exact reviewed App Check application, provider refresh additionally requires a consumed limited-use token, and account binding rejects unreviewed platform or configuration identities. Identity-backed quarantine replay recomputes the canonical private occurrence and validates its account claim. Account Link disclosure rechecks authority, state, the prepared-attempt ceiling, provider expiry, and clock again after the issuance receipt. The repository reserves generation, authority digest, and a bounded recovery deadline while the command-derived qpcmd value remains the sole provider idempotency identity. The strict manifest records a five-minute recent-auth boundary plus App Check monitoring, disabled replay enforcement, and an unbound environment-specific public key; it rejects premature enforcement or key binding. Existing production and candidate workflows select only the legacy default codebase, while credential-free workflows permit source tests and format/init/validate only.",
       "backendPaths": [
         "firebase.json",
         "functions-connect/index.js",
         "functions-connect/runtimePolicy.js",
         "functions-connect/interfaceContracts.js",
+        "functions-connect/authorityProjection.js",
+        "functions-connect/providerModel.js",
         "functions-connect/onboardingHandoff.js",
         "functions-connect/statusOnboardingService.js",
+        "functions-connect/statusOnboardingCommandEdgeService.js",
         "functions-connect/connectControlRepository.js",
         "functions-connect/durableRateLimiter.js",
+        "functions-connect/connectCommandContracts.js",
+        "functions-connect/connectCommandEdge.js",
+        "functions-connect/connectCommandWorker.js",
+        "functions-connect/connectProviderCommandExecutor.js",
         "functions-connect/stripeSandboxAdapter.js",
         "functions-connect/package.json",
         "functions-connect/package-lock.json",
@@ -4345,6 +4352,9 @@
         "src/lib/__tests__/stripeConnectInfrastructure.test.js",
         "src/lib/__tests__/stripeConnectOnboardingContracts.test.js",
         "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+        "src/lib/__tests__/stripeConnectAuthorityProjection.test.js",
+        "src/lib/__tests__/stripeConnectCommandBridge.test.js",
+        "src/lib/__tests__/stripeConnectCommandOrchestration.test.js",
         "src/lib/__tests__/deploymentSafety.test.js",
         "src/lib/__tests__/productionArtifact.test.js"
       ],
@@ -4375,6 +4385,10 @@
         },
         {
           "path": "src/lib/__tests__/stripeConnectOnboardingContracts.test.js",
+          "locator": "requires the exact App Check application for every status callable"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectOnboardingContracts.test.js",
           "locator": "requires canonical owner, recent auth, and unused App Check for onboarding"
         },
         {
@@ -4382,8 +4396,32 @@
           "locator": "consumes before provider access, stores no URL, and redirects with no-store frame denial"
         },
         {
+          "path": "src/lib/__tests__/stripeConnectAuthorityProjection.test.js",
+          "locator": "builds an exact receipt-bound projection and authorizes only its current admin set"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectAuthorityProjection.test.js",
+          "locator": "fails closed for expiry, inactive organizations, disabled members, and owner omission"
+        },
+        {
           "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
           "locator": "selects only the exact connect-control database"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "applies monotonically versioned authority projections with immutable replay receipts"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "reserves a generation, authority digest, and 30-day recovery deadline before account creation"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "rejects an unreviewed platform or configuration before provider binding"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "rechecks authority with the current transaction-attempt clock before account binding"
         },
         {
           "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
@@ -4391,7 +4429,83 @@
         },
         {
           "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
-          "locator": "reuses the same Accounts v2 idempotency key after provider success and interrupted completion"
+          "locator": "revokes a prepared handoff when authority revision or connection state changes"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "withholds a provider-issued Account Link when owner authority changes during the provider call"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "withholds a provider result whose effective expiry is no longer in the future"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "fails before mutation when the credential platform or mode preflight does not match"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "projects current provider truth and rejects live or responsibility-mismatched accounts"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "returns non-enumerable private identity evidence when a created account requires review"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectRuntimeAdapters.test.js",
+          "locator": "accepts only an applied merchant configuration with a valid RFC3339 timestamp"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandBridge.test.js",
+          "locator": "creates one immutable command and replays the exact acknowledgement transactionally"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandBridge.test.js",
+          "locator": "derives deterministic payload, request, command, and provider idempotency identities"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandBridge.test.js",
+          "locator": "dead-letters after the fixed stale-lease attempt limit without changing the command"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandOrchestration.test.js",
+          "locator": "keeps Stripe off the edge and completes account creation through one leased command"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandOrchestration.test.js",
+          "locator": "recovers after provider success with the same idempotency key when repository completion is interrupted"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandOrchestration.test.js",
+          "locator": "persists a returned provider identity when post-create validation requires quarantine"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandOrchestration.test.js",
+          "locator": "rechecks owner authority after provider creation and withholds the binding on drift"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandOrchestration.test.js",
+          "locator": "reconstructs the exact quarantine after command-receipt interruption"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandOrchestration.test.js",
+          "locator": "rejects identity-backed quarantine replay when its private account claim is missing or tampered"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectCommandOrchestration.test.js",
+          "locator": "quarantines an expired provider-recovery reservation before calling Stripe"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectOnboardingContracts.test.js",
+          "locator": "does not disclose a created Account Link when the post-provider authority receipt is withheld"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectOnboardingContracts.test.js",
+          "locator": "withholds an Account Link when provider latency crosses the prepared handoff expiry"
+        },
+        {
+          "path": "src/lib/__tests__/stripeConnectOnboardingContracts.test.js",
+          "locator": "rechecks expiry after the issuance receipt before disclosing the Account Link"
         },
         {
           "path": "src/lib/__tests__/deploymentSafety.test.js",
@@ -4433,8 +4547,8 @@
           "locator": "Stripe Connect staging infrastructure:"
         }
       ],
-      "headlessReason": "The checkpoint changes dependency, manifest, infrastructure, deployment, and dormant authority-contract boundaries only. Revision 5 adds a concrete exact-named-database repository, immutable generation reservation, 30-day Accounts v2 recovery identity, unique platform/mode/account binding, collision quarantine, replay receipts, one-use handoff persistence, multi-window transactional rate limits without raw principal or organization storage, and an injected exact-version Sandbox Accounts v2 adapter fixed to the approved merchant/full-Dashboard/Stripe-responsibility model. These modules remain uninstantiated and unexported; callable, HTTP, App Check registration, provider calls, plan, apply, deployment, and production bindings remain absent. It intentionally exposes no Connect user surface until applied isolated infrastructure and hosted Sandbox evidence are available.",
-      "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-only, production-absent, client-denied, apply-disabled, redacted, transactionally limited, uniquely bound, POST-only, one-use, and separately reviewable. Application JavaScript receives no Stripe Account Link, and failed dormant provider plans can describe only explicit recovery—not provider success."
+      "headlessReason": "The checkpoint changes dormant private authority, command transport, worker execution, post-provider completion, handoff, limiter, and provider-adapter boundaries only. Revision 10 keeps the command-derived qpcmd value as the sole provider idempotency identity while the repository reserves only generation, authority digest, and recovery deadline; requires exact App Check on cached status plus consumed replay protection for provider refresh; rechecks current owner authority with a fresh clock on every account-binding transaction attempt; stores a returned provider identity and occurrence only in private quarantine evidence when post-create validation, authority, or binding checks fail; canonically reconstructs identity-backed quarantine only while its private account claim remains intact; and rechecks authority, state, local attempt expiry, provider expiry, and post-receipt clock after Account Link creation before disclosure. Authority or state drift durably becomes provider_withheld. A receipt-persistence interruption withholds the URL and keeps the consumed attempt blocked until its local expiry rather than claiming a receipt that did not commit. The modules remain uninstantiated and unexported; authority publication, callable, HTTP, App Check enforcement/consumption, provider calls, plan, apply, deployment, and production bindings remain absent. It intentionally exposes no Connect user surface until applied isolated infrastructure and hosted Sandbox evidence are available.",
+      "safeOutcome": "Existing releases can deploy only the legacy default Functions codebase, while incomplete Connect source remains uncallable, provider-disabled, credential-free, Sandbox-only, production-absent, client-denied, apply-disabled, redacted, current-authority-bound, transactionally limited, command-isolated, lease-governed, uniquely bound, POST-only, one-use, and separately reviewable. The edge has no Stripe call path. A returned account identity cannot become a usable binding after authority drift and is retained only in private quarantine evidence; an interrupted quarantine receipt cannot trigger another provider create; and a created Account Link cannot reach application JavaScript unless the post-provider authority/state receipt commits. Stale authority, conflicting replay, platform/mode drift, deterministic provider-contract failure, provider_withheld, or exhausted worker attempts can produce only a blocked, quarantined, recoverable, withheld, or dead-letter outcome—not provider success."
     },
     {
       "id": "organization-owner-authority",
