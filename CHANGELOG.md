@@ -82,6 +82,16 @@ This changelog is backfilled from git history and will be maintained going forwa
 
 ### Changed
 
+- Repaired first-run catalog onboarding across the Ambient and compatibility
+  workspace graphs. Blank administrators can choose a starter pack, Import
+  Studio, manual catalog entry, or a session-only workspace bypass; existing
+  catalog records now open protected manual editing instead of retrying the
+  blank-only starter callable. Managed-menu creation no longer mistakes
+  asynchronously synchronized event/category labels for separate user edits,
+  and Firebase browser coverage isolates the catalog-populating case from the
+  remaining blank-owner paths. The Ambient temporary bundle exception is
+  recalibrated to the exact CI-emitted `3,827,245` aggregate JavaScript bytes;
+  the largest-chunk ceiling is unchanged.
 - Fixed the guarded Firebase production runner so backend and all-surface
   deployments explicitly acknowledge reviewed Functions retry-policy changes.
   The acknowledgement is derived from the selected scope rather than accepted

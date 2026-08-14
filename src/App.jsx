@@ -3945,7 +3945,10 @@ export default function App({
     );
   }
 
-  const shouldSuppressSetupGate = skipCatalogSetup || adminOpen || importStudioOpen;
+  // Keep Catalog Admin inside the setup branch so it receives the setup-only
+  // save guard and starter eligibility contract. Import Studio is rendered by
+  // the ordinary workspace branch, so that overlay still suppresses the gate.
+  const shouldSuppressSetupGate = skipCatalogSetup || importStudioOpen;
   if (!catalogSetupComplete && !shouldSuppressSetupGate) {
     return (
       <div className="app-shell app-shell-neutral" style={appThemeVars}>
@@ -3967,7 +3970,13 @@ export default function App({
             <div className="auth-actions">
               {authSession.isAdmin && (
                 <>
-                  <button type="button" className="cta" onClick={() => openWorkspaceTool(setAdminOpen)}>
+                  <button
+                    type="button"
+                    className="cta"
+                    onClick={() => openWorkspaceTool(setAdminOpen, {
+                      beforeOpen: () => setAdminInitialTab("starter")
+                    })}
+                  >
                     Open Admin Catalog
                   </button>
                   <button type="button" className="ghost" onClick={() => openWorkspaceTool(setImportStudioOpen)}>
@@ -4015,6 +4024,7 @@ export default function App({
               onCatalogMutation={handleCatalogMutation}
               onReload={catalog.reload}
               saving={catalog.saving}
+              initialTab={adminInitialTab}
               selectedEventType={globalEventTypeId}
               onEventTypeChange={setGlobalEventTypeId}
               onInteractionStateChange={setCatalogModalInteraction}

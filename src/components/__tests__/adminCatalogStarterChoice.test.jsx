@@ -98,6 +98,21 @@ describe("Admin Catalog starter choice", () => {
     expect(html).not.toContain("Save catalog changes");
   });
 
+  test("an incomplete catalog with existing records opens manual editing without calling it blank", () => {
+    const html = renderCatalog({
+      packages: [{ id: "existing", name: "Existing package", ppp: 30, active: true }],
+      addons: [],
+      rentals: [],
+      eventTypes: [],
+      settings: { pricingSetupConfirmed: false }
+    }, { initialTab: "starter" });
+
+    expect(html).toContain("Existing catalog records were found.");
+    expect(html).toContain("starter packs only populate a blank catalog");
+    expect(html).toContain(">Packages</button>");
+    expect(html).not.toContain("Use Wedding &amp; events");
+  });
+
   test("empty confirmed pricing still shows starter packs to recover catalog data", () => {
     const html = renderCatalog({
       packages: [],
