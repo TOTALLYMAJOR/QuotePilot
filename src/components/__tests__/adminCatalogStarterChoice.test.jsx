@@ -98,6 +98,20 @@ describe("Admin Catalog starter choice", () => {
     expect(html).not.toContain("Save catalog changes");
   });
 
+  test("empty confirmed pricing still shows starter packs to recover catalog data", () => {
+    const html = renderCatalog({
+      packages: [],
+      addons: [],
+      rentals: [],
+      settings: { pricingSetupConfirmed: true }
+    });
+
+    expect(html).toContain("What kind of catering do you do most?");
+    expect(html).toContain("Use Wedding &amp; events");
+    expect(html).toContain("Use Corporate drop-off");
+    expect(html).toContain("Build my catalog manually");
+  });
+
   test("a staged pack opens on the populated catalog with normal editing choices", () => {
     const html = renderCatalog({
       packages: [{ id: "celebration", name: "Celebration", ppp: 28 }],

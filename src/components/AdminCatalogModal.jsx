@@ -1661,6 +1661,14 @@ export function AdminCatalogView({
         || ((!recoveryReplacementBlocked && draft?.settings?.pricingSetupConfirmed !== true)
           || confirmedMissingMenuRecovery)
     );
+  const hasActiveVisibleTab = visibleAdminTabs.some((tab) => tab.id === activeTab);
+  const resolvedActiveTab = hasActiveVisibleTab ? activeTab : (visibleAdminTabs[0]?.id || "");
+  useEffect(() => {
+    if (open && !hasActiveVisibleTab && resolvedActiveTab && activeTab !== resolvedActiveTab) {
+      setActiveTab(resolvedActiveTab);
+    }
+  }, [open, hasActiveVisibleTab, resolvedActiveTab, activeTab]);
+
   const handleReload = () => {
     if (pendingCatalogEvidenceRef.current) {
       if (!window.confirm("Discard unsaved Library changes and load the newer version?")) {
@@ -1753,10 +1761,10 @@ export function AdminCatalogView({
               id={`catalog-admin-tab-${tab.id}`}
               type="button"
               role="tab"
-              aria-selected={activeTab === tab.id}
+              aria-selected={resolvedActiveTab === tab.id}
               aria-controls={`catalog-admin-panel-${tab.id}`}
-              tabIndex={activeTab === tab.id ? 0 : -1}
-              className={`admin-tab ${activeTab === tab.id ? "active" : ""}`}
+              tabIndex={resolvedActiveTab === tab.id ? 0 : -1}
+              className={`admin-tab ${resolvedActiveTab === tab.id ? "active" : ""}`}
               data-admin-tab-id={tab.id}
               onClick={() => selectAdminTab(tab.id)}
             >
@@ -1766,9 +1774,9 @@ export function AdminCatalogView({
         </div>
 
         <div
-          id={`catalog-admin-panel-${activeTab}`}
+          id={`catalog-admin-panel-${resolvedActiveTab}`}
           role="tabpanel"
-          aria-labelledby={`catalog-admin-tab-${activeTab}`}
+          aria-labelledby={`catalog-admin-tab-${resolvedActiveTab}`}
           tabIndex={0}
         >
 
@@ -1803,8 +1811,8 @@ export function AdminCatalogView({
           </div>
         )}
 
-        {activeTab === "starter" && (
-          draft?.settings?.pricingSetupConfirmed !== true || confirmedMissingMenuRecovery
+        {resolvedActiveTab === "starter" && (
+          draft?.settings?.pricingSetupConfirmed !== true || confirmedMissingMenuRecovery || starterChoiceOnly
         ) && (
           <section className="admin-section">
             <div className="admin-section-head"><h3>What kind of catering do you do most?</h3></div>
@@ -1841,7 +1849,7 @@ export function AdminCatalogView({
                         disabled={saving
                           || Boolean(packActionId)
                           || selected
-                          || (draft?.settings?.pricingSetupConfirmed === true && !confirmedMissingMenuRecovery)}
+                          || (draft?.settings?.pricingSetupConfirmed === true && !confirmedMissingMenuRecovery && !starterChoiceOnly)}
                       >
                         {packActionId === pack.id
                           ? "Populating your catalog..."
@@ -1857,7 +1865,7 @@ export function AdminCatalogView({
                   );
                 })}
               </div>
-              {draft?.settings?.pricingSetupConfirmed === true && !confirmedMissingMenuRecovery && (
+              {draft?.settings?.pricingSetupConfirmed === true && !confirmedMissingMenuRecovery && !starterChoiceOnly && (
                 <p className="warning-note">Starter packs are available only during initial unconfirmed catalog setup.</p>
               )}
               {starterChoiceOnly && (
@@ -1877,7 +1885,7 @@ export function AdminCatalogView({
           </section>
         )}
 
-        {activeTab === "packages" && (
+        {resolvedActiveTab === "packages" && (
           <Section title="Packages" onAdd={() => addRow("packages")}>
           <p className="source-note">
             Choose which catalog items the package price can cover. These items are not added to a quote automatically: the quote builder must select each one, and selected inclusions are charged $0.
@@ -1980,7 +1988,7 @@ export function AdminCatalogView({
           </Section>
         )}
 
-        {activeTab === "addons" && (
+        {resolvedActiveTab === "addons" && (
           <Section title="Add-ons" onAdd={() => addRow("addons")}>
           <p className="source-note">
             Add-ons are <strong>price-only</strong> and do not change server/chef/bartender counts.
@@ -2049,7 +2057,7 @@ export function AdminCatalogView({
           </Section>
         )}
 
-        {activeTab === "rentals" && (
+        {resolvedActiveTab === "rentals" && (
           <Section title="Rentals" onAdd={() => addRow("rentals")}>
           {draft.rentals.map((item, i) => (
             <div className="admin-row" key={item.id}>
@@ -2105,7 +2113,7 @@ export function AdminCatalogView({
           </Section>
         )}
 
-        {activeTab === "menu" && (
+        {resolvedActiveTab === "menu" && (
           <section className="admin-section">
           <div className="admin-section-head"><h3>Menu Management</h3></div>
           <div className="admin-section-body">
@@ -2310,7 +2318,7 @@ export function AdminCatalogView({
         </section>
         )}
 
-        {AMBIENT_UI_ENABLED && EventTemplatesEditor && activeTab === "templates" && (
+        {AMBIENT_UI_ENABLED && EventTemplatesEditor && resolvedActiveTab === "templates" && (
           <Suspense fallback={<div className="admin-section" role="status">Opening event templates…</div>}>
             <EventTemplatesEditor
               templates={draft.settings?.eventTemplates || []}
@@ -2337,7 +2345,7 @@ export function AdminCatalogView({
           </Suspense>
         )}
 
-        {activeTab === "pricing" && (
+        {resolvedActiveTab === "pricing" && (
           <>
             <section className="admin-section">
               <div className="admin-section-head"><h3>Pricing Review Required</h3></div>

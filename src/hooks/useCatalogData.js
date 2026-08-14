@@ -666,16 +666,20 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         }
         const shouldUseLocalFallback = !firebaseReady && ALLOW_LOCAL_CATALOG_FALLBACK;
         const fallback = shouldUseLocalFallback ? defaultCatalog() : blockedCatalog();
+        const readError = err?.message || "Failed to load catalog.";
+        const requiresFirebaseNow = !shouldUseLocalFallback && !firebaseReady;
         setState((prev) => ({
           ...prev,
           loading: false,
-          source: shouldUseLocalFallback ? "fallback-defaults" : "firebase-required",
+          source: shouldUseLocalFallback ? "fallback-defaults" : "firebase-failed",
           observedAtISO: "",
-          requiresFirebase: !shouldUseLocalFallback,
+          requiresFirebase: requiresFirebaseNow,
           serverFingerprints: null,
           error: shouldUseLocalFallback
-            ? err?.message || "Failed to load catalog."
-            : "Firebase catalog is required in this environment. Configure Firebase to continue.",
+            ? readError
+            : requiresFirebaseNow
+              ? "Firebase catalog is required in this environment. Configure Firebase to continue."
+              : readError,
           eventTypes: deriveEventTypesFromSettings(fallback.settings),
           ...fallback
         }));
