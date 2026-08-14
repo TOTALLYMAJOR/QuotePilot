@@ -154,15 +154,27 @@ function assertRecentAuthentication(actor, nowMs = Date.now()) {
   return Object.freeze({ ageSeconds: Math.max(0, ageSeconds) });
 }
 
-function assertConsumedAppCheck(app = null) {
+function assertAppCheck(app = null, expectedAppId = "") {
   const appId = text(app?.appId, 256);
+  const expected = text(expectedAppId, 256);
+  if (!expected) {
+    fail("internal", "The exact Connect App Check application binding is unavailable.");
+  }
   if (!appId) {
     fail("failed-precondition", "App verification is required before starting Stripe onboarding.");
   }
+  if (appId !== expected) {
+    fail("permission-denied", "App verification does not match the reviewed Connect application.");
+  }
+  return Object.freeze({ appId });
+}
+
+function assertConsumedAppCheck(app = null, expectedAppId = "") {
+  const verified = assertAppCheck(app, expectedAppId);
   if (app?.alreadyConsumed === true) {
     fail("permission-denied", "This onboarding verification was already used. Refresh and try again.");
   }
-  return Object.freeze({ appId, replayProtection: "consume_required" });
+  return Object.freeze({ appId: verified.appId, replayProtection: "consume_required" });
 }
 
 function enumValue(value, allowed, fallback) {
@@ -207,7 +219,10 @@ function buildStripeConnectStatusV1({ actor, authority = {}, record = {}, nowMs 
     generation,
     connection: Object.freeze({
       state: connectionState,
-      confirmedAtISO: isoOrEmpty(record.connectionConfirmedAtISO)
+      confirmedAtISO: isoOrEmpty(record.connectionConfirmedAtISO),
+      confirmedAttempt: DIGEST_PATTERN.test(text(record.connectionConfirmedAttemptDigest, 64).toLowerCase())
+        ? text(record.connectionConfirmedAttemptDigest, 64).toLowerCase().slice(0, 24)
+        : ""
     }),
     routing: Object.freeze({
       state: routingState,
@@ -251,6 +266,7 @@ module.exports = {
   CONNECT_INTERFACE_SCHEMA_VERSION,
   CONNECT_RECENT_AUTH_MAX_AGE_SECONDS,
   StripeConnectInterfaceError,
+  assertAppCheck,
   assertAuthenticatedAdmin,
   assertCanonicalOwner,
   assertConsumedAppCheck,

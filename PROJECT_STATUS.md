@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: August 13, 2026
+Last updated: August 14, 2026
 
 ## Current Production Release
 
@@ -116,8 +116,8 @@ Last updated: August 13, 2026
 - A seventh source-only checkpoint implements, but does not instantiate, an
   exact `connect-control` repository, transactional durable limiter, and
   injected Accounts v2 Sandbox adapter. The repository reserves one immutable
-  connection generation and stable 30-day provider idempotency identity before
-  access, binds a platform/mode/account identity to only one organization and
+  connection generation and a bounded provider-recovery window before access,
+  binds a platform/mode/account identity to only one organization and
   generation, quarantines collisions, preserves one-use handoffs, and stores
   redacted replay receipts. The limiter enforces fixed principal and
   organization windows in one transaction, stores neither raw UID nor
@@ -131,6 +131,43 @@ Last updated: August 13, 2026
   nothing. This is source/local evidence only: no applied database, credential,
   Stripe request, connected account, Account Link, callable/HTTP export,
   deployment, hosted result, or human acceptance exists.
+- An eighth source-only checkpoint removes identity-token role staleness from
+  the dormant Connect edge contract and separates provider credentials from
+  edge authority. A trusted, receipt-bound authority projection contains only
+  the current enabled, verified administrators and canonical owner, advances
+  monotonically, and expires within ten minutes. Account creation and status
+  refresh are frozen into immutable digest-bound commands; each command's
+  `qpcmd_<digest>` value is the sole provider idempotency identity, while the
+  repository reserves only generation, authority digest, and a 30-day recovery
+  deadline. A separately composed worker uses bounded leases,
+  revalidates authority/revision/generation/reservation or binding, and records
+  one terminal, quarantine, or dead-letter receipt. The edge never calls the
+  provider adapter. After account creation, the repository rechecks current
+  owner authority before binding. Post-create validation failure, authority
+  drift, or a binding conflict preserves the returned provider identity and
+  occurrence privately as a quarantined claim without publishing a usable
+  binding; an interrupted command receipt reconstructs that exact quarantine
+  on retry without a second provider call. The owner POST handoff is replay-
+  stable, permits one active ten-minute attempt, binds owner/authority/App Check
+  application/revision/generation/request/payload evidence, and rechecks
+  current authority and connection state both before and after Account Link
+  creation. Post-provider authority/state drift records `provider_withheld`;
+  expiry drift also withholds the URL. If receipt persistence fails, the URL
+  remains withheld and the consumed attempt stays blocked until local expiry
+  instead of claiming an uncommitted receipt. Every path returns only to
+  explicit recovery. Exact rate policies are now 6 principal and
+  6 organization refreshes per five minutes with a ten-second organization
+  interval, 6 principal and 10 organization onboarding starts per day, and 3
+  principal handoffs per 15 minutes plus 10 organization handoffs per day.
+  Before provider access, the Sandbox adapter retrieves the exact platform
+  account and confirms a test-mode balance; it validates the Accounts v2
+  merchant application as an RFC 3339 timestamp and requires both card-payment
+  and payout activity before `ready`. These modules remain deploy-dormant:
+  `functions-connect/index.js` exports nothing, the staging manifest is unbound
+  and provider-disabled, and no authority publisher, App Check enforcement or
+  token consumption, cloud resource, credential, callable/HTTP route, Stripe
+  request, connected account, Account Link, deployment, hosted result, or human
+  acceptance exists.
 
 - Current `main` is tagged `v0.8.1` at
   `31b7f8040667d6ae6158b5d16c1b3556193dde16`; the tag enables the Ambient
@@ -446,15 +483,18 @@ route evidence are complete.
 
 ## Current Validation Evidence
 
-- The dormant Connect repository/limiter/adapter slice passes its credential-
-  free source policy and 26 focused tests. Those tests cover exact named-
-  database selection, stable generation reservation, 30-day Accounts v2
-  idempotency recovery, unique provider-account binding, collision quarantine,
-  replay receipts, one-use handoffs, multi-window transactional rate limits,
-  limiter-state failure, exact Accounts v2 merchant payloads, Sandbox/mode/
-  responsibility/origin denial, status projection, and interrupted-completion
-  convergence. This is source/local evidence only and made no provider or cloud
-  request.
+- The focused Connect source suites cover exact named-database selection,
+  current-role projection expiry and removal, stable generation reservation,
+  authority-bound 30-day recovery deadline, sole command-derived `qpcmd`
+  provider identity, unique provider-account binding, collision quarantine,
+  private provider-identity/occurrence retention, exact quarantine replay after
+  command-receipt interruption, lease ownership and exhaustion, terminal
+  receipts, provider-success/interrupted-database convergence, pre- and post-
+  provider authority checks, `provider_withheld` URL non-disclosure, one active
+  replay-stable handoff, the reviewed transactional rate windows, platform/mode
+  preflight, provider-shaped merchant timestamps, separate card-payment and
+  payout readiness, and deterministic security review. This is source/local
+  evidence only and made no provider or cloud request.
 
 - The Ambient zero-dead-click release contract now runs as a dedicated step in
   the protected Playwright CI lane with the production presentation flags and
@@ -604,6 +644,11 @@ route evidence are complete.
     contract-conversion, and authoritative-staffing items need a separately
     reviewed immutable non-production acceptance window; blocked profile items
     cannot be omitted or attested as passed.
+14. Stripe Connect remains deliberately unexported and unbound. Do not add a
+    browser control, callable, handoff route, provider credential, or worker
+    deployment until the isolated staging resources, trusted authority
+    publisher, App Check enforcement/consumption, exact runtime identities, and
+    hosted negative/replay evidence are separately reviewed.
 
 ## Current Focus
 
@@ -628,6 +673,12 @@ route evidence are complete.
 7. Define and review an exact-SHA non-production acceptance profile for the
    currently blocked provider and authoritative-staffing UAT items before any
    all-positive attestation or production-intent merge.
+8. For Stripe Connect, review and apply the isolated staging foundation before
+   activating any runtime: reconcile exact database/IAM/egress/service-account
+   identities, establish the trusted authority publisher, register and observe
+   App Check, then bind the edge and worker identities under an explicit hosted
+   Sandbox release. Keep `functions-connect/index.js` export-empty until those
+   gates pass.
 
 Open work and priority sequencing live in [`DEV_TASKS.md`](DEV_TASKS.md).
 Historical shipped changes live in [`CHANGELOG.md`](CHANGELOG.md).

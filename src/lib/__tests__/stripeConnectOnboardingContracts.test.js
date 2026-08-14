@@ -3,6 +3,9 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const contracts = require("../../../functions-connect/interfaceContracts.js");
+const { buildConnectAuthorityProjection } = require(
+  "../../../functions-connect/authorityProjection.js"
+);
 const handoff = require("../../../functions-connect/onboardingHandoff.js");
 const { createStripeConnectStatusOnboardingService } = require(
   "../../../functions-connect/statusOnboardingService.js"
@@ -55,13 +58,43 @@ function statusRecord(overrides = {}) {
   };
 }
 
+function authorityProjection({ ownerUid = "owner_uid", members } = {}) {
+  const projectedMembers = members || [
+    {
+      uid: "admin_uid",
+      email: "admin_uid@example.test",
+      role: "admin",
+      emailVerified: true,
+      disabled: false
+    },
+    {
+      uid: ownerUid,
+      email: `${ownerUid}@example.test`,
+      role: "admin",
+      emailVerified: true,
+      disabled: false
+    }
+  ].sort((left, right) => left.uid.localeCompare(right.uid));
+  return buildConnectAuthorityProjection({
+    organizationId: "org_alpha",
+    authorityRevision: 4,
+    organizationActive: true,
+    ownerUid,
+    members: projectedMembers,
+    sourceReceiptId: "role-snapshot:org_alpha:4",
+    sourceReceiptDigest: "a".repeat(64),
+    observedAtISO: new Date(NOW_MS).toISOString(),
+    expiresAtISO: new Date(NOW_MS + 600_000).toISOString()
+  }, { nowMs: NOW_MS });
+}
+
 function serviceFixture({ ownerUid = "owner_uid", current = statusRecord(), provider = {}, repository = {} } = {}) {
   const defaults = {
-    readAuthority: vi.fn(async (organizationId) => ({ organizationId, ownerUid })),
+    readAuthority: vi.fn(async () => authorityProjection({ ownerUid })),
     readStatus: vi.fn(async () => current),
     findMutationReceipt: vi.fn(async () => null),
     reserveOnboarding: vi.fn(async ({ input }) => ({
-      providerIdempotencyKey: `connect-account-${input.payloadDigest}`,
+      reservationId: "7".repeat(64),
       outcome: {
         revision: input.expectedRevision + 1,
         generation: input.expectedGeneration,
@@ -85,17 +118,33 @@ function serviceFixture({ ownerUid = "owner_uid", current = statusRecord(), prov
   };
   const rateLimiter = { consume: vi.fn(async () => undefined) };
   const principalHasher = vi.fn(async () => "e".repeat(64));
+  const commandEdge = {
+    enqueueCommand: vi.fn(async (input) => ({
+      schemaVersion: 1,
+      commandId: "8".repeat(64),
+      operation: input.operation,
+      requestId: input.requestId,
+      requestDigest: "9".repeat(64),
+      payloadDigest: input.payloadDigest,
+      connectionGeneration: input.connectionGeneration,
+      state: "queued",
+      replayed: false,
+      receiptDigest: ""
+    }))
+  };
   return {
     repository: defaults,
     provider: providerDefaults,
     rateLimiter,
     principalHasher,
+    commandEdge,
     service: createStripeConnectStatusOnboardingService({
       repository: defaults,
-      provider: providerDefaults,
+      commandEdge,
       rateLimiter,
       principalHasher,
       hmacKey: HMAC_KEY,
+      expectedAppId: "staging-app",
       canonicalReturnOrigin: ORIGIN,
       now: () => NOW_MS
     })
@@ -145,13 +194,40 @@ describe("Stripe Connect public interface contracts", () => {
       .rejects.toMatchObject({ code: "failed-precondition" });
 
     const cross = serviceFixture({
-      repository: { readAuthority: vi.fn(async () => ({ organizationId: "org_other", ownerUid: "owner_uid" })) }
+      repository: {
+        readAuthority: vi.fn(async () => ({
+          ...authorityProjection(),
+          organizationId: "org_other"
+        }))
+      }
     });
     await expect(cross.service.getStripeConnectStatus({ ...actorRequest(), data: {} }))
       .rejects.toMatchObject({ code: "failed-precondition" });
   });
 
-  test("rate-limits live refresh and sends only the private binding to the provider adapter", async () => {
+  test("requires the exact App Check application for every status callable", async () => {
+    const fixture = serviceFixture();
+    await expect(fixture.service.getStripeConnectStatus({
+      ...actorRequest({ app: false }),
+      data: {}
+    })).rejects.toMatchObject({ code: "failed-precondition" });
+    await expect(fixture.service.getStripeConnectStatus({
+      ...actorRequest(),
+      app: { appId: "foreign-app", alreadyConsumed: false },
+      data: {}
+    })).rejects.toMatchObject({ code: "permission-denied" });
+
+    const replayedRefresh = actorRequest();
+    replayedRefresh.app.alreadyConsumed = true;
+    await expect(fixture.service.refreshStripeConnectStatus({
+      ...replayedRefresh,
+      data: mutation("refreshStripeConnectStatus")
+    })).rejects.toMatchObject({ code: "permission-denied" });
+    expect(fixture.rateLimiter.consume).not.toHaveBeenCalled();
+    expect(fixture.commandEdge.enqueueCommand).not.toHaveBeenCalled();
+  });
+
+  test("rate-limits live refresh and queues only a private-binding digest for the worker", async () => {
     const fixture = serviceFixture();
     const request = actorRequest({ uid: "admin_uid" });
     const result = await fixture.service.refreshStripeConnectStatus({
@@ -170,10 +246,16 @@ describe("Stripe Connect public interface contracts", () => {
       uid: "admin_uid"
     });
     expect(JSON.stringify(fixture.rateLimiter.consume.mock.calls)).not.toContain("admin_uid");
-    expect(fixture.provider.retrieveMerchantAccount).toHaveBeenCalledWith(expect.objectContaining({
-      privateAccountBinding: { accountId: "acct_private_never_project" }
+    expect(fixture.commandEdge.enqueueCommand).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "refresh_merchant_account",
+      organizationId: "org_alpha",
+      payload: {
+        accountBindingDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        authorityPayloadDigest: expect.stringMatching(/^[a-f0-9]{64}$/)
+      }
     }));
-    expect(result.health.state).toBe("healthy");
+    expect(fixture.provider.retrieveMerchantAccount).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ state: "queued", command: { operation: "refresh_merchant_account" } });
     expect(JSON.stringify(result)).not.toContain("acct_private_never_project");
   });
 
@@ -197,45 +279,60 @@ describe("Stripe Connect public interface contracts", () => {
       ...replay,
       data: mutation("beginStripeConnectOnboarding")
     })).rejects.toMatchObject({ code: "permission-denied" });
+
+    const wrongApp = actorRequest();
+    wrongApp.app.appId = "another-app";
+    await expect(fixture.service.beginStripeConnectOnboarding({
+      ...wrongApp,
+      data: mutation("beginStripeConnectOnboarding")
+    })).rejects.toMatchObject({ code: "permission-denied" });
   });
 
-  test("reserves before provider access and returns a provider-ID-free mutation receipt", async () => {
+  test("reserves before enqueue and returns a provider-ID-free command acknowledgement", async () => {
     const calls = [];
     const fixture = serviceFixture({
       repository: {
         reserveOnboarding: vi.fn(async ({ input }) => {
           calls.push("reserve");
           return {
-            providerIdempotencyKey: `stable-${input.payloadDigest}`,
+            reservationId: "7".repeat(64),
             outcome: { revision: 4, generation: 1, state: "onboarding" }
           };
-        }),
-        completeOnboarding: vi.fn(async ({ publicReceipt }) => {
-          calls.push("complete");
-          expect(publicReceipt).toMatchObject({ revision: 4, generation: 1, state: "onboarding" });
-        })
-      },
-      provider: {
-        createMerchantAccount: vi.fn(async (input) => {
-          calls.push("provider");
-          expect(input).toMatchObject({
-            country: "US",
-            currency: "usd",
-            dashboard: "full",
-            feesCollector: "stripe",
-            lossesCollector: "stripe",
-            capabilities: { cardPayments: "requested" }
-          });
-          return { privateAccountId: "acct_hidden" };
         })
       }
+    });
+    fixture.commandEdge.enqueueCommand.mockImplementationOnce(async (input) => {
+      calls.push("enqueue");
+      expect(input).toMatchObject({
+        operation: "create_merchant_account",
+        expectedRevision: 4,
+        connectionGeneration: 1,
+        payload: {
+          authorityPayloadDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+          configurationDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+          contactEmailDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+          reservationDigest: "7".repeat(64)
+        }
+      });
+      return {
+        schemaVersion: 1,
+        commandId: "8".repeat(64),
+        operation: input.operation,
+        requestId: input.requestId,
+        requestDigest: "9".repeat(64),
+        payloadDigest: input.payloadDigest,
+        connectionGeneration: 1,
+        state: "queued",
+        replayed: false,
+        receiptDigest: ""
+      };
     });
     const result = await fixture.service.beginStripeConnectOnboarding({
       ...actorRequest(),
       data: mutation("beginStripeConnectOnboarding")
     });
 
-    expect(calls).toEqual(["reserve", "provider", "complete"]);
+    expect(calls).toEqual(["reserve", "enqueue"]);
     expect(fixture.rateLimiter.consume).toHaveBeenCalledWith(expect.objectContaining({
       operation: "begin_onboarding",
       organizationId: "org_alpha"
@@ -245,8 +342,10 @@ describe("Stripe Connect public interface contracts", () => {
       operation: "beginStripeConnectOnboarding",
       revision: 4,
       generation: 1,
-      state: "onboarding"
+      state: "queued",
+      command: { operation: "create_merchant_account", state: "queued" }
     });
+    expect(fixture.provider.createMerchantAccount).not.toHaveBeenCalled();
     expect(JSON.stringify(result)).not.toMatch(/acct_|privateAccount|organizationId/i);
   });
 
@@ -266,7 +365,11 @@ describe("Stripe Connect public interface contracts", () => {
       repository: { findMutationReceipt: vi.fn(async () => ({ payloadDigest: input.payloadDigest, publicReceipt })) }
     });
     await expect(fixture.service.beginStripeConnectOnboarding({ ...actorRequest(), data: input }))
-      .resolves.toEqual(publicReceipt);
+      .resolves.toMatchObject({
+        operation: "beginStripeConnectOnboarding",
+        state: "completed",
+        receipt: publicReceipt
+      });
     expect(fixture.provider.createMerchantAccount).not.toHaveBeenCalled();
   });
 
@@ -290,6 +393,9 @@ describe("Stripe Connect public interface contracts", () => {
       organizationId: "org_alpha",
       generation: 1,
       revision: 3,
+      ownerUid: "owner_uid",
+      authorityRevision: 4,
+      appIdDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
       state: "prepared",
       tokenDigest: expect.stringMatching(/^[a-f0-9]{64}$/)
     }));
@@ -305,10 +411,34 @@ describe("Stripe Connect public interface contracts", () => {
       ...actorRequest(),
       data: mutation("prepareStripeConnectOnboardingRedirect", { expectedRevision: 2 })
     })).rejects.toMatchObject({ code: "aborted" });
+
+    const stale = actorRequest();
+    stale.auth.token.auth_time = Math.floor(NOW_MS / 1000) - 301;
+    await expect(fixture.service.prepareStripeConnectOnboardingRedirect({
+      ...stale,
+      data: input
+    })).rejects.toMatchObject({ code: "failed-precondition" });
+
+    const ready = serviceFixture({ current: statusRecord({ connectionState: "ready" }) });
+    await expect(ready.service.prepareStripeConnectOnboardingRedirect({
+      ...actorRequest(),
+      data: input
+    })).rejects.toMatchObject({ code: "aborted" });
   });
 });
 
 describe("Stripe Connect one-use same-tab handoff", () => {
+  test("accepts only default-port HTTPS Stripe Account Link destinations", () => {
+    expect(handoff.assertStripeAccountLink({
+      url: "https://accounts.stripe.com/r/reviewed-link",
+      expiresAtSeconds: Math.floor(NOW_MS / 1000) + 600
+    })).toMatchObject({ url: "https://accounts.stripe.com/r/reviewed-link" });
+    expect(() => handoff.assertStripeAccountLink({
+      url: "https://accounts.stripe.com:444/r/unreviewed-port",
+      expiresAtSeconds: Math.floor(NOW_MS / 1000) + 600
+    })).toThrow(expect.objectContaining({ code: "unavailable" }));
+  });
+
   test("persists only the HMAC token digest and gives the browser an internal QuotePilot URL", () => {
     const result = handoff.prepareOneUseOnboardingHandoff({
       organizationId: "org_alpha",
@@ -316,26 +446,44 @@ describe("Stripe Connect one-use same-tab handoff", () => {
       revision: 3,
       requestId: "prepare-redirect-request-0001",
       payloadDigest: "a".repeat(64),
+      ownerUid: "owner_uid",
+      authorityRevision: 4,
+      appIdDigest: "f".repeat(64),
       canonicalReturnOrigin: ORIGIN,
       hmacKey: HMAC_KEY,
-      nowMs: NOW_MS,
-      randomToken: () => "one-use-browser-token-with-32-bytes"
+      nowMs: NOW_MS
     });
 
     expect(result.browser).toMatchObject({
       handoffUrl: `${ORIGIN}/stripe-connect/onboarding/handoff`,
       handoffMethod: "POST",
-      handoffToken: "one-use-browser-token-with-32-bytes"
+      handoffToken: expect.stringMatching(/^[A-Za-z0-9_-]{32,}$/)
     });
     expect(result.browser.handoffUrl).not.toContain(result.browser.handoffToken);
     expect(result.browser.handoffUrl).not.toContain("stripe.com");
     expect(result.privateRecord).toMatchObject({ state: "prepared", tokenDigest: expect.stringMatching(/^[a-f0-9]{64}$/) });
-    expect(JSON.stringify(result.privateRecord)).not.toContain("one-use-browser-token-with-32-bytes");
+    expect(JSON.stringify(result.privateRecord)).not.toContain(result.browser.handoffToken);
+
+    const replay = handoff.prepareOneUseOnboardingHandoff({
+      organizationId: "org_alpha",
+      generation: 1,
+      revision: 3,
+      requestId: "prepare-redirect-request-0001",
+      payloadDigest: "a".repeat(64),
+      ownerUid: "owner_uid",
+      authorityRevision: 4,
+      appIdDigest: "f".repeat(64),
+      canonicalReturnOrigin: ORIGIN,
+      hmacKey: HMAC_KEY,
+      nowMs: NOW_MS + 1_000
+    });
+    expect(replay.browser.handoffToken).toBe(result.browser.handoffToken);
+    expect(replay.browser.attempt).toBe(result.browser.attempt);
   });
 
   test("consumes before provider access, stores no URL, and redirects with no-store frame denial", async () => {
-    const token = "one-use-browser-token";
-    const tokenDigest = handoff.digestToken(token, HMAC_KEY);
+    const token = "one-use-browser-token-at-least-32-bytes";
+    const tokenDigest = handoff.digestToken(token);
     const calls = [];
     const store = {
       consumePreparedHandoff: vi.fn(async () => {
@@ -351,6 +499,7 @@ describe("Stripe Connect one-use same-tab handoff", () => {
       recordProviderExpiry: vi.fn(async (value) => {
         calls.push("expiry");
         expect(JSON.stringify(value)).not.toContain("connect.stripe.com");
+        return { state: "provider_issued" };
       }),
       recordHandoffFailure: vi.fn()
     };
@@ -368,11 +517,10 @@ describe("Stripe Connect one-use same-tab handoff", () => {
     const response = await handoff.consumeOneUseOnboardingHandoff({
       method: "POST",
       token,
-      hmacKey: HMAC_KEY,
       canonicalReturnOrigin: ORIGIN,
       store,
       provider,
-      nowMs: NOW_MS
+      now: () => NOW_MS
     });
 
     expect(calls).toEqual(["consume", "provider", "expiry"]);
@@ -404,11 +552,10 @@ describe("Stripe Connect one-use same-tab handoff", () => {
     await expect(handoff.consumeOneUseOnboardingHandoff({
       method: "POST",
       token: "invalid-token",
-      hmacKey: HMAC_KEY,
       canonicalReturnOrigin: ORIGIN,
       store: missingStore,
       provider,
-      nowMs: NOW_MS
+      now: () => NOW_MS
     })).rejects.toMatchObject({ code: "permission-denied" });
     expect(provider.createAccountLink).not.toHaveBeenCalled();
 
@@ -423,19 +570,18 @@ describe("Stripe Connect one-use same-tab handoff", () => {
     };
     await expect(handoff.consumeOneUseOnboardingHandoff({
       method: "POST",
-      token: "expired-token",
-      hmacKey: HMAC_KEY,
+      token: "expired-token-at-least-32-bytes-long",
       canonicalReturnOrigin: ORIGIN,
       store: expiredStore,
       provider,
-      nowMs: NOW_MS
+      now: () => NOW_MS
     })).rejects.toMatchObject({ code: "failed-precondition" });
     expect(provider.createAccountLink).not.toHaveBeenCalled();
   });
 
   test("fails to recovery without silently creating another link", async () => {
-    const token = "provider-failure-token";
-    const tokenDigest = handoff.digestToken(token, HMAC_KEY);
+    const token = "provider-failure-token-at-least-32-bytes";
+    const tokenDigest = handoff.digestToken(token);
     const store = {
       consumePreparedHandoff: vi.fn(async () => ({
         tokenDigest,
@@ -451,23 +597,128 @@ describe("Stripe Connect one-use same-tab handoff", () => {
     const response = await handoff.consumeOneUseOnboardingHandoff({
       method: "POST",
       token,
-      hmacKey: HMAC_KEY,
       canonicalReturnOrigin: ORIGIN,
       store,
       provider,
-      nowMs: NOW_MS
+      now: () => NOW_MS
     });
 
     expect(provider.createAccountLink).toHaveBeenCalledTimes(1);
     expect(store.recordProviderExpiry).not.toHaveBeenCalled();
-    expect(store.recordHandoffFailure).toHaveBeenCalledWith({
-      tokenDigest,
-      attemptDigest: "d".repeat(64),
-      reason: "provider_unavailable"
-    });
+    expect(store.recordHandoffFailure).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(303);
     expect(response.headers.Location).toContain("connect_return=recover");
     expect(response.headers.Location).not.toContain("stripe.com");
+  });
+
+  test("does not disclose a created Account Link when the post-provider authority receipt is withheld", async () => {
+    const token = "post-provider-authority-token-at-least-32-bytes";
+    const tokenDigest = handoff.digestToken(token);
+    const providerUrl = "https://accounts.stripe.com/r/must-not-be-disclosed";
+    const store = {
+      consumePreparedHandoff: vi.fn(async () => ({
+        tokenDigest,
+        attemptDigest: "9".repeat(64),
+        state: "consumed",
+        expiresAtISO: "2026-08-13T12:10:00.000Z",
+        privateAccountBinding: { accountId: "acct_hidden" }
+      })),
+      recordProviderExpiry: vi.fn(async () => ({ state: "provider_withheld" }))
+    };
+    const provider = {
+      createAccountLink: vi.fn(async () => ({
+        url: providerUrl,
+        expiresAtSeconds: Math.floor(NOW_MS / 1000) + 600
+      }))
+    };
+
+    const response = await handoff.consumeOneUseOnboardingHandoff({
+      method: "POST",
+      token,
+      canonicalReturnOrigin: ORIGIN,
+      store,
+      provider,
+      now: () => NOW_MS
+    });
+    expect(provider.createAccountLink).toHaveBeenCalledTimes(1);
+    expect(store.recordProviderExpiry).toHaveBeenCalledTimes(1);
+    expect(response.headers.Location).toContain("connect_return=recover");
+    expect(JSON.stringify(response)).not.toContain(providerUrl);
+  });
+
+  test("withholds an Account Link when provider latency crosses the prepared handoff expiry", async () => {
+    const token = "provider-latency-token-at-least-32-bytes";
+    const tokenDigest = handoff.digestToken(token);
+    let clockMs = NOW_MS;
+    const store = {
+      consumePreparedHandoff: vi.fn(async () => ({
+        tokenDigest,
+        attemptDigest: "8".repeat(64),
+        state: "consumed",
+        expiresAtISO: new Date(NOW_MS + 600_000).toISOString(),
+        privateAccountBinding: { accountId: "acct_hidden" }
+      })),
+      recordProviderExpiry: vi.fn()
+    };
+    const providerUrl = "https://accounts.stripe.com/r/expired-during-provider-call";
+    const provider = {
+      createAccountLink: vi.fn(async () => {
+        clockMs = NOW_MS + 600_001;
+        return {
+          url: providerUrl,
+          expiresAtSeconds: Math.floor(NOW_MS / 1000) + 3600
+        };
+      })
+    };
+
+    const response = await handoff.consumeOneUseOnboardingHandoff({
+      method: "POST",
+      token,
+      canonicalReturnOrigin: ORIGIN,
+      store,
+      provider,
+      now: () => clockMs
+    });
+    expect(store.recordProviderExpiry).not.toHaveBeenCalled();
+    expect(response.headers.Location).toContain("connect_return=recover");
+    expect(JSON.stringify(response)).not.toContain(providerUrl);
+  });
+
+  test("rechecks expiry after the issuance receipt before disclosing the Account Link", async () => {
+    const token = "post-receipt-expiry-token-at-least-32-bytes";
+    const tokenDigest = handoff.digestToken(token);
+    let clockMs = NOW_MS;
+    const store = {
+      consumePreparedHandoff: vi.fn(async () => ({
+        tokenDigest,
+        attemptDigest: "7".repeat(64),
+        state: "consumed",
+        expiresAtISO: new Date(NOW_MS + 600_000).toISOString(),
+        privateAccountBinding: { accountId: "acct_hidden" }
+      })),
+      recordProviderExpiry: vi.fn(async () => {
+        clockMs = NOW_MS + 600_001;
+        return { state: "provider_issued" };
+      })
+    };
+    const providerUrl = "https://accounts.stripe.com/r/expired-after-receipt";
+    const response = await handoff.consumeOneUseOnboardingHandoff({
+      method: "POST",
+      token,
+      canonicalReturnOrigin: ORIGIN,
+      store,
+      provider: {
+        createAccountLink: vi.fn(async () => ({
+          url: providerUrl,
+          expiresAtSeconds: Math.floor(NOW_MS / 1000) + 3600
+        }))
+      },
+      now: () => clockMs
+    });
+
+    expect(store.recordProviderExpiry).toHaveBeenCalledTimes(1);
+    expect(response.headers.Location).toContain("connect_return=recover");
+    expect(JSON.stringify(response)).not.toContain(providerUrl);
   });
 
   test("rejects GET before looking up or calling the provider", async () => {
@@ -479,11 +730,10 @@ describe("Stripe Connect one-use same-tab handoff", () => {
     await expect(handoff.consumeOneUseOnboardingHandoff({
       method: "GET",
       token: "one-use-browser-token-with-32-bytes",
-      hmacKey: HMAC_KEY,
       canonicalReturnOrigin: ORIGIN,
       store,
       provider,
-      nowMs: NOW_MS
+      now: () => NOW_MS
     })).rejects.toMatchObject({ code: "permission-denied" });
     expect(store.consumePreparedHandoff).not.toHaveBeenCalled();
     expect(provider.createAccountLink).not.toHaveBeenCalled();
